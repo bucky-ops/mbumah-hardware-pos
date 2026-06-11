@@ -1,0 +1,1245 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→/**
+     4→     4→ * MBUMAH HARDWARE POS & ERP System - Main Application Page
+     5→     5→ * UI Overhaul: Dashboard stats, category chips, enhanced cards, improved cart, better login, footer fix, empty states, live clock
+     6→     6→ */
+     7→     7→
+     8→     8→import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+     9→     9→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+    10→    10→import { useTheme } from 'next-themes';
+    11→    11→import { toast } from 'sonner';
+    12→    12→import {
+    13→    13→  ShoppingCart, Package, Users, KeyRound, BarChart3, FileText,
+    14→    14→  Settings, LogOut, Search, Plus, Minus, Trash2, X, Menu, Sun, Moon,
+    15→    15→  CheckCircle, Clock,
+    16→    16→  ShoppingBag, CreditCard, Smartphone,
+    17→    17→  AlertCircle, Loader2,
+    18→    18→  Home, Store, Mail, ShieldCheck, Eye,
+    19→    19→  Banknote, Wallet,
+    20→    20→  TrendingUp, ArrowDownRight, AlertTriangle, DollarSign, Wrench, Hammer,
+    21→    21→  CalendarDays,
+    22→    22→} from 'lucide-react';
+    23→    23→
+    24→    24→import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
+    25→    25→import {
+    26→    26→  productsApi, categoriesApi, customersApi, transactionsApi,
+    27→    27→  paymentsApi, dashboardApi,
+    28→    28→  formatKES, formatDate, formatDateTime,
+    29→    29→  type ProductListItem, type CustomerItem,
+    30→    30→  type CategoryItem,
+    31→    31→} from '@/lib/api';
+    32→    32→import type { PaymentMethod, CartItem, UnitType, DashboardStats } from '@/lib/types';
+    33→    33→
+    34→    34→import { Button } from '@/components/ui/button';
+    35→    35→import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+    36→    36→import { Input } from '@/components/ui/input';
+    37→    37→import { Label } from '@/components/ui/label';
+    38→    38→import { Badge } from '@/components/ui/badge';
+    39→    39→import { Separator } from '@/components/ui/separator';
+    40→    40→import { Skeleton } from '@/components/ui/skeleton';
+    41→    41→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+    42→    42→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    43→    43→import { ScrollArea } from '@/components/ui/scroll-area';
+    44→    44→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    45→    45→import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+    46→    46→import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+    47→    47→
+    48→    48→// ============================================================================
+    49→    49→// LAZY-LOADED TAB COMPONENTS
+    50→    50→// ============================================================================
+    51→    51→
+    52→    52→const LazyInventoryTab = lazy(() => import('./tabs/inventory-tab'));
+    53→    53→const LazyCustomersTab = lazy(() => import('./tabs/customers-tab'));
+    54→    54→const LazyRentalsTab = lazy(() => import('./tabs/rentals-tab'));
+    55→    55→const LazyFinancialTab = lazy(() => import('./tabs/financial-tab'));
+    56→    56→const LazyReportsTab = lazy(() => import('./tabs/reports-tab'));
+    57→    57→const LazyAdminTab = lazy(() => import('./tabs/admin-tab'));
+    58→    58→
+    59→    59→function TabLoadingFallback() {
+    60→    60→  return (
+    61→    61→    <div className="space-y-4">
+    62→    62→      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    63→    63→        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+    64→    64→      </div>
+    65→    65→      <Skeleton className="h-10 w-full" />
+    66→    66→      <Skeleton className="h-64 w-full" />
+    67→    67→    </div>
+    68→    68→  );
+    69→    69→}
+    70→    70→
+    71→    71→// ============================================================================
+    72→    72→// CONSTANTS
+    73→    73→// ============================================================================
+    74→    74→
+    75→    75→const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
+    76→    76→  { id: 'pos', label: 'POS', icon: ShoppingCart },
+    77→    77→  { id: 'inventory', label: 'Inventory', icon: Package },
+    78→    78→  { id: 'customers', label: 'Customers', icon: Users },
+    79→    79→  { id: 'rentals', label: 'Rentals', icon: KeyRound },
+    80→    80→  { id: 'financial', label: 'Financial', icon: BarChart3 },
+    81→    81→  { id: 'reports', label: 'Reports', icon: FileText },
+    82→    82→  { id: 'admin', label: 'Admin', icon: Settings },
+    83→    83→];
+    84→    84→
+    85→    85→const DEMO_ACCOUNTS = [
+    86→    86→  { email: 'admin@mbumahhardware.co.ke', password: 'password123', role: 'Super Admin', icon: ShieldCheck, color: 'text-red-500' },
+    87→    87→  { email: 'cashier@mbumahhardware.co.ke', password: 'password123', role: 'Cashier', icon: ShoppingCart, color: 'text-green-500' },
+    88→    88→  { email: 'accountant@mbumahhardware.co.ke', password: 'password123', role: 'Accountant', icon: BarChart3, color: 'text-amber-500' },
+    89→    89→];
+    90→    90→
+    91→    91→// ============================================================================
+    92→    92→// LIVE CLOCK HOOK
+    93→    93→// ============================================================================
+    94→    94→
+    95→    95→function useLiveClock() {
+    96→    96→  const [now, setNow] = useState(new Date());
+    97→    97→
+    98→    98→  useEffect(() => {
+    99→    99→    const timer = setInterval(() => setNow(new Date()), 60000); // every minute
+   100→   100→    return () => clearInterval(timer);
+   101→   101→  }, []);
+   102→   102→
+   103→   103→  return now;
+   104→   104→}
+   105→   105→
+   106→   106→// ============================================================================
+   107→   107→// LOGIN SCREEN
+   108→   108→// ============================================================================
+   109→   109→
+   110→   110→function LoginScreen() {
+   111→   111→  const [email, setEmail] = useState('');
+   112→   112→  const [password, setPassword] = useState('');
+   113→   113→  const [showPassword, setShowPassword] = useState(false);
+   114→   114→  const login = useAuthStore((s) => s.login);
+   115→   115→  const isLoading = useAuthStore((s) => s.isLoading);
+   116→   116→
+   117→   117→  const handleSubmit = async (e: React.FormEvent) => {
+   118→   118→    e.preventDefault();
+   119→   119→    try {
+   120→   120→      await login(email, password);
+   121→   121→      toast.success('Welcome to MBUMAH HARDWARE POS!');
+   122→   122→    } catch (err: unknown) {
+   123→   123→      const message = err instanceof Error ? err.message : 'Login failed';
+   124→   124→      toast.error(message);
+   125→   125→    }
+   126→   126→  };
+   127→   127→
+   128→   128→  const fillDemo = (acct: typeof DEMO_ACCOUNTS[number]) => {
+   129→   129→    setEmail(acct.email);
+   130→   130→    setPassword(acct.password);
+   131→   131→  };
+   132→   132→
+   133→   133→  return (
+   134→   134→    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[oklch(0.22_0.07_260)] via-[oklch(0.295_0.1_260)] to-[oklch(0.22_0.06_260)] p-4 relative overflow-hidden">
+   135→   135→      {/* Decorative hardware pattern */}
+   136→   136→      <div className="absolute inset-0 opacity-[0.04] pointer-events-none">
+   137→   137→        <div className="absolute top-10 left-10"><Wrench className="h-24 w-24 text-white" /></div>
+   138→   138→        <div className="absolute top-32 right-20"><Hammer className="h-16 w-16 text-white" /></div>
+   139→   139→        <div className="absolute bottom-20 left-1/4"><Package className="h-20 w-20 text-white" /></div>
+   140→   140→        <div className="absolute bottom-32 right-1/3"><Store className="h-28 w-28 text-white" /></div>
+   141→   141→        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"><Wrench className="h-40 w-40 text-white" /></div>
+   142→   142→        <div className="absolute top-60 left-1/2"><Hammer className="h-12 w-12 text-white rotate-45" /></div>
+   143→   143→        <div className="absolute bottom-60 right-10"><Package className="h-14 w-14 text-white -rotate-12" /></div>
+   144→   144→      </div>
+   145→   145→
+   146→   146→      <div className="w-full max-w-md relative z-10">
+   147→   147→        <Card className="shadow-2xl border border-white/10 bg-card/95 backdrop-blur-sm">
+   148→   148→          <CardHeader className="text-center pb-2">
+   149→   149→            {/* Animated logo */}
+   150→   150→            <div className="mx-auto w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center mb-4 shadow-lg animate-pulse-slow">
+   151→   151→              <Store className="h-10 w-10 text-primary-foreground" />
+   152→   152→            </div>
+   153→   153→            <CardTitle className="text-2xl font-bold tracking-tight">MBUMAH HARDWARE</CardTitle>
+   154→   154→            <CardDescription className="text-base">POS & ERP System</CardDescription>
+   155→   155→          </CardHeader>
+   156→   156→          <CardContent>
+   157→   157→            <form onSubmit={handleSubmit} className="space-y-4">
+   158→   158→              <div className="space-y-2">
+   159→   159→                <Label htmlFor="email">Email Address</Label>
+   160→   160→                <div className="relative">
+   161→   161→                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   162→   162→                  <Input
+   163→   163→                    id="email"
+   164→   164→                    type="email"
+   165→   165→                    placeholder="cashier@mbumahhardware.co.ke"
+   166→   166→                    value={email}
+   167→   167→                    onChange={(e) => setEmail(e.target.value)}
+   168→   168→                    className="pl-10"
+   169→   169→                    required
+   170→   170→                    disabled={isLoading}
+   171→   171→                  />
+   172→   172→                </div>
+   173→   173→              </div>
+   174→   174→              <div className="space-y-2">
+   175→   175→                <Label htmlFor="password">Password</Label>
+   176→   176→                <div className="relative">
+   177→   177→                  <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   178→   178→                  <Input
+   179→   179→                    id="password"
+   180→   180→                    type={showPassword ? 'text' : 'password'}
+   181→   181→                    placeholder="Enter your password"
+   182→   182→                    value={password}
+   183→   183→                    onChange={(e) => setPassword(e.target.value)}
+   184→   184→                    className="pl-10 pr-10"
+   185→   185→                    required
+   186→   186→                    disabled={isLoading}
+   187→   187→                  />
+   188→   188→                  <Button
+   189→   189→                    type="button"
+   190→   190→                    variant="ghost"
+   191→   191→                    size="sm"
+   192→   192→                    className="absolute right-0 top-0 h-full px-3"
+   193→   193→                    onClick={() => setShowPassword(!showPassword)}
+   194→   194→                  >
+   195→   195→                    <Eye className="h-4 w-4" />
+   196→   196→                  </Button>
+   197→   197→                </div>
+   198→   198→              </div>
+   199→   199→              <Button
+   200→   200→                type="submit"
+   201→   201→                className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground font-semibold"
+   202→   202→                disabled={isLoading}
+   203→   203→                size="lg"
+   204→   204→              >
+   205→   205→                {isLoading ? (
+   206→   206→                  <>
+   207→   207→                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+   208→   208→                    Signing In...
+   209→   209→                  </>
+   210→   210→                ) : (
+   211→   211→                  'Sign In'
+   212→   212→                )}
+   213→   213→              </Button>
+   214→   214→            </form>
+   215→   215→
+   216→   216→            {/* Demo Accounts */}
+   217→   217→            <div className="mt-6">
+   218→   218→              <Separator className="mb-4" />
+   219→   219→              <p className="text-xs text-muted-foreground text-center mb-3">Quick Demo Access</p>
+   220→   220→              <div className="grid grid-cols-3 gap-2">
+   221→   221→                {DEMO_ACCOUNTS.map((acct) => {
+   222→   222→                  const Icon = acct.icon;
+   223→   223→                  return (
+   224→   224→                    <button
+   225→   225→                      key={acct.email}
+   226→   226→                      type="button"
+   227→   227→                      onClick={() => fillDemo(acct)}
+   228→   228→                      className="flex flex-col items-center gap-1.5 p-2.5 rounded-lg border border-border/50 hover:border-primary/40 hover:bg-primary/5 transition-all text-center"
+   229→   229→                    >
+   230→   230→                      <Icon className={`h-5 w-5 ${acct.color}`} />
+   231→   231→                      <span className="text-[10px] font-medium leading-tight">{acct.role}</span>
+   232→   232→                    </button>
+   233→   233→                  );
+   234→   234→                })}
+   235→   235→              </div>
+   236→   236→            </div>
+   237→   237→          </CardContent>
+   238→   238→          <CardFooter className="flex flex-col gap-2 text-sm text-muted-foreground">
+   239→   239→            <p className="text-xs">Select a demo account above or enter credentials manually</p>
+   240→   240→          </CardFooter>
+   241→   241→        </Card>
+   242→   242→      </div>
+   243→   243→    </div>
+   244→   244→  );
+   245→   245→}
+   246→   246→
+   247→   247→// ============================================================================
+   248→   248→// SIDEBAR
+   249→   249→// ============================================================================
+   250→   250→
+   251→   251→function AppSidebar() {
+   252→   252→  const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen } = useAppStore();
+   253→   253→  const user = useAuthStore((s) => s.user);
+   254→   254→  const logout = useAuthStore((s) => s.logout);
+   255→   255→  const { theme, setTheme } = useTheme();
+   256→   256→
+   257→   257→  const handleNav = (tab: AppTab) => {
+   258→   258→    setActiveTab(tab);
+   259→   259→    setSidebarOpen(false);
+   260→   260→  };
+   261→   261→
+   262→   262→  const handleLogout = async () => {
+   263→   263→    await logout();
+   264→   264→    toast.success('Logged out successfully');
+   265→   265→  };
+   266→   266→
+   267→   267→  const navItems = TAB_CONFIG.map(({ id, label, icon: Icon }) => (
+   268→   268→    <button
+   269→   269→      key={id}
+   270→   270→      onClick={() => handleNav(id)}
+   271→   271→      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+   272→   272→        activeTab === id
+   273→   273→          ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
+   274→   274→          : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+   275→   275→      }`}
+   276→   276→    >
+   277→   277→      <Icon className="h-4 w-4 shrink-0" />
+   278→   278→      <span>{label}</span>
+   279→   279→    </button>
+   280→   280→  ));
+   281→   281→
+   282→   282→  return (
+   283→   283→    <>
+   284→   284→      {/* Mobile overlay */}
+   285→   285→      {sidebarOpen && (
+   286→   286→        <div
+   287→   287→          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+   288→   288→          onClick={() => setSidebarOpen(false)}
+   289→   289→        />
+   290→   290→      )}
+   291→   291→
+   292→   292→      {/* Sidebar */}
+   293→   293→      <aside
+   294→   294→        className={`fixed top-0 left-0 z-50 h-full w-64 bg-sidebar text-sidebar-foreground transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:z-auto ${
+   295→   295→          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+   296→   296→        }`}
+   297→   297→      >
+   298→   298→        <div className="flex flex-col h-full">
+   299→   299→          {/* Logo */}
+   300→   300→          <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
+   301→   301→            <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center">
+   302→   302→              <Store className="h-5 w-5 text-sidebar-primary-foreground" />
+   303→   303→            </div>
+   304→   304→            <div>
+   305→   305→              <h1 className="font-bold text-sm leading-tight">MBUMAH HARDWARE</h1>
+   306→   306→              <p className="text-xs text-sidebar-foreground/60">POS & ERP</p>
+   307→   307→            </div>
+   308→   308→            <Button
+   309→   309→              variant="ghost"
+   310→   310→              size="icon"
+   311→   311→              className="ml-auto lg:hidden text-sidebar-foreground/60 hover:text-sidebar-foreground"
+   312→   312→              onClick={() => setSidebarOpen(false)}
+   313→   313→            >
+   314→   314→              <X className="h-4 w-4" />
+   315→   315→            </Button>
+   316→   316→          </div>
+   317→   317→
+   318→   318→          {/* Navigation */}
+   319→   319→          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
+   320→   320→            {navItems}
+   321→   321→          </nav>
+   322→   322→
+   323→   323→          {/* Footer */}
+   324→   324→          <div className="border-t border-sidebar-border px-3 py-3 space-y-2">
+   325→   325→            <div className="flex items-center gap-3 px-3 py-2">
+   326→   326→              <Avatar className="h-8 w-8">
+   327→   327→                <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground text-xs">
+   328→   328→                  {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
+   329→   329→                </AvatarFallback>
+   330→   330→              </Avatar>
+   331→   331→              <div className="flex-1 min-w-0">
+   332→   332→                <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
+   333→   333→                <p className="text-xs text-sidebar-foreground/60 truncate">{user?.role || 'Cashier'}</p>
+   334→   334→              </div>
+   335→   335→            </div>
+   336→   336→            <div className="flex items-center gap-2 px-2">
+   337→   337→              <Button
+   338→   338→                variant="ghost"
+   339→   339→                size="sm"
+   340→   340→                className="flex-1 text-sidebar-foreground/70 hover:text-sidebar-foreground"
+   341→   341→                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+   342→   342→              >
+   343→   343→                {theme === 'dark' ? <Sun className="h-4 w-4 mr-2" /> : <Moon className="h-4 w-4 mr-2" />}
+   344→   344→                {theme === 'dark' ? 'Light' : 'Dark'}
+   345→   345→              </Button>
+   346→   346→              <Button
+   347→   347→                variant="ghost"
+   348→   348→                size="sm"
+   349→   349→                className="text-sidebar-foreground/70 hover:text-destructive"
+   350→   350→                onClick={handleLogout}
+   351→   351→              >
+   352→   352→                <LogOut className="h-4 w-4" />
+   353→   353→              </Button>
+   354→   354→            </div>
+   355→   355→          </div>
+   356→   356→        </div>
+   357→   357→      </aside>
+   358→   358→    </>
+   359→   359→  );
+   360→   360→}
+   361→   361→
+   362→   362→// ============================================================================
+   363→   363→// TOP BAR (with live Date/Time)
+   364→   364→// ============================================================================
+   365→   365→
+   366→   366→function TopBar() {
+   367→   367→  const { activeTab, toggleSidebar } = useAppStore();
+   368→   368→  const cartItemCount = useCartStore((s) => s.getItemCount());
+   369→   369→  const currentTab = TAB_CONFIG.find(t => t.id === activeTab);
+   370→   370→  const TabIcon = currentTab?.icon || Home;
+   371→   371→  const now = useLiveClock();
+   372→   372→
+   373→   373→  return (
+   374→   374→    <header className="sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
+   375→   375→      <div className="flex items-center gap-3 px-4 py-3">
+   376→   376→        <Button
+   377→   377→          variant="ghost"
+   378→   378→          size="icon"
+   379→   379→          className="lg:hidden"
+   380→   380→          onClick={toggleSidebar}
+   381→   381→        >
+   382→   382→          <Menu className="h-5 w-5" />
+   383→   383→        </Button>
+   384→   384→        <div className="flex items-center gap-2">
+   385→   385→          <TabIcon className="h-5 w-5 text-primary" />
+   386→   386→          <h2 className="font-semibold text-lg">{currentTab?.label || 'Dashboard'}</h2>
+   387→   387→        </div>
+   388→   388→        <div className="ml-auto flex items-center gap-2">
+   389→   389→          {activeTab === 'pos' && (
+   390→   390→            <Badge variant="secondary" className="flex items-center gap-1">
+   391→   391→              <ShoppingCart className="h-3 w-3" />
+   392→   392→              {cartItemCount}
+   393→   393→            </Badge>
+   394→   394→          )}
+   395→   395→          <Badge variant="outline" className="hidden sm:flex items-center gap-1.5">
+   396→   396→            <CalendarDays className="h-3 w-3" />
+   397→   397→            {now.toLocaleDateString('en-KE', { weekday: 'short', month: 'short', day: 'numeric' })}
+   398→   398→            <span className="text-muted-foreground">|</span>
+   399→   399→            <Clock className="h-3 w-3" />
+   400→   400→            {now.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}
+   401→   401→          </Badge>
+   402→   402→        </div>
+   403→   403→      </div>
+   404→   404→    </header>
+   405→   405→  );
+   406→   406→}
+   407→   407→
+   408→   408→// ============================================================================
+   409→   409→// DASHBOARD STATS ROW
+   410→   410→// ============================================================================
+   411→   411→
+   412→   412→function DashboardStats({ storeId }: { storeId: string }) {
+   413→   413→  const { data, isLoading } = useQuery({
+   414→   414→    queryKey: ['dashboard', storeId],
+   415→   415→    queryFn: async () => {
+   416→   416→      const res = await dashboardApi.getStats(storeId);
+   417→   417→      return res.data;
+   418→   418→    },
+   419→   419→    refetchInterval: 60000,
+   420→   420→  });
+   421→   421→
+   422→   422→  const stats = [
+   423→   423→    {
+   424→   424→      label: "Today's Sales",
+   425→   425→      value: data?.todaySales ?? 0,
+   426→   426→      format: 'kes' as const,
+   427→   427→      icon: TrendingUp,
+   428→   428→      color: 'text-green-600 dark:text-green-400',
+   429→   429→      bg: 'bg-green-50 dark:bg-green-950/30',
+   430→   430→      borderColor: 'border-l-green-500',
+   431→   431→    },
+   432→   432→    {
+   433→   433→      label: 'Transactions',
+   434→   434→      value: data?.todayTransactions ?? 0,
+   435→   435→      format: 'number' as const,
+   436→   436→      icon: ShoppingCart,
+   437→   437→      color: 'text-blue-600 dark:text-blue-400',
+   438→   438→      bg: 'bg-blue-50 dark:bg-blue-950/30',
+   439→   439→      borderColor: 'border-l-blue-500',
+   440→   440→    },
+   441→   441→    {
+   442→   442→      label: 'Low Stock',
+   443→   443→      value: data?.lowStockProducts ?? 0,
+   444→   444→      format: 'number' as const,
+   445→   445→      icon: AlertTriangle,
+   446→   446→      color: 'text-amber-600 dark:text-amber-400',
+   447→   447→      bg: 'bg-amber-50 dark:bg-amber-950/30',
+   448→   448→      borderColor: 'border-l-amber-500',
+   449→   449→    },
+   450→   450→    {
+   451→   451→      label: 'Outstanding Debt',
+   452→   452→      value: data?.outstandingDebt ?? 0,
+   453→   453→      format: 'kes' as const,
+   454→   454→      icon: DollarSign,
+   455→   455→      color: 'text-red-600 dark:text-red-400',
+   456→   456→      bg: 'bg-red-50 dark:bg-red-950/30',
+   457→   457→      borderColor: 'border-l-red-500',
+   458→   458→    },
+   459→   459→  ];
+   460→   460→
+   461→   461→  if (isLoading) {
+   462→   462→    return (
+   463→   463→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+   464→   464→        {Array.from({ length: 4 }).map((_, i) => (
+   465→   465→          <Skeleton key={i} className="h-20" />
+   466→   466→        ))}
+   467→   467→      </div>
+   468→   468→    );
+   469→   469→  }
+   470→   470→
+   471→   471→  return (
+   472→   472→    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+   473→   473→      {stats.map((stat) => {
+   474→   474→        const Icon = stat.icon;
+   475→   475→        return (
+   476→   476→          <Card key={stat.label} className={`border-l-4 ${stat.borderColor} py-0`}>
+   477→   477→            <CardContent className="p-3 flex items-center gap-3">
+   478→   478→              <div className={`shrink-0 p-2 rounded-lg ${stat.bg}`}>
+   479→   479→                <Icon className={`h-4 w-4 ${stat.color}`} />
+   480→   480→              </div>
+   481→   481→              <div className="min-w-0">
+   482→   482→                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{stat.label}</p>
+   483→   483→                <p className={`text-sm sm:text-base font-bold ${stat.color} truncate`}>
+   484→   484→                  {stat.format === 'kes' ? formatKES(stat.value) : stat.value}
+   485→   485→                </p>
+   486→   486→              </div>
+   487→   487→            </CardContent>
+   488→   488→          </Card>
+   489→   489→        );
+   490→   490→      })}
+   491→   491→    </div>
+   492→   492→  );
+   493→   493→}
+   494→   494→
+   495→   495→// ============================================================================
+   496→   496→// CATEGORY FILTER CHIPS
+   497→   497→// ============================================================================
+   498→   498→
+   499→   499→function CategoryChips({
+   500→   500→  categories,
+   501→   501→  selected,
+   502→   502→  onSelect,
+   503→   503→}: {
+   504→   504→  categories: CategoryItem[];
+   505→   505→  selected: string;
+   506→   506→  onSelect: (id: string) => void;
+   507→   507→}) {
+   508→   508→  return (
+   509→   509→    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+   510→   510→      <button
+   511→   511→        onClick={() => onSelect('all')}
+   512→   512→        className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+   513→   513→          selected === 'all'
+   514→   514→            ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+   515→   515→            : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
+   516→   516→        }`}
+   517→   517→      >
+   518→   518→        All
+   519→   519→      </button>
+   520→   520→      {categories.map((cat) => {
+   521→   521→        const catColor = cat.color || '#6b7280';
+   522→   522→        const isActive = selected === cat.id;
+   523→   523→        return (
+   524→   524→          <button
+   525→   525→            key={cat.id}
+   526→   526→            onClick={() => onSelect(cat.id)}
+   527→   527→            className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap ${
+   528→   528→              isActive
+   529→   529→                ? 'text-white border-transparent shadow-sm'
+   530→   530→                : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
+   531→   531→            }`}
+   532→   532→            style={isActive ? { backgroundColor: catColor, borderColor: catColor } : { borderLeftColor: catColor, borderLeftWidth: '3px' }}
+   533→   533→          >
+   534→   534→            {cat.name}
+   535→   535→          </button>
+   536→   536→        );
+   537→   537→      })}
+   538→   538→    </div>
+   539→   539→  );
+   540→   540→}
+   541→   541→
+   542→   542→// ============================================================================
+   543→   543→// PRODUCT CARD
+   544→   544→// ============================================================================
+   545→   545→
+   546→   546→function ProductCard({
+   547→   547→  product,
+   548→   548→  onAdd,
+   549→   549→}: {
+   550→   550→  product: ProductListItem;
+   551→   551→  onAdd: (p: ProductListItem) => void;
+   552→   552→}) {
+   553→   553→  const categoryColor = product.category?.color || '#6b7280';
+   554→   554→  const stockPercent = product.reorderLevel > 0
+   555→   555→    ? Math.min((product.quantityInStock / (product.reorderLevel * 3)) * 100, 100)
+   556→   556→    : product.quantityInStock > 0 ? 100 : 0;
+   557→   557→  const isLowStock = product.quantityInStock <= product.reorderLevel && product.quantityInStock > 0;
+   558→   558→  const isOutOfStock = product.quantityInStock <= 0;
+   559→   559→
+   560→   560→  const stockBarColor = isOutOfStock
+   561→   561→    ? 'bg-red-500'
+   562→   562→    : isLowStock
+   563→   563→      ? 'bg-amber-500'
+   564→   564→      : 'bg-green-500';
+   565→   565→
+   566→   566→  const unitBadgeColor: Record<string, string> = {
+   567→   567→    PIECE: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+   568→   568→    KILOGRAM: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300',
+   569→   569→    METER: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300',
+   570→   570→    LITER: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+   571→   571→    BAG: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+   572→   572→    BOX: 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300',
+   573→   573→    SET: 'bg-pink-100 text-pink-700 dark:bg-pink-950 dark:text-pink-300',
+   574→   574→  };
+   575→   575→
+   576→   576→  return (
+   577→   577→    <Card
+   578→   578→      className="overflow-hidden cursor-pointer hover:shadow-lg transition-all hover:border-primary/30 group border-l-4"
+   579→   579→      style={{ borderLeftColor: categoryColor }}
+   580→   580→      onClick={() => onAdd(product)}
+   581→   581→    >
+   582→   582→      <div className="h-24 bg-muted flex items-center justify-center relative overflow-hidden">
+   583→   583→        {product.imageUrl ? (
+   584→   584→          <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+   585→   585→        ) : (
+   586→   586→          <Package className="h-9 w-9 text-muted-foreground/25" />
+   587→   587→        )}
+   588→   588→        {product.isRental && (
+   589→   589→          <Badge className="absolute top-1.5 left-1.5 bg-blue-600 text-white text-[10px] px-1.5">RENTAL</Badge>
+   590→   590→        )}
+   591→   591→        {product.isBundle && (
+   592→   592→          <Badge className="absolute top-1.5 right-1.5 bg-purple-600 text-white text-[10px] px-1.5">BUNDLE</Badge>
+   593→   593→        )}
+   594→   594→        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center">
+   595→   595→          <Plus className="h-7 w-7 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+   596→   596→        </div>
+   597→   597→      </div>
+   598→   598→      <CardContent className="p-2.5">
+   599→   599→        <h3 className="font-medium text-sm truncate leading-tight">{product.name}</h3>
+   600→   600→        {product.category && (
+   601→   601→          <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">{product.category.name}</p>
+   602→   602→        )}
+   603→   603→        <div className="flex items-center justify-between mt-1.5 gap-1">
+   604→   604→          <span className="font-bold text-primary text-sm truncate">{formatKES(product.pricePerUnit)}</span>
+   605→   605→          <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${unitBadgeColor[product.unitType] || 'bg-muted text-muted-foreground'}`}>
+   606→   606→            {product.unitType}
+   607→   607→          </span>
+   608→   608→        </div>
+   609→   609→        {/* Mini stock progress bar */}
+   610→   610→        <div className="mt-1.5 flex items-center gap-1.5">
+   611→   611→          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+   612→   612→            <div
+   613→   613→              className={`h-full rounded-full transition-all ${stockBarColor}`}
+   614→   614→              style={{ width: `${stockPercent}%` }}
+   615→   615→            />
+   616→   616→          </div>
+   617→   617→          <span className={`text-[9px] font-medium shrink-0 ${isOutOfStock ? 'text-red-500' : isLowStock ? 'text-amber-500' : 'text-muted-foreground'}`}>
+   618→   618→            {isOutOfStock ? 'Out' : `${product.quantityInStock}`}
+   619→   619→          </span>
+   620→   620→        </div>
+   621→   621→      </CardContent>
+   622→   622→    </Card>
+   623→   623→  );
+   624→   624→}
+   625→   625→
+   626→   626→// ============================================================================
+   627→   627→// CART ITEM ROW (enhanced)
+   628→   628→// ============================================================================
+   629→   629→
+   630→   630→function CartItemRow({
+   631→   631→  item,
+   632→   632→  onUpdateQty,
+   633→   633→  onRemove,
+   634→   634→}: {
+   635→   635→  item: CartItem;
+   636→   636→  onUpdateQty: (productId: string, qty: number) => void;
+   637→   637→  onRemove: (productId: string) => void;
+   638→   638→}) {
+   639→   639→  const quickAddAmounts = [1, 2, 5, 10];
+   640→   640→
+   641→   641→  return (
+   642→   642→    <div className="flex gap-2 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors">
+   643→   643→      {/* Image placeholder */}
+   644→   644→      <div className="shrink-0 w-10 h-10 rounded-md bg-muted flex items-center justify-center">
+   645→   645→        <Package className="h-4 w-4 text-muted-foreground/40" />
+   646→   646→      </div>
+   647→   647→      <div className="flex-1 min-w-0">
+   648→   648→        <p className="text-sm font-medium truncate">{item.productName}</p>
+   649→   649→        <div className="flex items-center gap-1.5 mt-0.5">
+   650→   650→          <span className="text-xs text-muted-foreground">{formatKES(item.pricePerUnit)}</span>
+   651→   651→          <span className="text-[9px] px-1 py-0 rounded bg-muted text-muted-foreground font-medium">{item.unitType}</span>
+   652→   652→          {item.discountPercent > 0 && (
+   653→   653→            <span className="text-[9px] text-green-600 font-medium">{item.discountPercent}% off</span>
+   654→   654→          )}
+   655→   655→        </div>
+   656→   656→        {/* Quick Add buttons */}
+   657→   657→        <div className="flex items-center gap-1 mt-1.5">
+   658→   658→          {quickAddAmounts.map((amt) => (
+   659→   659→            <button
+   660→   660→              key={amt}
+   661→   661→              type="button"
+   662→   662→              onClick={() => onUpdateQty(item.productId, item.quantity + amt)}
+   663→   663→              className="px-1.5 py-0 text-[9px] font-medium rounded border border-border/50 bg-background hover:bg-primary hover:text-primary-foreground transition-colors"
+   664→   664→            >
+   665→   665→              +{amt}
+   666→   666→            </button>
+   667→   667→          ))}
+   668→   668→        </div>
+   669→   669→      </div>
+   670→   670→      <div className="flex flex-col items-end gap-1">
+   671→   671→        <Button
+   672→   672→          variant="ghost"
+   673→   673→          size="icon"
+   674→   674→          className="h-5 w-5 text-muted-foreground hover:text-destructive"
+   675→   675→          onClick={() => onRemove(item.productId)}
+   676→   676→        >
+   677→   677→          <X className="h-3 w-3" />
+   678→   678→        </Button>
+   679→   679→        <div className="flex items-center gap-0.5">
+   680→   680→          <Button
+   681→   681→            variant="outline"
+   682→   682→            size="icon"
+   683→   683→            className="h-6 w-6"
+   684→   684→            onClick={() => onUpdateQty(item.productId, item.quantity - 1)}
+   685→   685→          >
+   686→   686→            <Minus className="h-2.5 w-2.5" />
+   687→   687→          </Button>
+   688→   688→          <span className="w-7 text-center text-xs font-semibold">{item.quantity}</span>
+   689→   689→          <Button
+   690→   690→            variant="outline"
+   691→   691→            size="icon"
+   692→   692→            className="h-6 w-6"
+   693→   693→            onClick={() => onUpdateQty(item.productId, item.quantity + 1)}
+   694→   694→          >
+   695→   695→            <Plus className="h-2.5 w-2.5" />
+   696→   696→          </Button>
+   697→   697→        </div>
+   698→   698→        <p className="text-xs font-semibold text-primary">{formatKES(item.lineTotal)}</p>
+   699→   699→      </div>
+   700→   700→    </div>
+   701→   701→  );
+   702→   702→}
+   703→   703→
+   704→   704→// ============================================================================
+   705→   705→// EMPTY STATE COMPONENTS
+   706→   706→// ============================================================================
+   707→   707→
+   708→   708→function EmptyCartState() {
+   709→   709→  return (
+   710→   710→    <div className="p-8 text-center">
+   711→   711→      <div className="relative mx-auto w-16 h-16 mb-4">
+   712→   712→        <div className="absolute inset-0 bg-primary/10 rounded-full animate-pulse" />
+   713→   713→        <ShoppingBag className="absolute inset-0 m-auto h-8 w-8 text-primary/40" />
+   714→   714→      </div>
+   715→   715→      <p className="text-sm font-medium text-muted-foreground">Your cart is empty</p>
+   716→   716→      <p className="text-xs text-muted-foreground/60 mt-1">Click on products to add them here</p>
+   717→   717→    </div>
+   718→   718→  );
+   719→   719→}
+   720→   720→
+   721→   721→function EmptyProductsState({ searchQuery }: { searchQuery: string }) {
+   722→   722→  return (
+   723→   723→    <div className="text-center py-16">
+   724→   724→      <div className="relative mx-auto w-20 h-20 mb-4">
+   725→   725→        <div className="absolute inset-0 bg-muted rounded-2xl" />
+   726→   726→        <Package className="absolute inset-0 m-auto h-10 w-10 text-muted-foreground/30" />
+   727→   727→      </div>
+   728→   728→      <p className="text-base font-medium text-muted-foreground">No products found</p>
+   729→   729→      {searchQuery ? (
+   730→   730→        <p className="text-sm text-muted-foreground/60 mt-1">
+   731→   731→          No results for &ldquo;{searchQuery}&rdquo;. Try a different search term.
+   732→   732→        </p>
+   733→   733→      ) : (
+   734→   734→        <p className="text-sm text-muted-foreground/60 mt-1">Try adjusting your search or filters</p>
+   735→   735→      )}
+   736→   736→    </div>
+   737→   737→  );
+   738→   738→}
+   739→   739→
+   740→   740→// ============================================================================
+   741→   741→// POS TAB (kept inline - core feature)
+   742→   742→// ============================================================================
+   743→   743→
+   744→   744→function POSTab() {
+   745→   745→  const [searchQuery, setSearchQuery] = useState('');
+   746→   746→  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+   747→   747→  const [checkoutOpen, setCheckoutOpen] = useState(false);
+   748→   748→  const [mpesaDialogOpen, setMpesaDialogOpen] = useState(false);
+   749→   749→  const [mpesaPhone, setMpesaPhone] = useState('');
+   750→   750→  const [mpesaStatus, setMpesaStatus] = useState<'idle' | 'processing' | 'success' | 'failed'>('idle');
+   751→   751→  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
+   752→   752→  const [cashReceived, setCashReceived] = useState('');
+   753→   753→  const [selectedCustomer, setSelectedCustomer] = useState<string>('');
+   754→   754→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+   755→   755→
+   756→   756→  const cart = useCartStore();
+   757→   757→  const subtotal = cart.getSubtotal();
+   758→   758→  const tax = cart.getTax();
+   759→   759→  const total = cart.getTotal();
+   760→   760→
+   761→   761→  const { data: productsData, isLoading: productsLoading } = useQuery({
+   762→   762→    queryKey: ['products', currentStoreId, searchQuery, selectedCategory],
+   763→   763→    queryFn: () => productsApi.list({
+   764→   764→      storeId: currentStoreId,
+   765→   765→      search: searchQuery || undefined,
+   766→   766→      limit: 100,
+   767→   767→      ...(selectedCategory !== 'all' ? { categoryId: selectedCategory } : {}),
+   768→   768→    }),
+   769→   769→  });
+   770→   770→
+   771→   771→  const { data: categoriesData } = useQuery({
+   772→   772→    queryKey: ['categories', currentStoreId],
+   773→   773→    queryFn: () => categoriesApi.list(currentStoreId),
+   774→   774→  });
+   775→   775→
+   776→   776→  const { data: customersData } = useQuery({
+   777→   777→    queryKey: ['customers', currentStoreId],
+   778→   778→    queryFn: () => customersApi.list({ storeId: currentStoreId, limit: 100 }),
+   779→   779→  });
+   780→   780→
+   781→   781→  const checkoutMutation = useMutation({
+   782→   782→    mutationFn: transactionsApi.create,
+   783→   783→    onSuccess: () => {
+   784→   784→      toast.success('Transaction completed successfully!');
+   785→   785→      cart.clearCart();
+   786→   786→      setCheckoutOpen(false);
+   787→   787→      setCashReceived('');
+   788→   788→      setSelectedCustomer('');
+   789→   789→    },
+   790→   790→    onError: (err: Error) => {
+   791→   791→      toast.error(err.message || 'Checkout failed');
+   792→   792→    },
+   793→   793→  });
+   794→   794→
+   795→   795→  const mpesaMutation = useMutation({
+   796→   796→    mutationFn: paymentsApi.initiateMpesa,
+   797→   797→    onSuccess: (res) => {
+   798→   798→      if (res.data) {
+   799→   799→        setMpesaStatus('processing');
+   800→   800→        // Simulate M-Pesa processing (in production, this would poll a status endpoint)
+   801→   801→        setTimeout(() => {
+   802→   802→          if (res.data?.resultCode === '0') {
+   803→   803→            setMpesaStatus('success');
+   804→   804→          } else {
+   805→   805→            setMpesaStatus('success'); // Default to success for demo
+   806→   806→          }
+   807→   807→        }, 5000);
+   808→   808→      }
+   809→   809→    },
+   810→   810→    onError: () => {
+   811→   811→      setMpesaStatus('failed');
+   812→   812→    },
+   813→   813→  });
+   814→   814→
+   815→   815→  const products = productsData?.data || [];
+   816→   816→  const categories = categoriesData?.data || [];
+   817→   817→  const customers = customersData?.data || [];
+   818→   818→
+   819→   819→  const handleAddToCart = (product: ProductListItem) => {
+   820→   820→    if (product.quantityInStock <= 0 && !product.isRental) {
+   821→   821→      toast.error('Product is out of stock');
+   822→   822→      return;
+   823→   823→    }
+   824→   824→    cart.addItem({
+   825→   825→      productId: product.id,
+   826→   826→      productName: product.name,
+   827→   827→      sku: product.sku,
+   828→   828→      quantity: 1,
+   829→   829→      unitType: product.unitType as UnitType,
+   830→   830→      pricePerUnit: product.pricePerUnit,
+   831→   831→      costPrice: product.costPrice,
+   832→   832→      discountPercent: 0,
+   833→   833→      taxRate: product.taxRate,
+   834→   834→      isRentalItem: product.isRental,
+   835→   835→      isBundle: product.isBundle,
+   836→   836→    });
+   837→   837→    toast.success(`${product.name} added to cart`);
+   838→   838→  };
+   839→   839→
+   840→   840→  const handleCheckout = () => {
+   841→   841→    if (cart.items.length === 0) {
+   842→   842→      toast.error('Cart is empty');
+   843→   843→      return;
+   844→   844→    }
+   845→   845→
+   846→   846→    if (paymentMethod === 'MPESA') {
+   847→   847→      setMpesaDialogOpen(true);
+   848→   848→      return;
+   849→   849→    }
+   850→   850→
+   851→   851→    checkoutMutation.mutate({
+   852→   852→      storeId: currentStoreId,
+   853→   853→      customerId: selectedCustomer || undefined,
+   854→   854→      cashierId: useAuthStore.getState().user?.id || '',
+   855→   855→      items: cart.items,
+   856→   856→      paymentMethod,
+   857→   857→      paymentDetails: {
+   858→   858→        cashAmount: paymentMethod === 'CASH' ? Number(cashReceived) || total : undefined,
+   859→   859→        debtAccountId: paymentMethod === 'DEBT' ? selectedCustomer : undefined,
+   860→   860→      },
+   861→   861→    });
+   862→   862→  };
+   863→   863→
+   864→   864→  const handleMpesaPay = () => {
+   865→   865→    if (!mpesaPhone || mpesaPhone.length < 10) {
+   866→   866→      toast.error('Enter a valid phone number');
+   867→   867→      return;
+   868→   868→    }
+   869→   869→    mpesaMutation.mutate({
+   870→   870→      phoneNumber: mpesaPhone.startsWith('0') ? `254${mpesaPhone.slice(1)}` : mpesaPhone,
+   871→   871→      amount: total,
+   872→   872→      accountReference: `MBT-${Date.now()}`,
+   873→   873→      transactionDesc: 'MBUMAH HARDWARE Purchase',
+   874→   874→    });
+   875→   875→  };
+   876→   876→
+   877→   877→  const change = paymentMethod === 'CASH' && cashReceived ? Number(cashReceived) - total : 0;
+   878→   878→
+   879→   879→  return (
+   880→   880→    <div className="flex flex-col lg:flex-row gap-4 h-full">
+   881→   881→      {/* Product Grid */}
+   882→   882→      <div className="flex-1 min-w-0 space-y-4">
+   883→   883→        {/* Dashboard Stats */}
+   884→   884→        <DashboardStats storeId={currentStoreId} />
+   885→   885→
+   886→   886→        {/* Search and Category Chips */}
+   887→   887→        <div className="space-y-3">
+   888→   888→          <div className="relative">
+   889→   889→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   890→   890→            <Input
+   891→   891→              placeholder="Search products by name, SKU, or barcode..."
+   892→   892→              value={searchQuery}
+   893→   893→              onChange={(e) => setSearchQuery(e.target.value)}
+   894→   894→              className="pl-10"
+   895→   895→            />
+   896→   896→          </div>
+   897→   897→          <CategoryChips
+   898→   898→            categories={categories}
+   899→   899→            selected={selectedCategory}
+   900→   900→            onSelect={setSelectedCategory}
+   901→   901→          />
+   902→   902→        </div>
+   903→   903→
+   904→   904→        {/* Products Grid */}
+   905→   905→        {productsLoading ? (
+   906→   906→          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+   907→   907→            {Array.from({ length: 8 }).map((_, i) => (
+   908→   908→              <Card key={i} className="overflow-hidden border-l-4 border-l-muted">
+   909→   909→                <Skeleton className="h-24" />
+   910→   910→                <CardContent className="p-2.5 space-y-2">
+   911→   911→                  <Skeleton className="h-4 w-3/4" />
+   912→   912→                  <Skeleton className="h-3 w-1/2" />
+   913→   913→                  <Skeleton className="h-5 w-2/3" />
+   914→   914→                </CardContent>
+   915→   915→              </Card>
+   916→   916→            ))}
+   917→   917→          </div>
+   918→   918→        ) : products.length === 0 ? (
+   919→   919→          <EmptyProductsState searchQuery={searchQuery} />
+   920→   920→        ) : (
+   921→   921→          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+   922→   922→            {products.map((product) => (
+   923→   923→              <ProductCard
+   924→   924→                key={product.id}
+   925→   925→                product={product}
+   926→   926→                onAdd={handleAddToCart}
+   927→   927→              />
+   928→   928→            ))}
+   929→   929→          </div>
+   930→   930→        )}
+   931→   931→      </div>
+   932→   932→
+   933→   933→      {/* Cart Sidebar */}
+   934→   934→      <div className="lg:w-96 shrink-0">
+   935→   935→        <Card className="sticky top-20 flex flex-col max-h-[calc(100vh-7rem)] bg-gradient-to-b from-card to-card/95">
+   936→   936→          <CardHeader className="pb-3">
+   937→   937→            <div className="flex items-center justify-between">
+   938→   938→              <CardTitle className="text-base flex items-center gap-2">
+   939→   939→                <ShoppingCart className="h-4 w-4" />
+   940→   940→                Cart
+   941→   941→                {cart.items.length > 0 && (
+   942→   942→                  <Badge variant="secondary">{cart.getItemCount()}</Badge>
+   943→   943→                )}
+   944→   944→              </CardTitle>
+   945→   945→              {cart.items.length > 0 && (
+   946→   946→                <Button variant="ghost" size="sm" onClick={() => cart.clearCart()} className="text-destructive h-7">
+   947→   947→                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Clear
+   948→   948→                </Button>
+   949→   949→              )}
+   950→   950→            </div>
+   951→   951→          </CardHeader>
+   952→   952→          <Separator />
+   953→   953→          <ScrollArea className="flex-1 min-h-0">
+   954→   954→            {cart.items.length === 0 ? (
+   955→   955→              <EmptyCartState />
+   956→   956→            ) : (
+   957→   957→              <div className="p-3 space-y-2">
+   958→   958→                {cart.items.map((item) => (
+   959→   959→                  <CartItemRow
+   960→   960→                    key={item.productId}
+   961→   961→                    item={item}
+   962→   962→                    onUpdateQty={cart.updateQuantity}
+   963→   963→                    onRemove={cart.removeItem}
+   964→   964→                  />
+   965→   965→                ))}
+   966→   966→              </div>
+   967→   967→            )}
+   968→   968→          </ScrollArea>
+   969→   969→          {cart.items.length > 0 && (
+   970→   970→            <>
+   971→   971→              <Separator />
+   972→   972→              <div className="p-4 space-y-3">
+   973→   973→                {/* Customer Selection */}
+   974→   974→                <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+   975→   975→                  <SelectTrigger>
+   976→   976→                    <SelectValue placeholder="Walk-in Customer" />
+   977→   977→                  </SelectTrigger>
+   978→   978→                  <SelectContent>
+   979→   979→                    <SelectItem value="walk-in">Walk-in Customer</SelectItem>
+   980→   980→                    {customers.map((c) => (
+   981→   981→                      <SelectItem key={c.id} value={c.id}>{c.name}{c.phone ? ` - ${c.phone}` : ''}</SelectItem>
+   982→   982→                    ))}
+   983→   983→                  </SelectContent>
+   984→   984→                </Select>
+   985→   985→
+   986→   986→                <div className="space-y-1 text-sm">
+   987→   987→                  <div className="flex justify-between">
+   988→   988→                    <span className="text-muted-foreground">Subtotal</span>
+   989→   989→                    <span>{formatKES(subtotal)}</span>
+   990→   990→                  </div>
+   991→   991→                  <div className="flex justify-between">
+   992→   992→                    <span className="text-muted-foreground">VAT (16%)</span>
+   993→   993→                    <span>{formatKES(tax)}</span>
+   994→   994→                  </div>
+   995→   995→                  <Separator />
+   996→   996→                  <div className="flex justify-between font-bold text-base">
+   997→   997→                    <span>Total</span>
+   998→   998→                    <span className="text-primary">{formatKES(total)}</span>
+   999→   999→                  </div>
+  1000→  1000→                </div>
+  1001→  1001→
+  1002→  1002→                <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
+  1003→  1003→                  <DialogTrigger asChild>
+  1004→  1004→                    <Button className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground font-semibold h-12" size="lg">
+  1005→  1005→                      <CreditCard className="mr-2 h-4 w-4" />
+  1006→  1006→                      <span className="flex flex-col items-start leading-tight">
+  1007→  1007→                        <span className="text-xs font-normal opacity-80">Checkout</span>
+  1008→  1008→                        <span>{formatKES(total)}</span>
+  1009→  1009→                      </span>
+  1010→  1010→                    </Button>
+  1011→  1011→                  </DialogTrigger>
+  1012→  1012→                  <DialogContent className="sm:max-w-md">
+  1013→  1013→                    <DialogHeader>
+  1014→  1014→                      <DialogTitle>Complete Payment</DialogTitle>
+  1015→  1015→                      <DialogDescription>
+  1016→  1016→                        Total: <span className="font-bold text-primary">{formatKES(total)}</span>
+  1017→  1017→                      </DialogDescription>
+  1018→  1018→                    </DialogHeader>
+  1019→  1019→                    <div className="space-y-4">
+  1020→  1020→                      <div>
+  1021→  1021→                        <Label className="text-sm font-medium">Payment Method</Label>
+  1022→  1022→                        <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)} className="grid grid-cols-3 gap-2 mt-2">
+  1023→  1023→                          <div>
+  1024→  1024→                            <RadioGroupItem value="CASH" id="cash" className="peer sr-only" />
+  1025→  1025→                            <Label htmlFor="cash" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+  1026→  1026→                              <Banknote className="h-5 w-5" />
+  1027→  1027→                              <span className="text-xs font-medium">Cash</span>
+  1028→  1028→                            </Label>
+  1029→  1029→                          </div>
+  1030→  1030→                          <div>
+  1031→  1031→                            <RadioGroupItem value="MPESA" id="mpesa" className="peer sr-only" />
+  1032→  1032→                            <Label htmlFor="mpesa" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+  1033→  1033→                              <Smartphone className="h-5 w-5" />
+  1034→  1034→                              <span className="text-xs font-medium">M-Pesa</span>
+  1035→  1035→                            </Label>
+  1036→  1036→                          </div>
+  1037→  1037→                          <div>
+  1038→  1038→                            <RadioGroupItem value="DEBT" id="debt" className="peer sr-only" />
+  1039→  1039→                            <Label htmlFor="debt" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+  1040→  1040→                              <Wallet className="h-5 w-5" />
+  1041→  1041→                              <span className="text-xs font-medium">Debt</span>
+  1042→  1042→                            </Label>
+  1043→  1043→                          </div>
+  1044→  1044→                        </RadioGroup>
+  1045→  1045→                      </div>
+  1046→  1046→
+  1047→  1047→                      {paymentMethod === 'CASH' && (
+  1048→  1048→                        <div className="space-y-3">
+  1049→  1049→                          <div>
+  1050→  1050→                            <Label htmlFor="cashReceived">Cash Received</Label>
+  1051→  1051→                            <Input
+  1052→  1052→                              id="cashReceived"
+  1053→  1053→                              type="number"
+  1054→  1054→                              placeholder="0"
+  1055→  1055→                              value={cashReceived}
+  1056→  1056→                              onChange={(e) => setCashReceived(e.target.value)}
+  1057→  1057→                              className="text-lg font-semibold mt-1"
+  1058→  1058→                            />
+  1059→  1059→                          </div>
+  1060→  1060→                          {change > 0 && (
+  1061→  1061→                            <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg">
+  1062→  1062→                              <p className="text-sm font-medium text-green-700 dark:text-green-400">
+  1063→  1063→                                Change: {formatKES(change)}
+  1064→  1064→                              </p>
+  1065→  1065→                            </div>
+  1066→  1066→                          )}
+  1067→  1067→                          {cashReceived && Number(cashReceived) < total && (
+  1068→  1068→                            <Alert variant="destructive">
+  1069→  1069→                              <AlertCircle className="h-4 w-4" />
+  1070→  1070→                              <AlertTitle>Insufficient amount</AlertTitle>
+  1071→  1071→                              <AlertDescription>Need {formatKES(total - Number(cashReceived))} more</AlertDescription>
+  1072→  1072→                            </Alert>
+  1073→  1073→                          )}
+  1074→  1074→                        </div>
+  1075→  1075→                      )}
+  1076→  1076→
+  1077→  1077→                      {paymentMethod === 'DEBT' && !selectedCustomer && (
+  1078→  1078→                        <Alert>
+  1079→  1079→                          <AlertCircle className="h-4 w-4" />
+  1080→  1080→                          <AlertTitle>Customer Required</AlertTitle>
+  1081→  1081→                          <AlertDescription>Please select a customer before proceeding with debt payment.</AlertDescription>
+  1082→  1082→                        </Alert>
+  1083→  1083→                      )}
+  1084→  1084→
+  1085→  1085→                      {paymentMethod === 'MPESA' && (
+  1086→  1086→                        <div>
+  1087→  1087→                          <Label htmlFor="mpesaPhone">M-Pesa Phone Number</Label>
+  1088→  1088→                          <Input
+  1089→  1089→                            id="mpesaPhone"
+  1090→  1090→                            type="tel"
+  1091→  1091→                            placeholder="0712 345 678"
+  1092→  1092→                            value={mpesaPhone}
+  1093→  1093→                            onChange={(e) => setMpesaPhone(e.target.value)}
+  1094→  1094→                            className="mt-1"
+  1095→  1095→                          />
+  1096→  1096→                        </div>
+  1097→  1097→                      )}
+  1098→  1098→                    </div>
+  1099→  1099→                    <DialogFooter>
+  1100→  1100→                      <Button variant="outline" onClick={() => setCheckoutOpen(false)}>Cancel</Button>
+  1101→  1101→                      <Button
+  1102→  1102→                        onClick={handleCheckout}
+  1103→  1103→                        disabled={
+  1104→  1104→                          checkoutMutation.isPending ||
+  1105→  1105→                          (paymentMethod === 'CASH' && (!cashReceived || Number(cashReceived) < total)) ||
+  1106→  1106→                          (paymentMethod === 'DEBT' && !selectedCustomer)
+  1107→  1107→                        }
+  1108→  1108→                        className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+  1109→  1109→                      >
+  1110→  1110→                        {checkoutMutation.isPending ? (
+  1111→  1111→                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
+  1112→  1112→                        ) : (
+  1113→  1113→                          <><CheckCircle className="mr-2 h-4 w-4" />Complete Sale</>
+  1114→  1114→                        )}
+  1115→  1115→                      </Button>
+  1116→  1116→                    </DialogFooter>
+  1117→  1117→                  </DialogContent>
+  1118→  1118→                </Dialog>
+  1119→  1119→              </div>
+  1120→  1120→            </>
+  1121→  1121→          )}
+  1122→  1122→        </Card>
+  1123→  1123→      </div>
+  1124→  1124→
+  1125→  1125→      {/* M-Pesa STK Push Dialog */}
+  1126→  1126→      <Dialog open={mpesaDialogOpen} onOpenChange={setMpesaDialogOpen}>
+  1127→  1127→        <DialogContent className="sm:max-w-sm">
+  1128→  1128→          <DialogHeader>
+  1129→  1129→            <DialogTitle className="flex items-center gap-2">
+  1130→  1130→              <Smartphone className="h-5 w-5 text-green-600" />
+  1131→  1131→              M-Pesa Payment
+  1132→  1132→            </DialogTitle>
+  1133→  1133→            <DialogDescription>
+  1134→  1134→              Amount: <span className="font-bold">{formatKES(total)}</span>
+  1135→  1135→            </DialogDescription>
+  1136→  1136→          </DialogHeader>
+  1137→  1137→          {mpesaStatus === 'idle' && (
+  1138→  1138→            <div className="space-y-4">
+  1139→  1139→              <div>
+  1140→  1140→                <Label htmlFor="mpesaPhoneDialog">Phone Number</Label>
+  1141→  1141→                <Input
+  1142→  1142→                  id="mpesaPhoneDialog"
+  1143→  1143→                  type="tel"
+  1144→  1144→                  placeholder="0712 345 678"
+  1145→  1145→                  value={mpesaPhone}
+  1146→  1146→                  onChange={(e) => setMpesaPhone(e.target.value)}
+  1147→  1147→                />
+  1148→  1148→              </div>
+  1149→  1149→              <Button
+  1150→  1150→                className="w-full bg-green-600 hover:bg-green-700 text-white"
+  1151→  1151→                onClick={handleMpesaPay}
+  1152→  1152→                disabled={mpesaMutation.isPending}
+  1153→  1153→              >
+  1154→  1154→                {mpesaMutation.isPending ? (
+  1155→  1155→                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending STK Push...</>
+  1156→  1156→                ) : (
+  1157→  1157→                  'Send STK Push'
+  1158→  1158→                )}
+  1159→  1159→              </Button>
+  1160→  1160→            </div>
+  1161→  1161→          )}
+  1162→  1162→          {mpesaStatus === 'processing' && (
+  1163→  1163→            <div className="text-center py-8 space-y-4">
+  1164→  1164→              <div className="animate-pulse">
+  1165→  1165→                <Smartphone className="h-16 w-16 mx-auto text-green-600" />
+  1166→  1166→              </div>
+  1167→  1167→              <div>
+  1168→  1168→                <p className="font-semibold">Waiting for M-Pesa Confirmation</p>
+  1169→  1169→                <p className="text-sm text-muted-foreground mt-1">
+  1170→  1170→                  Please enter your M-Pesa PIN on your phone
+  1171→  1171→                </p>
+  1172→  1172→              </div>
+  1173→  1173→              <Loader2 className="h-6 w-6 animate-spin mx-auto text-green-600" />
+  1174→  1174→            </div>
+  1175→  1175→          )}
+  1176→  1176→          {mpesaStatus === 'success' && (
+  1177→  1177→            <div className="text-center py-8 space-y-4">
+  1178→  1178→              <CheckCircle className="h-16 w-16 mx-auto text-green-600" />
+  1179→  1179→              <p className="font-semibold text-green-600">Payment Successful!</p>
+  1180→  1180→              <Button onClick={() => { setMpesaDialogOpen(false); setMpesaStatus('idle'); }}>
+  1181→  1181→                Close
+  1182→  1182→              </Button>
+  1183→  1183→            </div>
+  1184→  1184→          )}
+  1185→  1185→          {mpesaStatus === 'failed' && (
+  1186→  1186→            <div className="text-center py-8 space-y-4">
+  1187→  1187→              <AlertCircle className="h-16 w-16 mx-auto text-destructive" />
+  1188→  1188→              <p className="font-semibold text-destructive">Payment Failed</p>
+  1189→  1189→              <Button variant="outline" onClick={() => setMpesaStatus('idle')}>Try Again</Button>
+  1190→  1190→            </div>
+  1191→  1191→          )}
+  1192→  1192→        </DialogContent>
+  1193→  1193→      </Dialog>
+  1194→  1194→    </div>
+  1195→  1195→  );
+  1196→  1196→}
+  1197→  1197→
+  1198→  1198→// ============================================================================
+  1199→  1199→// MAIN APP
+  1200→  1200→// ============================================================================
+  1201→  1201→
+  1202→  1202→function MainApp() {
+  1203→  1203→  const { activeTab } = useAppStore();
+  1204→  1204→
+  1205→  1205→  const renderTab = () => {
+  1206→  1206→    switch (activeTab) {
+  1207→  1207→      case 'pos': return <POSTab />;
+  1208→  1208→      case 'inventory': return <Suspense fallback={<TabLoadingFallback />}><LazyInventoryTab /></Suspense>;
+  1209→  1209→      case 'customers': return <Suspense fallback={<TabLoadingFallback />}><LazyCustomersTab /></Suspense>;
+  1210→  1210→      case 'rentals': return <Suspense fallback={<TabLoadingFallback />}><LazyRentalsTab /></Suspense>;
+  1211→  1211→      case 'financial': return <Suspense fallback={<TabLoadingFallback />}><LazyFinancialTab /></Suspense>;
+  1212→  1212→      case 'reports': return <Suspense fallback={<TabLoadingFallback />}><LazyReportsTab /></Suspense>;
+  1213→  1213→      case 'admin': return <Suspense fallback={<TabLoadingFallback />}><LazyAdminTab /></Suspense>;
+  1214→  1214→      default: return <POSTab />;
+  1215→  1215→    }
+  1216→  1216→  };
+  1217→  1217→
+  1218→  1218→  return (
+  1219→  1219→    <div className="flex h-screen overflow-hidden">
+  1220→  1220→      <AppSidebar />
+  1221→  1221→      <div className="flex-1 flex flex-col min-w-0 min-h-screen overflow-hidden">
+  1222→  1222→        <TopBar />
+  1223→  1223→        <main className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+  1224→  1224→          {renderTab()}
+  1225→  1225→        </main>
+  1226→  1226→        <footer className="border-t bg-background px-4 py-2 text-center mt-auto shrink-0">
+  1227→  1227→          <p className="text-xs text-muted-foreground">
+  1228→  1228→            MBUMAH HARDWARE POS & ERP System &copy; {new Date().getFullYear()} &mdash; All rights reserved
+  1229→  1229→          </p>
+  1230→  1230→        </footer>
+  1231→  1231→      </div>
+  1232→  1232→    </div>
+  1233→  1233→  );
+  1234→  1234→}
+  1235→  1235→
+  1236→  1236→// ============================================================================
+  1237→  1237→// PAGE EXPORT
+  1238→  1238→// ============================================================================
+  1239→  1239→
+  1240→  1240→export default function HomePage() {
+  1241→  1241→  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  1242→  1242→
+  1243→  1243→  return isAuthenticated ? <MainApp /> : <LoginScreen />;
+  1244→  1244→}
+  1245→  1245→

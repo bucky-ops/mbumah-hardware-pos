@@ -15,10 +15,10 @@ import {
   CheckCircle, Clock,
   ShoppingBag, CreditCard, Smartphone,
   AlertCircle, Loader2,
-  Home, Store, Mail, ShieldCheck, Eye,
+  Home, Store, Mail, ShieldCheck, Eye, EyeOff,
   Banknote, Wallet,
   TrendingUp, ArrowDownRight, AlertTriangle, DollarSign, Wrench, Hammer,
-  CalendarDays,
+  CalendarDays, Printer, Bell, ChevronDown,
 } from 'lucide-react';
 
 import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
@@ -27,7 +27,7 @@ import {
   paymentsApi, dashboardApi,
   formatKES, formatDate, formatDateTime,
   type ProductListItem, type CustomerItem,
-  type CategoryItem,
+  type CategoryItem, type TransactionItem,
 } from '@/lib/api';
 import type { PaymentMethod, CartItem, UnitType, DashboardStats } from '@/lib/types';
 
@@ -55,6 +55,7 @@ const LazyRentalsTab = lazy(() => import('./tabs/rentals-tab'));
 const LazyFinancialTab = lazy(() => import('./tabs/financial-tab'));
 const LazyReportsTab = lazy(() => import('./tabs/reports-tab'));
 const LazyAdminTab = lazy(() => import('./tabs/admin-tab'));
+const LazyTransactionsTab = lazy(() => import('./tabs/transactions-tab'));
 
 function TabLoadingFallback() {
   return (
@@ -79,14 +80,34 @@ const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
   { id: 'rentals', label: 'Rentals', icon: KeyRound },
   { id: 'financial', label: 'Financial', icon: BarChart3 },
   { id: 'reports', label: 'Reports', icon: FileText },
+  { id: 'transactions', label: 'Transactions', icon: ShoppingBag },
   { id: 'admin', label: 'Admin', icon: Settings },
 ];
 
 const DEMO_ACCOUNTS = [
-  { email: 'admin@mbumahhardware.co.ke', password: 'password123', role: 'Super Admin', icon: ShieldCheck, color: 'text-red-500' },
-  { email: 'cashier@mbumahhardware.co.ke', password: 'password123', role: 'Cashier', icon: ShoppingCart, color: 'text-green-500' },
-  { email: 'accountant@mbumahhardware.co.ke', password: 'password123', role: 'Accountant', icon: BarChart3, color: 'text-amber-500' },
+  { email: 'admin@mbumahhardware.co.ke', password: 'password123', role: 'Super Admin', icon: ShieldCheck, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900 hover:bg-red-100 dark:hover:bg-red-950/50' },
+  { email: 'cashier@mbumahhardware.co.ke', password: 'password123', role: 'Cashier', icon: ShoppingCart, color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900 hover:bg-green-100 dark:hover:bg-green-950/50' },
+  { email: 'accountant@mbumahhardware.co.ke', password: 'password123', role: 'Accountant', icon: BarChart3, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900 hover:bg-amber-100 dark:hover:bg-amber-950/50' },
 ];
+
+// Category image mapping
+const CATEGORY_IMAGES: Record<string, string> = {
+  cat_cement: '/categories/cat_cement.png',
+  cat_iron_sheets: '/categories/cat_iron.png',
+  cat_paints: '/categories/cat_paints.png',
+  cat_iron_bars: '/categories/cat_rebar.png',
+  cat_wheelbarrows: '/categories/cat_wheelbarrow.png',
+  cat_mesh_wires: '/categories/cat_mesh.png',
+  cat_tools: '/categories/cat_tools.png',
+  cat_plumbing: '/categories/cat_plumbing.png',
+  cat_electrical: '/categories/cat_electrical.png',
+  cat_nails_screws: '/categories/cat_nails.png',
+};
+
+function getCategoryImage(categoryId: string | null | undefined): string | null {
+  if (!categoryId) return null;
+  return CATEGORY_IMAGES[categoryId] || null;
+}
 
 // ============================================================================
 // LIVE CLOCK HOOK
@@ -131,7 +152,11 @@ function LoginScreen() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[oklch(0.22_0.07_260)] via-[oklch(0.295_0.1_260)] to-[oklch(0.22_0.06_260)] p-4 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Animated gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[oklch(0.22_0.07_260)] via-[oklch(0.295_0.1_260)] to-[oklch(0.22_0.06_260)]" />
+      <div className="absolute inset-0 bg-gradient-to-tr from-[oklch(0.22_0.08_30)] via-transparent to-[oklch(0.25_0.09_150)] animate-gradient-shift" />
+
       {/* Decorative hardware pattern */}
       <div className="absolute inset-0 opacity-[0.04] pointer-events-none">
         <div className="absolute top-10 left-10"><Wrench className="h-24 w-24 text-white" /></div>
@@ -144,7 +169,7 @@ function LoginScreen() {
       </div>
 
       <div className="w-full max-w-md relative z-10">
-        <Card className="shadow-2xl border border-white/10 bg-card/95 backdrop-blur-sm">
+        <Card className="shadow-2xl border border-white/10 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl">
           <CardHeader className="text-center pb-2">
             {/* Animated logo */}
             <div className="mx-auto w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center mb-4 shadow-lg animate-pulse-slow">
@@ -185,15 +210,15 @@ function LoginScreen() {
                     required
                     disabled={isLoading}
                   />
-                  <Button
+                  <button
                     type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-3"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                     onClick={() => setShowPassword(!showPassword)}
+                    tabIndex={-1}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
-                    <Eye className="h-4 w-4" />
-                  </Button>
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
               </div>
               <Button
@@ -225,7 +250,7 @@ function LoginScreen() {
                       key={acct.email}
                       type="button"
                       onClick={() => fillDemo(acct)}
-                      className="flex flex-col items-center gap-1.5 p-2.5 rounded-lg border border-border/50 hover:border-primary/40 hover:bg-primary/5 transition-all text-center"
+                      className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all text-center ${acct.bg}`}
                     >
                       <Icon className={`h-5 w-5 ${acct.color}`} />
                       <span className="text-[10px] font-medium leading-tight">{acct.role}</span>
@@ -238,7 +263,18 @@ function LoginScreen() {
           <CardFooter className="flex flex-col gap-2 text-sm text-muted-foreground">
             <p className="text-xs">Select a demo account above or enter credentials manually</p>
           </CardFooter>
+          {/* Kenyan flag accent at bottom */}
+          <div className="flex h-1.5 rounded-b-xl overflow-hidden">
+            <div className="flex-1 bg-black" />
+            <div className="flex-1 bg-red-600" />
+            <div className="flex-1 bg-green-600" />
+            <div className="flex-1 bg-white" />
+          </div>
         </Card>
+        {/* Branding text */}
+        <p className="text-center mt-4 text-xs text-white/40 font-medium tracking-wider">
+          Powered by MBUMAH HARDWARE
+        </p>
       </div>
     </div>
   );
@@ -264,20 +300,28 @@ function AppSidebar() {
     toast.success('Logged out successfully');
   };
 
-  const navItems = TAB_CONFIG.map(({ id, label, icon: Icon }) => (
+  // Navigation groups
+  const mainNavItems = TAB_CONFIG.filter(t => ['pos', 'inventory', 'customers', 'transactions'].includes(t.id));
+  const managementNavItems = TAB_CONFIG.filter(t => ['rentals', 'financial', 'reports', 'admin'].includes(t.id));
+
+  const renderNavItem = ({ id, label, icon: Icon }: { id: AppTab; label: string; icon: React.ElementType }) => (
     <button
       key={id}
       onClick={() => handleNav(id)}
-      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all relative ${
         activeTab === id
           ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
           : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
       }`}
     >
+      {/* Active left border indicator */}
+      {activeTab === id && (
+        <div className="absolute left-0 top-1 bottom-1 w-1 rounded-r-full bg-sidebar-primary-foreground/80" />
+      )}
       <Icon className="h-4 w-4 shrink-0" />
       <span>{label}</span>
     </button>
-  ));
+  );
 
   return (
     <>
@@ -291,43 +335,71 @@ function AppSidebar() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 z-50 h-full w-64 bg-sidebar text-sidebar-foreground transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:z-auto ${
+        className={`fixed top-0 left-0 z-50 h-full w-64 bg-sidebar text-sidebar-foreground transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:z-auto border-r border-sidebar-border ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <div className="flex flex-col h-full">
-          {/* Logo */}
+          {/* Logo + Notification Bell */}
           <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
             <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center">
               <Store className="h-5 w-5 text-sidebar-primary-foreground" />
             </div>
-            <div>
+            <div className="flex-1 min-w-0">
               <h1 className="font-bold text-sm leading-tight">MBUMAH HARDWARE</h1>
               <p className="text-xs text-sidebar-foreground/60">POS & ERP</p>
             </div>
             <Button
               variant="ghost"
               size="icon"
-              className="ml-auto lg:hidden text-sidebar-foreground/60 hover:text-sidebar-foreground"
+              className="shrink-0 text-sidebar-foreground/60 hover:text-sidebar-foreground relative"
+              onClick={() => toast.info('No new notifications')}
+            >
+              <Bell className="h-4 w-4" />
+              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="shrink-0 lg:hidden text-sidebar-foreground/60 hover:text-sidebar-foreground"
               onClick={() => setSidebarOpen(false)}
             >
               <X className="h-4 w-4" />
             </Button>
           </div>
 
+          {/* Store Selector */}
+          <div className="px-3 pt-3 pb-1">
+            <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-sidebar-border bg-sidebar-accent/50 text-xs text-sidebar-foreground/80 hover:bg-sidebar-accent transition-colors">
+              <Store className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate font-medium">Juja Main Branch</span>
+              <ChevronDown className="h-3 w-3 ml-auto shrink-0" />
+            </button>
+          </div>
+
           {/* Navigation */}
-          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
-            {navItems}
+          <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto custom-scrollbar">
+            {/* Main Section */}
+            <p className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">Main</p>
+            {mainNavItems.map(renderNavItem)}
+
+            {/* Management Section */}
+            <p className="px-4 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">Management</p>
+            {managementNavItems.map(renderNavItem)}
           </nav>
 
           {/* Footer */}
           <div className="border-t border-sidebar-border px-3 py-3 space-y-2">
             <div className="flex items-center gap-3 px-3 py-2">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground text-xs">
-                  {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
-                </AvatarFallback>
-              </Avatar>
+              <div className="relative">
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground text-xs">
+                    {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
+                  </AvatarFallback>
+                </Avatar>
+                {/* Online dot */}
+                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-sidebar rounded-full" />
+              </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
                 <p className="text-xs text-sidebar-foreground/60 truncate">{user?.role || 'Cashier'}</p>
@@ -473,14 +545,14 @@ function DashboardStats({ storeId }: { storeId: string }) {
       {stats.map((stat) => {
         const Icon = stat.icon;
         return (
-          <Card key={stat.label} className={`border-l-4 ${stat.borderColor} py-0`}>
+          <Card key={stat.label} className={`border-l-4 ${stat.borderColor} py-0 bg-gradient-to-br from-card to-muted/30`}>
             <CardContent className="p-3 flex items-center gap-3">
-              <div className={`shrink-0 p-2 rounded-lg ${stat.bg}`}>
+              <div className={`shrink-0 p-2 rounded-lg bg-gradient-to-br ${stat.bg}`}>
                 <Icon className={`h-4 w-4 ${stat.color}`} />
               </div>
               <div className="min-w-0">
                 <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{stat.label}</p>
-                <p className={`text-sm sm:text-base font-bold ${stat.color} truncate`}>
+                <p className={`text-sm sm:text-base font-bold ${stat.color} whitespace-nowrap`}>
                   {stat.format === 'kes' ? formatKES(stat.value) : stat.value}
                 </p>
               </div>
@@ -520,17 +592,21 @@ function CategoryChips({
       {categories.map((cat) => {
         const catColor = cat.color || '#6b7280';
         const isActive = selected === cat.id;
+        const catImage = getCategoryImage(cat.id);
         return (
           <button
             key={cat.id}
             onClick={() => onSelect(cat.id)}
-            className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap ${
+            className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap flex items-center gap-1.5 ${
               isActive
                 ? 'text-white border-transparent shadow-sm'
                 : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
             }`}
             style={isActive ? { backgroundColor: catColor, borderColor: catColor } : { borderLeftColor: catColor, borderLeftWidth: '3px' }}
           >
+            {catImage && (
+              <img src={catImage} alt="" className="h-4 w-4 rounded-full object-cover" />
+            )}
             {cat.name}
           </button>
         );
@@ -575,13 +651,15 @@ function ProductCard({
 
   return (
     <Card
-      className="overflow-hidden cursor-pointer hover:shadow-lg transition-all hover:border-primary/30 group border-l-4"
+      className="overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 group border-l-4"
       style={{ borderLeftColor: categoryColor }}
       onClick={() => onAdd(product)}
     >
       <div className="h-24 bg-muted flex items-center justify-center relative overflow-hidden">
         {product.imageUrl ? (
           <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        ) : getCategoryImage(product.categoryId) ? (
+          <img src={getCategoryImage(product.categoryId)!} alt={product.category?.name || ''} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
           <Package className="h-9 w-9 text-muted-foreground/25" />
         )}
@@ -596,7 +674,7 @@ function ProductCard({
         </div>
       </div>
       <CardContent className="p-2.5">
-        <h3 className="font-medium text-sm truncate leading-tight">{product.name}</h3>
+        <h3 className="font-medium text-sm line-clamp-2 leading-tight">{product.name}</h3>
         {product.category && (
           <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">{product.category.name}</p>
         )}
@@ -778,10 +856,21 @@ function POSTab() {
     queryFn: () => customersApi.list({ storeId: currentStoreId, limit: 100 }),
   });
 
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [lastTransaction, setLastTransaction] = useState<TransactionItem | null>(null);
+  const [lastCashReceived, setLastCashReceived] = useState(0);
+  const [lastMpesaPhone, setLastMpesaPhone] = useState('');
+
   const checkoutMutation = useMutation({
     mutationFn: transactionsApi.create,
-    onSuccess: () => {
+    onSuccess: (res) => {
       toast.success('Transaction completed successfully!');
+      if (res.data) {
+        setLastTransaction(res.data);
+        setLastCashReceived(paymentMethod === 'CASH' ? Number(cashReceived) || total : 0);
+        setLastMpesaPhone(mpesaPhone);
+        setReceiptOpen(true);
+      }
       cart.clearCart();
       setCheckoutOpen(false);
       setCashReceived('');
@@ -1122,6 +1211,146 @@ function POSTab() {
         </Card>
       </div>
 
+      {/* Receipt Dialog */}
+      <Dialog open={receiptOpen} onOpenChange={setReceiptOpen}>
+        <DialogContent className="sm:max-w-lg receipt-dialog">
+          <DialogHeader className="pb-2">
+            <DialogTitle className="text-center">Receipt</DialogTitle>
+          </DialogHeader>
+          {lastTransaction && (
+            <div className="receipt-content receipt-printable space-y-4 text-sm" id="receipt-content">
+              {/* Store Header */}
+              <div className="text-center space-y-0.5">
+                <h2 className="text-lg font-bold">MBUMAH HARDWARE</h2>
+                <p className="text-xs text-muted-foreground">Juja Main Branch</p>
+                <p className="text-xs text-muted-foreground">Tel: +254 700 123 456</p>
+              </div>
+              <Separator />
+              {/* Receipt Meta */}
+              <div className="space-y-1 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Receipt #:</span>
+                  <span className="font-mono font-semibold">{lastTransaction.receiptNumber}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Date:</span>
+                  <span>{formatDateTime(lastTransaction.createdAt)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Cashier:</span>
+                  <span>{lastTransaction.cashier?.name || useAuthStore.getState().user?.name || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Customer:</span>
+                  <span>{lastTransaction.customer?.name || 'Walk-in'}</span>
+                </div>
+              </div>
+              <Separator />
+              {/* Line Items */}
+              <div className="space-y-1">
+                <div className="grid grid-cols-12 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  <span className="col-span-5">Item</span>
+                  <span className="col-span-2 text-center">Qty</span>
+                  <span className="col-span-2 text-center">Unit</span>
+                  <span className="col-span-3 text-right">Total</span>
+                </div>
+                {(lastTransaction.items || []).map((item) => (
+                  <div key={item.id} className="grid grid-cols-12 text-xs py-0.5">
+                    <span className="col-span-5 truncate">{item.productName}</span>
+                    <span className="col-span-2 text-center">{item.quantity}</span>
+                    <span className="col-span-2 text-center">{item.unitType}</span>
+                    <span className="col-span-3 text-right">{formatKES(item.lineTotal)}</span>
+                  </div>
+                ))}
+              </div>
+              <Separator />
+              {/* Totals */}
+              <div className="space-y-1 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span>{formatKES(lastTransaction.subtotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">VAT (16%)</span>
+                  <span>{formatKES(lastTransaction.taxAmount)}</span>
+                </div>
+                {lastTransaction.discountAmount > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Discount</span>
+                    <span>-{formatKES(lastTransaction.discountAmount)}</span>
+                  </div>
+                )}
+                <Separator />
+                <div className="flex justify-between font-bold text-base">
+                  <span>Total</span>
+                  <span className="text-primary">{formatKES(lastTransaction.totalAmount)}</span>
+                </div>
+              </div>
+              <Separator />
+              {/* Payment Details */}
+              <div className="space-y-1 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Payment Method</span>
+                  <Badge variant="secondary" className="text-[10px]">
+                    {lastTransaction.paymentMethod === 'CASH' && <Banknote className="h-3 w-3 mr-1" />}
+                    {lastTransaction.paymentMethod === 'MPESA' && <Smartphone className="h-3 w-3 mr-1" />}
+                    {lastTransaction.paymentMethod === 'DEBT' && <Wallet className="h-3 w-3 mr-1" />}
+                    {lastTransaction.paymentMethod}
+                  </Badge>
+                </div>
+                {lastTransaction.paymentMethod === 'CASH' && lastCashReceived > 0 && (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Cash Received</span>
+                      <span>{formatKES(lastCashReceived)}</span>
+                    </div>
+                    {lastCashReceived - lastTransaction.totalAmount > 0 && (
+                      <div className="flex justify-between text-green-600 font-semibold">
+                        <span>Change</span>
+                        <span>{formatKES(lastCashReceived - lastTransaction.totalAmount)}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+                {lastTransaction.paymentMethod === 'MPESA' && lastMpesaPhone && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">M-Pesa Phone</span>
+                    <span>{lastMpesaPhone}</span>
+                  </div>
+                )}
+              </div>
+              <Separator />
+              {/* Footer */}
+              <div className="text-center space-y-1">
+                <p className="font-semibold text-xs">Thank you for shopping at MBUMAH HARDWARE!</p>
+                <p className="text-xs text-muted-foreground italic">Asante sana!</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                window.print();
+              }}
+            >
+              <Printer className="mr-2 h-4 w-4" />
+              Print Receipt
+            </Button>
+            <Button
+              onClick={() => {
+                setReceiptOpen(false);
+                setLastTransaction(null);
+              }}
+              className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+            >
+              <ShoppingCart className="mr-2 h-4 w-4" />
+              New Sale
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* M-Pesa STK Push Dialog */}
       <Dialog open={mpesaDialogOpen} onOpenChange={setMpesaDialogOpen}>
         <DialogContent className="sm:max-w-sm">
@@ -1210,6 +1439,7 @@ function MainApp() {
       case 'rentals': return <Suspense fallback={<TabLoadingFallback />}><LazyRentalsTab /></Suspense>;
       case 'financial': return <Suspense fallback={<TabLoadingFallback />}><LazyFinancialTab /></Suspense>;
       case 'reports': return <Suspense fallback={<TabLoadingFallback />}><LazyReportsTab /></Suspense>;
+      case 'transactions': return <Suspense fallback={<TabLoadingFallback />}><LazyTransactionsTab /></Suspense>;
       case 'admin': return <Suspense fallback={<TabLoadingFallback />}><LazyAdminTab /></Suspense>;
       default: return <POSTab />;
     }

@@ -239,3 +239,110 @@ Unresolved Issues / Next Phase Priorities:
 - Mobile responsiveness could be further improved
 - Transaction history view not yet implemented
 - Print receipt functionality needed
+
+---
+Task ID: 8
+Agent: Feature Developer
+Task: Add receipt generation and transaction history
+
+Work Log:
+- Added 'transactions' to AppTab type in src/lib/stores.ts
+- Created src/app/tabs/transactions-tab.tsx with: summary cards (Period Sales, Transactions, Avg Value, Top Method), date range presets (Today, This Week, This Month, Custom), payment method filter (All, CASH, MPESA, DEBT), search by receipt # or customer name, expandable transaction rows showing line items, CSV export of filtered transactions
+- Added LazyTransactionsTab lazy import in page.tsx
+- Added transactions tab to TAB_CONFIG with ShoppingBag icon and "Transactions" label
+- Added transactions case to renderTab() switch in MainApp
+- Added receipt dialog that appears automatically after successful checkout with: store header (MBUMAH HARDWARE, Juja Main Branch, phone), receipt number, date/time, cashier name, customer name, line items table (product, qty, unit, total), subtotal/VAT(16%)/discount/total breakdown, payment method badge with icon, cash received and change for CASH, M-Pesa phone for MPESA, footer ("Thank you for shopping at MBUMAH HARDWARE!" + "Asante sana!"), Print Receipt button (window.print()), New Sale button (closes receipt and clears state)
+- Added print-specific CSS in globals.css (@media print rules for receipt-dialog class)
+- Fixed styling issues: product card h3 changed from truncate to line-clamp-2, stat card values changed from truncate to whitespace-nowrap, added bg-gradient-to-br to stat cards, added bg-gradient-to-br to stat icon backgrounds, added transition-all duration-200 hover:-translate-y-0.5 to product cards
+- Added Printer icon import from lucide-react
+- Added TransactionItem type import from @/lib/api
+- All files pass ESLint with no errors
+- Server verified: 29 products loading, transactions API responding
+
+Stage Summary:
+- Receipt generation fully implemented with auto-popup after checkout, print support, and all required fields
+- Transaction history tab created with 4 summary cards, date/payment filters, search, expandable rows, and CSV export
+- All 3 styling fixes applied (line-clamp-2, whitespace-nowrap, hover animations, gradient backgrounds)
+- AppTab type updated with 'transactions', TAB_CONFIG updated, lazy loading configured
+- No new npm packages added, no API routes modified
+
+---
+Task ID: 9
+Agent: UI Polish Agent
+Task: Polish UI and Add Product Category Images to MBUMAH HARDWARE POS
+
+Work Log:
+- Generated 10 product category images using z-ai image-gen CLI tool:
+  - cat_cement.png (Cement bags), cat_iron.png (Iron sheets), cat_paints.png (Paint buckets)
+  - cat_rebar.png (Steel rebar), cat_wheelbarrow.png (Wheelbarrow), cat_mesh.png (Wire mesh)
+  - cat_tools.png (Construction tools), cat_plumbing.png (PVC pipes), cat_electrical.png (Electrical cable)
+  - cat_nails.png (Nails and screws)
+- Copied all 10 images to /home/z/my-project/public/categories/
+- Added CATEGORY_IMAGES mapping and getCategoryImage() helper function in page.tsx
+- Updated ProductCard to use category images when product.imageUrl is null, falling back to Package icon
+- Updated CategoryChips to display small category image thumbnails next to category names
+- Enhanced LoginScreen: animated gradient background (animate-gradient-shift keyframe), frosted glass card (backdrop-blur-xl + bg-white/90 dark:bg-gray-900/90), Eye/EyeOff password toggle, role-colored demo buttons with bg classes, Kenyan flag accent stripe at bottom of card, "Powered by MBUMAH HARDWARE" branding text below card
+- Improved AppSidebar: border-r border-sidebar-border, active tab left border indicator (VS Code style), grouped navigation (Main: POS/Inventory/Customers/Transactions, Management: Rentals/Financial/Reports/Admin) with section labels, store selector dropdown (Juja Main Branch), notification bell icon with red dot, green "Online" dot on user avatar
+- Updated globals.css: added receipt-printable class for 80mm thermal receipt printing, added aside/header/footer/no-print display:none in print media, added animate-gradient-shift keyframe animation
+- Added receipt-printable class to receipt content div for proper print styling
+- Removed unused User import from lucide-react
+- All files pass ESLint with no errors
+- Dev server verified: all API endpoints responding, category images accessible at /categories/*.png
+
+Stage Summary:
+- 10 AI-generated category images for all product categories
+- Product cards now show category images instead of generic icons
+- Category filter chips show small category image thumbnails
+- Login screen significantly enhanced with animated gradient, frosted glass, Kenyan flag accent, better password toggle, colored demo buttons
+- Sidebar improved with grouped navigation, active indicators, store selector, notification bell, online status dot
+- Print CSS enhanced for 80mm thermal receipt printers
+- No new npm packages added, no API routes modified, all existing functionality preserved
+
+---
+Task ID: 10
+Agent: Main Orchestrator (Periodic QA Review)
+Task: QA review, bug fixes, and feature additions
+
+Work Log:
+- Reviewed worklog.md (Tasks 1-9 complete)
+- Verified dev server running on port 3000
+- Tested all 8 tabs via agent-browser: POS, Inventory, Customers, Rentals, Financial, Reports, Transactions, Admin - ALL WORKING
+- Confirmed checkout flow works end-to-end: add to cart → checkout with cash → receipt auto-popup
+- Confirmed transaction history shows completed transactions
+- Confirmed category images displaying on product cards and filter chips
+- Confirmed enhanced login page with gradient animation, frosted glass, Kenyan flag accent
+- Confirmed sidebar improvements (grouped nav, store selector, notification bell, online dot)
+- All API endpoints returning 200 status codes
+- No runtime errors in browser console
+- Confirmed receipt generation with Print Receipt and New Sale buttons
+
+Stage Summary:
+- Full end-to-end QA complete: all 8 tabs functional, checkout → receipt → transaction history flow verified
+- System is stable with no critical bugs
+- Overall quality ratings: Login 8/10, POS 7/10, Inventory 8/10, Customers 9/10, Rentals 8/10, Financial 7/10, Reports 7/10, Transactions 8/10, Admin 8/10, Dark mode 8/10
+
+---
+Current Project Status:
+- COMPLETE: All backend API routes (24 endpoints) verified working
+- COMPLETE: Database schema with 20+ models and full seed data (29 products, 10 categories, 5 customers)
+- COMPLETE: Frontend application with 8 tabs and full POS functionality
+- COMPLETE: Receipt generation after checkout with print support
+- COMPLETE: Transaction history tab with filters, search, and CSV export
+- COMPLETE: AI-generated category images on product cards and filter chips
+- COMPLETE: Enhanced login page (gradient animation, frosted glass, Kenyan flag accent, role-colored demo buttons)
+- COMPLETE: Improved sidebar (grouped navigation, active indicators, store selector, notification bell)
+- COMPLETE: Dark mode support across all tabs
+- COMPLETE: Bug fixes from previous rounds (storeId, isRentalItem, API endpoints, null access, NaN)
+- Server running via persistent runner.js (detached spawn)
+- All APIs verified working with 200 status codes
+
+Unresolved Issues / Next Phase Priorities:
+- M-Pesa mock service needs Docker to run (not tested in sandbox)
+- Notification service (mini-service) not yet built
+- Mobile responsiveness could be further improved
+- Low stock alert details (clicking Low Stock card should show which products)
+- Customer debt payment from Customers tab not fully tested
+- Receipt print layout could be further refined for actual thermal printers
+- Add data export (PDF reports) capability
+- Add user profile/settings page
+- Add search functionality for products by barcode/SKU scan

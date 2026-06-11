@@ -159,3 +159,53 @@
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: oklch(0.55 0.02 250);
 }
+
+/* Print styles for receipt */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .receipt-printable,
+  .receipt-printable * {
+    visibility: visible;
+  }
+  .receipt-printable {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm;
+    font-size: 12px;
+  }
+  .receipt-dialog,
+  .receipt-dialog * {
+    visibility: visible;
+  }
+  .receipt-dialog {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  .receipt-content {
+    padding: 1rem;
+  }
+  /* Hide dialog chrome when printing */
+  .receipt-dialog button,
+  .receipt-dialog [role="dialog"] > button {
+    display: none !important;
+  }
+  /* Hide sidebar, topbar, footer */
+  aside, header, footer, .no-print {
+    display: none !important;
+  }
+}
+
+/* Animated gradient shift for login background */
+@keyframes gradient-shift {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.animate-gradient-shift {
+  animation: gradient-shift 8s ease-in-out infinite;
+}
