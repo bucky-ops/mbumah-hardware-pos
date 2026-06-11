@@ -40,7 +40,7 @@ async function stkPushHandler(...args: unknown[]): Promise<Response> {
   }
 
   // Find or create the MpesaTransaction record
-  let mpesaTransaction = null;
+  let mpesaTransaction: Awaited<ReturnType<typeof db.mpesaTransaction.findFirst>> | null = null;
   if (storeId && transactionId) {
     mpesaTransaction = await db.mpesaTransaction.findFirst({
       where: { storeId, transactionId, status: 'PENDING' },

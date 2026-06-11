@@ -353,3 +353,46 @@ export function hasPermission(role: UserRole, resource: string, action: string):
   if (!resourcePermissions) return false;
   return resourcePermissions.includes(action);
 }
+
+
+// ============================================================================
+// SHIFT MANAGEMENT
+// ============================================================================
+
+export const ShiftStatus = {
+  ACTIVE: 'ACTIVE',
+  ENDED: 'ENDED',
+} as const;
+
+export type ShiftStatus = (typeof ShiftStatus)[keyof typeof ShiftStatus];
+
+export interface ShiftData {
+  id: string;
+  userId: string;
+  userName?: string;
+  storeId: string;
+  startedAt: string;
+  endedAt?: string | null;
+  startingCash: number;
+  endingCash?: number | null;
+  countedCash?: number | null;
+  cashDifference?: number | null;
+  totalSales: number;
+  totalTransactions: number;
+  status: ShiftStatus;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateShiftPayload {
+  storeId: string;
+  userId: string;
+  startingCash: number;
+}
+
+export interface EndShiftPayload {
+  endingCash: number;
+  countedCash: number;
+  notes?: string;
+}

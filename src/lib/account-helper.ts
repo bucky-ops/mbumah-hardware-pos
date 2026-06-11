@@ -26,7 +26,7 @@ const ACCOUNT_CODES = {
   BAD_DEBT_EXPENSE: '5400',
 } as const;
 
-type AccountCode = (typeof ACCOUNT_CODES)[keyof typeof ACCOUNT_CODES];
+export type AccountCode = (typeof ACCOUNT_CODES)[keyof typeof ACCOUNT_CODES];
 
 const accountCache = new Map<string, string>();
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -9,13 +9,21 @@ import {
   ShoppingCart, DollarSign, FileSpreadsheet, FileDown,
   Calendar, Clock, Eye, Play, Sparkles, PieChart,
   HeartPulse, RotateCcw, CreditCard, Banknote, Smartphone,
-  AlertTriangle, Users, Timer, Printer,
+  AlertTriangle, Users, Timer, Printer, Wrench,
+  Search, ClipboardList,
 } from 'lucide-react';
+import {
+  BarChart, Bar, LineChart, Line, AreaChart, Area,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
 
 import { useAppStore } from '@/lib/stores';
 import {
   reportsApi, dashboardApi,
+  customersApi, rentalsApi, transactionsApi,
   formatKES,
+  type CustomerItem,
+  type RentalItem,
 } from '@/lib/api';
 
 import { Button } from '@/components/ui/button';
@@ -178,7 +186,7 @@ function MiniSparkline({ data, color = 'text-primary', height = 24 }: {
 // Date Range Presets Component
 // ============================================================================
 
-type DatePreset = 'today' | 'this_week' | 'this_month' | 'last_month' | 'custom';
+type DatePreset = 'today' | 'this_week' | 'this_month' | 'this_quarter' | 'this_year' | 'last_month' | 'custom';
 
 function getDatePresetRange(preset: DatePreset): { from: string; to: string } {
   const now = new Date();
@@ -196,6 +204,13 @@ function getDatePresetRange(preset: DatePreset): { from: string; to: string } {
     }
     case 'this_month':
       return { from: fmt(new Date(now.getFullYear(), now.getMonth(), 1)), to: fmt(now) };
+    case 'this_quarter': {
+      const q = Math.floor(now.getMonth() / 3);
+      const start = new Date(now.getFullYear(), q * 3, 1);
+      return { from: fmt(start), to: fmt(now) };
+    }
+    case 'this_year':
+      return { from: fmt(new Date(now.getFullYear(), 0, 1)), to: fmt(now) };
     case 'last_month': {
       const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const end = new Date(now.getFullYear(), now.getMonth(), 0);
@@ -298,8 +313,8 @@ function SVGLineChart({ data, height = 200 }: { data: { label: string; value: nu
 
 export default function ReportsTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
-  const [reportType, setReportType] = useState<'sales' | 'inventory' | 'valuation' | 'daily' | 'top_products'>('sales');
-  const [chartType, setChartType] = useState<'bar' | 'line' | 'pie'>('bar');
+  const [reportType, setReportType] = useState<'sales' | 'inventory' | 'valuation' | 'daily' | 'top_products' | 'customer_analysis' | 'rental_performance'>('sales');
+  const [chartType, setChartType] = useState<'bar' | 'line' | 'area' | 'pie'>('bar');
   const [datePreset, setDatePreset] = useState<DatePreset>('this_month');
 
   // Initialize from preset
@@ -319,7 +334,7 @@ export default function ReportsTab() {
   const { data: salesData, isLoading: salesLoading } = useQuery({
     queryKey: ['sales-report', currentStoreId, dateFrom, dateTo],
     queryFn: () => reportsApi.getSalesReport({ storeId: currentStoreId, dateFrom, dateTo }),
-    enabled: reportType === 'sales' || reportType === 'daily' || reportType === 'top_products',
+    enabled: reportType === 'sales' || reportType === 'daily' || reportType === 'top_products' || reportType === 'customer_analysis',
   });
 
   const { data: inventoryData, isLoading: inventoryLoading } = useQuery({
@@ -331,6 +346,27 @@ export default function ReportsTab() {
   const { data: dashboardData } = useQuery({
     queryKey: ['dashboard', currentStoreId],
     queryFn: () => dashboardApi.getStats(currentStoreId),
+  });
+
+  // Customer data for customer analysis report
+  const { data: customersData, isLoading: customersLoading } = useQuery({
+    queryKey: ['customers-report', currentStoreId],
+    queryFn: () => customersApi.list({ storeId: currentStoreId, limit: 100 }),
+    enabled: reportType === 'customer_analysis',
+  });
+
+  // Transactions data for customer analysis
+  const { data: transactionsData, isLoading: transactionsLoading } = useQuery({
+    queryKey: ['transactions-report', currentStoreId, dateFrom, dateTo],
+    queryFn: () => transactionsApi.list({ storeId: currentStoreId, dateFrom, dateTo, limit: 200 }),
+    enabled: reportType === 'customer_analysis',
+  });
+
+  // Rentals data for rental performance report
+  const { data: rentalsData, isLoading: rentalsLoading } = useQuery({
+    queryKey: ['rentals-report', currentStoreId],
+    queryFn: () => rentalsApi.list({ storeId: currentStoreId, limit: 100 }),
+    enabled: reportType === 'rental_performance',
   });
 
   const salesReport = salesData?.data;
@@ -428,16 +464,169 @@ export default function ReportsTab() {
     }));
   }, [topProducts]);
 
+  // Customer Analysis data
+  const customerAnalysis = useMemo(() => {
+    const customers = customersData?.data || [];
+    const transactions = transactionsData?.data || [];
+    if (customers.length === 0) return { topCustomers: [], paymentMethods: [], customerCount: 0, totalSpent: 0, avgSpend: 0, debtTotal: 0 };
+
+    // Aggregate spending per customer
+    const customerSpending = new Map<string, { name: string; totalSpent: number; transactionCount: number; phone: string | null; debtBalance: number }>();
+    for (const c of customers) {
+      customerSpending.set(c.id, { name: c.name, totalSpent: 0, transactionCount: 0, phone: c.phone, debtBalance: c.currentDebtBalance });
+    }
+    for (const t of transactions) {
+      if (t.customerId) {
+        const existing = customerSpending.get(t.customerId);
+        if (existing) {
+          existing.totalSpent += t.totalAmount;
+          existing.transactionCount += 1;
+        }
+      }
+    }
+
+    const topCustomers = Array.from(customerSpending.entries())
+      .map(([id, data]) => ({ id, ...data }))
+      .sort((a, b) => b.totalSpent - a.totalSpent)
+      .slice(0, 10);
+
+    // Payment method breakdown from transactions
+    const pmMap = new Map<string, { count: number; amount: number }>();
+    for (const t of transactions) {
+      const existing = pmMap.get(t.paymentMethod) || { count: 0, amount: 0 };
+      existing.count += 1;
+      existing.amount += t.totalAmount;
+      pmMap.set(t.paymentMethod, existing);
+    }
+    const paymentMethods = Array.from(pmMap.entries()).map(([method, data]) => ({ method, ...data }));
+
+    const totalSpent = topCustomers.reduce((s, c) => s + c.totalSpent, 0);
+    const debtTotal = customers.reduce((s, c) => s + c.currentDebtBalance, 0);
+
+    return {
+      topCustomers,
+      paymentMethods,
+      customerCount: customers.length,
+      totalSpent,
+      avgSpend: customers.length > 0 ? totalSpent / customers.length : 0,
+      debtTotal,
+    };
+  }, [customersData, transactionsData]);
+
+  // Customer chart data for Recharts
+  const customerChartData = useMemo(() => {
+    return customerAnalysis.topCustomers.slice(0, 8).map(c => ({
+      name: c.name.length > 12 ? c.name.slice(0, 12) + '…' : c.name,
+      revenue: c.totalSpent,
+      transactions: c.transactionCount,
+    }));
+  }, [customerAnalysis]);
+
+  // Rental Performance data
+  const rentalPerformance = useMemo(() => {
+    const rentals = rentalsData?.data || [];
+    if (rentals.length === 0) return { activeRentals: 0, returnedRentals: 0, totalRevenue: 0, avgRentalValue: 0, utilization: 0, statusBreakdown: [], topRented: [], revenueByStatus: [] };
+
+    const activeRentals = rentals.filter(r => r.status === 'ACTIVE').length;
+    const returnedRentals = rentals.filter(r => r.status === 'RETURNED').length;
+    const totalRevenue = rentals.reduce((s, r) => s + (r.totalRentalCharge || 0), 0);
+    const avgRentalValue = rentals.length > 0 ? totalRevenue / rentals.length : 0;
+    const utilization = rentals.length > 0 ? Math.round((activeRentals / rentals.length) * 100) : 0;
+
+    // Status breakdown
+    const statusMap = new Map<string, number>();
+    for (const r of rentals) {
+      statusMap.set(r.status, (statusMap.get(r.status) || 0) + 1);
+    }
+    const statusBreakdown = Array.from(statusMap.entries()).map(([status, count]) => ({ status, count }));
+
+    // Revenue by status
+    const revStatusMap = new Map<string, number>();
+    for (const r of rentals) {
+      revStatusMap.set(r.status, (revStatusMap.get(r.status) || 0) + (r.totalRentalCharge || 0));
+    }
+    const revenueByStatus = Array.from(revStatusMap.entries()).map(([status, revenue]) => ({ status, revenue }));
+
+    return { activeRentals, returnedRentals, totalRevenue, avgRentalValue, utilization, statusBreakdown, topRented: rentals.slice(0, 8), revenueByStatus };
+  }, [rentalsData]);
+
+  // Rental chart data for Recharts
+  const rentalChartData = useMemo(() => {
+    return rentalPerformance.revenueByStatus.map(r => ({
+      name: r.status,
+      revenue: r.revenue,
+    }));
+  }, [rentalPerformance]);
+
+  // CSV Export function
+  const handleCSVExport = useCallback(() => {
+    let csvContent = '';
+    const filename = `mbumah_${reportType}_report_${dateFrom}_${dateTo}.csv`;
+
+    if (reportType === 'sales' && salesReport) {
+      csvContent = 'Metric,Value\n';
+      csvContent += `Total Revenue,${salesReport.totalRevenue}\n`;
+      csvContent += `Transaction Count,${salesReport.transactionCount}\n`;
+      csvContent += `Average Transaction,${salesReport.avgTransactionValue}\n`;
+      csvContent += `Total Tax,${salesReport.totalTax}\n`;
+      csvContent += `Total Discount,${salesReport.totalDiscount}\n`;
+      csvContent += '\nPayment Method,Count,Amount\n';
+      for (const pm of salesReport.byPaymentMethod || []) {
+        csvContent += `${pm.method},${pm.count},${pm.amount}\n`;
+      }
+    } else if ((reportType === 'inventory' || reportType === 'valuation') && inventoryReport) {
+      csvContent = 'Category,Product Count,Total Value\n';
+      for (const cat of categoryBreakdown) {
+        csvContent += `${cat.name},${cat.productCount},${cat.totalValue}\n`;
+      }
+      csvContent += `\nTotal Products,${inventoryReport.totalProducts}\n`;
+      csvContent += `Low Stock,${inventoryReport.lowStockCount}\n`;
+      csvContent += `Out of Stock,${inventoryReport.outOfStockCount}\n`;
+      csvContent += `Total Inventory Value,${inventoryReport.totalInventoryValue}\n`;
+    } else if (reportType === 'top_products' && topProducts.length > 0) {
+      csvContent = 'Rank,Product Name,Quantity Sold,Revenue\n';
+      topProducts.forEach((p, i) => {
+        csvContent += `${i + 1},"${p.productName}",${p.quantitySold},${p.revenue}\n`;
+      });
+    } else if (reportType === 'customer_analysis' && customerAnalysis.topCustomers.length > 0) {
+      csvContent = 'Rank,Customer Name,Total Spent,Transactions,Debt Balance\n';
+      customerAnalysis.topCustomers.forEach((c, i) => {
+        csvContent += `${i + 1},"${c.name}",${c.totalSpent},${c.transactionCount},${c.debtBalance}\n`;
+      });
+    } else if (reportType === 'rental_performance' && rentalPerformance.topRented.length > 0) {
+      csvContent = 'Rental ID,Status,Total Charge,Security Deposit,Late Fees\n';
+      for (const r of rentalPerformance.topRented) {
+        csvContent += `${r.id},${r.status},${r.totalRentalCharge},${r.securityDeposit},${r.lateFeeAccumulated}\n`;
+      }
+    } else {
+      csvContent = 'No data available for export\n';
+    }
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success('CSV exported successfully');
+  }, [reportType, salesReport, inventoryReport, categoryBreakdown, topProducts, customerAnalysis, rentalPerformance, dateFrom, dateTo]);
+
   const handleExport = async () => {
+    // Try server-side export first, fall back to client-side CSV
     try {
-      const res = await reportsApi.exportCSV({ storeId: currentStoreId, type: reportType === 'valuation' ? 'inventory' : reportType === 'daily' || reportType === 'top_products' ? 'sales' : reportType, dateFrom, dateTo });
+      const res = await reportsApi.exportCSV({ storeId: currentStoreId, type: reportType === 'valuation' ? 'inventory' : reportType === 'daily' || reportType === 'top_products' || reportType === 'customer_analysis' || reportType === 'rental_performance' ? 'sales' : reportType, dateFrom, dateTo });
       if (res.data?.url) {
         window.open(res.data.url, '_blank');
         toast.success('Report exported');
+        return;
       }
     } catch {
-      toast.error('Export failed');
+      // Fallback to client-side CSV
     }
+    handleCSVExport();
   };
 
   const handlePDFExport = () => {
@@ -465,7 +654,7 @@ export default function ReportsTab() {
         <body>
           <div class="header">
             <h1>MBUMAH HARDWARE</h1>
-            <h2>${reportType === 'sales' ? 'Sales' : reportType === 'inventory' ? 'Inventory' : reportType === 'valuation' ? 'Inventory Valuation' : reportType === 'daily' ? 'Daily Sales Summary' : 'Top Products'} Report</h2>
+            <h2>${reportType === 'sales' ? 'Sales' : reportType === 'inventory' ? 'Inventory' : reportType === 'valuation' ? 'Inventory Valuation' : reportType === 'daily' ? 'Daily Sales Summary' : reportType === 'top_products' ? 'Top Products' : reportType === 'customer_analysis' ? 'Customer Analysis' : 'Rental Performance'} Report</h2>
             <p style="color:#94a3b8;font-size:12px">Period: ${dateFrom} to ${dateTo}</p>
           </div>
           ${content.innerHTML}
@@ -615,6 +804,8 @@ export default function ReportsTab() {
                 { id: 'today', label: 'Today' },
                 { id: 'this_week', label: 'This Week' },
                 { id: 'this_month', label: 'This Month' },
+                { id: 'this_quarter', label: 'This Quarter' },
+                { id: 'this_year', label: 'This Year' },
                 { id: 'last_month', label: 'Last Month' },
                 { id: 'custom', label: 'Custom' },
               ] as { id: DatePreset; label: string }[]).map((preset) => (
@@ -686,15 +877,31 @@ export default function ReportsTab() {
                 onClick={() => setReportType('top_products')}
                 colorClass="text-primary"
               />
+              <ReportTypeCard
+                icon={<Users className="h-5 w-5" />}
+                title="Customer Analysis"
+                description="Top customers by spending, payment methods used, and debt analysis"
+                isActive={reportType === 'customer_analysis'}
+                onClick={() => setReportType('customer_analysis')}
+                colorClass="text-primary"
+              />
+              <ReportTypeCard
+                icon={<Wrench className="h-5 w-5" />}
+                title="Rental Performance"
+                description="Equipment utilization, revenue per rental, and status breakdown"
+                isActive={reportType === 'rental_performance'}
+                onClick={() => setReportType('rental_performance')}
+                colorClass="text-primary"
+              />
             </div>
           </div>
 
           {/* Chart Type Toggle */}
-          {(reportType === 'valuation' || reportType === 'top_products' || reportType === 'daily') && (
+          {(reportType === 'valuation' || reportType === 'top_products' || reportType === 'daily' || reportType === 'customer_analysis' || reportType === 'rental_performance') && (
             <div className="flex items-center gap-2">
               <Label className="text-xs font-medium">Chart Type:</Label>
               <div className="flex items-center gap-1">
-                {(['bar', 'line', 'pie'] as const).map(ct => (
+                {(['bar', 'line', 'area', 'pie'] as const).map(ct => (
                   <button
                     key={ct}
                     onClick={() => setChartType(ct)}
@@ -704,7 +911,7 @@ export default function ReportsTab() {
                         : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
                     }`}
                   >
-                    {ct === 'bar' ? <BarChart3 className="h-3 w-3 inline mr-1" /> : ct === 'line' ? <TrendingUp className="h-3 w-3 inline mr-1" /> : <PieChart className="h-3 w-3 inline mr-1" />}
+                    {ct === 'bar' ? <BarChart3 className="h-3 w-3 inline mr-1" /> : ct === 'line' ? <TrendingUp className="h-3 w-3 inline mr-1" /> : ct === 'area' ? <TrendingDown className="h-3 w-3 inline mr-1" /> : <PieChart className="h-3 w-3 inline mr-1" />}
                     {ct.charAt(0).toUpperCase() + ct.slice(1)}
                   </button>
                 ))}
@@ -1367,6 +1574,424 @@ export default function ReportsTab() {
                   <TrendingUp className="h-12 w-12 mx-auto mb-3 opacity-50" />
                   <p>No product sales data available</p>
                   <p className="text-xs mt-1">Complete some sales to see top products</p>
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
+
+        {/* ================================================================== */}
+        {/* Customer Analysis Report                                            */}
+        {/* ================================================================== */}
+        {reportType === 'customer_analysis' && (
+          <>
+            {(customersLoading || transactionsLoading) ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+                </div>
+                <Skeleton className="h-64" />
+              </div>
+            ) : customerAnalysis.customerCount > 0 ? (
+              <>
+                {/* Customer Summary Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <Card className="border-l-4 border-l-primary backdrop-blur-sm bg-card/80">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Users className="h-4 w-4 text-primary" />
+                        <p className="text-sm text-muted-foreground">Total Customers</p>
+                      </div>
+                      <p className="text-2xl font-bold">{customerAnalysis.customerCount}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-green-500 backdrop-blur-sm bg-card/80">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <DollarSign className="h-4 w-4 text-green-500" />
+                        <p className="text-sm text-muted-foreground">Total Spent</p>
+                      </div>
+                      <p className="text-2xl font-bold whitespace-nowrap">{formatKES(customerAnalysis.totalSpent)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-amber-500 backdrop-blur-sm bg-card/80">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <ShoppingCart className="h-4 w-4 text-amber-500" />
+                        <p className="text-sm text-muted-foreground">Avg. Spend</p>
+                      </div>
+                      <p className="text-2xl font-bold">{formatKES(customerAnalysis.avgSpend)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-red-500 backdrop-blur-sm bg-card/80">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <CreditCard className="h-4 w-4 text-red-500" />
+                        <p className="text-sm text-muted-foreground">Outstanding Debt</p>
+                      </div>
+                      <p className="text-2xl font-bold whitespace-nowrap">{formatKES(customerAnalysis.debtTotal)}</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Top Customers Chart */}
+                {customerChartData.length > 0 && (
+                  <Card className="backdrop-blur-sm bg-card/80">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Users className="h-4 w-4" /> Top Customers by Spending
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-72">
+                        <ResponsiveContainer width="100%" height="100%">
+                          {chartType === 'bar' ? (
+                            <BarChart data={customerChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `KES ${(v / 1000).toFixed(0)}k`} />
+                              <Tooltip formatter={(value: number) => formatKES(value)} />
+                              <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Revenue" />
+                            </BarChart>
+                          ) : chartType === 'line' ? (
+                            <LineChart data={customerChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `KES ${(v / 1000).toFixed(0)}k`} />
+                              <Tooltip formatter={(value: number) => formatKES(value)} />
+                              <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 4 }} name="Revenue" />
+                            </LineChart>
+                          ) : chartType === 'area' ? (
+                            <AreaChart data={customerChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `KES ${(v / 1000).toFixed(0)}k`} />
+                              <Tooltip formatter={(value: number) => formatKES(value)} />
+                              <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" fill="hsl(var(--primary) / 0.2)" name="Revenue" />
+                            </AreaChart>
+                          ) : (
+                            <BarChart data={customerChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `KES ${(v / 1000).toFixed(0)}k`} />
+                              <Tooltip formatter={(value: number) => formatKES(value)} />
+                              <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Revenue" />
+                            </BarChart>
+                          )}
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Payment Method Breakdown */}
+                {customerAnalysis.paymentMethods.length > 0 && (
+                  <Card className="backdrop-blur-sm bg-card/80">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <CreditCard className="h-4 w-4" /> Payment Methods Used
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {customerAnalysis.paymentMethods.map((pm, i) => {
+                          const totalAmount = customerAnalysis.paymentMethods.reduce((s, p) => s + p.amount, 0) || 1;
+                          const pct = (pm.amount / totalAmount) * 100;
+                          const pmColors: Record<string, string> = { CASH: 'bg-green-500', MPESA: 'bg-primary', DEBT: 'bg-orange-500', SPLIT: 'bg-purple-500' };
+                          return (
+                            <div key={i} className="space-y-2">
+                              <div className="flex items-center justify-between text-sm">
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-6 h-6 rounded-md flex items-center justify-center ${pmColors[pm.method] || 'bg-gray-400'} text-white`}>
+                                    {paymentMethodIcons[pm.method] || <CreditCard className="h-3.5 w-3.5" />}
+                                  </div>
+                                  <span className="font-medium">{pm.method}</span>
+                                  <Badge variant="outline" className="text-[9px]">{pm.count} txns</Badge>
+                                </div>
+                                <div className="text-right">
+                                  <span className="font-medium">{formatKES(pm.amount)}</span>
+                                  <span className="text-xs text-muted-foreground ml-2">{pct.toFixed(0)}%</span>
+                                </div>
+                              </div>
+                              <div className="h-2.5 bg-muted/30 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full transition-all duration-500 ${pmColors[pm.method] || 'bg-gray-400'}`} style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Customer Detail List */}
+                <Card className="backdrop-blur-sm bg-card/80">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Customer Details</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 max-h-96 overflow-y-auto custom-scrollbar pr-1">
+                      {customerAnalysis.topCustomers.map((customer, i) => {
+                        const maxSpent = Math.max(...customerAnalysis.topCustomers.map(c => c.totalSpent), 1);
+                        const pct = (customer.totalSpent / maxSpent) * 100;
+                        const rankColors = ['bg-yellow-500 text-white', 'bg-gray-400 text-white', 'bg-amber-600 text-white'];
+                        return (
+                          <div key={i} className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/30 transition-colors border border-transparent hover:border-border/30">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${i < 3 ? rankColors[i] : 'bg-muted text-muted-foreground'}`}>
+                              {i + 1}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-sm font-medium truncate">{customer.name}</span>
+                                <span className="text-sm font-bold ml-2">{formatKES(customer.totalSpent)}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <div className="flex-1">
+                                  <div className="h-2 bg-muted/30 rounded-full overflow-hidden">
+                                    <div className="h-full rounded-full bg-gradient-to-r from-primary/60 to-primary transition-all duration-500" style={{ width: `${pct}%` }} />
+                                  </div>
+                                </div>
+                                <span className="text-[10px] text-muted-foreground whitespace-nowrap min-w-[60px] text-right">{customer.transactionCount} txns</span>
+                              </div>
+                              {customer.debtBalance > 0 && (
+                                <div className="mt-1">
+                                  <Badge variant="outline" className="text-[9px] bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800">
+                                    Debt: {formatKES(customer.debtBalance)}
+                                  </Badge>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              <Card className="backdrop-blur-sm bg-card/80">
+                <CardContent className="p-12 text-center">
+                  <div className="mx-auto w-24 h-24 rounded-full bg-muted/30 flex items-center justify-center mb-4">
+                    <Users className="h-10 w-10 text-muted-foreground/50" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">No Customer Data</h3>
+                  <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                    Customer analysis will appear once you have customers and transactions recorded. 
+                    Start by adding customers and completing sales.
+                  </p>
+                  <Button variant="outline" className="mt-4" onClick={() => setReportType('sales')}>
+                    <ShoppingCart className="h-4 w-4 mr-2" /> View Sales Report Instead
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
+
+        {/* ================================================================== */}
+        {/* Rental Performance Report                                           */}
+        {/* ================================================================== */}
+        {reportType === 'rental_performance' && (
+          <>
+            {rentalsLoading ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+                </div>
+                <Skeleton className="h-64" />
+              </div>
+            ) : rentalPerformance.totalRevenue > 0 || rentalPerformance.activeRentals > 0 ? (
+              <>
+                {/* Rental Summary Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <Card className="border-l-4 border-l-primary backdrop-blur-sm bg-card/80">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Wrench className="h-4 w-4 text-primary" />
+                        <p className="text-sm text-muted-foreground">Active Rentals</p>
+                      </div>
+                      <p className="text-2xl font-bold">{rentalPerformance.activeRentals}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-green-500 backdrop-blur-sm bg-card/80">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <DollarSign className="h-4 w-4 text-green-500" />
+                        <p className="text-sm text-muted-foreground">Total Revenue</p>
+                      </div>
+                      <p className="text-2xl font-bold whitespace-nowrap">{formatKES(rentalPerformance.totalRevenue)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-amber-500 backdrop-blur-sm bg-card/80">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <TrendingUp className="h-4 w-4 text-amber-500" />
+                        <p className="text-sm text-muted-foreground">Avg. Rental Value</p>
+                      </div>
+                      <p className="text-2xl font-bold">{formatKES(rentalPerformance.avgRentalValue)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-teal-500 backdrop-blur-sm bg-card/80">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Package className="h-4 w-4 text-teal-500" />
+                        <p className="text-sm text-muted-foreground">Utilization Rate</p>
+                      </div>
+                      <p className="text-2xl font-bold">{rentalPerformance.utilization}%</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Revenue by Status Chart */}
+                {rentalChartData.length > 0 && (
+                  <Card className="backdrop-blur-sm bg-card/80">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <BarChart3 className="h-4 w-4" /> Revenue by Rental Status
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-72">
+                        <ResponsiveContainer width="100%" height="100%">
+                          {chartType === 'bar' ? (
+                            <BarChart data={rentalChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `KES ${(v / 1000).toFixed(0)}k`} />
+                              <Tooltip formatter={(value: number) => formatKES(value)} />
+                              <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Revenue" />
+                            </BarChart>
+                          ) : chartType === 'line' ? (
+                            <LineChart data={rentalChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `KES ${(v / 1000).toFixed(0)}k`} />
+                              <Tooltip formatter={(value: number) => formatKES(value)} />
+                              <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 4 }} name="Revenue" />
+                            </LineChart>
+                          ) : chartType === 'area' ? (
+                            <AreaChart data={rentalChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `KES ${(v / 1000).toFixed(0)}k`} />
+                              <Tooltip formatter={(value: number) => formatKES(value)} />
+                              <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" fill="hsl(var(--primary) / 0.2)" name="Revenue" />
+                            </AreaChart>
+                          ) : (
+                            <BarChart data={rentalChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `KES ${(v / 1000).toFixed(0)}k`} />
+                              <Tooltip formatter={(value: number) => formatKES(value)} />
+                              <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Revenue" />
+                            </BarChart>
+                          )}
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Status Breakdown */}
+                {rentalPerformance.statusBreakdown.length > 0 && (
+                  <Card className="backdrop-blur-sm bg-card/80">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">Rental Status Breakdown</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {rentalPerformance.statusBreakdown.map((sb, i) => {
+                          const totalRentals = rentalPerformance.statusBreakdown.reduce((s, r) => s + r.count, 0) || 1;
+                          const pct = (sb.count / totalRentals) * 100;
+                          const statusColors: Record<string, string> = {
+                            ACTIVE: 'bg-green-500',
+                            RETURNED: 'bg-primary',
+                            OVERDUE: 'bg-red-500',
+                            PENDING: 'bg-amber-500',
+                            DAMAGED: 'bg-orange-500',
+                          };
+                          return (
+                            <div key={i} className="space-y-1.5">
+                              <div className="flex items-center justify-between text-sm">
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-3 h-3 rounded-sm ${statusColors[sb.status] || 'bg-gray-400'}`} />
+                                  <span className="font-medium">{sb.status}</span>
+                                  <Badge variant="outline" className="text-[9px]">{sb.count} rentals</Badge>
+                                </div>
+                                <span className="text-xs text-muted-foreground">{pct.toFixed(0)}%</span>
+                              </div>
+                              <div className="h-2 bg-muted/30 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full transition-all duration-500 ${statusColors[sb.status] || 'bg-gray-400'}`} style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Rental Detail List */}
+                {rentalPerformance.topRented.length > 0 && (
+                  <Card className="backdrop-blur-sm bg-card/80">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">Recent Rentals</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2 max-h-96 overflow-y-auto custom-scrollbar pr-1">
+                        {rentalPerformance.topRented.map((rental) => {
+                          const statusColors: Record<string, string> = {
+                            ACTIVE: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800',
+                            RETURNED: 'bg-primary/10 text-primary border-primary/20',
+                            OVERDUE: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800',
+                            PENDING: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800',
+                          };
+                          return (
+                            <div key={rental.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/30 transition-colors border border-transparent hover:border-border/30">
+                              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <Wrench className="h-4 w-4 text-primary" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-sm font-medium truncate">{rental.id.slice(-8)}</span>
+                                  <span className="text-sm font-bold ml-2">{formatKES(rental.totalRentalCharge)}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className={`text-[9px] ${statusColors[rental.status] || ''}`}>
+                                    {rental.status}
+                                  </Badge>
+                                  {rental.lateFeeAccumulated > 0 && (
+                                    <Badge variant="outline" className="text-[9px] bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800">
+                                      Late: {formatKES(rental.lateFeeAccumulated)}
+                                    </Badge>
+                                  )}
+                                  <span className="text-[10px] text-muted-foreground">
+                                    Deposit: {formatKES(rental.securityDeposit)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            ) : (
+              <Card className="backdrop-blur-sm bg-card/80">
+                <CardContent className="p-12 text-center">
+                  <div className="mx-auto w-24 h-24 rounded-full bg-muted/30 flex items-center justify-center mb-4">
+                    <Wrench className="h-10 w-10 text-muted-foreground/50" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">No Rental Data</h3>
+                  <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                    Rental performance analysis will appear once you have equipment rentals recorded.
+                    Start by creating rental orders for your equipment.
+                  </p>
+                  <Button variant="outline" className="mt-4" onClick={() => setReportType('sales')}>
+                    <ShoppingCart className="h-4 w-4 mr-2" /> View Sales Report Instead
+                  </Button>
                 </CardContent>
               </Card>
             )}

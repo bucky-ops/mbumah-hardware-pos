@@ -1,0 +1,995 @@
+     1→/**
+     2→ * MBUMAH HARDWARE POS & ERP - API Client
+     3→ * Complete fetch wrappers for all backend endpoints
+     4→ */
+     5→
+     6→import type {
+     7→  AuthUser,
+     8→  CartItem,
+     9→  CheckoutPayload,
+    10→  MpesaSTKRequest,
+    11→  MpesaCallbackResult,
+    12→  DashboardStats,
+    13→  DebtAgingSummary,
+    14→  ReportFilter,
+    15→  JournalEntryDTO,
+    16→  PaymentMethod,
+    17→} from './types';
+    18→
+    19→// ============================================================================
+    20→// BASE CONFIG
+    21→// ============================================================================
+    22→
+    23→const API_BASE = '/api';
+    24→
+    25→interface ApiResponse<T = unknown> {
+    26→  success: boolean;
+    27→  data?: T;
+    28→  error?: string;
+    29→  message?: string;
+    30→  pagination?: {
+    31→    page: number;
+    32→    limit: number;
+    33→    total: number;
+    34→    totalPages: number;
+    35→  };
+    36→}
+    37→
+    38→async function request<T>(
+    39→  endpoint: string,
+    40→  options: RequestInit = {}
+    41→): Promise<ApiResponse<T>> {
+    42→  const token = typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null;
+    43→
+    44→  const headers: Record<string, string> = {
+    45→    'Content-Type': 'application/json',
+    46→    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    47→    ...(options.headers as Record<string, string> || {}),
+    48→  };
+    49→
+    50→  const response = await fetch(`${API_BASE}${endpoint}`, {
+    51→    ...options,
+    52→    headers,
+    53→  });
+    54→
+    55→  if (response.status === 401) {
+    56→    if (typeof window !== 'undefined') {
+    57→      localStorage.removeItem('mbt_token');
+    58→      localStorage.removeItem('mbt_user');
+    59→      window.location.reload();
+    60→    }
+    61→    throw new Error('Session expired. Please login again.');
+    62→  }
+    63→
+    64→  if (!response.ok) {
+    65→    const errorData = await response.json().catch(() => ({}));
+    66→    throw new Error(errorData.error || errorData.message || `Request failed: ${response.status}`);
+    67→  }
+    68→
+    69→  return response.json();
+    70→}
+    71→
+    72→// ============================================================================
+    73→// AUTH API
+    74→// ============================================================================
+    75→
+    76→export const authApi = {
+    77→  login: async (email: string, password: string) => {
+    78→    const res = await request<{ token: string; user: AuthUser }>('/auth/login', {
+    79→      method: 'POST',
+    80→      body: JSON.stringify({ email, password }),
+    81→    });
+    82→    if (res.data?.token) {
+    83→      localStorage.setItem('mbt_token', res.data.token);
+    84→      localStorage.setItem('mbt_user', JSON.stringify(res.data.user));
+    85→    }
+    86→    return res;
+    87→  },
+    88→
+    89→  logout: async () => {
+    90→    try {
+    91→      await request('/auth/logout', { method: 'POST' });
+    92→    } finally {
+    93→      localStorage.removeItem('mbt_token');
+    94→      localStorage.removeItem('mbt_user');
+    95→    }
+    96→  },
+    97→
+    98→  getMe: async () => {
+    99→    return request<AuthUser>('/auth/me');
+   100→  },
+   101→};
+   102→
+   103→// ============================================================================
+   104→// PRODUCTS API
+   105→// ============================================================================
+   106→
+   107→export interface ProductListItem {
+   108→  id: string;
+   109→  storeId: string;
+   110→  categoryId: string | null;
+   111→  sku: string;
+   112→  barcode: string | null;
+   113→  name: string;
+   114→  description: string | null;
+   115→  unitType: string;
+   116→  quantityInStock: number;
+   117→  reorderLevel: number;
+   118→  pricePerUnit: number;
+   119→  costPrice: number;
+   120→  taxRate: number;
+   121→  isRental: boolean;
+   122→  isBundle: boolean;
+   123→  isActive: boolean;
+   124→  imageUrl: string | null;
+   125→  createdAt: string;
+   126→  updatedAt: string;
+   127→  category?: { id: string; name: string; color?: string; icon?: string };
+   128→  bundleItems?: { childProductId: string; quantityRequired: number; childProduct?: { id: string; name: string; sku: string; quantityInStock: number; pricePerUnit: number } }[];
+   129→}
+   130→
+   131→export interface CreateProductPayload {
+   132→  storeId: string;
+   133→  categoryId?: string;
+   134→  sku: string;
+   135→  barcode?: string;
+   136→  name: string;
+   137→  description?: string;
+   138→  unitType?: string;
+   139→  quantityInStock?: number;
+   140→  reorderLevel?: number;
+   141→  pricePerUnit: number;
+   142→  costPrice: number;
+   143→  taxRate?: number;
+   144→  isRental?: boolean;
+   145→  isBundle?: boolean;
+   146→  imageUrl?: string;
+   147→}
+   148→
+   149→export const productsApi = {
+   150→  list: async (params?: { storeId?: string; page?: number; limit?: number; categoryId?: string; search?: string }) => {
+   151→    const query = new URLSearchParams();
+   152→    if (params?.storeId) query.set('storeId', params.storeId);
+   153→    if (params?.page) query.set('page', String(params.page));
+   154→    if (params?.limit) query.set('limit', String(params.limit));
+   155→    if (params?.categoryId) query.set('categoryId', params.categoryId);
+   156→    if (params?.search) query.set('search', params.search);
+   157→    const qs = query.toString();
+   158→    return request<ProductListItem[]>(`/products${qs ? `?${qs}` : ''}`);
+   159→  },
+   160→
+   161→  get: async (id: string) => {
+   162→    return request<ProductListItem>(`/products/${id}`);
+   163→  },
+   164→
+   165→  create: async (data: CreateProductPayload) => {
+   166→    return request<ProductListItem>('/products', {
+   167→      method: 'POST',
+   168→      body: JSON.stringify(data),
+   169→    });
+   170→  },
+   171→
+   172→  update: async (id: string, data: Partial<CreateProductPayload>) => {
+   173→    return request<ProductListItem>(`/products/${id}`, {
+   174→      method: 'PUT',
+   175→      body: JSON.stringify(data),
+   176→    });
+   177→  },
+   178→
+   179→  delete: async (id: string) => {
+   180→    return request<void>(`/products/${id}`, { method: 'DELETE' });
+   181→  },
+   182→
+   183→  search: async (query: string, storeId?: string) => {
+   184→    const params = new URLSearchParams({ q: query });
+   185→    if (storeId) params.set('storeId', storeId);
+   186→    return request<ProductListItem[]>(`/products/search?${params.toString()}`);
+   187→  },
+   188→
+   189→  listBundles: async (storeId?: string) => {
+   190→    const params = new URLSearchParams();
+   191→    if (storeId) params.set('storeId', storeId);
+   192→    return request<ProductListItem[]>(`/products/bundles?${params.toString()}`);
+   193→  },
+   194→};
+   195→
+   196→// ============================================================================
+   197→// CATEGORIES API
+   198→// ============================================================================
+   199→
+   200→export interface CategoryItem {
+   201→  id: string;
+   202→  storeId: string;
+   203→  name: string;
+   204→  description: string | null;
+   205→  icon: string | null;
+   206→  color: string | null;
+   207→  sortOrder: number;
+   208→  isActive: boolean;
+   209→}
+   210→
+   211→export const categoriesApi = {
+   212→  list: async (storeId?: string) => {
+   213→    const params = new URLSearchParams();
+   214→    if (storeId) params.set('storeId', storeId);
+   215→    return request<CategoryItem[]>(`/categories?${params.toString()}`);
+   216→  },
+   217→
+   218→  create: async (data: { storeId: string; name: string; description?: string; icon?: string; color?: string }) => {
+   219→    return request<CategoryItem>('/categories', {
+   220→      method: 'POST',
+   221→      body: JSON.stringify(data),
+   222→    });
+   223→  },
+   224→};
+   225→
+   226→// ============================================================================
+   227→// CUSTOMERS API
+   228→// ============================================================================
+   229→
+   230→export interface CustomerItem {
+   231→  id: string;
+   232→  storeId: string;
+   233→  name: string;
+   234→  phone: string | null;
+   235→  email: string | null;
+   236→  address: string | null;
+   237→  idNumber: string | null;
+   238→  currentDebtBalance: number;
+   239→  debtLimit: number;
+   240→  loyaltyPoints: number;
+   241→  preferredChannel: string;
+   242→  isActive: boolean;
+   243→  createdAt: string;
+   244→  updatedAt: string;
+   245→}
+   246→
+   247→export const customersApi = {
+   248→  list: async (params?: { storeId?: string; page?: number; limit?: number; search?: string }) => {
+   249→    const query = new URLSearchParams();
+   250→    if (params?.storeId) query.set('storeId', params.storeId);
+   251→    if (params?.page) query.set('page', String(params.page));
+   252→    if (params?.limit) query.set('limit', String(params.limit));
+   253→    if (params?.search) query.set('search', params.search);
+   254→    return request<CustomerItem[]>(`/customers?${query.toString()}`);
+   255→  },
+   256→
+   257→  get: async (id: string) => {
+   258→    return request<CustomerItem>(`/customers/${id}`);
+   259→  },
+   260→
+   261→  create: async (data: { storeId: string; name: string; phone?: string; email?: string; address?: string; idNumber?: string; debtLimit?: number }) => {
+   262→    return request<CustomerItem>('/customers', {
+   263→      method: 'POST',
+   264→      body: JSON.stringify(data),
+   265→    });
+   266→  },
+   267→
+   268→  update: async (id: string, data: Partial<CustomerItem>) => {
+   269→    return request<CustomerItem>(`/customers/${id}`, {
+   270→      method: 'PUT',
+   271→      body: JSON.stringify(data),
+   272→    });
+   273→  },
+   274→
+   275→  search: async (query: string, storeId?: string) => {
+   276→    const params = new URLSearchParams({ q: query });
+   277→    if (storeId) params.set('storeId', storeId);
+   278→    return request<CustomerItem[]>(`/customers/search?${params.toString()}`);
+   279→  },
+   280→};
+   281→
+   282→// ============================================================================
+   283→// TRANSACTIONS API
+   284→// ============================================================================
+   285→
+   286→export interface TransactionItem {
+   287→  id: string;
+   288→  storeId: string;
+   289→  receiptNumber: string;
+   290→  customerId: string | null;
+   291→  cashierId: string;
+   292→  subtotal: number;
+   293→  taxAmount: number;
+   294→  discountAmount: number;
+   295→  totalAmount: number;
+   296→  paymentMethod: string;
+   297→  paymentStatus: string;
+   298→  transactionType: string;
+   299→  notes: string | null;
+   300→  isOffline: boolean;
+   301→  createdAt: string;
+   302→  updatedAt: string;
+   303→  items?: SaleItemDetail[];
+   304→  customer?: CustomerItem;
+   305→  cashier?: { id: string; name: string };
+   306→}
+   307→
+   308→export interface SaleItemDetail {
+   309→  id: string;
+   310→  productId: string;
+   311→  productName: string;
+   312→  quantity: number;
+   313→  unitType: string;
+   314→  pricePerUnit: number;
+   315→  costPrice: number;
+   316→  discountPercent: number;
+   317→  taxRate: number;
+   318→  lineTotal: number;
+   319→  isRentalItem: boolean;
+   320→}
+   321→
+   322→export const transactionsApi = {
+   323→  list: async (params?: { storeId?: string; page?: number; limit?: number; paymentMethod?: string; dateFrom?: string; dateTo?: string }) => {
+   324→    const query = new URLSearchParams();
+   325→    if (params?.storeId) query.set('storeId', params.storeId);
+   326→    if (params?.page) query.set('page', String(params.page));
+   327→    if (params?.limit) query.set('limit', String(params.limit));
+   328→    if (params?.paymentMethod) query.set('paymentMethod', params.paymentMethod);
+   329→    if (params?.dateFrom) query.set('dateFrom', params.dateFrom);
+   330→    if (params?.dateTo) query.set('dateTo', params.dateTo);
+   331→    return request<TransactionItem[]>(`/transactions?${query.toString()}`);
+   332→  },
+   333→
+   334→  get: async (id: string) => {
+   335→    return request<TransactionItem>(`/transactions/${id}`);
+   336→  },
+   337→
+   338→  create: async (data: CheckoutPayload) => {
+   339→    return request<TransactionItem>('/transactions', {
+   340→      method: 'POST',
+   341→      body: JSON.stringify(data),
+   342→    });
+   343→  },
+   344→};
+   345→
+   346→// ============================================================================
+   347→// PAYMENTS API
+   348→// ============================================================================
+   349→
+   350→export const paymentsApi = {
+   351→  initiateMpesa: async (data: MpesaSTKRequest) => {
+   352→    return request<MpesaCallbackResult>('/payments/mpesa/stkpush', {
+   353→      method: 'POST',
+   354→      body: JSON.stringify(data),
+   355→    });
+   356→  },
+   357→};
+   358→
+   359→// ============================================================================
+   360→// DEBT API
+   361→// ============================================================================
+   362→
+   363→export interface DebtLedgerItem {
+   364→  id: string;
+   365→  storeId: string;
+   366→  customerId: string;
+   367→  transactionId: string | null;
+   368→  amountOwed: number;
+   369→  amountPaid: number;
+   370→  balance: number;
+   371→  dueDate: string;
+   372→  status: string;
+   373→  agingBucket: string;
+   374→  lastReminderAt: string | null;
+   375→  notes: string | null;
+   376→  createdAt: string;
+   377→  updatedAt: string;
+   378→  customer?: CustomerItem;
+   379→}
+   380→
+   381→export const debtApi = {
+   382→  list: async (params?: { storeId?: string; customerId?: string; status?: string; page?: number; limit?: number }) => {
+   383→    const query = new URLSearchParams();
+   384→    if (params?.storeId) query.set('storeId', params.storeId);
+   385→    if (params?.customerId) query.set('customerId', params.customerId);
+   386→    if (params?.status) query.set('status', params.status);
+   387→    if (params?.page) query.set('page', String(params.page));
+   388→    if (params?.limit) query.set('limit', String(params.limit));
+   389→    return request<DebtLedgerItem[]>(`/debt?${query.toString()}`);
+   390→  },
+   391→
+   392→  makePayment: async (data: { debtLedgerId: string; amount: number; paymentMethod: string; reference?: string }) => {
+   393→    return request<DebtLedgerItem>('/debt/payment', {
+   394→      method: 'POST',
+   395→      body: JSON.stringify(data),
+   396→    });
+   397→  },
+   398→};
+   399→
+   400→// ============================================================================
+   401→// RENTALS API
+   402→// ============================================================================
+   403→
+   404→export interface RentalItem {
+   405→  id: string;
+   406→  storeId: string;
+   407→  productId: string;
+   408→  customerId: string;
+   409→  status: string;
+   410→  rentalStartDate: string;
+   411→  expectedReturnDate: string;
+   412→  actualReturnDate: string | null;
+   413→  securityDeposit: number;
+   414→  ratePerDay: number;
+   415→  ratePerWeek: number | null;
+   416→  ratePerMonth: number | null;
+   417→  totalRentalCharge: number;
+   418→  lateFeeAccumulated: number;
+   419→  damageAssessment: string | null;
+   420→  damageCharge: number;
+   421→  notes: string | null;
+   422→  createdAt: string;
+   423→  updatedAt: string;
+   424→  product?: ProductListItem;
+   425→  customer?: CustomerItem;
+   426→}
+   427→
+   428→export const rentalsApi = {
+   429→  list: async (params?: { storeId?: string; status?: string; page?: number; limit?: number }) => {
+   430→    const query = new URLSearchParams();
+   431→    if (params?.storeId) query.set('storeId', params.storeId);
+   432→    if (params?.status) query.set('status', params.status);
+   433→    if (params?.page) query.set('page', String(params.page));
+   434→    if (params?.limit) query.set('limit', String(params.limit));
+   435→    return request<RentalItem[]>(`/rentals?${query.toString()}`);
+   436→  },
+   437→
+   438→  create: async (data: { storeId: string; productId: string; customerId: string; expectedReturnDate: string; securityDeposit: number; ratePerDay: number; ratePerWeek?: number; ratePerMonth?: number; notes?: string }) => {
+   439→    return request<RentalItem>('/rentals', {
+   440→      method: 'POST',
+   441→      body: JSON.stringify(data),
+   442→    });
+   443→  },
+   444→
+   445→  returnRental: async (id: string, data: { damageAssessment?: string; damageCharge?: number; notes?: string }) => {
+   446→    return request<RentalItem>(`/rentals/${id}/return`, {
+   447→      method: 'POST',
+   448→      body: JSON.stringify(data),
+   449→    });
+   450→  },
+   451→};
+   452→
+   453→// ============================================================================
+   454→// FINANCIAL API
+   455→// ============================================================================
+   456→
+   457→export interface JournalEntryItem {
+   458→  id: string;
+   459→  storeId: string;
+   460→  entryNumber: string;
+   461→  entryDate: string;
+   462→  description: string;
+   463→  referenceType: string | null;
+   464→  referenceId: string | null;
+   465→  totalDebit: number;
+   466→  totalCredit: number;
+   467→  isPosted: boolean;
+   468→  postedAt: string | null;
+   469→  createdBy: string | null;
+   470→  createdAt: string;
+   471→  lines?: JournalEntryLineItem[];
+   472→}
+   473→
+   474→export interface JournalEntryLineItem {
+   475→  id: string;
+   476→  accountId: string;
+   477→  debit: number;
+   478→  credit: number;
+   479→  description: string | null;
+   480→  account?: { id: string; code: string; name: string; type: string; subType?: string | null };
+   481→}
+   482→
+   483→export interface AccountItem {
+   484→  id: string;
+   485→  organizationId: string;
+   486→  code: string;
+   487→  name: string;
+   488→  type: string;
+   489→  subType: string | null;
+   490→  normalBalance: string;
+   491→  isActive: boolean;
+   492→}
+   493→
+   494→export const financialApi = {
+   495→  listJournalEntries: async (params?: { storeId?: string; page?: number; limit?: number; dateFrom?: string; dateTo?: string }) => {
+   496→    const query = new URLSearchParams();
+   497→    if (params?.storeId) query.set('storeId', params.storeId);
+   498→    if (params?.page) query.set('page', String(params.page));
+   499→    if (params?.limit) query.set('limit', String(params.limit));
+   500→    if (params?.dateFrom) query.set('dateFrom', params.dateFrom);
+   501→    if (params?.dateTo) query.set('dateTo', params.dateTo);
+   502→    return request<JournalEntryItem[]>(`/financial/journal?${query.toString()}`);
+   503→  },
+   504→
+   505→  listAccounts: async (storeId?: string) => {
+   506→    const params = new URLSearchParams();
+   507→    if (storeId) params.set('storeId', storeId);
+   508→    params.set('includeBalances', 'true');
+   509→    return request<AccountItem[]>(`/financial/accounts?${params.toString()}`);
+   510→  },
+   511→
+   512→  getRevenueTrend: async (params: { storeId: string; days?: number }) => {
+   513→    const query = new URLSearchParams();
+   514→    query.set('storeId', params.storeId);
+   515→    if (params.days) query.set('days', String(params.days));
+   516→    return request<{
+   517→      daily: { date: string; label: string; revenue: number; expenses: number; transactions: number; margin: number; byMethod: Record<string, number> }[];
+   518→      summary: {
+   519→        totalRevenue: number;
+   520→        totalExpenses: number;
+   521→        grossProfit: number;
+   522→        profitMargin: number;
+   523→        avgDailyRevenue: number;
+   524→        peakDayRevenue: number;
+   525→        peakDayLabel: string;
+   526→        totalTransactions: number;
+   527→        isDemo: boolean;
+   528→      };
+   529→    }>(`/financial/revenue-trend?${query.toString()}`);
+   530→  },
+   531→};
+   532→
+   533→// ============================================================================
+   534→// DASHBOARD API
+   535→// ============================================================================
+   536→
+   537→export const dashboardApi = {
+   538→  getStats: async (storeId?: string) => {
+   539→    const params = new URLSearchParams();
+   540→    if (storeId) params.set('storeId', storeId);
+   541→    const qs = params.toString();
+   542→    return request<DashboardStats>(`/dashboard${qs ? `?${qs}` : ''}`);
+   543→  },
+   544→};
+   545→
+   546→// ============================================================================
+   547→// REPORTS API
+   548→// ============================================================================
+   549→
+   550→export interface SalesReportData {
+   551→  period: string;
+   552→  totalSales: number;
+   553→  totalRevenue: number;
+   554→  totalTax: number;
+   555→  totalDiscount: number;
+   556→  transactionCount: number;
+   557→  avgTransactionValue: number;
+   558→  byPaymentMethod: { method: PaymentMethod; count: number; amount: number }[];
+   559→}
+   560→
+   561→export interface InventoryReportData {
+   562→  totalProducts: number;
+   563→  lowStockCount: number;
+   564→  outOfStockCount: number;
+   565→  totalInventoryValue: number;
+   566→  categories: { name: string; productCount: number; totalValue: number }[];
+   567→  topSelling: { productId: string; productName: string; quantitySold: number; revenue: number }[];
+   568→}
+   569→
+   570→export const reportsApi = {
+   571→  getSalesReport: async (filter: ReportFilter) => {
+   572→    const params = new URLSearchParams();
+   573→    params.set('storeId', filter.storeId);
+   574→    params.set('dateFrom', filter.dateFrom);
+   575→    params.set('dateTo', filter.dateTo);
+   576→    if (filter.paymentMethod) params.set('paymentMethod', filter.paymentMethod);
+   577→    if (filter.categoryId) params.set('categoryId', filter.categoryId);
+   578→    return request<SalesReportData>(`/reports/sales?${params.toString()}`);
+   579→  },
+   580→
+   581→  getInventoryReport: async (storeId: string) => {
+   582→    return request<InventoryReportData>(`/reports/inventory?storeId=${storeId}`);
+   583→  },
+   584→
+   585→  exportCSV: async (filter: ReportFilter & { type: 'sales' | 'inventory' }) => {
+   586→    const params = new URLSearchParams();
+   587→    params.set('storeId', filter.storeId);
+   588→    params.set('type', filter.type);
+   589→    params.set('dateFrom', filter.dateFrom);
+   590→    params.set('dateTo', filter.dateTo);
+   591→    if (filter.paymentMethod) params.set('paymentMethod', filter.paymentMethod);
+   592→    if (filter.categoryId) params.set('categoryId', filter.categoryId);
+   593→    return request<{ url: string }>(`/reports/export?${params.toString()}`);
+   594→  },
+   595→};
+   596→
+   597→// ============================================================================
+   598→// SYSTEM LOGS API
+   599→// ============================================================================
+   600→
+   601→export interface SystemLogItem {
+   602→  id: string;
+   603→  storeId: string | null;
+   604→  userId: string | null;
+   605→  action: string;
+   606→  component: string;
+   607→  severity: string;
+   608→  message: string;
+   609→  metadata: string | null;
+   610→  stackTrace: string | null;
+   611→  ipAddress: string | null;
+   612→  createdAt: string;
+   613→  user?: { id: string; name: string };
+   614→}
+   615→
+   616→export const systemLogsApi = {
+   617→  list: async (params?: { storeId?: string; component?: string; severity?: string; page?: number; limit?: number }) => {
+   618→    const query = new URLSearchParams();
+   619→    if (params?.storeId) query.set('storeId', params.storeId);
+   620→    if (params?.component) query.set('component', params.component);
+   621→    if (params?.severity) query.set('severity', params.severity);
+   622→    if (params?.page) query.set('page', String(params.page));
+   623→    if (params?.limit) query.set('limit', String(params.limit));
+   624→    return request<SystemLogItem[]>(`/system-logs?${query.toString()}`);
+   625→  },
+   626→};
+   627→
+   628→// ============================================================================
+   629→// STOCK MOVEMENTS API
+   630→// ============================================================================
+   631→
+   632→export interface StockMovementItem {
+   633→  id: string;
+   634→  storeId: string;
+   635→  productId: string;
+   636→  movementType: string;
+   637→  quantity: number;
+   638→  referenceId: string | null;
+   639→  notes: string | null;
+   640→  performedBy: string | null;
+   641→  createdAt: string;
+   642→  product?: ProductListItem;
+   643→}
+   644→
+   645→export const stockMovementsApi = {
+   646→  list: async (params?: { storeId?: string; productId?: string; movementType?: string; page?: number; limit?: number }) => {
+   647→    const query = new URLSearchParams();
+   648→    if (params?.storeId) query.set('storeId', params.storeId);
+   649→    if (params?.productId) query.set('productId', params.productId);
+   650→    if (params?.movementType) query.set('movementType', params.movementType);
+   651→    if (params?.page) query.set('page', String(params.page));
+   652→    if (params?.limit) query.set('limit', String(params.limit));
+   653→    return request<StockMovementItem[]>(`/stock-movements?${query.toString()}`);
+   654→  },
+   655→
+   656→  createAdjustment: async (data: { storeId: string; productId: string; quantity: number; notes?: string }) => {
+   657→    return request<StockMovementItem>('/stock-movements/adjustment', {
+   658→      method: 'POST',
+   659→      body: JSON.stringify(data),
+   660→    });
+   661→  },
+   662→};
+   663→
+   664→// ============================================================================
+   665→// AUDIT LOGS API
+   666→// ============================================================================
+   667→
+   668→export interface AuditLogItem {
+   669→  id: string;
+   670→  storeId: string | null;
+   671→  userId: string | null;
+   672→  action: string;
+   673→  component: string;
+   674→  severity: string;
+   675→  message: string;
+   676→  metadata: string | null;
+   677→  stackTrace: string | null;
+   678→  ipAddress: string | null;
+   679→  createdAt: string;
+   680→  user?: { id: string; name: string; email: string; role: string };
+   681→}
+   682→
+   683→export const auditLogsApi = {
+   684→  list: async (params?: { storeId?: string; type?: string; severity?: string; dateFrom?: string; dateTo?: string; search?: string; page?: number; limit?: number }) => {
+   685→    const query = new URLSearchParams();
+   686→    if (params?.storeId) query.set('storeId', params.storeId);
+   687→    if (params?.type) query.set('type', params.type);
+   688→    if (params?.severity) query.set('severity', params.severity);
+   689→    if (params?.dateFrom) query.set('dateFrom', params.dateFrom);
+   690→    if (params?.dateTo) query.set('dateTo', params.dateTo);
+   691→    if (params?.search) query.set('search', params.search);
+   692→    if (params?.page) query.set('page', String(params.page));
+   693→    if (params?.limit) query.set('limit', String(params.limit));
+   694→    return request<AuditLogItem[]>(`/audit-logs?${query.toString()}`);
+   695→  },
+   696→};
+   697→
+   698→// ============================================================================
+   699→// SYSTEM CONFIG API
+   700→// ============================================================================
+   701→
+   702→export interface SystemConfigItem {
+   703→  id: string;
+   704→  key: string;
+   705→  value: string;
+   706→  description: string | null;
+   707→  isEncrypted: boolean;
+   708→  updatedAt: string;
+   709→}
+   710→
+   711→export const systemConfigApi = {
+   712→  list: async (category?: string) => {
+   713→    const params = new URLSearchParams();
+   714→    if (category) params.set('category', category);
+   715→    return request<Record<string, SystemConfigItem[]>>(`/system-config?${params.toString()}`);
+   716→  },
+   717→
+   718→  update: async (data: { id?: string; key?: string; value: string }) => {
+   719→    return request<SystemConfigItem>('/system-config', {
+   720→      method: 'PUT',
+   721→      body: JSON.stringify(data),
+   722→    });
+   723→  },
+   724→};
+   725→
+   726→// ============================================================================
+   727→// USERS API
+   728→// ============================================================================
+   729→
+   730→export interface UserItem {
+   731→  id: string;
+   732→  name: string;
+   733→  email: string;
+   734→  role: string;
+   735→  phone: string | null;
+   736→  isActive: boolean;
+   737→  lastLoginAt: string | null;
+   738→  createdAt: string;
+   739→  storeId: string | null;
+   740→  store?: { id: string; name: string };
+   741→}
+   742→
+   743→export const usersApi = {
+   744→  list: async (params?: { storeId?: string; role?: string; isActive?: boolean; search?: string; page?: number; limit?: number }) => {
+   745→    const query = new URLSearchParams();
+   746→    if (params?.storeId) query.set('storeId', params.storeId);
+   747→    if (params?.role) query.set('role', params.role);
+   748→    if (params?.isActive !== undefined) query.set('isActive', String(params.isActive));
+   749→    if (params?.search) query.set('search', params.search);
+   750→    if (params?.page) query.set('page', String(params.page));
+   751→    if (params?.limit) query.set('limit', String(params.limit));
+   752→    return request<UserItem[]>(`/users?${query.toString()}`);
+   753→  },
+   754→
+   755→  create: async (data: { name: string; email: string; role: string; password: string; phone?: string; storeId?: string; organizationId?: string }) => {
+   756→    return request<UserItem>('/users', {
+   757→      method: 'POST',
+   758→      body: JSON.stringify(data),
+   759→    });
+   760→  },
+   761→};
+   762→
+   763→// ============================================================================
+   764→// SUPPLIERS API
+   765→// ============================================================================
+   766→
+   767→export interface SupplierItem {
+   768→  id: string;
+   769→  storeId: string;
+   770→  name: string;
+   771→  email: string | null;
+   772→  phone: string | null;
+   773→  address: string | null;
+   774→  city: string | null;
+   775→  contactPerson: string | null;
+   776→  taxPin: string | null;
+   777→  paymentTerms: string;
+   778→  rating: number;
+   779→  isActive: boolean;
+   780→  notes: string | null;
+   781→  createdAt: string;
+   782→  updatedAt: string;
+   783→  purchaseOrderCount?: number;
+   784→  summary?: {
+   785→    totalPOs: number;
+   786→    totalPOValue: number;
+   787→    pendingPOs: number;
+   788→  };
+   789→  purchaseOrders?: PurchaseOrderListItem[];
+   790→}
+   791→
+   792→export interface PurchaseOrderListItem {
+   793→  id: string;
+   794→  storeId: string;
+   795→  poNumber: string;
+   796→  supplierId: string;
+   797→  status: string;
+   798→  orderDate: string;
+   799→  expectedDate: string | null;
+   800→  totalAmount: number;
+   801→  notes: string | null;
+   802→  createdBy: string | null;
+   803→  createdAt: string;
+   804→  updatedAt: string;
+   805→  supplier?: { id: string; name: string; phone?: string | null; email?: string | null };
+   806→  items?: PurchaseOrderItemDetail[];
+   807→  itemCount?: number;
+   808→}
+   809→
+   810→export interface PurchaseOrderItemDetail {
+   811→  id: string;
+   812→  purchaseOrderId: string;
+   813→  productId: string;
+   814→  quantity: number;
+   815→  unitPrice: number;
+   816→  totalPrice: number;
+   817→  receivedQty: number;
+   818→  notes: string | null;
+   819→  product?: { id: string; name: string; sku: string; unitType: string; quantityInStock?: number; costPrice?: number };
+   820→}
+   821→
+   822→export const suppliersApi = {
+   823→  list: async (params?: { storeId?: string; search?: string; isActive?: string; page?: number; limit?: number; sortBy?: string; sortOrder?: string }) => {
+   824→    const query = new URLSearchParams();
+   825→    if (params?.storeId) query.set('storeId', params.storeId);
+   826→    if (params?.search) query.set('search', params.search);
+   827→    if (params?.isActive) query.set('isActive', params.isActive);
+   828→    if (params?.page) query.set('page', String(params.page));
+   829→    if (params?.limit) query.set('limit', String(params.limit));
+   830→    if (params?.sortBy) query.set('sortBy', params.sortBy);
+   831→    if (params?.sortOrder) query.set('sortOrder', params.sortOrder);
+   832→    const qs = query.toString();
+   833→    return request<SupplierItem[]>(`/suppliers${qs ? `?${qs}` : ''}`);
+   834→  },
+   835→
+   836→  get: async (id: string) => {
+   837→    return request<SupplierItem>(`/suppliers/${id}`);
+   838→  },
+   839→
+   840→  create: async (data: {
+   841→    storeId: string;
+   842→    name: string;
+   843→    email?: string;
+   844→    phone?: string;
+   845→    address?: string;
+   846→    city?: string;
+   847→    contactPerson?: string;
+   848→    taxPin?: string;
+   849→    paymentTerms?: string;
+   850→    rating?: number;
+   851→    isActive?: boolean;
+   852→    notes?: string;
+   853→  }) => {
+   854→    return request<SupplierItem>('/suppliers', {
+   855→      method: 'POST',
+   856→      body: JSON.stringify(data),
+   857→    });
+   858→  },
+   859→
+   860→  update: async (id: string, data: Partial<SupplierItem>) => {
+   861→    return request<SupplierItem>(`/suppliers/${id}`, {
+   862→      method: 'PUT',
+   863→      body: JSON.stringify(data),
+   864→    });
+   865→  },
+   866→
+   867→  delete: async (id: string) => {
+   868→    return request<void>(`/suppliers/${id}`, { method: 'DELETE' });
+   869→  },
+   870→};
+   871→
+   872→export const purchaseOrdersApi = {
+   873→  list: async (params?: { storeId?: string; supplierId?: string; status?: string; page?: number; limit?: number }) => {
+   874→    const query = new URLSearchParams();
+   875→    if (params?.storeId) query.set('storeId', params.storeId);
+   876→    if (params?.supplierId) query.set('supplierId', params.supplierId);
+   877→    if (params?.status) query.set('status', params.status);
+   878→    if (params?.page) query.set('page', String(params.page));
+   879→    if (params?.limit) query.set('limit', String(params.limit));
+   880→    const qs = query.toString();
+   881→    return request<PurchaseOrderListItem[]>(`/purchase-orders${qs ? `?${qs}` : ''}`);
+   882→  },
+   883→
+   884→  get: async (id: string) => {
+   885→    return request<PurchaseOrderListItem>(`/purchase-orders/${id}`);
+   886→  },
+   887→
+   888→  create: async (data: {
+   889→    storeId: string;
+   890→    supplierId: string;
+   891→    items: { productId: string; quantity: number; unitPrice: number; notes?: string }[];
+   892→    notes?: string;
+   893→    expectedDate?: string;
+   894→    createdBy?: string;
+   895→  }) => {
+   896→    return request<PurchaseOrderListItem>('/purchase-orders', {
+   897→      method: 'POST',
+   898→      body: JSON.stringify(data),
+   899→    });
+   900→  },
+   901→
+   902→  updateStatus: async (id: string, status: string, notes?: string) => {
+   903→    return request<PurchaseOrderListItem>(`/purchase-orders/${id}`, {
+   904→      method: 'PUT',
+   905→      body: JSON.stringify({ status, notes }),
+   906→    });
+   907→  },
+   908→
+   909→  receiveItems: async (id: string, receivedItems: { itemId: string; receivedQty: number }[]) => {
+   910→    return request<PurchaseOrderListItem>(`/purchase-orders/${id}`, {
+   911→      method: 'PUT',
+   912→      body: JSON.stringify({ action: 'receive', receivedItems }),
+   913→    });
+   914→  },
+   915→};
+   916→
+   917→// ============================================================================
+   918→// NOTIFICATIONS API
+   919→// ============================================================================
+   920→
+   921→export interface NotificationItem {
+   922→  id: string;
+   923→  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction';
+   924→  title: string;
+   925→  description: string;
+   926→  severity: 'critical' | 'warning' | 'info';
+   927→  timestamp: string;
+   928→  isRead: boolean;
+   929→  targetTab: string;
+   930→}
+   931→
+   932→export interface NotificationSummary {
+   933→  total: number;
+   934→  critical: number;
+   935→  warning: number;
+   936→  info: number;
+   937→}
+   938→
+   939→export const notificationsApi = {
+   940→  list: async (storeId: string) => {
+   941→    const query = new URLSearchParams();
+   942→    query.set('storeId', storeId);
+   943→    return request<NotificationItem[]>(`/notifications?${query.toString()}`);
+   944→  },
+   945→};
+   946→
+   947→// ============================================================================
+   948→// HELPERS
+   949→// ============================================================================
+   950→
+   951→export function formatKES(amount: number): string {
+   952→  return new Intl.NumberFormat('en-KE', {
+   953→    style: 'currency',
+   954→    currency: 'KES',
+   955→    minimumFractionDigits: 0,
+   956→    maximumFractionDigits: 2,
+   957→  }).format(amount);
+   958→}
+   959→
+   960→export function formatDate(date: string | Date): string {
+   961→  return new Date(date).toLocaleDateString('en-KE', {
+   962→    year: 'numeric',
+   963→    month: 'short',
+   964→    day: 'numeric',
+   965→  });
+   966→}
+   967→
+   968→export function formatDateTime(date: string | Date): string {
+   969→  return new Date(date).toLocaleString('en-KE', {
+   970→    year: 'numeric',
+   971→    month: 'short',
+   972→    day: 'numeric',
+   973→    hour: '2-digit',
+   974→    minute: '2-digit',
+   975→  });
+   976→}
+   977→
+   978→export function formatRelativeTime(date: string | Date): string {
+   979→  const now = new Date();
+   980→  const then = new Date(date);
+   981→  const diffMs = now.getTime() - then.getTime();
+   982→  const diffSec = Math.floor(diffMs / 1000);
+   983→  const diffMin = Math.floor(diffSec / 60);
+   984→  const diffHr = Math.floor(diffMin / 60);
+   985→  const diffDay = Math.floor(diffHr / 24);
+   986→  const diffWeek = Math.floor(diffDay / 7);
+   987→
+   988→  if (diffSec < 60) return 'just now';
+   989→  if (diffMin < 60) return `${diffMin} min${diffMin !== 1 ? 's' : ''} ago`;
+   990→  if (diffHr < 24) return `${diffHr} hour${diffHr !== 1 ? 's' : ''} ago`;
+   991→  if (diffDay < 7) return `${diffDay} day${diffDay !== 1 ? 's' : ''} ago`;
+   992→  if (diffWeek < 4) return `${diffWeek} week${diffWeek !== 1 ? 's' : ''} ago`;
+   993→  return formatDate(date);
+   994→}
+   995→

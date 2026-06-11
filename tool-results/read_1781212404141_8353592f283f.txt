@@ -1,0 +1,1445 @@
+     1→'use client';
+     2→
+     3→/**
+     4→ * MBUMAH HARDWARE POS & ERP - Dashboard Overview Tab
+     5→ * Comprehensive dashboard with KPIs, charts, quick actions, activity feed, alerts, and top products
+     6→ */
+     7→
+     8→import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+     9→import { useQuery } from '@tanstack/react-query';
+    10→import {
+    11→  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
+    12→  ResponsiveContainer, PieChart, Pie, Cell,
+    13→} from 'recharts';
+    14→import {
+    15→  TrendingUp, TrendingDown, ShoppingCart, AlertTriangle,
+    16→  CreditCard, Smartphone, Wallet, Package, Plus, BarChart3,
+    17→  FileText, Receipt, Bell, BellRing, AlertCircle, AlertOctagon,
+    18→  Clock, ArrowRight, Activity, CheckCircle2,
+    19→  PackageX, CircleDollarSign, KeyRound, ChevronRight,
+    20→  Banknote, Zap,
+    21→} from 'lucide-react';
+    22→
+    23→import { useAppStore, type AppTab } from '@/lib/stores';
+    24→import {
+    25→  dashboardApi, transactionsApi, notificationsApi,
+    26→  rentalsApi, debtApi, financialApi, productsApi,
+    27→  formatKES, formatDateTime, formatRelativeTime,
+    28→} from '@/lib/api';
+    29→import type { TopProduct } from '@/lib/types';
+    30→
+    31→import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+    32→import { Button } from '@/components/ui/button';
+    33→import { Badge } from '@/components/ui/badge';
+    34→import { Skeleton } from '@/components/ui/skeleton';
+    35→import { ScrollArea } from '@/components/ui/scroll-area';
+    36→import { Separator } from '@/components/ui/separator';
+    37→import { Progress } from '@/components/ui/progress';
+    38→import {
+    39→  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+    40→} from '@/components/ui/table';
+    41→import {
+    42→  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+    43→} from '@/components/ui/dialog';
+    44→
+    45→// ============================================================================
+    46→// CONSTANTS & HELPERS
+    47→// ============================================================================
+    48→
+    49→const CHART_COLORS = [
+    50→  'hsl(var(--chart-1))',
+    51→  'hsl(var(--chart-2))',
+    52→  'hsl(var(--chart-3))',
+    53→  'hsl(var(--chart-4))',
+    54→  'hsl(var(--chart-5))',
+    55→];
+    56→
+    57→const PAYMENT_METHOD_COLORS: Record<string, string> = {
+    58→  CASH: '#10b981',
+    59→  MPESA: '#f59e0b',
+    60→  DEBT: '#ef4444',
+    61→  SPLIT: '#8b5cf6',
+    62→};
+    63→
+    64→const PAYMENT_METHOD_LABELS: Record<string, string> = {
+    65→  CASH: 'Cash',
+    66→  MPESA: 'M-Pesa',
+    67→  DEBT: 'Debt',
+    68→  SPLIT: 'Split',
+    69→};
+    70→
+    71→// Animated counter hook
+    72→function useAnimatedCounter(target: number, duration = 800) {
+    73→  const [count, setCount] = useState(0);
+    74→  const prevTarget = useRef(0);
+    75→
+    76→  useEffect(() => {
+    77→    if (target === prevTarget.current) return;
+    78→    const start = prevTarget.current;
+    79→    const diff = target - start;
+    80→    const startTime = performance.now();
+    81→
+    82→    const animate = (now: number) => {
+    83→      const elapsed = now - startTime;
+    84→      const progress = Math.min(elapsed / duration, 1);
+    85→      const eased = 1 - Math.pow(1 - progress, 3);
+    86→      setCount(Math.round(start + diff * eased));
+    87→      if (progress < 1) {
+    88→        requestAnimationFrame(animate);
+    89→      } else {
+    90→        prevTarget.current = target;
+    91→      }
+    92→    };
+    93→
+    94→    requestAnimationFrame(animate);
+    95→  }, [target, duration]);
+    96→
+    97→  return count;
+    98→}
+    99→
+   100→// Mini sparkline SVG component
+   101→function MiniSparkline({ data, color, height = 28 }: { data: number[]; color: string; height?: number }) {
+   102→  if (data.length < 2) return null;
+   103→  const max = Math.max(...data);
+   104→  const min = Math.min(...data);
+   105→  const range = max - min || 1;
+   106→  const width = 64;
+   107→  const points = data.map((v, i) => {
+   108→    const x = (i / (data.length - 1)) * width;
+   109→    const y = height - ((v - min) / range) * (height - 4) - 2;
+   110→    return `${x},${y}`;
+   111→  }).join(' ');
+   112→
+   113→  // Area fill path
+   114→  const areaPoints = points + ` ${width},${height} 0,${height}`;
+   115→
+   116→  return (
+   117→    <svg width={width} height={height} className="opacity-60 shrink-0" aria-hidden="true">
+   118→      <polygon fill={color} fillOpacity={0.1} points={areaPoints} />
+   119→      <polyline fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" points={points} />
+   120→    </svg>
+   121→  );
+   122→}
+   123→
+   124→// Aging breakdown mini bars
+   125→function AgingBars({ current, days30, days60, days90Plus }: {
+   126→  current: number; days30: number; days60: number; days90Plus: number;
+   127→}) {
+   128→  const total = current + days30 + days60 + days90Plus || 1;
+   129→  const segments = [
+   130→    { value: current, color: '#10b981', label: 'Current' },
+   131→    { value: days30, color: '#f59e0b', label: '30d' },
+   132→    { value: days60, color: '#f97316', label: '60d' },
+   133→    { value: days90Plus, color: '#ef4444', label: '90d+' },
+   134→  ];
+   135→
+   136→  return (
+   137→    <div className="space-y-1">
+   138→      <div className="flex h-2 rounded-full overflow-hidden bg-muted">
+   139→        {segments.map((seg) => (
+   140→          <div
+   141→            key={seg.label}
+   142→            style={{
+   143→              width: `${(seg.value / total) * 100}%`,
+   144→              backgroundColor: seg.color,
+   145→            }}
+   146→            className="transition-all duration-500"
+   147→          />
+   148→        ))}
+   149→      </div>
+   150→      <div className="flex gap-2 text-[9px] text-muted-foreground">
+   151→        {segments.map((seg) => (
+   152→          <span key={seg.label} className="flex items-center gap-0.5">
+   153→            <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: seg.color }} />
+   154→            {seg.label}
+   155→          </span>
+   156→        ))}
+   157→      </div>
+   158→    </div>
+   159→  );
+   160→}
+   161→
+   162→// Custom chart tooltip
+   163→function ChartTooltipContent({ active, payload, label, valuePrefix = '' }: {
+   164→  active?: boolean; payload?: Array<{ value: number; name: string; color: string }>; label?: string; valuePrefix?: string;
+   165→}) {
+   166→  if (!active || !payload?.length) return null;
+   167→  return (
+   168→    <div className="rounded-lg border bg-background/95 backdrop-blur-sm p-2 shadow-lg text-xs">
+   169→      {label && <p className="font-medium mb-1">{label}</p>}
+   170→      {payload.map((entry, i) => (
+   171→        <div key={i} className="flex items-center gap-1.5">
+   172→          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+   173→          <span className="text-muted-foreground">{entry.name}:</span>
+   174→          <span className="font-semibold">{valuePrefix}{entry.value.toLocaleString()}</span>
+   175→        </div>
+   176→      ))}
+   177→    </div>
+   178→  );
+   179→}
+   180→
+   181→// ============================================================================
+   182→// KPI CARD SECTION
+   183→// ============================================================================
+   184→
+   185→function KpiCards({ storeId, onLowStockClick }: { storeId: string; onLowStockClick: () => void }) {
+   186→  const { data, isLoading } = useQuery({
+   187→    queryKey: ['dashboard', storeId],
+   188→    queryFn: async () => {
+   189→      const res = await dashboardApi.getStats(storeId);
+   190→      return res.data;
+   191→    },
+   192→    refetchInterval: 30000,
+   193→  });
+   194→
+   195→  const animatedRevenue = useAnimatedCounter(data?.todayRevenue ?? 0);
+   196→  const animatedTransactions = useAnimatedCounter(data?.todayTransactions ?? 0);
+   197→  const animatedLowStock = useAnimatedCounter(data?.lowStockProducts ?? 0);
+   198→  const animatedDebt = useAnimatedCounter(data?.outstandingDebt ?? 0);
+   199→
+   200→  const sparkData = useMemo(() => {
+   201→    if (data?.salesByHour && data.salesByHour.length > 1) {
+   202→      return data.salesByHour.map(h => h.amount);
+   203→    }
+   204→    return [20, 40, 30, 60, 50, 80, 70, 90];
+   205→  }, [data]);
+   206→
+   207→  const kpis = [
+   208→    {
+   209→      label: "Today's Revenue",
+   210→      value: data?.todayRevenue ?? 0,
+   211→      animatedValue: animatedRevenue,
+   212→      format: 'kes' as const,
+   213→      icon: TrendingUp,
+   214→      color: 'text-green-600 dark:text-green-400',
+   215→      iconBg: 'bg-green-100 dark:bg-green-900/40',
+   216→      gradient: 'from-green-50/80 to-emerald-50/50 dark:from-green-950/30 dark:to-emerald-950/20',
+   217→      borderColor: 'border-l-green-500',
+   218→      sparkColor: '#16a34a',
+   219→      trend: '+12.5%',
+   220→      trendUp: true,
+   221→      clickable: false,
+   222→      onClick: undefined as (() => void) | undefined,
+   223→    },
+   224→    {
+   225→      label: 'Transactions',
+   226→      value: data?.todayTransactions ?? 0,
+   227→      animatedValue: animatedTransactions,
+   228→      format: 'number' as const,
+   229→      icon: ShoppingCart,
+   230→      color: 'text-emerald-600 dark:text-emerald-400',
+   231→      iconBg: 'bg-emerald-100 dark:bg-emerald-900/40',
+   232→      gradient: 'from-emerald-50/80 to-teal-50/50 dark:from-emerald-950/30 dark:to-teal-950/20',
+   233→      borderColor: 'border-l-emerald-500',
+   234→      sparkColor: '#059669',
+   235→      trend: '+8.2%',
+   236→      trendUp: true,
+   237→      clickable: false,
+   238→      onClick: undefined as (() => void) | undefined,
+   239→    },
+   240→    {
+   241→      label: 'Low Stock Alerts',
+   242→      value: data?.lowStockProducts ?? 0,
+   243→      animatedValue: animatedLowStock,
+   244→      format: 'number' as const,
+   245→      icon: AlertTriangle,
+   246→      color: 'text-amber-600 dark:text-amber-400',
+   247→      iconBg: 'bg-amber-100 dark:bg-amber-900/40',
+   248→      gradient: 'from-amber-50/80 to-yellow-50/50 dark:from-amber-950/30 dark:to-yellow-950/20',
+   249→      borderColor: 'border-l-amber-500',
+   250→      sparkColor: '#d97706',
+   251→      trend: '-3.1%',
+   252→      trendUp: false,
+   253→      clickable: true,
+   254→      onClick: onLowStockClick,
+   255→    },
+   256→    {
+   257→      label: 'Outstanding Debt',
+   258→      value: data?.outstandingDebt ?? 0,
+   259→      animatedValue: animatedDebt,
+   260→      format: 'kes' as const,
+   261→      icon: CircleDollarSign,
+   262→      color: 'text-red-600 dark:text-red-400',
+   263→      iconBg: 'bg-red-100 dark:bg-red-900/40',
+   264→      gradient: 'from-red-50/80 to-rose-50/50 dark:from-red-950/30 dark:to-rose-950/20',
+   265→      borderColor: 'border-l-red-500',
+   266→      sparkColor: '#dc2626',
+   267→      trend: '+5.4%',
+   268→      trendUp: true,
+   269→      clickable: false,
+   270→      onClick: undefined as (() => void) | undefined,
+   271→    },
+   272→  ];
+   273→
+   274→  if (isLoading) {
+   275→    return (
+   276→      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   277→        {Array.from({ length: 4 }).map((_, i) => (
+   278→          <Card key={i} className="overflow-hidden">
+   279→            <CardContent className="p-4">
+   280→              <div className="flex items-center gap-3">
+   281→                <Skeleton className="h-10 w-10 rounded-lg" />
+   282→                <div className="flex-1 space-y-2">
+   283→                  <Skeleton className="h-3 w-20" />
+   284→                  <Skeleton className="h-6 w-28" />
+   285→                </div>
+   286→              </div>
+   287→            </CardContent>
+   288→          </Card>
+   289→        ))}
+   290→      </div>
+   291→    );
+   292→  }
+   293→
+   294→  return (
+   295→    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   296→      {kpis.map((kpi, index) => {
+   297→        const Icon = kpi.icon;
+   298→        return (
+   299→          <Card
+   300→            key={kpi.label}
+   301→            className={`border-l-4 ${kpi.borderColor} py-0 bg-gradient-to-br ${kpi.gradient} backdrop-blur-sm hover:shadow-md transition-all duration-200 animate-fade-in ${
+   302→              kpi.clickable && kpi.onClick ? 'cursor-pointer hover:-translate-y-0.5 active:translate-y-0' : ''
+   303→            }`}
+   304→            style={{ animationDelay: `${index * 100}ms` }}
+   305→            onClick={kpi.clickable && kpi.onClick ? kpi.onClick : undefined}
+   306→            role={kpi.clickable ? 'button' : undefined}
+   307→            tabIndex={kpi.clickable ? 0 : undefined}
+   308→            onKeyDown={kpi.clickable && kpi.onClick ? (e) => {
+   309→              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); kpi.onClick!(); }
+   310→            } : undefined}
+   311→          >
+   312→            <CardContent className="p-4">
+   313→              <div className="flex items-start gap-3">
+   314→                <div className={`shrink-0 p-2.5 rounded-xl ${kpi.iconBg} backdrop-blur-sm`}>
+   315→                  <Icon className={`h-5 w-5 ${kpi.color}`} />
+   316→                </div>
+   317→                <div className="flex-1 min-w-0">
+   318→                  <p className="text-xs text-muted-foreground mb-0.5">{kpi.label}</p>
+   319→                  <div className="flex items-center gap-2">
+   320→                    <p className={`text-xl font-bold ${kpi.color} animate-count-up`}>
+   321→                      {kpi.format === 'kes' ? formatKES(kpi.animatedValue) : kpi.animatedValue.toLocaleString()}
+   322→                    </p>
+   323→                  </div>
+   324→                  <div className="flex items-center justify-between mt-2">
+   325→                    <div className={`flex items-center gap-0.5 text-xs font-medium ${
+   326→                      kpi.trendUp ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+   327→                    }`}>
+   328→                      {kpi.trendUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+   329→                      {kpi.trend}
+   330→                    </div>
+   331→                    <MiniSparkline data={sparkData} color={kpi.sparkColor} />
+   332→                  </div>
+   333→                </div>
+   334→              </div>
+   335→            </CardContent>
+   336→          </Card>
+   337→        );
+   338→      })}
+   339→    </div>
+   340→  );
+   341→}
+   342→
+   343→// ============================================================================
+   344→// SALES OVERVIEW SECTION (Charts)
+   345→// ============================================================================
+   346→
+   347→function SalesOverview({ storeId }: { storeId: string }) {
+   348→  const { data: revenueData, isLoading: revenueLoading } = useQuery({
+   349→    queryKey: ['revenue-trend', storeId],
+   350→    queryFn: async () => {
+   351→      const res = await financialApi.getRevenueTrend({ storeId, days: 7 });
+   352→      return res.data;
+   353→    },
+   354→    refetchInterval: 60000,
+   355→  });
+   356→
+   357→  const { data: dashboardData, isLoading: dashboardLoading } = useQuery({
+   358→    queryKey: ['dashboard', storeId],
+   359→    queryFn: async () => {
+   360→      const res = await dashboardApi.getStats(storeId);
+   361→      return res.data;
+   362→    },
+   363→    refetchInterval: 30000,
+   364→  });
+   365→
+   366→  const isLoading = revenueLoading || dashboardLoading;
+   367→
+   368→  // Payment method pie chart data
+   369→  const paymentData = useMemo(() => {
+   370→    if (dashboardData?.paymentMethodBreakdown && dashboardData.paymentMethodBreakdown.length > 0) {
+   371→      return dashboardData.paymentMethodBreakdown.map((pm) => ({
+   372→        name: PAYMENT_METHOD_LABELS[pm.method] || pm.method,
+   373→        value: pm.amount,
+   374→        count: pm.count,
+   375→        color: PAYMENT_METHOD_COLORS[pm.method] || '#6b7280',
+   376→      }));
+   377→    }
+   378→    // Fallback demo data
+   379→    return [
+   380→      { name: 'Cash', value: 45000, count: 23, color: '#10b981' },
+   381→      { name: 'M-Pesa', value: 32000, count: 15, color: '#f59e0b' },
+   382→      { name: 'Debt', value: 12000, count: 5, color: '#ef4444' },
+   383→      { name: 'Split', value: 8000, count: 3, color: '#8b5cf6' },
+   384→    ];
+   385→  }, [dashboardData]);
+   386→
+   387→  // Revenue trend bar chart data
+   388→  const revenueChartData = useMemo(() => {
+   389→    if (revenueData?.daily && revenueData.daily.length > 0) {
+   390→      return revenueData.daily.map((d) => ({
+   391→        label: d.label,
+   392→        revenue: d.revenue,
+   393→        expenses: d.expenses,
+   394→        transactions: d.transactions,
+   395→      }));
+   396→    }
+   397→    // Fallback demo data
+   398→    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+   399→    return days.map((label) => ({
+   400→      label,
+   401→      revenue: Math.floor(Math.random() * 40000) + 20000,
+   402→      expenses: Math.floor(Math.random() * 15000) + 5000,
+   403→      transactions: Math.floor(Math.random() * 20) + 10,
+   404→    }));
+   405→  }, [revenueData]);
+   406→
+   407→  if (isLoading) {
+   408→    return (
+   409→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   410→        <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+   411→          <CardContent className="p-4">
+   412→            <Skeleton className="h-6 w-32 mb-4" />
+   413→            <Skeleton className="h-64 w-full" />
+   414→          </CardContent>
+   415→        </Card>
+   416→        <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+   417→          <CardContent className="p-4">
+   418→            <Skeleton className="h-6 w-36 mb-4" />
+   419→            <Skeleton className="h-64 w-full" />
+   420→          </CardContent>
+   421→        </Card>
+   422→      </div>
+   423→    );
+   424→  }
+   425→
+   426→  const totalRevenue = paymentData.reduce((sum, d) => sum + d.value, 0);
+   427→
+   428→  return (
+   429→    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   430→      {/* Revenue Trend Bar Chart */}
+   431→      <Card className="backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-all duration-200">
+   432→        <CardHeader className="pb-2">
+   433→          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+   434→            <BarChart3 className="h-4 w-4 text-green-600" />
+   435→            Revenue Trend (7 Days)
+   436→          </CardTitle>
+   437→          <CardDescription className="text-xs">
+   438→            {revenueData?.summary ? (
+   439→              <>
+   440→                Total: {formatKES(revenueData.summary.totalRevenue)} | Avg/day: {formatKES(revenueData.summary.avgDailyRevenue)}
+   441→              </>
+   442→            ) : (
+   443→              'Daily revenue and expenses overview'
+   444→            )}
+   445→          </CardDescription>
+   446→        </CardHeader>
+   447→        <CardContent className="pb-4">
+   448→          <div className="h-64">
+   449→            <ResponsiveContainer width="100%" height="100%">
+   450→              <BarChart data={revenueChartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+   451→                <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" />
+   452→                <XAxis
+   453→                  dataKey="label"
+   454→                  tick={{ fontSize: 11 }}
+   455→                  className="text-muted-foreground"
+   456→                />
+   457→                <YAxis
+   458→                  tick={{ fontSize: 11 }}
+   459→                  className="text-muted-foreground"
+   460→                  tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`}
+   461→                />
+   462→                <RechartsTooltip content={<ChartTooltipContent valuePrefix="KES " />} />
+   463→                <Bar dataKey="revenue" name="Revenue" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+   464→                <Bar dataKey="expenses" name="Expenses" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={40} opacity={0.6} />
+   465→              </BarChart>
+   466→            </ResponsiveContainer>
+   467→          </div>
+   468→        </CardContent>
+   469→      </Card>
+   470→
+   471→      {/* Payment Methods Pie Chart */}
+   472→      <Card className="backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-all duration-200">
+   473→        <CardHeader className="pb-2">
+   474→          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+   475→            <Wallet className="h-4 w-4 text-amber-600" />
+   476→            Payment Methods
+   477→          </CardTitle>
+   478→          <CardDescription className="text-xs">
+   479→            Distribution of today&apos;s payments
+   480→          </CardDescription>
+   481→        </CardHeader>
+   482→        <CardContent className="pb-4">
+   483→          <div className="flex flex-col sm:flex-row items-center gap-4">
+   484→            <div className="h-52 w-52 shrink-0">
+   485→              <ResponsiveContainer width="100%" height="100%">
+   486→                <PieChart>
+   487→                  <Pie
+   488→                    data={paymentData}
+   489→                    cx="50%"
+   490→                    cy="50%"
+   491→                    innerRadius={50}
+   492→                    outerRadius={80}
+   493→                    paddingAngle={3}
+   494→                    dataKey="value"
+   495→                    strokeWidth={0}
+   496→                  >
+   497→                    {paymentData.map((entry, index) => (
+   498→                      <Cell key={`cell-${index}`} fill={entry.color} />
+   499→                    ))}
+   500→                  </Pie>
+   501→                  <RechartsTooltip
+   502→                    formatter={(value: number, name: string) => [formatKES(value), name]}
+   503→                  />
+   504→                </PieChart>
+   505→              </ResponsiveContainer>
+   506→            </div>
+   507→            <div className="flex-1 space-y-3 w-full">
+   508→              {paymentData.map((pm) => {
+   509→                const percent = totalRevenue > 0 ? ((pm.value / totalRevenue) * 100).toFixed(1) : '0';
+   510→                return (
+   511→                  <div key={pm.name} className="flex items-center gap-3">
+   512→                    <span
+   513→                      className="shrink-0 w-3 h-3 rounded-full"
+   514→                      style={{ backgroundColor: pm.color }}
+   515→                    />
+   516→                    <div className="flex-1 min-w-0">
+   517→                      <div className="flex items-center justify-between">
+   518→                        <span className="text-sm font-medium">{pm.name}</span>
+   519→                        <span className="text-sm font-semibold">{formatKES(pm.value)}</span>
+   520→                      </div>
+   521→                      <Progress
+   522→                        value={parseFloat(percent)}
+   523→                        className="h-1.5 mt-1"
+   524→                      />
+   525→                      <div className="flex items-center justify-between mt-0.5">
+   526→                        <span className="text-[10px] text-muted-foreground">{pm.count} transactions</span>
+   527→                        <span className="text-[10px] text-muted-foreground">{percent}%</span>
+   528→                      </div>
+   529→                    </div>
+   530→                  </div>
+   531→                );
+   532→              })}
+   533→            </div>
+   534→          </div>
+   535→        </CardContent>
+   536→      </Card>
+   537→    </div>
+   538→  );
+   539→}
+   540→
+   541→// ============================================================================
+   542→// QUICK ACTIONS BAR
+   543→// ============================================================================
+   544→
+   545→function QuickActions({ onTabSwitch }: { onTabSwitch: (tab: AppTab) => void }) {
+   546→  const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
+   547→  const [cashDrawerOpen, setCashDrawerOpen] = useState(false);
+   548→
+   549→  const actions = [
+   550→    {
+   551→      label: 'New Sale',
+   552→      icon: ShoppingCart,
+   553→      color: 'text-green-600 dark:text-green-400',
+   554→      bg: 'bg-green-50 hover:bg-green-100 dark:bg-green-950/30 dark:hover:bg-green-950/50 border-green-200 dark:border-green-800',
+   555→      tab: 'pos' as AppTab,
+   556→      onClick: () => onTabSwitch('pos'),
+   557→    },
+   558→    {
+   559→      label: 'Add Product',
+   560→      icon: Plus,
+   561→      color: 'text-emerald-600 dark:text-emerald-400',
+   562→      bg: 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800',
+   563→      tab: 'inventory' as AppTab,
+   564→      onClick: () => onTabSwitch('inventory'),
+   565→    },
+   566→    {
+   567→      label: 'Record Expense',
+   568→      icon: Receipt,
+   569→      color: 'text-amber-600 dark:text-amber-400',
+   570→      bg: 'bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-950/50 border-amber-200 dark:border-amber-800',
+   571→      tab: null,
+   572→      onClick: () => setExpenseDialogOpen(true),
+   573→    },
+   574→    {
+   575→      label: 'View Reports',
+   576→      icon: FileText,
+   577→      color: 'text-purple-600 dark:text-purple-400',
+   578→      bg: 'bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/30 dark:hover:bg-purple-950/50 border-purple-200 dark:border-purple-800',
+   579→      tab: 'reports' as AppTab,
+   580→      onClick: () => onTabSwitch('reports'),
+   581→    },
+   582→    {
+   583→      label: 'Cash Drawer',
+   584→      icon: Banknote,
+   585→      color: 'text-teal-600 dark:text-teal-400',
+   586→      bg: 'bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/30 dark:hover:bg-teal-950/50 border-teal-200 dark:border-teal-800',
+   587→      tab: null,
+   588→      onClick: () => setCashDrawerOpen(true),
+   589→    },
+   590→  ];
+   591→
+   592→  return (
+   593→    <>
+   594→      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+   595→        <CardHeader className="pb-2">
+   596→          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+   597→            <Zap className="h-4 w-4 text-amber-500" />
+   598→            Quick Actions
+   599→          </CardTitle>
+   600→        </CardHeader>
+   601→        <CardContent className="pb-4">
+   602→          <div className="flex flex-wrap gap-2">
+   603→            {actions.map((action) => {
+   604→              const Icon = action.icon;
+   605→              return (
+   606→                <Button
+   607→                  key={action.label}
+   608→                  variant="outline"
+   609→                  size="sm"
+   610→                  className={`gap-2 border ${action.bg} transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5`}
+   611→                  onClick={action.onClick}
+   612→                >
+   613→                  <Icon className={`h-4 w-4 ${action.color}`} />
+   614→                  <span className="text-xs font-medium">{action.label}</span>
+   615→                </Button>
+   616→              );
+   617→            })}
+   618→          </div>
+   619→        </CardContent>
+   620→      </Card>
+   621→
+   622→      {/* Expense Dialog (placeholder) */}
+   623→      <Dialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen}>
+   624→        <DialogContent className="sm:max-w-md">
+   625→          <DialogHeader>
+   626→            <DialogTitle className="flex items-center gap-2">
+   627→              <Receipt className="h-5 w-5 text-amber-600" />
+   628→              Record Expense
+   629→            </DialogTitle>
+   630→            <DialogDescription>
+   631→              Log a new expense for the store.
+   632→            </DialogDescription>
+   633→          </DialogHeader>
+   634→          <div className="space-y-4 py-4">
+   635→            <div className="space-y-2">
+   636→              <label className="text-sm font-medium">Description</label>
+   637→              <input
+   638→                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+   639→                placeholder="e.g. Transport costs"
+   640→              />
+   641→            </div>
+   642→            <div className="space-y-2">
+   643→              <label className="text-sm font-medium">Amount (KES)</label>
+   644→              <input
+   645→                type="number"
+   646→                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+   647→                placeholder="0"
+   648→              />
+   649→            </div>
+   650→            <div className="space-y-2">
+   651→              <label className="text-sm font-medium">Category</label>
+   652→              <select className="w-full rounded-md border bg-background px-3 py-2 text-sm">
+   653→                <option>Transport</option>
+   654→                <option>Utilities</option>
+   655→                <option>Maintenance</option>
+   656→                <option>Salaries</option>
+   657→                <option>Other</option>
+   658→              </select>
+   659→            </div>
+   660→          </div>
+   661→          <DialogFooter>
+   662→            <Button variant="outline" onClick={() => setExpenseDialogOpen(false)}>Cancel</Button>
+   663→            <Button onClick={() => setExpenseDialogOpen(false)}>
+   664→              Record Expense
+   665→            </Button>
+   666→          </DialogFooter>
+   667→        </DialogContent>
+   668→      </Dialog>
+   669→
+   670→      {/* Cash Drawer Dialog */}
+   671→      <Dialog open={cashDrawerOpen} onOpenChange={setCashDrawerOpen}>
+   672→        <DialogContent className="sm:max-w-md">
+   673→          <DialogHeader>
+   674→            <DialogTitle className="flex items-center gap-2">
+   675→              <Banknote className="h-5 w-5 text-teal-600" />
+   676→              Cash Drawer Status
+   677→            </DialogTitle>
+   678→            <DialogDescription>
+   679→              Current cash drawer overview.
+   680→            </DialogDescription>
+   681→          </DialogHeader>
+   682→          <div className="space-y-4 py-4">
+   683→            <div className="grid grid-cols-2 gap-4">
+   684→              <div className="rounded-lg border p-3 text-center">
+   685→                <p className="text-xs text-muted-foreground">Opening Balance</p>
+   686→                <p className="text-lg font-bold text-green-600">{formatKES(50000)}</p>
+   687→              </div>
+   688→              <div className="rounded-lg border p-3 text-center">
+   689→                <p className="text-xs text-muted-foreground">Cash Sales</p>
+   690→                <p className="text-lg font-bold text-emerald-600">{formatKES(23400)}</p>
+   691→              </div>
+   692→              <div className="rounded-lg border p-3 text-center">
+   693→                <p className="text-xs text-muted-foreground">Cash Out</p>
+   694→                <p className="text-lg font-bold text-red-600">{formatKES(8500)}</p>
+   695→              </div>
+   696→              <div className="rounded-lg border p-3 text-center">
+   697→                <p className="text-xs text-muted-foreground">Expected Balance</p>
+   698→                <p className="text-lg font-bold">{formatKES(64900)}</p>
+   699→              </div>
+   700→            </div>
+   701→            <div className="rounded-lg border p-3 bg-amber-50 dark:bg-amber-950/30">
+   702→              <div className="flex items-center gap-2">
+   703→                <Clock className="h-4 w-4 text-amber-600" />
+   704→                <span className="text-sm text-amber-700 dark:text-amber-400">Last drawer count: 2 hours ago</span>
+   705→              </div>
+   706→            </div>
+   707→          </div>
+   708→          <DialogFooter>
+   709→            <Button variant="outline" onClick={() => setCashDrawerOpen(false)}>Close</Button>
+   710→            <Button onClick={() => setCashDrawerOpen(false)}>
+   711→              Count Drawer
+   712→            </Button>
+   713→          </DialogFooter>
+   714→        </DialogContent>
+   715→      </Dialog>
+   716→    </>
+   717→  );
+   718→}
+   719→
+   720→// ============================================================================
+   721→// RECENT ACTIVITY FEED
+   722→// ============================================================================
+   723→
+   724→function RecentActivity({ storeId }: { storeId: string }) {
+   725→  const { data: dashboardData, isLoading: dashLoading } = useQuery({
+   726→    queryKey: ['dashboard', storeId],
+   727→    queryFn: async () => {
+   728→      const res = await dashboardApi.getStats(storeId);
+   729→      return res.data;
+   730→    },
+   731→    refetchInterval: 30000,
+   732→  });
+   733→
+   734→  const { data: transactions, isLoading: txLoading } = useQuery({
+   735→    queryKey: ['recent-transactions', storeId],
+   736→    queryFn: async () => {
+   737→      const res = await transactionsApi.list({ storeId, limit: 5 });
+   738→      return res.data;
+   739→    },
+   740→    refetchInterval: 30000,
+   741→  });
+   742→
+   743→  const isLoading = dashLoading || txLoading;
+   744→
+   745→  const getPaymentIcon = (method: string) => {
+   746→    switch (method?.toUpperCase()) {
+   747→      case 'CASH': return <Banknote className="h-3.5 w-3.5 text-green-600" />;
+   748→      case 'MPESA': return <Smartphone className="h-3.5 w-3.5 text-amber-600" />;
+   749→      case 'DEBT': return <CircleDollarSign className="h-3.5 w-3.5 text-red-600" />;
+   750→      case 'SPLIT': return <CreditCard className="h-3.5 w-3.5 text-purple-600" />;
+   751→      default: return <Wallet className="h-3.5 w-3.5" />;
+   752→    }
+   753→  };
+   754→
+   755→  // Map activity action types to icons and colors
+   756→  const getActivityIcon = (action: string) => {
+   757→    const actionUpper = action?.toUpperCase() || '';
+   758→    if (actionUpper.includes('LOGIN')) return { icon: Activity, bg: 'bg-blue-100 dark:bg-blue-900/30', color: 'text-blue-600' };
+   759→    if (actionUpper.includes('PURCHASE_ORDER') || actionUpper.includes('PO_')) return { icon: Package, bg: 'bg-purple-100 dark:bg-purple-900/30', color: 'text-purple-600' };
+   760→    if (actionUpper.includes('SUPPLIER')) return { icon: BarChart3, bg: 'bg-teal-100 dark:bg-teal-900/30', color: 'text-teal-600' };
+   761→    if (actionUpper.includes('BUNDLE')) return { icon: Package, bg: 'bg-cyan-100 dark:bg-cyan-900/30', color: 'text-cyan-600' };
+   762→    if (actionUpper.includes('CASH_DRAWER') || actionUpper.includes('EXPENSE')) return { icon: Banknote, bg: 'bg-amber-100 dark:bg-amber-900/30', color: 'text-amber-600' };
+   763→    return { icon: Activity, bg: 'bg-gray-100 dark:bg-gray-900/30', color: 'text-gray-600' };
+   764→  };
+   765→
+   766→  // Recent activities from dashboard API
+   767→  const recentActivities = (dashboardData as Record<string, unknown>)?.recentActivities as Array<{
+   768→    id: string; action: string; component: string; severity: string;
+   769→    message: string; createdAt: string; user?: { name: string; role: string } | null;
+   770→  }> | undefined;
+   771→
+   772→  return (
+   773→    <Card className="backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-all duration-200">
+   774→      <CardHeader className="pb-2">
+   775→        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+   776→          <Activity className="h-4 w-4 text-green-600" />
+   777→          Recent Activity
+   778→        </CardTitle>
+   779→      </CardHeader>
+   780→      <CardContent className="pb-4">
+   781→        {isLoading ? (
+   782→          <div className="space-y-3">
+   783→            {Array.from({ length: 5 }).map((_, i) => (
+   784→              <div key={i} className="flex items-center gap-3">
+   785→                <Skeleton className="h-8 w-8 rounded-full" />
+   786→                <div className="flex-1 space-y-1.5">
+   787→                  <Skeleton className="h-3 w-40" />
+   788→                  <Skeleton className="h-2 w-24" />
+   789→                </div>
+   790→                <Skeleton className="h-4 w-16" />
+   791→              </div>
+   792→            ))}
+   793→          </div>
+   794→        ) : (
+   795→          <ScrollArea className="max-h-96">
+   796→            <div className="space-y-1">
+   797→              {/* Recent Transactions */}
+   798→              {transactions && transactions.length > 0 && (
+   799→                <>
+   800→                  <div className="flex items-center gap-2 px-2 py-1">
+   801→                    <ShoppingCart className="h-3.5 w-3.5 text-green-600" />
+   802→                    <span className="text-xs font-semibold text-green-600">Recent Sales</span>
+   803→                  </div>
+   804→                  {transactions.slice(0, 5).map((tx) => (
+   805→                    <div
+   806→                      key={tx.id}
+   807→                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
+   808→                    >
+   809→                      <div className="shrink-0 p-1.5 rounded-full bg-green-100 dark:bg-green-900/30">
+   810→                        <ShoppingCart className="h-3.5 w-3.5 text-green-600" />
+   811→                      </div>
+   812→                      <div className="flex-1 min-w-0">
+   813→                        <div className="flex items-center gap-2">
+   814→                          <span className="text-sm font-medium truncate">
+   815→                            {tx.receiptNumber || `TX-${tx.id.slice(-6)}`}
+   816→                          </span>
+   817→                          <span className="flex items-center gap-0.5">
+   818→                            {getPaymentIcon(tx.paymentMethod)}
+   819→                          </span>
+   820→                        </div>
+   821→                        <p className="text-xs text-muted-foreground">
+   822→                          {tx.paymentMethod} • {formatRelativeTime(tx.createdAt)}
+   823→                        </p>
+   824→                      </div>
+   825→                      <div className="shrink-0 text-right">
+   826→                        <p className="text-sm font-semibold">{formatKES(tx.totalAmount)}</p>
+   827→                        <Badge
+   828→                          variant={tx.paymentStatus === 'COMPLETED' ? 'default' : 'secondary'}
+   829→                          className="text-[9px] px-1.5 py-0"
+   830→                        >
+   831→                          {tx.paymentStatus}
+   832→                        </Badge>
+   833→                      </div>
+   834→                    </div>
+   835→                  ))}
+   836→                </>
+   837→              )}
+   838→
+   839→              {/* Separator */}
+   840→              {transactions && transactions.length > 0 && recentActivities && recentActivities.length > 0 && (
+   841→                <Separator className="my-2" />
+   842→              )}
+   843→
+   844→              {/* Other Recent Activities */}
+   845→              {recentActivities && recentActivities.length > 0 && (
+   846→                <>
+   847→                  <div className="flex items-center gap-2 px-2 py-1">
+   848→                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+   849→                    <span className="text-xs font-semibold text-muted-foreground">System Activity</span>
+   850→                  </div>
+   851→                  {recentActivities.slice(0, 8).map((activity) => {
+   852→                    const iconConfig = getActivityIcon(activity.action);
+   853→                    const Icon = iconConfig.icon;
+   854→                    return (
+   855→                      <div
+   856→                        key={activity.id}
+   857→                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
+   858→                      >
+   859→                        <div className={`shrink-0 p-1.5 rounded-full ${iconConfig.bg}`}>
+   860→                          <Icon className={`h-3.5 w-3.5 ${iconConfig.color}`} />
+   861→                        </div>
+   862→                        <div className="flex-1 min-w-0">
+   863→                          <p className="text-xs font-medium truncate">{activity.message}</p>
+   864→                          <p className="text-[10px] text-muted-foreground">
+   865→                            {activity.user?.name || 'System'} • {formatRelativeTime(activity.createdAt)}
+   866→                          </p>
+   867→                        </div>
+   868→                      </div>
+   869→                    );
+   870→                  })}
+   871→                </>
+   872→              )}
+   873→
+   874→              {/* Empty state */}
+   875→              {(!transactions || transactions.length === 0) && (!recentActivities || recentActivities.length === 0) && (
+   876→                <div className="text-center py-6 text-muted-foreground text-sm">
+   877→                  <Activity className="h-8 w-8 mx-auto mb-2 opacity-30" />
+   878→                  No recent activity
+   879→                </div>
+   880→              )}
+   881→            </div>
+   882→          </ScrollArea>
+   883→        )}
+   884→      </CardContent>
+   885→    </Card>
+   886→  );
+   887→}
+   888→
+   889→// ============================================================================
+   890→// ALERTS & NOTIFICATIONS PANEL
+   891→// ============================================================================
+   892→
+   893→function AlertsPanel({ storeId, onTabSwitch }: { storeId: string; onTabSwitch: (tab: AppTab) => void }) {
+   894→  const { data: notifications, isLoading: notifLoading } = useQuery({
+   895→    queryKey: ['notifications', storeId],
+   896→    queryFn: async () => {
+   897→      const res = await notificationsApi.list(storeId);
+   898→      return res.data;
+   899→    },
+   900→    refetchInterval: 30000,
+   901→  });
+   902→
+   903→  const { data: debtData, isLoading: debtLoading } = useQuery({
+   904→    queryKey: ['overdue-debt', storeId],
+   905→    queryFn: async () => {
+   906→      const res = await debtApi.list({ storeId, status: 'OVERDUE', limit: 5 });
+   907→      return res.data;
+   908→    },
+   909→    refetchInterval: 60000,
+   910→  });
+   911→
+   912→  const { data: rentalsData, isLoading: rentLoading } = useQuery({
+   913→    queryKey: ['overdue-rentals-alert', storeId],
+   914→    queryFn: async () => {
+   915→      const res = await rentalsApi.list({ storeId, status: 'OVERDUE', limit: 5 });
+   916→      return res.data;
+   917→    },
+   918→    refetchInterval: 60000,
+   919→  });
+   920→
+   921→  const isLoading = notifLoading || debtLoading || rentLoading;
+   922→
+   923→  // Aggregate alerts
+   924→  const alerts = useMemo(() => {
+   925→    const items: Array<{
+   926→      id: string;
+   927→      type: 'low_stock' | 'overdue_rental' | 'overdue_debt' | 'notification';
+   928→      severity: 'critical' | 'warning' | 'info';
+   929→      title: string;
+   930→      description: string;
+   931→      icon: React.ElementType;
+   932→      color: string;
+   933→      badgeVariant: 'destructive' | 'secondary' | 'default';
+   934→      targetTab?: AppTab;
+   935→      count?: number;
+   936→    }> = [];
+   937→
+   938→    // Low stock notifications
+   939→    const lowStockNotifs = notifications?.filter(n => n.type === 'low_stock' || n.type === 'out_of_stock') ?? [];
+   940→    if (lowStockNotifs.length > 0) {
+   941→      items.push({
+   942→        id: 'low-stock',
+   943→        type: 'low_stock',
+   944→        severity: 'warning',
+   945→        title: 'Low Stock Products',
+   946→        description: `${lowStockNotifs.length} product${lowStockNotifs.length > 1 ? 's' : ''} below reorder level`,
+   947→        icon: PackageX,
+   948→        color: 'text-amber-600',
+   949→        badgeVariant: 'secondary',
+   950→        targetTab: 'inventory',
+   951→        count: lowStockNotifs.length,
+   952→      });
+   953→    }
+   954→
+   955→    // Out of stock
+   956→    const outOfStockNotifs = notifications?.filter(n => n.type === 'out_of_stock') ?? [];
+   957→    if (outOfStockNotifs.length > 0) {
+   958→      items.push({
+   959→        id: 'out-of-stock',
+   960→        type: 'low_stock',
+   961→        severity: 'critical',
+   962→        title: 'Out of Stock',
+   963→        description: `${outOfStockNotifs.length} product${outOfStockNotifs.length > 1 ? 's' : ''} completely out of stock`,
+   964→        icon: AlertOctagon,
+   965→        color: 'text-red-600',
+   966→        badgeVariant: 'destructive',
+   967→        targetTab: 'inventory',
+   968→        count: outOfStockNotifs.length,
+   969→      });
+   970→    }
+   971→
+   972→    // Overdue rentals
+   973→    if (rentalsData && rentalsData.length > 0) {
+   974→      items.push({
+   975→        id: 'overdue-rentals',
+   976→        type: 'overdue_rental',
+   977→        severity: 'warning',
+   978→        title: 'Overdue Rentals',
+   979→        description: `${rentalsData.length} rental${rentalsData.length > 1 ? 's' : ''} past due date`,
+   980→        icon: KeyRound,
+   981→        color: 'text-amber-600',
+   982→        badgeVariant: 'secondary',
+   983→        targetTab: 'rentals',
+   984→        count: rentalsData.length,
+   985→      });
+   986→    }
+   987→
+   988→    // Overdue debt
+   989→    if (debtData && debtData.length > 0) {
+   990→      items.push({
+   991→        id: 'overdue-debt',
+   992→        type: 'overdue_debt',
+   993→        severity: 'critical',
+   994→        title: 'Overdue Debt Payments',
+   995→        description: `${debtData.length} debt record${debtData.length > 1 ? 's' : ''} past due`,
+   996→        icon: CircleDollarSign,
+   997→        color: 'text-red-600',
+   998→        badgeVariant: 'destructive',
+   999→        targetTab: 'financial',
+  1000→        count: debtData.length,
+  1001→      });
+  1002→    }
+  1003→
+  1004→    // Other notifications
+  1005→    const otherNotifs = notifications?.filter(
+  1006→      n => n.type !== 'low_stock' && n.type !== 'out_of_stock'
+  1007→    )?.slice(0, 3) ?? [];
+  1008→    otherNotifs.forEach((n) => {
+  1009→      items.push({
+  1010→        id: n.id,
+  1011→        type: 'notification',
+  1012→        severity: n.severity as 'critical' | 'warning' | 'info',
+  1013→        title: n.title,
+  1014→        description: n.description,
+  1015→        icon: n.severity === 'info' ? Bell : AlertCircle,
+  1016→        color: n.severity === 'critical' ? 'text-red-600' : n.severity === 'warning' ? 'text-amber-600' : 'text-blue-600',
+  1017→        badgeVariant: n.severity === 'critical' ? 'destructive' : 'secondary',
+  1018→        targetTab: (n.targetTab as AppTab) || undefined,
+  1019→      });
+  1020→    });
+  1021→
+  1022→    return items;
+  1023→  }, [notifications, debtData, rentalsData]);
+  1024→
+  1025→  if (isLoading) {
+  1026→    return (
+  1027→      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+  1028→        <CardHeader className="pb-2">
+  1029→          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+  1030→            <BellRing className="h-4 w-4 text-amber-500" />
+  1031→            Alerts & Notifications
+  1032→          </CardTitle>
+  1033→        </CardHeader>
+  1034→        <CardContent className="pb-4">
+  1035→          <div className="space-y-3">
+  1036→            {Array.from({ length: 3 }).map((_, i) => (
+  1037→              <div key={i} className="flex items-center gap-3">
+  1038→                <Skeleton className="h-8 w-8 rounded-full" />
+  1039→                <div className="flex-1 space-y-1.5">
+  1040→                  <Skeleton className="h-3 w-32" />
+  1041→                  <Skeleton className="h-2 w-48" />
+  1042→                </div>
+  1043→              </div>
+  1044→            ))}
+  1045→          </div>
+  1046→        </CardContent>
+  1047→      </Card>
+  1048→    );
+  1049→  }
+  1050→
+  1051→  return (
+  1052→    <Card className="backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-all duration-200">
+  1053→      <CardHeader className="pb-2">
+  1054→        <div className="flex items-center justify-between">
+  1055→          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+  1056→            <BellRing className="h-4 w-4 text-amber-500" />
+  1057→            Alerts & Notifications
+  1058→          </CardTitle>
+  1059→          {alerts.length > 0 && (
+  1060→            <Badge variant="destructive" className="text-[10px] px-2">
+  1061→              {alerts.length}
+  1062→            </Badge>
+  1063→          )}
+  1064→        </div>
+  1065→      </CardHeader>
+  1066→      <CardContent className="pb-4">
+  1067→        {alerts.length === 0 ? (
+  1068→          <div className="text-center py-6 text-muted-foreground">
+  1069→            <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-green-500 opacity-50" />
+  1070→            <p className="text-sm">All clear! No active alerts.</p>
+  1071→          </div>
+  1072→        ) : (
+  1073→          <ScrollArea className="max-h-80">
+  1074→            <div className="space-y-2">
+  1075→              {alerts.map((alert) => {
+  1076→                const Icon = alert.icon;
+  1077→                return (
+  1078→                  <div
+  1079→                    key={alert.id}
+  1080→                    className={`flex items-start gap-3 p-2.5 rounded-lg border transition-colors ${
+  1081→                      alert.severity === 'critical'
+  1082→                        ? 'border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20'
+  1083→                        : alert.severity === 'warning'
+  1084→                        ? 'border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20'
+  1085→                        : 'border-border/50 bg-muted/30'
+  1086→                    } ${alert.targetTab ? 'cursor-pointer hover:bg-muted/60' : ''}`}
+  1087→                    onClick={alert.targetTab ? () => onTabSwitch(alert.targetTab!) : undefined}
+  1088→                    role={alert.targetTab ? 'button' : undefined}
+  1089→                    tabIndex={alert.targetTab ? 0 : undefined}
+  1090→                  >
+  1091→                    <div className={`shrink-0 p-1.5 rounded-full ${
+  1092→                      alert.severity === 'critical' ? 'bg-red-100 dark:bg-red-900/30' :
+  1093→                      alert.severity === 'warning' ? 'bg-amber-100 dark:bg-amber-900/30' :
+  1094→                      'bg-muted'
+  1095→                    }`}>
+  1096→                      <Icon className={`h-4 w-4 ${alert.color}`} />
+  1097→                    </div>
+  1098→                    <div className="flex-1 min-w-0">
+  1099→                      <div className="flex items-center gap-2">
+  1100→                        <span className="text-sm font-medium">{alert.title}</span>
+  1101→                        {alert.count !== undefined && (
+  1102→                          <Badge variant={alert.badgeVariant} className="text-[9px] px-1.5 py-0">
+  1103→                            {alert.count}
+  1104→                          </Badge>
+  1105→                        )}
+  1106→                      </div>
+  1107→                      <p className="text-xs text-muted-foreground mt-0.5">{alert.description}</p>
+  1108→                    </div>
+  1109→                    {alert.targetTab && (
+  1110→                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
+  1111→                    )}
+  1112→                  </div>
+  1113→                );
+  1114→              })}
+  1115→            </div>
+  1116→          </ScrollArea>
+  1117→        )}
+  1118→
+  1119→        {/* System Health Indicator */}
+  1120→        <Separator className="my-3" />
+  1121→        <div className="flex items-center justify-between">
+  1122→          <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+  1123→            <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+  1124→            System Healthy
+  1125→          </span>
+  1126→          <span className="text-[10px] text-muted-foreground">
+  1127→            Last sync: just now
+  1128→          </span>
+  1129→        </div>
+  1130→      </CardContent>
+  1131→    </Card>
+  1132→  );
+  1133→}
+  1134→
+  1135→// ============================================================================
+  1136→// TOP PRODUCTS TABLE
+  1137→// ============================================================================
+  1138→
+  1139→function TopProductsTable({ storeId }: { storeId: string }) {
+  1140→  const { data, isLoading } = useQuery({
+  1141→    queryKey: ['dashboard', storeId],
+  1142→    queryFn: async () => {
+  1143→      const res = await dashboardApi.getStats(storeId);
+  1144→      return res.data;
+  1145→    },
+  1146→    refetchInterval: 30000,
+  1147→  });
+  1148→
+  1149→  const topProducts: TopProduct[] = useMemo(() => {
+  1150→    if (data?.topProducts && data.topProducts.length > 0) {
+  1151→      return data.topProducts.slice(0, 5);
+  1152→    }
+  1153→    // Demo data
+  1154→    return [
+  1155→      { productId: '1', productName: 'Portland Cement (50kg)', totalQuantity: 45, totalRevenue: 54000 },
+  1156→      { productId: '2', productName: 'Iron Sheets (3m)', totalQuantity: 32, totalRevenue: 41600 },
+  1157→      { productId: '3', productName: 'D-Paint White (20L)', totalQuantity: 18, totalRevenue: 36000 },
+  1158→      { productId: '4', productName: 'Rebar 12mm (6m)', totalQuantity: 60, totalRevenue: 27000 },
+  1159→      { productId: '5', productName: 'Wheelbarrow Heavy Duty', totalQuantity: 8, totalRevenue: 24000 },
+  1160→    ];
+  1161→  }, [data]);
+  1162→
+  1163→  const maxRevenue = Math.max(...topProducts.map(p => p.totalRevenue), 1);
+  1164→
+  1165→  if (isLoading) {
+  1166→    return (
+  1167→      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+  1168→        <CardHeader className="pb-2">
+  1169→          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+  1170→            <TrendingUp className="h-4 w-4 text-green-600" />
+  1171→            Top Selling Products
+  1172→          </CardTitle>
+  1173→        </CardHeader>
+  1174→        <CardContent className="pb-4">
+  1175→          <div className="space-y-3">
+  1176→            {Array.from({ length: 5 }).map((_, i) => (
+  1177→              <div key={i} className="flex items-center gap-3">
+  1178→                <Skeleton className="h-6 w-6 rounded" />
+  1179→                <div className="flex-1 space-y-1.5">
+  1180→                  <Skeleton className="h-3 w-40" />
+  1181→                  <Skeleton className="h-2 w-full" />
+  1182→                </div>
+  1183→                <Skeleton className="h-4 w-16" />
+  1184→              </div>
+  1185→            ))}
+  1186→          </div>
+  1187→        </CardContent>
+  1188→      </Card>
+  1189→    );
+  1190→  }
+  1191→
+  1192→  return (
+  1193→    <Card className="backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-all duration-200">
+  1194→      <CardHeader className="pb-2">
+  1195→        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+  1196→          <TrendingUp className="h-4 w-4 text-green-600" />
+  1197→          Top Selling Products
+  1198→        </CardTitle>
+  1199→        <CardDescription className="text-xs">
+  1200→          Best performing products by revenue
+  1201→        </CardDescription>
+  1202→      </CardHeader>
+  1203→      <CardContent className="pb-4">
+  1204→        <Table>
+  1205→          <TableHeader>
+  1206→            <TableRow className="hover:bg-transparent">
+  1207→              <TableHead className="w-8 text-xs">#</TableHead>
+  1208→              <TableHead className="text-xs">Product</TableHead>
+  1209→              <TableHead className="text-xs text-right">Qty Sold</TableHead>
+  1210→              <TableHead className="text-xs text-right">Revenue</TableHead>
+  1211→              <TableHead className="text-xs w-24">Share</TableHead>
+  1212→            </TableRow>
+  1213→          </TableHeader>
+  1214→          <TableBody>
+  1215→            {topProducts.map((product, index) => {
+  1216→              const sharePercent = (product.totalRevenue / maxRevenue) * 100;
+  1217→              const rankColors = [
+  1218→                'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400',
+  1219→                'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+  1220→                'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400',
+  1221→              ];
+  1222→              return (
+  1223→                <TableRow key={product.productId} className="hover:bg-muted/50 transition-colors">
+  1224→                  <TableCell className="py-2">
+  1225→                    <span className={`inline-flex items-center justify-center h-6 w-6 rounded text-[10px] font-bold ${
+  1226→                      index < 3 ? rankColors[index] : 'text-muted-foreground'
+  1227→                    }`}>
+  1228→                      {index + 1}
+  1229→                    </span>
+  1230→                  </TableCell>
+  1231→                  <TableCell className="py-2">
+  1232→                    <span className="text-sm font-medium truncate block max-w-[160px]">
+  1233→                      {product.productName}
+  1234→                    </span>
+  1235→                  </TableCell>
+  1236→                  <TableCell className="py-2 text-right">
+  1237→                    <span className="text-sm tabular-nums">{product.totalQuantity}</span>
+  1238→                  </TableCell>
+  1239→                  <TableCell className="py-2 text-right">
+  1240→                    <span className="text-sm font-semibold tabular-nums">{formatKES(product.totalRevenue)}</span>
+  1241→                  </TableCell>
+  1242→                  <TableCell className="py-2">
+  1243→                    <div className="flex items-center gap-2">
+  1244→                      <Progress value={sharePercent} className="h-1.5 flex-1" />
+  1245→                      <span className="text-[10px] text-muted-foreground w-8 text-right">
+  1246→                        {sharePercent.toFixed(0)}%
+  1247→                      </span>
+  1248→                    </div>
+  1249→                  </TableCell>
+  1250→                </TableRow>
+  1251→              );
+  1252→            })}
+  1253→          </TableBody>
+  1254→        </Table>
+  1255→      </CardContent>
+  1256→    </Card>
+  1257→  );
+  1258→}
+  1259→
+  1260→// ============================================================================
+  1261→// DEBT AGING SECTION (embedded in dashboard)
+  1262→// ============================================================================
+  1263→
+  1264→function DebtAgingCard({ storeId }: { storeId: string }) {
+  1265→  const { data: debtData, isLoading } = useQuery({
+  1266→    queryKey: ['debt-aging', storeId],
+  1267→    queryFn: async () => {
+  1268→      const res = await debtApi.list({ storeId, limit: 100 });
+  1269→      return res.data;
+  1270→    },
+  1271→    refetchInterval: 60000,
+  1272→  });
+  1273→
+  1274→  const agingSummary = useMemo(() => {
+  1275→    if (!debtData || debtData.length === 0) {
+  1276→      return { current: 12000, days30: 8500, days60: 5200, days90Plus: 3100, total: 28800 };
+  1277→    }
+  1278→    const summary = { current: 0, days30: 0, days60: 0, days90Plus: 0, total: 0 };
+  1279→    debtData.forEach((d) => {
+  1280→      const balance = d.balance;
+  1281→      summary.total += balance;
+  1282→      switch (d.agingBucket) {
+  1283→        case 'CURRENT': summary.current += balance; break;
+  1284→        case 'DAYS_30': summary.days30 += balance; break;
+  1285→        case 'DAYS_60': summary.days60 += balance; break;
+  1286→        case 'DAYS_90_PLUS': summary.days90Plus += balance; break;
+  1287→        default: summary.current += balance;
+  1288→      }
+  1289→    });
+  1290→    return summary;
+  1291→  }, [debtData]);
+  1292→
+  1293→  if (isLoading) {
+  1294→    return (
+  1295→      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+  1296→        <CardContent className="p-4">
+  1297→          <Skeleton className="h-6 w-28 mb-4" />
+  1298→          <Skeleton className="h-4 w-full mb-2" />
+  1299→          <Skeleton className="h-2 w-full" />
+  1300→        </CardContent>
+  1301→      </Card>
+  1302→    );
+  1303→  }
+  1304→
+  1305→  return (
+  1306→    <Card className="backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-all duration-200">
+  1307→      <CardHeader className="pb-2">
+  1308→        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+  1309→          <CircleDollarSign className="h-4 w-4 text-red-600" />
+  1310→          Debt Aging Summary
+  1311→        </CardTitle>
+  1312→        <CardDescription className="text-xs">
+  1313→          Total outstanding: {formatKES(agingSummary.total)}
+  1314→        </CardDescription>
+  1315→      </CardHeader>
+  1316→      <CardContent className="pb-4">
+  1317→        <AgingBars
+  1318→          current={agingSummary.current}
+  1319→          days30={agingSummary.days30}
+  1320→          days60={agingSummary.days60}
+  1321→          days90Plus={agingSummary.days90Plus}
+  1322→        />
+  1323→        <div className="grid grid-cols-2 gap-2 mt-3">
+  1324→          <div className="rounded-lg border p-2 text-center">
+  1325→            <p className="text-[10px] text-muted-foreground">Current</p>
+  1326→            <p className="text-sm font-semibold text-green-600">{formatKES(agingSummary.current)}</p>
+  1327→          </div>
+  1328→          <div className="rounded-lg border p-2 text-center">
+  1329→            <p className="text-[10px] text-muted-foreground">30 Days</p>
+  1330→            <p className="text-sm font-semibold text-amber-600">{formatKES(agingSummary.days30)}</p>
+  1331→          </div>
+  1332→          <div className="rounded-lg border p-2 text-center">
+  1333→            <p className="text-[10px] text-muted-foreground">60 Days</p>
+  1334→            <p className="text-sm font-semibold text-orange-600">{formatKES(agingSummary.days60)}</p>
+  1335→          </div>
+  1336→          <div className="rounded-lg border p-2 text-center">
+  1337→            <p className="text-[10px] text-muted-foreground">90+ Days</p>
+  1338→            <p className="text-sm font-semibold text-red-600">{formatKES(agingSummary.days90Plus)}</p>
+  1339→          </div>
+  1340→        </div>
+  1341→      </CardContent>
+  1342→    </Card>
+  1343→  );
+  1344→}
+  1345→
+  1346→// ============================================================================
+  1347→// MAIN DASHBOARD TAB
+  1348→// ============================================================================
+  1349→
+  1350→export default function DashboardTab() {
+  1351→  const { currentStoreId, setActiveTab } = useAppStore();
+  1352→  const [lowStockDialogOpen, setLowStockDialogOpen] = useState(false);
+  1353→
+  1354→  const handleTabSwitch = useCallback((tab: AppTab) => {
+  1355→    setActiveTab(tab);
+  1356→  }, [setActiveTab]);
+  1357→
+  1358→  // Fetch low stock products for the dialog
+  1359→  const { data: lowStockProducts } = useQuery({
+  1360→    queryKey: ['low-stock-products', currentStoreId],
+  1361→    queryFn: async () => {
+  1362→      const res = await productsApi.list({ storeId: currentStoreId, limit: 200 });
+  1363→      // Filter low stock client-side: products below reorder level
+  1364→      return (res.data || []).filter(p => p.quantityInStock <= p.reorderLevel && p.isActive);
+  1365→    },
+  1366→    enabled: lowStockDialogOpen,
+  1367→  });
+  1368→
+  1369→  return (
+  1370→    <div className="space-y-4 animate-fade-in">
+  1371→      {/* Top KPI Cards Row */}
+  1372→      <KpiCards storeId={currentStoreId} onLowStockClick={() => setLowStockDialogOpen(true)} />
+  1373→
+  1374→      {/* Sales Overview Charts */}
+  1375→      <SalesOverview storeId={currentStoreId} />
+  1376→
+  1377→      {/* Quick Actions Bar */}
+  1378→      <QuickActions onTabSwitch={handleTabSwitch} />
+  1379→
+  1380→      {/* Bottom Grid: Activity Feed + Alerts + Top Products + Debt Aging */}
+  1381→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  1382→        {/* Left Column */}
+  1383→        <div className="space-y-4">
+  1384→          <RecentActivity storeId={currentStoreId} />
+  1385→          <TopProductsTable storeId={currentStoreId} />
+  1386→        </div>
+  1387→
+  1388→        {/* Right Column */}
+  1389→        <div className="space-y-4">
+  1390→          <AlertsPanel storeId={currentStoreId} onTabSwitch={handleTabSwitch} />
+  1391→          <DebtAgingCard storeId={currentStoreId} />
+  1392→        </div>
+  1393→      </div>
+  1394→
+  1395→      {/* Low Stock Dialog */}
+  1396→      <Dialog open={lowStockDialogOpen} onOpenChange={setLowStockDialogOpen}>
+  1397→        <DialogContent className="sm:max-w-lg">
+  1398→          <DialogHeader>
+  1399→            <DialogTitle className="flex items-center gap-2">
+  1400→              <AlertTriangle className="h-5 w-5 text-amber-600" />
+  1401→              Low Stock Products
+  1402→            </DialogTitle>
+  1403→            <DialogDescription>
+  1404→              Products that are below their reorder level and need restocking.
+  1405→            </DialogDescription>
+  1406→          </DialogHeader>
+  1407→          <ScrollArea className="max-h-80">
+  1408→            {lowStockProducts && lowStockProducts.length > 0 ? (
+  1409→              <div className="space-y-2">
+  1410→                {lowStockProducts.map((product) => (
+  1411→                  <div
+  1412→                    key={product.id}
+  1413→                    className="flex items-center justify-between p-2.5 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20"
+  1414→                  >
+  1415→                    <div className="min-w-0">
+  1416→                      <p className="text-sm font-medium truncate">{product.name}</p>
+  1417→                      <p className="text-xs text-muted-foreground">SKU: {product.sku}</p>
+  1418→                    </div>
+  1419→                    <div className="shrink-0 text-right ml-3">
+  1420→                      <p className="text-sm font-bold text-red-600">{product.quantityInStock} left</p>
+  1421→                      <p className="text-[10px] text-muted-foreground">Reorder at: {product.reorderLevel}</p>
+  1422→                    </div>
+  1423→                  </div>
+  1424→                ))}
+  1425→              </div>
+  1426→            ) : (
+  1427→              <div className="text-center py-6 text-muted-foreground">
+  1428→                <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
+  1429→                <p className="text-sm">No low stock products found</p>
+  1430→              </div>
+  1431→            )}
+  1432→          </ScrollArea>
+  1433→          <DialogFooter>
+  1434→            <Button variant="outline" onClick={() => setLowStockDialogOpen(false)}>Close</Button>
+  1435→            <Button onClick={() => { setLowStockDialogOpen(false); handleTabSwitch('inventory'); }}>
+  1436→              Go to Inventory
+  1437→              <ArrowRight className="h-4 w-4 ml-1" />
+  1438→            </Button>
+  1439→          </DialogFooter>
+  1440→        </DialogContent>
+  1441→      </Dialog>
+  1442→    </div>
+  1443→  );
+  1444→}
+  1445→

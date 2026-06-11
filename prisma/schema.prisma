@@ -54,6 +54,7 @@ model Store {
   transactions    SalesTransaction[]
   payments        Payment[]
   debtLedgers     DebtLedger[]
+  debtPayments    DebtPayment[]
   rentals         EquipmentRental[]
   stockMovements  StockMovement[]
   warehouseStocks WarehouseStock[]
@@ -64,6 +65,7 @@ model Store {
   suppliers       Supplier[]
   purchaseOrders  PurchaseOrder[]
   expenses        Expense[]
+  shifts          Shift[]
 
   @@index([organizationId])
   @@map("stores")
@@ -94,6 +96,7 @@ model User {
   systemLogs      SystemLog[]
   transactions    SalesTransaction[]
   cashDrawerLogs  CashDrawerLog[]
+  shifts          Shift[]
 
   @@index([organizationId])
   @@index([storeId])
@@ -404,6 +407,7 @@ model DebtLedger {
   store           Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
   customer        Customer          @relation(fields: [customerId], references: [id])
   transaction     SalesTransaction? @relation(fields: [transactionId], references: [id])
+  debtPayments    DebtPayment[]
 
   @@index([storeId])
   @@index([customerId])
@@ -422,6 +426,9 @@ model DebtPayment {
   reference       String?
   receivedBy      String?  // User ID
   createdAt       DateTime @default(now())
+
+  store           Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  debtLedger      DebtLedger  @relation(fields: [debtLedgerId], references: [id], onDelete: Cascade)
 
   @@index([storeId])
   @@index([debtLedgerId])
@@ -726,4 +733,33 @@ model InitializationLog {
   executedAt      DateTime @default(now())
 
   @@map("initialization_logs")
+}
+
+// ============================================================================
+// SHIFT MANAGEMENT
+// ============================================================================
+
+model Shift {
+  id                String    @id @default(cuid())
+  userId            String    @map("user_id")
+  user              User      @relation(fields: [userId], references: [id])
+  storeId           String    @map("store_id")
+  store             Store     @relation(fields: [storeId], references: [id])
+  startedAt         DateTime  @map("started_at") @default(now())
+  endedAt           DateTime? @map("ended_at")
+  startingCash      Float     @map("starting_cash") @default(0)
+  endingCash        Float?    @map("ending_cash")
+  countedCash       Float?    @map("counted_cash")
+  cashDifference    Float?    @map("cash_difference")
+  totalSales        Float     @map("total_sales") @default(0)
+  totalTransactions Int       @map("total_transactions") @default(0)
+  status            String    @default("ACTIVE") // ACTIVE, ENDED
+  notes             String?
+  createdAt         DateTime  @map("created_at") @default(now())
+  updatedAt         DateTime  @map("updated_at") @updatedAt
+
+  @@index([storeId])
+  @@index([userId])
+  @@index([status])
+  @@map("shifts")
 }

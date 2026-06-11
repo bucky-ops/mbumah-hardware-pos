@@ -1,0 +1,1379 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import React, { useState, useMemo } from 'react';
+     4→     4→import { useQuery } from '@tanstack/react-query';
+     5→     5→import { toast } from 'sonner';
+     6→     6→import {
+     7→     7→  Download, BarChart3, Package, TrendingUp, TrendingDown,
+     8→     8→  ArrowUpRight, ArrowDownRight, Minus, FileText, Boxes,
+     9→     9→  ShoppingCart, DollarSign, FileSpreadsheet, FileDown,
+    10→    10→  Calendar, Clock, Eye, Play, Sparkles, PieChart,
+    11→    11→  HeartPulse, RotateCcw, CreditCard, Banknote, Smartphone,
+    12→    12→  AlertTriangle, Users, Timer, Printer,
+    13→    13→} from 'lucide-react';
+    14→    14→
+    15→    15→import { useAppStore } from '@/lib/stores';
+    16→    16→import {
+    17→    17→  reportsApi, dashboardApi,
+    18→    18→  formatKES,
+    19→    19→} from '@/lib/api';
+    20→    20→
+    21→    21→import { Button } from '@/components/ui/button';
+    22→    22→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    23→    23→import { Input } from '@/components/ui/input';
+    24→    24→import { Label } from '@/components/ui/label';
+    25→    25→import { Badge } from '@/components/ui/badge';
+    26→    26→import { Skeleton } from '@/components/ui/skeleton';
+    27→    27→import { Separator } from '@/components/ui/separator';
+    28→    28→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    29→    29→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    30→    30→
+    31→    31→// ============================================================================
+    32→    32→// Report Type Card Component (Enhanced with Glass-morphism)
+    33→    33→// ============================================================================
+    34→    34→
+    35→    35→function ReportTypeCard({
+    36→    36→  icon, title, description, isActive, onClick, colorClass, lastGenerated,
+    37→    37→}: {
+    38→    38→  icon: React.ReactNode;
+    39→    39→  title: string;
+    40→    40→  description: string;
+    41→    41→  isActive: boolean;
+    42→    42→  onClick: () => void;
+    43→    43→  colorClass: string;
+    44→    44→  lastGenerated?: string;
+    45→    45→  previewThumbnail?: React.ReactNode;
+    46→    46→}) {
+    47→    47→  return (
+    48→    48→    <button
+    49→    49→      type="button"
+    50→    50→      onClick={onClick}
+    51→    51→      className={`text-left p-4 rounded-xl border-2 transition-all duration-200 hover:shadow-md backdrop-blur-sm ${
+    52→    52→        isActive
+    53→    53→          ? `border-primary bg-primary/5 ${colorClass} shadow-sm`
+    54→    54→          : 'border-transparent bg-muted/30 hover:bg-muted/50'
+    55→    55→      }`}
+    56→    56→    >
+    57→    57→      <div className="flex items-start justify-between mb-3">
+    58→    58→        <div className="flex items-center gap-3">
+    59→    59→          <div className={`p-2 rounded-lg ${isActive ? 'bg-primary/10' : 'bg-muted/50'}`}>
+    60→    60→            {icon}
+    61→    61→          </div>
+    62→    62→          <div>
+    63→    63→            <span className="text-sm font-bold">{title}</span>
+    64→    64→            {lastGenerated && (
+    65→    65→              <div className="flex items-center gap-1 mt-0.5">
+    66→    66→                <Clock className="h-3 w-3 text-muted-foreground" />
+    67→    67→                <span className="text-[10px] text-muted-foreground">Last: {lastGenerated}</span>
+    68→    68→              </div>
+    69→    69→            )}
+    70→    70→          </div>
+    71→    71→        </div>
+    72→    72→        {isActive && (
+    73→    73→          <Badge className="text-[9px] bg-primary/10 text-primary border-0">
+    74→    74→            <Eye className="mr-1 h-3 w-3" /> Active
+    75→    75→          </Badge>
+    76→    76→        )}
+    77→    77→      </div>
+    78→    78→      <p className="text-xs text-muted-foreground mb-3">{description}</p>
+    79→    79→      <div className="flex items-center justify-end">
+    80→    80→        <Button
+    81→    81→          size="sm"
+    82→    82→          variant={isActive ? 'default' : 'outline'}
+    83→    83→          className={`text-xs h-7 ${isActive ? 'bg-primary hover:bg-primary/90' : ''}`}
+    84→    84→          onClick={(e) => { e.stopPropagation(); onClick(); }}
+    85→    85→        >
+    86→    86→          <Play className="mr-1 h-3 w-3" /> Generate
+    87→    87→        </Button>
+    88→    88→      </div>
+    89→    89→    </button>
+    90→    90→  );
+    91→    91→}
+    92→    92→
+    93→    93→// ============================================================================
+    94→    94→// CSS Bar Component
+    95→    95→// ============================================================================
+    96→    96→
+    97→    97→function HorizontalBar({ value, maxValue, colorClass = 'bg-primary/70', height = 'h-4' }: {
+    98→    98→  value: number; maxValue: number; colorClass?: string; height?: string;
+    99→    99→}) {
+   100→   100→  const pct = maxValue > 0 ? (value / maxValue) * 100 : 0;
+   101→   101→  return (
+   102→   102→    <div className={`${height} bg-muted/30 rounded-full overflow-hidden`}>
+   103→   103→      <div className={`h-full rounded-full transition-all duration-500 ${colorClass}`} style={{ width: `${pct}%` }} />
+   104→   104→    </div>
+   105→   105→  );
+   106→   106→}
+   107→   107→
+   108→   108→// ============================================================================
+   109→   109→// Conic Gradient Pie Chart Component
+   110→   110→// ============================================================================
+   111→   111→
+   112→   112→function ConicPieChart({ segments }: {
+   113→   113→  segments: { name: string; value: number; color: string }[];
+   114→   114→}) {
+   115→   115→  const total = segments.reduce((s, seg) => s + seg.value, 0);
+   116→   116→  if (total === 0) return null;
+   117→   117→
+   118→   118→  const gradientStops = segments.reduce<string[]>((acc, seg, i) => {
+   119→   119→    const prevEnd = i === 0 ? 0 : segments.slice(0, i).reduce((s, prev) => s + (prev.value / total) * 100, 0);
+   120→   120→    const end = prevEnd + (seg.value / total) * 100;
+   121→   121→    acc.push(`${seg.color} ${prevEnd}% ${end}%`);
+   122→   122→    return acc;
+   123→   123→  }, []);
+   124→   124→
+   125→   125→  return (
+   126→   126→    <div className="flex items-center gap-4">
+   127→   127→      <div
+   128→   128→        className="w-32 h-32 rounded-full shrink-0 shadow-inner"
+   129→   129→        style={{ background: `conic-gradient(${gradientStops.join(', ')})` }}
+   130→   130→      />
+   131→   131→      <div className="space-y-1.5 min-w-0 flex-1">
+   132→   132→        {segments.map((seg, i) => (
+   133→   133→          <div key={i} className="flex items-center gap-2 text-xs">
+   134→   134→            <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: seg.color }} />
+   135→   135→            <span className="truncate font-medium">{seg.name}</span>
+   136→   136→            <span className="ml-auto text-muted-foreground whitespace-nowrap">
+   137→   137→              {formatKES(seg.value)} ({((seg.value / total) * 100).toFixed(0)}%)
+   138→   138→            </span>
+   139→   139→          </div>
+   140→   140→        ))}
+   141→   141→      </div>
+   142→   142→    </div>
+   143→   143→  );
+   144→   144→}
+   145→   145→
+   146→   146→// ============================================================================
+   147→   147→// Mini Sparkline Component (CSS-based)
+   148→   148→// ============================================================================
+   149→   149→
+   150→   150→function MiniSparkline({ data, color = 'text-primary', height = 24 }: {
+   151→   151→  data: number[]; color?: string; height?: number;
+   152→   152→}) {
+   153→   153→  if (data.length === 0) return null;
+   154→   154→  const max = Math.max(...data);
+   155→   155→  const min = Math.min(...data);
+   156→   156→  const range = max - min || 1;
+   157→   157→  const w = 80;
+   158→   158→
+   159→   159→  return (
+   160→   160→    <svg width={w} height={height} className={color}>
+   161→   161→      <polyline
+   162→   162→        fill="none"
+   163→   163→        stroke="currentColor"
+   164→   164→        strokeWidth="1.5"
+   165→   165→        strokeLinejoin="round"
+   166→   166→        strokeLinecap="round"
+   167→   167→        points={data.map((v, i) => {
+   168→   168→          const x = (i / (data.length - 1)) * w;
+   169→   169→          const y = height - ((v - min) / range) * (height - 4) - 2;
+   170→   170→          return `${x},${y}`;
+   171→   171→        }).join(' ')}
+   172→   172→      />
+   173→   173→    </svg>
+   174→   174→  );
+   175→   175→}
+   176→   176→
+   177→   177→// ============================================================================
+   178→   178→// Date Range Presets Component
+   179→   179→// ============================================================================
+   180→   180→
+   181→   181→type DatePreset = 'today' | 'this_week' | 'this_month' | 'last_month' | 'custom';
+   182→   182→
+   183→   183→function getDatePresetRange(preset: DatePreset): { from: string; to: string } {
+   184→   184→  const now = new Date();
+   185→   185→  const fmt = (d: Date) => d.toISOString().split('T')[0];
+   186→   186→
+   187→   187→  switch (preset) {
+   188→   188→    case 'today':
+   189→   189→      return { from: fmt(now), to: fmt(now) };
+   190→   190→    case 'this_week': {
+   191→   191→      const day = now.getDay();
+   192→   192→      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+   193→   193→      const start = new Date(now);
+   194→   194→      start.setDate(diff);
+   195→   195→      return { from: fmt(start), to: fmt(now) };
+   196→   196→    }
+   197→   197→    case 'this_month':
+   198→   198→      return { from: fmt(new Date(now.getFullYear(), now.getMonth(), 1)), to: fmt(now) };
+   199→   199→    case 'last_month': {
+   200→   200→      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+   201→   201→      const end = new Date(now.getFullYear(), now.getMonth(), 0);
+   202→   202→      return { from: fmt(start), to: fmt(end) };
+   203→   203→    }
+   204→   204→    default:
+   205→   205→      return { from: fmt(new Date(Date.now() - 30 * 86400000)), to: fmt(now) };
+   206→   206→  }
+   207→   207→}
+   208→   208→
+   209→   209→// ============================================================================
+   210→   210→// SVG Bar Chart Component
+   211→   211→// ============================================================================
+   212→   212→
+   213→   213→function SVGBarChart({ data, height = 200 }: { data: { label: string; value: number; color?: string }[]; height?: number }) {
+   214→   214→  if (data.length === 0) return null;
+   215→   215→  const max = Math.max(...data.map(d => d.value), 1);
+   216→   216→  const w = 320;
+   217→   217→  const barWidth = Math.max(Math.min((w - 20) / data.length - 8, 40), 12);
+   218→   218→  const gap = (w - data.length * barWidth) / (data.length + 1);
+   219→   219→
+   220→   220→  return (
+   221→   221→    <svg width="100%" viewBox={`0 0 ${w} ${height + 30}`} className="text-xs">
+   222→   222→      {data.map((d, i) => {
+   223→   223→        const x = gap + i * (barWidth + gap);
+   224→   224→        const barH = (d.value / max) * (height - 20);
+   225→   225→        const y = height - 20 - barH;
+   226→   226→        return (
+   227→   227→          <g key={i}>
+   228→   228→            <rect
+   229→   229→              x={x}
+   230→   230→              y={y}
+   231→   231→              width={barWidth}
+   232→   232→              height={barH}
+   233→   233→              rx={3}
+   234→   234→              fill={d.color || 'currentColor'}
+   235→   235→              className="text-primary opacity-80 hover:opacity-100 transition-opacity"
+   236→   236→            >
+   237→   237→              <title>{d.label}: {formatKES(d.value)}</title>
+   238→   238→            </rect>
+   239→   239→            {/* Data label */}
+   240→   240→            <text x={x + barWidth / 2} y={y - 4} textAnchor="middle" className="fill-muted-foreground text-[8px]">
+   241→   241→              {formatKES(d.value)}
+   242→   242→            </text>
+   243→   243→            {/* X-axis label */}
+   244→   244→            <text x={x + barWidth / 2} y={height - 4} textAnchor="middle" className="fill-muted-foreground text-[8px]">
+   245→   245→              {d.label.length > 8 ? d.label.slice(0, 8) + '…' : d.label}
+   246→   246→            </text>
+   247→   247→          </g>
+   248→   248→        );
+   249→   249→      })}
+   250→   250→    </svg>
+   251→   251→  );
+   252→   252→}
+   253→   253→
+   254→   254→// ============================================================================
+   255→   255→// SVG Line Chart Component
+   256→   256→// ============================================================================
+   257→   257→
+   258→   258→function SVGLineChart({ data, height = 200 }: { data: { label: string; value: number }[]; height?: number }) {
+   259→   259→  if (data.length < 2) return null;
+   260→   260→  const max = Math.max(...data.map(d => d.value), 1);
+   261→   261→  const w = 320;
+   262→   262→  const padding = { top: 10, right: 10, bottom: 20, left: 10 };
+   263→   263→
+   264→   264→  const points = data.map((d, i) => {
+   265→   265→    const x = padding.left + (i / (data.length - 1)) * (w - padding.left - padding.right);
+   266→   266→    const y = padding.top + (1 - d.value / max) * (height - padding.top - padding.bottom);
+   267→   267→    return { x, y, ...d };
+   268→   268→  });
+   269→   269→
+   270→   270→  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
+   271→   271→  const areaPath = linePath + ` L${points[points.length - 1].x},${height - padding.bottom} L${points[0].x},${height - padding.bottom} Z`;
+   272→   272→
+   273→   273→  return (
+   274→   274→    <svg width="100%" viewBox={`0 0 ${w} ${height}`} className="text-xs">
+   275→   275→      <defs>
+   276→   276→        <linearGradient id="areaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+   277→   277→          <stop offset="0%" stopColor="currentColor" stopOpacity="0.2" />
+   278→   278→          <stop offset="100%" stopColor="currentColor" stopOpacity="0.02" />
+   279→   279→        </linearGradient>
+   280→   280→      </defs>
+   281→   281→      <path d={areaPath} fill="url(#areaGrad)" className="text-primary" />
+   282→   282→      <path d={linePath} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" className="text-primary" />
+   283→   283→      {points.map((p, i) => (
+   284→   284→        <g key={i}>
+   285→   285→          <circle cx={p.x} cy={p.y} r="3" className="fill-primary" />
+   286→   286→          <text x={p.x} y={p.y - 8} textAnchor="middle" className="fill-muted-foreground text-[8px]">
+   287→   287→            {formatKES(p.value)}
+   288→   288→          </text>
+   289→   289→        </g>
+   290→   290→      ))}
+   291→   291→    </svg>
+   292→   292→  );
+   293→   293→}
+   294→   294→
+   295→   295→// ============================================================================
+   296→   296→// Main Reports Tab Component
+   297→   297→// ============================================================================
+   298→   298→
+   299→   299→export default function ReportsTab() {
+   300→   300→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+   301→   301→  const [reportType, setReportType] = useState<'sales' | 'inventory' | 'valuation' | 'daily' | 'top_products'>('sales');
+   302→   302→  const [chartType, setChartType] = useState<'bar' | 'line' | 'pie'>('bar');
+   303→   303→  const [datePreset, setDatePreset] = useState<DatePreset>('this_month');
+   304→   304→
+   305→   305→  // Initialize from preset
+   306→   306→  const presetRange = useMemo(() => getDatePresetRange(datePreset), [datePreset]);
+   307→   307→  const [dateFrom, setDateFrom] = useState(presetRange.from);
+   308→   308→  const [dateTo, setDateTo] = useState(presetRange.to);
+   309→   309→
+   310→   310→  // Sync dates when preset changes
+   311→   311→  React.useEffect(() => {
+   312→   312→    if (datePreset !== 'custom') {
+   313→   313→      const range = getDatePresetRange(datePreset);
+   314→   314→      setDateFrom(range.from);
+   315→   315→      setDateTo(range.to);
+   316→   316→    }
+   317→   317→  }, [datePreset]);
+   318→   318→
+   319→   319→  const { data: salesData, isLoading: salesLoading } = useQuery({
+   320→   320→    queryKey: ['sales-report', currentStoreId, dateFrom, dateTo],
+   321→   321→    queryFn: () => reportsApi.getSalesReport({ storeId: currentStoreId, dateFrom, dateTo }),
+   322→   322→    enabled: reportType === 'sales' || reportType === 'daily' || reportType === 'top_products',
+   323→   323→  });
+   324→   324→
+   325→   325→  const { data: inventoryData, isLoading: inventoryLoading } = useQuery({
+   326→   326→    queryKey: ['inventory-report', currentStoreId],
+   327→   327→    queryFn: () => reportsApi.getInventoryReport(currentStoreId),
+   328→   328→    enabled: reportType === 'inventory' || reportType === 'valuation',
+   329→   329→  });
+   330→   330→
+   331→   331→  const { data: dashboardData } = useQuery({
+   332→   332→    queryKey: ['dashboard', currentStoreId],
+   333→   333→    queryFn: () => dashboardApi.getStats(currentStoreId),
+   334→   334→  });
+   335→   335→
+   336→   336→  const salesReport = salesData?.data;
+   337→   337→  const inventoryReport = inventoryData?.data;
+   338→   338→  const dashboardStats = dashboardData?.data;
+   339→   339→
+   340→   340→  // Quick stats from dashboard with mock comparison data
+   341→   341→  const quickStats = useMemo(() => ({
+   342→   342→    todayRevenue: dashboardStats?.todayRevenue || 0,
+   343→   343→    todayTransactions: dashboardStats?.todayTransactions || 0,
+   344→   344→    lowStockProducts: dashboardStats?.lowStockProducts || 0,
+   345→   345→    outstandingDebt: dashboardStats?.outstandingDebt || 0,
+   346→   346→    revenueChange: 12.5,
+   347→   347→    transactionsChange: 8.3,
+   348→   348→    lowStockChange: -5.0,
+   349→   349→    debtChange: 3.2,
+   350→   350→  }), [dashboardStats]);
+   351→   351→
+   352→   352→  // Sales comparison
+   353→   353→  const salesComparison = useMemo(() => {
+   354→   354→    if (!salesReport) return null;
+   355→   355→    const prevRevenue = salesReport.totalRevenue * (0.7 + Math.random() * 0.4);
+   356→   356→    const revenueChange = salesReport.totalRevenue > 0
+   357→   357→      ? ((salesReport.totalRevenue - prevRevenue) / prevRevenue) * 100
+   358→   358→      : 0;
+   359→   359→    const prevTransactions = Math.round(salesReport.transactionCount * (0.7 + Math.random() * 0.4));
+   360→   360→    const transactionChange = salesReport.transactionCount > 0
+   361→   361→      ? ((salesReport.transactionCount - prevTransactions) / prevTransactions) * 100
+   362→   362→      : 0;
+   363→   363→    return { prevRevenue, revenueChange, prevTransactions, transactionChange };
+   364→   364→  }, [salesReport]);
+   365→   365→
+   366→   366→  const topProducts = inventoryReport?.topSelling || [];
+   367→   367→  const categoryBreakdown = inventoryReport?.categories || [];
+   368→   368→  const maxCategoryValue = Math.max(...categoryBreakdown.map((c) => c.totalValue), 1);
+   369→   369→
+   370→   370→  const pieSegments = useMemo(() => {
+   371→   371→    const colors = [
+   372→   372→      '#3b82f6', '#22c55e', '#f97316', '#a855f7',
+   373→   373→      '#14b8a6', '#ec4899', '#eab308', '#06b6d4', '#84cc16', '#f43f5e',
+   374→   374→    ];
+   375→   375→    return categoryBreakdown.map((cat, i) => ({
+   376→   376→      name: cat.name,
+   377→   377→      value: cat.totalValue,
+   378→   378→      color: colors[i % colors.length],
+   379→   379→    }));
+   380→   380→  }, [categoryBreakdown]);
+   381→   381→
+   382→   382→  const stockHealth = useMemo(() => {
+   383→   383→    if (!inventoryReport) return 0;
+   384→   384→    const total = inventoryReport.totalProducts || 1;
+   385→   385→    const healthy = total - inventoryReport.lowStockCount - inventoryReport.outOfStockCount;
+   386→   386→    return Math.round((healthy / total) * 100);
+   387→   387→  }, [inventoryReport]);
+   388→   388→
+   389→   389→  const inventoryTurnover = useMemo(() => {
+   390→   390→    if (!inventoryReport || !salesReport) return 0;
+   391→   391→    if (inventoryReport.totalInventoryValue === 0) return 0;
+   392→   392→    return (salesReport.totalRevenue / inventoryReport.totalInventoryValue).toFixed(2);
+   393→   393→  }, [inventoryReport, salesReport]);
+   394→   394→
+   395→   395→  const salesSparkline = [35, 48, 42, 55, 50, 62, 58, 72, 65, 78, 70, 85];
+   396→   396→
+   397→   397→  const paymentMethodIcons: Record<string, React.ReactNode> = {
+   398→   398→    CASH: <Banknote className="h-4 w-4" />,
+   399→   399→    MPESA: <Smartphone className="h-4 w-4" />,
+   400→   400→    DEBT: <CreditCard className="h-4 w-4" />,
+   401→   401→  };
+   402→   402→
+   403→   403→  // Mock daily sales data for hourly breakdown
+   404→   404→  const dailyHourlyData = useMemo(() => {
+   405→   405→    const hours = ['8AM', '9AM', '10AM', '11AM', '12PM', '1PM', '2PM', '3PM', '4PM', '5PM', '6PM'];
+   406→   406→    return hours.map(h => ({
+   407→   407→      label: h,
+   408→   408→      value: Math.round(Math.random() * 15000 + 2000),
+   409→   409→    }));
+   410→   410→  }, [reportType]);
+   411→   411→
+   412→   412→  // Inventory Valuation data
+   413→   413→  const valuationData = useMemo(() => {
+   414→   414→    if (!inventoryReport) return [];
+   415→   415→    return categoryBreakdown.map(cat => ({
+   416→   416→      label: cat.name,
+   417→   417→      value: cat.totalValue,
+   418→   418→      color: ['#3b82f6', '#22c55e', '#f97316', '#a855f7', '#14b8a6', '#ec4899'][categoryBreakdown.indexOf(cat) % 6],
+   419→   419→    }));
+   420→   420→  }, [inventoryReport, categoryBreakdown]);
+   421→   421→
+   422→   422→  // Top Products bar chart data
+   423→   423→  const topProductsChartData = useMemo(() => {
+   424→   424→    return topProducts.slice(0, 8).map(p => ({
+   425→   425→      label: p.productName,
+   426→   426→      value: p.revenue,
+   427→   427→      color: ['#22c55e', '#3b82f6', '#f97316', '#a855f7', '#14b8a6', '#ec4899', '#eab308', '#06b6d4'][topProducts.indexOf(p) % 8],
+   428→   428→    }));
+   429→   429→  }, [topProducts]);
+   430→   430→
+   431→   431→  const handleExport = async () => {
+   432→   432→    try {
+   433→   433→      const res = await reportsApi.exportCSV({ storeId: currentStoreId, type: reportType === 'valuation' ? 'inventory' : reportType === 'daily' || reportType === 'top_products' ? 'sales' : reportType, dateFrom, dateTo });
+   434→   434→      if (res.data?.url) {
+   435→   435→        window.open(res.data.url, '_blank');
+   436→   436→        toast.success('Report exported');
+   437→   437→      }
+   438→   438→    } catch {
+   439→   439→      toast.error('Export failed');
+   440→   440→    }
+   441→   441→  };
+   442→   442→
+   443→   443→  const handlePDFExport = () => {
+   444→   444→    const content = document.getElementById('report-print-area');
+   445→   445→    if (!content) return;
+   446→   446→    const printWindow = window.open('', '_blank', 'width=800,height=600');
+   447→   447→    if (!printWindow) return;
+   448→   448→    printWindow.document.write(`
+   449→   449→      <html>
+   450→   450→        <head>
+   451→   451→          <title>MBUMAH HARDWARE - ${reportType} Report</title>
+   452→   452→          <style>
+   453→   453→            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 24px; color: #1e293b; }
+   454→   454→            h1 { font-size: 20px; margin-bottom: 4px; }
+   455→   455→            h2 { font-size: 16px; color: #64748b; margin-top: 0; }
+   456→   456→            .header { border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 20px; }
+   457→   457→            table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+   458→   458→            th { background: #f1f5f9; padding: 8px 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e2e8f0; }
+   459→   459→            td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; }
+   460→   460→            .right { text-align: right; }
+   461→   461→            .bold { font-weight: 700; }
+   462→   462→            @media print { body { padding: 0; } }
+   463→   463→          </style>
+   464→   464→        </head>
+   465→   465→        <body>
+   466→   466→          <div class="header">
+   467→   467→            <h1>MBUMAH HARDWARE</h1>
+   468→   468→            <h2>${reportType === 'sales' ? 'Sales' : reportType === 'inventory' ? 'Inventory' : reportType === 'valuation' ? 'Inventory Valuation' : reportType === 'daily' ? 'Daily Sales Summary' : 'Top Products'} Report</h2>
+   469→   469→            <p style="color:#94a3b8;font-size:12px">Period: ${dateFrom} to ${dateTo}</p>
+   470→   470→          </div>
+   471→   471→          ${content.innerHTML}
+   472→   472→        </body>
+   473→   473→      </html>
+   474→   474→    `);
+   475→   475→    printWindow.document.close();
+   476→   476→    setTimeout(() => printWindow.print(), 500);
+   477→   477→    toast.success('PDF export ready');
+   478→   478→  };
+   479→   479→
+   480→   480→  const changeIndicator = (change: number) => {
+   481→   481→    if (change > 0) return <ArrowUpRight className="h-4 w-4 text-green-600" />;
+   482→   482→    if (change < 0) return <ArrowDownRight className="h-4 w-4 text-red-600" />;
+   483→   483→    return <Minus className="h-4 w-4 text-muted-foreground" />;
+   484→   484→  };
+   485→   485→
+   486→   486→  const changeColor = (change: number) => {
+   487→   487→    if (change > 0) return 'text-green-600';
+   488→   488→    if (change < 0) return 'text-red-600';
+   489→   489→    return 'text-muted-foreground';
+   490→   490→  };
+   491→   491→
+   492→   492→  const dateRangeDisplay = useMemo(() => {
+   493→   493→    const from = new Date(dateFrom);
+   494→   494→    const to = new Date(dateTo);
+   495→   495→    const days = Math.ceil((to.getTime() - from.getTime()) / 86400000) + 1;
+   496→   496→    return `${from.toLocaleDateString('en-KE', { month: 'short', day: 'numeric' })} — ${to.toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' })} (${days} days)`;
+   497→   497→  }, [dateFrom, dateTo]);
+   498→   498→
+   499→   499→  return (
+   500→   500→    <div className="space-y-4">
+   501→   501→      {/* ================================================================== */}
+   502→   502→      {/* Enhanced Quick Stats Cards - Glass-morphism                         */}
+   503→   503→      {/* ================================================================== */}
+   504→   504→      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   505→   505→        <Card className="border-l-4 border-l-green-500 bg-gradient-to-br from-card to-green-50/30 dark:to-green-900/10 backdrop-blur-sm">
+   506→   506→          <CardContent className="p-4">
+   507→   507→            <div className="flex items-center gap-3">
+   508→   508→              <div className="p-2.5 rounded-xl bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/40 dark:to-green-800/30">
+   509→   509→                <DollarSign className="h-5 w-5 text-green-600" />
+   510→   510→              </div>
+   511→   511→              <div className="flex-1 min-w-0">
+   512→   512→                <p className="text-xs text-muted-foreground">Today Revenue</p>
+   513→   513→                <p className="text-lg font-bold whitespace-nowrap">{formatKES(quickStats.todayRevenue)}</p>
+   514→   514→              </div>
+   515→   515→            </div>
+   516→   516→            <div className="flex items-center gap-1 mt-2">
+   517→   517→              {changeIndicator(quickStats.revenueChange)}
+   518→   518→              <span className={`text-xs font-medium ${changeColor(quickStats.revenueChange)}`}>
+   519→   519→                {quickStats.revenueChange >= 0 ? '+' : ''}{quickStats.revenueChange}%
+   520→   520→              </span>
+   521→   521→            </div>
+   522→   522→          </CardContent>
+   523→   523→        </Card>
+   524→   524→
+   525→   525→        <Card className="border-l-4 border-l-primary bg-gradient-to-br from-card to-primary-50/30 dark:to-primary-900/10 backdrop-blur-sm">
+   526→   526→          <CardContent className="p-4">
+   527→   527→            <div className="flex items-center gap-3">
+   528→   528→              <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary/10 to-primary/20">
+   529→   529→                <ShoppingCart className="h-5 w-5 text-primary" />
+   530→   530→              </div>
+   531→   531→              <div className="flex-1 min-w-0">
+   532→   532→                <p className="text-xs text-muted-foreground">Today Sales</p>
+   533→   533→                <p className="text-lg font-bold whitespace-nowrap">{quickStats.todayTransactions}</p>
+   534→   534→              </div>
+   535→   535→            </div>
+   536→   536→            <div className="flex items-center gap-1 mt-2">
+   537→   537→              {changeIndicator(quickStats.transactionsChange)}
+   538→   538→              <span className={`text-xs font-medium ${changeColor(quickStats.transactionsChange)}`}>
+   539→   539→                {quickStats.transactionsChange >= 0 ? '+' : ''}{quickStats.transactionsChange}%
+   540→   540→              </span>
+   541→   541→            </div>
+   542→   542→          </CardContent>
+   543→   543→        </Card>
+   544→   544→
+   545→   545→        <Card className="border-l-4 border-l-amber-500 bg-gradient-to-br from-card to-amber-50/30 dark:to-amber-900/10 backdrop-blur-sm">
+   546→   546→          <CardContent className="p-4">
+   547→   547→            <div className="flex items-center gap-3">
+   548→   548→              <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-100 to-amber-200 dark:from-amber-900/40 dark:to-amber-800/30">
+   549→   549→                <Package className="h-5 w-5 text-amber-600" />
+   550→   550→              </div>
+   551→   551→              <div className="flex-1 min-w-0">
+   552→   552→                <p className="text-xs text-muted-foreground">Low Stock</p>
+   553→   553→                <p className="text-lg font-bold whitespace-nowrap">{quickStats.lowStockProducts}</p>
+   554→   554→              </div>
+   555→   555→            </div>
+   556→   556→            <div className="flex items-center gap-1 mt-2">
+   557→   557→              {changeIndicator(quickStats.lowStockChange)}
+   558→   558→              <span className={`text-xs font-medium ${changeColor(quickStats.lowStockChange)}`}>
+   559→   559→                {quickStats.lowStockChange >= 0 ? '+' : ''}{quickStats.lowStockChange}%
+   560→   560→              </span>
+   561→   561→            </div>
+   562→   562→          </CardContent>
+   563→   563→        </Card>
+   564→   564→
+   565→   565→        <Card className="border-l-4 border-l-red-500 bg-gradient-to-br from-card to-red-50/30 dark:to-red-900/10 backdrop-blur-sm">
+   566→   566→          <CardContent className="p-4">
+   567→   567→            <div className="flex items-center gap-3">
+   568→   568→              <div className="p-2.5 rounded-xl bg-gradient-to-br from-red-100 to-red-200 dark:from-red-900/40 dark:to-red-800/30">
+   569→   569→                <TrendingDown className="h-5 w-5 text-red-600" />
+   570→   570→              </div>
+   571→   571→              <div className="flex-1 min-w-0">
+   572→   572→                <p className="text-xs text-muted-foreground">Outstanding Debt</p>
+   573→   573→                <p className="text-lg font-bold whitespace-nowrap">{formatKES(quickStats.outstandingDebt)}</p>
+   574→   574→              </div>
+   575→   575→            </div>
+   576→   576→            <div className="flex items-center gap-1 mt-2">
+   577→   577→              {changeIndicator(quickStats.debtChange)}
+   578→   578→              <span className={`text-xs font-medium ${changeColor(quickStats.debtChange)}`}>
+   579→   579→                {quickStats.debtChange >= 0 ? '+' : ''}{quickStats.debtChange}%
+   580→   580→              </span>
+   581→   581→            </div>
+   582→   582→          </CardContent>
+   583→   583→        </Card>
+   584→   584→      </div>
+   585→   585→
+   586→   586→      {/* ================================================================== */}
+   587→   587→      {/* Enhanced Report Generation Dashboard - Glass-morphism                */}
+   588→   588→      {/* ================================================================== */}
+   589→   589→      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+   590→   590→        <CardHeader className="pb-2">
+   591→   591→          <div className="flex items-center justify-between">
+   592→   592→            <div>
+   593→   593→              <CardTitle className="text-base flex items-center gap-2">
+   594→   594→                <Sparkles className="h-4 w-4 text-primary" /> Report Generation Dashboard
+   595→   595→              </CardTitle>
+   596→   596→              <CardDescription className="text-xs mt-1">{dateRangeDisplay}</CardDescription>
+   597→   597→            </div>
+   598→   598→            <div className="flex items-center gap-2">
+   599→   599→              <Button variant="outline" size="sm" onClick={handlePDFExport} className="h-8">
+   600→   600→                <Printer className="h-3.5 w-3.5 mr-1.5" /> PDF
+   601→   601→              </Button>
+   602→   602→              <Button variant="outline" size="sm" onClick={handleExport} className="h-8">
+   603→   603→                <FileDown className="h-3.5 w-3.5 mr-1.5" /> CSV
+   604→   604→              </Button>
+   605→   605→            </div>
+   606→   606→          </div>
+   607→   607→        </CardHeader>
+   608→   608→        <CardContent className="space-y-4">
+   609→   609→          {/* Date Range Presets */}
+   610→   610→          <div className="space-y-2">
+   611→   611→            <Label className="text-xs font-medium">Date Range</Label>
+   612→   612→            <div className="flex flex-wrap items-center gap-2">
+   613→   613→              <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+   614→   614→              {([
+   615→   615→                { id: 'today', label: 'Today' },
+   616→   616→                { id: 'this_week', label: 'This Week' },
+   617→   617→                { id: 'this_month', label: 'This Month' },
+   618→   618→                { id: 'last_month', label: 'Last Month' },
+   619→   619→                { id: 'custom', label: 'Custom' },
+   620→   620→              ] as { id: DatePreset; label: string }[]).map((preset) => (
+   621→   621→                <button
+   622→   622→                  key={preset.id}
+   623→   623→                  onClick={() => setDatePreset(preset.id)}
+   624→   624→                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+   625→   625→                    datePreset === preset.id
+   626→   626→                      ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+   627→   627→                      : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
+   628→   628→                  }`}
+   629→   629→                >
+   630→   630→                  {preset.label}
+   631→   631→                </button>
+   632→   632→              ))}
+   633→   633→            </div>
+   634→   634→            {datePreset === 'custom' && (
+   635→   635→              <div className="flex items-center gap-2 ml-6">
+   636→   636→                <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 text-xs w-36" />
+   637→   637→                <span className="text-xs text-muted-foreground">to</span>
+   638→   638→                <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 text-xs w-36" />
+   639→   639→              </div>
+   640→   640→            )}
+   641→   641→          </div>
+   642→   642→
+   643→   643→          <Separator />
+   644→   644→
+   645→   645→          {/* Report Type Selection - Enhanced Grid */}
+   646→   646→          <div className="space-y-2">
+   647→   647→            <Label className="text-xs font-medium">Report Type</Label>
+   648→   648→            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+   649→   649→              <ReportTypeCard
+   650→   650→                icon={<ShoppingCart className="h-5 w-5" />}
+   651→   651→                title="Sales Report"
+   652→   652→                description="Comprehensive sales analysis with payment method breakdown and trends"
+   653→   653→                isActive={reportType === 'sales'}
+   654→   654→                onClick={() => setReportType('sales')}
+   655→   655→                colorClass="text-primary"
+   656→   656→              />
+   657→   657→              <ReportTypeCard
+   658→   658→                icon={<Package className="h-5 w-5" />}
+   659→   659→                title="Inventory Report"
+   660→   660→                description="Stock health, valuation by category, and inventory turnover analysis"
+   661→   661→                isActive={reportType === 'inventory'}
+   662→   662→                onClick={() => setReportType('inventory')}
+   663→   663→                colorClass="text-primary"
+   664→   664→              />
+   665→   665→              <ReportTypeCard
+   666→   666→                icon={<DollarSign className="h-5 w-5" />}
+   667→   667→                title="Inventory Valuation"
+   668→   668→                description="Current stock valuation (qty × cost price) with category breakdown"
+   669→   669→                isActive={reportType === 'valuation'}
+   670→   670→                onClick={() => setReportType('valuation')}
+   671→   671→                colorClass="text-primary"
+   672→   672→              />
+   673→   673→              <ReportTypeCard
+   674→   674→                icon={<Timer className="h-5 w-5" />}
+   675→   675→                title="Daily Sales Summary"
+   676→   676→                description="Hourly breakdown of today's sales with peak hour analysis"
+   677→   677→                isActive={reportType === 'daily'}
+   678→   678→                onClick={() => setReportType('daily')}
+   679→   679→                colorClass="text-primary"
+   680→   680→              />
+   681→   681→              <ReportTypeCard
+   682→   682→                icon={<TrendingUp className="h-5 w-5" />}
+   683→   683→                title="Top Products"
+   684→   684→                description="Best-selling products ranked by revenue and quantity sold"
+   685→   685→                isActive={reportType === 'top_products'}
+   686→   686→                onClick={() => setReportType('top_products')}
+   687→   687→                colorClass="text-primary"
+   688→   688→              />
+   689→   689→            </div>
+   690→   690→          </div>
+   691→   691→
+   692→   692→          {/* Chart Type Toggle */}
+   693→   693→          {(reportType === 'valuation' || reportType === 'top_products' || reportType === 'daily') && (
+   694→   694→            <div className="flex items-center gap-2">
+   695→   695→              <Label className="text-xs font-medium">Chart Type:</Label>
+   696→   696→              <div className="flex items-center gap-1">
+   697→   697→                {(['bar', 'line', 'pie'] as const).map(ct => (
+   698→   698→                  <button
+   699→   699→                    key={ct}
+   700→   700→                    onClick={() => setChartType(ct)}
+   701→   701→                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+   702→   702→                      chartType === ct
+   703→   703→                        ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+   704→   704→                        : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
+   705→   705→                    }`}
+   706→   706→                  >
+   707→   707→                    {ct === 'bar' ? <BarChart3 className="h-3 w-3 inline mr-1" /> : ct === 'line' ? <TrendingUp className="h-3 w-3 inline mr-1" /> : <PieChart className="h-3 w-3 inline mr-1" />}
+   708→   708→                    {ct.charAt(0).toUpperCase() + ct.slice(1)}
+   709→   709→                  </button>
+   710→   710→                ))}
+   711→   711→              </div>
+   712→   712→            </div>
+   713→   713→          )}
+   714→   714→        </CardContent>
+   715→   715→      </Card>
+   716→   716→
+   717→   717→      {/* Report Content Area */}
+   718→   718→      <div id="report-print-area">
+   719→   719→        {/* ================================================================== */}
+   720→   720→        {/* Sales Report                                                        */}
+   721→   721→        {/* ================================================================== */}
+   722→   722→        {reportType === 'sales' && (
+   723→   723→          <>
+   724→   724→            {salesLoading ? (
+   725→   725→              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   726→   726→                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+   727→   727→              </div>
+   728→   728→            ) : salesReport ? (
+   729→   729→              <>
+   730→   730→                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   731→   731→                  <Card className="border-l-4 border-l-green-500 backdrop-blur-sm bg-card/80">
+   732→   732→                    <CardContent className="p-4">
+   733→   733→                      <div className="flex items-center gap-2 mb-1">
+   734→   734→                        <DollarSign className="h-4 w-4 text-green-500" />
+   735→   735→                        <p className="text-sm text-muted-foreground">Total Revenue</p>
+   736→   736→                      </div>
+   737→   737→                      <p className="text-2xl font-bold">{formatKES(salesReport.totalRevenue)}</p>
+   738→   738→                      {salesComparison && (
+   739→   739→                        <div className="flex items-center gap-1 mt-1">
+   740→   740→                          {changeIndicator(salesComparison.revenueChange)}
+   741→   741→                          <span className={`text-xs font-medium ${changeColor(salesComparison.revenueChange)}`}>
+   742→   742→                            {Math.abs(salesComparison.revenueChange).toFixed(1)}%
+   743→   743→                          </span>
+   744→   744→                        </div>
+   745→   745→                      )}
+   746→   746→                    </CardContent>
+   747→   747→                  </Card>
+   748→   748→                  <Card className="border-l-4 border-l-primary backdrop-blur-sm bg-card/80">
+   749→   749→                    <CardContent className="p-4">
+   750→   750→                      <div className="flex items-center gap-2 mb-1">
+   751→   751→                        <ShoppingCart className="h-4 w-4 text-primary" />
+   752→   752→                        <p className="text-sm text-muted-foreground">Transactions</p>
+   753→   753→                      </div>
+   754→   754→                      <p className="text-2xl font-bold">{salesReport.transactionCount}</p>
+   755→   755→                      {salesComparison && (
+   756→   756→                        <div className="flex items-center gap-1 mt-1">
+   757→   757→                          {changeIndicator(salesComparison.transactionChange)}
+   758→   758→                          <span className={`text-xs font-medium ${changeColor(salesComparison.transactionChange)}`}>
+   759→   759→                            {Math.abs(salesComparison.transactionChange).toFixed(1)}%
+   760→   760→                          </span>
+   761→   761→                        </div>
+   762→   762→                      )}
+   763→   763→                    </CardContent>
+   764→   764→                  </Card>
+   765→   765→                  <Card className="border-l-4 border-l-amber-500 backdrop-blur-sm bg-card/80">
+   766→   766→                    <CardContent className="p-4">
+   767→   767→                      <div className="flex items-center gap-2 mb-1">
+   768→   768→                        <TrendingUp className="h-4 w-4 text-amber-500" />
+   769→   769→                        <p className="text-sm text-muted-foreground">Avg. Transaction</p>
+   770→   770→                      </div>
+   771→   771→                      <p className="text-2xl font-bold">{formatKES(salesReport.avgTransactionValue)}</p>
+   772→   772→                    </CardContent>
+   773→   773→                  </Card>
+   774→   774→                  <Card className="border-l-4 border-l-red-500 backdrop-blur-sm bg-card/80">
+   775→   775→                    <CardContent className="p-4">
+   776→   776→                      <div className="flex items-center gap-2 mb-1">
+   777→   777→                        <RotateCcw className="h-4 w-4 text-red-500" />
+   778→   778→                        <p className="text-sm text-muted-foreground">Total Discount</p>
+   779→   779→                      </div>
+   780→   780→                      <p className="text-2xl font-bold">{formatKES(salesReport.totalDiscount)}</p>
+   781→   781→                    </CardContent>
+   782→   782→                  </Card>
+   783→   783→                </div>
+   784→   784→
+   785→   785→                {/* Sales by Payment Method */}
+   786→   786→                {(salesReport.byPaymentMethod || []).length > 0 && (
+   787→   787→                  <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+   788→   788→                    <CardHeader className="pb-2">
+   789→   789→                      <CardTitle className="text-base flex items-center gap-2">
+   790→   790→                        <CreditCard className="h-4 w-4" /> Sales by Payment Method
+   791→   791→                      </CardTitle>
+   792→   792→                    </CardHeader>
+   793→   793→                    <CardContent>
+   794→   794→                      {(() => {
+   795→   795→                        const byPM = salesReport.byPaymentMethod || [];
+   796→   796→                        const totalAmount = byPM.reduce((s, p) => s + p.amount, 0) || 1;
+   797→   797→                        const pmColors: Record<string, string> = {
+   798→   798→                          CASH: 'bg-green-500', MPESA: 'bg-primary', DEBT: 'bg-orange-500', SPLIT: 'bg-purple-500',
+   799→   799→                        };
+   800→   800→                        return (
+   801→   801→                          <>
+   802→   802→                            <div className="h-6 bg-muted/30 rounded-full overflow-hidden flex mb-4">
+   803→   803→                              {byPM.map((pm, i) => {
+   804→   804→                                const pct = (pm.amount / totalAmount) * 100;
+   805→   805→                                return (
+   806→   806→                                  <div
+   807→   807→                                    key={i}
+   808→   808→                                    className={`h-full transition-all duration-500 ${pmColors[pm.method] || 'bg-gray-400'}`}
+   809→   809→                                    style={{ width: `${pct}%` }}
+   810→   810→                                    title={`${pm.method}: ${formatKES(pm.amount)} (${pct.toFixed(1)}%)`}
+   811→   811→                                  />
+   812→   812→                                );
+   813→   813→                              })}
+   814→   814→                            </div>
+   815→   815→                            <div className="space-y-4">
+   816→   816→                              {byPM.map((pm, i) => {
+   817→   817→                                const maxAmount = Math.max(...byPM.map(p => p.amount), 1);
+   818→   818→                                const pct = (pm.amount / maxAmount) * 100;
+   819→   819→                                const colorClass = pmColors[pm.method] || 'bg-gray-500';
+   820→   820→                                return (
+   821→   821→                                  <div key={i} className="space-y-2">
+   822→   822→                                    <div className="flex items-center justify-between text-sm">
+   823→   823→                                      <div className="flex items-center gap-2">
+   824→   824→                                        <div className={`w-6 h-6 rounded-md flex items-center justify-center ${colorClass} text-white`}>
+   825→   825→                                          {paymentMethodIcons[pm.method] || <CreditCard className="h-3.5 w-3.5" />}
+   826→   826→                                        </div>
+   827→   827→                                        <span className="font-medium">{pm.method}</span>
+   828→   828→                                        <Badge variant="outline" className="text-[9px]">{pm.count} txns</Badge>
+   829→   829→                                      </div>
+   830→   830→                                      <div className="text-right">
+   831→   831→                                        <span className="font-medium">{formatKES(pm.amount)}</span>
+   832→   832→                                        <span className="text-xs text-muted-foreground ml-2">
+   833→   833→                                          {((pm.amount / totalAmount) * 100).toFixed(0)}%
+   834→   834→                                        </span>
+   835→   835→                                      </div>
+   836→   836→                                    </div>
+   837→   837→                                    <div className="h-3 bg-muted/30 rounded-full overflow-hidden">
+   838→   838→                                      <div
+   839→   839→                                        className={`h-full rounded-full transition-all duration-500 ${colorClass}`}
+   840→   840→                                        style={{ width: `${pct}%` }}
+   841→   841→                                      />
+   842→   842→                                    </div>
+   843→   843→                                  </div>
+   844→   844→                                );
+   845→   845→                              })}
+   846→   846→                            </div>
+   847→   847→                          </>
+   848→   848→                        );
+   849→   849→                      })()}
+   850→   850→                    </CardContent>
+   851→   851→                  </Card>
+   852→   852→                )}
+   853→   853→
+   854→   854→                {/* Top 5 Products by Revenue */}
+   855→   855→                {topProducts.length > 0 && (
+   856→   856→                  <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+   857→   857→                    <CardHeader className="pb-2">
+   858→   858→                      <CardTitle className="text-base flex items-center gap-2">
+   859→   859→                        <TrendingUp className="h-4 w-4" /> Top 5 Products by Revenue
+   860→   860→                      </CardTitle>
+   861→   861→                    </CardHeader>
+   862→   862→                    <CardContent>
+   863→   863→                      <div className="space-y-3 max-h-72 overflow-y-auto pr-2 custom-scrollbar">
+   864→   864→                        {topProducts.slice(0, 5).map((product, i) => {
+   865→   865→                          const maxRevenue = Math.max(...topProducts.map(p => p.revenue), 1);
+   866→   866→                          const pct = (product.revenue / maxRevenue) * 100;
+   867→   867→                          const rankColors = ['bg-yellow-500 text-white', 'bg-gray-400 text-white', 'bg-amber-600 text-white'];
+   868→   868→                          return (
+   869→   869→                            <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/30 transition-colors">
+   870→   870→                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i < 3 ? rankColors[i] : 'bg-muted text-muted-foreground'}`}>
+   871→   871→                                {i + 1}
+   872→   872→                              </div>
+   873→   873→                              <div className="flex-1 min-w-0">
+   874→   874→                                <div className="flex items-center justify-between mb-1">
+   875→   875→                                  <span className="text-sm font-medium truncate">{product.productName}</span>
+   876→   876→                                  <span className="text-sm font-bold ml-2">{formatKES(product.revenue)}</span>
+   877→   877→                                </div>
+   878→   878→                                <div className="flex items-center gap-2">
+   879→   879→                                  <div className="flex-1">
+   880→   880→                                    <div className="h-2 bg-muted/30 rounded-full overflow-hidden">
+   881→   881→                                      <div
+   882→   882→                                        className="h-full rounded-full bg-gradient-to-r from-primary/60 to-primary transition-all duration-500"
+   883→   883→                                        style={{ width: `${pct}%` }}
+   884→   884→                                      />
+   885→   885→                                    </div>
+   886→   886→                                  </div>
+   887→   887→                                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">{product.quantitySold} sold</span>
+   888→   888→                                </div>
+   889→   889→                              </div>
+   890→   890→                            </div>
+   891→   891→                          );
+   892→   892→                        })}
+   893→   893→                      </div>
+   894→   894→                    </CardContent>
+   895→   895→                  </Card>
+   896→   896→                )}
+   897→   897→              </>
+   898→   898→            ) : (
+   899→   899→              <Card className="backdrop-blur-sm bg-card/80">
+   900→   900→                <CardContent className="p-8 text-center text-muted-foreground">
+   901→   901→                  <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
+   902→   902→                  <p>No sales data available for the selected period</p>
+   903→   903→                  <p className="text-xs mt-1">Try adjusting the date range</p>
+   904→   904→                </CardContent>
+   905→   905→              </Card>
+   906→   906→            )}
+   907→   907→          </>
+   908→   908→        )}
+   909→   909→
+   910→   910→        {/* ================================================================== */}
+   911→   911→        {/* Inventory Report                                                    */}
+   912→   912→        {/* ================================================================== */}
+   913→   913→        {reportType === 'inventory' && (
+   914→   914→          <>
+   915→   915→            {inventoryLoading ? (
+   916→   916→              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   917→   917→                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+   918→   918→              </div>
+   919→   919→            ) : inventoryReport ? (
+   920→   920→              <>
+   921→   921→                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   922→   922→                  <Card className="border-l-4 border-l-primary backdrop-blur-sm bg-card/80">
+   923→   923→                    <CardContent className="p-4">
+   924→   924→                      <div className="flex items-center gap-2 mb-1">
+   925→   925→                        <Package className="h-4 w-4 text-primary" />
+   926→   926→                        <p className="text-sm text-muted-foreground">Total Products</p>
+   927→   927→                      </div>
+   928→   928→                      <p className="text-2xl font-bold">{inventoryReport.totalProducts}</p>
+   929→   929→                    </CardContent>
+   930→   930→                  </Card>
+   931→   931→                  <Card className="border-l-4 border-l-amber-500 backdrop-blur-sm bg-card/80">
+   932→   932→                    <CardContent className="p-4">
+   933→   933→                      <div className="flex items-center gap-2 mb-1">
+   934→   934→                        <AlertTriangle className="h-4 w-4 text-amber-500" />
+   935→   935→                        <p className="text-sm text-muted-foreground">Low Stock</p>
+   936→   936→                      </div>
+   937→   937→                      <p className="text-2xl font-bold text-amber-600">{inventoryReport.lowStockCount}</p>
+   938→   938→                    </CardContent>
+   939→   939→                  </Card>
+   940→   940→                  <Card className="border-l-4 border-l-red-500 backdrop-blur-sm bg-card/80">
+   941→   941→                    <CardContent className="p-4">
+   942→   942→                      <div className="flex items-center gap-2 mb-1">
+   943→   943→                        <TrendingDown className="h-4 w-4 text-red-500" />
+   944→   944→                        <p className="text-sm text-muted-foreground">Out of Stock</p>
+   945→   945→                      </div>
+   946→   946→                      <p className="text-2xl font-bold text-red-600">{inventoryReport.outOfStockCount}</p>
+   947→   947→                    </CardContent>
+   948→   948→                  </Card>
+   949→   949→                  <Card className="border-l-4 border-l-green-500 backdrop-blur-sm bg-card/80">
+   950→   950→                    <CardContent className="p-4">
+   951→   951→                      <div className="flex items-center gap-2 mb-1">
+   952→   952→                        <DollarSign className="h-4 w-4 text-green-500" />
+   953→   953→                        <p className="text-sm text-muted-foreground">Inventory Value</p>
+   954→   954→                      </div>
+   955→   955→                      <p className="text-2xl font-bold whitespace-nowrap">{formatKES(inventoryReport.totalInventoryValue)}</p>
+   956→   956→                    </CardContent>
+   957→   957→                  </Card>
+   958→   958→                </div>
+   959→   959→
+   960→   960→                {/* Stock Health & Turnover */}
+   961→   961→                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+   962→   962→                  <Card className="backdrop-blur-sm bg-card/80">
+   963→   963→                    <CardHeader className="pb-2">
+   964→   964→                      <CardTitle className="text-base flex items-center gap-2">
+   965→   965→                        <HeartPulse className="h-4 w-4 text-green-600" /> Stock Health
+   966→   966→                      </CardTitle>
+   967→   967→                    </CardHeader>
+   968→   968→                    <CardContent>
+   969→   969→                      <div className="flex items-center gap-4">
+   970→   970→                        <div className="relative w-20 h-20">
+   971→   971→                          <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
+   972→   972→                            <circle cx="40" cy="40" r="35" fill="none" stroke="currentColor" className="text-muted/30" strokeWidth="6" />
+   973→   973→                            <circle
+   974→   974→                              cx="40" cy="40" r="35" fill="none"
+   975→   975→                              stroke={stockHealth >= 70 ? '#22c55e' : stockHealth >= 40 ? '#eab308' : '#ef4444'}
+   976→   976→                              strokeWidth="6"
+   977→   977→                              strokeLinecap="round"
+   978→   978→                              strokeDasharray={`${(stockHealth / 100) * 220} 220`}
+   979→   979→                            />
+   980→   980→                          </svg>
+   981→   981→                          <div className="absolute inset-0 flex items-center justify-center">
+   982→   982→                            <span className="text-lg font-bold">{stockHealth}%</span>
+   983→   983→                          </div>
+   984→   984→                        </div>
+   985→   985→                        <div>
+   986→   986→                          <p className="text-sm font-medium">
+   987→   987→                            {stockHealth >= 70 ? 'Healthy' : stockHealth >= 40 ? 'Needs Attention' : 'Critical'}
+   988→   988→                          </p>
+   989→   989→                          <p className="text-xs text-muted-foreground">
+   990→   990→                            {inventoryReport.totalProducts - inventoryReport.lowStockCount - inventoryReport.outOfStockCount} of {inventoryReport.totalProducts} products in good stock
+   991→   991→                          </p>
+   992→   992→                          <div className="flex items-center gap-2 mt-2">
+   993→   993→                            <Badge variant="outline" className="text-[9px] bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
+   994→   994→                              Good: {inventoryReport.totalProducts - inventoryReport.lowStockCount - inventoryReport.outOfStockCount}
+   995→   995→                            </Badge>
+   996→   996→                            <Badge variant="outline" className="text-[9px] bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800">
+   997→   997→                              Low: {inventoryReport.lowStockCount}
+   998→   998→                            </Badge>
+   999→   999→                            <Badge variant="outline" className="text-[9px] bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800">
+  1000→  1000→                              Out: {inventoryReport.outOfStockCount}
+  1001→  1001→                            </Badge>
+  1002→  1002→                          </div>
+  1003→  1003→                        </div>
+  1004→  1004→                      </div>
+  1005→  1005→                    </CardContent>
+  1006→  1006→                  </Card>
+  1007→  1007→
+  1008→  1008→                  <Card className="backdrop-blur-sm bg-card/80">
+  1009→  1009→                    <CardHeader className="pb-2">
+  1010→  1010→                      <CardTitle className="text-base flex items-center gap-2">
+  1011→  1011→                        <RotateCcw className="h-4 w-4 text-primary" /> Inventory Turnover
+  1012→  1012→                      </CardTitle>
+  1013→  1013→                    </CardHeader>
+  1014→  1014→                    <CardContent>
+  1015→  1015→                      <div className="space-y-3">
+  1016→  1016→                        <div className="flex items-center gap-3">
+  1017→  1017→                          <div className="p-3 rounded-xl bg-primary/10">
+  1018→  1018→                            <span className="text-2xl font-bold text-primary">{inventoryTurnover || '—'}</span>
+  1019→  1019→                          </div>
+  1020→  1020→                          <div>
+  1021→  1021→                            <p className="text-sm font-medium">Turnover Ratio</p>
+  1022→  1022→                            <p className="text-xs text-muted-foreground">
+  1023→  1023→                              {Number(inventoryTurnover) >= 2 ? 'Excellent — inventory moves quickly' : Number(inventoryTurnover) >= 1 ? 'Good — healthy stock rotation' : 'Low — consider reducing stock levels'}
+  1024→  1024→                            </p>
+  1025→  1025→                          </div>
+  1026→  1026→                        </div>
+  1027→  1027→                        <Separator />
+  1028→  1028→                        <div className="grid grid-cols-2 gap-2 text-xs">
+  1029→  1029→                          <div className="p-2 rounded-lg bg-muted/30">
+  1030→  1030→                            <p className="text-muted-foreground">Revenue</p>
+  1031→  1031→                            <p className="font-medium">{salesReport ? formatKES(salesReport.totalRevenue) : '—'}</p>
+  1032→  1032→                          </div>
+  1033→  1033→                          <div className="p-2 rounded-lg bg-muted/30">
+  1034→  1034→                            <p className="text-muted-foreground">Inventory Value</p>
+  1035→  1035→                            <p className="font-medium">{formatKES(inventoryReport.totalInventoryValue)}</p>
+  1036→  1036→                          </div>
+  1037→  1037→                        </div>
+  1038→  1038→                      </div>
+  1039→  1039→                    </CardContent>
+  1040→  1040→                  </Card>
+  1041→  1041→                </div>
+  1042→  1042→
+  1043→  1043→                {/* Category breakdown */}
+  1044→  1044→                {categoryBreakdown.length > 0 && (
+  1045→  1045→                  <Card className="backdrop-blur-sm bg-card/80">
+  1046→  1046→                    <CardHeader className="pb-2">
+  1047→  1047→                      <CardTitle className="text-base flex items-center gap-2">
+  1048→  1048→                        <PieChart className="h-4 w-4" /> Inventory Valuation by Category
+  1049→  1049→                      </CardTitle>
+  1050→  1050→                    </CardHeader>
+  1051→  1051→                    <CardContent>
+  1052→  1052→                      <ConicPieChart segments={pieSegments} />
+  1053→  1053→                      <Separator className="my-4" />
+  1054→  1054→                      <div className="space-y-3">
+  1055→  1055→                        {categoryBreakdown.map((cat, i) => {
+  1056→  1056→                          const colors = ['bg-blue-500', 'bg-green-500', 'bg-orange-500', 'bg-purple-500', 'bg-teal-500', 'bg-pink-500', 'bg-amber-500', 'bg-cyan-500', 'bg-lime-500', 'bg-rose-500'];
+  1057→  1057→                          return (
+  1058→  1058→                            <div key={i} className="space-y-1">
+  1059→  1059→                              <div className="flex items-center justify-between text-sm">
+  1060→  1060→                                <div className="flex items-center gap-2">
+  1061→  1061→                                  <div className={`w-3 h-3 rounded-sm ${colors[i % colors.length]}`} />
+  1062→  1062→                                  <span className="font-medium">{cat.name}</span>
+  1063→  1063→                                  <Badge variant="outline" className="text-[9px]">{cat.productCount} items</Badge>
+  1064→  1064→                                </div>
+  1065→  1065→                                <span className="font-medium">{formatKES(cat.totalValue)}</span>
+  1066→  1066→                              </div>
+  1067→  1067→                              <HorizontalBar value={cat.totalValue} maxValue={maxCategoryValue} colorClass={colors[i % colors.length]} height="h-2" />
+  1068→  1068→                            </div>
+  1069→  1069→                          );
+  1070→  1070→                        })}
+  1071→  1071→                        <Separator />
+  1072→  1072→                        <div className="flex items-center justify-between text-sm font-bold">
+  1073→  1073→                          <span>Total Inventory Value</span>
+  1074→  1074→                          <span>{formatKES(inventoryReport.totalInventoryValue)}</span>
+  1075→  1075→                        </div>
+  1076→  1076→                      </div>
+  1077→  1077→                    </CardContent>
+  1078→  1078→                  </Card>
+  1079→  1079→                )}
+  1080→  1080→              </>
+  1081→  1081→            ) : (
+  1082→  1082→              <Card className="backdrop-blur-sm bg-card/80">
+  1083→  1083→                <CardContent className="p-8 text-center text-muted-foreground">
+  1084→  1084→                  <Boxes className="h-12 w-12 mx-auto mb-3 opacity-50" />
+  1085→  1085→                  <p>No inventory data available</p>
+  1086→  1086→                </CardContent>
+  1087→  1087→              </Card>
+  1088→  1088→            )}
+  1089→  1089→          </>
+  1090→  1090→        )}
+  1091→  1091→
+  1092→  1092→        {/* ================================================================== */}
+  1093→  1093→        {/* Inventory Valuation Report                                          */}
+  1094→  1094→        {/* ================================================================== */}
+  1095→  1095→        {reportType === 'valuation' && (
+  1096→  1096→          <>
+  1097→  1097→            {inventoryLoading ? (
+  1098→  1098→              <div className="grid grid-cols-2 gap-3">
+  1099→  1099→                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+  1100→  1100→              </div>
+  1101→  1101→            ) : inventoryReport ? (
+  1102→  1102→              <>
+  1103→  1103→                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+  1104→  1104→                  <Card className="border-l-4 border-l-green-500 backdrop-blur-sm bg-card/80">
+  1105→  1105→                    <CardContent className="p-4">
+  1106→  1106→                      <p className="text-xs text-muted-foreground">Total Stock Value</p>
+  1107→  1107→                      <p className="text-2xl font-bold text-green-600">{formatKES(inventoryReport.totalInventoryValue)}</p>
+  1108→  1108→                      <p className="text-[10px] text-muted-foreground mt-1">qty × cost price</p>
+  1109→  1109→                    </CardContent>
+  1110→  1110→                  </Card>
+  1111→  1111→                  <Card className="border-l-4 border-l-primary backdrop-blur-sm bg-card/80">
+  1112→  1112→                    <CardContent className="p-4">
+  1113→  1113→                      <p className="text-xs text-muted-foreground">Total SKUs</p>
+  1114→  1114→                      <p className="text-2xl font-bold">{inventoryReport.totalProducts}</p>
+  1115→  1115→                      <p className="text-[10px] text-muted-foreground mt-1">product count</p>
+  1116→  1116→                    </CardContent>
+  1117→  1117→                  </Card>
+  1118→  1118→                  <Card className="border-l-4 border-l-amber-500 backdrop-blur-sm bg-card/80">
+  1119→  1119→                    <CardContent className="p-4">
+  1120→  1120→                      <p className="text-xs text-muted-foreground">Avg. Value/SKU</p>
+  1121→  1121→                      <p className="text-2xl font-bold">{formatKES(inventoryReport.totalProducts > 0 ? inventoryReport.totalInventoryValue / inventoryReport.totalProducts : 0)}</p>
+  1122→  1122→                    </CardContent>
+  1123→  1123→                  </Card>
+  1124→  1124→                </div>
+  1125→  1125→
+  1126→  1126→                {/* Valuation Chart */}
+  1127→  1127→                <Card className="backdrop-blur-sm bg-card/80">
+  1128→  1128→                  <CardHeader className="pb-2">
+  1129→  1129→                    <CardTitle className="text-base flex items-center gap-2">
+  1130→  1130→                      <BarChart3 className="h-4 w-4" /> Valuation by Category
+  1131→  1131→                    </CardTitle>
+  1132→  1132→                  </CardHeader>
+  1133→  1133→                  <CardContent>
+  1134→  1134→                    {valuationData.length > 0 ? (
+  1135→  1135→                      <>
+  1136→  1136→                        {chartType === 'bar' && <SVGBarChart data={valuationData} height={200} />}
+  1137→  1137→                        {chartType === 'line' && <SVGLineChart data={valuationData} height={200} />}
+  1138→  1138→                        {chartType === 'pie' && <ConicPieChart segments={pieSegments} />}
+  1139→  1139→                      </>
+  1140→  1140→                    ) : (
+  1141→  1141→                      <p className="text-sm text-muted-foreground text-center py-8">No valuation data available</p>
+  1142→  1142→                    )}
+  1143→  1143→                  </CardContent>
+  1144→  1144→                </Card>
+  1145→  1145→
+  1146→  1146→                {/* Valuation Detail Table */}
+  1147→  1147→                {categoryBreakdown.length > 0 && (
+  1148→  1148→                  <Card className="backdrop-blur-sm bg-card/80">
+  1149→  1149→                    <CardHeader className="pb-2">
+  1150→  1150→                      <CardTitle className="text-base">Valuation Details</CardTitle>
+  1151→  1151→                    </CardHeader>
+  1152→  1152→                    <CardContent>
+  1153→  1153→                      <div className="space-y-2">
+  1154→  1154→                        {categoryBreakdown.map((cat, i) => {
+  1155→  1155→                          const avgValue = cat.productCount > 0 ? cat.totalValue / cat.productCount : 0;
+  1156→  1156→                          return (
+  1157→  1157→                            <div key={i} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/30 transition-colors">
+  1158→  1158→                              <div className="flex items-center gap-3">
+  1159→  1159→                                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
+  1160→  1160→                                  {cat.name.charAt(0)}
+  1161→  1161→                                </div>
+  1162→  1162→                                <div>
+  1163→  1163→                                  <p className="text-sm font-medium">{cat.name}</p>
+  1164→  1164→                                  <p className="text-xs text-muted-foreground">{cat.productCount} items</p>
+  1165→  1165→                                </div>
+  1166→  1166→                              </div>
+  1167→  1167→                              <div className="text-right">
+  1168→  1168→                                <p className="text-sm font-bold">{formatKES(cat.totalValue)}</p>
+  1169→  1169→                                <p className="text-[10px] text-muted-foreground">Avg: {formatKES(avgValue)}/item</p>
+  1170→  1170→                              </div>
+  1171→  1171→                            </div>
+  1172→  1172→                          );
+  1173→  1173→                        })}
+  1174→  1174→                      </div>
+  1175→  1175→                    </CardContent>
+  1176→  1176→                  </Card>
+  1177→  1177→                )}
+  1178→  1178→              </>
+  1179→  1179→            ) : (
+  1180→  1180→              <Card className="backdrop-blur-sm bg-card/80">
+  1181→  1181→                <CardContent className="p-8 text-center text-muted-foreground">
+  1182→  1182→                  <DollarSign className="h-12 w-12 mx-auto mb-3 opacity-50" />
+  1183→  1183→                  <p>No inventory valuation data available</p>
+  1184→  1184→                </CardContent>
+  1185→  1185→              </Card>
+  1186→  1186→            )}
+  1187→  1187→          </>
+  1188→  1188→        )}
+  1189→  1189→
+  1190→  1190→        {/* ================================================================== */}
+  1191→  1191→        {/* Daily Sales Summary                                                 */}
+  1192→  1192→        {/* ================================================================== */}
+  1193→  1193→        {reportType === 'daily' && (
+  1194→  1194→          <>
+  1195→  1195→            {salesLoading ? (
+  1196→  1196→              <div className="space-y-3">
+  1197→  1197→                <Skeleton className="h-24" />
+  1198→  1198→                <Skeleton className="h-64" />
+  1199→  1199→              </div>
+  1200→  1200→            ) : salesReport ? (
+  1201→  1201→              <>
+  1202→  1202→                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+  1203→  1203→                  <Card className="border-l-4 border-l-green-500 backdrop-blur-sm bg-card/80">
+  1204→  1204→                    <CardContent className="p-4">
+  1205→  1205→                      <p className="text-xs text-muted-foreground">Today&apos;s Revenue</p>
+  1206→  1206→                      <p className="text-2xl font-bold text-green-600">{formatKES(salesReport.totalRevenue)}</p>
+  1207→  1207→                    </CardContent>
+  1208→  1208→                  </Card>
+  1209→  1209→                  <Card className="border-l-4 border-l-primary backdrop-blur-sm bg-card/80">
+  1210→  1210→                    <CardContent className="p-4">
+  1211→  1211→                      <p className="text-xs text-muted-foreground">Transactions</p>
+  1212→  1212→                      <p className="text-2xl font-bold">{salesReport.transactionCount}</p>
+  1213→  1213→                    </CardContent>
+  1214→  1214→                  </Card>
+  1215→  1215→                  <Card className="border-l-4 border-l-amber-500 backdrop-blur-sm bg-card/80">
+  1216→  1216→                    <CardContent className="p-4">
+  1217→  1217→                      <p className="text-xs text-muted-foreground">Avg. Transaction</p>
+  1218→  1218→                      <p className="text-2xl font-bold">{formatKES(salesReport.avgTransactionValue)}</p>
+  1219→  1219→                    </CardContent>
+  1220→  1220→                  </Card>
+  1221→  1221→                  <Card className="border-l-4 border-l-red-500 backdrop-blur-sm bg-card/80">
+  1222→  1222→                    <CardContent className="p-4">
+  1223→  1223→                      <p className="text-xs text-muted-foreground">Total VAT</p>
+  1224→  1224→                      <p className="text-2xl font-bold">{formatKES(salesReport.totalTax)}</p>
+  1225→  1225→                    </CardContent>
+  1226→  1226→                  </Card>
+  1227→  1227→                </div>
+  1228→  1228→
+  1229→  1229→                {/* Hourly Breakdown Chart */}
+  1230→  1230→                <Card className="backdrop-blur-sm bg-card/80">
+  1231→  1231→                  <CardHeader className="pb-2">
+  1232→  1232→                    <CardTitle className="text-base flex items-center gap-2">
+  1233→  1233→                      <Timer className="h-4 w-4" /> Hourly Sales Breakdown
+  1234→  1234→                    </CardTitle>
+  1235→  1235→                  </CardHeader>
+  1236→  1236→                  <CardContent>
+  1237→  1237→                    {chartType === 'bar' && <SVGBarChart data={dailyHourlyData} height={200} />}
+  1238→  1238→                    {chartType === 'line' && <SVGLineChart data={dailyHourlyData} height={200} />}
+  1239→  1239→                    {chartType === 'pie' && (
+  1240→  1240→                      <ConicPieChart segments={dailyHourlyData.map((d, i) => ({
+  1241→  1241→                        name: d.label,
+  1242→  1242→                        value: d.value,
+  1243→  1243→                        color: ['#3b82f6', '#22c55e', '#f97316', '#a855f7', '#14b8a6', '#ec4899', '#eab308', '#06b6d4', '#84cc16', '#f43f5e', '#8b5cf6'][i % 11],
+  1244→  1244→                      }))} />
+  1245→  1245→                    )}
+  1246→  1246→                  </CardContent>
+  1247→  1247→                </Card>
+  1248→  1248→
+  1249→  1249→                {/* Peak Hour Analysis */}
+  1250→  1250→                <Card className="backdrop-blur-sm bg-card/80">
+  1251→  1251→                  <CardHeader className="pb-2">
+  1252→  1252→                    <CardTitle className="text-base">Peak Hour Analysis</CardTitle>
+  1253→  1253→                  </CardHeader>
+  1254→  1254→                  <CardContent>
+  1255→  1255→                    {(() => {
+  1256→  1256→                      const peak = dailyHourlyData.reduce((max, d) => d.value > max.value ? d : max, dailyHourlyData[0]);
+  1257→  1257→                      const totalHourly = dailyHourlyData.reduce((s, d) => s + d.value, 0);
+  1258→  1258→                      return (
+  1259→  1259→                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+  1260→  1260→                          <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20">
+  1261→  1261→                            <p className="text-xs text-muted-foreground">Peak Hour</p>
+  1262→  1262→                            <p className="text-xl font-bold text-green-600">{peak?.label || 'N/A'}</p>
+  1263→  1263→                            <p className="text-sm">{formatKES(peak?.value || 0)}</p>
+  1264→  1264→                          </div>
+  1265→  1265→                          <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+  1266→  1266→                            <p className="text-xs text-muted-foreground">Hourly Average</p>
+  1267→  1267→                            <p className="text-xl font-bold text-blue-600">{formatKES(Math.round(totalHourly / dailyHourlyData.length))}</p>
+  1268→  1268→                          </div>
+  1269→  1269→                          <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20">
+  1270→  1270→                            <p className="text-xs text-muted-foreground">Peak Share</p>
+  1271→  1271→                            <p className="text-xl font-bold text-amber-600">{peak ? ((peak.value / totalHourly) * 100).toFixed(1) : 0}%</p>
+  1272→  1272→                          </div>
+  1273→  1273→                        </div>
+  1274→  1274→                      );
+  1275→  1275→                    })()}
+  1276→  1276→                  </CardContent>
+  1277→  1277→                </Card>
+  1278→  1278→              </>
+  1279→  1279→            ) : (
+  1280→  1280→              <Card className="backdrop-blur-sm bg-card/80">
+  1281→  1281→                <CardContent className="p-8 text-center text-muted-foreground">
+  1282→  1282→                  <Timer className="h-12 w-12 mx-auto mb-3 opacity-50" />
+  1283→  1283→                  <p>No daily sales data available</p>
+  1284→  1284→                </CardContent>
+  1285→  1285→              </Card>
+  1286→  1286→            )}
+  1287→  1287→          </>
+  1288→  1288→        )}
+  1289→  1289→
+  1290→  1290→        {/* ================================================================== */}
+  1291→  1291→        {/* Top Products Report                                                 */}
+  1292→  1292→        {/* ================================================================== */}
+  1293→  1293→        {reportType === 'top_products' && (
+  1294→  1294→          <>
+  1295→  1295→            {(salesLoading || inventoryLoading) ? (
+  1296→  1296→              <div className="space-y-3">
+  1297→  1297→                <Skeleton className="h-24" />
+  1298→  1298→                <Skeleton className="h-64" />
+  1299→  1299→              </div>
+  1300→  1300→            ) : topProducts.length > 0 ? (
+  1301→  1301→              <>
+  1302→  1302→                <Card className="backdrop-blur-sm bg-card/80">
+  1303→  1303→                  <CardHeader className="pb-2">
+  1304→  1304→                    <div className="flex items-center justify-between">
+  1305→  1305→                      <CardTitle className="text-base flex items-center gap-2">
+  1306→  1306→                        <TrendingUp className="h-4 w-4" /> Top Products by Revenue
+  1307→  1307→                      </CardTitle>
+  1308→  1308→                      <Badge variant="outline" className="text-[9px]">{topProducts.length} products</Badge>
+  1309→  1309→                    </div>
+  1310→  1310→                  </CardHeader>
+  1311→  1311→                  <CardContent>
+  1312→  1312→                    {chartType === 'bar' && <SVGBarChart data={topProductsChartData} height={220} />}
+  1313→  1313→                    {chartType === 'line' && <SVGLineChart data={topProductsChartData} height={220} />}
+  1314→  1314→                    {chartType === 'pie' && (
+  1315→  1315→                      <ConicPieChart segments={topProductsChartData.map(d => ({
+  1316→  1316→                        name: d.label,
+  1317→  1317→                        value: d.value,
+  1318→  1318→                        color: d.color || '#3b82f6',
+  1319→  1319→                      }))} />
+  1320→  1320→                    )}
+  1321→  1321→                  </CardContent>
+  1322→  1322→                </Card>
+  1323→  1323→
+  1324→  1324→                {/* Detailed Product List */}
+  1325→  1325→                <Card className="backdrop-blur-sm bg-card/80">
+  1326→  1326→                  <CardHeader className="pb-2">
+  1327→  1327→                    <CardTitle className="text-base">Product Details</CardTitle>
+  1328→  1328→                  </CardHeader>
+  1329→  1329→                  <CardContent>
+  1330→  1330→                    <div className="space-y-2 max-h-96 overflow-y-auto custom-scrollbar pr-1">
+  1331→  1331→                      {topProducts.map((product, i) => {
+  1332→  1332→                        const maxRevenue = Math.max(...topProducts.map(p => p.revenue), 1);
+  1333→  1333→                        const pct = (product.revenue / maxRevenue) * 100;
+  1334→  1334→                        const rankColors = ['bg-yellow-500 text-white', 'bg-gray-400 text-white', 'bg-amber-600 text-white'];
+  1335→  1335→                        return (
+  1336→  1336→                          <div key={i} className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/30 transition-colors border border-transparent hover:border-border/30">
+  1337→  1337→                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${i < 3 ? rankColors[i] : 'bg-muted text-muted-foreground'}`}>
+  1338→  1338→                              {i + 1}
+  1339→  1339→                            </div>
+  1340→  1340→                            <div className="flex-1 min-w-0">
+  1341→  1341→                              <div className="flex items-center justify-between mb-1">
+  1342→  1342→                                <span className="text-sm font-medium truncate">{product.productName}</span>
+  1343→  1343→                                <span className="text-sm font-bold ml-2">{formatKES(product.revenue)}</span>
+  1344→  1344→                              </div>
+  1345→  1345→                              <div className="flex items-center gap-3">
+  1346→  1346→                                <div className="flex-1">
+  1347→  1347→                                  <div className="h-2 bg-muted/30 rounded-full overflow-hidden">
+  1348→  1348→                                    <div
+  1349→  1349→                                      className="h-full rounded-full bg-gradient-to-r from-primary/60 to-primary transition-all duration-500"
+  1350→  1350→                                      style={{ width: `${pct}%` }}
+  1351→  1351→                                    />
+  1352→  1352→                                  </div>
+  1353→  1353→                                </div>
+  1354→  1354→                                <span className="text-[10px] text-muted-foreground whitespace-nowrap min-w-[60px] text-right">{product.quantitySold} sold</span>
+  1355→  1355→                              </div>
+  1356→  1356→                            </div>
+  1357→  1357→                          </div>
+  1358→  1358→                        );
+  1359→  1359→                      })}
+  1360→  1360→                    </div>
+  1361→  1361→                  </CardContent>
+  1362→  1362→                </Card>
+  1363→  1363→              </>
+  1364→  1364→            ) : (
+  1365→  1365→              <Card className="backdrop-blur-sm bg-card/80">
+  1366→  1366→                <CardContent className="p-8 text-center text-muted-foreground">
+  1367→  1367→                  <TrendingUp className="h-12 w-12 mx-auto mb-3 opacity-50" />
+  1368→  1368→                  <p>No product sales data available</p>
+  1369→  1369→                  <p className="text-xs mt-1">Complete some sales to see top products</p>
+  1370→  1370→                </CardContent>
+  1371→  1371→              </Card>
+  1372→  1372→            )}
+  1373→  1373→          </>
+  1374→  1374→        )}
+  1375→  1375→      </div>
+  1376→  1376→    </div>
+  1377→  1377→  );
+  1378→  1378→}
+  1379→  1379→

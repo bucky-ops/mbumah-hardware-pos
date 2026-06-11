@@ -183,7 +183,7 @@ export const useCartStore = create<CartState>((set, get) => ({
 // APP STORE
 // ============================================================================
 
-export type AppTab = 'pos' | 'inventory' | 'customers' | 'rentals' | 'financial' | 'reports' | 'transactions' | 'suppliers' | 'admin';
+export type AppTab = 'dashboard' | 'pos' | 'inventory' | 'customers' | 'rentals' | 'financial' | 'reports' | 'transactions' | 'suppliers' | 'admin';
 
 interface AppState {
   activeTab: AppTab;
@@ -196,7 +196,7 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  activeTab: 'pos',
+  activeTab: 'dashboard',
   setActiveTab: (tab) => set({ activeTab: tab }),
   sidebarOpen: false,
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),

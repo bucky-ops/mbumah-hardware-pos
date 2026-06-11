@@ -12,7 +12,7 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateJournalEntryNumber } from '@/lib/helpers';
-import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
+import { getAccountIds, ACCOUNT_CODES, type AccountCode } from '@/lib/account-helper';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
 // Expense category to account code mapping
@@ -161,8 +161,8 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
   const expenseAccountCode = CATEGORY_ACCOUNT_MAP[category] || ACCOUNT_CODES.SALARIES_EXPENSE;
 
   const accounts = await getAccountIds(orgId, [
-    expenseAccountCode as keyof typeof ACCOUNT_CODES,
-    creditAccountCode as keyof typeof ACCOUNT_CODES,
+    expenseAccountCode as AccountCode,
+    creditAccountCode as AccountCode,
   ]);
 
   const expenseAccountKey = Object.entries(ACCOUNT_CODES).find(([, v]) => v === expenseAccountCode)?.[0] || 'SALARIES_EXPENSE';

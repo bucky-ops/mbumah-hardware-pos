@@ -14,6 +14,9 @@ import type {
   ReportFilter,
   JournalEntryDTO,
   PaymentMethod,
+  ShiftData,
+  CreateShiftPayload,
+  EndShiftPayload,
 } from './types';
 
 // ============================================================================
@@ -941,6 +944,41 @@ export const notificationsApi = {
     const query = new URLSearchParams();
     query.set('storeId', storeId);
     return request<NotificationItem[]>(`/notifications?${query.toString()}`);
+  },
+};
+
+// ============================================================================
+// SHIFTS API
+// ============================================================================
+
+export const shiftsApi = {
+  list: async (storeId: string, status?: string, userId?: string) => {
+    const query = new URLSearchParams();
+    query.set('storeId', storeId);
+    if (status) query.set('status', status);
+    if (userId) query.set('userId', userId);
+    return request<ShiftData[]>(`/shifts?${query.toString()}`);
+  },
+
+  getCurrent: async (storeId: string, userId: string) => {
+    const query = new URLSearchParams();
+    query.set('storeId', storeId);
+    query.set('userId', userId);
+    return request<ShiftData | null>(`/shifts/current?${query.toString()}`);
+  },
+
+  start: async (payload: CreateShiftPayload) => {
+    return request<ShiftData>('/shifts', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  end: async (shiftId: string, payload: EndShiftPayload) => {
+    return request<ShiftData>(`/shifts/${shiftId}/end`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
 };
 

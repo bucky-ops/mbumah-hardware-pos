@@ -1,0 +1,761 @@
+     1→     1→// ============================================================================
+     2→     2→// MBUMAH HARDWARE - Enterprise POS & ERP System
+     3→     3→// Complete Prisma Schema - Multi-Tenant Discriminator Column Model
+     4→     4→// Designed for PostgreSQL (Supabase) with SQLite compatibility for local dev
+     5→     5→// ============================================================================
+     6→     6→
+     7→     7→generator client {
+     8→     8→  provider = "prisma-client-js"
+     9→     9→}
+    10→    10→
+    11→    11→datasource db {
+    12→    12→  provider = "sqlite"
+    13→    13→  url      = env("DATABASE_URL")
+    14→    14→}
+    15→    15→
+    16→    16→// ============================================================================
+    17→    17→// TENANCY & ORGANIZATION
+    18→    18→// ============================================================================
+    19→    19→
+    20→    20→model Organization {
+    21→    21→  id          String   @id @default(cuid())
+    22→    22→  name        String
+    23→    23→  taxPin      String?  // KRA PIN for Kenyan businesses
+    24→    24→  status      String   @default("ACTIVE") // ACTIVE, SUSPENDED, ARCHIVED
+    25→    25→  logoUrl     String?
+    26→    26→  createdAt   DateTime @default(now())
+    27→    27→  updatedAt   DateTime @updatedAt
+    28→    28→
+    29→    29→  stores      Store[]
+    30→    30→  users       User[]
+    31→    31→  accounts    Account[]
+    32→    32→
+    33→    33→  @@map("organizations")
+    34→    34→}
+    35→    35→
+    36→    36→model Store {
+    37→    37→  id              String   @id @default(cuid())
+    38→    38→  organizationId  String
+    39→    39→  name            String
+    40→    40→  location        String?
+    41→    41→  address         String?
+    42→    42→  phone           String?
+    43→    43→  email           String?
+    44→    44→  taxPin          String?  // Store-level KRA PIN
+    45→    45→  status          String   @default("ACTIVE") // ACTIVE, CLOSED, RENOVATING
+    46→    46→  createdAt       DateTime @default(now())
+    47→    47→  updatedAt       DateTime @updatedAt
+    48→    48→
+    49→    49→  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    50→    50→  users           User[]
+    51→    51→  products        Product[]
+    52→    52→  categories      ProductCategory[]
+    53→    53→  customers       Customer[]
+    54→    54→  transactions    SalesTransaction[]
+    55→    55→  payments        Payment[]
+    56→    56→  debtLedgers     DebtLedger[]
+    57→    57→  rentals         EquipmentRental[]
+    58→    58→  stockMovements  StockMovement[]
+    59→    59→  warehouseStocks WarehouseStock[]
+    60→    60→  journalEntries  JournalEntry[]
+    61→    61→  systemLogs      SystemLog[]
+    62→    62→  cashDrawerLogs  CashDrawerLog[]
+    63→    63→  receipts        Receipt[]
+    64→    64→  suppliers       Supplier[]
+    65→    65→  purchaseOrders  PurchaseOrder[]
+    66→    66→  expenses        Expense[]
+    67→    67→  shifts          Shift[]
+    68→    68→
+    69→    69→  @@index([organizationId])
+    70→    70→  @@map("stores")
+    71→    71→}
+    72→    72→
+    73→    73→// ============================================================================
+    74→    74→// AUTHENTICATION & RBAC
+    75→    75→// ============================================================================
+    76→    76→
+    77→    77→model User {
+    78→    78→  id              String   @id @default(cuid())
+    79→    79→  organizationId  String
+    80→    80→  storeId         String?
+    81→    81→  email           String   @unique
+    82→    82→  name            String
+    83→    83→  passwordHash    String
+    84→    84→  role            String   @default("CASHIER") // SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER, CASHIER, ACCOUNTANT
+    85→    85→  phone           String?
+    86→    86→  avatarUrl       String?
+    87→    87→  isActive        Boolean  @default(true)
+    88→    88→  lastLoginAt     DateTime?
+    89→    89→  createdAt       DateTime @default(now())
+    90→    90→  updatedAt       DateTime @updatedAt
+    91→    91→
+    92→    92→  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    93→    93→  store           Store?       @relation(fields: [storeId], references: [id])
+    94→    94→  sessions        Session[]
+    95→    95→  systemLogs      SystemLog[]
+    96→    96→  transactions    SalesTransaction[]
+    97→    97→  cashDrawerLogs  CashDrawerLog[]
+    98→    98→  shifts          Shift[]
+    99→    99→
+   100→   100→  @@index([organizationId])
+   101→   101→  @@index([storeId])
+   102→   102→  @@index([email])
+   103→   103→  @@map("users")
+   104→   104→}
+   105→   105→
+   106→   106→model Session {
+   107→   107→  id           String   @id @default(cuid())
+   108→   108→  userId       String
+   109→   109→  token        String   @unique
+   110→   110→  ipAddress    String?
+   111→   111→  userAgent    String?
+   112→   112→  expiresAt    DateTime
+   113→   113→  createdAt    DateTime @default(now())
+   114→   114→
+   115→   115→  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+   116→   116→
+   117→   117→  @@index([userId])
+   118→   118→  @@index([token])
+   119→   119→  @@map("sessions")
+   120→   120→}
+   121→   121→
+   122→   122→model RolePermission {
+   123→   123→  id           String   @id @default(cuid())
+   124→   124→  role         String   // SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER, CASHIER, ACCOUNTANT
+   125→   125→  resource     String   // products, transactions, customers, financials, rentals, admin, reports
+   126→   126→  action       String   // create, read, update, delete, approve, refund, export
+   127→   127→  createdAt    DateTime @default(now())
+   128→   128→
+   129→   129→  @@unique([role, resource, action])
+   130→   130→  @@map("role_permissions")
+   131→   131→}
+   132→   132→
+   133→   133→// ============================================================================
+   134→   134→// PRODUCT & INVENTORY
+   135→   135→// ============================================================================
+   136→   136→
+   137→   137→model ProductCategory {
+   138→   138→  id              String   @id @default(cuid())
+   139→   139→  storeId         String
+   140→   140→  name            String
+   141→   141→  description     String?
+   142→   142→  icon            String?
+   143→   143→  color           String?
+   144→   144→  sortOrder       Int      @default(0)
+   145→   145→  isActive        Boolean  @default(true)
+   146→   146→  createdAt       DateTime @default(now())
+   147→   147→  updatedAt       DateTime @updatedAt
+   148→   148→
+   149→   149→  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+   150→   150→  products        Product[]
+   151→   151→
+   152→   152→  @@index([storeId])
+   153→   153→  @@map("product_categories")
+   154→   154→}
+   155→   155→
+   156→   156→model Product {
+   157→   157→  id                String   @id @default(cuid())
+   158→   158→  storeId           String
+   159→   159→  categoryId        String?
+   160→   160→  sku               String   @unique
+   161→   161→  barcode           String?  @unique
+   162→   162→  name              String
+   163→   163→  description       String?
+   164→   164→  unitType          String   @default("PIECE") // PIECE, KILOGRAM, METER, LITER, BAG, BOX, SET
+   165→   165→  quantityInStock   Float    @default(0)
+   166→   166→  reorderLevel      Float    @default(10)
+   167→   167→  pricePerUnit      Float    // Selling price
+   168→   168→  costPrice         Float    // Purchase/cost price
+   169→   169→  taxRate           Float    @default(16) // Kenya VAT 16%
+   170→   170→  isRental          Boolean  @default(false)
+   171→   171→  isBundle          Boolean  @default(false)
+   172→   172→  isActive          Boolean  @default(true)
+   173→   173→  imageUrl          String?
+   174→   174→  createdAt         DateTime @default(now())
+   175→   175→  updatedAt         DateTime @updatedAt
+   176→   176→
+   177→   177→  store             Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+   178→   178→  category          ProductCategory? @relation(fields: [categoryId], references: [id])
+   179→   179→  bundleItems       ProductBundle[]  @relation("BundleParent")
+   180→   180→  parentBundles     ProductBundle[]  @relation("BundleChild")
+   181→   181→  saleItems         SaleItem[]
+   182→   182→  stockMovements    StockMovement[]
+   183→   183→  warehouseStocks   WarehouseStock[]
+   184→   184→  rentals           EquipmentRental[]
+   185→   185→  purchaseOrderItems PurchaseOrderItem[]
+   186→   186→
+   187→   187→  @@index([storeId])
+   188→   188→  @@index([sku])
+   189→   189→  @@index([barcode])
+   190→   190→  @@index([name])
+   191→   191→  @@index([categoryId])
+   192→   192→  @@index([isActive])
+   193→   193→  @@map("products")
+   194→   194→}
+   195→   195→
+   196→   196→model ProductBundle {
+   197→   197→  id                String   @id @default(cuid())
+   198→   198→  parentProductId   String   // The bundle product
+   199→   199→  childProductId    String   // The constituent product
+   200→   200→  quantityRequired  Float    @default(1) // How many of child in one bundle
+   201→   201→
+   202→   202→  parentProduct     Product  @relation("BundleParent", fields: [parentProductId], references: [id], onDelete: Cascade)
+   203→   203→  childProduct      Product  @relation("BundleChild", fields: [childProductId], references: [id], onDelete: Cascade)
+   204→   204→
+   205→   205→  @@unique([parentProductId, childProductId])
+   206→   206→  @@index([parentProductId])
+   207→   207→  @@map("product_bundles")
+   208→   208→}
+   209→   209→
+   210→   210→model WarehouseStock {
+   211→   211→  id          String   @id @default(cuid())
+   212→   212→  storeId     String
+   213→   213→  productId   String
+   214→   214→  warehouse   String   @default("MAIN") // MAIN, BACKUP, RECEIVING
+   215→   215→  quantity    Float    @default(0)
+   216→   216→  updatedAt   DateTime @updatedAt
+   217→   217→
+   218→   218→  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+   219→   219→  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+   220→   220→
+   221→   221→  @@unique([storeId, productId, warehouse])
+   222→   222→  @@index([storeId])
+   223→   223→  @@map("warehouse_stocks")
+   224→   224→}
+   225→   225→
+   226→   226→model StockMovement {
+   227→   227→  id              String   @id @default(cuid())
+   228→   228→  storeId         String
+   229→   229→  productId       String
+   230→   230→  movementType    String   // PURCHASE, SALE, ADJUSTMENT, TRANSFER, RETURN, RENTAL_OUT, RENTAL_RETURN
+   231→   231→  quantity        Float    // Positive for in, negative for out
+   232→   232→  referenceId     String?  // Transaction ID, PO ID, etc.
+   233→   233→  notes           String?
+   234→   234→  performedBy     String?  // User ID
+   235→   235→  createdAt       DateTime @default(now())
+   236→   236→
+   237→   237→  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+   238→   238→  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+   239→   239→
+   240→   240→  @@index([storeId])
+   241→   241→  @@index([productId])
+   242→   242→  @@index([createdAt])
+   243→   243→  @@map("stock_movements")
+   244→   244→}
+   245→   245→
+   246→   246→// ============================================================================
+   247→   247→// CUSTOMERS & CRM
+   248→   248→// ============================================================================
+   249→   249→
+   250→   250→model Customer {
+   251→   251→  id                  String   @id @default(cuid())
+   252→   252→  storeId             String
+   253→   253→  name                String
+   254→   254→  phone               String?
+   255→   255→  email               String?
+   256→   256→  address             String?
+   257→   257→  idNumber            String?  // Kenyan National ID
+   258→   258→  currentDebtBalance  Float    @default(0)
+   259→   259→  debtLimit           Float    @default(50000) // KES default limit
+   260→   260→  loyaltyPoints       Int      @default(0)
+   261→   261→  preferredChannel    String   @default("SMS") // SMS, EMAIL, WHATSAPP, PRINT
+   262→   262→  isActive            Boolean  @default(true)
+   263→   263→  createdAt           DateTime @default(now())
+   264→   264→  updatedAt           DateTime @updatedAt
+   265→   265→
+   266→   266→  store               Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+   267→   267→  debtLedgers         DebtLedger[]
+   268→   268→  transactions        SalesTransaction[]
+   269→   269→  rentals             EquipmentRental[]
+   270→   270→
+   271→   271→  @@index([storeId])
+   272→   272→  @@index([phone])
+   273→   273→  @@index([name])
+   274→   274→  @@map("customers")
+   275→   275→}
+   276→   276→
+   277→   277→// ============================================================================
+   278→   278→// SALES & TRANSACTIONS
+   279→   279→// ============================================================================
+   280→   280→
+   281→   281→model SalesTransaction {
+   282→   282→  id              String   @id @default(cuid())
+   283→   283→  storeId         String
+   284→   284→  receiptNumber   String   @unique
+   285→   285→  customerId      String?
+   286→   286→  cashierId       String
+   287→   287→  subtotal        Float
+   288→   288→  taxAmount       Float
+   289→   289→  discountAmount  Float    @default(0)
+   290→   290→  totalAmount     Float
+   291→   291→  paymentMethod   String   // CASH, MPESA, DEBT, SPLIT
+   292→   292→  paymentStatus   String   @default("COMPLETED") // PENDING, COMPLETED, FAILED, REFUNDED, PARTIAL
+   293→   293→  transactionType String   @default("SALE") // SALE, REFUND, VOID
+   294→   294→  notes           String?
+   295→   295→  isOffline       Boolean  @default(false)
+   296→   296→  syncedAt        DateTime?
+   297→   297→  createdAt       DateTime @default(now())
+   298→   298→  updatedAt       DateTime @updatedAt
+   299→   299→
+   300→   300→  store           Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+   301→   301→  customer        Customer?   @relation(fields: [customerId], references: [id])
+   302→   302→  cashier         User        @relation(fields: [cashierId], references: [id])
+   303→   303→  items           SaleItem[]
+   304→   304→  payments        Payment[]
+   305→   305→  debtLedgers     DebtLedger[]
+   306→   306→  receipt         Receipt?
+   307→   307→
+   308→   308→  @@index([storeId])
+   309→   309→  @@index([cashierId])
+   310→   310→  @@index([customerId])
+   311→   311→  @@index([paymentStatus])
+   312→   312→  @@index([createdAt])
+   313→   313→  @@map("sales_transactions")
+   314→   314→}
+   315→   315→
+   316→   316→model SaleItem {
+   317→   317→  id              String   @id @default(cuid())
+   318→   318→  transactionId   String
+   319→   319→  productId       String
+   320→   320→  productName     String   // Snapshot at time of sale
+   321→   321→  quantity        Float
+   322→   322→  unitType        String
+   323→   323→  pricePerUnit    Float
+   324→   324→  costPrice       Float    // Snapshot for profit calculation
+   325→   325→  discountPercent Float    @default(0)
+   326→   326→  taxRate         Float    @default(16)
+   327→   327→  lineTotal       Float
+   328→   328→  isRentalItem    Boolean  @default(false)
+   329→   329→
+   330→   330→  transaction     SalesTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+   331→   331→  product         Product          @relation(fields: [productId], references: [id])
+   332→   332→
+   333→   333→  @@index([transactionId])
+   334→   334→  @@index([productId])
+   335→   335→  @@map("sale_items")
+   336→   336→}
+   337→   337→
+   338→   338→// ============================================================================
+   339→   339→// PAYMENTS
+   340→   340→// ============================================================================
+   341→   341→
+   342→   342→model Payment {
+   343→   343→  id              String   @id @default(cuid())
+   344→   344→  storeId         String
+   345→   345→  transactionId   String
+   346→   346→  paymentMethod   String   // CASH, MPESA, DEBT
+   347→   347→  amount          Float
+   348→   348→  currency        String   @default("KES")
+   349→   349→  status          String   @default("COMPLETED") // PENDING, COMPLETED, FAILED, REFUNDED
+   350→   350→  reference       String?  // M-Pesa CheckoutRequestID, receipt number, etc.
+   351→   351→  metadata        String?  // JSON string for additional payment details
+   352→   352→  processedAt     DateTime @default(now())
+   353→   353→  createdAt       DateTime @default(now())
+   354→   354→
+   355→   355→  store           Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+   356→   356→  transaction     SalesTransaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+   357→   357→
+   358→   358→  @@index([storeId])
+   359→   359→  @@index([transactionId])
+   360→   360→  @@index([paymentMethod])
+   361→   361→  @@map("payments")
+   362→   362→}
+   363→   363→
+   364→   364→model MpesaTransaction {
+   365→   365→  id                    String   @id @default(cuid())
+   366→   366→  storeId               String
+   367→   367→  checkoutRequestId     String?
+   368→   368→  merchantRequestId     String?
+   369→   369→  mpesaReceiptNumber    String?
+   370→   370→  phoneNumber           String?
+   371→   371→  amount                Float
+   372→   372→  status                String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED
+   373→   373→  resultCode            String?
+   374→   374→  resultDesc            String?
+   375→   375→  callbackReceived      Boolean  @default(false)
+   376→   376→  transactionId         String?  // Link to SalesTransaction
+   377→   377→  createdAt             DateTime @default(now())
+   378→   378→  updatedAt             DateTime @updatedAt
+   379→   379→
+   380→   380→  @@index([storeId])
+   381→   381→  @@index([checkoutRequestId])
+   382→   382→  @@index([status])
+   383→   383→  @@map("mpesa_transactions")
+   384→   384→}
+   385→   385→
+   386→   386→// ============================================================================
+   387→   387→// DEBT / CREDIT MANAGEMENT
+   388→   388→// ============================================================================
+   389→   389→
+   390→   390→model DebtLedger {
+   391→   391→  id              String   @id @default(cuid())
+   392→   392→  storeId         String
+   393→   393→  customerId      String
+   394→   394→  transactionId   String?
+   395→   395→  amountOwed      Float
+   396→   396→  amountPaid      Float    @default(0)
+   397→   397→  balance         Float    // amountOwed - amountPaid
+   398→   398→  dueDate         DateTime
+   399→   399→  status          String   @default("OUTSTANDING") // OUTSTANDING, PARTIAL, SETTLED, OVERDUE, WRITTEN_OFF
+   400→   400→  agingBucket     String   @default("CURRENT") // CURRENT, DAYS_30, DAYS_60, DAYS_90_PLUS
+   401→   401→  lastReminderAt  DateTime?
+   402→   402→  notes           String?
+   403→   403→  createdAt       DateTime @default(now())
+   404→   404→  updatedAt       DateTime @updatedAt
+   405→   405→
+   406→   406→  store           Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+   407→   407→  customer        Customer          @relation(fields: [customerId], references: [id])
+   408→   408→  transaction     SalesTransaction? @relation(fields: [transactionId], references: [id])
+   409→   409→
+   410→   410→  @@index([storeId])
+   411→   411→  @@index([customerId])
+   412→   412→  @@index([status])
+   413→   413→  @@index([agingBucket])
+   414→   414→  @@index([dueDate])
+   415→   415→  @@map("debt_ledgers")
+   416→   416→}
+   417→   417→
+   418→   418→model DebtPayment {
+   419→   419→  id              String   @id @default(cuid())
+   420→   420→  storeId         String
+   421→   421→  debtLedgerId    String
+   422→   422→  amount          Float
+   423→   423→  paymentMethod   String   // CASH, MPESA
+   424→   424→  reference       String?
+   425→   425→  receivedBy      String?  // User ID
+   426→   426→  createdAt       DateTime @default(now())
+   427→   427→
+   428→   428→  @@index([storeId])
+   429→   429→  @@index([debtLedgerId])
+   430→   430→  @@map("debt_payments")
+   431→   431→}
+   432→   432→
+   433→   433→// ============================================================================
+   434→   434→// EQUIPMENT RENTAL
+   435→   435→// ============================================================================
+   436→   436→
+   437→   437→model EquipmentRental {
+   438→   438→  id                  String   @id @default(cuid())
+   439→   439→  storeId             String
+   440→   440→  productId           String
+   441→   441→  customerId          String
+   442→   442→  status              String   @default("ACTIVE") // ACTIVE, RETURNED, OVERDUE, DAMAGED, LOST
+   443→   443→  rentalStartDate     DateTime @default(now())
+   444→   444→  expectedReturnDate  DateTime
+   445→   445→  actualReturnDate    DateTime?
+   446→   446→  securityDeposit     Float
+   447→   447→  ratePerDay          Float
+   448→   448→  ratePerWeek         Float?
+   449→   449→  ratePerMonth        Float?
+   450→   450→  totalRentalCharge   Float    @default(0)
+   451→   451→  lateFeeAccumulated  Float    @default(0)
+   452→   452→  damageAssessment    String?  // NONE, MINOR, MODERATE, SEVERE
+   453→   453→  damageCharge        Float    @default(0)
+   454→   454→  notes               String?
+   455→   455→  createdAt           DateTime @default(now())
+   456→   456→  updatedAt           DateTime @updatedAt
+   457→   457→
+   458→   458→  store               Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+   459→   459→  product             Product  @relation(fields: [productId], references: [id])
+   460→   460→  customer            Customer @relation(fields: [customerId], references: [id])
+   461→   461→
+   462→   462→  @@index([storeId])
+   463→   463→  @@index([customerId])
+   464→   464→  @@index([productId])
+   465→   465→  @@index([status])
+   466→   466→  @@index([expectedReturnDate])
+   467→   467→  @@map("equipment_rentals")
+   468→   468→}
+   469→   469→
+   470→   470→// ============================================================================
+   471→   471→// FINANCIAL ACCOUNTING - DOUBLE-ENTRY BOOKKEEPING
+   472→   472→// ============================================================================
+   473→   473→
+   474→   474→model Account {
+   475→   475→  id              String   @id @default(cuid())
+   476→   476→  organizationId  String
+   477→   477→  code            String   // Account code e.g. 1000, 2000, 3000
+   478→   478→  name            String
+   479→   479→  type            String   // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+   480→   480→  subType         String?  // CURRENT_ASSET, FIXED_ASSET, CURRENT_LIABILITY, etc.
+   481→   481→  normalBalance   String   @default("DEBIT") // DEBIT, CREDIT
+   482→   482→  isActive        Boolean  @default(true)
+   483→   483→  createdAt       DateTime @default(now())
+   484→   484→  updatedAt       DateTime @updatedAt
+   485→   485→
+   486→   486→  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+   487→   487→  journalEntryLines JournalEntryLine[]
+   488→   488→
+   489→   489→  @@unique([organizationId, code])
+   490→   490→  @@index([organizationId])
+   491→   491→  @@index([type])
+   492→   492→  @@map("accounts")
+   493→   493→}
+   494→   494→
+   495→   495→model JournalEntry {
+   496→   496→  id              String   @id @default(cuid())
+   497→   497→  storeId         String
+   498→   498→  entryNumber     String   @unique
+   499→   499→  entryDate       DateTime @default(now())
+   500→   500→  description     String
+   501→   501→  referenceType   String?  // SALE, PAYMENT, REFUND, RENTAL, ADJUSTMENT
+   502→   502→  referenceId     String?  // Transaction ID, Payment ID, etc.
+   503→   503→  totalDebit      Float
+   504→   504→  totalCredit     Float
+   505→   505→  isPosted        Boolean  @default(false)
+   506→   506→  postedAt        DateTime?
+   507→   507→  createdBy       String?  // User ID
+   508→   508→  createdAt       DateTime @default(now())
+   509→   509→  updatedAt       DateTime @updatedAt
+   510→   510→
+   511→   511→  store           Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+   512→   512→  lines           JournalEntryLine[]
+   513→   513→
+   514→   514→  @@index([storeId])
+   515→   515→  @@index([entryDate])
+   516→   516→  @@index([referenceType])
+   517→   517→  @@index([isPosted])
+   518→   518→  @@map("journal_entries")
+   519→   519→}
+   520→   520→
+   521→   521→model JournalEntryLine {
+   522→   522→  id              String   @id @default(cuid())
+   523→   523→  journalEntryId  String
+   524→   524→  accountId       String
+   525→   525→  debit           Float    @default(0)
+   526→   526→  credit          Float    @default(0)
+   527→   527→  description     String?
+   528→   528→  createdAt       DateTime @default(now())
+   529→   529→
+   530→   530→  journalEntry    JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+   531→   531→  account         Account      @relation(fields: [accountId], references: [id])
+   532→   532→
+   533→   533→  @@index([journalEntryId])
+   534→   534→  @@index([accountId])
+   535→   535→  @@map("journal_entry_lines")
+   536→   536→}
+   537→   537→
+   538→   538→// ============================================================================
+   539→   539→// CASH DRAWER MANAGEMENT
+   540→   540→// ============================================================================
+   541→   541→
+   542→   542→model CashDrawerLog {
+   543→   543→  id              String   @id @default(cuid())
+   544→   544→  storeId         String
+   545→   545→  userId          String
+   546→   546→  action          String   // OPEN, CLOSE, CASH_IN, CASH_OUT, SALE, REFUND
+   547→   547→  amount          Float
+   548→   548→  balance         Float    // Running balance
+   549→   549→  notes           String?
+   550→   550→  createdAt       DateTime @default(now())
+   551→   551→
+   552→   552→  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+   553→   553→  user            User     @relation(fields: [userId], references: [id])
+   554→   554→
+   555→   555→  @@index([storeId])
+   556→   556→  @@index([userId])
+   557→   557→  @@index([createdAt])
+   558→   558→  @@map("cash_drawer_logs")
+   559→   559→}
+   560→   560→
+   561→   561→// ============================================================================
+   562→   562→// RECEIPTS
+   563→   563→// ============================================================================
+   564→   564→
+   565→   565→model Receipt {
+   566→   566→  id              String   @id @default(cuid())
+   567→   567→  storeId         String
+   568→   568→  transactionId   String   @unique
+   569→   569→  receiptNumber   String   @unique
+   570→   570→  receiptType     String   @default("DIGITAL") // DIGITAL, PRINTED, EMAIL, SMS, WHATSAPP
+   571→   571→  sentTo          String?  // Phone or email
+   572→   572→  sentAt          DateTime?
+   573→   573→  createdAt       DateTime @default(now())
+   574→   574→
+   575→   575→  store           Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+   576→   576→  transaction     SalesTransaction  @relation(fields: [transactionId], references: [id])
+   577→   577→
+   578→   578→  @@index([storeId])
+   579→   579→  @@index([transactionId])
+   580→   580→  @@map("receipts")
+   581→   581→}
+   582→   582→
+   583→   583→// ============================================================================
+   584→   584→// SUPPLIER & PURCHASE ORDERS
+   585→   585→// ============================================================================
+   586→   586→
+   587→   587→model Supplier {
+   588→   588→  id            String   @id @default(cuid())
+   589→   589→  storeId       String
+   590→   590→  name          String
+   591→   591→  email         String?
+   592→   592→  phone         String?
+   593→   593→  address       String?
+   594→   594→  city          String?
+   595→   595→  contactPerson String?
+   596→   596→  taxPin        String?
+   597→   597→  paymentTerms  String   @default("NET_30") // NET_15, NET_30, NET_60, IMMEDIATE
+   598→   598→  rating        Int      @default(3) // 1-5 stars
+   599→   599→  isActive      Boolean  @default(true)
+   600→   600→  notes         String?
+   601→   601→  createdAt     DateTime @default(now())
+   602→   602→  updatedAt     DateTime @updatedAt
+   603→   603→
+   604→   604→  store          Store           @relation(fields: [storeId], references: [id])
+   605→   605→  purchaseOrders PurchaseOrder[]
+   606→   606→
+   607→   607→  @@index([storeId])
+   608→   608→  @@index([name])
+   609→   609→  @@index([isActive])
+   610→   610→  @@map("suppliers")
+   611→   611→}
+   612→   612→
+   613→   613→model PurchaseOrder {
+   614→   614→  id              String   @id @default(cuid())
+   615→   615→  storeId         String
+   616→   616→  poNumber        String   @unique
+   617→   617→  supplierId      String
+   618→   618→  status          String   @default("DRAFT") // DRAFT, SENT, CONFIRMED, RECEIVED, CANCELLED
+   619→   619→  orderDate       DateTime @default(now())
+   620→   620→  expectedDate    DateTime?
+   621→   621→  totalAmount     Float    @default(0)
+   622→   622→  notes           String?
+   623→   623→  createdBy       String?
+   624→   624→  createdAt       DateTime @default(now())
+   625→   625→  updatedAt       DateTime @updatedAt
+   626→   626→
+   627→   627→  store           Store           @relation(fields: [storeId], references: [id])
+   628→   628→  supplier        Supplier        @relation(fields: [supplierId], references: [id])
+   629→   629→  items           PurchaseOrderItem[]
+   630→   630→
+   631→   631→  @@index([storeId])
+   632→   632→  @@index([supplierId])
+   633→   633→  @@index([status])
+   634→   634→  @@map("purchase_orders")
+   635→   635→}
+   636→   636→
+   637→   637→model PurchaseOrderItem {
+   638→   638→  id              String   @id @default(cuid())
+   639→   639→  purchaseOrderId String
+   640→   640→  productId       String
+   641→   641→  quantity        Float
+   642→   642→  unitPrice       Float
+   643→   643→  totalPrice      Float
+   644→   644→  receivedQty     Float    @default(0)
+   645→   645→  notes           String?
+   646→   646→
+   647→   647→  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+   648→   648→  product         Product      @relation(fields: [productId], references: [id])
+   649→   649→
+   650→   650→  @@index([purchaseOrderId])
+   651→   651→  @@index([productId])
+   652→   652→  @@map("purchase_order_items")
+   653→   653→}
+   654→   654→
+   655→   655→// ============================================================================
+   656→   656→// EXPENSES
+   657→   657→// ============================================================================
+   658→   658→
+   659→   659→model Expense {
+   660→   660→  id              String   @id @default(cuid())
+   661→   661→  storeId         String
+   662→   662→  description     String
+   663→   663→  amount          Float
+   664→   664→  category        String   // RENT, SALARIES, UTILITIES, TRANSPORT, MAINTENANCE, SUPPLIES, OTHER
+   665→   665→  paidBy          String   // User ID who paid
+   666→   666→  paymentMethod   String   @default("CASH") // CASH, MPESA
+   667→   667→  journalEntryId  String?  // Reference to the created journal entry
+   668→   668→  notes           String?
+   669→   669→  createdAt       DateTime @default(now())
+   670→   670→  updatedAt       DateTime @updatedAt
+   671→   671→
+   672→   672→  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+   673→   673→
+   674→   674→  @@index([storeId])
+   675→   675→  @@index([category])
+   676→   676→  @@index([paidBy])
+   677→   677→  @@index([createdAt])
+   678→   678→  @@map("expenses")
+   679→   679→}
+   680→   680→
+   681→   681→// ============================================================================
+   682→   682→// SYSTEM LOGGING & AUDIT
+   683→   683→// ============================================================================
+   684→   684→
+   685→   685→model SystemLog {
+   686→   686→  id              String   @id @default(cuid())
+   687→   687→  storeId         String?
+   688→   688→  userId          String?
+   689→   689→  action          String
+   690→   690→  component       String   // POS, INVENTORY, FINANCIAL, AUTH, PAYMENT, RENTAL
+   691→   691→  severity        String   @default("INFO") // DEBUG, INFO, WARN, ERROR, CRITICAL
+   692→   692→  message         String
+   693→   693→  metadata        String?  // JSON string for additional context
+   694→   694→  stackTrace      String?
+   695→   695→  ipAddress       String?
+   696→   696→  createdAt       DateTime @default(now())
+   697→   697→
+   698→   698→  store           Store?   @relation(fields: [storeId], references: [id])
+   699→   699→  user            User?    @relation(fields: [userId], references: [id])
+   700→   700→
+   701→   701→  @@index([storeId])
+   702→   702→  @@index([userId])
+   703→   703→  @@index([component])
+   704→   704→  @@index([severity])
+   705→   705→  @@index([createdAt])
+   706→   706→  @@map("system_logs")
+   707→   707→}
+   708→   708→
+   709→   709→// ============================================================================
+   710→   710→// SYSTEM CONFIGURATION
+   711→   711→// ============================================================================
+   712→   712→
+   713→   713→model SystemConfig {
+   714→   714→  id              String   @id @default(cuid())
+   715→   715→  key             String   @unique
+   716→   716→  value           String
+   717→   717→  description     String?
+   718→   718→  isEncrypted     Boolean  @default(false)
+   719→   719→  updatedAt       DateTime @updatedAt
+   720→   720→
+   721→   721→  @@map("system_configs")
+   722→   722→}
+   723→   723→
+   724→   724→model InitializationLog {
+   725→   725→  id              String   @id @default(cuid())
+   726→   726→  event           String
+   727→   727→  details         String?
+   728→   728→  executedAt      DateTime @default(now())
+   729→   729→
+   730→   730→  @@map("initialization_logs")
+   731→   731→}
+   732→   732→
+   733→   733→// ============================================================================
+   734→   734→// SHIFT MANAGEMENT
+   735→   735→// ============================================================================
+   736→   736→
+   737→   737→model Shift {
+   738→   738→  id                String    @id @default(cuid())
+   739→   739→  userId            String    @map("user_id")
+   740→   740→  user              User      @relation(fields: [userId], references: [id])
+   741→   741→  storeId           String    @map("store_id")
+   742→   742→  store             Store     @relation(fields: [storeId], references: [id])
+   743→   743→  startedAt         DateTime  @map("started_at") @default(now())
+   744→   744→  endedAt           DateTime? @map("ended_at")
+   745→   745→  startingCash      Float     @map("starting_cash") @default(0)
+   746→   746→  endingCash        Float?    @map("ending_cash")
+   747→   747→  countedCash       Float?    @map("counted_cash")
+   748→   748→  cashDifference    Float?    @map("cash_difference")
+   749→   749→  totalSales        Float     @map("total_sales") @default(0)
+   750→   750→  totalTransactions Int       @map("total_transactions") @default(0)
+   751→   751→  status            String    @default("ACTIVE") // ACTIVE, ENDED
+   752→   752→  notes             String?
+   753→   753→  createdAt         DateTime  @map("created_at") @default(now())
+   754→   754→  updatedAt         DateTime  @map("updated_at") @updatedAt
+   755→   755→
+   756→   756→  @@index([storeId])
+   757→   757→  @@index([userId])
+   758→   758→  @@index([status])
+   759→   759→  @@map("shifts")
+   760→   760→}
+   761→   761→

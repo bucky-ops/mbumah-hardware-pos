@@ -58,6 +58,7 @@ import { Progress } from '@/components/ui/progress';
 // LAZY-LOADED TAB COMPONENTS
 // ============================================================================
 
+const LazyDashboardTab = lazy(() => import('./tabs/dashboard-tab'));
 const LazyInventoryTab = lazy(() => import('./tabs/inventory-tab'));
 const LazyCustomersTab = lazy(() => import('./tabs/customers-tab'));
 const LazyRentalsTab = lazy(() => import('./tabs/rentals-tab'));
@@ -84,6 +85,7 @@ function TabLoadingFallback() {
 // ============================================================================
 
 const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: Home },
   { id: 'pos', label: 'POS', icon: ShoppingCart },
   { id: 'inventory', label: 'Inventory', icon: Package },
   { id: 'customers', label: 'Customers', icon: Users },
@@ -943,17 +945,17 @@ function AppSidebar() {
     <button
       key={id}
       onClick={() => handleNav(id)}
-      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 relative sidebar-nav-item group ${
+      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ease-out relative group ${
         activeTab === id
-          ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm shadow-sidebar-primary/20'
-          : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:translate-x-0.5'
+          ? 'bg-sidebar-primary/90 text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/25'
+          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground hover:translate-x-1'
       }`}
     >
-      {/* Active left border indicator with animation */}
+      {/* Active left border indicator with pulse */}
       {activeTab === id && (
-        <div className="absolute left-0 top-1 bottom-1 w-1 rounded-r-full bg-sidebar-primary-foreground/80 transition-all duration-200" />
+        <div className="absolute left-0 top-0.5 bottom-0.5 w-1 rounded-r-full bg-sidebar-primary-foreground/90 transition-all duration-300 shadow-[0_0_6px] shadow-sidebar-primary-foreground/30" />
       )}
-      <Icon className="h-4 w-4 shrink-0 relative z-10 transition-transform duration-200 group-hover:scale-110" />
+      <Icon className={`h-4 w-4 shrink-0 relative z-10 transition-transform duration-300 ${activeTab === id ? 'scale-110' : 'group-hover:scale-110'}`} />
       <span className="relative z-10">{label}</span>
       {/* Keyboard shortcut hint for main tabs */}
       {id === 'pos' && <kbd className="ml-auto text-[8px] opacity-40 hidden xl:inline">F2</kbd>}
@@ -1145,7 +1147,7 @@ function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonEle
 
   return (
     <>
-      <header className="sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
+      <header className="sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b shadow-sm">
         <div className="flex items-center gap-3 px-4 py-3">
           <Button
             variant="ghost"
@@ -1165,7 +1167,7 @@ function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonEle
               ref={searchBtnRef}
               variant="outline"
               size="sm"
-              className="hidden md:flex items-center gap-2 text-muted-foreground h-8 px-3"
+              className="hidden md:flex items-center gap-2 text-muted-foreground h-8 px-3 transition-all duration-200 hover:border-primary/40 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-primary/30"
               onClick={() => setSearchOpen(true)}
             >
               <Search className="h-3.5 w-3.5" />
@@ -1587,7 +1589,7 @@ function CategoryChips({
           <ChevronDown className="h-3 w-3 rotate-90" />
         </button>
       )}
-      <div ref={scrollRef} className="flex gap-2 overflow-x-auto scrollbar-none py-0.5 flex-1">
+      <div ref={scrollRef} className="flex gap-2 overflow-x-auto scrollbar-none py-0.5 flex-1 px-1" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <button
           onClick={() => onSelect('all')}
           className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap ${
@@ -1606,7 +1608,7 @@ function CategoryChips({
             <button
               key={cat.id}
               onClick={() => onSelect(cat.id)}
-              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap flex items-center gap-1.5 ${
+              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap flex items-center gap-1.5 min-w-fit ${
                 isActive
                   ? 'text-white border-transparent shadow-sm'
                   : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
@@ -1699,7 +1701,7 @@ function ProductCard({
 
   return (
     <Card
-      className={`overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 hover:-translate-y-1 hover:border-primary/30 group border-l-4 card-glow relative ${isBouncing ? 'animate-bounce-add' : ''}`}
+      className={`overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 hover:-translate-y-1 hover:border-primary/30 hover:scale-[1.02] group border-l-4 card-glow relative h-full flex flex-col ${isBouncing ? 'animate-bounce-add' : ''}`}
       style={{ borderLeftColor: categoryColor }}
       onClick={handleClick}
     >
@@ -1718,7 +1720,7 @@ function ProductCard({
           {cartQuantity}
         </div>
       )}
-      <div className="h-28 bg-muted flex items-center justify-center relative overflow-hidden">
+      <div className="h-28 bg-muted flex items-center justify-center relative overflow-hidden shrink-0">
         {product.imageUrl ? (
           <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500" />
         ) : getCategoryImage(product.categoryId) ? (
@@ -1734,13 +1736,13 @@ function ProductCard({
         </div>
         {/* Badges */}
         {product.isRental && (
-          <Badge className="absolute top-1.5 left-1.5 bg-blue-600 text-white text-[10px] px-1.5">RENTAL</Badge>
+          <Badge className="absolute top-1.5 left-1.5 bg-amber-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm z-20">RENTAL</Badge>
         )}
         {product.isBundle && (
-          <Badge className="absolute top-1.5 right-1.5 bg-purple-600 text-white text-[10px] px-1.5">BUNDLE</Badge>
+          <Badge className="absolute top-1.5 right-1.5 bg-purple-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm z-20">BUNDLE</Badge>
         )}
         {isNew && !product.isRental && !product.isBundle && (
-          <Badge className="absolute top-1.5 right-1.5 bg-emerald-500 text-white text-[10px] px-1.5 font-bold animate-pulse">NEW</Badge>
+          <Badge className="absolute top-1.5 right-1.5 bg-green-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm z-20">NEW</Badge>
         )}
         {isOutOfStock && (
           <div className="absolute inset-0 bg-red-500/10 flex items-center justify-center">
@@ -1748,7 +1750,7 @@ function ProductCard({
           </div>
         )}
       </div>
-      <CardContent className="p-2.5">
+      <CardContent className="p-2.5 flex-1 flex flex-col">
         <h3 className="font-medium text-sm line-clamp-2 leading-tight">{product.name}</h3>
         {product.category && (
           <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">{product.category.name}</p>
@@ -1760,7 +1762,7 @@ function ProductCard({
           </span>
         </div>
         {/* Enhanced stock progress bar */}
-        <div className="mt-1.5 flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 mt-auto pt-1.5">
           <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
             <div
               className={`h-full rounded-full animate-stock-fill ${stockBarColor} relative`}
@@ -1801,7 +1803,7 @@ function CartItemRow({
   const [showNote, setShowNote] = useState(!!note);
 
   return (
-    <div className={`flex gap-2 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors ${isNew ? 'animate-slide-in' : ''}`}>
+    <div className={`flex gap-2 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-all duration-200 ${isNew ? 'animate-slide-in' : ''}`}>
       {/* Image placeholder */}
       <div className="shrink-0 w-10 h-10 rounded-md bg-muted flex items-center justify-center">
         <Package className="h-4 w-4 text-muted-foreground/40" />
@@ -1889,38 +1891,38 @@ function EmptyCartState() {
   return (
     <div className="p-8 text-center">
       {/* Enhanced empty cart illustration */}
-      <div className="relative mx-auto w-28 h-28 mb-4">
+      <div className="relative mx-auto w-32 h-32 mb-5">
         {/* Cart body */}
-        <div className="absolute bottom-4 left-4 right-4 h-14 border-2 border-muted-foreground/15 rounded-b-xl bg-muted/20 backdrop-blur-sm">
+        <div className="absolute bottom-6 left-4 right-4 h-16 border-2 border-muted-foreground/12 rounded-b-xl bg-muted/15 backdrop-blur-sm">
           {/* Empty lines */}
-          <div className="absolute top-3 left-3 right-3 space-y-1.5">
-            <div className="h-1 bg-muted-foreground/8 rounded" />
-            <div className="h-1 bg-muted-foreground/8 rounded w-3/4" />
+          <div className="absolute top-4 left-4 right-4 space-y-2">
+            <div className="h-1 bg-muted-foreground/6 rounded" />
+            <div className="h-1 bg-muted-foreground/6 rounded w-3/4" />
           </div>
           {/* Sparkle icon */}
-          <Sparkles className="absolute bottom-1.5 right-2 h-3 w-3 text-muted-foreground/15" />
+          <Sparkles className="absolute bottom-2 right-3 h-3.5 w-3.5 text-muted-foreground/12" />
         </div>
         {/* Cart handle */}
-        <div className="absolute top-2 left-7 right-7 h-7 border-t-2 border-l-2 border-r-2 border-muted-foreground/15 rounded-t-full" />
+        <div className="absolute top-2 left-7 right-7 h-8 border-t-2 border-l-2 border-r-2 border-muted-foreground/12 rounded-t-full" />
         {/* Wheels */}
-        <div className="absolute bottom-2 left-6 w-3.5 h-3.5 border-2 border-muted-foreground/15 rounded-full bg-background">
-          <div className="absolute inset-0.5 border border-muted-foreground/10 rounded-full" />
+        <div className="absolute bottom-3 left-7 w-4 h-4 border-2 border-muted-foreground/12 rounded-full bg-background">
+          <div className="absolute inset-0.5 border border-muted-foreground/8 rounded-full" />
         </div>
-        <div className="absolute bottom-2 right-6 w-3.5 h-3.5 border-2 border-muted-foreground/15 rounded-full bg-background">
-          <div className="absolute inset-0.5 border border-muted-foreground/10 rounded-full" />
+        <div className="absolute bottom-3 right-7 w-4 h-4 border-2 border-muted-foreground/12 rounded-full bg-background">
+          <div className="absolute inset-0.5 border border-muted-foreground/8 rounded-full" />
         </div>
         {/* Animated arrow pointing to products */}
-        <div className="absolute -top-2 -right-2 animate-bounce">
-          <div className="w-7 h-7 bg-primary/10 rounded-full flex items-center justify-center">
-            <Plus className="h-3.5 w-3.5 text-primary/60" />
+        <div className="absolute -top-1 -right-1 animate-bounce">
+          <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center ring-2 ring-primary/5">
+            <Plus className="h-4 w-4 text-primary/60" />
           </div>
         </div>
         {/* Subtle glow */}
-        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-16 h-4 bg-primary/5 rounded-full blur-sm" />
+        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-20 h-5 bg-primary/5 rounded-full blur-md" />
       </div>
       <p className="text-sm font-medium text-muted-foreground">Your cart is empty</p>
-      <p className="text-xs text-muted-foreground/60 mt-1">Click on products to add them here</p>
-      <div className="mt-3 flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground/40">
+      <p className="text-xs text-muted-foreground/50 mt-1.5">Click on products to add them here</p>
+      <div className="mt-4 flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground/35">
         <Keyboard className="h-3 w-3" />
         <span>Press <kbd className="px-1 py-0.5 rounded border bg-muted text-[9px]">F9</kbd> to checkout</span>
       </div>
@@ -2353,7 +2355,7 @@ function POSTab() {
         ) : products.length === 0 ? (
           <EmptyProductsState searchQuery={searchQuery} />
         ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 items-stretch">
             {sortedProducts.map((product) => (
               <ProductCard
                 key={product.id}
@@ -3260,6 +3262,7 @@ function MainApp() {
 
   const renderTab = () => {
     switch (activeTab) {
+      case 'dashboard': return <Suspense fallback={<TabLoadingFallback />}><LazyDashboardTab /></Suspense>;
       case 'pos': return <POSTab />;
       case 'inventory': return <Suspense fallback={<TabLoadingFallback />}><LazyInventoryTab /></Suspense>;
       case 'customers': return <Suspense fallback={<TabLoadingFallback />}><LazyCustomersTab /></Suspense>;
@@ -3285,17 +3288,26 @@ function MainApp() {
         </main>
         <footer className="border-t bg-background/95 backdrop-blur-sm px-4 py-2 text-center shrink-0 mt-auto">
           <div className="flex items-center justify-between max-w-7xl mx-auto">
-            <p className="text-xs text-muted-foreground">
-              MBUMAH HARDWARE POS & ERP &copy; {new Date().getFullYear()}
-            </p>
-            <button
-              type="button"
-              onClick={() => setShortcutsOpen(true)}
-              className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors flex items-center gap-1"
-            >
-              <Keyboard className="h-3 w-3" />
-              Shortcuts
-            </button>
+            <div className="flex items-center gap-3">
+              <p className="text-xs text-muted-foreground">
+                MBUMAH HARDWARE POS & ERP &copy; {new Date().getFullYear()}
+              </p>
+              <span className="text-[10px] text-muted-foreground/50 hidden sm:inline">v1.0.0</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60">
+                <div className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-[0_0_4px] shadow-green-500/50" />
+                <span className="hidden sm:inline">Connected</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShortcutsOpen(true)}
+                className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors flex items-center gap-1"
+              >
+                <Keyboard className="h-3 w-3" />
+                <span className="hidden sm:inline">Shortcuts</span>
+              </button>
+            </div>
           </div>
         </footer>
       </div>

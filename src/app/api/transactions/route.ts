@@ -172,7 +172,7 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
   }
 
   // Verify customer if provided
-  let customer = null;
+  let customer: Awaited<ReturnType<typeof db.customer.findUnique>> | null = null;
   if (customerId) {
     customer = await db.customer.findUnique({ where: { id: customerId } });
     if (!customer) {
