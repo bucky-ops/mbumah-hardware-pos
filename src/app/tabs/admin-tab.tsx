@@ -10,13 +10,17 @@ import {
   Search, ChevronDown, ChevronUp, FileDown, Globe,
   Shield, Wrench, PackageX, AlertOctagon, LogOut,
   UserCheck, UserX, PlusCircle, MinusCircle,
+  Settings, Save, Eye, Edit3, UserPlus, X,
+  AlertTriangle, Terminal, BarChart3,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
   systemLogsApi, stockMovementsApi, productsApi,
-  formatDateTime,
+  auditLogsApi, systemConfigApi, usersApi,
+  formatDateTime, formatKES,
   type SystemLogItem, type StockMovementItem,
+  type AuditLogItem, type SystemConfigItem, type UserItem,
 } from '@/lib/api';
 
 import { Button } from '@/components/ui/button';
@@ -107,6 +111,38 @@ function MiniSparkline({ data, color = 'text-primary', height = 24 }: {
       />
     </svg>
   );
+}
+
+// ============================================================================
+// Animated Counter Component
+// ============================================================================
+
+function AnimatedCounter({ value, duration = 1000 }: { value: number; duration?: number }) {
+  const [display, setDisplay] = useState(0);
+  const prevRef = React.useRef(value);
+  const rafRef = React.useRef<number>(0);
+
+  useEffect(() => {
+    const start = prevRef.current;
+    const end = value;
+    const startTime = Date.now();
+
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(start + (end - start) * eased));
+      if (progress < 1) {
+        rafRef.current = requestAnimationFrame(animate);
+      }
+    };
+
+    rafRef.current = requestAnimationFrame(animate);
+    prevRef.current = value;
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [value, duration]);
+
+  return <>{display.toLocaleString()}</>;
 }
 
 // ============================================================================
@@ -204,7 +240,6 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
           <DialogDescription>Add or remove stock quantity with a reason</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          {/* Product Search */}
           <div className="space-y-2">
             <Label>Search Product</Label>
             <div className="relative">
@@ -218,7 +253,6 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
             </div>
           </div>
 
-          {/* Product Select */}
           <div className="space-y-2">
             <Label>Product</Label>
             <Select value={productId} onValueChange={setProductId}>
@@ -252,7 +286,6 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
             )}
           </div>
 
-          {/* Adjustment Type */}
           <div className="space-y-2">
             <Label>Adjustment Type</Label>
             <div className="grid grid-cols-2 gap-2">
@@ -283,7 +316,6 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
             </div>
           </div>
 
-          {/* Quantity */}
           <div className="space-y-2">
             <Label>Quantity</Label>
             <Input
@@ -325,7 +357,6 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
             )}
           </div>
 
-          {/* Reason Category */}
           <div className="space-y-2">
             <Label>Reason Category <span className="text-red-500">*</span></Label>
             <div className="grid grid-cols-2 gap-1.5">
@@ -348,7 +379,6 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
             {errors.reasonCategory && <p className="text-xs text-red-500">{errors.reasonCategory}</p>}
           </div>
 
-          {/* Additional Notes */}
           <div className="space-y-2">
             <Label>Additional Notes</Label>
             <Textarea
@@ -463,7 +493,7 @@ function QuickActions() {
 // Activity Feed Component (Enhanced)
 // ============================================================================
 
-function ActivityFeed({ logs }: { logs: SystemLogItem[] }) {
+function ActivityFeed({ logs }: { logs: AuditLogItem[] }) {
   const [visibleCount, setVisibleCount] = useState(8);
   const recentLogs = logs.slice(0, visibleCount);
   const hasMore = logs.length > visibleCount;
@@ -473,7 +503,7 @@ function ActivityFeed({ logs }: { logs: SystemLogItem[] }) {
       case 'CRITICAL': case 'ERROR':
         return <AlertCircle className="h-3.5 w-3.5 text-red-500" />;
       case 'WARN':
-        return <AlertCircle className="h-3.5 w-3.5 text-yellow-500" />;
+        return <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />;
       default:
         return <Info className="h-3.5 w-3.5 text-blue-500" />;
     }
@@ -482,7 +512,7 @@ function ActivityFeed({ logs }: { logs: SystemLogItem[] }) {
   const getSeverityBg = (severity: string) => {
     switch (severity) {
       case 'CRITICAL': case 'ERROR': return 'bg-red-100 dark:bg-red-900/20';
-      case 'WARN': return 'bg-yellow-100 dark:bg-yellow-900/20';
+      case 'WARN': return 'bg-amber-100 dark:bg-amber-900/20';
       default: return 'bg-blue-100 dark:bg-blue-900/20';
     }
   };
@@ -531,6 +561,9 @@ function ActivityFeed({ logs }: { logs: SystemLogItem[] }) {
                 </Badge>
               </div>
               <p className="text-[10px] text-muted-foreground truncate">{log.message}</p>
+              {log.user && (
+                <p className="text-[9px] text-muted-foreground mt-0.5">by {log.user.name}</p>
+              )}
             </div>
             <span className="text-[10px] text-muted-foreground whitespace-nowrap" title={formatDateTime(log.createdAt)}>
               {getRelativeTime(log.createdAt)}
@@ -548,68 +581,576 @@ function ActivityFeed({ logs }: { logs: SystemLogItem[] }) {
 }
 
 // ============================================================================
-// User Management Component (Enhanced)
+// Audit Log Section (Enhanced with Filters and Color Coding)
 // ============================================================================
 
-const MOCK_USERS = [
-  { id: '1', name: 'Admin User', email: 'admin@mbumah.co.ke', role: 'SUPER_ADMIN' as const, status: 'Online' as const, lastActive: 'Just now', initials: 'AU' },
-  { id: '2', name: 'Jane Cashier', email: 'jane@mbumah.co.ke', role: 'CASHIER' as const, status: 'Offline' as const, lastActive: '2 hours ago', initials: 'JC' },
-  { id: '3', name: 'Peter Accountant', email: 'peter@mbumah.co.ke', role: 'ACCOUNTANT' as const, status: 'Offline' as const, lastActive: '1 day ago', initials: 'PA' },
-];
+function AuditLogSection({ storeId }: { storeId: string }) {
+  const [filters, setFilters] = useState({
+    type: 'all',
+    severity: 'all',
+    search: '',
+  });
+  const [page, setPage] = useState(1);
+  const [expandedLog, setExpandedLog] = useState<string | null>(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['audit-logs', storeId, filters, page],
+    queryFn: () => auditLogsApi.list({
+      storeId,
+      type: filters.type !== 'all' ? filters.type : undefined,
+      severity: filters.severity !== 'all' ? filters.severity : undefined,
+      search: filters.search || undefined,
+      page,
+      limit: 20,
+    }),
+  });
+
+  const logs = data?.data || [];
+  const pagination = data?.pagination;
+  const rawResp = data as unknown as Record<string, unknown>;
+  const summary = rawResp?.summary as { bySeverity?: Record<string, number>; byComponent?: Record<string, number>; recentErrors?: number } | undefined;
+
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case 'CRITICAL': case 'ERROR': return 'bg-red-500';
+      case 'WARN': return 'bg-amber-500';
+      case 'INFO': return 'bg-blue-500';
+      case 'DEBUG': return 'bg-gray-400';
+      default: return 'bg-gray-400';
+    }
+  };
+
+  const getSeverityBadge = (severity: string) => {
+    const styles: Record<string, string> = {
+      CRITICAL: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800',
+      ERROR: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800',
+      WARN: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+      INFO: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+      DEBUG: 'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400 border-gray-200 dark:border-gray-800',
+    };
+    return styles[severity] || styles.INFO;
+  };
+
+  const getComponentBadge = (component: string) => {
+    const styles: Record<string, string> = {
+      POS: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+      INVENTORY: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+      AUTH: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+      FINANCIAL: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+      PAYMENT: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
+      RENTAL: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+      SYSTEM: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
+    };
+    return styles[component] || 'bg-muted text-muted-foreground';
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Terminal className="h-4 w-4" /> Audit Log
+          </CardTitle>
+          {summary?.recentErrors !== undefined && summary.recentErrors > 0 && (
+            <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-xs gap-1">
+              <AlertCircle className="h-3 w-3" /> {summary.recentErrors} errors (24h)
+            </Badge>
+          )}
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2 mt-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={filters.search}
+              onChange={(e) => setFilters(f => ({ ...f, search: e.target.value }))}
+              placeholder="Search logs..."
+              className="pl-8 h-8 text-xs"
+            />
+          </div>
+          <Select value={filters.type} onValueChange={(v) => { setFilters(f => ({ ...f, type: v })); setPage(1); }}>
+            <SelectTrigger className="w-32 h-8 text-xs"><SelectValue placeholder="Type" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="AUTH">Auth</SelectItem>
+              <SelectItem value="INVENTORY">Inventory</SelectItem>
+              <SelectItem value="POS">POS</SelectItem>
+              <SelectItem value="FINANCIAL">Financial</SelectItem>
+              <SelectItem value="PAYMENT">Payment</SelectItem>
+              <SelectItem value="RENTAL">Rental</SelectItem>
+              <SelectItem value="SYSTEM">System</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filters.severity} onValueChange={(v) => { setFilters(f => ({ ...f, severity: v })); setPage(1); }}>
+            <SelectTrigger className="w-32 h-8 text-xs"><SelectValue placeholder="Severity" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Levels</SelectItem>
+              <SelectItem value="CRITICAL">Critical</SelectItem>
+              <SelectItem value="ERROR">Error</SelectItem>
+              <SelectItem value="WARN">Warning</SelectItem>
+              <SelectItem value="INFO">Info</SelectItem>
+              <SelectItem value="DEBUG">Debug</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        {isLoading ? (
+          <div className="p-4 space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-8" />
+                  <TableHead>Time</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Severity</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>User</TableHead>
+                  <TableHead className="max-w-[200px]">Details</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {logs.length === 0 ? (
+                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No audit logs found</TableCell></TableRow>
+                ) : logs.map((log) => (
+                  <React.Fragment key={log.id}>
+                    <TableRow
+                      className="cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
+                    >
+                      <TableCell>
+                        <div className={`w-2.5 h-2.5 rounded-full ${getSeverityColor(log.severity)}`} />
+                      </TableCell>
+                      <TableCell className="text-xs font-mono whitespace-nowrap">{formatDateTime(log.createdAt)}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={`text-[9px] ${getComponentBadge(log.component)}`}>
+                          {log.component}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={`text-[9px] ${getSeverityBadge(log.severity)}`}>
+                          {log.severity}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm font-medium">{log.action}</TableCell>
+                      <TableCell className="text-sm">{log.user?.name || '—'}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{log.message}</TableCell>
+                    </TableRow>
+                    {expandedLog === log.id && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="bg-muted/10 p-4">
+                          <div className="space-y-2 text-xs">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div><span className="text-muted-foreground">ID:</span> <span className="font-mono">{log.id}</span></div>
+                              <div><span className="text-muted-foreground">IP:</span> <span className="font-mono">{log.ipAddress || 'N/A'}</span></div>
+                            </div>
+                            <div><span className="text-muted-foreground">Message:</span> <span>{log.message}</span></div>
+                            {log.metadata && (
+                              <div>
+                                <span className="text-muted-foreground">Metadata:</span>
+                                <pre className="mt-1 p-2 bg-muted/30 rounded text-[10px] font-mono overflow-x-auto max-h-32">
+                                  {typeof log.metadata === 'string' ? log.metadata : JSON.stringify(log.metadata, null, 2)}
+                                </pre>
+                              </div>
+                            )}
+                            {log.stackTrace && (
+                              <div>
+                                <span className="text-muted-foreground">Stack Trace:</span>
+                                <pre className="mt-1 p-2 bg-red-50 dark:bg-red-900/10 rounded text-[10px] font-mono overflow-x-auto max-h-32 text-red-600">
+                                  {log.stackTrace}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+        {pagination && pagination.totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t">
+            <span className="text-xs text-muted-foreground">
+              Page {pagination.page} of {pagination.totalPages} ({pagination.total} entries)
+            </span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                Previous
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page >= pagination.totalPages} onClick={() => setPage(p => p + 1)}>
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================================
+// System Configuration Editor
+// ============================================================================
+
+const CONFIG_CATEGORIES = ['General', 'POS', 'Inventory', 'Financial', 'Notifications', 'Other'];
+
+function ConfigEditor({ storeId }: { storeId: string }) {
+  const queryClient = useQueryClient();
+  const [activeCategory, setActiveCategory] = useState('General');
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['system-config'],
+    queryFn: () => systemConfigApi.list(),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: systemConfigApi.update,
+    onSuccess: () => {
+      toast.success('Configuration updated');
+      queryClient.invalidateQueries({ queryKey: ['system-config'] });
+      setEditingKey(null);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const configs = data?.data || {};
+  const categoryConfigs = configs[activeCategory] || [];
+
+  const startEdit = (config: SystemConfigItem) => {
+    setEditingKey(config.key);
+    setEditValue(config.value);
+  };
+
+  const saveEdit = (config: SystemConfigItem) => {
+    updateMutation.mutate({ id: config.id, value: editValue });
+  };
+
+  const cancelEdit = () => {
+    setEditingKey(null);
+    setEditValue('');
+  };
+
+  const getConfigIcon = (key: string) => {
+    const k = key.toLowerCase();
+    if (k.includes('store') || k.includes('name') || k.includes('app')) return '🏪';
+    if (k.includes('vat') || k.includes('tax')) return '🧾';
+    if (k.includes('receipt')) return '🖨️';
+    if (k.includes('currency')) return '💰';
+    if (k.includes('stock') || k.includes('reorder') || k.includes('inventory')) return '📦';
+    if (k.includes('payment') || k.includes('debt')) return '💳';
+    if (k.includes('notif') || k.includes('email') || k.includes('sms')) return '🔔';
+    return '⚙️';
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Settings className="h-4 w-4" /> System Configuration
+        </CardTitle>
+        <CardDescription className="text-xs">Manage application settings and preferences</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {CONFIG_CATEGORIES.map((cat) => {
+            const count = (configs[cat] || []).length;
+            return (
+              <Button
+                key={cat}
+                size="sm"
+                variant={activeCategory === cat ? 'default' : 'outline'}
+                className="h-7 text-xs"
+                onClick={() => setActiveCategory(cat)}
+              >
+                {cat} {count > 0 && <span className="ml-1 text-[10px] opacity-70">({count})</span>}
+              </Button>
+            );
+          })}
+        </div>
+
+        {isLoading ? (
+          <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+        ) : categoryConfigs.length === 0 ? (
+          <div className="text-center py-8">
+            <Settings className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">No configurations in this category</p>
+            <p className="text-xs text-muted-foreground mt-1">Configurations will appear here when system settings are defined</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {categoryConfigs.map((config: SystemConfigItem) => (
+              <div key={config.id} className="flex items-center gap-3 p-2.5 rounded-lg border hover:bg-muted/30 transition-colors">
+                <span className="text-sm">{getConfigIcon(config.key)}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium font-mono">{config.key}</p>
+                    {config.isEncrypted && (
+                      <Badge variant="outline" className="text-[8px] h-4 px-1">
+                        <Shield className="h-2.5 w-2.5 mr-0.5" /> Encrypted
+                      </Badge>
+                    )}
+                  </div>
+                  {config.description && (
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{config.description}</p>
+                  )}
+                </div>
+                {editingKey === config.key ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      className="h-7 text-xs w-40"
+                      type={config.isEncrypted ? 'password' : 'text'}
+                    />
+                    <Button size="sm" className="h-7 w-7 p-0" onClick={() => saveEdit(config)} disabled={updateMutation.isPending}>
+                      {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={cancelEdit}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-mono text-muted-foreground max-w-[200px] truncate">
+                      {config.isEncrypted ? '••••••••' : config.value}
+                    </span>
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => startEdit(config)}>
+                      <Edit3 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================================
+// User Management Section (Enhanced with API)
+// ============================================================================
 
 const ROLE_STYLES: Record<string, { bg: string; text: string; badge: string; border: string }> = {
   SUPER_ADMIN: { bg: 'bg-red-500', text: 'text-white', badge: 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800', border: 'border-red-500' },
+  STORE_OWNER: { bg: 'bg-purple-500', text: 'text-white', badge: 'bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800', border: 'border-purple-500' },
+  BRANCH_MANAGER: { bg: 'bg-blue-500', text: 'text-white', badge: 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800', border: 'border-blue-500' },
   CASHIER: { bg: 'bg-green-500', text: 'text-white', badge: 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800', border: 'border-green-500' },
   ACCOUNTANT: { bg: 'bg-amber-500', text: 'text-white', badge: 'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800', border: 'border-amber-500' },
 };
 
-function UserManagement() {
-  const [userStates, setUserStates] = useState<Record<string, boolean>>({
-    '1': true, '2': true, '3': true,
+const ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: 'Super Admin',
+  STORE_OWNER: 'Shop Owner',
+  BRANCH_MANAGER: 'Store Manager',
+  CASHIER: 'Cashier',
+  ACCOUNTANT: 'Accountant',
+};
+
+function UserManagement({ storeId }: { storeId: string }) {
+  const queryClient = useQueryClient();
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'CASHIER', password: '', phone: '' });
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  const { data: usersData, isLoading } = useQuery({
+    queryKey: ['users', storeId],
+    queryFn: () => usersApi.list({ storeId, limit: 50 }),
   });
 
-  const toggleUserStatus = (userId: string) => {
-    setUserStates(prev => ({ ...prev, [userId]: !prev[userId] }));
-    toast.success(`User status updated`);
+  const users = usersData?.data || [];
+  const rawUsersResp = usersData as unknown as Record<string, unknown>;
+  const activeSessions = rawUsersResp?.meta ? (rawUsersResp.meta as { activeSessions?: number }).activeSessions || 0 : 0;
+
+  const createMutation = useMutation({
+    mutationFn: usersApi.create,
+    onSuccess: () => {
+      toast.success('User created successfully');
+      queryClient.invalidateQueries({ queryKey: ['users', storeId] });
+      setAddDialogOpen(false);
+      setNewUser({ name: '', email: '', role: 'CASHIER', password: '', phone: '' });
+      setFormErrors({});
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const validate = (): boolean => {
+    const errs: Record<string, string> = {};
+    if (!newUser.name.trim()) errs.name = 'Name is required';
+    if (!newUser.email.trim()) errs.email = 'Email is required';
+    if (!newUser.password || newUser.password.length < 6) errs.password = 'Password must be at least 6 characters';
+    setFormErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleCreate = () => {
+    if (validate()) {
+      createMutation.mutate({
+        ...newUser,
+        storeId,
+        organizationId: 'org_mbumah',
+      });
+    }
+  };
+
+  const getInitials = (name: string) => {
+    return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  };
+
+  const getRelativeTime = (dateStr: string | null) => {
+    if (!dateStr) return 'Never';
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
   };
 
   return (
-    <div className="space-y-2">
-      {MOCK_USERS.map((user) => {
-        const style = ROLE_STYLES[user.role] || ROLE_STYLES.CASHIER;
-        const isActive = userStates[user.id] ?? true;
-        return (
-          <div key={user.id} className={`flex items-center gap-3 p-2.5 rounded-lg border-l-2 ${style.border} hover:bg-muted/30 transition-colors`}>
-            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ${style.bg} ${style.text}`}>
-              {user.initials}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium truncate">{user.name}</p>
-                <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-4 border ${style.badge}`}>
-                  {user.role}
-                </Badge>
+    <div className="space-y-3">
+      {/* Header with add button */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-xs">{users.length} users</Badge>
+          <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1 animate-pulse" />
+            {activeSessions} online
+          </Badge>
+        </div>
+        <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" className="h-7 text-xs">
+              <UserPlus className="mr-1.5 h-3.5 w-3.5" /> Add User
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Add New User</DialogTitle>
+              <DialogDescription>Create a new user account for the store</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Full Name</Label>
+                <Input
+                  value={newUser.name}
+                  onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                  placeholder="John Doe"
+                  className={formErrors.name ? 'border-red-500' : ''}
+                />
+                {formErrors.name && <p className="text-xs text-red-500">{formErrors.name}</p>}
               </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                <p className="text-[10px] text-muted-foreground">{user.email}</p>
-                <span className="text-[10px] text-muted-foreground">•</span>
-                <p className="text-[10px] text-muted-foreground">Last active: {user.lastActive}</p>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  value={newUser.email}
+                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  placeholder="john@mbumah.co.ke"
+                  className={formErrors.email ? 'border-red-500' : ''}
+                />
+                {formErrors.email && <p className="text-xs text-red-500">{formErrors.email}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label>Role</Label>
+                <Select value={newUser.role} onValueChange={(v) => setNewUser({ ...newUser, role: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SUPER_ADMIN">Super Admin</SelectItem>
+                    <SelectItem value="STORE_OWNER">Shop Owner</SelectItem>
+                    <SelectItem value="BRANCH_MANAGER">Store Manager</SelectItem>
+                    <SelectItem value="CASHIER">Cashier</SelectItem>
+                    <SelectItem value="ACCOUNTANT">Accountant</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Password</Label>
+                <Input
+                  type="password"
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  placeholder="Min. 6 characters"
+                  className={formErrors.password ? 'border-red-500' : ''}
+                />
+                {formErrors.password && <p className="text-xs text-red-500">{formErrors.password}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label>Phone (Optional)</Label>
+                <Input
+                  value={newUser.phone}
+                  onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
+                  placeholder="+254 7XX XXX XXX"
+                />
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5">
-                <div className={`w-2 h-2 rounded-full ${user.status === 'Online' ? 'bg-green-500' : 'bg-gray-400'}`} />
-                <span className="text-[10px] text-muted-foreground">{user.status}</span>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAddDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleCreate} disabled={createMutation.isPending}>
+                {createMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
+                Create User
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* User list */}
+      {isLoading ? (
+        <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
+      ) : users.length === 0 ? (
+        <div className="text-center py-6">
+          <Users className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">No users found</p>
+        </div>
+      ) : (
+        <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+          {users.map((user) => {
+            const style = ROLE_STYLES[user.role] || ROLE_STYLES.CASHIER;
+            const isOnline = user.lastLoginAt && (Date.now() - new Date(user.lastLoginAt).getTime()) < 30 * 60 * 1000;
+            return (
+              <div key={user.id} className={`flex items-center gap-3 p-2.5 rounded-lg border-l-2 ${style.border} hover:bg-muted/30 transition-colors`}>
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ${style.bg} ${style.text}`}>
+                  {getInitials(user.name)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium truncate">{user.name}</p>
+                    <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-4 border ${style.badge}`}>
+                      {ROLE_LABELS[user.role] || user.role}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-[10px] text-muted-foreground">{user.email}</p>
+                    <span className="text-[10px] text-muted-foreground">•</span>
+                    <p className="text-[10px] text-muted-foreground">Last: {getRelativeTime(user.lastLoginAt)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : user.isActive ? 'bg-gray-400' : 'bg-red-400'}`} />
+                    <span className="text-[10px] text-muted-foreground">{isOnline ? 'Online' : user.isActive ? 'Offline' : 'Disabled'}</span>
+                  </div>
+                  {!user.isActive && (
+                    <Badge variant="outline" className="text-[8px] h-4 px-1 bg-red-50 text-red-600 border-red-200">Inactive</Badge>
+                  )}
+                </div>
               </div>
-              <Switch
-                checked={isActive}
-                onCheckedChange={() => toggleUserStatus(user.id)}
-                className="scale-75"
-              />
-            </div>
-          </div>
-        );
-      })}
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -672,12 +1213,18 @@ export default function AdminTab() {
     }),
   });
 
+  const { data: auditData } = useQuery({
+    queryKey: ['audit-logs', currentStoreId],
+    queryFn: () => auditLogsApi.list({ storeId: currentStoreId, limit: 50 }),
+  });
+
   const { data: movementsData } = useQuery({
     queryKey: ['stock-movements', currentStoreId],
     queryFn: () => stockMovementsApi.list({ storeId: currentStoreId, limit: 50 }),
   });
 
   const logs = logsData?.data || [];
+  const auditLogs = auditData?.data || [];
   const movements = movementsData?.data || [];
 
   // Simulated health metrics
@@ -685,6 +1232,11 @@ export default function AdminTab() {
   const cpuUsage = 23;
   const activeSessions = 3;
   const dbSizeMB = 2.4;
+
+  // Recent error count from audit summary
+  const rawAuditResp = auditData as unknown as Record<string, unknown>;
+  const auditSummary = rawAuditResp?.summary as { recentErrors?: number } | undefined;
+  const recentErrors = auditSummary?.recentErrors || 0;
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
@@ -705,10 +1257,17 @@ export default function AdminTab() {
             <CardTitle className="text-base flex items-center gap-2">
               <Cpu className="h-4 w-4" /> System Health Dashboard
             </CardTitle>
-            <Badge variant="outline" className="text-[10px] bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
-              <div className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse" />
-              All Systems Operational
-            </Badge>
+            <div className="flex items-center gap-2">
+              {recentErrors > 0 && (
+                <Badge variant="outline" className="text-[10px] bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800">
+                  <AlertCircle className="h-3 w-3 mr-1" /> {recentErrors} errors (24h)
+                </Badge>
+              )}
+              <Badge variant="outline" className="text-[10px] bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse" />
+                All Systems Operational
+              </Badge>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -787,7 +1346,7 @@ export default function AdminTab() {
             <CardDescription className="text-xs">Manage user accounts and permissions</CardDescription>
           </CardHeader>
           <CardContent>
-            <UserManagement />
+            <UserManagement storeId={currentStoreId} />
           </CardContent>
         </Card>
 
@@ -815,9 +1374,19 @@ export default function AdminTab() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ActivityFeed logs={logs} />
+          <ActivityFeed logs={auditLogs} />
         </CardContent>
       </Card>
+
+      {/* ================================================================== */}
+      {/* Audit Log Section (New)                                             */}
+      {/* ================================================================== */}
+      <AuditLogSection storeId={currentStoreId} />
+
+      {/* ================================================================== */}
+      {/* System Configuration Editor (New)                                   */}
+      {/* ================================================================== */}
+      <ConfigEditor storeId={currentStoreId} />
 
       {/* ================================================================== */}
       {/* System Logs & Stock Movements Tabs                                  */}

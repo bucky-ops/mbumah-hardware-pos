@@ -1,0 +1,943 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import React, { useState, useMemo, useEffect } from 'react';
+     4→     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+     5→     5→import { toast } from 'sonner';
+     6→     6→import {
+     7→     7→  Activity, ArrowRight, Plus, CheckCircle, Loader2,
+     8→     8→  Cpu, HardDrive, Clock, Users, Zap, Trash2, RefreshCw,
+     9→     9→  Database, ShieldCheck, AlertCircle, Info, Bell,
+    10→    10→  Search, ChevronDown, ChevronUp, FileDown, Globe,
+    11→    11→  Shield, Wrench, PackageX, AlertOctagon, LogOut,
+    12→    12→  UserCheck, UserX, PlusCircle, MinusCircle,
+    13→    13→} from 'lucide-react';
+    14→    14→
+    15→    15→import { useAppStore } from '@/lib/stores';
+    16→    16→import {
+    17→    17→  systemLogsApi, stockMovementsApi, productsApi,
+    18→    18→  formatDateTime,
+    19→    19→  type SystemLogItem, type StockMovementItem,
+    20→    20→} from '@/lib/api';
+    21→    21→
+    22→    22→import { Button } from '@/components/ui/button';
+    23→    23→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    24→    24→import { Input } from '@/components/ui/input';
+    25→    25→import { Label } from '@/components/ui/label';
+    26→    26→import { Badge } from '@/components/ui/badge';
+    27→    27→import { Skeleton } from '@/components/ui/skeleton';
+    28→    28→import { Separator } from '@/components/ui/separator';
+    29→    29→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+    30→    30→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+    31→    31→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    32→    32→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    33→    33→import { Textarea } from '@/components/ui/textarea';
+    34→    34→import { Progress } from '@/components/ui/progress';
+    35→    35→import { Switch } from '@/components/ui/switch';
+    36→    36→import {
+    37→    37→  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+    38→    38→  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+    39→    39→} from '@/components/ui/alert-dialog';
+    40→    40→
+    41→    41→// ============================================================================
+    42→    42→// System Health Indicator Component (Enhanced)
+    43→    43→// ============================================================================
+    44→    44→
+    45→    45→function HealthIndicator({ label, value, max, unit, colorClass }: {
+    46→    46→  label: string; value: number; max: number; unit: string; colorClass?: string;
+    47→    47→}) {
+    48→    48→  const pct = max > 0 ? (value / max) * 100 : 0;
+    49→    49→  const status = pct < 50 ? 'good' : pct < 80 ? 'warning' : 'critical';
+    50→    50→  const statusColors = {
+    51→    51→    good: 'text-green-600',
+    52→    52→    warning: 'text-yellow-600',
+    53→    53→    critical: 'text-red-600',
+    54→    54→  };
+    55→    55→  const barColors = {
+    56→    56→    good: '[&>div]:bg-green-500',
+    57→    57→    warning: '[&>div]:bg-yellow-500',
+    58→    58→    critical: '[&>div]:bg-red-500',
+    59→    59→  };
+    60→    60→  const bgColors = {
+    61→    61→    good: 'bg-green-500',
+    62→    62→    warning: 'bg-yellow-500',
+    63→    63→    critical: 'bg-red-500',
+    64→    64→  };
+    65→    65→  return (
+    66→    66→    <div className="space-y-1.5">
+    67→    67→      <div className="flex items-center justify-between text-sm">
+    68→    68→        <span className="text-muted-foreground">{label}</span>
+    69→    69→        <div className="flex items-center gap-2">
+    70→    70→          <div className={`w-2 h-2 rounded-full ${bgColors[status]} animate-pulse`} />
+    71→    71→          <span className={`font-medium ${colorClass || statusColors[status]}`}>
+    72→    72→            {typeof value === 'number' && value % 1 !== 0 ? value.toFixed(1) : value}{unit}
+    73→    73→          </span>
+    74→    74→        </div>
+    75→    75→      </div>
+    76→    76→      <Progress value={pct} className={`h-2.5 ${barColors[status]}`} />
+    77→    77→    </div>
+    78→    78→  );
+    79→    79→}
+    80→    80→
+    81→    81→// ============================================================================
+    82→    82→// Mini Sparkline Component (CSS-based)
+    83→    83→// ============================================================================
+    84→    84→
+    85→    85→function MiniSparkline({ data, color = 'text-primary', height = 24 }: {
+    86→    86→  data: number[]; color?: string; height?: number;
+    87→    87→}) {
+    88→    88→  if (data.length === 0) return null;
+    89→    89→  const max = Math.max(...data);
+    90→    90→  const min = Math.min(...data);
+    91→    91→  const range = max - min || 1;
+    92→    92→  const w = 100;
+    93→    93→
+    94→    94→  return (
+    95→    95→    <svg width={w} height={height} className={color}>
+    96→    96→      <polyline
+    97→    97→        fill="none"
+    98→    98→        stroke="currentColor"
+    99→    99→        strokeWidth="1.5"
+   100→   100→        strokeLinejoin="round"
+   101→   101→        strokeLinecap="round"
+   102→   102→        points={data.map((v, i) => {
+   103→   103→          const x = (i / (data.length - 1)) * w;
+   104→   104→          const y = height - ((v - min) / range) * (height - 4) - 2;
+   105→   105→          return `${x},${y}`;
+   106→   106→        }).join(' ')}
+   107→   107→      />
+   108→   108→    </svg>
+   109→   109→  );
+   110→   110→}
+   111→   111→
+   112→   112→// ============================================================================
+   113→   113→// Stock Adjustment Dialog (Enhanced)
+   114→   114→// ============================================================================
+   115→   115→
+   116→   116→const REASON_CATEGORIES = [
+   117→   117→  { value: 'RESTOCK', label: 'Restock', icon: PlusCircle, color: 'text-green-600' },
+   118→   118→  { value: 'DAMAGE', label: 'Damage', icon: PackageX, color: 'text-red-600' },
+   119→   119→  { value: 'THEFT', label: 'Theft', icon: AlertOctagon, color: 'text-red-800' },
+   120→   120→  { value: 'CORRECTION', label: 'Correction', icon: Wrench, color: 'text-amber-600' },
+   121→   121→  { value: 'RETURN', label: 'Return', icon: RefreshCw, color: 'text-blue-600' },
+   122→   122→];
+   123→   123→
+   124→   124→function StockAdjustmentDialog({ storeId }: { storeId: string }) {
+   125→   125→  const [open, setOpen] = useState(false);
+   126→   126→  const [productId, setProductId] = useState('');
+   127→   127→  const [quantity, setQuantity] = useState('');
+   128→   128→  const [adjustmentType, setAdjustmentType] = useState<'ADD' | 'SUBTRACT'>('ADD');
+   129→   129→  const [reasonCategory, setReasonCategory] = useState('');
+   130→   130→  const [notes, setNotes] = useState('');
+   131→   131→  const [productSearch, setProductSearch] = useState('');
+   132→   132→  const [errors, setErrors] = useState<Record<string, string>>({});
+   133→   133→
+   134→   134→  const { data: productsData } = useQuery({
+   135→   135→    queryKey: ['products', storeId],
+   136→   136→    queryFn: () => productsApi.list({ storeId, limit: 200 }),
+   137→   137→  });
+   138→   138→
+   139→   139→  const adjustMutation = useMutation({
+   140→   140→    mutationFn: stockMovementsApi.createAdjustment,
+   141→   141→    onSuccess: () => {
+   142→   142→      toast.success('Stock adjusted successfully');
+   143→   143→      setOpen(false);
+   144→   144→      setProductId('');
+   145→   145→      setQuantity('');
+   146→   146→      setAdjustmentType('ADD');
+   147→   147→      setReasonCategory('');
+   148→   148→      setNotes('');
+   149→   149→      setProductSearch('');
+   150→   150→      setErrors({});
+   151→   151→    },
+   152→   152→    onError: (err: Error) => toast.error(err.message),
+   153→   153→  });
+   154→   154→
+   155→   155→  const allProducts = productsData?.data || [];
+   156→   156→  const filteredProducts = useMemo(() => {
+   157→   157→    if (!productSearch.trim()) return allProducts;
+   158→   158→    const q = productSearch.toLowerCase();
+   159→   159→    return allProducts.filter(p =>
+   160→   160→      p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
+   161→   161→    );
+   162→   162→  }, [allProducts, productSearch]);
+   163→   163→
+   164→   164→  const selectedProduct = allProducts.find(p => p.id === productId);
+   165→   165→  const quantityNum = Number(quantity);
+   166→   166→  const effectiveQuantity = adjustmentType === 'ADD' ? quantityNum : -quantityNum;
+   167→   167→  const newStockLevel = selectedProduct ? selectedProduct.quantityInStock + effectiveQuantity : null;
+   168→   168→
+   169→   169→  const validate = (): boolean => {
+   170→   170→    const newErrors: Record<string, string> = {};
+   171→   171→    if (!productId) newErrors.productId = 'Product is required';
+   172→   172→    if (!quantity || quantity === '0') newErrors.quantity = 'Quantity is required';
+   173→   173→    if (quantity && isNaN(quantityNum)) newErrors.quantity = 'Must be a valid number';
+   174→   174→    if (quantityNum <= 0) newErrors.quantity = 'Quantity must be positive';
+   175→   175→    if (adjustmentType === 'SUBTRACT' && selectedProduct && quantityNum > selectedProduct.quantityInStock) {
+   176→   176→      newErrors.quantity = `Cannot remove more than current stock (${selectedProduct.quantityInStock})`;
+   177→   177→    }
+   178→   178→    if (!reasonCategory) newErrors.reasonCategory = 'Reason category is required';
+   179→   179→    setErrors(newErrors);
+   180→   180→    return Object.keys(newErrors).length === 0;
+   181→   181→  };
+   182→   182→
+   183→   183→  const handleSubmit = () => {
+   184→   184→    if (validate()) {
+   185→   185→      adjustMutation.mutate({
+   186→   186→        storeId,
+   187→   187→        productId,
+   188→   188→        quantity: effectiveQuantity,
+   189→   189→        notes: `[${reasonCategory}] ${notes}`,
+   190→   190→      });
+   191→   191→    }
+   192→   192→  };
+   193→   193→
+   194→   194→  return (
+   195→   195→    <Dialog open={open} onOpenChange={setOpen}>
+   196→   196→      <DialogTrigger asChild>
+   197→   197→        <Button size="sm" className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground">
+   198→   198→          <Plus className="mr-2 h-4 w-4" /> Adjustment
+   199→   199→        </Button>
+   200→   200→      </DialogTrigger>
+   201→   201→      <DialogContent className="max-w-lg">
+   202→   202→        <DialogHeader>
+   203→   203→          <DialogTitle>Stock Adjustment</DialogTitle>
+   204→   204→          <DialogDescription>Add or remove stock quantity with a reason</DialogDescription>
+   205→   205→        </DialogHeader>
+   206→   206→        <div className="space-y-4">
+   207→   207→          {/* Product Search */}
+   208→   208→          <div className="space-y-2">
+   209→   209→            <Label>Search Product</Label>
+   210→   210→            <div className="relative">
+   211→   211→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   212→   212→              <Input
+   213→   213→                value={productSearch}
+   214→   214→                onChange={(e) => setProductSearch(e.target.value)}
+   215→   215→                placeholder="Search by name or SKU..."
+   216→   216→                className="pl-9"
+   217→   217→              />
+   218→   218→            </div>
+   219→   219→          </div>
+   220→   220→
+   221→   221→          {/* Product Select */}
+   222→   222→          <div className="space-y-2">
+   223→   223→            <Label>Product</Label>
+   224→   224→            <Select value={productId} onValueChange={setProductId}>
+   225→   225→              <SelectTrigger className={errors.productId ? 'border-red-500' : ''}>
+   226→   226→                <SelectValue placeholder="Select product" />
+   227→   227→              </SelectTrigger>
+   228→   228→              <SelectContent>
+   229→   229→                {filteredProducts.map(p => (
+   230→   230→                  <SelectItem key={p.id} value={p.id}>
+   231→   231→                    {p.name} (Stock: {p.quantityInStock} {p.unitType})
+   232→   232→                  </SelectItem>
+   233→   233→                ))}
+   234→   234→              </SelectContent>
+   235→   235→            </Select>
+   236→   236→            {errors.productId && <p className="text-xs text-red-500">{errors.productId}</p>}
+   237→   237→            {selectedProduct && (
+   238→   238→              <div className="p-2 rounded-lg bg-muted/30 border text-xs space-y-1">
+   239→   239→                <div className="flex justify-between">
+   240→   240→                  <span className="text-muted-foreground">Current Stock</span>
+   241→   241→                  <span className="font-medium">{selectedProduct.quantityInStock} {selectedProduct.unitType}</span>
+   242→   242→                </div>
+   243→   243→                <div className="flex justify-between">
+   244→   244→                  <span className="text-muted-foreground">Reorder Level</span>
+   245→   245→                  <span className="font-medium">{selectedProduct.reorderLevel}</span>
+   246→   246→                </div>
+   247→   247→                <div className="flex justify-between">
+   248→   248→                  <span className="text-muted-foreground">Price</span>
+   249→   249→                  <span className="font-medium">KES {selectedProduct.pricePerUnit.toLocaleString()}</span>
+   250→   250→                </div>
+   251→   251→              </div>
+   252→   252→            )}
+   253→   253→          </div>
+   254→   254→
+   255→   255→          {/* Adjustment Type */}
+   256→   256→          <div className="space-y-2">
+   257→   257→            <Label>Adjustment Type</Label>
+   258→   258→            <div className="grid grid-cols-2 gap-2">
+   259→   259→              <button
+   260→   260→                type="button"
+   261→   261→                onClick={() => setAdjustmentType('ADD')}
+   262→   262→                className={`flex items-center justify-center gap-2 p-2.5 rounded-lg border-2 transition-all ${
+   263→   263→                  adjustmentType === 'ADD'
+   264→   264→                    ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
+   265→   265→                    : 'border-transparent bg-muted/30 hover:bg-muted/50'
+   266→   266→                }`}
+   267→   267→              >
+   268→   268→                <PlusCircle className="h-4 w-4" />
+   269→   269→                <span className="text-sm font-medium">Add Stock</span>
+   270→   270→              </button>
+   271→   271→              <button
+   272→   272→                type="button"
+   273→   273→                onClick={() => setAdjustmentType('SUBTRACT')}
+   274→   274→                className={`flex items-center justify-center gap-2 p-2.5 rounded-lg border-2 transition-all ${
+   275→   275→                  adjustmentType === 'SUBTRACT'
+   276→   276→                    ? 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'
+   277→   277→                    : 'border-transparent bg-muted/30 hover:bg-muted/50'
+   278→   278→                }`}
+   279→   279→              >
+   280→   280→                <MinusCircle className="h-4 w-4" />
+   281→   281→                <span className="text-sm font-medium">Remove Stock</span>
+   282→   282→              </button>
+   283→   283→            </div>
+   284→   284→          </div>
+   285→   285→
+   286→   286→          {/* Quantity */}
+   287→   287→          <div className="space-y-2">
+   288→   288→            <Label>Quantity</Label>
+   289→   289→            <Input
+   290→   290→              type="number"
+   291→   291→              value={quantity}
+   292→   292→              onChange={(e) => setQuantity(e.target.value)}
+   293→   293→              placeholder="Enter quantity"
+   294→   294→              min="1"
+   295→   295→              className={errors.quantity ? 'border-red-500' : ''}
+   296→   296→            />
+   297→   297→            {errors.quantity && <p className="text-xs text-red-500">{errors.quantity}</p>}
+   298→   298→            {selectedProduct && quantityNum > 0 && (
+   299→   299→              <div className={`p-2 rounded-lg border text-xs ${
+   300→   300→                newStockLevel !== null && newStockLevel >= 0
+   301→   301→                  ? newStockLevel > selectedProduct.reorderLevel
+   302→   302→                    ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+   303→   303→                    : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
+   304→   304→                  : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+   305→   305→              }`}>
+   306→   306→                <div className="flex justify-between items-center">
+   307→   307→                  <span className="text-muted-foreground">New Stock Level</span>
+   308→   308→                  <span className={`font-bold text-base ${
+   309→   309→                    newStockLevel !== null && newStockLevel >= 0
+   310→   310→                      ? newStockLevel > selectedProduct.reorderLevel ? 'text-green-600' : 'text-amber-600'
+   311→   311→                      : 'text-red-600'
+   312→   312→                  }`}>
+   313→   313→                    {newStockLevel ?? '—'} {selectedProduct.unitType}
+   314→   314→                  </span>
+   315→   315→                </div>
+   316→   316→                {newStockLevel !== null && newStockLevel >= 0 && (
+   317→   317→                  <div className="mt-1">
+   318→   318→                    <Progress
+   319→   319→                      value={Math.min((newStockLevel / (selectedProduct.reorderLevel * 3)) * 100, 100)}
+   320→   320→                      className={`h-1.5 ${newStockLevel > selectedProduct.reorderLevel ? '[&>div]:bg-green-500' : '[&>div]:bg-amber-500'}`}
+   321→   321→                    />
+   322→   322→                  </div>
+   323→   323→                )}
+   324→   324→              </div>
+   325→   325→            )}
+   326→   326→          </div>
+   327→   327→
+   328→   328→          {/* Reason Category */}
+   329→   329→          <div className="space-y-2">
+   330→   330→            <Label>Reason Category <span className="text-red-500">*</span></Label>
+   331→   331→            <div className="grid grid-cols-2 gap-1.5">
+   332→   332→              {REASON_CATEGORIES.map((cat) => (
+   333→   333→                <button
+   334→   334→                  key={cat.value}
+   335→   335→                  type="button"
+   336→   336→                  onClick={() => setReasonCategory(cat.value)}
+   337→   337→                  className={`flex items-center gap-1.5 p-2 rounded-lg border text-xs transition-all ${
+   338→   338→                    reasonCategory === cat.value
+   339→   339→                      ? 'border-primary bg-primary/5'
+   340→   340→                      : 'border-transparent bg-muted/30 hover:bg-muted/50'
+   341→   341→                  }`}
+   342→   342→                >
+   343→   343→                  <cat.icon className={`h-3.5 w-3.5 ${cat.color}`} />
+   344→   344→                  <span className="font-medium">{cat.label}</span>
+   345→   345→                </button>
+   346→   346→              ))}
+   347→   347→            </div>
+   348→   348→            {errors.reasonCategory && <p className="text-xs text-red-500">{errors.reasonCategory}</p>}
+   349→   349→          </div>
+   350→   350→
+   351→   351→          {/* Additional Notes */}
+   352→   352→          <div className="space-y-2">
+   353→   353→            <Label>Additional Notes</Label>
+   354→   354→            <Textarea
+   355→   355→              value={notes}
+   356→   356→              onChange={(e) => setNotes(e.target.value)}
+   357→   357→              placeholder="Optional additional notes..."
+   358→   358→              rows={2}
+   359→   359→            />
+   360→   360→          </div>
+   361→   361→        </div>
+   362→   362→        <DialogFooter>
+   363→   363→          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+   364→   364→          <Button onClick={handleSubmit} disabled={adjustMutation.isPending}>
+   365→   365→            {adjustMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+   366→   366→            Apply Adjustment
+   367→   367→          </Button>
+   368→   368→        </DialogFooter>
+   369→   369→      </DialogContent>
+   370→   370→    </Dialog>
+   371→   371→  );
+   372→   372→}
+   373→   373→
+   374→   374→// ============================================================================
+   375→   375→// Quick Actions Component (Enhanced with Confirm Dialogs)
+   376→   376→// ============================================================================
+   377→   377→
+   378→   378→function QuickActions() {
+   379→   379→  const [loading, setLoading] = useState<string | null>(null);
+   380→   380→
+   381→   381→  const handleAction = async (action: string) => {
+   382→   382→    setLoading(action);
+   383→   383→    await new Promise(r => setTimeout(r, 1500));
+   384→   384→    setLoading(null);
+   385→   385→    toast.success(`${action} completed successfully`);
+   386→   386→  };
+   387→   387→
+   388→   388→  const actions = [
+   389→   389→    { id: 'reindex', label: 'Reindex Database', icon: Database, desc: 'Rebuild search indexes for faster queries', color: 'text-blue-600', destructive: false },
+   390→   390→    { id: 'cache', label: 'Clear Cache', icon: Trash2, desc: 'Clear all application and query cache', color: 'text-orange-600', destructive: true },
+   391→   391→    { id: 'health', label: 'Health Check', icon: ShieldCheck, desc: 'Run full system diagnostics scan', color: 'text-green-600', destructive: false },
+   392→   392→    { id: 'optimize', label: 'Optimize DB', icon: Zap, desc: 'Optimize database tables and indexes', color: 'text-purple-600', destructive: false },
+   393→   393→  ];
+   394→   394→
+   395→   395→  return (
+   396→   396→    <div className="space-y-3">
+   397→   397→      <div className="grid grid-cols-2 gap-3">
+   398→   398→        {actions.map((action) => (
+   399→   399→          action.destructive ? (
+   400→   400→            <AlertDialog key={action.id}>
+   401→   401→              <AlertDialogTrigger asChild>
+   402→   402→                <button
+   403→   403→                  type="button"
+   404→   404→                  disabled={loading !== null}
+   405→   405→                  className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-all disabled:opacity-50 text-left"
+   406→   406→                >
+   407→   407→                  {loading === action.label ? (
+   408→   408→                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+   409→   409→                  ) : (
+   410→   410→                    <action.icon className={`h-5 w-5 ${action.color}`} />
+   411→   411→                  )}
+   412→   412→                  <div>
+   413→   413→                    <p className="text-sm font-medium">{action.label}</p>
+   414→   414→                    <p className="text-[10px] text-muted-foreground">{action.desc}</p>
+   415→   415→                  </div>
+   416→   416→                </button>
+   417→   417→              </AlertDialogTrigger>
+   418→   418→              <AlertDialogContent>
+   419→   419→                <AlertDialogHeader>
+   420→   420→                  <AlertDialogTitle>Confirm {action.label}</AlertDialogTitle>
+   421→   421→                  <AlertDialogDescription>
+   422→   422→                    This action may temporarily affect system performance. Are you sure you want to proceed?
+   423→   423→                  </AlertDialogDescription>
+   424→   424→                </AlertDialogHeader>
+   425→   425→                <AlertDialogFooter>
+   426→   426→                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+   427→   427→                  <AlertDialogAction onClick={() => handleAction(action.label)}>
+   428→   428→                    {loading === action.label ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+   429→   429→                    Confirm
+   430→   430→                  </AlertDialogAction>
+   431→   431→                </AlertDialogFooter>
+   432→   432→              </AlertDialogContent>
+   433→   433→            </AlertDialog>
+   434→   434→          ) : (
+   435→   435→            <button
+   436→   436→              key={action.id}
+   437→   437→              type="button"
+   438→   438→              onClick={() => handleAction(action.label)}
+   439→   439→              disabled={loading !== null}
+   440→   440→              className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-all disabled:opacity-50 text-left"
+   441→   441→            >
+   442→   442→              {loading === action.label ? (
+   443→   443→                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+   444→   444→              ) : (
+   445→   445→                <action.icon className={`h-5 w-5 ${action.color}`} />
+   446→   446→              )}
+   447→   447→              <div>
+   448→   448→                <p className="text-sm font-medium">{action.label}</p>
+   449→   449→                <p className="text-[10px] text-muted-foreground">{action.desc}</p>
+   450→   450→              </div>
+   451→   451→            </button>
+   452→   452→          )
+   453→   453→        ))}
+   454→   454→      </div>
+   455→   455→      <Button variant="outline" size="sm" className="w-full" onClick={() => toast.info('Log export coming soon')}>
+   456→   456→        <FileDown className="mr-2 h-4 w-4" /> Export Logs
+   457→   457→      </Button>
+   458→   458→    </div>
+   459→   459→  );
+   460→   460→}
+   461→   461→
+   462→   462→// ============================================================================
+   463→   463→// Activity Feed Component (Enhanced)
+   464→   464→// ============================================================================
+   465→   465→
+   466→   466→function ActivityFeed({ logs }: { logs: SystemLogItem[] }) {
+   467→   467→  const [visibleCount, setVisibleCount] = useState(8);
+   468→   468→  const recentLogs = logs.slice(0, visibleCount);
+   469→   469→  const hasMore = logs.length > visibleCount;
+   470→   470→
+   471→   471→  const getSeverityIcon = (severity: string) => {
+   472→   472→    switch (severity) {
+   473→   473→      case 'CRITICAL': case 'ERROR':
+   474→   474→        return <AlertCircle className="h-3.5 w-3.5 text-red-500" />;
+   475→   475→      case 'WARN':
+   476→   476→        return <AlertCircle className="h-3.5 w-3.5 text-yellow-500" />;
+   477→   477→      default:
+   478→   478→        return <Info className="h-3.5 w-3.5 text-blue-500" />;
+   479→   479→    }
+   480→   480→  };
+   481→   481→
+   482→   482→  const getSeverityBg = (severity: string) => {
+   483→   483→    switch (severity) {
+   484→   484→      case 'CRITICAL': case 'ERROR': return 'bg-red-100 dark:bg-red-900/20';
+   485→   485→      case 'WARN': return 'bg-yellow-100 dark:bg-yellow-900/20';
+   486→   486→      default: return 'bg-blue-100 dark:bg-blue-900/20';
+   487→   487→    }
+   488→   488→  };
+   489→   489→
+   490→   490→  const getComponentBadge = (component: string) => {
+   491→   491→    const componentStyles: Record<string, string> = {
+   492→   492→      POS: 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800',
+   493→   493→      INVENTORY: 'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+   494→   494→      AUTH: 'bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800',
+   495→   495→      FINANCIAL: 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+   496→   496→      PAYMENT: 'bg-teal-100 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400 border-teal-200 dark:border-teal-800',
+   497→   497→      RENTAL: 'bg-orange-100 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800',
+   498→   498→      SYSTEM: 'bg-gray-100 dark:bg-gray-900/20 text-gray-700 dark:text-gray-400 border-gray-200 dark:border-gray-800',
+   499→   499→    };
+   500→   500→    return componentStyles[component] || 'bg-muted text-muted-foreground';
+   501→   501→  };
+   502→   502→
+   503→   503→  const getRelativeTime = (dateStr: string) => {
+   504→   504→    const now = new Date();
+   505→   505→    const date = new Date(dateStr);
+   506→   506→    const diffMs = now.getTime() - date.getTime();
+   507→   507→    const diffMins = Math.floor(diffMs / 60000);
+   508→   508→    if (diffMins < 1) return 'just now';
+   509→   509→    if (diffMins < 60) return `${diffMins} min ago`;
+   510→   510→    const diffHours = Math.floor(diffMins / 60);
+   511→   511→    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+   512→   512→    const diffDays = Math.floor(diffHours / 24);
+   513→   513→    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+   514→   514→  };
+   515→   515→
+   516→   516→  return (
+   517→   517→    <div className="space-y-2">
+   518→   518→      <div className="max-h-80 overflow-y-auto pr-2 custom-scrollbar space-y-2">
+   519→   519→        {recentLogs.length === 0 ? (
+   520→   520→          <p className="text-sm text-muted-foreground text-center py-4">No recent activity</p>
+   521→   521→        ) : recentLogs.map((log) => (
+   522→   522→          <div key={log.id} className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted/30 transition-colors">
+   523→   523→            <div className={`mt-0.5 p-1 rounded-md ${getSeverityBg(log.severity)}`}>
+   524→   524→              {getSeverityIcon(log.severity)}
+   525→   525→            </div>
+   526→   526→            <div className="flex-1 min-w-0">
+   527→   527→              <div className="flex items-center gap-1.5 mb-0.5">
+   528→   528→                <p className="text-xs font-medium truncate">{log.action}</p>
+   529→   529→                <Badge variant="outline" className={`text-[8px] px-1 py-0 h-4 border ${getComponentBadge(log.component)}`}>
+   530→   530→                  {log.component}
+   531→   531→                </Badge>
+   532→   532→              </div>
+   533→   533→              <p className="text-[10px] text-muted-foreground truncate">{log.message}</p>
+   534→   534→            </div>
+   535→   535→            <span className="text-[10px] text-muted-foreground whitespace-nowrap" title={formatDateTime(log.createdAt)}>
+   536→   536→              {getRelativeTime(log.createdAt)}
+   537→   537→            </span>
+   538→   538→          </div>
+   539→   539→        ))}
+   540→   540→      </div>
+   541→   541→      {hasMore && (
+   542→   542→        <Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => setVisibleCount(c => c + 8)}>
+   543→   543→          <ChevronDown className="mr-1 h-3 w-3" /> Load More ({logs.length - visibleCount} remaining)
+   544→   544→        </Button>
+   545→   545→      )}
+   546→   546→    </div>
+   547→   547→  );
+   548→   548→}
+   549→   549→
+   550→   550→// ============================================================================
+   551→   551→// User Management Component (Enhanced)
+   552→   552→// ============================================================================
+   553→   553→
+   554→   554→const MOCK_USERS = [
+   555→   555→  { id: '1', name: 'Admin User', email: 'admin@mbumah.co.ke', role: 'SUPER_ADMIN' as const, status: 'Online' as const, lastActive: 'Just now', initials: 'AU' },
+   556→   556→  { id: '2', name: 'Jane Cashier', email: 'jane@mbumah.co.ke', role: 'CASHIER' as const, status: 'Offline' as const, lastActive: '2 hours ago', initials: 'JC' },
+   557→   557→  { id: '3', name: 'Peter Accountant', email: 'peter@mbumah.co.ke', role: 'ACCOUNTANT' as const, status: 'Offline' as const, lastActive: '1 day ago', initials: 'PA' },
+   558→   558→];
+   559→   559→
+   560→   560→const ROLE_STYLES: Record<string, { bg: string; text: string; badge: string; border: string }> = {
+   561→   561→  SUPER_ADMIN: { bg: 'bg-red-500', text: 'text-white', badge: 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800', border: 'border-red-500' },
+   562→   562→  CASHIER: { bg: 'bg-green-500', text: 'text-white', badge: 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800', border: 'border-green-500' },
+   563→   563→  ACCOUNTANT: { bg: 'bg-amber-500', text: 'text-white', badge: 'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800', border: 'border-amber-500' },
+   564→   564→};
+   565→   565→
+   566→   566→function UserManagement() {
+   567→   567→  const [userStates, setUserStates] = useState<Record<string, boolean>>({
+   568→   568→    '1': true, '2': true, '3': true,
+   569→   569→  });
+   570→   570→
+   571→   571→  const toggleUserStatus = (userId: string) => {
+   572→   572→    setUserStates(prev => ({ ...prev, [userId]: !prev[userId] }));
+   573→   573→    toast.success(`User status updated`);
+   574→   574→  };
+   575→   575→
+   576→   576→  return (
+   577→   577→    <div className="space-y-2">
+   578→   578→      {MOCK_USERS.map((user) => {
+   579→   579→        const style = ROLE_STYLES[user.role] || ROLE_STYLES.CASHIER;
+   580→   580→        const isActive = userStates[user.id] ?? true;
+   581→   581→        return (
+   582→   582→          <div key={user.id} className={`flex items-center gap-3 p-2.5 rounded-lg border-l-2 ${style.border} hover:bg-muted/30 transition-colors`}>
+   583→   583→            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ${style.bg} ${style.text}`}>
+   584→   584→              {user.initials}
+   585→   585→            </div>
+   586→   586→            <div className="flex-1 min-w-0">
+   587→   587→              <div className="flex items-center gap-2">
+   588→   588→                <p className="text-sm font-medium truncate">{user.name}</p>
+   589→   589→                <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-4 border ${style.badge}`}>
+   590→   590→                  {user.role}
+   591→   591→                </Badge>
+   592→   592→              </div>
+   593→   593→              <div className="flex items-center gap-2 mt-0.5">
+   594→   594→                <p className="text-[10px] text-muted-foreground">{user.email}</p>
+   595→   595→                <span className="text-[10px] text-muted-foreground">•</span>
+   596→   596→                <p className="text-[10px] text-muted-foreground">Last active: {user.lastActive}</p>
+   597→   597→              </div>
+   598→   598→            </div>
+   599→   599→            <div className="flex items-center gap-2">
+   600→   600→              <div className="flex items-center gap-1.5">
+   601→   601→                <div className={`w-2 h-2 rounded-full ${user.status === 'Online' ? 'bg-green-500' : 'bg-gray-400'}`} />
+   602→   602→                <span className="text-[10px] text-muted-foreground">{user.status}</span>
+   603→   603→              </div>
+   604→   604→              <Switch
+   605→   605→                checked={isActive}
+   606→   606→                onCheckedChange={() => toggleUserStatus(user.id)}
+   607→   607→                className="scale-75"
+   608→   608→              />
+   609→   609→            </div>
+   610→   610→          </div>
+   611→   611→        );
+   612→   612→      })}
+   613→   613→    </div>
+   614→   614→  );
+   615→   615→}
+   616→   616→
+   617→   617→// ============================================================================
+   618→   618→// Main Admin Tab Component
+   619→   619→// ============================================================================
+   620→   620→
+   621→   621→export default function AdminTab() {
+   622→   622→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+   623→   623→  const [logFilter, setLogFilter] = useState({ component: 'all', severity: 'all' });
+   624→   624→
+   625→   625→  // Simulated system health metrics
+   626→   626→  const [uptime, setUptime] = useState(0);
+   627→   627→  const [apiResponseTime, setApiResponseTime] = useState(0);
+   628→   628→  const [apiHistory, setApiHistory] = useState<number[]>([120, 95, 140, 110, 85, 130, 100, 115, 90, 105, 125, 98]);
+   629→   629→
+   630→   630→  useEffect(() => {
+   631→   631→    const startTime = Date.now();
+   632→   632→    const interval = setInterval(() => {
+   633→   633→      setUptime(Math.floor((Date.now() - startTime) / 1000));
+   634→   634→    }, 1000);
+   635→   635→    return () => clearInterval(interval);
+   636→   636→  }, []);
+   637→   637→
+   638→   638→  useEffect(() => {
+   639→   639→    const measure = async () => {
+   640→   640→      const start = Date.now();
+   641→   641→      try {
+   642→   642→        await fetch('/api/products?storeId=store_juja_main&limit=1');
+   643→   643→        const elapsed = Date.now() - start;
+   644→   644→        setApiResponseTime(elapsed);
+   645→   645→        setApiHistory(prev => [...prev.slice(-11), elapsed]);
+   646→   646→      } catch {
+   647→   647→        setApiResponseTime(999);
+   648→   648→        setApiHistory(prev => [...prev.slice(-11), 999]);
+   649→   649→      }
+   650→   650→    };
+   651→   651→    measure();
+   652→   652→    const interval = setInterval(measure, 30000);
+   653→   653→    return () => clearInterval(interval);
+   654→   654→  }, []);
+   655→   655→
+   656→   656→  const formatUptime = (seconds: number) => {
+   657→   657→    const days = Math.floor(seconds / 86400);
+   658→   658→    const hrs = Math.floor((seconds % 86400) / 3600);
+   659→   659→    const mins = Math.floor((seconds % 3600) / 60);
+   660→   660→    const secs = seconds % 60;
+   661→   661→    if (days > 0) return `${days}d ${hrs}h ${mins}m`;
+   662→   662→    return `${hrs}h ${mins}m ${secs}s`;
+   663→   663→  };
+   664→   664→
+   665→   665→  const { data: logsData, isLoading } = useQuery({
+   666→   666→    queryKey: ['system-logs', currentStoreId, logFilter],
+   667→   667→    queryFn: () => systemLogsApi.list({
+   668→   668→      storeId: currentStoreId,
+   669→   669→      component: logFilter.component !== 'all' ? logFilter.component : undefined,
+   670→   670→      severity: logFilter.severity !== 'all' ? logFilter.severity : undefined,
+   671→   671→      limit: 100,
+   672→   672→    }),
+   673→   673→  });
+   674→   674→
+   675→   675→  const { data: movementsData } = useQuery({
+   676→   676→    queryKey: ['stock-movements', currentStoreId],
+   677→   677→    queryFn: () => stockMovementsApi.list({ storeId: currentStoreId, limit: 50 }),
+   678→   678→  });
+   679→   679→
+   680→   680→  const logs = logsData?.data || [];
+   681→   681→  const movements = movementsData?.data || [];
+   682→   682→
+   683→   683→  // Simulated health metrics
+   684→   684→  const memoryUsed = 67;
+   685→   685→  const cpuUsage = 23;
+   686→   686→  const activeSessions = 3;
+   687→   687→  const dbSizeMB = 2.4;
+   688→   688→
+   689→   689→  const getSeverityColor = (severity: string) => {
+   690→   690→    switch (severity) {
+   691→   691→      case 'CRITICAL': case 'ERROR': return 'destructive';
+   692→   692→      case 'WARN': return 'outline';
+   693→   693→      default: return 'secondary';
+   694→   694→    }
+   695→   695→  };
+   696→   696→
+   697→   697→  return (
+   698→   698→    <div className="space-y-4">
+   699→   699→      {/* ================================================================== */}
+   700→   700→      {/* Enhanced System Health Dashboard                                    */}
+   701→   701→      {/* ================================================================== */}
+   702→   702→      <Card>
+   703→   703→        <CardHeader className="pb-2">
+   704→   704→          <div className="flex items-center justify-between">
+   705→   705→            <CardTitle className="text-base flex items-center gap-2">
+   706→   706→              <Cpu className="h-4 w-4" /> System Health Dashboard
+   707→   707→            </CardTitle>
+   708→   708→            <Badge variant="outline" className="text-[10px] bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
+   709→   709→              <div className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse" />
+   710→   710→              All Systems Operational
+   711→   711→            </Badge>
+   712→   712→          </div>
+   713→   713→        </CardHeader>
+   714→   714→        <CardContent>
+   715→   715→          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+   716→   716→            {/* Left: Progress Bars */}
+   717→   717→            <div className="space-y-5">
+   718→   718→              <HealthIndicator label="CPU Usage" value={cpuUsage} max={100} unit="%" />
+   719→   719→              <HealthIndicator label="Memory Usage" value={memoryUsed} max={100} unit="%" />
+   720→   720→              <div className="space-y-1.5">
+   721→   721→                <div className="flex items-center justify-between text-sm">
+   722→   722→                  <span className="text-muted-foreground">API Response</span>
+   723→   723→                  <div className="flex items-center gap-2">
+   724→   724→                    <MiniSparkline data={apiHistory} color={apiResponseTime > 200 ? 'text-red-500' : 'text-green-600'} height={16} />
+   725→   725→                    <span className={`font-medium ${apiResponseTime > 200 ? 'text-red-600' : 'text-green-600'}`}>
+   726→   726→                      {apiResponseTime}ms
+   727→   727→                    </span>
+   728→   728→                  </div>
+   729→   729→                </div>
+   730→   730→                <Progress
+   731→   731→                  value={(apiResponseTime / 500) * 100}
+   732→   732→                  className={`h-2.5 ${apiResponseTime < 100 ? '[&>div]:bg-green-500' : apiResponseTime < 250 ? '[&>div]:bg-yellow-500' : '[&>div]:bg-red-500'}`}
+   733→   733→                />
+   734→   734→                <p className="text-[10px] text-muted-foreground">Avg: {Math.round(apiHistory.reduce((a, b) => a + b, 0) / apiHistory.length)}ms over last 12 checks</p>
+   735→   735→              </div>
+   736→   736→            </div>
+   737→   737→
+   738→   738→            {/* Right: Stat Cards */}
+   739→   739→            <div className="grid grid-cols-2 gap-3">
+   740→   740→              <div className="p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-900/40">
+   741→   741→                <div className="flex items-center gap-2 mb-1">
+   742→   742→                  <Clock className="h-4 w-4 text-green-600" />
+   743→   743→                  <span className="text-xs text-muted-foreground">Uptime</span>
+   744→   744→                </div>
+   745→   745→                <p className="text-sm font-bold text-green-600">{formatUptime(uptime)}</p>
+   746→   746→                <p className="text-[10px] text-green-600/70 mt-0.5">Since last restart</p>
+   747→   747→              </div>
+   748→   748→              <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/40">
+   749→   749→                <div className="flex items-center gap-2 mb-1">
+   750→   750→                  <HardDrive className="h-4 w-4 text-blue-600" />
+   751→   751→                  <span className="text-xs text-muted-foreground">DB Size</span>
+   752→   752→                </div>
+   753→   753→                <p className="text-sm font-bold text-blue-600">{dbSizeMB} MB</p>
+   754→   754→                <Progress value={(dbSizeMB / 100) * 100} className="h-1 mt-1 [&>div]:bg-blue-500" />
+   755→   755→              </div>
+   756→   756→              <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-900/40">
+   757→   757→                <div className="flex items-center gap-2 mb-1">
+   758→   758→                  <Users className="h-4 w-4 text-purple-600" />
+   759→   759→                  <span className="text-xs text-muted-foreground">Active Sessions</span>
+   760→   760→                </div>
+   761→   761→                <p className="text-sm font-bold text-purple-600">{activeSessions}</p>
+   762→   762→                <p className="text-[10px] text-purple-600/70 mt-0.5">Users online now</p>
+   763→   763→              </div>
+   764→   764→              <div className="p-3 rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-900/40">
+   765→   765→                <div className="flex items-center gap-2 mb-1">
+   766→   766→                  <Globe className="h-4 w-4 text-orange-600" />
+   767→   767→                  <span className="text-xs text-muted-foreground">API Latency</span>
+   768→   768→                </div>
+   769→   769→                <p className="text-sm font-bold text-orange-600">{apiResponseTime}ms</p>
+   770→   770→                <MiniSparkline data={apiHistory} color="text-orange-500" height={12} />
+   771→   771→              </div>
+   772→   772→            </div>
+   773→   773→          </div>
+   774→   774→        </CardContent>
+   775→   775→      </Card>
+   776→   776→
+   777→   777→      {/* ================================================================== */}
+   778→   778→      {/* User Management & Quick Actions Row                                 */}
+   779→   779→      {/* ================================================================== */}
+   780→   780→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   781→   781→        {/* User Management */}
+   782→   782→        <Card>
+   783→   783→          <CardHeader className="pb-2">
+   784→   784→            <CardTitle className="text-base flex items-center gap-2">
+   785→   785→              <Users className="h-4 w-4" /> User Management
+   786→   786→            </CardTitle>
+   787→   787→            <CardDescription className="text-xs">Manage user accounts and permissions</CardDescription>
+   788→   788→          </CardHeader>
+   789→   789→          <CardContent>
+   790→   790→            <UserManagement />
+   791→   791→          </CardContent>
+   792→   792→        </Card>
+   793→   793→
+   794→   794→        {/* Quick Actions */}
+   795→   795→        <Card>
+   796→   796→          <CardHeader className="pb-2">
+   797→   797→            <CardTitle className="text-base flex items-center gap-2">
+   798→   798→              <Zap className="h-4 w-4" /> Quick Actions
+   799→   799→            </CardTitle>
+   800→   800→            <CardDescription className="text-xs">System maintenance and utility operations</CardDescription>
+   801→   801→          </CardHeader>
+   802→   802→          <CardContent>
+   803→   803→            <QuickActions />
+   804→   804→          </CardContent>
+   805→   805→        </Card>
+   806→   806→      </div>
+   807→   807→
+   808→   808→      {/* ================================================================== */}
+   809→   809→      {/* Activity Feed (Enhanced)                                            */}
+   810→   810→      {/* ================================================================== */}
+   811→   811→      <Card>
+   812→   812→        <CardHeader className="pb-2">
+   813→   813→          <CardTitle className="text-base flex items-center gap-2">
+   814→   814→            <Bell className="h-4 w-4" /> Recent Activity
+   815→   815→          </CardTitle>
+   816→   816→        </CardHeader>
+   817→   817→        <CardContent>
+   818→   818→          <ActivityFeed logs={logs} />
+   819→   819→        </CardContent>
+   820→   820→      </Card>
+   821→   821→
+   822→   822→      {/* ================================================================== */}
+   823→   823→      {/* System Logs & Stock Movements Tabs                                  */}
+   824→   824→      {/* ================================================================== */}
+   825→   825→      <Tabs defaultValue="logs">
+   826→   826→        <TabsList>
+   827→   827→          <TabsTrigger value="logs"><Activity className="mr-2 h-4 w-4" />System Logs</TabsTrigger>
+   828→   828→          <TabsTrigger value="movements"><ArrowRight className="mr-2 h-4 w-4" />Stock Movements</TabsTrigger>
+   829→   829→        </TabsList>
+   830→   830→
+   831→   831→        <TabsContent value="logs" className="space-y-4">
+   832→   832→          <div className="flex gap-3">
+   833→   833→            <Select value={logFilter.component} onValueChange={(v) => setLogFilter({ ...logFilter, component: v })}>
+   834→   834→              <SelectTrigger className="w-48"><SelectValue placeholder="All Components" /></SelectTrigger>
+   835→   835→              <SelectContent>
+   836→   836→                <SelectItem value="all">All Components</SelectItem>
+   837→   837→                <SelectItem value="POS">POS</SelectItem>
+   838→   838→                <SelectItem value="INVENTORY">Inventory</SelectItem>
+   839→   839→                <SelectItem value="FINANCIAL">Financial</SelectItem>
+   840→   840→                <SelectItem value="AUTH">Auth</SelectItem>
+   841→   841→                <SelectItem value="PAYMENT">Payment</SelectItem>
+   842→   842→                <SelectItem value="RENTAL">Rental</SelectItem>
+   843→   843→                <SelectItem value="SYSTEM">System</SelectItem>
+   844→   844→              </SelectContent>
+   845→   845→            </Select>
+   846→   846→            <Select value={logFilter.severity} onValueChange={(v) => setLogFilter({ ...logFilter, severity: v })}>
+   847→   847→              <SelectTrigger className="w-40"><SelectValue placeholder="All Severities" /></SelectTrigger>
+   848→   848→              <SelectContent>
+   849→   849→                <SelectItem value="all">All Severities</SelectItem>
+   850→   850→                <SelectItem value="DEBUG">Debug</SelectItem>
+   851→   851→                <SelectItem value="INFO">Info</SelectItem>
+   852→   852→                <SelectItem value="WARN">Warning</SelectItem>
+   853→   853→                <SelectItem value="ERROR">Error</SelectItem>
+   854→   854→                <SelectItem value="CRITICAL">Critical</SelectItem>
+   855→   855→              </SelectContent>
+   856→   856→            </Select>
+   857→   857→          </div>
+   858→   858→
+   859→   859→          <Card>
+   860→   860→            <CardContent className="p-0">
+   861→   861→              {isLoading ? (
+   862→   862→                <div className="p-6 space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+   863→   863→              ) : (
+   864→   864→                <div className="overflow-x-auto">
+   865→   865→                  <Table>
+   866→   866→                    <TableHeader>
+   867→   867→                      <TableRow>
+   868→   868→                        <TableHead>Timestamp</TableHead>
+   869→   869→                        <TableHead>Component</TableHead>
+   870→   870→                        <TableHead>Severity</TableHead>
+   871→   871→                        <TableHead>Action</TableHead>
+   872→   872→                        <TableHead className="max-w-[300px]">Message</TableHead>
+   873→   873→                        <TableHead>User</TableHead>
+   874→   874→                      </TableRow>
+   875→   875→                    </TableHeader>
+   876→   876→                    <TableBody>
+   877→   877→                      {logs.length === 0 ? (
+   878→   878→                        <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No logs found</TableCell></TableRow>
+   879→   879→                      ) : logs.map((log) => (
+   880→   880→                        <TableRow key={log.id}>
+   881→   881→                          <TableCell className="text-xs font-mono whitespace-nowrap">{formatDateTime(log.createdAt)}</TableCell>
+   882→   882→                          <TableCell><Badge variant="outline" className="text-[10px]">{log.component}</Badge></TableCell>
+   883→   883→                          <TableCell><Badge variant={getSeverityColor(log.severity) as "destructive" | "outline" | "secondary"} className="text-[10px]">{log.severity}</Badge></TableCell>
+   884→   884→                          <TableCell className="text-sm">{log.action}</TableCell>
+   885→   885→                          <TableCell className="text-sm max-w-[300px] truncate">{log.message}</TableCell>
+   886→   886→                          <TableCell className="text-sm">{log.user?.name || '—'}</TableCell>
+   887→   887→                        </TableRow>
+   888→   888→                      ))}
+   889→   889→                    </TableBody>
+   890→   890→                  </Table>
+   891→   891→                </div>
+   892→   892→              )}
+   893→   893→            </CardContent>
+   894→   894→          </Card>
+   895→   895→        </TabsContent>
+   896→   896→
+   897→   897→        <TabsContent value="movements" className="space-y-4">
+   898→   898→          <Card>
+   899→   899→            <CardHeader className="pb-2">
+   900→   900→              <div className="flex items-center justify-between">
+   901→   901→                <CardTitle className="text-base">Stock Movements</CardTitle>
+   902→   902→                <StockAdjustmentDialog storeId={currentStoreId} />
+   903→   903→              </div>
+   904→   904→            </CardHeader>
+   905→   905→            <CardContent className="p-0">
+   906→   906→              <div className="overflow-x-auto">
+   907→   907→                <Table>
+   908→   908→                  <TableHeader>
+   909→   909→                    <TableRow>
+   910→   910→                      <TableHead>Date</TableHead>
+   911→   911→                      <TableHead>Product</TableHead>
+   912→   912→                      <TableHead>Type</TableHead>
+   913→   913→                      <TableHead className="text-right">Quantity</TableHead>
+   914→   914→                      <TableHead>Notes</TableHead>
+   915→   915→                    </TableRow>
+   916→   916→                  </TableHeader>
+   917→   917→                  <TableBody>
+   918→   918→                    {movements.length === 0 ? (
+   919→   919→                      <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No stock movements</TableCell></TableRow>
+   920→   920→                    ) : movements.map((m) => (
+   921→   921→                      <TableRow key={m.id}>
+   922→   922→                        <TableCell className="text-sm">{formatDateTime(m.createdAt)}</TableCell>
+   923→   923→                        <TableCell className="text-sm font-medium">{m.product?.name || m.productId}</TableCell>
+   924→   924→                        <TableCell><Badge variant="outline" className="text-[10px]">{m.movementType}</Badge></TableCell>
+   925→   925→                        <TableCell className="text-right font-medium">
+   926→   926→                          <span className={m.quantity > 0 ? 'text-green-600' : 'text-red-600'}>
+   927→   927→                            {m.quantity > 0 ? '+' : ''}{m.quantity}
+   928→   928→                          </span>
+   929→   929→                        </TableCell>
+   930→   930→                        <TableCell className="text-sm text-muted-foreground">{m.notes || '—'}</TableCell>
+   931→   931→                      </TableRow>
+   932→   932→                    ))}
+   933→   933→                  </TableBody>
+   934→   934→                </Table>
+   935→   935→              </div>
+   936→   936→            </CardContent>
+   937→   937→          </Card>
+   938→   938→        </TabsContent>
+   939→   939→      </Tabs>
+   940→   940→    </div>
+   941→   941→  );
+   942→   942→}
+   943→   943→

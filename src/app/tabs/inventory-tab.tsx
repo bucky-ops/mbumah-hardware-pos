@@ -1,24 +1,26 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Package, Search, Plus, AlertTriangle, AlertCircle, DollarSign,
   MoreVertical, Edit, Trash2, Loader2, CheckCircle, Copy, ArrowUpDown,
-  Minus, TrendingUp, BarChart3
+  Minus, TrendingUp, BarChart3, ChevronUp, ChevronDown, ChevronsUpDown,
+  Download, History, ArrowUp, ArrowDown, RotateCcw, X, ImageIcon
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
   productsApi, categoriesApi, stockMovementsApi,
-  formatKES,
+  formatKES, formatDate,
   type ProductListItem,
   type CategoryItem,
+  type StockMovementItem,
 } from '@/lib/api';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -45,6 +47,25 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Nails & Fasteners': '#78716C',
 };
 
+// Category image mapping (same as page.tsx)
+const CATEGORY_IMAGES: Record<string, string> = {
+  cat_cement: '/categories/cat_cement.png',
+  cat_iron_sheets: '/categories/cat_iron.png',
+  cat_paints: '/categories/cat_paints.png',
+  cat_iron_bars: '/categories/cat_rebar.png',
+  cat_wheelbarrows: '/categories/cat_wheelbarrow.png',
+  cat_mesh_wires: '/categories/cat_mesh.png',
+  cat_tools: '/categories/cat_tools.png',
+  cat_plumbing: '/categories/cat_plumbing.png',
+  cat_electrical: '/categories/cat_electrical.png',
+  cat_nails_screws: '/categories/cat_nails.png',
+};
+
+function getCategoryImage(categoryId: string | null | undefined): string | null {
+  if (!categoryId) return null;
+  return CATEGORY_IMAGES[categoryId] || null;
+}
+
 function getCategoryColor(name: string): string {
   return CATEGORY_COLORS[name] || '#6B7280';
 }
@@ -53,6 +74,36 @@ function getProfitMarginColor(margin: number): { text: string; bg: string } {
   if (margin >= 30) return { text: 'text-green-700 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-900/30' };
   if (margin >= 15) return { text: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30' };
   return { text: 'text-red-700 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-900/30' };
+}
+
+// Movement type badge config
+function getMovementBadge(type: string): { label: string; className: string } {
+  switch (type) {
+    case 'PURCHASE':
+    case 'SALE': // Positive sale (return)
+      return { label: 'IN', className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' };
+    case 'ADJUSTMENT':
+      return { label: 'ADJ', className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' };
+    case 'RETURN':
+    case 'RENTAL_RETURN':
+      return { label: 'RETURN', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' };
+    case 'SALE': // Negative (outgoing)
+    case 'RENTAL_OUT':
+    case 'TRANSFER':
+    default:
+      return { label: type === 'SALE' ? 'OUT' : type.slice(0, 3), className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' };
+  }
+}
+
+type SortField = 'name' | 'sku' | 'pricePerUnit' | 'costPrice' | 'quantityInStock' | 'profitMargin';
+type SortDirection = 'asc' | 'desc';
+
+// Sort indicator component - defined outside render to avoid re-creation
+function SortIndicator({ field, sortField, sortDirection }: { field: SortField; sortField: SortField; sortDirection: SortDirection }) {
+  if (sortField !== field) return <ChevronsUpDown className="h-3 w-3 text-muted-foreground/40" />;
+  return sortDirection === 'asc'
+    ? <ChevronUp className="h-3 w-3 text-primary" />
+    : <ChevronDown className="h-3 w-3 text-primary" />;
 }
 
 export default function InventoryTab() {
@@ -67,6 +118,20 @@ export default function InventoryTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
   const queryClient = useQueryClient();
 
+  // Sorting state
+  const [sortField, setSortField] = useState<SortField>('name');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkAdjustOpen, setBulkAdjustOpen] = useState(false);
+  const [bulkAdjustAmount, setBulkAdjustAmount] = useState(0);
+  const [bulkAdjustReason, setBulkAdjustReason] = useState('');
+
+  // Inline quick adjust state
+  const [quickAdjustId, setQuickAdjustId] = useState<string | null>(null);
+  const [quickAdjustValue, setQuickAdjustValue] = useState('');
+
   const [newProduct, setNewProduct] = useState({
     name: '', sku: '', barcode: '', pricePerUnit: '', costPrice: '', quantityInStock: '',
     reorderLevel: '10', unitType: 'PIECE', categoryId: '', description: '',
@@ -74,7 +139,7 @@ export default function InventoryTab() {
   });
 
   const { data: productsData, isLoading } = useQuery({
-    queryKey: ['products', currentStoreId, searchQuery, selectedCategory, stockFilter],
+    queryKey: ['products', currentStoreId],
     queryFn: () => productsApi.list({
       storeId: currentStoreId,
       search: searchQuery || undefined,
@@ -86,6 +151,12 @@ export default function InventoryTab() {
   const { data: categoriesData } = useQuery({
     queryKey: ['categories', currentStoreId],
     queryFn: () => categoriesApi.list(currentStoreId),
+  });
+
+  // Stock movements query for history section
+  const { data: stockMovementsData } = useQuery({
+    queryKey: ['stock-movements', currentStoreId],
+    queryFn: () => stockMovementsApi.list({ storeId: currentStoreId, limit: 20 }),
   });
 
   const createProductMutation = useMutation({
@@ -121,23 +192,97 @@ export default function InventoryTab() {
       setStockAdjustAmount(0);
       setStockAdjustReason('');
       queryClient.invalidateQueries({ queryKey: ['products', currentStoreId] });
+      queryClient.invalidateQueries({ queryKey: ['stock-movements', currentStoreId] });
     },
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const products = (productsData?.data || []).filter((p) => {
-    if (stockFilter === 'low') return p.quantityInStock <= p.reorderLevel && p.quantityInStock > 0;
-    if (stockFilter === 'out') return p.quantityInStock <= 0;
-    if (stockFilter === 'ok') return p.quantityInStock > p.reorderLevel;
-    return true;
+  // Bulk adjust mutation
+  const bulkAdjustMutation = useMutation({
+    mutationFn: async ({ productIds, amount, reason }: { productIds: string[]; amount: number; reason: string }) => {
+      const results = await Promise.all(
+        productIds.map(productId =>
+          stockMovementsApi.createAdjustment({
+            storeId: currentStoreId,
+            productId,
+            quantity: amount,
+            notes: reason || undefined,
+          })
+        )
+      );
+      return results;
+    },
+    onSuccess: () => {
+      toast.success('Bulk stock adjustment applied');
+      setSelectedIds(new Set());
+      setBulkAdjustOpen(false);
+      setBulkAdjustAmount(0);
+      setBulkAdjustReason('');
+      queryClient.invalidateQueries({ queryKey: ['products', currentStoreId] });
+      queryClient.invalidateQueries({ queryKey: ['stock-movements', currentStoreId] });
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 
+  // Quick inline adjust mutation
+  const quickAdjustMutation = useMutation({
+    mutationFn: ({ productId, amount }: { productId: string; amount: number }) =>
+      stockMovementsApi.createAdjustment({
+        storeId: currentStoreId,
+        productId,
+        quantity: amount,
+        notes: 'Quick adjustment',
+      }),
+    onSuccess: () => {
+      toast.success('Stock adjusted');
+      setQuickAdjustId(null);
+      setQuickAdjustValue('');
+      queryClient.invalidateQueries({ queryKey: ['products', currentStoreId] });
+      queryClient.invalidateQueries({ queryKey: ['stock-movements', currentStoreId] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // Filtered and sorted products
+  const allProducts = productsData?.data || [];
+  const filteredProducts = useMemo(() => {
+    let result = allProducts.filter((p) => {
+      if (stockFilter === 'low') return p.quantityInStock <= p.reorderLevel && p.quantityInStock > 0;
+      if (stockFilter === 'out') return p.quantityInStock <= 0;
+      if (stockFilter === 'ok') return p.quantityInStock > p.reorderLevel;
+      return true;
+    });
+
+    // Apply sorting
+    result = [...result].sort((a, b) => {
+      let aVal: number | string;
+      let bVal: number | string;
+      switch (sortField) {
+        case 'name': aVal = a.name.toLowerCase(); bVal = b.name.toLowerCase(); break;
+        case 'sku': aVal = a.sku.toLowerCase(); bVal = b.sku.toLowerCase(); break;
+        case 'pricePerUnit': aVal = a.pricePerUnit; bVal = b.pricePerUnit; break;
+        case 'costPrice': aVal = a.costPrice; bVal = b.costPrice; break;
+        case 'quantityInStock': aVal = a.quantityInStock; bVal = b.quantityInStock; break;
+        case 'profitMargin':
+          aVal = a.pricePerUnit > 0 ? (a.pricePerUnit - a.costPrice) / a.pricePerUnit : 0;
+          bVal = b.pricePerUnit > 0 ? (b.pricePerUnit - b.costPrice) / b.pricePerUnit : 0;
+          break;
+        default: aVal = a.name.toLowerCase(); bVal = b.name.toLowerCase();
+      }
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return result;
+  }, [allProducts, stockFilter, sortField, sortDirection]);
+
   const categories = categoriesData?.data || [];
-  const lowStockCount = (productsData?.data || []).filter(p => p.quantityInStock <= p.reorderLevel && p.quantityInStock > 0).length;
-  const outOfStockCount = (productsData?.data || []).filter(p => p.quantityInStock <= 0).length;
-  const totalInventoryValue = (productsData?.data || []).reduce((sum, p) => sum + (p.costPrice * p.quantityInStock), 0);
+  const stockMovements = stockMovementsData?.data || [];
+  const lowStockCount = allProducts.filter(p => p.quantityInStock <= p.reorderLevel && p.quantityInStock > 0).length;
+  const outOfStockCount = allProducts.filter(p => p.quantityInStock <= 0).length;
+  const totalInventoryValue = allProducts.reduce((sum, p) => sum + (p.costPrice * p.quantityInStock), 0);
   const avgProfitMargin = (() => {
-    const allProducts = productsData?.data || [];
     if (allProducts.length === 0) return 0;
     const total = allProducts.reduce((sum, p) => {
       if (p.pricePerUnit > 0) return sum + ((p.pricePerUnit - p.costPrice) / p.pricePerUnit * 100);
@@ -145,6 +290,73 @@ export default function InventoryTab() {
     }, 0);
     return total / allProducts.length;
   })();
+
+  // Selection helpers
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredProducts.length && filteredProducts.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredProducts.map(p => p.id)));
+    }
+  };
+
+  const isAllSelected = filteredProducts.length > 0 && selectedIds.size === filteredProducts.length;
+
+  // Sort handler
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Export selected products as CSV
+  const handleExportSelected = () => {
+    const selectedProducts = filteredProducts.filter(p => selectedIds.has(p.id));
+    if (selectedProducts.length === 0) {
+      toast.error('No products selected');
+      return;
+    }
+    const headers = ['Name', 'SKU', 'Category', 'Price', 'Cost', 'Margin', 'Stock', 'Status'];
+    const csvRows = [
+      headers.join(','),
+      ...selectedProducts.map(p => {
+        const margin = p.pricePerUnit > 0 ? ((p.pricePerUnit - p.costPrice) / p.pricePerUnit * 100).toFixed(1) : '0';
+        const status = p.quantityInStock <= 0 ? 'Out of Stock' : p.quantityInStock <= p.reorderLevel ? 'Low Stock' : 'In Stock';
+        return [p.name, p.sku, p.category?.name || '', p.pricePerUnit, p.costPrice, margin, p.quantityInStock, status]
+          .map(v => String(v).includes(',') ? `"${v}"` : v)
+          .join(',');
+      }),
+    ];
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `inventory_export_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${selectedProducts.length} products`);
+  };
+
+  // Bulk delete
+  const handleBulkDelete = () => {
+    const count = selectedIds.size;
+    if (count === 0) return;
+    selectedIds.forEach(id => deleteProductMutation.mutate(id));
+    setSelectedIds(new Set());
+    toast.success(`Deleted ${count} products`);
+  };
 
   const handleCreateProduct = () => {
     createProductMutation.mutate({
@@ -211,6 +423,24 @@ export default function InventoryTab() {
 
   return (
     <div className="space-y-4">
+      {/* Low Stock Warning Banner */}
+      {(lowStockCount > 0 || outOfStockCount > 0) && (
+        <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3 flex items-center gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+          <div className="flex-1 text-sm">
+            <span className="font-semibold text-amber-800 dark:text-amber-300">
+              {outOfStockCount > 0 && `${outOfStockCount} out of stock`}
+              {outOfStockCount > 0 && lowStockCount > 0 && ' · '}
+              {lowStockCount > 0 && `${lowStockCount} low stock`}
+            </span>
+            <span className="text-amber-700 dark:text-amber-400"> — items need attention</span>
+          </div>
+          <Button variant="outline" size="sm" className="h-7 text-xs border-amber-300 dark:border-amber-700" onClick={() => setStockFilter(outOfStockCount > 0 ? 'out' : 'low')}>
+            View Issues
+          </Button>
+        </div>
+      )}
+
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="bg-gradient-to-br from-card to-muted/20 border-l-4 border-l-primary hover:-translate-y-0.5 transition-transform cursor-default">
@@ -219,7 +449,7 @@ export default function InventoryTab() {
               <div className="p-2 rounded-lg bg-primary/10"><Package className="h-5 w-5 text-primary" /></div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Products</p>
-                <p className="text-xl font-bold">{productsData?.data?.length || 0}</p>
+                <p className="text-xl font-bold">{allProducts.length}</p>
               </div>
             </div>
           </CardContent>
@@ -400,9 +630,44 @@ export default function InventoryTab() {
         </Dialog>
       </div>
 
+      {/* Bulk Actions Toolbar */}
+      {selectedIds.size > 0 && (
+        <div className="rounded-lg border bg-muted/50 p-3 flex items-center gap-3 flex-wrap">
+          <Badge variant="secondary" className="text-xs font-medium">
+            {selectedIds.size} selected
+          </Badge>
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setBulkAdjustOpen(true)}>
+            <ArrowUpDown className="mr-1.5 h-3.5 w-3.5" /> Adjust Stock
+          </Button>
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={handleExportSelected}>
+            <Download className="mr-1.5 h-3.5 w-3.5" /> Export Selected
+          </Button>
+          <Button variant="outline" size="sm" className="h-8 text-xs text-destructive hover:text-destructive" onClick={handleBulkDelete}>
+            <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete Selected
+          </Button>
+          <div className="ml-auto">
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setSelectedIds(new Set())}>
+              <X className="mr-1 h-3.5 w-3.5" /> Clear Selection
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Product Table */}
       <Card>
         <CardContent className="p-0">
+          {/* Product count summary */}
+          <div className="px-4 py-2 border-b bg-muted/20">
+            <p className="text-xs text-muted-foreground">
+              Showing <span className="font-medium">{filteredProducts.length}</span> of <span className="font-medium">{allProducts.length}</span> products
+              {searchQuery && <span> matching &quot;{searchQuery}&quot;</span>}
+              {stockFilter !== 'all' && <span> · {stockFilter === 'ok' ? 'In Stock' : stockFilter === 'low' ? 'Low Stock' : 'Out of Stock'}</span>}
+              {selectedCategory !== 'all' && categories.find(c => c.id === selectedCategory) && (
+                <span> · {categories.find(c => c.id === selectedCategory)?.name}</span>
+              )}
+            </p>
+          </div>
+
           {isLoading ? (
             <div className="p-6 space-y-3">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -414,42 +679,108 @@ export default function InventoryTab() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[220px]">Product</TableHead>
-                    <TableHead>SKU</TableHead>
+                    <TableHead className="w-[40px]">
+                      <Checkbox
+                        checked={isAllSelected}
+                        onCheckedChange={toggleSelectAll}
+                        aria-label="Select all"
+                      />
+                    </TableHead>
+                    <TableHead className="w-[40px]">Img</TableHead>
+                    <TableHead className="w-[220px]">
+                      <button type="button" className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => handleSort('name')}>
+                        Product <SortIndicator field="name" sortField={sortField} sortDirection={sortDirection} />
+                      </button>
+                    </TableHead>
+                    <TableHead>
+                      <button type="button" className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => handleSort('sku')}>
+                        SKU <SortIndicator field="sku" sortField={sortField} sortDirection={sortDirection} />
+                      </button>
+                    </TableHead>
                     <TableHead>Category</TableHead>
-                    <TableHead className="text-right">Price</TableHead>
-                    <TableHead className="text-right">Cost</TableHead>
-                    <TableHead className="text-right">Margin</TableHead>
-                    <TableHead className="w-[120px]">Stock</TableHead>
+                    <TableHead className="text-right">
+                      <button type="button" className="flex items-center gap-1 ml-auto hover:text-foreground transition-colors" onClick={() => handleSort('pricePerUnit')}>
+                        Price <SortIndicator field="pricePerUnit" sortField={sortField} sortDirection={sortDirection} />
+                      </button>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <button type="button" className="flex items-center gap-1 ml-auto hover:text-foreground transition-colors" onClick={() => handleSort('costPrice')}>
+                        Cost <SortIndicator field="costPrice" sortField={sortField} sortDirection={sortDirection} />
+                      </button>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <button type="button" className="flex items-center gap-1 ml-auto hover:text-foreground transition-colors" onClick={() => handleSort('profitMargin')}>
+                        Margin <SortIndicator field="profitMargin" sortField={sortField} sortDirection={sortDirection} />
+                      </button>
+                    </TableHead>
+                    <TableHead className="w-[140px]">
+                      <button type="button" className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => handleSort('quantityInStock')}>
+                        Stock <SortIndicator field="quantityInStock" sortField={sortField} sortDirection={sortDirection} />
+                      </button>
+                    </TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="w-[80px]">Actions</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {products.length === 0 ? (
+                  {filteredProducts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                        No products found
+                      <TableCell colSpan={11} className="text-center py-12">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="p-4 rounded-full bg-muted/50">
+                            <Package className="h-8 w-8 text-muted-foreground/50" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">No products found</p>
+                            <p className="text-xs text-muted-foreground/70 mt-1">
+                              {searchQuery || stockFilter !== 'all' || selectedCategory !== 'all'
+                                ? 'Try adjusting your filters'
+                                : 'Add your first product to get started'}
+                            </p>
+                          </div>
+                          {(searchQuery || stockFilter !== 'all' || selectedCategory !== 'all') && (
+                            <Button variant="outline" size="sm" className="text-xs mt-1" onClick={() => { setSearchQuery(''); setStockFilter('all'); setSelectedCategory('all'); }}>
+                              Clear Filters
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ) : (
-                    products.map((product, idx) => {
+                    filteredProducts.map((product, idx) => {
                       const profitMargin = product.pricePerUnit > 0
                         ? ((product.pricePerUnit - product.costPrice) / product.pricePerUnit * 100)
                         : 0;
                       const marginColor = getProfitMarginColor(profitMargin);
                       const catColor = product.category?.name ? getCategoryColor(product.category.name) : '#6B7280';
+                      const catImage = getCategoryImage(product.categoryId);
+                      const isQuickAdjusting = quickAdjustId === product.id;
 
                       return (
                         <TableRow
                           key={product.id}
-                          className={`${idx % 2 === 1 ? 'bg-muted/30' : ''} hover:bg-primary/5 transition-colors`}
+                          className={`${idx % 2 === 1 ? 'bg-muted/20' : ''} ${selectedIds.has(product.id) ? 'bg-primary/5' : ''} hover:bg-primary/5 transition-colors`}
                         >
                           <TableCell>
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded bg-muted flex items-center justify-center shrink-0">
-                                <Package className="h-4 w-4 text-muted-foreground" />
+                            <Checkbox
+                              checked={selectedIds.has(product.id)}
+                              onCheckedChange={() => toggleSelect(product.id)}
+                              aria-label={`Select ${product.name}`}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {catImage ? (
+                              <div className="w-8 h-8 rounded overflow-hidden bg-muted shrink-0">
+                                <img src={catImage} alt={product.category?.name || 'Product category'} className="h-full w-full object-cover" />
                               </div>
+                            ) : (
+                              <div className="w-8 h-8 rounded bg-muted flex items-center justify-center shrink-0">
+                                <ImageIcon className="h-3.5 w-3.5 text-muted-foreground/40" />
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
                               <div>
                                 <p className="font-medium text-sm">{product.name}</p>
                                 <div className="flex gap-1 mt-0.5">
@@ -463,7 +794,7 @@ export default function InventoryTab() {
                           <TableCell className="text-sm">
                             <div className="flex items-center gap-2">
                               <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: catColor }} />
-                              {product.category?.name || '—'}
+                              <span className="truncate max-w-[100px]">{product.category?.name || '—'}</span>
                             </div>
                           </TableCell>
                           <TableCell className="text-right font-medium">{formatKES(product.pricePerUnit)}</TableCell>
@@ -474,10 +805,70 @@ export default function InventoryTab() {
                             </span>
                           </TableCell>
                           <TableCell>
-                            <div className="space-y-1">
-                              <span className="text-sm font-medium">{product.quantityInStock}</span>
-                              <MiniStockBar product={product} />
-                            </div>
+                            {isQuickAdjusting ? (
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  type="number"
+                                  value={quickAdjustValue}
+                                  onChange={(e) => setQuickAdjustValue(e.target.value)}
+                                  className="h-7 w-16 text-xs text-center"
+                                  placeholder="+/-"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      const val = Number(quickAdjustValue);
+                                      if (val !== 0) {
+                                        quickAdjustMutation.mutate({ productId: product.id, amount: val });
+                                      }
+                                    } else if (e.key === 'Escape') {
+                                      setQuickAdjustId(null);
+                                      setQuickAdjustValue('');
+                                    }
+                                  }}
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => {
+                                    const val = Number(quickAdjustValue);
+                                    if (val !== 0) {
+                                      quickAdjustMutation.mutate({ productId: product.id, amount: val });
+                                    }
+                                  }}
+                                  disabled={quickAdjustMutation.isPending}
+                                >
+                                  <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => { setQuickAdjustId(null); setQuickAdjustValue(''); }}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="space-y-1 flex items-center gap-2">
+                                <div className="flex-1">
+                                  <span className="text-sm font-medium">{product.quantityInStock}</span>
+                                  <MiniStockBar product={product} />
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 shrink-0"
+                                  onClick={() => {
+                                    setQuickAdjustId(product.id);
+                                    setQuickAdjustValue('');
+                                  }}
+                                  title="Quick stock adjust (+/-)"
+                                >
+                                  <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
+                                </Button>
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell>
                             {product.quantityInStock <= 0 ? (
@@ -523,6 +914,69 @@ export default function InventoryTab() {
                       );
                     })
                   )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Stock Movement History */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <History className="h-4 w-4" /> Recent Stock Movements
+            </CardTitle>
+            <Badge variant="outline" className="text-xs">{stockMovements.length} recent</Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {stockMovements.length === 0 ? (
+            <div className="flex flex-col items-center py-8 gap-2">
+              <RotateCcw className="h-8 w-8 text-muted-foreground/30" />
+              <p className="text-sm text-muted-foreground">No stock movements recorded yet</p>
+              <p className="text-xs text-muted-foreground/70">Movements will appear when you adjust stock or make sales</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto max-h-[350px] overflow-y-auto custom-scrollbar">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-right">Qty Change</TableHead>
+                    <TableHead>Reason</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {stockMovements.map((movement: StockMovementItem) => {
+                    const badge = getMovementBadge(movement.movementType);
+                    return (
+                      <TableRow key={movement.id}>
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          {new Date(movement.createdAt).toLocaleDateString('en-KE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {movement.product?.name || 'Unknown'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={`text-[10px] font-semibold px-2 ${badge.className}`}>
+                            {badge.label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <span className={`text-sm font-mono font-medium ${movement.quantity > 0 ? 'text-green-600' : movement.quantity < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                            {movement.quantity > 0 ? '+' : ''}{movement.quantity}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">
+                          {movement.notes || '—'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -706,6 +1160,67 @@ export default function InventoryTab() {
             >
               {stockAdjustMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowUpDown className="mr-2 h-4 w-4" />}
               Apply Adjustment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Adjust Stock Dialog */}
+      <Dialog open={bulkAdjustOpen} onOpenChange={setBulkAdjustOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowUpDown className="h-5 w-5 text-accent-orange" />
+              Bulk Stock Adjustment
+            </DialogTitle>
+            <DialogDescription>
+              Adjust stock for {selectedIds.size} selected products
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="text-sm text-muted-foreground">
+                This will apply the same quantity adjustment to <span className="font-medium">{selectedIds.size}</span> products.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Adjustment Amount (positive to add, negative to subtract)</Label>
+              <Input
+                type="number"
+                value={bulkAdjustAmount}
+                onChange={(e) => setBulkAdjustAmount(Number(e.target.value))}
+                className="text-center text-lg font-bold"
+              />
+              <div className="flex gap-2 flex-wrap">
+                <Button variant="outline" size="sm" className="text-xs" onClick={() => setBulkAdjustAmount(-10)}>-10</Button>
+                <Button variant="outline" size="sm" className="text-xs" onClick={() => setBulkAdjustAmount(-5)}>-5</Button>
+                <Button variant="outline" size="sm" className="text-xs" onClick={() => setBulkAdjustAmount(5)}>+5</Button>
+                <Button variant="outline" size="sm" className="text-xs" onClick={() => setBulkAdjustAmount(10)}>+10</Button>
+                <Button variant="outline" size="sm" className="text-xs" onClick={() => setBulkAdjustAmount(50)}>+50</Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Reason <span className="text-muted-foreground">(optional)</span></Label>
+              <Input
+                value={bulkAdjustReason}
+                onChange={(e) => setBulkAdjustReason(e.target.value)}
+                placeholder="e.g. Stock count correction..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkAdjustOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+              disabled={bulkAdjustMutation.isPending || bulkAdjustAmount === 0}
+              onClick={() => bulkAdjustMutation.mutate({
+                productIds: Array.from(selectedIds),
+                amount: bulkAdjustAmount,
+                reason: bulkAdjustReason,
+              })}
+            >
+              {bulkAdjustMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowUpDown className="mr-2 h-4 w-4" />}
+              Apply to {selectedIds.size} Products
             </Button>
           </DialogFooter>
         </DialogContent>

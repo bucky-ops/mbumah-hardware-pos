@@ -1,0 +1,716 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import React, { useState } from 'react';
+     4→     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+     5→     5→import { toast } from 'sonner';
+     6→     6→import {
+     7→     7→  Package, Search, Plus, AlertTriangle, AlertCircle, DollarSign,
+     8→     8→  MoreVertical, Edit, Trash2, Loader2, CheckCircle, Copy, ArrowUpDown,
+     9→     9→  Minus, TrendingUp, BarChart3
+    10→    10→} from 'lucide-react';
+    11→    11→
+    12→    12→import { useAppStore } from '@/lib/stores';
+    13→    13→import {
+    14→    14→  productsApi, categoriesApi, stockMovementsApi,
+    15→    15→  formatKES,
+    16→    16→  type ProductListItem,
+    17→    17→  type CategoryItem,
+    18→    18→} from '@/lib/api';
+    19→    19→
+    20→    20→import { Button } from '@/components/ui/button';
+    21→    21→import { Card, CardContent } from '@/components/ui/card';
+    22→    22→import { Input } from '@/components/ui/input';
+    23→    23→import { Label } from '@/components/ui/label';
+    24→    24→import { Badge } from '@/components/ui/badge';
+    25→    25→import { Skeleton } from '@/components/ui/skeleton';
+    26→    26→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+    27→    27→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+    28→    28→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    29→    29→import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+    30→    30→import { Checkbox } from '@/components/ui/checkbox';
+    31→    31→import { Textarea } from '@/components/ui/textarea';
+    32→    32→import { Separator } from '@/components/ui/separator';
+    33→    33→
+    34→    34→// Category color map for dots
+    35→    35→const CATEGORY_COLORS: Record<string, string> = {
+    36→    36→  'Cement & Building': '#6B7280',
+    37→    37→  'Iron Sheets & Roofing': '#3B82F6',
+    38→    38→  'Paints & Finishes': '#8B5CF6',
+    39→    39→  'Steel & Rebar': '#EF4444',
+    40→    40→  'Wheelbarrows & Carts': '#F59E0B',
+    41→    41→  'Wire & Mesh': '#6366F1',
+    42→    42→  'Tools & Equipment': '#10B981',
+    43→    43→  'Plumbing & PVC': '#06B6D4',
+    44→    44→  'Electrical Supplies': '#F97316',
+    45→    45→  'Nails & Fasteners': '#78716C',
+    46→    46→};
+    47→    47→
+    48→    48→function getCategoryColor(name: string): string {
+    49→    49→  return CATEGORY_COLORS[name] || '#6B7280';
+    50→    50→}
+    51→    51→
+    52→    52→function getProfitMarginColor(margin: number): { text: string; bg: string } {
+    53→    53→  if (margin >= 30) return { text: 'text-green-700 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-900/30' };
+    54→    54→  if (margin >= 15) return { text: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30' };
+    55→    55→  return { text: 'text-red-700 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-900/30' };
+    56→    56→}
+    57→    57→
+    58→    58→export default function InventoryTab() {
+    59→    59→  const [searchQuery, setSearchQuery] = useState('');
+    60→    60→  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+    61→    61→  const [addProductOpen, setAddProductOpen] = useState(false);
+    62→    62→  const [editProduct, setEditProduct] = useState<ProductListItem | null>(null);
+    63→    63→  const [stockFilter, setStockFilter] = useState<string>('all');
+    64→    64→  const [adjustStockProduct, setAdjustStockProduct] = useState<ProductListItem | null>(null);
+    65→    65→  const [stockAdjustAmount, setStockAdjustAmount] = useState(0);
+    66→    66→  const [stockAdjustReason, setStockAdjustReason] = useState('');
+    67→    67→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+    68→    68→  const queryClient = useQueryClient();
+    69→    69→
+    70→    70→  const [newProduct, setNewProduct] = useState({
+    71→    71→    name: '', sku: '', barcode: '', pricePerUnit: '', costPrice: '', quantityInStock: '',
+    72→    72→    reorderLevel: '10', unitType: 'PIECE', categoryId: '', description: '',
+    73→    73→    isRental: false, isBundle: false,
+    74→    74→  });
+    75→    75→
+    76→    76→  const { data: productsData, isLoading } = useQuery({
+    77→    77→    queryKey: ['products', currentStoreId, searchQuery, selectedCategory, stockFilter],
+    78→    78→    queryFn: () => productsApi.list({
+    79→    79→      storeId: currentStoreId,
+    80→    80→      search: searchQuery || undefined,
+    81→    81→      limit: 200,
+    82→    82→      ...(selectedCategory !== 'all' ? { categoryId: selectedCategory } : {}),
+    83→    83→    }),
+    84→    84→  });
+    85→    85→
+    86→    86→  const { data: categoriesData } = useQuery({
+    87→    87→    queryKey: ['categories', currentStoreId],
+    88→    88→    queryFn: () => categoriesApi.list(currentStoreId),
+    89→    89→  });
+    90→    90→
+    91→    91→  const createProductMutation = useMutation({
+    92→    92→    mutationFn: productsApi.create,
+    93→    93→    onSuccess: () => {
+    94→    94→      toast.success('Product created successfully');
+    95→    95→      setAddProductOpen(false);
+    96→    96→      setNewProduct({ name: '', sku: '', barcode: '', pricePerUnit: '', costPrice: '', quantityInStock: '', reorderLevel: '10', unitType: 'PIECE', categoryId: '', description: '', isRental: false, isBundle: false });
+    97→    97→    },
+    98→    98→    onError: (err: Error) => toast.error(err.message),
+    99→    99→  });
+   100→   100→
+   101→   101→  const updateProductMutation = useMutation({
+   102→   102→    mutationFn: ({ id, data }: { id: string; data: Partial<ProductListItem> }) => productsApi.update(id, data),
+   103→   103→    onSuccess: () => {
+   104→   104→      toast.success('Product updated');
+   105→   105→      setEditProduct(null);
+   106→   106→    },
+   107→   107→    onError: (err: Error) => toast.error(err.message),
+   108→   108→  });
+   109→   109→
+   110→   110→  const deleteProductMutation = useMutation({
+   111→   111→    mutationFn: productsApi.delete,
+   112→   112→    onSuccess: () => toast.success('Product deleted'),
+   113→   113→    onError: (err: Error) => toast.error(err.message),
+   114→   114→  });
+   115→   115→
+   116→   116→  const stockAdjustMutation = useMutation({
+   117→   117→    mutationFn: stockMovementsApi.createAdjustment,
+   118→   118→    onSuccess: () => {
+   119→   119→      toast.success('Stock adjusted successfully');
+   120→   120→      setAdjustStockProduct(null);
+   121→   121→      setStockAdjustAmount(0);
+   122→   122→      setStockAdjustReason('');
+   123→   123→      queryClient.invalidateQueries({ queryKey: ['products', currentStoreId] });
+   124→   124→    },
+   125→   125→    onError: (err: Error) => toast.error(err.message),
+   126→   126→  });
+   127→   127→
+   128→   128→  const products = (productsData?.data || []).filter((p) => {
+   129→   129→    if (stockFilter === 'low') return p.quantityInStock <= p.reorderLevel && p.quantityInStock > 0;
+   130→   130→    if (stockFilter === 'out') return p.quantityInStock <= 0;
+   131→   131→    if (stockFilter === 'ok') return p.quantityInStock > p.reorderLevel;
+   132→   132→    return true;
+   133→   133→  });
+   134→   134→
+   135→   135→  const categories = categoriesData?.data || [];
+   136→   136→  const lowStockCount = (productsData?.data || []).filter(p => p.quantityInStock <= p.reorderLevel && p.quantityInStock > 0).length;
+   137→   137→  const outOfStockCount = (productsData?.data || []).filter(p => p.quantityInStock <= 0).length;
+   138→   138→  const totalInventoryValue = (productsData?.data || []).reduce((sum, p) => sum + (p.costPrice * p.quantityInStock), 0);
+   139→   139→  const avgProfitMargin = (() => {
+   140→   140→    const allProducts = productsData?.data || [];
+   141→   141→    if (allProducts.length === 0) return 0;
+   142→   142→    const total = allProducts.reduce((sum, p) => {
+   143→   143→      if (p.pricePerUnit > 0) return sum + ((p.pricePerUnit - p.costPrice) / p.pricePerUnit * 100);
+   144→   144→      return sum;
+   145→   145→    }, 0);
+   146→   146→    return total / allProducts.length;
+   147→   147→  })();
+   148→   148→
+   149→   149→  const handleCreateProduct = () => {
+   150→   150→    createProductMutation.mutate({
+   151→   151→      storeId: currentStoreId,
+   152→   152→      name: newProduct.name,
+   153→   153→      sku: newProduct.sku,
+   154→   154→      barcode: newProduct.barcode || undefined,
+   155→   155→      pricePerUnit: Number(newProduct.pricePerUnit),
+   156→   156→      costPrice: Number(newProduct.costPrice),
+   157→   157→      quantityInStock: Number(newProduct.quantityInStock),
+   158→   158→      reorderLevel: Number(newProduct.reorderLevel),
+   159→   159→      unitType: newProduct.unitType,
+   160→   160→      categoryId: newProduct.categoryId || undefined,
+   161→   161→      description: newProduct.description || undefined,
+   162→   162→      isRental: newProduct.isRental,
+   163→   163→      isBundle: newProduct.isBundle,
+   164→   164→    });
+   165→   165→  };
+   166→   166→
+   167→   167→  const handleDuplicateProduct = (product: ProductListItem) => {
+   168→   168→    const dupSku = product.sku + '-COPY';
+   169→   169→    createProductMutation.mutate({
+   170→   170→      storeId: currentStoreId,
+   171→   171→      name: product.name + ' (Copy)',
+   172→   172→      sku: dupSku,
+   173→   173→      barcode: product.barcode || undefined,
+   174→   174→      pricePerUnit: product.pricePerUnit,
+   175→   175→      costPrice: product.costPrice,
+   176→   176→      quantityInStock: 0,
+   177→   177→      reorderLevel: product.reorderLevel,
+   178→   178→      unitType: product.unitType,
+   179→   179→      categoryId: product.categoryId || undefined,
+   180→   180→      description: product.description || undefined,
+   181→   181→      isRental: product.isRental,
+   182→   182→      isBundle: product.isBundle,
+   183→   183→    });
+   184→   184→  };
+   185→   185→
+   186→   186→  const handleStockAdjust = () => {
+   187→   187→    if (!adjustStockProduct || stockAdjustAmount === 0) return;
+   188→   188→    stockAdjustMutation.mutate({
+   189→   189→      storeId: currentStoreId,
+   190→   190→      productId: adjustStockProduct.id,
+   191→   191→      quantity: stockAdjustAmount,
+   192→   192→      notes: stockAdjustReason || undefined,
+   193→   193→    });
+   194→   194→  };
+   195→   195→
+   196→   196→  // Mini stock bar component
+   197→   197→  const MiniStockBar = ({ product }: { product: ProductListItem }) => {
+   198→   198→    const ratio = product.reorderLevel > 0 ? product.quantityInStock / (product.reorderLevel * 3) : 1;
+   199→   199→    const pct = Math.min(100, Math.max(0, ratio * 100));
+   200→   200→    const barColor = product.quantityInStock <= 0
+   201→   201→      ? 'bg-red-500'
+   202→   202→      : product.quantityInStock <= product.reorderLevel
+   203→   203→        ? 'bg-amber-500'
+   204→   204→        : 'bg-green-500';
+   205→   205→    return (
+   206→   206→      <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
+   207→   207→        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+   208→   208→      </div>
+   209→   209→    );
+   210→   210→  };
+   211→   211→
+   212→   212→  return (
+   213→   213→    <div className="space-y-4">
+   214→   214→      {/* Stats Cards */}
+   215→   215→      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   216→   216→        <Card className="bg-gradient-to-br from-card to-muted/20 border-l-4 border-l-primary hover:-translate-y-0.5 transition-transform cursor-default">
+   217→   217→          <CardContent className="p-4">
+   218→   218→            <div className="flex items-center gap-3">
+   219→   219→              <div className="p-2 rounded-lg bg-primary/10"><Package className="h-5 w-5 text-primary" /></div>
+   220→   220→              <div>
+   221→   221→                <p className="text-sm text-muted-foreground">Total Products</p>
+   222→   222→                <p className="text-xl font-bold">{productsData?.data?.length || 0}</p>
+   223→   223→              </div>
+   224→   224→            </div>
+   225→   225→          </CardContent>
+   226→   226→        </Card>
+   227→   227→        <Card className="bg-gradient-to-br from-card to-muted/20 border-l-4 border-l-yellow-500 hover:-translate-y-0.5 transition-transform cursor-default">
+   228→   228→          <CardContent className="p-4">
+   229→   229→            <div className="flex items-center gap-3">
+   230→   230→              <div className="p-2 rounded-lg bg-yellow-100 dark:bg-yellow-900/30"><AlertTriangle className="h-5 w-5 text-yellow-600" /></div>
+   231→   231→              <div>
+   232→   232→                <p className="text-sm text-muted-foreground">Low Stock</p>
+   233→   233→                <p className="text-xl font-bold">{lowStockCount}</p>
+   234→   234→              </div>
+   235→   235→            </div>
+   236→   236→          </CardContent>
+   237→   237→        </Card>
+   238→   238→        <Card className="bg-gradient-to-br from-card to-muted/20 border-l-4 border-l-red-500 hover:-translate-y-0.5 transition-transform cursor-default">
+   239→   239→          <CardContent className="p-4">
+   240→   240→            <div className="flex items-center gap-3">
+   241→   241→              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30"><AlertCircle className="h-5 w-5 text-red-600" /></div>
+   242→   242→              <div>
+   243→   243→                <p className="text-sm text-muted-foreground">Out of Stock</p>
+   244→   244→                <p className="text-xl font-bold">{outOfStockCount}</p>
+   245→   245→              </div>
+   246→   246→            </div>
+   247→   247→          </CardContent>
+   248→   248→        </Card>
+   249→   249→        <Card className="bg-gradient-to-br from-card to-muted/20 border-l-4 border-l-green-500 hover:-translate-y-0.5 transition-transform cursor-default">
+   250→   250→          <CardContent className="p-4">
+   251→   251→            <div className="flex items-center gap-3">
+   252→   252→              <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30"><DollarSign className="h-5 w-5 text-green-600" /></div>
+   253→   253→              <div>
+   254→   254→                <p className="text-sm text-muted-foreground">Inventory Value</p>
+   255→   255→                <p className="text-xl font-bold whitespace-nowrap">{formatKES(totalInventoryValue)}</p>
+   256→   256→              </div>
+   257→   257→            </div>
+   258→   258→          </CardContent>
+   259→   259→        </Card>
+   260→   260→      </div>
+   261→   261→
+   262→   262→      {/* Toolbar */}
+   263→   263→      <div className="flex flex-col sm:flex-row gap-3">
+   264→   264→        <div className="relative flex-1">
+   265→   265→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   266→   266→          <Input placeholder="Search products..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
+   267→   267→        </div>
+   268→   268→        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+   269→   269→          <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="All Categories" /></SelectTrigger>
+   270→   270→          <SelectContent>
+   271→   271→            <SelectItem value="all">All Categories</SelectItem>
+   272→   272→            {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+   273→   273→          </SelectContent>
+   274→   274→        </Select>
+   275→   275→        <Select value={stockFilter} onValueChange={setStockFilter}>
+   276→   276→          <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="Stock Status" /></SelectTrigger>
+   277→   277→          <SelectContent>
+   278→   278→            <SelectItem value="all">All Stock</SelectItem>
+   279→   279→            <SelectItem value="ok">In Stock</SelectItem>
+   280→   280→            <SelectItem value="low">Low Stock</SelectItem>
+   281→   281→            <SelectItem value="out">Out of Stock</SelectItem>
+   282→   282→          </SelectContent>
+   283→   283→        </Select>
+   284→   284→        <Dialog open={addProductOpen} onOpenChange={setAddProductOpen}>
+   285→   285→          <DialogTrigger asChild>
+   286→   286→            <Button className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground">
+   287→   287→              <Plus className="mr-2 h-4 w-4" /> Add Product
+   288→   288→            </Button>
+   289→   289→          </DialogTrigger>
+   290→   290→          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+   291→   291→            <DialogHeader>
+   292→   292→              <DialogTitle>Add New Product</DialogTitle>
+   293→   293→              <DialogDescription>Add a product to your inventory</DialogDescription>
+   294→   294→            </DialogHeader>
+   295→   295→            <div className="space-y-4">
+   296→   296→              {/* Section: Basic Info */}
+   297→   297→              <div>
+   298→   298→                <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+   299→   299→                  <Package className="h-4 w-4" /> Basic Information
+   300→   300→                </h4>
+   301→   301→                <Separator className="mb-3" />
+   302→   302→                <div className="grid grid-cols-2 gap-4">
+   303→   303→                  <div className="space-y-2 col-span-2">
+   304→   304→                    <Label>Product Name</Label>
+   305→   305→                    <Input value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} placeholder="e.g. 20mm Nails" />
+   306→   306→                  </div>
+   307→   307→                  <div className="space-y-2">
+   308→   308→                    <Label>SKU</Label>
+   309→   309→                    <Input value={newProduct.sku} onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })} placeholder="e.g. NAIL-20" />
+   310→   310→                  </div>
+   311→   311→                  <div className="space-y-2">
+   312→   312→                    <Label>Barcode</Label>
+   313→   313→                    <Input value={newProduct.barcode} onChange={(e) => setNewProduct({ ...newProduct, barcode: e.target.value })} placeholder="e.g. 6001234567890" />
+   314→   314→                  </div>
+   315→   315→                  <div className="space-y-2 col-span-2">
+   316→   316→                    <Label>Category</Label>
+   317→   317→                    <Select value={newProduct.categoryId} onValueChange={(v) => setNewProduct({ ...newProduct, categoryId: v })}>
+   318→   318→                      <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+   319→   319→                      <SelectContent>
+   320→   320→                        {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+   321→   321→                      </SelectContent>
+   322→   322→                    </Select>
+   323→   323→                  </div>
+   324→   324→                  <div className="space-y-2 col-span-2">
+   325→   325→                    <Label>Description</Label>
+   326→   326→                    <Textarea value={newProduct.description} onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })} placeholder="Product description..." rows={2} />
+   327→   327→                  </div>
+   328→   328→                </div>
+   329→   329→              </div>
+   330→   330→
+   331→   331→              {/* Section: Pricing */}
+   332→   332→              <div>
+   333→   333→                <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+   334→   334→                  <DollarSign className="h-4 w-4" /> Pricing
+   335→   335→                </h4>
+   336→   336→                <Separator className="mb-3" />
+   337→   337→                <div className="grid grid-cols-2 gap-4">
+   338→   338→                  <div className="space-y-2">
+   339→   339→                    <Label>Selling Price (KES)</Label>
+   340→   340→                    <Input type="number" value={newProduct.pricePerUnit} onChange={(e) => setNewProduct({ ...newProduct, pricePerUnit: e.target.value })} placeholder="0" />
+   341→   341→                  </div>
+   342→   342→                  <div className="space-y-2">
+   343→   343→                    <Label>Cost Price (KES)</Label>
+   344→   344→                    <Input type="number" value={newProduct.costPrice} onChange={(e) => setNewProduct({ ...newProduct, costPrice: e.target.value })} placeholder="0" />
+   345→   345→                  </div>
+   346→   346→                </div>
+   347→   347→              </div>
+   348→   348→
+   349→   349→              {/* Section: Stock & Units */}
+   350→   350→              <div>
+   351→   351→                <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+   352→   352→                  <BarChart3 className="h-4 w-4" /> Stock & Units
+   353→   353→                </h4>
+   354→   354→                <Separator className="mb-3" />
+   355→   355→                <div className="grid grid-cols-2 gap-4">
+   356→   356→                  <div className="space-y-2">
+   357→   357→                    <Label>Quantity in Stock</Label>
+   358→   358→                    <Input type="number" value={newProduct.quantityInStock} onChange={(e) => setNewProduct({ ...newProduct, quantityInStock: e.target.value })} placeholder="0" />
+   359→   359→                  </div>
+   360→   360→                  <div className="space-y-2">
+   361→   361→                    <Label>Reorder Level</Label>
+   362→   362→                    <Input type="number" value={newProduct.reorderLevel} onChange={(e) => setNewProduct({ ...newProduct, reorderLevel: e.target.value })} placeholder="10" />
+   363→   363→                  </div>
+   364→   364→                  <div className="space-y-2">
+   365→   365→                    <Label>Unit Type</Label>
+   366→   366→                    <Select value={newProduct.unitType} onValueChange={(v) => setNewProduct({ ...newProduct, unitType: v })}>
+   367→   367→                      <SelectTrigger><SelectValue /></SelectTrigger>
+   368→   368→                      <SelectContent>
+   369→   369→                        <SelectItem value="PIECE">Piece</SelectItem>
+   370→   370→                        <SelectItem value="KILOGRAM">Kilogram</SelectItem>
+   371→   371→                        <SelectItem value="METER">Meter</SelectItem>
+   372→   372→                        <SelectItem value="LITER">Liter</SelectItem>
+   373→   373→                        <SelectItem value="BAG">Bag</SelectItem>
+   374→   374→                        <SelectItem value="BOX">Box</SelectItem>
+   375→   375→                        <SelectItem value="SET">Set</SelectItem>
+   376→   376→                      </SelectContent>
+   377→   377→                    </Select>
+   378→   378→                  </div>
+   379→   379→                  <div className="flex items-center gap-4 pt-6">
+   380→   380→                    <div className="flex items-center gap-2">
+   381→   381→                      <Checkbox id="rental" checked={newProduct.isRental} onCheckedChange={(v) => setNewProduct({ ...newProduct, isRental: !!v })} />
+   382→   382→                      <Label htmlFor="rental" className="text-sm">Rental</Label>
+   383→   383→                    </div>
+   384→   384→                    <div className="flex items-center gap-2">
+   385→   385→                      <Checkbox id="bundle" checked={newProduct.isBundle} onCheckedChange={(v) => setNewProduct({ ...newProduct, isBundle: !!v })} />
+   386→   386→                      <Label htmlFor="bundle" className="text-sm">Bundle</Label>
+   387→   387→                    </div>
+   388→   388→                  </div>
+   389→   389→                </div>
+   390→   390→              </div>
+   391→   391→            </div>
+   392→   392→            <DialogFooter>
+   393→   393→              <Button variant="outline" onClick={() => setAddProductOpen(false)}>Cancel</Button>
+   394→   394→              <Button onClick={handleCreateProduct} disabled={createProductMutation.isPending || !newProduct.name || !newProduct.sku} className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground">
+   395→   395→                {createProductMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+   396→   396→                Add Product
+   397→   397→              </Button>
+   398→   398→            </DialogFooter>
+   399→   399→          </DialogContent>
+   400→   400→        </Dialog>
+   401→   401→      </div>
+   402→   402→
+   403→   403→      {/* Product Table */}
+   404→   404→      <Card>
+   405→   405→        <CardContent className="p-0">
+   406→   406→          {isLoading ? (
+   407→   407→            <div className="p-6 space-y-3">
+   408→   408→              {Array.from({ length: 5 }).map((_, i) => (
+   409→   409→                <div key={i} className="flex gap-4"><Skeleton className="h-10 flex-1" /></div>
+   410→   410→              ))}
+   411→   411→            </div>
+   412→   412→          ) : (
+   413→   413→            <div className="overflow-x-auto">
+   414→   414→              <Table>
+   415→   415→                <TableHeader>
+   416→   416→                  <TableRow>
+   417→   417→                    <TableHead className="w-[220px]">Product</TableHead>
+   418→   418→                    <TableHead>SKU</TableHead>
+   419→   419→                    <TableHead>Category</TableHead>
+   420→   420→                    <TableHead className="text-right">Price</TableHead>
+   421→   421→                    <TableHead className="text-right">Cost</TableHead>
+   422→   422→                    <TableHead className="text-right">Margin</TableHead>
+   423→   423→                    <TableHead className="w-[120px]">Stock</TableHead>
+   424→   424→                    <TableHead>Status</TableHead>
+   425→   425→                    <TableHead className="w-[80px]">Actions</TableHead>
+   426→   426→                  </TableRow>
+   427→   427→                </TableHeader>
+   428→   428→                <TableBody>
+   429→   429→                  {products.length === 0 ? (
+   430→   430→                    <TableRow>
+   431→   431→                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+   432→   432→                        No products found
+   433→   433→                      </TableCell>
+   434→   434→                    </TableRow>
+   435→   435→                  ) : (
+   436→   436→                    products.map((product, idx) => {
+   437→   437→                      const profitMargin = product.pricePerUnit > 0
+   438→   438→                        ? ((product.pricePerUnit - product.costPrice) / product.pricePerUnit * 100)
+   439→   439→                        : 0;
+   440→   440→                      const marginColor = getProfitMarginColor(profitMargin);
+   441→   441→                      const catColor = product.category?.name ? getCategoryColor(product.category.name) : '#6B7280';
+   442→   442→
+   443→   443→                      return (
+   444→   444→                        <TableRow
+   445→   445→                          key={product.id}
+   446→   446→                          className={`${idx % 2 === 1 ? 'bg-muted/30' : ''} hover:bg-primary/5 transition-colors`}
+   447→   447→                        >
+   448→   448→                          <TableCell>
+   449→   449→                            <div className="flex items-center gap-3">
+   450→   450→                              <div className="w-8 h-8 rounded bg-muted flex items-center justify-center shrink-0">
+   451→   451→                                <Package className="h-4 w-4 text-muted-foreground" />
+   452→   452→                              </div>
+   453→   453→                              <div>
+   454→   454→                                <p className="font-medium text-sm">{product.name}</p>
+   455→   455→                                <div className="flex gap-1 mt-0.5">
+   456→   456→                                  {product.isRental && <Badge variant="outline" className="text-[9px] h-4 px-1">RENTAL</Badge>}
+   457→   457→                                  {product.isBundle && <Badge variant="outline" className="text-[9px] h-4 px-1">BUNDLE</Badge>}
+   458→   458→                                </div>
+   459→   459→                              </div>
+   460→   460→                            </div>
+   461→   461→                          </TableCell>
+   462→   462→                          <TableCell className="text-sm font-mono">{product.sku}</TableCell>
+   463→   463→                          <TableCell className="text-sm">
+   464→   464→                            <div className="flex items-center gap-2">
+   465→   465→                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: catColor }} />
+   466→   466→                              {product.category?.name || '—'}
+   467→   467→                            </div>
+   468→   468→                          </TableCell>
+   469→   469→                          <TableCell className="text-right font-medium">{formatKES(product.pricePerUnit)}</TableCell>
+   470→   470→                          <TableCell className="text-right text-sm text-muted-foreground">{formatKES(product.costPrice)}</TableCell>
+   471→   471→                          <TableCell className="text-right">
+   472→   472→                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${marginColor.bg} ${marginColor.text}`}>
+   473→   473→                              {profitMargin.toFixed(1)}%
+   474→   474→                            </span>
+   475→   475→                          </TableCell>
+   476→   476→                          <TableCell>
+   477→   477→                            <div className="space-y-1">
+   478→   478→                              <span className="text-sm font-medium">{product.quantityInStock}</span>
+   479→   479→                              <MiniStockBar product={product} />
+   480→   480→                            </div>
+   481→   481→                          </TableCell>
+   482→   482→                          <TableCell>
+   483→   483→                            {product.quantityInStock <= 0 ? (
+   484→   484→                              <Badge variant="destructive" className="text-[10px] font-semibold px-2">Out of Stock</Badge>
+   485→   485→                            ) : product.quantityInStock <= product.reorderLevel ? (
+   486→   486→                              <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 text-[10px] font-semibold px-2">Low Stock</Badge>
+   487→   487→                            ) : (
+   488→   488→                              <Badge variant="secondary" className="text-[10px] font-semibold px-2 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">In Stock</Badge>
+   489→   489→                            )}
+   490→   490→                          </TableCell>
+   491→   491→                          <TableCell>
+   492→   492→                            <DropdownMenu>
+   493→   493→                              <DropdownMenuTrigger asChild>
+   494→   494→                                <Button variant="ghost" size="icon" className="h-8 w-8">
+   495→   495→                                  <MoreVertical className="h-4 w-4" />
+   496→   496→                                </Button>
+   497→   497→                              </DropdownMenuTrigger>
+   498→   498→                              <DropdownMenuContent align="end">
+   499→   499→                                <DropdownMenuItem onClick={() => setEditProduct(product)}>
+   500→   500→                                  <Edit className="mr-2 h-4 w-4" /> Edit
+   501→   501→                                </DropdownMenuItem>
+   502→   502→                                <DropdownMenuItem onClick={() => handleDuplicateProduct(product)}>
+   503→   503→                                  <Copy className="mr-2 h-4 w-4" /> Duplicate
+   504→   504→                                </DropdownMenuItem>
+   505→   505→                                <DropdownMenuItem onClick={() => {
+   506→   506→                                  setAdjustStockProduct(product);
+   507→   507→                                  setStockAdjustAmount(0);
+   508→   508→                                  setStockAdjustReason('');
+   509→   509→                                }}>
+   510→   510→                                  <ArrowUpDown className="mr-2 h-4 w-4" /> Adjust Stock
+   511→   511→                                </DropdownMenuItem>
+   512→   512→                                <DropdownMenuSeparator />
+   513→   513→                                <DropdownMenuItem
+   514→   514→                                  className="text-destructive"
+   515→   515→                                  onClick={() => deleteProductMutation.mutate(product.id)}
+   516→   516→                                >
+   517→   517→                                  <Trash2 className="mr-2 h-4 w-4" /> Delete
+   518→   518→                                </DropdownMenuItem>
+   519→   519→                              </DropdownMenuContent>
+   520→   520→                            </DropdownMenu>
+   521→   521→                          </TableCell>
+   522→   522→                        </TableRow>
+   523→   523→                      );
+   524→   524→                    })
+   525→   525→                  )}
+   526→   526→                </TableBody>
+   527→   527→              </Table>
+   528→   528→            </div>
+   529→   529→          )}
+   530→   530→        </CardContent>
+   531→   531→      </Card>
+   532→   532→
+   533→   533→      {/* Edit Product Dialog */}
+   534→   534→      <Dialog open={!!editProduct} onOpenChange={(open) => !open && setEditProduct(null)}>
+   535→   535→        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+   536→   536→          <DialogHeader>
+   537→   537→            <DialogTitle>Edit Product</DialogTitle>
+   538→   538→            <DialogDescription>Update product details</DialogDescription>
+   539→   539→          </DialogHeader>
+   540→   540→          {editProduct && (
+   541→   541→            <div className="space-y-4">
+   542→   542→              {/* Section: Basic Info */}
+   543→   543→              <div>
+   544→   544→                <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+   545→   545→                  <Package className="h-4 w-4" /> Basic Information
+   546→   546→                </h4>
+   547→   547→                <Separator className="mb-3" />
+   548→   548→                <div className="grid grid-cols-2 gap-4">
+   549→   549→                  <div className="space-y-2 col-span-2">
+   550→   550→                    <Label>Product Name</Label>
+   551→   551→                    <Input value={editProduct.name} onChange={(e) => setEditProduct({ ...editProduct, name: e.target.value })} />
+   552→   552→                  </div>
+   553→   553→                  <div className="space-y-2">
+   554→   554→                    <Label>SKU</Label>
+   555→   555→                    <Input value={editProduct.sku} onChange={(e) => setEditProduct({ ...editProduct, sku: e.target.value })} />
+   556→   556→                  </div>
+   557→   557→                  <div className="space-y-2">
+   558→   558→                    <Label>Barcode</Label>
+   559→   559→                    <Input value={editProduct.barcode || ''} onChange={(e) => setEditProduct({ ...editProduct, barcode: e.target.value })} />
+   560→   560→                  </div>
+   561→   561→                  <div className="space-y-2 col-span-2">
+   562→   562→                    <Label>Description</Label>
+   563→   563→                    <Textarea value={editProduct.description || ''} onChange={(e) => setEditProduct({ ...editProduct, description: e.target.value })} rows={2} />
+   564→   564→                  </div>
+   565→   565→                </div>
+   566→   566→              </div>
+   567→   567→
+   568→   568→              {/* Section: Pricing */}
+   569→   569→              <div>
+   570→   570→                <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+   571→   571→                  <DollarSign className="h-4 w-4" /> Pricing
+   572→   572→                </h4>
+   573→   573→                <Separator className="mb-3" />
+   574→   574→                <div className="grid grid-cols-2 gap-4">
+   575→   575→                  <div className="space-y-2">
+   576→   576→                    <Label>Selling Price</Label>
+   577→   577→                    <Input type="number" value={editProduct.pricePerUnit} onChange={(e) => setEditProduct({ ...editProduct, pricePerUnit: Number(e.target.value) })} />
+   578→   578→                  </div>
+   579→   579→                  <div className="space-y-2">
+   580→   580→                    <Label>Cost Price</Label>
+   581→   581→                    <Input type="number" value={editProduct.costPrice} onChange={(e) => setEditProduct({ ...editProduct, costPrice: Number(e.target.value) })} />
+   582→   582→                  </div>
+   583→   583→                </div>
+   584→   584→              </div>
+   585→   585→
+   586→   586→              {/* Section: Stock & Units */}
+   587→   587→              <div>
+   588→   588→                <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+   589→   589→                  <BarChart3 className="h-4 w-4" /> Stock & Units
+   590→   590→                </h4>
+   591→   591→                <Separator className="mb-3" />
+   592→   592→                <div className="grid grid-cols-2 gap-4">
+   593→   593→                  <div className="space-y-2">
+   594→   594→                    <Label>Stock</Label>
+   595→   595→                    <Input type="number" value={editProduct.quantityInStock} onChange={(e) => setEditProduct({ ...editProduct, quantityInStock: Number(e.target.value) })} />
+   596→   596→                  </div>
+   597→   597→                  <div className="space-y-2">
+   598→   598→                    <Label>Reorder Level</Label>
+   599→   599→                    <Input type="number" value={editProduct.reorderLevel} onChange={(e) => setEditProduct({ ...editProduct, reorderLevel: Number(e.target.value) })} />
+   600→   600→                  </div>
+   601→   601→                </div>
+   602→   602→              </div>
+   603→   603→            </div>
+   604→   604→          )}
+   605→   605→          <DialogFooter>
+   606→   606→            <Button variant="outline" onClick={() => setEditProduct(null)}>Cancel</Button>
+   607→   607→            <Button
+   608→   608→              onClick={() => editProduct && updateProductMutation.mutate({ id: editProduct.id, data: editProduct })}
+   609→   609→              disabled={updateProductMutation.isPending}
+   610→   610→            >
+   611→   611→              {updateProductMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+   612→   612→              Save Changes
+   613→   613→            </Button>
+   614→   614→          </DialogFooter>
+   615→   615→        </DialogContent>
+   616→   616→      </Dialog>
+   617→   617→
+   618→   618→      {/* Adjust Stock Dialog */}
+   619→   619→      <Dialog open={!!adjustStockProduct} onOpenChange={(open) => !open && setAdjustStockProduct(null)}>
+   620→   620→        <DialogContent className="sm:max-w-md">
+   621→   621→          <DialogHeader>
+   622→   622→            <DialogTitle className="flex items-center gap-2">
+   623→   623→              <ArrowUpDown className="h-5 w-5 text-accent-orange" />
+   624→   624→              Adjust Stock
+   625→   625→            </DialogTitle>
+   626→   626→            <DialogDescription>
+   627→   627→              Adjust stock for {adjustStockProduct?.name}
+   628→   628→            </DialogDescription>
+   629→   629→          </DialogHeader>
+   630→   630→          {adjustStockProduct && (
+   631→   631→            <div className="space-y-4">
+   632→   632→              <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
+   633→   633→                <div className="flex justify-between items-center">
+   634→   634→                  <span className="text-sm text-muted-foreground">Current Stock</span>
+   635→   635→                  <span className="text-sm font-bold">{adjustStockProduct.quantityInStock} {adjustStockProduct.unitType.toLowerCase()}s</span>
+   636→   636→                </div>
+   637→   637→                <div className="flex justify-between items-center">
+   638→   638→                  <span className="text-sm text-muted-foreground">Reorder Level</span>
+   639→   639→                  <span className="text-sm">{adjustStockProduct.reorderLevel}</span>
+   640→   640→                </div>
+   641→   641→              </div>
+   642→   642→
+   643→   643→              <div className="space-y-2">
+   644→   644→                <Label>Adjustment Amount</Label>
+   645→   645→                <div className="flex items-center gap-3">
+   646→   646→                  <Button
+   647→   647→                    variant="outline"
+   648→   648→                    size="icon"
+   649→   649→                    className="h-10 w-10 shrink-0"
+   650→   650→                    onClick={() => setStockAdjustAmount(Math.max(stockAdjustAmount - 1, -adjustStockProduct.quantityInStock))}
+   651→   651→                  >
+   652→   652→                    <Minus className="h-4 w-4" />
+   653→   653→                  </Button>
+   654→   654→                  <Input
+   655→   655→                    type="number"
+   656→   656→                    value={stockAdjustAmount}
+   657→   657→                    onChange={(e) => setStockAdjustAmount(Number(e.target.value))}
+   658→   658→                    className="text-center text-lg font-bold"
+   659→   659→                  />
+   660→   660→                  <Button
+   661→   661→                    variant="outline"
+   662→   662→                    size="icon"
+   663→   663→                    className="h-10 w-10 shrink-0"
+   664→   664→                    onClick={() => setStockAdjustAmount(stockAdjustAmount + 1)}
+   665→   665→                  >
+   666→   666→                    <Plus className="h-4 w-4" />
+   667→   667→                  </Button>
+   668→   668→                </div>
+   669→   669→                <div className="flex gap-2 flex-wrap">
+   670→   670→                  <Button variant="outline" size="sm" className="text-xs" onClick={() => setStockAdjustAmount(-5)}>-5</Button>
+   671→   671→                  <Button variant="outline" size="sm" className="text-xs" onClick={() => setStockAdjustAmount(-1)}>-1</Button>
+   672→   672→                  <Button variant="outline" size="sm" className="text-xs" onClick={() => setStockAdjustAmount(1)}>+1</Button>
+   673→   673→                  <Button variant="outline" size="sm" className="text-xs" onClick={() => setStockAdjustAmount(5)}>+5</Button>
+   674→   674→                  <Button variant="outline" size="sm" className="text-xs" onClick={() => setStockAdjustAmount(10)}>+10</Button>
+   675→   675→                  <Button variant="outline" size="sm" className="text-xs" onClick={() => setStockAdjustAmount(50)}>+50</Button>
+   676→   676→                </div>
+   677→   677→              </div>
+   678→   678→
+   679→   679→              {stockAdjustAmount !== 0 && (
+   680→   680→                <div className="rounded-lg border bg-muted/30 p-3">
+   681→   681→                  <div className="flex justify-between items-center">
+   682→   682→                    <span className="text-sm text-muted-foreground">New Stock</span>
+   683→   683→                    <span className={`text-sm font-bold ${adjustStockProduct.quantityInStock + stockAdjustAmount < 0 ? 'text-red-600' : 'text-green-600'}`}>
+   684→   684→                      {adjustStockProduct.quantityInStock + stockAdjustAmount} {adjustStockProduct.unitType.toLowerCase()}s
+   685→   685→                    </span>
+   686→   686→                  </div>
+   687→   687→                </div>
+   688→   688→              )}
+   689→   689→
+   690→   690→              <div className="space-y-2">
+   691→   691→                <Label>Reason <span className="text-muted-foreground">(optional)</span></Label>
+   692→   692→                <Input
+   693→   693→                  value={stockAdjustReason}
+   694→   694→                  onChange={(e) => setStockAdjustReason(e.target.value)}
+   695→   695→                  placeholder="e.g. Stock count correction, damaged goods..."
+   696→   696→                />
+   697→   697→              </div>
+   698→   698→            </div>
+   699→   699→          )}
+   700→   700→          <DialogFooter>
+   701→   701→            <Button variant="outline" onClick={() => setAdjustStockProduct(null)}>Cancel</Button>
+   702→   702→            <Button
+   703→   703→              className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+   704→   704→              disabled={stockAdjustMutation.isPending || stockAdjustAmount === 0}
+   705→   705→              onClick={handleStockAdjust}
+   706→   706→            >
+   707→   707→              {stockAdjustMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowUpDown className="mr-2 h-4 w-4" />}
+   708→   708→              Apply Adjustment
+   709→   709→            </Button>
+   710→   710→          </DialogFooter>
+   711→   711→        </DialogContent>
+   712→   712→      </Dialog>
+   713→   713→    </div>
+   714→   714→  );
+   715→   715→}
+   716→   716→

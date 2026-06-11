@@ -61,6 +61,8 @@ model Store {
   systemLogs      SystemLog[]
   cashDrawerLogs  CashDrawerLog[]
   receipts        Receipt[]
+  suppliers       Supplier[]
+  purchaseOrders  PurchaseOrder[]
 
   @@index([organizationId])
   @@map("stores")
@@ -177,6 +179,7 @@ model Product {
   stockMovements    StockMovement[]
   warehouseStocks   WarehouseStock[]
   rentals           EquipmentRental[]
+  purchaseOrderItems PurchaseOrderItem[]
 
   @@index([storeId])
   @@index([sku])
@@ -572,6 +575,78 @@ model Receipt {
   @@index([storeId])
   @@index([transactionId])
   @@map("receipts")
+}
+
+// ============================================================================
+// SUPPLIER & PURCHASE ORDERS
+// ============================================================================
+
+model Supplier {
+  id            String   @id @default(cuid())
+  storeId       String
+  name          String
+  email         String?
+  phone         String?
+  address       String?
+  city          String?
+  contactPerson String?
+  taxPin        String?
+  paymentTerms  String   @default("NET_30") // NET_15, NET_30, NET_60, IMMEDIATE
+  rating        Int      @default(3) // 1-5 stars
+  isActive      Boolean  @default(true)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  store          Store           @relation(fields: [storeId], references: [id])
+  purchaseOrders PurchaseOrder[]
+
+  @@index([storeId])
+  @@index([name])
+  @@index([isActive])
+  @@map("suppliers")
+}
+
+model PurchaseOrder {
+  id              String   @id @default(cuid())
+  storeId         String
+  poNumber        String   @unique
+  supplierId      String
+  status          String   @default("DRAFT") // DRAFT, SENT, CONFIRMED, RECEIVED, CANCELLED
+  orderDate       DateTime @default(now())
+  expectedDate    DateTime?
+  totalAmount     Float    @default(0)
+  notes           String?
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store           @relation(fields: [storeId], references: [id])
+  supplier        Supplier        @relation(fields: [supplierId], references: [id])
+  items           PurchaseOrderItem[]
+
+  @@index([storeId])
+  @@index([supplierId])
+  @@index([status])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id              String   @id @default(cuid())
+  purchaseOrderId String
+  productId       String
+  quantity        Float
+  unitPrice       Float
+  totalPrice      Float
+  receivedQty     Float    @default(0)
+  notes           String?
+
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product         Product      @relation(fields: [productId], references: [id])
+
+  @@index([purchaseOrderId])
+  @@index([productId])
+  @@map("purchase_order_items")
 }
 
 // ============================================================================

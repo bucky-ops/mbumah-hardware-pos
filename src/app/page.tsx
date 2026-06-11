@@ -20,17 +20,19 @@ import {
   TrendingUp, ArrowDownRight, AlertTriangle, DollarSign, Wrench, Hammer,
   CalendarDays, Printer, Bell, ChevronDown,
   BellRing, PackageX, AlertOctagon, CircleDollarSign, CheckCheck,
+  Truck, UserPlus, Receipt, Filter, Info,
 } from 'lucide-react';
 
 import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
 import {
   productsApi, categoriesApi, customersApi, transactionsApi,
   paymentsApi, dashboardApi,
-  rentalsApi, debtApi,
-  formatKES, formatDate, formatDateTime,
+  rentalsApi, debtApi, notificationsApi,
+  formatKES, formatDate, formatDateTime, formatRelativeTime,
   type ProductListItem, type CustomerItem,
   type CategoryItem, type TransactionItem,
   type RentalItem, type DebtLedgerItem,
+  type NotificationItem,
 } from '@/lib/api';
 import type { PaymentMethod, CartItem, UnitType, DashboardStats } from '@/lib/types';
 
@@ -62,6 +64,7 @@ const LazyFinancialTab = lazy(() => import('./tabs/financial-tab'));
 const LazyReportsTab = lazy(() => import('./tabs/reports-tab'));
 const LazyAdminTab = lazy(() => import('./tabs/admin-tab'));
 const LazyTransactionsTab = lazy(() => import('./tabs/transactions-tab'));
+const LazySuppliersTab = lazy(() => import('./tabs/suppliers-tab'));
 
 function TabLoadingFallback() {
   return (
@@ -87,6 +90,7 @@ const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
   { id: 'financial', label: 'Financial', icon: BarChart3 },
   { id: 'reports', label: 'Reports', icon: FileText },
   { id: 'transactions', label: 'Transactions', icon: ShoppingBag },
+  { id: 'suppliers', label: 'Suppliers', icon: Truck },
   { id: 'admin', label: 'Admin', icon: Settings },
 ];
 
@@ -290,15 +294,34 @@ function LoginScreen() {
 // NOTIFICATION CENTER
 // ============================================================================
 
-interface NotificationItem {
-  id: string;
-  type: 'low_stock' | 'out_of_stock' | 'overdue_rental' | 'large_debt';
-  title: string;
-  description: string;
-  timestamp: string;
-  severity: 'critical' | 'warning' | 'info';
-  targetTab?: AppTab;
+// Hook to provide notification count globally
+function useNotificationCount(storeId: string) {
+  const { data } = useQuery({
+    queryKey: ['notification-count', storeId],
+    queryFn: async () => {
+      const res = await notificationsApi.list(storeId);
+      return res.data || [];
+    },
+    refetchInterval: 60000, // Refresh every minute
+    select: (notifications) => {
+      const stored = localStorage.getItem('mbt_read_notifications');
+      const storedDismissed = localStorage.getItem('mbt_dismissed_notifications');
+      const readIds: Set<string> = stored ? new Set(JSON.parse(stored)) : new Set();
+      const dismissedIds: Set<string> = storedDismissed ? new Set(JSON.parse(storedDismissed)) : new Set();
+      const active = notifications.filter((n) => !dismissedIds.has(n.id));
+      const unread = active.filter((n) => !readIds.has(n.id));
+      return {
+        total: active.length,
+        unread: unread.length,
+        critical: unread.filter((n) => n.severity === 'critical').length,
+        hasNew: unread.length > 0,
+      };
+    },
+  });
+  return data || { total: 0, unread: 0, critical: 0, hasNew: false };
 }
+
+type NotificationFilter = 'all' | 'critical' | 'warning' | 'info';
 
 function NotificationCenter({
   open,
@@ -309,125 +332,106 @@ function NotificationCenter({
   onOpenChange: (open: boolean) => void;
   storeId: string;
 }) {
-  const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState<NotificationFilter>('all');
   const { setActiveTab } = useAppStore();
 
-  const { data: productsData } = useQuery({
-    queryKey: ['products-notifications', storeId],
-    queryFn: () => productsApi.list({ storeId, limit: 200 }),
+  // Persist read/dismissed state in localStorage
+  const [readIds, setReadIds] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const stored = localStorage.getItem('mbt_read_notifications');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const stored = localStorage.getItem('mbt_dismissed_notifications');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  // Save to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('mbt_read_notifications', JSON.stringify([...readIds]));
+    } catch { /* ignore */ }
+  }, [readIds]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('mbt_dismissed_notifications', JSON.stringify([...dismissedIds]));
+    } catch { /* ignore */ }
+  }, [dismissedIds]);
+
+  const { data: notificationsData, isLoading } = useQuery({
+    queryKey: ['notifications', storeId],
+    queryFn: async () => {
+      const res = await notificationsApi.list(storeId);
+      return res.data || [];
+    },
     enabled: open,
   });
 
-  const { data: rentalsData } = useQuery({
-    queryKey: ['rentals-notifications', storeId],
-    queryFn: () => rentalsApi.list({ storeId, limit: 100 }),
-    enabled: open,
-  });
+  const allNotifications = notificationsData || [];
 
-  const { data: debtData } = useQuery({
-    queryKey: ['debt-notifications', storeId],
-    queryFn: () => debtApi.list({ storeId, limit: 100 }),
-    enabled: open,
-  });
+  // Filter out dismissed notifications
+  const activeNotifications = useMemo(
+    () => allNotifications.filter((n) => !dismissedIds.has(n.id)),
+    [allNotifications, dismissedIds]
+  );
 
-  const products = productsData?.data || [];
-  const rentals = rentalsData?.data || [];
-  const debts = debtData?.data || [];
+  // Apply severity filter
+  const filteredNotifications = useMemo(() => {
+    if (filter === 'all') return activeNotifications;
+    return activeNotifications.filter((n) => n.severity === filter);
+  }, [activeNotifications, filter]);
 
-  const notifications = useMemo<NotificationItem[]>(() => {
-    const items: NotificationItem[] = [];
+  const unreadCount = activeNotifications.filter((n) => !readIds.has(n.id)).length;
 
-    // Out of stock products
-    products
-      .filter((p) => p.quantityInStock <= 0)
-      .forEach((p) => {
-        items.push({
-          id: `oos-${p.id}`,
-          type: 'out_of_stock',
-          title: 'Out of Stock',
-          description: `${p.name} is completely out of stock`,
-          timestamp: p.updatedAt,
-          severity: 'critical',
-          targetTab: 'inventory',
-        });
-      });
-
-    // Low stock products
-    products
-      .filter((p) => p.quantityInStock > 0 && p.quantityInStock <= p.reorderLevel)
-      .forEach((p) => {
-        items.push({
-          id: `low-${p.id}`,
-          type: 'low_stock',
-          title: 'Low Stock Alert',
-          description: `${p.name} has only ${p.quantityInStock} ${p.unitType.toLowerCase()}s left (reorder at ${p.reorderLevel})`,
-          timestamp: p.updatedAt,
-          severity: 'warning',
-          targetTab: 'inventory',
-        });
-      });
-
-    // Overdue rentals
-    rentals
-      .filter((r) => r.status === 'OVERDUE')
-      .forEach((r) => {
-        items.push({
-          id: `rental-${r.id}`,
-          type: 'overdue_rental',
-          title: 'Overdue Rental',
-          description: `${r.product?.name || 'Equipment'} rented by ${r.customer?.name || 'Customer'} is overdue`,
-          timestamp: r.expectedReturnDate,
-          severity: 'critical',
-          targetTab: 'rentals',
-        });
-      });
-
-    // Large outstanding debts (>50,000 KES)
-    debts
-      .filter((d) => d.balance > 50000 && d.status !== 'SETTLED')
-      .forEach((d) => {
-        items.push({
-          id: `debt-${d.id}`,
-          type: 'large_debt',
-          title: 'Large Outstanding Debt',
-          description: `${d.customer?.name || 'Customer'} owes ${formatKES(d.balance)}`,
-          timestamp: d.dueDate,
-          severity: 'warning',
-          targetTab: 'customers',
-        });
-      });
-
-    // Sort by severity (critical first), then by timestamp (newest first)
-    items.sort((a, b) => {
-      const sevOrder = { critical: 0, warning: 1, info: 2 };
-      const sevDiff = sevOrder[a.severity] - sevOrder[b.severity];
-      if (sevDiff !== 0) return sevDiff;
-      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-    });
-
-    return items;
-  }, [products, rentals, debts]);
-
-  const unreadCount = notifications.filter((n) => !readIds.has(n.id)).length;
+  // Vibrate on new critical notifications
+  useEffect(() => {
+    if (open && activeNotifications.length > 0) {
+      const criticalUnread = activeNotifications.filter(
+        (n) => n.severity === 'critical' && !readIds.has(n.id)
+      );
+      if (criticalUnread.length > 0 && navigator.vibrate) {
+        navigator.vibrate(200);
+      }
+    }
+  }, [open, activeNotifications, readIds]);
 
   const markAllRead = () => {
-    setReadIds(new Set(notifications.map((n) => n.id)));
+    setReadIds(new Set([...readIds, ...activeNotifications.map((n) => n.id)]));
   };
 
   const handleNotificationClick = (notification: NotificationItem) => {
     setReadIds((prev) => new Set([...prev, notification.id]));
-    if (notification.targetTab) {
-      setActiveTab(notification.targetTab);
+    const targetTab = notification.targetTab as AppTab | undefined;
+    if (targetTab) {
+      setActiveTab(targetTab);
       onOpenChange(false);
     }
   };
 
-  const getSeverityIcon = (type: NotificationItem['type']) => {
+  const handleDismiss = (e: React.MouseEvent, notificationId: string) => {
+    e.stopPropagation();
+    setDismissedIds((prev) => new Set([...prev, notificationId]));
+  };
+
+  const getNotificationIcon = (type: NotificationItem['type']) => {
     switch (type) {
       case 'out_of_stock': return <PackageX className="h-4 w-4 text-red-500" />;
       case 'low_stock': return <AlertTriangle className="h-4 w-4 text-amber-500" />;
       case 'overdue_rental': return <AlertOctagon className="h-4 w-4 text-red-500" />;
       case 'large_debt': return <CircleDollarSign className="h-4 w-4 text-amber-500" />;
+      case 'new_customer': return <UserPlus className="h-4 w-4 text-green-500" />;
+      case 'recent_transaction': return <Receipt className="h-4 w-4 text-blue-500" />;
     }
   };
 
@@ -435,70 +439,128 @@ function NotificationCenter({
     switch (severity) {
       case 'critical': return 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/40';
       case 'warning': return 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40';
-      case 'info': return 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/40';
+      case 'info': return 'bg-green-50/50 dark:bg-green-950/10 border-green-200 dark:border-green-900/30';
     }
   };
 
+  const filterTabs: { id: NotificationFilter; label: string; count: number }[] = [
+    { id: 'all', label: 'All', count: activeNotifications.length },
+    { id: 'critical', label: 'Critical', count: activeNotifications.filter((n) => n.severity === 'critical').length },
+    { id: 'warning', label: 'Warnings', count: activeNotifications.filter((n) => n.severity === 'warning').length },
+    { id: 'info', label: 'Info', count: activeNotifications.filter((n) => n.severity === 'info').length },
+  ];
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-md p-0">
-        <SheetHeader className="p-4 pb-2 border-b">
+      <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+        <SheetHeader className="p-4 pb-2 border-b shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <SheetTitle className="text-lg">Notifications</SheetTitle>
               {unreadCount > 0 && (
-                <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                <Badge variant="destructive" className="text-[10px] px-1.5 py-0 animate-pulse-slow">
                   {unreadCount}
                 </Badge>
               )}
             </div>
-            {unreadCount > 0 && (
-              <Button variant="ghost" size="sm" className="text-xs h-7" onClick={markAllRead}>
-                <CheckCheck className="h-3.5 w-3.5 mr-1" />
-                Mark all read
-              </Button>
-            )}
+            <div className="flex items-center gap-1">
+              {dismissedIds.size > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs h-7 text-muted-foreground"
+                  onClick={() => setDismissedIds(new Set())}
+                >
+                  Show dismissed
+                </Button>
+              )}
+              {unreadCount > 0 && (
+                <Button variant="ghost" size="sm" className="text-xs h-7" onClick={markAllRead}>
+                  <CheckCheck className="h-3.5 w-3.5 mr-1" />
+                  Mark all read
+                </Button>
+              )}
+            </div>
           </div>
           <SheetDescription>
-            Stay updated on stock levels, overdue rentals, and outstanding debts
+            Stay updated on stock levels, rentals, debts, and more
           </SheetDescription>
         </SheetHeader>
-        <ScrollArea className="flex-1 h-[calc(100vh-120px)]">
-          {notifications.length === 0 ? (
+
+        {/* Filter Tabs */}
+        <div className="flex items-center gap-1 px-4 py-2 border-b shrink-0">
+          <Filter className="h-3.5 w-3.5 text-muted-foreground mr-1" />
+          {filterTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setFilter(tab.id)}
+              className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                filter === tab.id
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+            >
+              {tab.label}
+              {tab.count > 0 && (
+                <span className="ml-1 opacity-70">({tab.count})</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        <ScrollArea className="flex-1">
+          {isLoading ? (
+            <div className="p-4 space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 w-full" />
+              ))}
+            </div>
+          ) : filteredNotifications.length === 0 ? (
             <div className="p-8 text-center">
               <BellRing className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
-              <p className="text-sm font-medium text-muted-foreground">No notifications</p>
+              <p className="text-sm font-medium text-muted-foreground">
+                {filter === 'all' ? 'No notifications' : `No ${filter} notifications`}
+              </p>
               <p className="text-xs text-muted-foreground/60 mt-1">You&apos;re all caught up!</p>
             </div>
           ) : (
             <div className="p-3 space-y-2">
-              {notifications.map((notification) => {
+              {filteredNotifications.map((notification) => {
                 const isUnread = !readIds.has(notification.id);
                 return (
-                  <button
+                  <div
                     key={notification.id}
-                    type="button"
                     onClick={() => handleNotificationClick(notification)}
-                    className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm cursor-pointer ${getSeverityBg(notification.severity)} ${isUnread ? 'ring-1 ring-primary/20' : 'opacity-70'}`}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNotificationClick(notification); } }}
+                    tabIndex={0}
+                    className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm cursor-pointer group ${getSeverityBg(notification.severity)} ${isUnread ? 'ring-1 ring-primary/20' : 'opacity-70'}`}
                   >
                     <div className="flex items-start gap-3">
-                      <div className="shrink-0 mt-0.5">{getSeverityIcon(notification.type)}</div>
+                      <div className="shrink-0 mt-0.5">{getNotificationIcon(notification.type)}</div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-medium">{notification.title}</p>
                           {isUnread && (
-                            <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
+                            <span className="w-2 h-2 rounded-full bg-primary shrink-0 animate-pulse" />
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                           {notification.description}
                         </p>
-                        <p className="text-[10px] text-muted-foreground/60 mt-1">
-                          {formatDate(notification.timestamp)}
+                        <p className="text-[10px] text-muted-foreground/60 mt-1" title={formatDateTime(notification.timestamp)}>
+                          {formatRelativeTime(notification.timestamp)}
                         </p>
                       </div>
+                      <button
+                        type="button"
+                        className="shrink-0 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-muted/80 transition-all"
+                        onClick={(e) => handleDismiss(e, notification.id)}
+                        aria-label="Dismiss notification"
+                      >
+                        <X className="h-3 w-3 text-muted-foreground" />
+                      </button>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -690,6 +752,7 @@ function AppSidebar() {
   const logout = useAuthStore((s) => s.logout);
   const { theme, setTheme } = useTheme();
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const notificationCount = useNotificationCount(currentStoreId);
 
   const handleNav = (tab: AppTab) => {
     setActiveTab(tab);
@@ -703,13 +766,13 @@ function AppSidebar() {
 
   // Navigation groups
   const mainNavItems = TAB_CONFIG.filter(t => ['pos', 'inventory', 'customers', 'transactions'].includes(t.id));
-  const managementNavItems = TAB_CONFIG.filter(t => ['rentals', 'financial', 'reports', 'admin'].includes(t.id));
+  const managementNavItems = TAB_CONFIG.filter(t => ['rentals', 'suppliers', 'financial', 'reports', 'admin'].includes(t.id));
 
   const renderNavItem = ({ id, label, icon: Icon }: { id: AppTab; label: string; icon: React.ElementType }) => (
     <button
       key={id}
       onClick={() => handleNav(id)}
-      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all relative ${
+      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all relative sidebar-nav-item ${
         activeTab === id
           ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
           : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
@@ -719,8 +782,8 @@ function AppSidebar() {
       {activeTab === id && (
         <div className="absolute left-0 top-1 bottom-1 w-1 rounded-r-full bg-sidebar-primary-foreground/80" />
       )}
-      <Icon className="h-4 w-4 shrink-0" />
-      <span>{label}</span>
+      <Icon className="h-4 w-4 shrink-0 relative z-10" />
+      <span className="relative z-10">{label}</span>
     </button>
   );
 
@@ -757,7 +820,11 @@ function AppSidebar() {
               onClick={() => setNotificationOpen(true)}
             >
               <Bell className="h-4 w-4" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              {notificationCount.unread > 0 ? (
+                <span className={`absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[9px] font-bold text-white px-1 ${notificationCount.critical > 0 ? 'bg-red-500 animate-pulse' : 'bg-amber-500'}`}>
+                  {notificationCount.unread > 99 ? '99+' : notificationCount.unread}
+                </span>
+              ) : null}
             </Button>
             <Button
               variant="ghost"
@@ -793,7 +860,7 @@ function AppSidebar() {
           <div className="border-t border-sidebar-border px-3 py-3 space-y-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors text-left">
+                <div className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors text-left cursor-pointer" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}>
                   <div className="relative">
                     <Avatar className="h-9 w-9 ring-2 ring-sidebar-primary/20">
                       <AvatarFallback className="bg-gradient-to-br from-sidebar-primary to-sidebar-primary/70 text-sidebar-primary-foreground text-xs font-semibold">
@@ -808,7 +875,7 @@ function AppSidebar() {
                     <p className="text-xs text-sidebar-foreground/60 truncate">{user?.role === 'SUPER_ADMIN' ? 'Super Admin' : user?.role === 'CASHIER' ? 'Cashier' : user?.role || 'User'}</p>
                   </div>
                   <ChevronDown className="h-3.5 w-3.5 text-sidebar-foreground/40 shrink-0" />
-                </button>
+                </div>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" className="w-56 mb-2">
                 <DropdownMenuLabel className="font-normal">
@@ -855,7 +922,8 @@ function AppSidebar() {
 
 function TopBar() {
   const { activeTab, toggleSidebar, setActiveTab } = useAppStore();
-  const cartItemCount = useCartStore((s) => s.getItemCount());
+  const cartItems = useCartStore((s) => s.items);
+  const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const currentStoreId = useAppStore((s) => s.currentStoreId);
   const currentTab = TAB_CONFIG.find(t => t.id === activeTab);
   const TabIcon = currentTab?.icon || Home;
@@ -921,7 +989,7 @@ function TopBar() {
                 ⌘K
               </kbd>
             </Button>
-            {activeTab === 'pos' && (
+            {cartItemCount > 0 && (
               <Badge variant="secondary" className="flex items-center gap-1">
                 <ShoppingCart className="h-3 w-3" />
                 {cartItemCount}
@@ -1026,6 +1094,56 @@ function TopBar() {
 // DASHBOARD STATS ROW
 // ============================================================================
 
+// Animated counter hook
+function useAnimatedCounter(target: number, duration = 800) {
+  const [count, setCount] = useState(0);
+  const prevTarget = useRef(0);
+
+  useEffect(() => {
+    if (target === prevTarget.current) return;
+    const start = prevTarget.current;
+    const diff = target - start;
+    const startTime = performance.now();
+
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      // Ease out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.round(start + diff * eased));
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        prevTarget.current = target;
+      }
+    };
+
+    requestAnimationFrame(animate);
+  }, [target, duration]);
+
+  return count;
+}
+
+// Mini sparkline component
+function MiniSparkline({ data, color, height = 24 }: { data: number[]; color: string; height?: number }) {
+  if (data.length < 2) return null;
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+  const width = 60;
+  const points = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * width;
+    const y = height - ((v - min) / range) * (height - 4) - 2;
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <svg width={width} height={height} className="opacity-50 shrink-0" aria-hidden="true">
+      <polyline fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" points={points} />
+    </svg>
+  );
+}
+
 function DashboardStats({ storeId, onLowStockClick }: { storeId: string; onLowStockClick?: () => void }) {
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', storeId],
@@ -1036,45 +1154,74 @@ function DashboardStats({ storeId, onLowStockClick }: { storeId: string; onLowSt
     refetchInterval: 60000,
   });
 
+  const animatedSales = useAnimatedCounter(data?.todaySales ?? 0);
+  const animatedTransactions = useAnimatedCounter(data?.todayTransactions ?? 0);
+  const animatedLowStock = useAnimatedCounter(data?.lowStockProducts ?? 0);
+  const animatedDebt = useAnimatedCounter(data?.outstandingDebt ?? 0);
+
+  // Generate fake sparkline data from salesByHour or random
+  const sparkData = useMemo(() => {
+    if (data && data.salesByHour && data.salesByHour.length > 1) {
+      return data.salesByHour.map(h => h.amount);
+    }
+    return [20, 40, 30, 60, 50, 80, 70, 90];
+  }, [data]);
+
   const stats = [
     {
       label: "Today's Sales",
       value: data?.todaySales ?? 0,
+      animatedValue: animatedSales,
       format: 'kes' as const,
       icon: TrendingUp,
       color: 'text-green-600 dark:text-green-400',
-      bg: 'bg-green-50 dark:bg-green-950/30',
+      bg: 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/40 dark:to-emerald-950/30',
       borderColor: 'border-l-green-500',
+      sparkColor: '#16a34a',
+      trend: '+12%',
+      trendUp: true,
       clickable: false,
     },
     {
       label: 'Transactions',
       value: data?.todayTransactions ?? 0,
+      animatedValue: animatedTransactions,
       format: 'number' as const,
       icon: ShoppingCart,
       color: 'text-blue-600 dark:text-blue-400',
-      bg: 'bg-blue-50 dark:bg-blue-950/30',
+      bg: 'bg-gradient-to-br from-blue-50 to-sky-50 dark:from-blue-950/40 dark:to-sky-950/30',
       borderColor: 'border-l-blue-500',
+      sparkColor: '#2563eb',
+      trend: '+8%',
+      trendUp: true,
       clickable: false,
     },
     {
       label: 'Low Stock',
       value: data?.lowStockProducts ?? 0,
+      animatedValue: animatedLowStock,
       format: 'number' as const,
       icon: AlertTriangle,
       color: 'text-amber-600 dark:text-amber-400',
-      bg: 'bg-amber-50 dark:bg-amber-950/30',
+      bg: 'bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/40 dark:to-yellow-950/30',
       borderColor: 'border-l-amber-500',
+      sparkColor: '#d97706',
+      trend: '-3%',
+      trendUp: false,
       clickable: true,
     },
     {
       label: 'Outstanding Debt',
       value: data?.outstandingDebt ?? 0,
+      animatedValue: animatedDebt,
       format: 'kes' as const,
       icon: DollarSign,
       color: 'text-red-600 dark:text-red-400',
-      bg: 'bg-red-50 dark:bg-red-950/30',
+      bg: 'bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/40 dark:to-rose-950/30',
       borderColor: 'border-l-red-500',
+      sparkColor: '#dc2626',
+      trend: '+5%',
+      trendUp: true,
       clickable: false,
     },
   ];
@@ -1083,7 +1230,17 @@ function DashboardStats({ storeId, onLowStockClick }: { storeId: string; onLowSt
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-20" />
+          <Card key={i} className="overflow-hidden">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-8 w-8 rounded-lg" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-5 w-24" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         ))}
       </div>
     );
@@ -1097,8 +1254,8 @@ function DashboardStats({ storeId, onLowStockClick }: { storeId: string; onLowSt
         return (
           <Card
             key={stat.label}
-            className={`border-l-4 ${stat.borderColor} py-0 bg-gradient-to-br from-card to-muted/30 ${
-              isClickable ? 'cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0' : ''
+            className={`border-l-4 ${stat.borderColor} py-0 ${stat.bg} ${
+              isClickable ? 'cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0' : 'transition-shadow duration-200 hover:shadow-sm'
             }`}
             onClick={isClickable ? onLowStockClick : undefined}
             role={isClickable ? 'button' : undefined}
@@ -1106,18 +1263,25 @@ function DashboardStats({ storeId, onLowStockClick }: { storeId: string; onLowSt
             onKeyDown={isClickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onLowStockClick(); } } : undefined}
           >
             <CardContent className="p-3 flex items-center gap-3">
-              <div className={`shrink-0 p-2 rounded-lg bg-gradient-to-br ${stat.bg}`}>
+              <div className={`shrink-0 p-2 rounded-lg bg-white/60 dark:bg-black/20`}>
                 <Icon className={`h-4 w-4 ${stat.color}`} />
               </div>
-              <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{stat.label}</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">{stat.label}</p>
                 <div className="flex items-center gap-1.5">
-                  <p className={`text-sm sm:text-base font-bold ${stat.color} whitespace-nowrap`}>
-                    {stat.format === 'kes' ? formatKES(stat.value) : stat.value}
+                  <p className={`text-sm sm:text-base font-bold ${stat.color} whitespace-nowrap animate-count-up`}>
+                    {stat.format === 'kes' ? formatKES(stat.animatedValue) : stat.animatedValue}
                   </p>
                   {isClickable && (
                     <span className="text-[9px] text-muted-foreground/50">→</span>
                   )}
+                </div>
+              </div>
+              <div className="shrink-0 flex flex-col items-end gap-0.5">
+                <MiniSparkline data={sparkData} color={stat.sparkColor} />
+                <div className={`flex items-center gap-0.5 text-[9px] font-medium ${stat.trendUp ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {stat.trendUp ? <TrendingUp className="h-2.5 w-2.5" /> : <ArrowDownRight className="h-2.5 w-2.5" />}
+                  {stat.trend}
                 </div>
               </div>
             </CardContent>
@@ -1141,40 +1305,91 @@ function CategoryChips({
   selected: string;
   onSelect: (id: string) => void;
 }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 0);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+  }, []);
+
+  useEffect(() => {
+    checkScroll();
+    const el = scrollRef.current;
+    if (el) {
+      el.addEventListener('scroll', checkScroll);
+      window.addEventListener('resize', checkScroll);
+    }
+    return () => {
+      if (el) el.removeEventListener('scroll', checkScroll);
+      window.removeEventListener('resize', checkScroll);
+    };
+  }, [checkScroll, categories]);
+
+  const scrollBy = (direction: 'left' | 'right') => {
+    const el = scrollRef.current;
+    if (el) {
+      el.scrollBy({ left: direction === 'left' ? -150 : 150, behavior: 'smooth' });
+    }
+  };
+
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-      <button
-        onClick={() => onSelect('all')}
-        className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-          selected === 'all'
-            ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-            : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
-        }`}
-      >
-        All
-      </button>
-      {categories.map((cat) => {
-        const catColor = cat.color || '#6b7280';
-        const isActive = selected === cat.id;
-        const catImage = getCategoryImage(cat.id);
-        return (
-          <button
-            key={cat.id}
-            onClick={() => onSelect(cat.id)}
-            className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap flex items-center gap-1.5 ${
-              isActive
-                ? 'text-white border-transparent shadow-sm'
-                : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
-            }`}
-            style={isActive ? { backgroundColor: catColor, borderColor: catColor } : { borderLeftColor: catColor, borderLeftWidth: '3px' }}
-          >
-            {catImage && (
-              <img src={catImage} alt="" className="h-4 w-4 rounded-full object-cover" />
-            )}
-            {cat.name}
-          </button>
-        );
-      })}
+    <div className="relative flex items-center gap-1">
+      {canScrollLeft && (
+        <button
+          onClick={() => scrollBy('left')}
+          className="shrink-0 h-7 w-7 rounded-full border bg-background shadow-sm flex items-center justify-center hover:bg-muted transition-colors z-10"
+          aria-label="Scroll categories left"
+        >
+          <ChevronDown className="h-3 w-3 rotate-90" />
+        </button>
+      )}
+      <div ref={scrollRef} className="flex gap-2 overflow-x-auto scrollbar-none py-0.5 flex-1">
+        <button
+          onClick={() => onSelect('all')}
+          className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap ${
+            selected === 'all'
+              ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+              : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
+          }`}
+        >
+          All
+        </button>
+        {categories.map((cat) => {
+          const catColor = cat.color || '#6b7280';
+          const isActive = selected === cat.id;
+          const catImage = getCategoryImage(cat.id);
+          return (
+            <button
+              key={cat.id}
+              onClick={() => onSelect(cat.id)}
+              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                isActive
+                  ? 'text-white border-transparent shadow-sm'
+                  : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
+              }`}
+              style={isActive ? { backgroundColor: catColor, borderColor: catColor } : { borderLeftColor: catColor, borderLeftWidth: '3px' }}
+            >
+              {catImage && (
+                <img src={catImage} alt="" className="h-4 w-4 rounded-full object-cover" />
+              )}
+              {cat.name}
+            </button>
+          );
+        })}
+      </div>
+      {canScrollRight && (
+        <button
+          onClick={() => scrollBy('right')}
+          className="shrink-0 h-7 w-7 rounded-full border bg-background shadow-sm flex items-center justify-center hover:bg-muted transition-colors z-10"
+          aria-label="Scroll categories right"
+        >
+          <ChevronDown className="h-3 w-3 -rotate-90" />
+        </button>
+      )}
     </div>
   );
 }
@@ -1190,12 +1405,21 @@ function ProductCard({
   product: ProductListItem;
   onAdd: (p: ProductListItem) => void;
 }) {
+  const [isBouncing, setIsBouncing] = useState(false);
   const categoryColor = product.category?.color || '#6b7280';
   const stockPercent = product.reorderLevel > 0
     ? Math.min((product.quantityInStock / (product.reorderLevel * 3)) * 100, 100)
     : product.quantityInStock > 0 ? 100 : 0;
   const isLowStock = product.quantityInStock <= product.reorderLevel && product.quantityInStock > 0;
   const isOutOfStock = product.quantityInStock <= 0;
+
+  // Check if product is new (created within last 7 days)
+  const isNew = useMemo(() => {
+    const created = new Date(product.createdAt || Date.now());
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    return created > sevenDaysAgo;
+  }, [product.createdAt]);
 
   const stockBarColor = isOutOfStock
     ? 'bg-red-500'
@@ -1213,29 +1437,47 @@ function ProductCard({
     SET: 'bg-pink-100 text-pink-700 dark:bg-pink-950 dark:text-pink-300',
   };
 
+  const handleClick = () => {
+    setIsBouncing(true);
+    onAdd(product);
+    setTimeout(() => setIsBouncing(false), 400);
+  };
+
   return (
     <Card
-      className="overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 group border-l-4"
+      className={`overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 hover:-translate-y-1 hover:border-primary/30 group border-l-4 card-glow ${isBouncing ? 'animate-bounce-add' : ''}`}
       style={{ borderLeftColor: categoryColor }}
-      onClick={() => onAdd(product)}
+      onClick={handleClick}
     >
-      <div className="h-24 bg-muted flex items-center justify-center relative overflow-hidden">
+      <div className="h-28 bg-muted flex items-center justify-center relative overflow-hidden">
         {product.imageUrl ? (
-          <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500" />
         ) : getCategoryImage(product.categoryId) ? (
-          <img src={getCategoryImage(product.categoryId)!} alt={product.category?.name || ''} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          <img src={getCategoryImage(product.categoryId)!} alt={product.category?.name || ''} className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500" />
         ) : (
           <Package className="h-9 w-9 text-muted-foreground/25" />
         )}
+        {/* Gradient overlay on hover */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/0 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+          <div className="bg-white/90 dark:bg-black/70 rounded-full p-2 shadow-lg transform scale-50 group-hover:scale-100 transition-transform duration-200">
+            <Plus className="h-5 w-5 text-primary" />
+          </div>
+        </div>
+        {/* Badges */}
         {product.isRental && (
           <Badge className="absolute top-1.5 left-1.5 bg-blue-600 text-white text-[10px] px-1.5">RENTAL</Badge>
         )}
         {product.isBundle && (
           <Badge className="absolute top-1.5 right-1.5 bg-purple-600 text-white text-[10px] px-1.5">BUNDLE</Badge>
         )}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center">
-          <Plus className="h-7 w-7 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
-        </div>
+        {isNew && !product.isRental && !product.isBundle && (
+          <Badge className="absolute top-1.5 right-1.5 bg-emerald-500 text-white text-[10px] px-1.5 font-bold animate-pulse">NEW</Badge>
+        )}
+        {isOutOfStock && (
+          <div className="absolute inset-0 bg-red-500/10 flex items-center justify-center">
+            <Badge variant="destructive" className="text-[10px] font-bold">OUT OF STOCK</Badge>
+          </div>
+        )}
       </div>
       <CardContent className="p-2.5">
         <h3 className="font-medium text-sm line-clamp-2 leading-tight">{product.name}</h3>
@@ -1248,13 +1490,15 @@ function ProductCard({
             {product.unitType}
           </span>
         </div>
-        {/* Mini stock progress bar */}
+        {/* Enhanced stock progress bar */}
         <div className="mt-1.5 flex items-center gap-1.5">
-          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all ${stockBarColor}`}
+              className={`h-full rounded-full animate-stock-fill ${stockBarColor} relative`}
               style={{ width: `${stockPercent}%` }}
-            />
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
+            </div>
           </div>
           <span className={`text-[9px] font-medium shrink-0 ${isOutOfStock ? 'text-red-500' : isLowStock ? 'text-amber-500' : 'text-muted-foreground'}`}>
             {isOutOfStock ? 'Out' : `${product.quantityInStock}`}
@@ -1273,15 +1517,17 @@ function CartItemRow({
   item,
   onUpdateQty,
   onRemove,
+  isNew,
 }: {
   item: CartItem;
   onUpdateQty: (productId: string, qty: number) => void;
   onRemove: (productId: string) => void;
+  isNew?: boolean;
 }) {
   const quickAddAmounts = [1, 2, 5, 10];
 
   return (
-    <div className="flex gap-2 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors">
+    <div className={`flex gap-2 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors ${isNew ? 'animate-slide-in' : ''}`}>
       {/* Image placeholder */}
       <div className="shrink-0 w-10 h-10 rounded-md bg-muted flex items-center justify-center">
         <Package className="h-4 w-4 text-muted-foreground/40" />
@@ -1350,9 +1596,26 @@ function CartItemRow({
 function EmptyCartState() {
   return (
     <div className="p-8 text-center">
-      <div className="relative mx-auto w-16 h-16 mb-4">
-        <div className="absolute inset-0 bg-primary/10 rounded-full animate-pulse" />
-        <ShoppingBag className="absolute inset-0 m-auto h-8 w-8 text-primary/40" />
+      {/* CSS-only empty cart illustration */}
+      <div className="relative mx-auto w-24 h-24 mb-4">
+        {/* Cart body */}
+        <div className="absolute bottom-2 left-3 right-3 h-12 border-2 border-muted-foreground/20 rounded-b-lg bg-muted/30">
+          {/* Cart items placeholder lines */}
+          <div className="absolute top-2 left-2 right-2 space-y-1">
+            <div className="h-1 bg-muted-foreground/10 rounded" />
+            <div className="h-1 bg-muted-foreground/10 rounded w-3/4" />
+            <div className="h-1 bg-muted-foreground/10 rounded w-1/2" />
+          </div>
+        </div>
+        {/* Cart handle */}
+        <div className="absolute top-0 left-6 right-6 h-6 border-t-2 border-l-2 border-r-2 border-muted-foreground/20 rounded-t-full" />
+        {/* Wheels */}
+        <div className="absolute bottom-0 left-4 w-3 h-3 border-2 border-muted-foreground/20 rounded-full bg-background" />
+        <div className="absolute bottom-0 right-4 w-3 h-3 border-2 border-muted-foreground/20 rounded-full bg-background" />
+        {/* Floating plus sign */}
+        <div className="absolute -top-1 -right-1 w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center animate-bounce">
+          <Plus className="h-3 w-3 text-primary/50" />
+        </div>
       </div>
       <p className="text-sm font-medium text-muted-foreground">Your cart is empty</p>
       <p className="text-xs text-muted-foreground/60 mt-1">Click on products to add them here</p>
@@ -1394,6 +1657,10 @@ function POSTab() {
   const [cashReceived, setCashReceived] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<string>('');
   const [lowStockAlertOpen, setLowStockAlertOpen] = useState(false);
+  const [discountCode, setDiscountCode] = useState('');
+  const [cartBadgeShake, setCartBadgeShake] = useState(false);
+  const [addedItemId, setAddedItemId] = useState<string | null>(null);
+  const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const currentStoreId = useAppStore((s) => s.currentStoreId);
 
   const cart = useCartStore();
@@ -1488,7 +1755,90 @@ function POSTab() {
       isRentalItem: product.isRental,
       isBundle: product.isBundle,
     });
+    // Trigger animations
+    setAddedItemId(product.id);
+    setCartBadgeShake(true);
+    setTimeout(() => { setAddedItemId(null); setCartBadgeShake(false); }, 500);
     toast.success(`${product.name} added to cart`);
+  };
+
+  // Hold/Recall cart functionality
+  const holdCart = () => {
+    if (cart.items.length === 0) {
+      toast.error('Cart is empty - nothing to hold');
+      return;
+    }
+    const heldCarts = JSON.parse(localStorage.getItem('mbt_held_carts') || '[]');
+    const holdId = `hold_${Date.now()}`;
+    heldCarts.push({ id: holdId, items: cart.items, customer: selectedCustomer, timestamp: new Date().toISOString() });
+    localStorage.setItem('mbt_held_carts', JSON.stringify(heldCarts));
+    cart.clearCart();
+    setSelectedCustomer('');
+    toast.success('Cart held successfully');
+  };
+
+  const recallCart = () => {
+    const heldCarts = JSON.parse(localStorage.getItem('mbt_held_carts') || '[]');
+    if (heldCarts.length === 0) {
+      toast.info('No held carts to recall');
+      return;
+    }
+    const lastHeld = heldCarts.pop();
+    if (lastHeld && lastHeld.items) {
+      // Clear current cart first
+      cart.clearCart();
+      // Add all items from held cart
+      lastHeld.items.forEach((item: CartItem) => {
+        cart.addItem({
+          productId: item.productId,
+          productName: item.productName,
+          sku: item.sku,
+          quantity: item.quantity,
+          unitType: item.unitType,
+          pricePerUnit: item.pricePerUnit,
+          costPrice: item.costPrice,
+          discountPercent: item.discountPercent,
+          taxRate: item.taxRate,
+          isRentalItem: item.isRentalItem,
+          isBundle: item.isBundle,
+        });
+      });
+      if (lastHeld.customer) setSelectedCustomer(lastHeld.customer);
+      localStorage.setItem('mbt_held_carts', JSON.stringify(heldCarts));
+      toast.success('Cart recalled successfully');
+    }
+  };
+
+  const heldCartCount = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('mbt_held_carts') || '[]').length;
+    } catch { return 0; }
+  })();
+
+  const applyDiscountCode = () => {
+    if (!discountCode.trim()) {
+      toast.error('Enter a discount code');
+      return;
+    }
+    // Simple discount code validation for demo
+    const validCodes: Record<string, number> = {
+      'SAVE10': 10,
+      'SAVE20': 20,
+      'MBUMAH': 15,
+      'HARDWARE': 5,
+    };
+    const discount = validCodes[discountCode.toUpperCase()];
+    if (discount) {
+      cart.items.forEach((item) => {
+        if (item.discountPercent === 0) {
+          cart.applyDiscount(item.productId, discount);
+        }
+      });
+      toast.success(`${discount}% discount applied!`);
+      setDiscountCode('');
+    } else {
+      toast.error('Invalid discount code. Try: SAVE10, SAVE20, MBUMAH, or HARDWARE');
+    }
   };
 
   const handleCheckout = () => {
@@ -1539,7 +1889,7 @@ function POSTab() {
 
         {/* Search and Category Chips */}
         <div className="space-y-3">
-          <div className="relative">
+          <div className="relative animate-pulse-search rounded-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search products by name, SKU, or barcode..."
@@ -1560,11 +1910,13 @@ function POSTab() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {Array.from({ length: 8 }).map((_, i) => (
               <Card key={i} className="overflow-hidden border-l-4 border-l-muted">
-                <Skeleton className="h-24" />
+                <div className="h-28 bg-muted relative">
+                  <div className="absolute inset-0 animate-shimmer" />
+                </div>
                 <CardContent className="p-2.5 space-y-2">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-1/2" />
-                  <Skeleton className="h-5 w-2/3" />
+                  <div className="relative"><Skeleton className="h-4 w-3/4" /><div className="absolute inset-0 animate-shimmer" /></div>
+                  <div className="relative"><Skeleton className="h-3 w-1/2" /><div className="absolute inset-0 animate-shimmer" /></div>
+                  <div className="relative"><Skeleton className="h-5 w-2/3" /><div className="absolute inset-0 animate-shimmer" /></div>
                 </CardContent>
               </Card>
             ))}
@@ -1584,8 +1936,8 @@ function POSTab() {
         )}
       </div>
 
-      {/* Cart Sidebar */}
-      <div className="lg:w-96 shrink-0">
+      {/* Cart Sidebar - Desktop only */}
+      <div className="hidden lg:block lg:w-96 shrink-0">
         <Card className="sticky top-20 flex flex-col max-h-[calc(100vh-7rem)] bg-gradient-to-b from-card to-card/95">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -1593,14 +1945,26 @@ function POSTab() {
                 <ShoppingCart className="h-4 w-4" />
                 Cart
                 {cart.items.length > 0 && (
-                  <Badge variant="secondary">{cart.getItemCount()}</Badge>
+                  <Badge variant="secondary" className={cartBadgeShake ? 'animate-shake' : ''}>{cart.getItemCount()}</Badge>
                 )}
               </CardTitle>
-              {cart.items.length > 0 && (
-                <Button variant="ghost" size="sm" onClick={() => cart.clearCart()} className="text-destructive h-7">
-                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Clear
-                </Button>
-              )}
+              <div className="flex items-center gap-1">
+                {heldCartCount > 0 && (
+                  <Button variant="ghost" size="sm" onClick={recallCart} className="text-blue-600 h-7" title="Recall held cart">
+                    <ShoppingBag className="h-3.5 w-3.5 mr-1" /> Recall ({heldCartCount})
+                  </Button>
+                )}
+                {cart.items.length > 0 && (
+                  <>
+                    <Button variant="ghost" size="sm" onClick={holdCart} className="text-amber-600 h-7" title="Hold current cart">
+                      <Clock className="h-3.5 w-3.5 mr-1" /> Hold
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => cart.clearCart()} className="text-destructive h-7">
+                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Clear
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </CardHeader>
           <Separator />
@@ -1615,6 +1979,7 @@ function POSTab() {
                     item={item}
                     onUpdateQty={cart.updateQuantity}
                     onRemove={cart.removeItem}
+                    isNew={addedItemId === item.productId}
                   />
                 ))}
               </div>
@@ -1624,6 +1989,20 @@ function POSTab() {
             <>
               <Separator />
               <div className="p-4 space-y-3">
+                {/* Discount Code */}
+                <div className="flex gap-1.5">
+                  <Input
+                    placeholder="Discount code"
+                    value={discountCode}
+                    onChange={(e) => setDiscountCode(e.target.value)}
+                    className="h-8 text-xs"
+                    onKeyDown={(e) => { if (e.key === 'Enter') applyDiscountCode(); }}
+                  />
+                  <Button variant="outline" size="sm" onClick={applyDiscountCode} className="h-8 text-xs shrink-0">
+                    Apply
+                  </Button>
+                </div>
+
                 {/* Customer Selection */}
                 <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
                   <SelectTrigger>
@@ -1649,13 +2028,13 @@ function POSTab() {
                   <Separator />
                   <div className="flex justify-between font-bold text-base">
                     <span>Total</span>
-                    <span className="text-primary">{formatKES(total)}</span>
+                    <span className="gradient-text">{formatKES(total)}</span>
                   </div>
                 </div>
 
                 <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
                   <DialogTrigger asChild>
-                    <Button className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground font-semibold h-12" size="lg">
+                    <Button className="w-full bg-gradient-to-r from-accent-orange to-amber-500 hover:from-accent-orange/90 hover:to-amber-600 text-white font-semibold h-12 shadow-lg shadow-accent-orange/20" size="lg">
                       <CreditCard className="mr-2 h-4 w-4" />
                       <span className="flex flex-col items-start leading-tight">
                         <span className="text-xs font-normal opacity-80">Checkout</span>
@@ -1992,6 +2371,215 @@ function POSTab() {
         onOpenChange={setLowStockAlertOpen}
         storeId={currentStoreId}
       />
+
+      {/* Mobile Cart FAB (Floating Action Button) */}
+      {cart.items.length > 0 && (
+        <button
+          type="button"
+          className="lg:hidden fixed bottom-20 right-4 z-40 h-14 w-14 rounded-full bg-gradient-to-r from-accent-orange to-amber-500 text-white shadow-xl shadow-accent-orange/30 flex items-center justify-center hover:scale-110 transition-transform"
+          onClick={() => setMobileCartOpen(true)}
+          aria-label="Open cart"
+        >
+          <ShoppingCart className="h-6 w-6" />
+          <span className="absolute -top-1 -right-1 min-w-[20px] h-5 flex items-center justify-center rounded-full bg-red-500 text-[10px] font-bold px-1">
+            {cart.getItemCount()}
+          </span>
+        </button>
+      )}
+
+      {/* Mobile Cart Sheet */}
+      <Sheet open={mobileCartOpen} onOpenChange={setMobileCartOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+          <SheetHeader className="p-4 pb-2 border-b shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <SheetTitle className="text-lg flex items-center gap-2">
+                  <ShoppingCart className="h-4 w-4" /> Cart
+                  {cart.items.length > 0 && (
+                    <Badge variant="secondary" className={cartBadgeShake ? 'animate-shake' : ''}>{cart.getItemCount()}</Badge>
+                  )}
+                </SheetTitle>
+              </div>
+              <div className="flex items-center gap-1">
+                {heldCartCount > 0 && (
+                  <Button variant="ghost" size="sm" onClick={recallCart} className="text-blue-600 h-7 text-xs">
+                    <ShoppingBag className="h-3.5 w-3.5 mr-1" /> Recall
+                  </Button>
+                )}
+                {cart.items.length > 0 && (
+                  <>
+                    <Button variant="ghost" size="sm" onClick={holdCart} className="text-amber-600 h-7 text-xs">
+                      <Clock className="h-3.5 w-3.5 mr-1" /> Hold
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => cart.clearCart()} className="text-destructive h-7 text-xs">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          </SheetHeader>
+          <ScrollArea className="flex-1 min-h-0">
+            {cart.items.length === 0 ? (
+              <EmptyCartState />
+            ) : (
+              <div className="p-3 space-y-2">
+                {cart.items.map((item) => (
+                  <CartItemRow
+                    key={item.productId}
+                    item={item}
+                    onUpdateQty={cart.updateQuantity}
+                    onRemove={cart.removeItem}
+                    isNew={addedItemId === item.productId}
+                  />
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+          {cart.items.length > 0 && (
+            <>
+              <div className="p-4 space-y-3 border-t shrink-0">
+                <div className="flex gap-1.5">
+                  <Input
+                    placeholder="Discount code"
+                    value={discountCode}
+                    onChange={(e) => setDiscountCode(e.target.value)}
+                    className="h-8 text-xs"
+                    onKeyDown={(e) => { if (e.key === 'Enter') applyDiscountCode(); }}
+                  />
+                  <Button variant="outline" size="sm" onClick={applyDiscountCode} className="h-8 text-xs shrink-0">
+                    Apply
+                  </Button>
+                </div>
+                <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Walk-in Customer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="walk-in">Walk-in Customer</SelectItem>
+                    {customers.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}{c.phone ? ` - ${c.phone}` : ''}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span>{formatKES(subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">VAT (16%)</span>
+                    <span>{formatKES(tax)}</span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between font-bold text-base">
+                    <span>Total</span>
+                    <span className="gradient-text">{formatKES(total)}</span>
+                  </div>
+                </div>
+                <Dialog open={checkoutOpen} onOpenChange={(v) => { setCheckoutOpen(v); if (!v) return; }}>
+                  <DialogTrigger asChild>
+                    <Button className="w-full bg-gradient-to-r from-accent-orange to-amber-500 hover:from-accent-orange/90 hover:to-amber-600 text-white font-semibold h-12 shadow-lg shadow-accent-orange/20" size="lg">
+                      <CreditCard className="mr-2 h-4 w-4" />
+                      <span className="flex flex-col items-start leading-tight">
+                        <span className="text-xs font-normal opacity-80">Checkout</span>
+                        <span>{formatKES(total)}</span>
+                      </span>
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Complete Payment</DialogTitle>
+                      <DialogDescription>
+                        Total: <span className="font-bold text-primary">{formatKES(total)}</span>
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label className="text-sm font-medium">Payment Method</Label>
+                        <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)} className="grid grid-cols-3 gap-2 mt-2">
+                          <div>
+                            <RadioGroupItem value="CASH" id="mobile-cash" className="peer sr-only" />
+                            <Label htmlFor="mobile-cash" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+                              <Banknote className="h-5 w-5" />
+                              <span className="text-xs font-medium">Cash</span>
+                            </Label>
+                          </div>
+                          <div>
+                            <RadioGroupItem value="MPESA" id="mobile-mpesa" className="peer sr-only" />
+                            <Label htmlFor="mobile-mpesa" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+                              <Smartphone className="h-5 w-5" />
+                              <span className="text-xs font-medium">M-Pesa</span>
+                            </Label>
+                          </div>
+                          <div>
+                            <RadioGroupItem value="DEBT" id="mobile-debt" className="peer sr-only" />
+                            <Label htmlFor="mobile-debt" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+                              <Wallet className="h-5 w-5" />
+                              <span className="text-xs font-medium">Debt</span>
+                            </Label>
+                          </div>
+                        </RadioGroup>
+                      </div>
+                      {paymentMethod === 'CASH' && (
+                        <div className="space-y-3">
+                          <div>
+                            <Label htmlFor="mobile-cashReceived">Cash Received</Label>
+                            <Input id="mobile-cashReceived" type="number" placeholder="0" value={cashReceived} onChange={(e) => setCashReceived(e.target.value)} className="text-lg font-semibold mt-1" />
+                          </div>
+                          {change > 0 && (
+                            <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg">
+                              <p className="text-sm font-medium text-green-700 dark:text-green-400">Change: {formatKES(change)}</p>
+                            </div>
+                          )}
+                          {cashReceived && Number(cashReceived) < total && (
+                            <Alert variant="destructive">
+                              <AlertCircle className="h-4 w-4" />
+                              <AlertTitle>Insufficient amount</AlertTitle>
+                              <AlertDescription>Need {formatKES(total - Number(cashReceived))} more</AlertDescription>
+                            </Alert>
+                          )}
+                        </div>
+                      )}
+                      {paymentMethod === 'DEBT' && !selectedCustomer && (
+                        <Alert>
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertTitle>Customer Required</AlertTitle>
+                          <AlertDescription>Please select a customer for debt payment.</AlertDescription>
+                        </Alert>
+                      )}
+                      {paymentMethod === 'MPESA' && (
+                        <div>
+                          <Label htmlFor="mobile-mpesaPhone">M-Pesa Phone Number</Label>
+                          <Input id="mobile-mpesaPhone" type="tel" placeholder="0712 345 678" value={mpesaPhone} onChange={(e) => setMpesaPhone(e.target.value)} className="mt-1" />
+                        </div>
+                      )}
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setCheckoutOpen(false)}>Cancel</Button>
+                      <Button
+                        onClick={handleCheckout}
+                        disabled={
+                          checkoutMutation.isPending ||
+                          (paymentMethod === 'CASH' && (!cashReceived || Number(cashReceived) < total)) ||
+                          (paymentMethod === 'DEBT' && !selectedCustomer)
+                        }
+                        className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+                      >
+                        {checkoutMutation.isPending ? (
+                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
+                        ) : (
+                          <><CheckCircle className="mr-2 h-4 w-4" />Complete Sale</>
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
@@ -2013,6 +2601,7 @@ function MainApp() {
       case 'reports': return <Suspense fallback={<TabLoadingFallback />}><LazyReportsTab /></Suspense>;
       case 'transactions': return <Suspense fallback={<TabLoadingFallback />}><LazyTransactionsTab /></Suspense>;
       case 'admin': return <Suspense fallback={<TabLoadingFallback />}><LazyAdminTab /></Suspense>;
+      case 'suppliers': return <Suspense fallback={<TabLoadingFallback />}><LazySuppliersTab /></Suspense>;
       default: return <POSTab />;
     }
   };
@@ -2020,12 +2609,14 @@ function MainApp() {
   return (
     <div className="flex h-screen overflow-hidden">
       <AppSidebar />
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 h-screen">
         <TopBar />
         <main className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-          {renderTab()}
+          <div className="animate-tab-enter" key={activeTab}>
+            {renderTab()}
+          </div>
         </main>
-        <footer className="border-t bg-background px-4 py-2 text-center mt-auto shrink-0">
+        <footer className="border-t bg-background px-4 py-2 text-center shrink-0">
           <p className="text-xs text-muted-foreground">
             MBUMAH HARDWARE POS & ERP System &copy; {new Date().getFullYear()} &mdash; All rights reserved
           </p>

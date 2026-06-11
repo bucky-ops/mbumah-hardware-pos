@@ -209,3 +209,155 @@
 .animate-gradient-shift {
   animation: gradient-shift 8s ease-in-out infinite;
 }
+
+/* POS Enhancement Animations */
+@keyframes bounce-add {
+  0%, 100% { transform: scale(1); }
+  30% { transform: scale(0.95); }
+  60% { transform: scale(1.03); }
+  80% { transform: scale(0.99); }
+}
+
+.animate-bounce-add {
+  animation: bounce-add 0.4s ease-out;
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-slide-in {
+  animation: slide-in-right 0.3s ease-out;
+}
+
+@keyframes shake-badge {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px) rotate(-2deg); }
+  40% { transform: translateX(3px) rotate(2deg); }
+  60% { transform: translateX(-2px) rotate(-1deg); }
+  80% { transform: translateX(2px) rotate(1deg); }
+}
+
+.animate-shake {
+  animation: shake-badge 0.5s ease-out;
+}
+
+@keyframes pulse-search {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.295 0.1 260 / 0); }
+  50% { box-shadow: 0 0 0 4px oklch(0.295 0.1 260 / 0.15); }
+}
+
+.animate-pulse-search:focus-within {
+  animation: pulse-search 2s ease-in-out infinite;
+}
+
+@keyframes stock-fill {
+  from { width: 0%; }
+}
+
+.animate-stock-fill {
+  animation: stock-fill 1s ease-out;
+}
+
+@keyframes float-up {
+  0% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-30px); }
+}
+
+.animate-float-up {
+  animation: float-up 0.8s ease-out forwards;
+}
+
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-count-up {
+  animation: count-up 0.5s ease-out;
+}
+
+@keyframes tab-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-tab-enter {
+  animation: tab-fade-in 0.25s ease-out;
+}
+
+/* Skeleton shimmer animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent 0%, oklch(0.96 0.008 250 / 0.5) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.dark .animate-shimmer {
+  background: linear-gradient(90deg, transparent 0%, oklch(0.24 0.02 260 / 0.5) 50%, transparent 100%);
+  background-size: 200% 100%;
+}
+
+/* Subtle glow effect on card hover */
+.card-glow:hover {
+  box-shadow: 0 0 15px oklch(0.295 0.1 260 / 0.08), 0 4px 12px oklch(0.295 0.1 260 / 0.05);
+}
+
+.dark .card-glow:hover {
+  box-shadow: 0 0 15px oklch(0.65 0.15 260 / 0.1), 0 4px 12px oklch(0.65 0.15 260 / 0.06);
+}
+
+/* Sidebar nav hover effect */
+.sidebar-nav-item {
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-nav-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: oklch(0.68 0.18 55 / 0.1);
+  transition: width 0.2s ease;
+  border-radius: inherit;
+}
+
+.sidebar-nav-item:hover::before {
+  width: 100%;
+}
+
+/* Hide scrollbar for category chips */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Gradient text utility */
+.gradient-text {
+  background: linear-gradient(135deg, oklch(0.68 0.18 55), oklch(0.6 0.2 30));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Slow pulse animation for notification badges */
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 2s ease-in-out infinite;
+}

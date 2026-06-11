@@ -1,0 +1,2002 @@
+     1→'use client';
+     2→
+     3→/**
+     4→ * MBUMAH HARDWARE POS & ERP System - Main Application Page
+     5→ * UI Overhaul: Dashboard stats, category chips, enhanced cards, improved cart, better login, footer fix, empty states, live clock
+     6→ */
+     7→
+     8→import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef } from 'react';
+     9→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+    10→import { useTheme } from 'next-themes';
+    11→import { toast } from 'sonner';
+    12→import {
+    13→  ShoppingCart, Package, Users, KeyRound, BarChart3, FileText,
+    14→  Settings, LogOut, Search, Plus, Minus, Trash2, X, Menu, Sun, Moon,
+    15→  CheckCircle, Clock,
+    16→  ShoppingBag, CreditCard, Smartphone,
+    17→  AlertCircle, Loader2,
+    18→  Home, Store, Mail, ShieldCheck, Eye, EyeOff,
+    19→  Banknote, Wallet,
+    20→  TrendingUp, ArrowDownRight, AlertTriangle, DollarSign, Wrench, Hammer,
+    21→  CalendarDays, Printer, Bell, ChevronDown,
+    22→  BellRing, PackageX, AlertOctagon, CircleDollarSign, CheckCheck,
+    23→} from 'lucide-react';
+    24→
+    25→import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
+    26→import {
+    27→  productsApi, categoriesApi, customersApi, transactionsApi,
+    28→  paymentsApi, dashboardApi,
+    29→  rentalsApi, debtApi,
+    30→  formatKES, formatDate, formatDateTime,
+    31→  type ProductListItem, type CustomerItem,
+    32→  type CategoryItem, type TransactionItem,
+    33→  type RentalItem, type DebtLedgerItem,
+    34→} from '@/lib/api';
+    35→import type { PaymentMethod, CartItem, UnitType, DashboardStats } from '@/lib/types';
+    36→
+    37→import { Button } from '@/components/ui/button';
+    38→import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+    39→import { Input } from '@/components/ui/input';
+    40→import { Label } from '@/components/ui/label';
+    41→import { Badge } from '@/components/ui/badge';
+    42→import { Separator } from '@/components/ui/separator';
+    43→import { Skeleton } from '@/components/ui/skeleton';
+    44→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+    45→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    46→import { ScrollArea } from '@/components/ui/scroll-area';
+    47→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    48→import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+    49→import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+    50→import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+    51→import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+    52→import { Progress } from '@/components/ui/progress';
+    53→
+    54→// ============================================================================
+    55→// LAZY-LOADED TAB COMPONENTS
+    56→// ============================================================================
+    57→
+    58→const LazyInventoryTab = lazy(() => import('./tabs/inventory-tab'));
+    59→const LazyCustomersTab = lazy(() => import('./tabs/customers-tab'));
+    60→const LazyRentalsTab = lazy(() => import('./tabs/rentals-tab'));
+    61→const LazyFinancialTab = lazy(() => import('./tabs/financial-tab'));
+    62→const LazyReportsTab = lazy(() => import('./tabs/reports-tab'));
+    63→const LazyAdminTab = lazy(() => import('./tabs/admin-tab'));
+    64→const LazyTransactionsTab = lazy(() => import('./tabs/transactions-tab'));
+    65→
+    66→function TabLoadingFallback() {
+    67→  return (
+    68→    <div className="space-y-4">
+    69→      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    70→        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+    71→      </div>
+    72→      <Skeleton className="h-10 w-full" />
+    73→      <Skeleton className="h-64 w-full" />
+    74→    </div>
+    75→  );
+    76→}
+    77→
+    78→// ============================================================================
+    79→// CONSTANTS
+    80→// ============================================================================
+    81→
+    82→const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
+    83→  { id: 'pos', label: 'POS', icon: ShoppingCart },
+    84→  { id: 'inventory', label: 'Inventory', icon: Package },
+    85→  { id: 'customers', label: 'Customers', icon: Users },
+    86→  { id: 'rentals', label: 'Rentals', icon: KeyRound },
+    87→  { id: 'financial', label: 'Financial', icon: BarChart3 },
+    88→  { id: 'reports', label: 'Reports', icon: FileText },
+    89→  { id: 'transactions', label: 'Transactions', icon: ShoppingBag },
+    90→  { id: 'admin', label: 'Admin', icon: Settings },
+    91→];
+    92→
+    93→const DEMO_ACCOUNTS = [
+    94→  { email: 'admin@mbumahhardware.co.ke', password: 'password123', role: 'Super Admin', icon: ShieldCheck, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900 hover:bg-red-100 dark:hover:bg-red-950/50' },
+    95→  { email: 'cashier@mbumahhardware.co.ke', password: 'password123', role: 'Cashier', icon: ShoppingCart, color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900 hover:bg-green-100 dark:hover:bg-green-950/50' },
+    96→  { email: 'accountant@mbumahhardware.co.ke', password: 'password123', role: 'Accountant', icon: BarChart3, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900 hover:bg-amber-100 dark:hover:bg-amber-950/50' },
+    97→];
+    98→
+    99→// Category image mapping
+   100→const CATEGORY_IMAGES: Record<string, string> = {
+   101→  cat_cement: '/categories/cat_cement.png',
+   102→  cat_iron_sheets: '/categories/cat_iron.png',
+   103→  cat_paints: '/categories/cat_paints.png',
+   104→  cat_iron_bars: '/categories/cat_rebar.png',
+   105→  cat_wheelbarrows: '/categories/cat_wheelbarrow.png',
+   106→  cat_mesh_wires: '/categories/cat_mesh.png',
+   107→  cat_tools: '/categories/cat_tools.png',
+   108→  cat_plumbing: '/categories/cat_plumbing.png',
+   109→  cat_electrical: '/categories/cat_electrical.png',
+   110→  cat_nails_screws: '/categories/cat_nails.png',
+   111→};
+   112→
+   113→function getCategoryImage(categoryId: string | null | undefined): string | null {
+   114→  if (!categoryId) return null;
+   115→  return CATEGORY_IMAGES[categoryId] || null;
+   116→}
+   117→
+   118→// ============================================================================
+   119→// LIVE CLOCK HOOK
+   120→// ============================================================================
+   121→
+   122→function useLiveClock() {
+   123→  const [now, setNow] = useState(new Date());
+   124→
+   125→  useEffect(() => {
+   126→    const timer = setInterval(() => setNow(new Date()), 60000); // every minute
+   127→    return () => clearInterval(timer);
+   128→  }, []);
+   129→
+   130→  return now;
+   131→}
+   132→
+   133→// ============================================================================
+   134→// LOGIN SCREEN
+   135→// ============================================================================
+   136→
+   137→function LoginScreen() {
+   138→  const [email, setEmail] = useState('');
+   139→  const [password, setPassword] = useState('');
+   140→  const [showPassword, setShowPassword] = useState(false);
+   141→  const login = useAuthStore((s) => s.login);
+   142→  const isLoading = useAuthStore((s) => s.isLoading);
+   143→
+   144→  const handleSubmit = async (e: React.FormEvent) => {
+   145→    e.preventDefault();
+   146→    try {
+   147→      await login(email, password);
+   148→      toast.success('Welcome to MBUMAH HARDWARE POS!');
+   149→    } catch (err: unknown) {
+   150→      const message = err instanceof Error ? err.message : 'Login failed';
+   151→      toast.error(message);
+   152→    }
+   153→  };
+   154→
+   155→  const fillDemo = (acct: typeof DEMO_ACCOUNTS[number]) => {
+   156→    setEmail(acct.email);
+   157→    setPassword(acct.password);
+   158→  };
+   159→
+   160→  return (
+   161→    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+   162→      {/* Animated gradient background */}
+   163→      <div className="absolute inset-0 bg-gradient-to-br from-[oklch(0.22_0.07_260)] via-[oklch(0.295_0.1_260)] to-[oklch(0.22_0.06_260)]" />
+   164→      <div className="absolute inset-0 bg-gradient-to-tr from-[oklch(0.22_0.08_30)] via-transparent to-[oklch(0.25_0.09_150)] animate-gradient-shift" />
+   165→
+   166→      {/* Decorative hardware pattern */}
+   167→      <div className="absolute inset-0 opacity-[0.04] pointer-events-none">
+   168→        <div className="absolute top-10 left-10"><Wrench className="h-24 w-24 text-white" /></div>
+   169→        <div className="absolute top-32 right-20"><Hammer className="h-16 w-16 text-white" /></div>
+   170→        <div className="absolute bottom-20 left-1/4"><Package className="h-20 w-20 text-white" /></div>
+   171→        <div className="absolute bottom-32 right-1/3"><Store className="h-28 w-28 text-white" /></div>
+   172→        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"><Wrench className="h-40 w-40 text-white" /></div>
+   173→        <div className="absolute top-60 left-1/2"><Hammer className="h-12 w-12 text-white rotate-45" /></div>
+   174→        <div className="absolute bottom-60 right-10"><Package className="h-14 w-14 text-white -rotate-12" /></div>
+   175→      </div>
+   176→
+   177→      <div className="w-full max-w-md relative z-10">
+   178→        <Card className="shadow-2xl border border-white/10 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl">
+   179→          <CardHeader className="text-center pb-2">
+   180→            {/* Animated logo */}
+   181→            <div className="mx-auto w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center mb-4 shadow-lg animate-pulse-slow">
+   182→              <Store className="h-10 w-10 text-primary-foreground" />
+   183→            </div>
+   184→            <CardTitle className="text-2xl font-bold tracking-tight">MBUMAH HARDWARE</CardTitle>
+   185→            <CardDescription className="text-base">POS & ERP System</CardDescription>
+   186→          </CardHeader>
+   187→          <CardContent>
+   188→            <form onSubmit={handleSubmit} className="space-y-4">
+   189→              <div className="space-y-2">
+   190→                <Label htmlFor="email">Email Address</Label>
+   191→                <div className="relative">
+   192→                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   193→                  <Input
+   194→                    id="email"
+   195→                    type="email"
+   196→                    placeholder="cashier@mbumahhardware.co.ke"
+   197→                    value={email}
+   198→                    onChange={(e) => setEmail(e.target.value)}
+   199→                    className="pl-10"
+   200→                    required
+   201→                    disabled={isLoading}
+   202→                  />
+   203→                </div>
+   204→              </div>
+   205→              <div className="space-y-2">
+   206→                <Label htmlFor="password">Password</Label>
+   207→                <div className="relative">
+   208→                  <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   209→                  <Input
+   210→                    id="password"
+   211→                    type={showPassword ? 'text' : 'password'}
+   212→                    placeholder="Enter your password"
+   213→                    value={password}
+   214→                    onChange={(e) => setPassword(e.target.value)}
+   215→                    className="pl-10 pr-10"
+   216→                    required
+   217→                    disabled={isLoading}
+   218→                  />
+   219→                  <button
+   220→                    type="button"
+   221→                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+   222→                    onClick={() => setShowPassword(!showPassword)}
+   223→                    tabIndex={-1}
+   224→                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+   225→                  >
+   226→                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+   227→                  </button>
+   228→                </div>
+   229→              </div>
+   230→              <Button
+   231→                type="submit"
+   232→                className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground font-semibold"
+   233→                disabled={isLoading}
+   234→                size="lg"
+   235→              >
+   236→                {isLoading ? (
+   237→                  <>
+   238→                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+   239→                    Signing In...
+   240→                  </>
+   241→                ) : (
+   242→                  'Sign In'
+   243→                )}
+   244→              </Button>
+   245→            </form>
+   246→
+   247→            {/* Demo Accounts */}
+   248→            <div className="mt-6">
+   249→              <Separator className="mb-4" />
+   250→              <p className="text-xs text-muted-foreground text-center mb-3">Quick Demo Access</p>
+   251→              <div className="grid grid-cols-3 gap-2">
+   252→                {DEMO_ACCOUNTS.map((acct) => {
+   253→                  const Icon = acct.icon;
+   254→                  return (
+   255→                    <button
+   256→                      key={acct.email}
+   257→                      type="button"
+   258→                      onClick={() => fillDemo(acct)}
+   259→                      className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all text-center ${acct.bg}`}
+   260→                    >
+   261→                      <Icon className={`h-5 w-5 ${acct.color}`} />
+   262→                      <span className="text-[10px] font-medium leading-tight">{acct.role}</span>
+   263→                    </button>
+   264→                  );
+   265→                })}
+   266→              </div>
+   267→            </div>
+   268→          </CardContent>
+   269→          <CardFooter className="flex flex-col gap-2 text-sm text-muted-foreground">
+   270→            <p className="text-xs">Select a demo account above or enter credentials manually</p>
+   271→          </CardFooter>
+   272→          {/* Kenyan flag accent at bottom */}
+   273→          <div className="flex h-1.5 rounded-b-xl overflow-hidden">
+   274→            <div className="flex-1 bg-black" />
+   275→            <div className="flex-1 bg-red-600" />
+   276→            <div className="flex-1 bg-green-600" />
+   277→            <div className="flex-1 bg-white" />
+   278→          </div>
+   279→        </Card>
+   280→        {/* Branding text */}
+   281→        <p className="text-center mt-4 text-xs text-white/40 font-medium tracking-wider">
+   282→          Powered by MBUMAH HARDWARE
+   283→        </p>
+   284→      </div>
+   285→    </div>
+   286→  );
+   287→}
+   288→
+   289→// ============================================================================
+   290→// NOTIFICATION CENTER
+   291→// ============================================================================
+   292→
+   293→interface NotificationItem {
+   294→  id: string;
+   295→  type: 'low_stock' | 'out_of_stock' | 'overdue_rental' | 'large_debt';
+   296→  title: string;
+   297→  description: string;
+   298→  timestamp: string;
+   299→  severity: 'critical' | 'warning' | 'info';
+   300→  targetTab?: AppTab;
+   301→}
+   302→
+   303→function NotificationCenter({
+   304→  open,
+   305→  onOpenChange,
+   306→  storeId,
+   307→}: {
+   308→  open: boolean;
+   309→  onOpenChange: (open: boolean) => void;
+   310→  storeId: string;
+   311→}) {
+   312→  const [readIds, setReadIds] = useState<Set<string>>(new Set());
+   313→  const { setActiveTab } = useAppStore();
+   314→
+   315→  const { data: productsData } = useQuery({
+   316→    queryKey: ['products-notifications', storeId],
+   317→    queryFn: () => productsApi.list({ storeId, limit: 200 }),
+   318→    enabled: open,
+   319→  });
+   320→
+   321→  const { data: rentalsData } = useQuery({
+   322→    queryKey: ['rentals-notifications', storeId],
+   323→    queryFn: () => rentalsApi.list({ storeId, limit: 100 }),
+   324→    enabled: open,
+   325→  });
+   326→
+   327→  const { data: debtData } = useQuery({
+   328→    queryKey: ['debt-notifications', storeId],
+   329→    queryFn: () => debtApi.list({ storeId, limit: 100 }),
+   330→    enabled: open,
+   331→  });
+   332→
+   333→  const products = productsData?.data || [];
+   334→  const rentals = rentalsData?.data || [];
+   335→  const debts = debtData?.data || [];
+   336→
+   337→  const notifications = useMemo<NotificationItem[]>(() => {
+   338→    const items: NotificationItem[] = [];
+   339→
+   340→    // Out of stock products
+   341→    products
+   342→      .filter((p) => p.quantityInStock <= 0)
+   343→      .forEach((p) => {
+   344→        items.push({
+   345→          id: `oos-${p.id}`,
+   346→          type: 'out_of_stock',
+   347→          title: 'Out of Stock',
+   348→          description: `${p.name} is completely out of stock`,
+   349→          timestamp: p.updatedAt,
+   350→          severity: 'critical',
+   351→          targetTab: 'inventory',
+   352→        });
+   353→      });
+   354→
+   355→    // Low stock products
+   356→    products
+   357→      .filter((p) => p.quantityInStock > 0 && p.quantityInStock <= p.reorderLevel)
+   358→      .forEach((p) => {
+   359→        items.push({
+   360→          id: `low-${p.id}`,
+   361→          type: 'low_stock',
+   362→          title: 'Low Stock Alert',
+   363→          description: `${p.name} has only ${p.quantityInStock} ${p.unitType.toLowerCase()}s left (reorder at ${p.reorderLevel})`,
+   364→          timestamp: p.updatedAt,
+   365→          severity: 'warning',
+   366→          targetTab: 'inventory',
+   367→        });
+   368→      });
+   369→
+   370→    // Overdue rentals
+   371→    rentals
+   372→      .filter((r) => r.status === 'OVERDUE')
+   373→      .forEach((r) => {
+   374→        items.push({
+   375→          id: `rental-${r.id}`,
+   376→          type: 'overdue_rental',
+   377→          title: 'Overdue Rental',
+   378→          description: `${r.product?.name || 'Equipment'} rented by ${r.customer?.name || 'Customer'} is overdue`,
+   379→          timestamp: r.expectedReturnDate,
+   380→          severity: 'critical',
+   381→          targetTab: 'rentals',
+   382→        });
+   383→      });
+   384→
+   385→    // Large outstanding debts (>50,000 KES)
+   386→    debts
+   387→      .filter((d) => d.balance > 50000 && d.status !== 'SETTLED')
+   388→      .forEach((d) => {
+   389→        items.push({
+   390→          id: `debt-${d.id}`,
+   391→          type: 'large_debt',
+   392→          title: 'Large Outstanding Debt',
+   393→          description: `${d.customer?.name || 'Customer'} owes ${formatKES(d.balance)}`,
+   394→          timestamp: d.dueDate,
+   395→          severity: 'warning',
+   396→          targetTab: 'customers',
+   397→        });
+   398→      });
+   399→
+   400→    // Sort by severity (critical first), then by timestamp (newest first)
+   401→    items.sort((a, b) => {
+   402→      const sevOrder = { critical: 0, warning: 1, info: 2 };
+   403→      const sevDiff = sevOrder[a.severity] - sevOrder[b.severity];
+   404→      if (sevDiff !== 0) return sevDiff;
+   405→      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+   406→    });
+   407→
+   408→    return items;
+   409→  }, [products, rentals, debts]);
+   410→
+   411→  const unreadCount = notifications.filter((n) => !readIds.has(n.id)).length;
+   412→
+   413→  const markAllRead = () => {
+   414→    setReadIds(new Set(notifications.map((n) => n.id)));
+   415→  };
+   416→
+   417→  const handleNotificationClick = (notification: NotificationItem) => {
+   418→    setReadIds((prev) => new Set([...prev, notification.id]));
+   419→    if (notification.targetTab) {
+   420→      setActiveTab(notification.targetTab);
+   421→      onOpenChange(false);
+   422→    }
+   423→  };
+   424→
+   425→  const getSeverityIcon = (type: NotificationItem['type']) => {
+   426→    switch (type) {
+   427→      case 'out_of_stock': return <PackageX className="h-4 w-4 text-red-500" />;
+   428→      case 'low_stock': return <AlertTriangle className="h-4 w-4 text-amber-500" />;
+   429→      case 'overdue_rental': return <AlertOctagon className="h-4 w-4 text-red-500" />;
+   430→      case 'large_debt': return <CircleDollarSign className="h-4 w-4 text-amber-500" />;
+   431→    }
+   432→  };
+   433→
+   434→  const getSeverityBg = (severity: NotificationItem['severity']) => {
+   435→    switch (severity) {
+   436→      case 'critical': return 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/40';
+   437→      case 'warning': return 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40';
+   438→      case 'info': return 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/40';
+   439→    }
+   440→  };
+   441→
+   442→  return (
+   443→    <Sheet open={open} onOpenChange={onOpenChange}>
+   444→      <SheetContent side="right" className="w-full sm:max-w-md p-0">
+   445→        <SheetHeader className="p-4 pb-2 border-b">
+   446→          <div className="flex items-center justify-between">
+   447→            <div className="flex items-center gap-2">
+   448→              <SheetTitle className="text-lg">Notifications</SheetTitle>
+   449→              {unreadCount > 0 && (
+   450→                <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+   451→                  {unreadCount}
+   452→                </Badge>
+   453→              )}
+   454→            </div>
+   455→            {unreadCount > 0 && (
+   456→              <Button variant="ghost" size="sm" className="text-xs h-7" onClick={markAllRead}>
+   457→                <CheckCheck className="h-3.5 w-3.5 mr-1" />
+   458→                Mark all read
+   459→              </Button>
+   460→            )}
+   461→          </div>
+   462→          <SheetDescription>
+   463→            Stay updated on stock levels, overdue rentals, and outstanding debts
+   464→          </SheetDescription>
+   465→        </SheetHeader>
+   466→        <ScrollArea className="flex-1 h-[calc(100vh-120px)]">
+   467→          {notifications.length === 0 ? (
+   468→            <div className="p-8 text-center">
+   469→              <BellRing className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
+   470→              <p className="text-sm font-medium text-muted-foreground">No notifications</p>
+   471→              <p className="text-xs text-muted-foreground/60 mt-1">You&apos;re all caught up!</p>
+   472→            </div>
+   473→          ) : (
+   474→            <div className="p-3 space-y-2">
+   475→              {notifications.map((notification) => {
+   476→                const isUnread = !readIds.has(notification.id);
+   477→                return (
+   478→                  <button
+   479→                    key={notification.id}
+   480→                    type="button"
+   481→                    onClick={() => handleNotificationClick(notification)}
+   482→                    className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm cursor-pointer ${getSeverityBg(notification.severity)} ${isUnread ? 'ring-1 ring-primary/20' : 'opacity-70'}`}
+   483→                  >
+   484→                    <div className="flex items-start gap-3">
+   485→                      <div className="shrink-0 mt-0.5">{getSeverityIcon(notification.type)}</div>
+   486→                      <div className="flex-1 min-w-0">
+   487→                        <div className="flex items-center gap-2">
+   488→                          <p className="text-sm font-medium">{notification.title}</p>
+   489→                          {isUnread && (
+   490→                            <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
+   491→                          )}
+   492→                        </div>
+   493→                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+   494→                          {notification.description}
+   495→                        </p>
+   496→                        <p className="text-[10px] text-muted-foreground/60 mt-1">
+   497→                          {formatDate(notification.timestamp)}
+   498→                        </p>
+   499→                      </div>
+   500→                    </div>
+   501→                  </button>
+   502→                );
+   503→              })}
+   504→            </div>
+   505→          )}
+   506→        </ScrollArea>
+   507→      </SheetContent>
+   508→    </Sheet>
+   509→  );
+   510→}
+   511→
+   512→// ============================================================================
+   513→// LOW STOCK ALERT DIALOG
+   514→// ============================================================================
+   515→
+   516→function LowStockAlertDialog({
+   517→  open,
+   518→  onOpenChange,
+   519→  storeId,
+   520→}: {
+   521→  open: boolean;
+   522→  onOpenChange: (open: boolean) => void;
+   523→  storeId: string;
+   524→}) {
+   525→  const { data: productsData, isLoading } = useQuery({
+   526→    queryKey: ['products-lowstock', storeId],
+   527→    queryFn: () => productsApi.list({ storeId, limit: 200 }),
+   528→    enabled: open,
+   529→  });
+   530→
+   531→  const products = productsData?.data || [];
+   532→
+   533→  const outOfStockProducts = useMemo(
+   534→    () => products.filter((p) => p.quantityInStock <= 0),
+   535→    [products]
+   536→  );
+   537→
+   538→  const lowStockProducts = useMemo(
+   539→    () => products.filter((p) => p.quantityInStock > 0 && p.quantityInStock <= p.reorderLevel),
+   540→    [products]
+   541→  );
+   542→
+   543→  const totalAffected = outOfStockProducts.length + lowStockProducts.length;
+   544→
+   545→  return (
+   546→    <Dialog open={open} onOpenChange={onOpenChange}>
+   547→      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+   548→        <DialogHeader>
+   549→          <DialogTitle className="flex items-center gap-2">
+   550→            <AlertTriangle className="h-5 w-5 text-amber-500" />
+   551→            Low Stock Alert
+   552→          </DialogTitle>
+   553→          <DialogDescription>
+   554→            {totalAffected} product{totalAffected !== 1 ? 's' : ''} need attention
+   555→            — {outOfStockProducts.length} out of stock, {lowStockProducts.length} low stock
+   556→          </DialogDescription>
+   557→        </DialogHeader>
+   558→
+   559→        {isLoading ? (
+   560→          <div className="space-y-3 p-4">
+   561→            {Array.from({ length: 3 }).map((_, i) => (
+   562→              <Skeleton key={i} className="h-20 w-full" />
+   563→            ))}
+   564→          </div>
+   565→        ) : totalAffected === 0 ? (
+   566→          <div className="p-8 text-center">
+   567→            <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-3" />
+   568→            <p className="text-sm font-medium">All products are well stocked!</p>
+   569→            <p className="text-xs text-muted-foreground mt-1">No items require restocking at this time</p>
+   570→          </div>
+   571→        ) : (
+   572→          <ScrollArea className="flex-1 min-h-0 max-h-[60vh]">
+   573→            <div className="space-y-4 p-1">
+   574→              {/* Out of Stock Section */}
+   575→              {outOfStockProducts.length > 0 && (
+   576→                <div>
+   577→                  <div className="flex items-center gap-2 mb-2">
+   578→                    <PackageX className="h-4 w-4 text-red-500" />
+   579→                    <h4 className="text-sm font-semibold text-red-600 dark:text-red-400">
+   580→                      Out of Stock ({outOfStockProducts.length})
+   581→                    </h4>
+   582→                  </div>
+   583→                  <div className="space-y-2">
+   584→                    {outOfStockProducts.map((product) => (
+   585→                      <div
+   586→                        key={product.id}
+   587→                        className="p-3 rounded-lg border border-red-200 dark:border-red-900/40 bg-red-50/50 dark:bg-red-950/10"
+   588→                      >
+   589→                        <div className="flex items-start justify-between gap-2">
+   590→                          <div className="min-w-0">
+   591→                            <p className="text-sm font-medium">{product.name}</p>
+   592→                            {product.category && (
+   593→                              <p className="text-[10px] text-muted-foreground">{product.category.name}</p>
+   594→                            )}
+   595→                          </div>
+   596→                          <Badge variant="destructive" className="text-[10px] shrink-0">
+   597→                            0 in stock
+   598→                          </Badge>
+   599→                        </div>
+   600→                        <div className="mt-2">
+   601→                          <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+   602→                            <span>Reorder level: {product.reorderLevel}</span>
+   603→                            <span className="text-red-500 font-medium">Needs immediate restock</span>
+   604→                          </div>
+   605→                          <div className="h-2 bg-muted rounded-full overflow-hidden">
+   606→                            <div className="h-full bg-red-500 rounded-full" style={{ width: '2%' }} />
+   607→                          </div>
+   608→                        </div>
+   609→                      </div>
+   610→                    ))}
+   611→                  </div>
+   612→                </div>
+   613→              )}
+   614→
+   615→              {/* Low Stock Section */}
+   616→              {lowStockProducts.length > 0 && (
+   617→                <div>
+   618→                  <div className="flex items-center gap-2 mb-2">
+   619→                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+   620→                    <h4 className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+   621→                      Low Stock ({lowStockProducts.length})
+   622→                    </h4>
+   623→                  </div>
+   624→                  <div className="space-y-2">
+   625→                    {lowStockProducts.map((product) => {
+   626→                      const stockPercent = product.reorderLevel > 0
+   627→                        ? Math.min((product.quantityInStock / (product.reorderLevel * 3)) * 100, 100)
+   628→                        : product.quantityInStock > 0 ? 50 : 0;
+   629→                      const restockQty = Math.max(product.reorderLevel * 2 - product.quantityInStock, product.reorderLevel);
+   630→                      return (
+   631→                        <div
+   632→                          key={product.id}
+   633→                          className="p-3 rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/10"
+   634→                        >
+   635→                          <div className="flex items-start justify-between gap-2">
+   636→                            <div className="min-w-0">
+   637→                              <p className="text-sm font-medium">{product.name}</p>
+   638→                              {product.category && (
+   639→                                <p className="text-[10px] text-muted-foreground">{product.category.name}</p>
+   640→                              )}
+   641→                            </div>
+   642→                            <Badge className="text-[10px] shrink-0 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200 dark:border-amber-800">
+   643→                              {product.quantityInStock} left
+   644→                            </Badge>
+   645→                          </div>
+   646→                          <div className="mt-2">
+   647→                            <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+   648→                              <span>Current: {product.quantityInStock} / Reorder at: {product.reorderLevel}</span>
+   649→                              <span className="text-amber-600 dark:text-amber-400 font-medium">
+   650→                                Restock ~{restockQty} {product.unitType.toLowerCase()}s
+   651→                              </span>
+   652→                            </div>
+   653→                            <div className="h-2 bg-muted rounded-full overflow-hidden">
+   654→                              <div
+   655→                                className="h-full bg-amber-500 rounded-full transition-all"
+   656→                                style={{ width: `${stockPercent}%` }}
+   657→                              />
+   658→                            </div>
+   659→                          </div>
+   660→                        </div>
+   661→                      );
+   662→                    })}
+   663→                  </div>
+   664→                </div>
+   665→              )}
+   666→
+   667→              {totalAffected > 0 && (
+   668→                <div className="p-3 rounded-lg border bg-muted/30">
+   669→                  <p className="text-xs text-muted-foreground">
+   670→                    💡 <strong>Tip:</strong> Consider restocking to at least 2× the reorder level to maintain healthy inventory.
+   671→                    Use the <strong>Admin → Stock Adjustment</strong> tool to update stock levels.
+   672→                  </p>
+   673→                </div>
+   674→              )}
+   675→            </div>
+   676→          </ScrollArea>
+   677→        )}
+   678→      </DialogContent>
+   679→    </Dialog>
+   680→  );
+   681→}
+   682→
+   683→// ============================================================================
+   684→// SIDEBAR
+   685→// ============================================================================
+   686→
+   687→function AppSidebar() {
+   688→  const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen, currentStoreId } = useAppStore();
+   689→  const user = useAuthStore((s) => s.user);
+   690→  const logout = useAuthStore((s) => s.logout);
+   691→  const { theme, setTheme } = useTheme();
+   692→  const [notificationOpen, setNotificationOpen] = useState(false);
+   693→
+   694→  const handleNav = (tab: AppTab) => {
+   695→    setActiveTab(tab);
+   696→    setSidebarOpen(false);
+   697→  };
+   698→
+   699→  const handleLogout = async () => {
+   700→    await logout();
+   701→    toast.success('Logged out successfully');
+   702→  };
+   703→
+   704→  // Navigation groups
+   705→  const mainNavItems = TAB_CONFIG.filter(t => ['pos', 'inventory', 'customers', 'transactions'].includes(t.id));
+   706→  const managementNavItems = TAB_CONFIG.filter(t => ['rentals', 'financial', 'reports', 'admin'].includes(t.id));
+   707→
+   708→  const renderNavItem = ({ id, label, icon: Icon }: { id: AppTab; label: string; icon: React.ElementType }) => (
+   709→    <button
+   710→      key={id}
+   711→      onClick={() => handleNav(id)}
+   712→      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all relative ${
+   713→        activeTab === id
+   714→          ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
+   715→          : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+   716→      }`}
+   717→    >
+   718→      {/* Active left border indicator */}
+   719→      {activeTab === id && (
+   720→        <div className="absolute left-0 top-1 bottom-1 w-1 rounded-r-full bg-sidebar-primary-foreground/80" />
+   721→      )}
+   722→      <Icon className="h-4 w-4 shrink-0" />
+   723→      <span>{label}</span>
+   724→    </button>
+   725→  );
+   726→
+   727→  return (
+   728→    <>
+   729→      {/* Mobile overlay */}
+   730→      {sidebarOpen && (
+   731→        <div
+   732→          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+   733→          onClick={() => setSidebarOpen(false)}
+   734→        />
+   735→      )}
+   736→
+   737→      {/* Sidebar */}
+   738→      <aside
+   739→        className={`fixed top-0 left-0 z-50 h-full w-64 bg-sidebar text-sidebar-foreground transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:z-auto border-r border-sidebar-border ${
+   740→          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+   741→        }`}
+   742→      >
+   743→        <div className="flex flex-col h-full">
+   744→          {/* Logo + Notification Bell */}
+   745→          <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
+   746→            <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center">
+   747→              <Store className="h-5 w-5 text-sidebar-primary-foreground" />
+   748→            </div>
+   749→            <div className="flex-1 min-w-0">
+   750→              <h1 className="font-bold text-sm leading-tight">MBUMAH HARDWARE</h1>
+   751→              <p className="text-xs text-sidebar-foreground/60">POS & ERP</p>
+   752→            </div>
+   753→            <Button
+   754→              variant="ghost"
+   755→              size="icon"
+   756→              className="shrink-0 text-sidebar-foreground/60 hover:text-sidebar-foreground relative"
+   757→              onClick={() => setNotificationOpen(true)}
+   758→            >
+   759→              <Bell className="h-4 w-4" />
+   760→              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+   761→            </Button>
+   762→            <Button
+   763→              variant="ghost"
+   764→              size="icon"
+   765→              className="shrink-0 lg:hidden text-sidebar-foreground/60 hover:text-sidebar-foreground"
+   766→              onClick={() => setSidebarOpen(false)}
+   767→            >
+   768→              <X className="h-4 w-4" />
+   769→            </Button>
+   770→          </div>
+   771→
+   772→          {/* Store Selector */}
+   773→          <div className="px-3 pt-3 pb-1">
+   774→            <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-sidebar-border bg-sidebar-accent/50 text-xs text-sidebar-foreground/80 hover:bg-sidebar-accent transition-colors">
+   775→              <Store className="h-3.5 w-3.5 shrink-0" />
+   776→              <span className="truncate font-medium">Juja Main Branch</span>
+   777→              <ChevronDown className="h-3 w-3 ml-auto shrink-0" />
+   778→            </button>
+   779→          </div>
+   780→
+   781→          {/* Navigation */}
+   782→          <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto custom-scrollbar">
+   783→            {/* Main Section */}
+   784→            <p className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">Main</p>
+   785→            {mainNavItems.map(renderNavItem)}
+   786→
+   787→            {/* Management Section */}
+   788→            <p className="px-4 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">Management</p>
+   789→            {managementNavItems.map(renderNavItem)}
+   790→          </nav>
+   791→
+   792→          {/* Footer - User Profile Dropdown */}
+   793→          <div className="border-t border-sidebar-border px-3 py-3 space-y-2">
+   794→            <DropdownMenu>
+   795→              <DropdownMenuTrigger asChild>
+   796→                <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors text-left">
+   797→                  <div className="relative">
+   798→                    <Avatar className="h-9 w-9 ring-2 ring-sidebar-primary/20">
+   799→                      <AvatarFallback className="bg-gradient-to-br from-sidebar-primary to-sidebar-primary/70 text-sidebar-primary-foreground text-xs font-semibold">
+   800→                        {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
+   801→                      </AvatarFallback>
+   802→                    </Avatar>
+   803→                    {/* Online dot */}
+   804→                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-sidebar rounded-full" />
+   805→                  </div>
+   806→                  <div className="flex-1 min-w-0">
+   807→                    <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
+   808→                    <p className="text-xs text-sidebar-foreground/60 truncate">{user?.role === 'SUPER_ADMIN' ? 'Super Admin' : user?.role === 'CASHIER' ? 'Cashier' : user?.role || 'User'}</p>
+   809→                  </div>
+   810→                  <ChevronDown className="h-3.5 w-3.5 text-sidebar-foreground/40 shrink-0" />
+   811→                </button>
+   812→              </DropdownMenuTrigger>
+   813→              <DropdownMenuContent side="top" className="w-56 mb-2">
+   814→                <DropdownMenuLabel className="font-normal">
+   815→                  <div className="flex flex-col space-y-1">
+   816→                    <p className="text-sm font-medium">{user?.name || 'User'}</p>
+   817→                    <p className="text-xs text-muted-foreground">{user?.email || ''}</p>
+   818→                  </div>
+   819→                </DropdownMenuLabel>
+   820→                <DropdownMenuSeparator />
+   821→                <DropdownMenuItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+   822→                  {theme === 'dark' ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
+   823→                  {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+   824→                </DropdownMenuItem>
+   825→                <DropdownMenuItem onClick={() => toast.info('Profile settings coming soon')}>
+   826→                  <ShieldCheck className="mr-2 h-4 w-4" />
+   827→                  Profile & Settings
+   828→                </DropdownMenuItem>
+   829→                <DropdownMenuItem onClick={() => toast.info('Keyboard shortcuts: Ctrl+K for search')}>
+   830→                  <Search className="mr-2 h-4 w-4" />
+   831→                  Keyboard Shortcuts
+   832→                </DropdownMenuItem>
+   833→                <DropdownMenuSeparator />
+   834→                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={handleLogout}>
+   835→                  <LogOut className="mr-2 h-4 w-4" />
+   836→                  Log out
+   837→                </DropdownMenuItem>
+   838→              </DropdownMenuContent>
+   839→            </DropdownMenu>
+   840→          </div>
+   841→        </div>
+   842→      </aside>
+   843→      <NotificationCenter
+   844→        open={notificationOpen}
+   845→        onOpenChange={setNotificationOpen}
+   846→        storeId={currentStoreId}
+   847→      />
+   848→    </>
+   849→  );
+   850→}
+   851→
+   852→// ============================================================================
+   853→// TOP BAR (with live Date/Time)
+   854→// ============================================================================
+   855→
+   856→function TopBar() {
+   857→  const { activeTab, toggleSidebar, setActiveTab } = useAppStore();
+   858→  const cartItemCount = useCartStore((s) => s.getItemCount());
+   859→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+   860→  const currentTab = TAB_CONFIG.find(t => t.id === activeTab);
+   861→  const TabIcon = currentTab?.icon || Home;
+   862→  const now = useLiveClock();
+   863→  const [searchOpen, setSearchOpen] = useState(false);
+   864→  const [searchQuery, setSearchQuery] = useState('');
+   865→
+   866→  // Global search with Ctrl+K
+   867→  useEffect(() => {
+   868→    const handleKeyDown = (e: KeyboardEvent) => {
+   869→      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+   870→        e.preventDefault();
+   871→        setSearchOpen(true);
+   872→      }
+   873→    };
+   874→    document.addEventListener('keydown', handleKeyDown);
+   875→    return () => document.removeEventListener('keydown', handleKeyDown);
+   876→  }, []);
+   877→
+   878→  const { data: searchResults } = useQuery({
+   879→    queryKey: ['globalSearch', searchQuery, currentStoreId],
+   880→    queryFn: async () => {
+   881→      if (!searchQuery || searchQuery.length < 2) return { products: [] as ProductListItem[], customers: [] as CustomerItem[] };
+   882→      const [prodRes, custRes] = await Promise.all([
+   883→        productsApi.list({ storeId: currentStoreId, search: searchQuery, limit: 5 }),
+   884→        customersApi.list({ storeId: currentStoreId, search: searchQuery, limit: 5 }),
+   885→      ]);
+   886→      return {
+   887→        products: prodRes.data || [],
+   888→        customers: custRes.data || [],
+   889→      };
+   890→    },
+   891→    enabled: searchQuery.length >= 2,
+   892→  });
+   893→
+   894→  return (
+   895→    <>
+   896→      <header className="sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
+   897→        <div className="flex items-center gap-3 px-4 py-3">
+   898→          <Button
+   899→            variant="ghost"
+   900→            size="icon"
+   901→            className="lg:hidden"
+   902→            onClick={toggleSidebar}
+   903→          >
+   904→            <Menu className="h-5 w-5" />
+   905→          </Button>
+   906→          <div className="flex items-center gap-2">
+   907→            <TabIcon className="h-5 w-5 text-primary" />
+   908→            <h2 className="font-semibold text-lg">{currentTab?.label || 'Dashboard'}</h2>
+   909→          </div>
+   910→          <div className="ml-auto flex items-center gap-2">
+   911→            {/* Quick Search Button */}
+   912→            <Button
+   913→              variant="outline"
+   914→              size="sm"
+   915→              className="hidden md:flex items-center gap-2 text-muted-foreground h-8 px-3"
+   916→              onClick={() => setSearchOpen(true)}
+   917→            >
+   918→              <Search className="h-3.5 w-3.5" />
+   919→              <span className="text-xs">Search...</span>
+   920→              <kbd className="ml-2 pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+   921→                ⌘K
+   922→              </kbd>
+   923→            </Button>
+   924→            {activeTab === 'pos' && (
+   925→              <Badge variant="secondary" className="flex items-center gap-1">
+   926→                <ShoppingCart className="h-3 w-3" />
+   927→                {cartItemCount}
+   928→              </Badge>
+   929→            )}
+   930→            <Badge variant="outline" className="hidden sm:flex items-center gap-1.5">
+   931→              <CalendarDays className="h-3 w-3" />
+   932→              {now.toLocaleDateString('en-KE', { weekday: 'short', month: 'short', day: 'numeric' })}
+   933→              <span className="text-muted-foreground">|</span>
+   934→              <Clock className="h-3 w-3" />
+   935→              {now.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}
+   936→            </Badge>
+   937→          </div>
+   938→        </div>
+   939→      </header>
+   940→
+   941→      {/* Global Search Dialog */}
+   942→      <Dialog open={searchOpen} onOpenChange={(open) => { setSearchOpen(open); if (!open) setSearchQuery(''); }}>
+   943→        <DialogContent className="sm:max-w-lg p-0 gap-0">
+   944→          <div className="flex items-center border-b px-4 py-3">
+   945→            <Search className="h-4 w-4 text-muted-foreground shrink-0 mr-2" />
+   946→            <Input
+   947→              value={searchQuery}
+   948→              onChange={(e) => setSearchQuery(e.target.value)}
+   949→              placeholder="Search products, customers..."
+   950→              className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-8"
+   951→              autoFocus
+   952→            />
+   953→            <kbd className="ml-2 pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+   954→              ESC
+   955→            </kbd>
+   956→          </div>
+   957→          <div className="max-h-80 overflow-y-auto custom-scrollbar">
+   958→            {searchQuery.length < 2 ? (
+   959→              <div className="p-6 text-center">
+   960→                <Search className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+   961→                <p className="text-sm text-muted-foreground">Type at least 2 characters to search</p>
+   962→                <p className="text-xs text-muted-foreground/60 mt-1">Search across products and customers</p>
+   963→              </div>
+   964→            ) : searchResults && (searchResults.products.length > 0 || searchResults.customers.length > 0) ? (
+   965→              <div className="py-2">
+   966→                {searchResults.products.length > 0 && (
+   967→                  <div>
+   968→                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Products</p>
+   969→                    {searchResults.products.map((p) => (
+   970→                      <button
+   971→                        key={p.id}
+   972→                        className="w-full flex items-center gap-3 px-4 py-2 hover:bg-muted/50 transition-colors text-left"
+   973→                        onClick={() => { setActiveTab('inventory'); setSearchOpen(false); setSearchQuery(''); }}
+   974→                      >
+   975→                        <div className="shrink-0 w-8 h-8 rounded-md bg-muted flex items-center justify-center">
+   976→                          <Package className="h-4 w-4 text-muted-foreground" />
+   977→                        </div>
+   978→                        <div className="flex-1 min-w-0">
+   979→                          <p className="text-sm font-medium truncate">{p.name}</p>
+   980→                          <p className="text-xs text-muted-foreground">{p.sku} · {p.category?.name || 'No category'}</p>
+   981→                        </div>
+   982→                        <span className="text-sm font-semibold text-primary whitespace-nowrap">{formatKES(p.pricePerUnit)}</span>
+   983→                      </button>
+   984→                    ))}
+   985→                  </div>
+   986→                )}
+   987→                {searchResults.customers.length > 0 && (
+   988→                  <div>
+   989→                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-t mt-1 pt-2">Customers</p>
+   990→                    {searchResults.customers.map((c) => (
+   991→                      <button
+   992→                        key={c.id}
+   993→                        className="w-full flex items-center gap-3 px-4 py-2 hover:bg-muted/50 transition-colors text-left"
+   994→                        onClick={() => { setActiveTab('customers'); setSearchOpen(false); setSearchQuery(''); }}
+   995→                      >
+   996→                        <Avatar className="h-8 w-8 shrink-0">
+   997→                          <AvatarFallback className="text-xs">{c.name.split(' ').map(n => n[0]).join('').slice(0, 2)}</AvatarFallback>
+   998→                        </Avatar>
+   999→                        <div className="flex-1 min-w-0">
+  1000→                          <p className="text-sm font-medium truncate">{c.name}</p>
+  1001→                          <p className="text-xs text-muted-foreground">{c.phone || c.email || 'No contact'}</p>
+  1002→                        </div>
+  1003→                        {c.currentDebtBalance > 0 && (
+  1004→                          <Badge variant="destructive" className="text-[10px]">{formatKES(c.currentDebtBalance)}</Badge>
+  1005→                        )}
+  1006→                      </button>
+  1007→                    ))}
+  1008→                  </div>
+  1009→                )}
+  1010→              </div>
+  1011→            ) : searchQuery.length >= 2 ? (
+  1012→              <div className="p-6 text-center">
+  1013→                <Package className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+  1014→                <p className="text-sm text-muted-foreground">No results found</p>
+  1015→                <p className="text-xs text-muted-foreground/60 mt-1">Try a different search term</p>
+  1016→              </div>
+  1017→            ) : null}
+  1018→          </div>
+  1019→        </DialogContent>
+  1020→      </Dialog>
+  1021→    </>
+  1022→  );
+  1023→}
+  1024→
+  1025→// ============================================================================
+  1026→// DASHBOARD STATS ROW
+  1027→// ============================================================================
+  1028→
+  1029→function DashboardStats({ storeId, onLowStockClick }: { storeId: string; onLowStockClick?: () => void }) {
+  1030→  const { data, isLoading } = useQuery({
+  1031→    queryKey: ['dashboard', storeId],
+  1032→    queryFn: async () => {
+  1033→      const res = await dashboardApi.getStats(storeId);
+  1034→      return res.data;
+  1035→    },
+  1036→    refetchInterval: 60000,
+  1037→  });
+  1038→
+  1039→  const stats = [
+  1040→    {
+  1041→      label: "Today's Sales",
+  1042→      value: data?.todaySales ?? 0,
+  1043→      format: 'kes' as const,
+  1044→      icon: TrendingUp,
+  1045→      color: 'text-green-600 dark:text-green-400',
+  1046→      bg: 'bg-green-50 dark:bg-green-950/30',
+  1047→      borderColor: 'border-l-green-500',
+  1048→      clickable: false,
+  1049→    },
+  1050→    {
+  1051→      label: 'Transactions',
+  1052→      value: data?.todayTransactions ?? 0,
+  1053→      format: 'number' as const,
+  1054→      icon: ShoppingCart,
+  1055→      color: 'text-blue-600 dark:text-blue-400',
+  1056→      bg: 'bg-blue-50 dark:bg-blue-950/30',
+  1057→      borderColor: 'border-l-blue-500',
+  1058→      clickable: false,
+  1059→    },
+  1060→    {
+  1061→      label: 'Low Stock',
+  1062→      value: data?.lowStockProducts ?? 0,
+  1063→      format: 'number' as const,
+  1064→      icon: AlertTriangle,
+  1065→      color: 'text-amber-600 dark:text-amber-400',
+  1066→      bg: 'bg-amber-50 dark:bg-amber-950/30',
+  1067→      borderColor: 'border-l-amber-500',
+  1068→      clickable: true,
+  1069→    },
+  1070→    {
+  1071→      label: 'Outstanding Debt',
+  1072→      value: data?.outstandingDebt ?? 0,
+  1073→      format: 'kes' as const,
+  1074→      icon: DollarSign,
+  1075→      color: 'text-red-600 dark:text-red-400',
+  1076→      bg: 'bg-red-50 dark:bg-red-950/30',
+  1077→      borderColor: 'border-l-red-500',
+  1078→      clickable: false,
+  1079→    },
+  1080→  ];
+  1081→
+  1082→  if (isLoading) {
+  1083→    return (
+  1084→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+  1085→        {Array.from({ length: 4 }).map((_, i) => (
+  1086→          <Skeleton key={i} className="h-20" />
+  1087→        ))}
+  1088→      </div>
+  1089→    );
+  1090→  }
+  1091→
+  1092→  return (
+  1093→    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+  1094→      {stats.map((stat) => {
+  1095→        const Icon = stat.icon;
+  1096→        const isClickable = stat.clickable && onLowStockClick;
+  1097→        return (
+  1098→          <Card
+  1099→            key={stat.label}
+  1100→            className={`border-l-4 ${stat.borderColor} py-0 bg-gradient-to-br from-card to-muted/30 ${
+  1101→              isClickable ? 'cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0' : ''
+  1102→            }`}
+  1103→            onClick={isClickable ? onLowStockClick : undefined}
+  1104→            role={isClickable ? 'button' : undefined}
+  1105→            tabIndex={isClickable ? 0 : undefined}
+  1106→            onKeyDown={isClickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onLowStockClick(); } } : undefined}
+  1107→          >
+  1108→            <CardContent className="p-3 flex items-center gap-3">
+  1109→              <div className={`shrink-0 p-2 rounded-lg bg-gradient-to-br ${stat.bg}`}>
+  1110→                <Icon className={`h-4 w-4 ${stat.color}`} />
+  1111→              </div>
+  1112→              <div className="min-w-0">
+  1113→                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{stat.label}</p>
+  1114→                <div className="flex items-center gap-1.5">
+  1115→                  <p className={`text-sm sm:text-base font-bold ${stat.color} whitespace-nowrap`}>
+  1116→                    {stat.format === 'kes' ? formatKES(stat.value) : stat.value}
+  1117→                  </p>
+  1118→                  {isClickable && (
+  1119→                    <span className="text-[9px] text-muted-foreground/50">→</span>
+  1120→                  )}
+  1121→                </div>
+  1122→              </div>
+  1123→            </CardContent>
+  1124→          </Card>
+  1125→        );
+  1126→      })}
+  1127→    </div>
+  1128→  );
+  1129→}
+  1130→
+  1131→// ============================================================================
+  1132→// CATEGORY FILTER CHIPS
+  1133→// ============================================================================
+  1134→
+  1135→function CategoryChips({
+  1136→  categories,
+  1137→  selected,
+  1138→  onSelect,
+  1139→}: {
+  1140→  categories: CategoryItem[];
+  1141→  selected: string;
+  1142→  onSelect: (id: string) => void;
+  1143→}) {
+  1144→  return (
+  1145→    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+  1146→      <button
+  1147→        onClick={() => onSelect('all')}
+  1148→        className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+  1149→          selected === 'all'
+  1150→            ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+  1151→            : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
+  1152→        }`}
+  1153→      >
+  1154→        All
+  1155→      </button>
+  1156→      {categories.map((cat) => {
+  1157→        const catColor = cat.color || '#6b7280';
+  1158→        const isActive = selected === cat.id;
+  1159→        const catImage = getCategoryImage(cat.id);
+  1160→        return (
+  1161→          <button
+  1162→            key={cat.id}
+  1163→            onClick={() => onSelect(cat.id)}
+  1164→            className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap flex items-center gap-1.5 ${
+  1165→              isActive
+  1166→                ? 'text-white border-transparent shadow-sm'
+  1167→                : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
+  1168→            }`}
+  1169→            style={isActive ? { backgroundColor: catColor, borderColor: catColor } : { borderLeftColor: catColor, borderLeftWidth: '3px' }}
+  1170→          >
+  1171→            {catImage && (
+  1172→              <img src={catImage} alt="" className="h-4 w-4 rounded-full object-cover" />
+  1173→            )}
+  1174→            {cat.name}
+  1175→          </button>
+  1176→        );
+  1177→      })}
+  1178→    </div>
+  1179→  );
+  1180→}
+  1181→
+  1182→// ============================================================================
+  1183→// PRODUCT CARD
+  1184→// ============================================================================
+  1185→
+  1186→function ProductCard({
+  1187→  product,
+  1188→  onAdd,
+  1189→}: {
+  1190→  product: ProductListItem;
+  1191→  onAdd: (p: ProductListItem) => void;
+  1192→}) {
+  1193→  const categoryColor = product.category?.color || '#6b7280';
+  1194→  const stockPercent = product.reorderLevel > 0
+  1195→    ? Math.min((product.quantityInStock / (product.reorderLevel * 3)) * 100, 100)
+  1196→    : product.quantityInStock > 0 ? 100 : 0;
+  1197→  const isLowStock = product.quantityInStock <= product.reorderLevel && product.quantityInStock > 0;
+  1198→  const isOutOfStock = product.quantityInStock <= 0;
+  1199→
+  1200→  const stockBarColor = isOutOfStock
+  1201→    ? 'bg-red-500'
+  1202→    : isLowStock
+  1203→      ? 'bg-amber-500'
+  1204→      : 'bg-green-500';
+  1205→
+  1206→  const unitBadgeColor: Record<string, string> = {
+  1207→    PIECE: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  1208→    KILOGRAM: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300',
+  1209→    METER: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300',
+  1210→    LITER: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+  1211→    BAG: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+  1212→    BOX: 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300',
+  1213→    SET: 'bg-pink-100 text-pink-700 dark:bg-pink-950 dark:text-pink-300',
+  1214→  };
+  1215→
+  1216→  return (
+  1217→    <Card
+  1218→      className="overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 group border-l-4"
+  1219→      style={{ borderLeftColor: categoryColor }}
+  1220→      onClick={() => onAdd(product)}
+  1221→    >
+  1222→      <div className="h-24 bg-muted flex items-center justify-center relative overflow-hidden">
+  1223→        {product.imageUrl ? (
+  1224→          <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+  1225→        ) : getCategoryImage(product.categoryId) ? (
+  1226→          <img src={getCategoryImage(product.categoryId)!} alt={product.category?.name || ''} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+  1227→        ) : (
+  1228→          <Package className="h-9 w-9 text-muted-foreground/25" />
+  1229→        )}
+  1230→        {product.isRental && (
+  1231→          <Badge className="absolute top-1.5 left-1.5 bg-blue-600 text-white text-[10px] px-1.5">RENTAL</Badge>
+  1232→        )}
+  1233→        {product.isBundle && (
+  1234→          <Badge className="absolute top-1.5 right-1.5 bg-purple-600 text-white text-[10px] px-1.5">BUNDLE</Badge>
+  1235→        )}
+  1236→        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center">
+  1237→          <Plus className="h-7 w-7 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+  1238→        </div>
+  1239→      </div>
+  1240→      <CardContent className="p-2.5">
+  1241→        <h3 className="font-medium text-sm line-clamp-2 leading-tight">{product.name}</h3>
+  1242→        {product.category && (
+  1243→          <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">{product.category.name}</p>
+  1244→        )}
+  1245→        <div className="flex items-center justify-between mt-1.5 gap-1">
+  1246→          <span className="font-bold text-primary text-sm truncate">{formatKES(product.pricePerUnit)}</span>
+  1247→          <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${unitBadgeColor[product.unitType] || 'bg-muted text-muted-foreground'}`}>
+  1248→            {product.unitType}
+  1249→          </span>
+  1250→        </div>
+  1251→        {/* Mini stock progress bar */}
+  1252→        <div className="mt-1.5 flex items-center gap-1.5">
+  1253→          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+  1254→            <div
+  1255→              className={`h-full rounded-full transition-all ${stockBarColor}`}
+  1256→              style={{ width: `${stockPercent}%` }}
+  1257→            />
+  1258→          </div>
+  1259→          <span className={`text-[9px] font-medium shrink-0 ${isOutOfStock ? 'text-red-500' : isLowStock ? 'text-amber-500' : 'text-muted-foreground'}`}>
+  1260→            {isOutOfStock ? 'Out' : `${product.quantityInStock}`}
+  1261→          </span>
+  1262→        </div>
+  1263→      </CardContent>
+  1264→    </Card>
+  1265→  );
+  1266→}
+  1267→
+  1268→// ============================================================================
+  1269→// CART ITEM ROW (enhanced)
+  1270→// ============================================================================
+  1271→
+  1272→function CartItemRow({
+  1273→  item,
+  1274→  onUpdateQty,
+  1275→  onRemove,
+  1276→}: {
+  1277→  item: CartItem;
+  1278→  onUpdateQty: (productId: string, qty: number) => void;
+  1279→  onRemove: (productId: string) => void;
+  1280→}) {
+  1281→  const quickAddAmounts = [1, 2, 5, 10];
+  1282→
+  1283→  return (
+  1284→    <div className="flex gap-2 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors">
+  1285→      {/* Image placeholder */}
+  1286→      <div className="shrink-0 w-10 h-10 rounded-md bg-muted flex items-center justify-center">
+  1287→        <Package className="h-4 w-4 text-muted-foreground/40" />
+  1288→      </div>
+  1289→      <div className="flex-1 min-w-0">
+  1290→        <p className="text-sm font-medium truncate">{item.productName}</p>
+  1291→        <div className="flex items-center gap-1.5 mt-0.5">
+  1292→          <span className="text-xs text-muted-foreground">{formatKES(item.pricePerUnit)}</span>
+  1293→          <span className="text-[9px] px-1 py-0 rounded bg-muted text-muted-foreground font-medium">{item.unitType}</span>
+  1294→          {item.discountPercent > 0 && (
+  1295→            <span className="text-[9px] text-green-600 font-medium">{item.discountPercent}% off</span>
+  1296→          )}
+  1297→        </div>
+  1298→        {/* Quick Add buttons */}
+  1299→        <div className="flex items-center gap-1 mt-1.5">
+  1300→          {quickAddAmounts.map((amt) => (
+  1301→            <button
+  1302→              key={amt}
+  1303→              type="button"
+  1304→              onClick={() => onUpdateQty(item.productId, item.quantity + amt)}
+  1305→              className="px-1.5 py-0 text-[9px] font-medium rounded border border-border/50 bg-background hover:bg-primary hover:text-primary-foreground transition-colors"
+  1306→            >
+  1307→              +{amt}
+  1308→            </button>
+  1309→          ))}
+  1310→        </div>
+  1311→      </div>
+  1312→      <div className="flex flex-col items-end gap-1">
+  1313→        <Button
+  1314→          variant="ghost"
+  1315→          size="icon"
+  1316→          className="h-5 w-5 text-muted-foreground hover:text-destructive"
+  1317→          onClick={() => onRemove(item.productId)}
+  1318→        >
+  1319→          <X className="h-3 w-3" />
+  1320→        </Button>
+  1321→        <div className="flex items-center gap-0.5">
+  1322→          <Button
+  1323→            variant="outline"
+  1324→            size="icon"
+  1325→            className="h-6 w-6"
+  1326→            onClick={() => onUpdateQty(item.productId, item.quantity - 1)}
+  1327→          >
+  1328→            <Minus className="h-2.5 w-2.5" />
+  1329→          </Button>
+  1330→          <span className="w-7 text-center text-xs font-semibold">{item.quantity}</span>
+  1331→          <Button
+  1332→            variant="outline"
+  1333→            size="icon"
+  1334→            className="h-6 w-6"
+  1335→            onClick={() => onUpdateQty(item.productId, item.quantity + 1)}
+  1336→          >
+  1337→            <Plus className="h-2.5 w-2.5" />
+  1338→          </Button>
+  1339→        </div>
+  1340→        <p className="text-xs font-semibold text-primary">{formatKES(item.lineTotal)}</p>
+  1341→      </div>
+  1342→    </div>
+  1343→  );
+  1344→}
+  1345→
+  1346→// ============================================================================
+  1347→// EMPTY STATE COMPONENTS
+  1348→// ============================================================================
+  1349→
+  1350→function EmptyCartState() {
+  1351→  return (
+  1352→    <div className="p-8 text-center">
+  1353→      <div className="relative mx-auto w-16 h-16 mb-4">
+  1354→        <div className="absolute inset-0 bg-primary/10 rounded-full animate-pulse" />
+  1355→        <ShoppingBag className="absolute inset-0 m-auto h-8 w-8 text-primary/40" />
+  1356→      </div>
+  1357→      <p className="text-sm font-medium text-muted-foreground">Your cart is empty</p>
+  1358→      <p className="text-xs text-muted-foreground/60 mt-1">Click on products to add them here</p>
+  1359→    </div>
+  1360→  );
+  1361→}
+  1362→
+  1363→function EmptyProductsState({ searchQuery }: { searchQuery: string }) {
+  1364→  return (
+  1365→    <div className="text-center py-16">
+  1366→      <div className="relative mx-auto w-20 h-20 mb-4">
+  1367→        <div className="absolute inset-0 bg-muted rounded-2xl" />
+  1368→        <Package className="absolute inset-0 m-auto h-10 w-10 text-muted-foreground/30" />
+  1369→      </div>
+  1370→      <p className="text-base font-medium text-muted-foreground">No products found</p>
+  1371→      {searchQuery ? (
+  1372→        <p className="text-sm text-muted-foreground/60 mt-1">
+  1373→          No results for &ldquo;{searchQuery}&rdquo;. Try a different search term.
+  1374→        </p>
+  1375→      ) : (
+  1376→        <p className="text-sm text-muted-foreground/60 mt-1">Try adjusting your search or filters</p>
+  1377→      )}
+  1378→    </div>
+  1379→  );
+  1380→}
+  1381→
+  1382→// ============================================================================
+  1383→// POS TAB (kept inline - core feature)
+  1384→// ============================================================================
+  1385→
+  1386→function POSTab() {
+  1387→  const [searchQuery, setSearchQuery] = useState('');
+  1388→  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  1389→  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  1390→  const [mpesaDialogOpen, setMpesaDialogOpen] = useState(false);
+  1391→  const [mpesaPhone, setMpesaPhone] = useState('');
+  1392→  const [mpesaStatus, setMpesaStatus] = useState<'idle' | 'processing' | 'success' | 'failed'>('idle');
+  1393→  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
+  1394→  const [cashReceived, setCashReceived] = useState('');
+  1395→  const [selectedCustomer, setSelectedCustomer] = useState<string>('');
+  1396→  const [lowStockAlertOpen, setLowStockAlertOpen] = useState(false);
+  1397→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+  1398→
+  1399→  const cart = useCartStore();
+  1400→  const subtotal = cart.getSubtotal();
+  1401→  const tax = cart.getTax();
+  1402→  const total = cart.getTotal();
+  1403→
+  1404→  const { data: productsData, isLoading: productsLoading } = useQuery({
+  1405→    queryKey: ['products', currentStoreId, searchQuery, selectedCategory],
+  1406→    queryFn: () => productsApi.list({
+  1407→      storeId: currentStoreId,
+  1408→      search: searchQuery || undefined,
+  1409→      limit: 100,
+  1410→      ...(selectedCategory !== 'all' ? { categoryId: selectedCategory } : {}),
+  1411→    }),
+  1412→  });
+  1413→
+  1414→  const { data: categoriesData } = useQuery({
+  1415→    queryKey: ['categories', currentStoreId],
+  1416→    queryFn: () => categoriesApi.list(currentStoreId),
+  1417→  });
+  1418→
+  1419→  const { data: customersData } = useQuery({
+  1420→    queryKey: ['customers', currentStoreId],
+  1421→    queryFn: () => customersApi.list({ storeId: currentStoreId, limit: 100 }),
+  1422→  });
+  1423→
+  1424→  const [receiptOpen, setReceiptOpen] = useState(false);
+  1425→  const [lastTransaction, setLastTransaction] = useState<TransactionItem | null>(null);
+  1426→  const [lastCashReceived, setLastCashReceived] = useState(0);
+  1427→  const [lastMpesaPhone, setLastMpesaPhone] = useState('');
+  1428→
+  1429→  const checkoutMutation = useMutation({
+  1430→    mutationFn: transactionsApi.create,
+  1431→    onSuccess: (res) => {
+  1432→      toast.success('Transaction completed successfully!');
+  1433→      if (res.data) {
+  1434→        setLastTransaction(res.data);
+  1435→        setLastCashReceived(paymentMethod === 'CASH' ? Number(cashReceived) || total : 0);
+  1436→        setLastMpesaPhone(mpesaPhone);
+  1437→        setReceiptOpen(true);
+  1438→      }
+  1439→      cart.clearCart();
+  1440→      setCheckoutOpen(false);
+  1441→      setCashReceived('');
+  1442→      setSelectedCustomer('');
+  1443→    },
+  1444→    onError: (err: Error) => {
+  1445→      toast.error(err.message || 'Checkout failed');
+  1446→    },
+  1447→  });
+  1448→
+  1449→  const mpesaMutation = useMutation({
+  1450→    mutationFn: paymentsApi.initiateMpesa,
+  1451→    onSuccess: (res) => {
+  1452→      if (res.data) {
+  1453→        setMpesaStatus('processing');
+  1454→        // Simulate M-Pesa processing (in production, this would poll a status endpoint)
+  1455→        setTimeout(() => {
+  1456→          if (res.data?.resultCode === '0') {
+  1457→            setMpesaStatus('success');
+  1458→          } else {
+  1459→            setMpesaStatus('success'); // Default to success for demo
+  1460→          }
+  1461→        }, 5000);
+  1462→      }
+  1463→    },
+  1464→    onError: () => {
+  1465→      setMpesaStatus('failed');
+  1466→    },
+  1467→  });
+  1468→
+  1469→  const products = productsData?.data || [];
+  1470→  const categories = categoriesData?.data || [];
+  1471→  const customers = customersData?.data || [];
+  1472→
+  1473→  const handleAddToCart = (product: ProductListItem) => {
+  1474→    if (product.quantityInStock <= 0 && !product.isRental) {
+  1475→      toast.error('Product is out of stock');
+  1476→      return;
+  1477→    }
+  1478→    cart.addItem({
+  1479→      productId: product.id,
+  1480→      productName: product.name,
+  1481→      sku: product.sku,
+  1482→      quantity: 1,
+  1483→      unitType: product.unitType as UnitType,
+  1484→      pricePerUnit: product.pricePerUnit,
+  1485→      costPrice: product.costPrice,
+  1486→      discountPercent: 0,
+  1487→      taxRate: product.taxRate,
+  1488→      isRentalItem: product.isRental,
+  1489→      isBundle: product.isBundle,
+  1490→    });
+  1491→    toast.success(`${product.name} added to cart`);
+  1492→  };
+  1493→
+  1494→  const handleCheckout = () => {
+  1495→    if (cart.items.length === 0) {
+  1496→      toast.error('Cart is empty');
+  1497→      return;
+  1498→    }
+  1499→
+  1500→    if (paymentMethod === 'MPESA') {
+  1501→      setMpesaDialogOpen(true);
+  1502→      return;
+  1503→    }
+  1504→
+  1505→    checkoutMutation.mutate({
+  1506→      storeId: currentStoreId,
+  1507→      customerId: selectedCustomer || undefined,
+  1508→      cashierId: useAuthStore.getState().user?.id || '',
+  1509→      items: cart.items,
+  1510→      paymentMethod,
+  1511→      paymentDetails: {
+  1512→        cashAmount: paymentMethod === 'CASH' ? Number(cashReceived) || total : undefined,
+  1513→        debtAccountId: paymentMethod === 'DEBT' ? selectedCustomer : undefined,
+  1514→      },
+  1515→    });
+  1516→  };
+  1517→
+  1518→  const handleMpesaPay = () => {
+  1519→    if (!mpesaPhone || mpesaPhone.length < 10) {
+  1520→      toast.error('Enter a valid phone number');
+  1521→      return;
+  1522→    }
+  1523→    mpesaMutation.mutate({
+  1524→      phoneNumber: mpesaPhone.startsWith('0') ? `254${mpesaPhone.slice(1)}` : mpesaPhone,
+  1525→      amount: total,
+  1526→      accountReference: `MBT-${Date.now()}`,
+  1527→      transactionDesc: 'MBUMAH HARDWARE Purchase',
+  1528→    });
+  1529→  };
+  1530→
+  1531→  const change = paymentMethod === 'CASH' && cashReceived ? Number(cashReceived) - total : 0;
+  1532→
+  1533→  return (
+  1534→    <div className="flex flex-col lg:flex-row gap-4 h-full">
+  1535→      {/* Product Grid */}
+  1536→      <div className="flex-1 min-w-0 space-y-4">
+  1537→        {/* Dashboard Stats */}
+  1538→        <DashboardStats storeId={currentStoreId} onLowStockClick={() => setLowStockAlertOpen(true)} />
+  1539→
+  1540→        {/* Search and Category Chips */}
+  1541→        <div className="space-y-3">
+  1542→          <div className="relative">
+  1543→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1544→            <Input
+  1545→              placeholder="Search products by name, SKU, or barcode..."
+  1546→              value={searchQuery}
+  1547→              onChange={(e) => setSearchQuery(e.target.value)}
+  1548→              className="pl-10"
+  1549→            />
+  1550→          </div>
+  1551→          <CategoryChips
+  1552→            categories={categories}
+  1553→            selected={selectedCategory}
+  1554→            onSelect={setSelectedCategory}
+  1555→          />
+  1556→        </div>
+  1557→
+  1558→        {/* Products Grid */}
+  1559→        {productsLoading ? (
+  1560→          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+  1561→            {Array.from({ length: 8 }).map((_, i) => (
+  1562→              <Card key={i} className="overflow-hidden border-l-4 border-l-muted">
+  1563→                <Skeleton className="h-24" />
+  1564→                <CardContent className="p-2.5 space-y-2">
+  1565→                  <Skeleton className="h-4 w-3/4" />
+  1566→                  <Skeleton className="h-3 w-1/2" />
+  1567→                  <Skeleton className="h-5 w-2/3" />
+  1568→                </CardContent>
+  1569→              </Card>
+  1570→            ))}
+  1571→          </div>
+  1572→        ) : products.length === 0 ? (
+  1573→          <EmptyProductsState searchQuery={searchQuery} />
+  1574→        ) : (
+  1575→          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+  1576→            {products.map((product) => (
+  1577→              <ProductCard
+  1578→                key={product.id}
+  1579→                product={product}
+  1580→                onAdd={handleAddToCart}
+  1581→              />
+  1582→            ))}
+  1583→          </div>
+  1584→        )}
+  1585→      </div>
+  1586→
+  1587→      {/* Cart Sidebar */}
+  1588→      <div className="lg:w-96 shrink-0">
+  1589→        <Card className="sticky top-20 flex flex-col max-h-[calc(100vh-7rem)] bg-gradient-to-b from-card to-card/95">
+  1590→          <CardHeader className="pb-3">
+  1591→            <div className="flex items-center justify-between">
+  1592→              <CardTitle className="text-base flex items-center gap-2">
+  1593→                <ShoppingCart className="h-4 w-4" />
+  1594→                Cart
+  1595→                {cart.items.length > 0 && (
+  1596→                  <Badge variant="secondary">{cart.getItemCount()}</Badge>
+  1597→                )}
+  1598→              </CardTitle>
+  1599→              {cart.items.length > 0 && (
+  1600→                <Button variant="ghost" size="sm" onClick={() => cart.clearCart()} className="text-destructive h-7">
+  1601→                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Clear
+  1602→                </Button>
+  1603→              )}
+  1604→            </div>
+  1605→          </CardHeader>
+  1606→          <Separator />
+  1607→          <ScrollArea className="flex-1 min-h-0">
+  1608→            {cart.items.length === 0 ? (
+  1609→              <EmptyCartState />
+  1610→            ) : (
+  1611→              <div className="p-3 space-y-2">
+  1612→                {cart.items.map((item) => (
+  1613→                  <CartItemRow
+  1614→                    key={item.productId}
+  1615→                    item={item}
+  1616→                    onUpdateQty={cart.updateQuantity}
+  1617→                    onRemove={cart.removeItem}
+  1618→                  />
+  1619→                ))}
+  1620→              </div>
+  1621→            )}
+  1622→          </ScrollArea>
+  1623→          {cart.items.length > 0 && (
+  1624→            <>
+  1625→              <Separator />
+  1626→              <div className="p-4 space-y-3">
+  1627→                {/* Customer Selection */}
+  1628→                <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+  1629→                  <SelectTrigger>
+  1630→                    <SelectValue placeholder="Walk-in Customer" />
+  1631→                  </SelectTrigger>
+  1632→                  <SelectContent>
+  1633→                    <SelectItem value="walk-in">Walk-in Customer</SelectItem>
+  1634→                    {customers.map((c) => (
+  1635→                      <SelectItem key={c.id} value={c.id}>{c.name}{c.phone ? ` - ${c.phone}` : ''}</SelectItem>
+  1636→                    ))}
+  1637→                  </SelectContent>
+  1638→                </Select>
+  1639→
+  1640→                <div className="space-y-1 text-sm">
+  1641→                  <div className="flex justify-between">
+  1642→                    <span className="text-muted-foreground">Subtotal</span>
+  1643→                    <span>{formatKES(subtotal)}</span>
+  1644→                  </div>
+  1645→                  <div className="flex justify-between">
+  1646→                    <span className="text-muted-foreground">VAT (16%)</span>
+  1647→                    <span>{formatKES(tax)}</span>
+  1648→                  </div>
+  1649→                  <Separator />
+  1650→                  <div className="flex justify-between font-bold text-base">
+  1651→                    <span>Total</span>
+  1652→                    <span className="text-primary">{formatKES(total)}</span>
+  1653→                  </div>
+  1654→                </div>
+  1655→
+  1656→                <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
+  1657→                  <DialogTrigger asChild>
+  1658→                    <Button className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground font-semibold h-12" size="lg">
+  1659→                      <CreditCard className="mr-2 h-4 w-4" />
+  1660→                      <span className="flex flex-col items-start leading-tight">
+  1661→                        <span className="text-xs font-normal opacity-80">Checkout</span>
+  1662→                        <span>{formatKES(total)}</span>
+  1663→                      </span>
+  1664→                    </Button>
+  1665→                  </DialogTrigger>
+  1666→                  <DialogContent className="sm:max-w-md">
+  1667→                    <DialogHeader>
+  1668→                      <DialogTitle>Complete Payment</DialogTitle>
+  1669→                      <DialogDescription>
+  1670→                        Total: <span className="font-bold text-primary">{formatKES(total)}</span>
+  1671→                      </DialogDescription>
+  1672→                    </DialogHeader>
+  1673→                    <div className="space-y-4">
+  1674→                      <div>
+  1675→                        <Label className="text-sm font-medium">Payment Method</Label>
+  1676→                        <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)} className="grid grid-cols-3 gap-2 mt-2">
+  1677→                          <div>
+  1678→                            <RadioGroupItem value="CASH" id="cash" className="peer sr-only" />
+  1679→                            <Label htmlFor="cash" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+  1680→                              <Banknote className="h-5 w-5" />
+  1681→                              <span className="text-xs font-medium">Cash</span>
+  1682→                            </Label>
+  1683→                          </div>
+  1684→                          <div>
+  1685→                            <RadioGroupItem value="MPESA" id="mpesa" className="peer sr-only" />
+  1686→                            <Label htmlFor="mpesa" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+  1687→                              <Smartphone className="h-5 w-5" />
+  1688→                              <span className="text-xs font-medium">M-Pesa</span>
+  1689→                            </Label>
+  1690→                          </div>
+  1691→                          <div>
+  1692→                            <RadioGroupItem value="DEBT" id="debt" className="peer sr-only" />
+  1693→                            <Label htmlFor="debt" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+  1694→                              <Wallet className="h-5 w-5" />
+  1695→                              <span className="text-xs font-medium">Debt</span>
+  1696→                            </Label>
+  1697→                          </div>
+  1698→                        </RadioGroup>
+  1699→                      </div>
+  1700→
+  1701→                      {paymentMethod === 'CASH' && (
+  1702→                        <div className="space-y-3">
+  1703→                          <div>
+  1704→                            <Label htmlFor="cashReceived">Cash Received</Label>
+  1705→                            <Input
+  1706→                              id="cashReceived"
+  1707→                              type="number"
+  1708→                              placeholder="0"
+  1709→                              value={cashReceived}
+  1710→                              onChange={(e) => setCashReceived(e.target.value)}
+  1711→                              className="text-lg font-semibold mt-1"
+  1712→                            />
+  1713→                          </div>
+  1714→                          {change > 0 && (
+  1715→                            <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg">
+  1716→                              <p className="text-sm font-medium text-green-700 dark:text-green-400">
+  1717→                                Change: {formatKES(change)}
+  1718→                              </p>
+  1719→                            </div>
+  1720→                          )}
+  1721→                          {cashReceived && Number(cashReceived) < total && (
+  1722→                            <Alert variant="destructive">
+  1723→                              <AlertCircle className="h-4 w-4" />
+  1724→                              <AlertTitle>Insufficient amount</AlertTitle>
+  1725→                              <AlertDescription>Need {formatKES(total - Number(cashReceived))} more</AlertDescription>
+  1726→                            </Alert>
+  1727→                          )}
+  1728→                        </div>
+  1729→                      )}
+  1730→
+  1731→                      {paymentMethod === 'DEBT' && !selectedCustomer && (
+  1732→                        <Alert>
+  1733→                          <AlertCircle className="h-4 w-4" />
+  1734→                          <AlertTitle>Customer Required</AlertTitle>
+  1735→                          <AlertDescription>Please select a customer before proceeding with debt payment.</AlertDescription>
+  1736→                        </Alert>
+  1737→                      )}
+  1738→
+  1739→                      {paymentMethod === 'MPESA' && (
+  1740→                        <div>
+  1741→                          <Label htmlFor="mpesaPhone">M-Pesa Phone Number</Label>
+  1742→                          <Input
+  1743→                            id="mpesaPhone"
+  1744→                            type="tel"
+  1745→                            placeholder="0712 345 678"
+  1746→                            value={mpesaPhone}
+  1747→                            onChange={(e) => setMpesaPhone(e.target.value)}
+  1748→                            className="mt-1"
+  1749→                          />
+  1750→                        </div>
+  1751→                      )}
+  1752→                    </div>
+  1753→                    <DialogFooter>
+  1754→                      <Button variant="outline" onClick={() => setCheckoutOpen(false)}>Cancel</Button>
+  1755→                      <Button
+  1756→                        onClick={handleCheckout}
+  1757→                        disabled={
+  1758→                          checkoutMutation.isPending ||
+  1759→                          (paymentMethod === 'CASH' && (!cashReceived || Number(cashReceived) < total)) ||
+  1760→                          (paymentMethod === 'DEBT' && !selectedCustomer)
+  1761→                        }
+  1762→                        className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+  1763→                      >
+  1764→                        {checkoutMutation.isPending ? (
+  1765→                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
+  1766→                        ) : (
+  1767→                          <><CheckCircle className="mr-2 h-4 w-4" />Complete Sale</>
+  1768→                        )}
+  1769→                      </Button>
+  1770→                    </DialogFooter>
+  1771→                  </DialogContent>
+  1772→                </Dialog>
+  1773→              </div>
+  1774→            </>
+  1775→          )}
+  1776→        </Card>
+  1777→      </div>
+  1778→
+  1779→      {/* Receipt Dialog */}
+  1780→      <Dialog open={receiptOpen} onOpenChange={setReceiptOpen}>
+  1781→        <DialogContent className="sm:max-w-lg receipt-dialog">
+  1782→          <DialogHeader className="pb-2">
+  1783→            <DialogTitle className="text-center">Receipt</DialogTitle>
+  1784→          </DialogHeader>
+  1785→          {lastTransaction && (
+  1786→            <div className="receipt-content receipt-printable space-y-4 text-sm" id="receipt-content">
+  1787→              {/* Store Header */}
+  1788→              <div className="text-center space-y-0.5">
+  1789→                <h2 className="text-lg font-bold">MBUMAH HARDWARE</h2>
+  1790→                <p className="text-xs text-muted-foreground">Juja Main Branch</p>
+  1791→                <p className="text-xs text-muted-foreground">Tel: +254 700 123 456</p>
+  1792→              </div>
+  1793→              <Separator />
+  1794→              {/* Receipt Meta */}
+  1795→              <div className="space-y-1 text-xs">
+  1796→                <div className="flex justify-between">
+  1797→                  <span className="text-muted-foreground">Receipt #:</span>
+  1798→                  <span className="font-mono font-semibold">{lastTransaction.receiptNumber}</span>
+  1799→                </div>
+  1800→                <div className="flex justify-between">
+  1801→                  <span className="text-muted-foreground">Date:</span>
+  1802→                  <span>{formatDateTime(lastTransaction.createdAt)}</span>
+  1803→                </div>
+  1804→                <div className="flex justify-between">
+  1805→                  <span className="text-muted-foreground">Cashier:</span>
+  1806→                  <span>{lastTransaction.cashier?.name || useAuthStore.getState().user?.name || 'N/A'}</span>
+  1807→                </div>
+  1808→                <div className="flex justify-between">
+  1809→                  <span className="text-muted-foreground">Customer:</span>
+  1810→                  <span>{lastTransaction.customer?.name || 'Walk-in'}</span>
+  1811→                </div>
+  1812→              </div>
+  1813→              <Separator />
+  1814→              {/* Line Items */}
+  1815→              <div className="space-y-1">
+  1816→                <div className="grid grid-cols-12 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+  1817→                  <span className="col-span-5">Item</span>
+  1818→                  <span className="col-span-2 text-center">Qty</span>
+  1819→                  <span className="col-span-2 text-center">Unit</span>
+  1820→                  <span className="col-span-3 text-right">Total</span>
+  1821→                </div>
+  1822→                {(lastTransaction.items || []).map((item) => (
+  1823→                  <div key={item.id} className="grid grid-cols-12 text-xs py-0.5">
+  1824→                    <span className="col-span-5 truncate">{item.productName}</span>
+  1825→                    <span className="col-span-2 text-center">{item.quantity}</span>
+  1826→                    <span className="col-span-2 text-center">{item.unitType}</span>
+  1827→                    <span className="col-span-3 text-right">{formatKES(item.lineTotal)}</span>
+  1828→                  </div>
+  1829→                ))}
+  1830→              </div>
+  1831→              <Separator />
+  1832→              {/* Totals */}
+  1833→              <div className="space-y-1 text-xs">
+  1834→                <div className="flex justify-between">
+  1835→                  <span className="text-muted-foreground">Subtotal</span>
+  1836→                  <span>{formatKES(lastTransaction.subtotal)}</span>
+  1837→                </div>
+  1838→                <div className="flex justify-between">
+  1839→                  <span className="text-muted-foreground">VAT (16%)</span>
+  1840→                  <span>{formatKES(lastTransaction.taxAmount)}</span>
+  1841→                </div>
+  1842→                {lastTransaction.discountAmount > 0 && (
+  1843→                  <div className="flex justify-between text-green-600">
+  1844→                    <span>Discount</span>
+  1845→                    <span>-{formatKES(lastTransaction.discountAmount)}</span>
+  1846→                  </div>
+  1847→                )}
+  1848→                <Separator />
+  1849→                <div className="flex justify-between font-bold text-base">
+  1850→                  <span>Total</span>
+  1851→                  <span className="text-primary">{formatKES(lastTransaction.totalAmount)}</span>
+  1852→                </div>
+  1853→              </div>
+  1854→              <Separator />
+  1855→              {/* Payment Details */}
+  1856→              <div className="space-y-1 text-xs">
+  1857→                <div className="flex justify-between">
+  1858→                  <span className="text-muted-foreground">Payment Method</span>
+  1859→                  <Badge variant="secondary" className="text-[10px]">
+  1860→                    {lastTransaction.paymentMethod === 'CASH' && <Banknote className="h-3 w-3 mr-1" />}
+  1861→                    {lastTransaction.paymentMethod === 'MPESA' && <Smartphone className="h-3 w-3 mr-1" />}
+  1862→                    {lastTransaction.paymentMethod === 'DEBT' && <Wallet className="h-3 w-3 mr-1" />}
+  1863→                    {lastTransaction.paymentMethod}
+  1864→                  </Badge>
+  1865→                </div>
+  1866→                {lastTransaction.paymentMethod === 'CASH' && lastCashReceived > 0 && (
+  1867→                  <>
+  1868→                    <div className="flex justify-between">
+  1869→                      <span className="text-muted-foreground">Cash Received</span>
+  1870→                      <span>{formatKES(lastCashReceived)}</span>
+  1871→                    </div>
+  1872→                    {lastCashReceived - lastTransaction.totalAmount > 0 && (
+  1873→                      <div className="flex justify-between text-green-600 font-semibold">
+  1874→                        <span>Change</span>
+  1875→                        <span>{formatKES(lastCashReceived - lastTransaction.totalAmount)}</span>
+  1876→                      </div>
+  1877→                    )}
+  1878→                  </>
+  1879→                )}
+  1880→                {lastTransaction.paymentMethod === 'MPESA' && lastMpesaPhone && (
+  1881→                  <div className="flex justify-between">
+  1882→                    <span className="text-muted-foreground">M-Pesa Phone</span>
+  1883→                    <span>{lastMpesaPhone}</span>
+  1884→                  </div>
+  1885→                )}
+  1886→              </div>
+  1887→              <Separator />
+  1888→              {/* Footer */}
+  1889→              <div className="text-center space-y-1">
+  1890→                <p className="font-semibold text-xs">Thank you for shopping at MBUMAH HARDWARE!</p>
+  1891→                <p className="text-xs text-muted-foreground italic">Asante sana!</p>
+  1892→              </div>
+  1893→            </div>
+  1894→          )}
+  1895→          <DialogFooter className="gap-2 sm:gap-0">
+  1896→            <Button
+  1897→              variant="outline"
+  1898→              onClick={() => {
+  1899→                window.print();
+  1900→              }}
+  1901→            >
+  1902→              <Printer className="mr-2 h-4 w-4" />
+  1903→              Print Receipt
+  1904→            </Button>
+  1905→            <Button
+  1906→              onClick={() => {
+  1907→                setReceiptOpen(false);
+  1908→                setLastTransaction(null);
+  1909→              }}
+  1910→              className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+  1911→            >
+  1912→              <ShoppingCart className="mr-2 h-4 w-4" />
+  1913→              New Sale
+  1914→            </Button>
+  1915→          </DialogFooter>
+  1916→        </DialogContent>
+  1917→      </Dialog>
+  1918→
+  1919→      {/* M-Pesa STK Push Dialog */}
+  1920→      <Dialog open={mpesaDialogOpen} onOpenChange={setMpesaDialogOpen}>
+  1921→        <DialogContent className="sm:max-w-sm">
+  1922→          <DialogHeader>
+  1923→            <DialogTitle className="flex items-center gap-2">
+  1924→              <Smartphone className="h-5 w-5 text-green-600" />
+  1925→              M-Pesa Payment
+  1926→            </DialogTitle>
+  1927→            <DialogDescription>
+  1928→              Amount: <span className="font-bold">{formatKES(total)}</span>
+  1929→            </DialogDescription>
+  1930→          </DialogHeader>
+  1931→          {mpesaStatus === 'idle' && (
+  1932→            <div className="space-y-4">
+  1933→              <div>
+  1934→                <Label htmlFor="mpesaPhoneDialog">Phone Number</Label>
+  1935→                <Input
+  1936→                  id="mpesaPhoneDialog"
+  1937→                  type="tel"
+  1938→                  placeholder="0712 345 678"
+  1939→                  value={mpesaPhone}
+  1940→                  onChange={(e) => setMpesaPhone(e.target.value)}
+  1941→                />
+  1942→              </div>
+  1943→              <Button
+  1944→                className="w-full bg-green-600 hover:bg-green-700 text-white"
+  1945→                onClick={handleMpesaPay}
+  1946→                disabled={mpesaMutation.isPending}
+  1947→              >
+  1948→                {mpesaMutation.isPending ? (
+  1949→                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending STK Push...</>
+  1950→                ) : (
+  1951→                  'Send STK Push'
+  1952→                )}
+  1953→              </Button>
+  1954→            </div>
+  1955→          )}
+  1956→          {mpesaStatus === 'processing' && (
+  1957→            <div className="text-center py-8 space-y-4">
+  1958→              <div className="animate-pulse">
+  1959→                <Smartphone className="h-16 w-16 mx-auto text-green-600" />
+  1960→              </div>
+  1961→              <div>
+  1962→                <p className="font-semibold">Waiting for M-Pesa Confirmation</p>
+  1963→                <p className="text-sm text-muted-foreground mt-1">
+  1964→                  Please enter your M-Pesa PIN on your phone
+  1965→                </p>
+  1966→              </div>
+  1967→              <Loader2 className="h-6 w-6 animate-spin mx-auto text-green-600" />
+  1968→            </div>
+  1969→          )}
+  1970→          {mpesaStatus === 'success' && (
+  1971→            <div className="text-center py-8 space-y-4">
+  1972→              <CheckCircle className="h-16 w-16 mx-auto text-green-600" />
+  1973→              <p className="font-semibold text-green-600">Payment Successful!</p>
+  1974→              <Button onClick={() => { setMpesaDialogOpen(false); setMpesaStatus('idle'); }}>
+  1975→                Close
+  1976→              </Button>
+  1977→            </div>
+  1978→          )}
+  1979→          {mpesaStatus === 'failed' && (
+  1980→            <div className="text-center py-8 space-y-4">
+  1981→              <AlertCircle className="h-16 w-16 mx-auto text-destructive" />
+  1982→              <p className="font-semibold text-destructive">Payment Failed</p>
+  1983→              <Button variant="outline" onClick={() => setMpesaStatus('idle')}>Try Again</Button>
+  1984→            </div>
+  1985→          )}
+  1986→        </DialogContent>
+  1987→      </Dialog>
+  1988→
+  1989→      {/* Low Stock Alert Dialog */}
+  1990→      <LowStockAlertDialog
+  1991→        open={lowStockAlertOpen}
+  1992→        onOpenChange={setLowStockAlertOpen}
+  1993→        storeId={currentStoreId}
+  1994→      />
+  1995→    </div>
+  1996→  );
+  1997→}
+  1998→
+  1999→// ============================================================================
+  2000→// MAIN APP
+
+[showing lines 1-2000 of 2047; use offset=2001 with limit to continue reading]

@@ -426,3 +426,315 @@ Stage Summary:
 - Low Stock stat card is now clickable with hover effects and keyboard accessibility
 - No new npm packages added, all existing functionality preserved
 - Uses existing shadcn/ui components (Sheet, Dialog, Badge, Button, ScrollArea, Progress)
+
+---
+Task ID: 1 (UI Bug Fixes & POS Enhancement)
+Agent: UI Enhancement Agent
+Task: Fix UI bugs and enhance POS tab styling
+
+Work Log:
+
+### Bug Fixes
+1. **Truncated Dashboard Stats Labels** - Removed `truncate` class from stat labels, changed label styling to `leading-tight` for better text wrapping, increased stat card content flexibility with `flex-1 min-w-0`
+
+2. **Truncated Category Chips** - Added scroll detection with left/right arrow buttons for navigation, added proper `scrollbar-none` class, added `useRef` for scroll container, `useCallback`/`useEffect` for scroll state tracking with ChevronDown arrows for scroll indicators
+
+3. **Nested Button Warning** - Changed `<button>` to `<div role="button">` with `tabIndex={0}` and `onKeyDown` handlers for:
+   - Sidebar user profile dropdown trigger (was `<button>` wrapping `<DropdownMenuTrigger asChild>`)
+   - Notification items (was `<button>` elements)
+
+### POS Enhancements
+4. **Dashboard Stats Enhancement**
+   - Added `useAnimatedCounter` hook with ease-out cubic animation for count-up effect
+   - Added `MiniSparkline` SVG component for mini trend charts
+   - Added trend indicators (TrendingUp/ArrowDownRight with percentages)
+   - Changed backgrounds to gradient colors per stat card
+   - Better loading skeleton with icon placeholder
+
+5. **Product Card Enhancement**
+   - Added gradient overlay on hover with Plus icon that scales in
+   - Added bounce animation (`animate-bounce-add`) when adding to cart
+   - Made stock progress bar more prominent (h-2) with animated fill and shimmer effect
+   - Added "NEW" badge for products created within last 7 days (with `useMemo`)
+   - Added "OUT OF STOCK" overlay for zero-stock items
+   - Enhanced hover effects (scale-110 images, card-glow, -translate-y-1)
+   - Image area increased from h-24 to h-28
+
+6. **Cart Enhancement**
+   - Added slide-in animation for newly added cart items (`animate-slide-in`)
+   - Added shake animation on cart badge when items are added (`animate-shake`)
+   - Made checkout button gradient (from-accent-orange to-amber-500) with shadow
+   - Added gradient text on total amount
+   - Added "Discount Code" input field with Apply button (valid codes: SAVE10, SAVE20, MBUMAH, HARDWARE)
+   - Added "Hold Cart" functionality (saves to localStorage with timestamp)
+   - Added "Recall Cart" functionality (restores last held cart from localStorage)
+
+7. **General Styling**
+   - Added smooth tab transition animation (`animate-tab-enter`)
+   - Added pulsing search bar animation on focus (`animate-pulse-search`)
+   - Enhanced skeleton loading with shimmer animation overlay
+   - CSS-only empty cart illustration with cart body, handle, wheels, and floating plus sign
+   - Added sidebar nav hover effect with sliding background (`sidebar-nav-item`)
+   - Added gradient text utility class
+
+### CSS Additions (globals.css)
+- `animate-bounce-add` - bounce effect on add-to-cart
+- `animate-slide-in` - slide-in from right for cart items
+- `animate-shake` - shake effect for cart badge
+- `animate-pulse-search` - pulsing glow on search focus
+- `animate-stock-fill` - animated stock bar fill
+- `animate-count-up` - number count-up entrance
+- `animate-tab-enter` - tab fade-in transition
+- `animate-shimmer` - skeleton shimmer overlay
+- `animate-float-up` - floating animation
+- `card-glow` - hover glow effect
+- `sidebar-nav-item` - sidebar hover with sliding background
+- `scrollbar-none` - hidden scrollbar
+- `gradient-text` - gradient text effect
+
+Stage Summary:
+- All 3 bug fixes applied (truncated stats, truncated chips, nested buttons)
+- All POS enhancements implemented (animated stats, enhanced cards, improved cart with hold/recall/discount)
+- All general styling improvements added (tab transitions, search pulse, shimmer skeletons, empty cart illustration, sidebar effects)
+- No new npm packages required - all animations are CSS-based
+- Lint passes (only pre-existing runner.js errors remain)
+- TypeScript compiles with no errors in page.tsx
+
+---
+Task ID: 4
+Agent: Supplier Management Agent
+Task: Add complete Supplier Management feature with CRUD API and UI
+
+Work Log:
+- Updated Prisma schema with 3 new models: Supplier, PurchaseOrder, PurchaseOrderItem
+- Added relations to Store model (suppliers, purchaseOrders) and Product model (purchaseOrderItems)
+- Ran db:push successfully to sync SQLite database
+- Created API route: /api/suppliers (GET list with search/filter, POST create)
+- Created API route: /api/suppliers/[id] (GET detail with PO stats, PUT update, DELETE soft-delete)
+- Created API route: /api/purchase-orders (GET list with filters, POST create with items + auto PO number)
+- Created API route: /api/purchase-orders/[id] (GET detail, PUT status update + receive items with stock update)
+- Added suppliersApi and purchaseOrdersApi client functions to lib/api.ts with TypeScript interfaces
+- Created suppliers-tab.tsx with full UI: overview stats, supplier list, add/edit dialog, detail view with tabs, PO management, star ratings, CSV export
+- Added 'suppliers' to AppTab type in stores.ts
+- Added Suppliers tab with Truck icon to TAB_CONFIG in page.tsx (in Management section)
+- Added LazySuppliersTab lazy import and render case in page.tsx
+- Verified all API endpoints work: GET/POST suppliers, GET/PUT suppliers/[id], GET/POST purchase-orders, GET/PUT purchase-orders/[id]
+- Tested full PO lifecycle: Create → Send → Confirm → Receive (stock auto-updated from 399 to 449)
+- Lint passes with no new errors
+
+Stage Summary:
+- Complete Supplier Management feature with CRUD operations
+- Purchase Order management with status workflow (DRAFT→SENT→CONFIRMED→RECEIVED)
+- Receiving PO items automatically updates warehouse stock and creates stock movements
+- UI includes: overview stats cards, searchable/filterable supplier list, star rating system, supplier detail with tabs (Info/POs/Contact), PO list with status badges, receive items dialog, CSV export
+- All APIs follow existing project patterns (withErrorBoundary, systemLog, db client)
+- No new npm packages required
+
+---
+Task ID: 7-8
+Agent: Admin & Financial Enhancement Agent
+Task: Enhance Admin and Financial tabs with new features and better styling
+
+Work Log:
+- Created 3 new API routes:
+  - `/api/audit-logs/route.ts`: GET - List system logs with filters (storeId, type, severity, dateRange, search, pagination) + summary stats (bySeverity, byComponent, recentErrors)
+  - `/api/system-config/route.ts`: GET - List all system configs grouped by category (General, POS, Inventory, Financial, Notifications, Other); PUT - Update a config value with audit logging
+  - `/api/users/route.ts`: GET - List users for a store with active session count; POST - Create a new user with validation and audit logging
+- Updated `src/lib/api.ts` with new API client functions: auditLogsApi, systemConfigApi, usersApi with proper TypeScript interfaces
+- Enhanced Admin Tab (`src/app/tabs/admin-tab.tsx`):
+  - Added AuditLogSection: color-coded log entries (red=errors, amber=warnings, blue=info), expandable rows with metadata/stack trace, search/filter by type & severity, pagination
+  - Added ConfigEditor: categorized config key-value pairs (General, POS, Inventory, Financial, Notifications), inline edit with save, encrypted field handling, emoji icons
+  - Enhanced UserManagement: real API-backed user list with Add User dialog, role-colored badges (Super Admin=red, Shop Owner=purple, Store Manager=blue, Cashier=green, Accountant=amber), online/offline status, active session count
+  - Enhanced System Health: added recent errors count badge, active sessions, uptime counter
+  - Seeded 12 default system configs via seed script
+- Enhanced Financial Tab (`src/app/tabs/financial-tab.tsx`):
+  - Added Recharts-based chart visualizations:
+    - Revenue Trend Line Chart (30 days) using ChartContainer/shadcn chart
+    - Payment Methods Distribution Pie/Donut Chart with legend
+    - Expense Categories Bar Chart
+    - Profit Margin Trend Area Chart
+  - Added Drill-Down Functionality:
+    - Click "Total Revenue" card → Revenue breakdown dialog with daily table, total/avg/peak stats
+    - Click "Outstanding Debt" card → Debt aging breakdown dialog with 4 aging buckets (Current, 1-30, 31-60, 61+ days) + customer detail table + export
+  - Added Export Functionality:
+    - Export to CSV (financial report, journal entries, debt aging)
+    - Print Report button
+    - Export button on journal entries section
+  - Improved Styling:
+    - Gradient backgrounds on financial cards
+    - AnimatedCounter component with smooth number transitions
+    - Trend arrows with percentage comparison (vs previous period)
+    - Quick Actions bar (Record Expense, Record Payment, View Ledger)
+  - Fixed Data Inconsistency: Financial overview banner now uses same data source as individual cards (journals for P&L, dashboard API for today's stats)
+- All changes pass ESLint with no errors
+- Dev server running and all APIs verified working
+
+Stage Summary:
+- Admin tab now has full audit trail, system config editor, and real user management
+- Financial tab now has interactive Recharts visualizations, drill-down dialogs, CSV export, gradient styling, animated counters, and trend indicators
+- 3 new API routes with proper error handling and audit logging
+- 12 default system configurations seeded for the config editor
+- All existing functionality preserved
+
+---
+Task ID: 11-6
+Agent: Task Agent
+Task: Fix Financial tab charts and enhance Inventory tab
+
+Work Log:
+- Created `/api/financial/revenue-trend` API endpoint that queries SalesTransaction table grouped by date for past 30 days
+  - Returns daily revenue, expenses, transactions, profit margin, and payment method breakdown
+  - Generates realistic demo data (8k-45k KES/day with weekend/busier patterns) when no real transactions exist
+  - Includes summary stats (totalRevenue, avgDailyRevenue, peakDayRevenue, isDemo flag)
+- Added `financialApi.getRevenueTrend()` to `/lib/api.ts` client
+- Fixed Financial tab charts:
+  - Revenue Trend: Now uses real API data instead of random simulation based on todayRevenue
+  - Added summary stats row below chart (Avg Daily, Peak Day, 30D Total)
+  - Added "Demo Data" badge when using demo fallback data
+  - Payment Methods Pie Chart: Falls back to demo data derived from revenue trend if no real payment breakdown exists
+  - Expense Categories Bar Chart: Shows demo expense categories (Rent, Salaries, Utilities, Supplies, Transport, Maintenance) when no real expense accounts in journal
+  - Profit Margin Trend: Now uses real data from revenue-trend API instead of random simulation
+  - All chart cards now show "Demo Data" badge when using fallback data
+- Enhanced Inventory tab:
+  - Stock Movement History: Added "Recent Stock Movements" section with type badges (IN=green, OUT=red, ADJ=amber, RETURN=blue), date, product, quantity change, reason
+  - Product Image Support: Added image column showing category images from `/categories/cat_*.png`
+  - Bulk Actions: Checkbox selection for products with toolbar (Adjust Stock, Export Selected, Delete Selected), select all/deselect all
+  - Quick Stock Adjustment: +/- inline button next to each product row for fast stock adjustments with Enter/Escape keyboard support
+  - Sort & Filter: Added column sorting (click headers to sort by name, SKU, price, cost, margin, stock), existing stock level filter and category filter
+  - Styling: Alternating row colors, product count summary ("Showing X of Y products"), low stock warning banner at top, better empty state with clear filters button, bulk adjust dialog
+
+Stage Summary:
+- Financial charts now render with real or demo data instead of being empty
+- Revenue trend API provides proper 30-day trend data
+- Inventory tab significantly enhanced with bulk operations, sorting, stock history, and better UX
+
+---
+Task ID: 9-12
+Agent: UI Enhancement Agent
+Task: Notification Center + UI Bug Fixes
+
+Work Log:
+- Created Notifications API (`/src/app/api/notifications/route.ts`):
+  - GET endpoint queries database for 6 notification types: out_of_stock, low_stock, overdue_rental, large_debt, new_customer, recent_transaction
+  - Each notification includes: id, type, title, description, severity (critical/warning/info), timestamp, isRead, targetTab
+  - Returns summary counts (total, critical, warning, info)
+  - Sorted by severity (critical first), then timestamp (newest first)
+
+- Added Notifications API client to `src/lib/api.ts`:
+  - `notificationsApi.list(storeId)` - fetches notifications from API
+  - `NotificationItem` interface - type definitions for notifications
+  - `NotificationSummary` interface - summary counts
+  - `formatRelativeTime()` helper - converts timestamps to "5 min ago", "2 hours ago" format
+
+- Enhanced NotificationCenter component (`src/app/page.tsx`):
+  - Replaced client-side notification computation with server-side API calls
+  - Added filter tabs: "All", "Critical", "Warnings", "Info" with counts
+  - Added dismiss button on individual notifications (X button, appears on hover)
+  - Added "Show dismissed" button to restore dismissed notifications
+  - Persisted read/dismissed state in localStorage (mbt_read_notifications, mbt_dismissed_notifications)
+  - Added relative timestamps ("5 min ago", "2 hours ago") with title tooltip showing full date
+  - Added notification category icons: PackageX (out_of_stock), AlertTriangle (low_stock), AlertOctagon (overdue_rental), CircleDollarSign (large_debt), UserPlus (new_customer), Receipt (recent_transaction)
+  - Added vibrate feedback on critical notifications when panel opens
+  - Added loading skeleton state while fetching
+  - Distinct color coding: red for critical, amber for warning, green for info
+
+- Updated bell icon badge in sidebar:
+  - Added `useNotificationCount` hook for real-time notification counts
+  - Badge shows actual unread count (with 99+ cap)
+  - Pulsing animation when critical notifications exist (red pulse)
+  - Amber badge for non-critical unread notifications
+  - Auto-refreshes every 60 seconds
+
+- Fixed cart badge not updating in TopBar:
+  - Changed from `useCartStore((s) => s.getItemCount())` (returns function reference, doesn't trigger re-renders)
+  - To `useCartStore((s) => s.items)` + `.reduce()` for proper Zustand reactivity
+  - Cart badge now shows on all tabs when items exist (not just POS tab)
+
+- Fixed footer not sticking to bottom:
+  - Changed inner container from `min-h-screen overflow-hidden` to `h-screen`
+  - Removed unnecessary `mt-auto` from footer (flex layout handles positioning)
+  - Footer now always appears at bottom of viewport
+
+- Fixed React nested button warning:
+  - Removed `role="button"` from notification items that contained a dismiss `<button>`
+  - Notification items now use plain `<div>` with onClick/onKeyDown handlers
+
+- Added mobile cart accessibility:
+  - Cart sidebar now `hidden lg:block` on desktop only
+  - Added floating cart FAB (Floating Action Button) on mobile (bottom-right)
+  - FAB shows item count with gradient background matching checkout button
+  - Added mobile cart Sheet with full cart functionality:
+    - Cart items with quantity controls
+    - Discount code input
+    - Customer selection
+    - Order totals (subtotal, VAT, total)
+    - Complete checkout dialog with Cash/M-Pesa/Debt payment options
+
+- Fixed responsive table scrolling:
+  - Updated suppliers-tab.tsx tables to use `overflow-auto` instead of `overflow-y-auto`
+
+- Added CSS animation:
+  - `animate-pulse-slow` for notification badge pulsing effect
+
+Stage Summary:
+- Comprehensive notification center with 6 notification types, filters, dismiss, relative timestamps, and localStorage persistence
+- Real-time notification badge on sidebar bell with actual unread counts and pulsing animation
+- Cart badge now updates correctly when items are added/removed
+- Footer properly sticks to bottom of viewport
+- Mobile users can access cart via floating FAB button and Sheet drawer
+- All tables scroll properly on mobile
+- No nested button React warnings
+- All code passes lint checks with zero errors
+
+---
+Task ID: Round-2-Comprehensive-QA-Enhancement
+Agent: Main Orchestrator
+Task: Comprehensive QA assessment, bug fixes, new features, and styling improvements
+
+Work Log:
+- Performed thorough QA testing using agent-browser with VLM visual analysis
+- Identified and cataloged 15+ UI issues across all tabs (truncated text, empty charts, missing features)
+- Fixed critical bugs: nested button React errors, truncated dashboard stats, category chip truncation
+- Fixed financial API endpoint mismatch (journal-entries → journal)
+- Added Supplier Management feature with full CRUD API, Purchase Orders, star ratings, CSV export
+- Added Purchase Order lifecycle: DRAFT → SENT → CONFIRMED → RECEIVED with stock auto-update
+- Enhanced Financial tab with Recharts visualizations: Revenue Trend, Payment Methods Pie, Expense Categories Bar, Profit Margin Area
+- Created revenue-trend API endpoint with real transaction data + demo data fallback
+- Enhanced Admin tab: Audit log with filters, System Config editor, User management with API, System health dashboard
+- Enhanced Inventory tab: Stock movement history, product images, bulk actions (checkboxes + toolbar), quick stock adjustment, column sorting, stock level filters
+- Enhanced POS tab: Animated counters, sparklines, trend indicators, NEW badges, bounce animations, discount codes, hold/recall cart
+- Added Notification Center: 6 notification types, filter tabs (All/Critical/Warnings/Info), dismiss buttons, relative timestamps, localStorage persistence
+- Fixed cart badge reactivity (Zustand selector pattern), footer stickiness, mobile cart FAB
+- All changes pass lint with zero new errors
+
+Stage Summary:
+- System now has 9 fully functional tabs: POS, Inventory, Customers, Transactions, Rentals, Financial, Reports, Suppliers, Admin
+- All API endpoints working (30+ routes)
+- Financial charts render with real/demo data
+- Supplier + Purchase Order lifecycle fully operational
+- Notification center provides real-time alerts from database
+- Cart works correctly with proper badge updates
+- Mobile responsive with floating cart button
+- Professional quality UI with animations, gradients, and micro-interactions
+
+Current Project Status:
+- The application is STABLE and feature-rich with comprehensive POS, inventory, financial, supplier management, and admin capabilities
+- All major features from the original spec are implemented
+- VLM-based QA testing confirms professional quality across all tabs
+
+Unresolved Issues / Risks:
+- Financial data is mostly demo/simulated (needs real transaction volume for meaningful charts)
+- Some charts show "Demo Data" badge indicating fallback data is being used
+- No actual email/SMS/WhatsApp notifications (API integrations are stubs)
+- No real M-Pesa integration (using mock API)
+- Multi-tenancy is structurally ready but only one store (Juja Main) is configured
+- No deployment to Vercel/Supabase yet (still using local SQLite)
+
+Priority Recommendations for Next Phase:
+1. Deploy to production (Vercel + Supabase PostgreSQL)
+2. Add real M-Pesa Daraja API integration
+3. Add email/SMS notifications (Resend/Twilio)
+4. Add multi-store support with store switching
+5. Add receipt printing via thermal printer
+6. Add barcode scanning support
+7. Performance optimization for large datasets
