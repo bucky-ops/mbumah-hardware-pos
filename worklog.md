@@ -342,7 +342,87 @@ Unresolved Issues / Next Phase Priorities:
 - Mobile responsiveness could be further improved
 - Low stock alert details (clicking Low Stock card should show which products)
 - Customer debt payment from Customers tab not fully tested
+
+---
+Task ID: 11
+Agent: Main Orchestrator (Round 11 - Feature Enhancement & Styling Overhaul)
+Task: QA assessment, add new features, improve styling, and update worklog
+
+Work Log:
+- Performed comprehensive QA assessment with agent-browser: all 8 tabs working, no browser errors
+- Added Low Stock Alert Panel: clickable "Low Stock" stat card opens a Dialog showing out-of-stock (red) and low-stock (amber) products with progress bars, restock suggestions, and category info
+- Added Notification Center: Bell icon in sidebar opens a Sheet with notifications for out-of-stock, low-stock, overdue rentals, and large outstanding debts (>KES 50,000); includes mark-all-read, unread badges, and click-to-navigate
+- Added Customer Debt Payment Dialog: "Record Payment" button in Customer Detail Sheet opens dialog with amount input, quick-amount buttons (Full, Half, KES 5K, KES 10K), payment method select (CASH/MPESA), reference input, balance preview, and validation
+- Added User Profile Dropdown: replaced static sidebar footer with DropdownMenu showing user name, email, theme toggle, Profile & Settings option, Keyboard Shortcuts option, and Log out
+- Added Global Search (Ctrl+K): TopBar now has a Search button with ⌘K keyboard shortcut; opens a Dialog searching products and customers in real-time; click results navigate to relevant tabs
+- Enhanced Inventory Tab: gradient stat cards with border-l-4, alternating row backgrounds, category color dots, Profit Margin column (green >30%, amber 15-30%, red <15%), mini stock progress bar in Stock column, enhanced Add/Edit forms with barcode and description fields, "Duplicate Product" and "Adjust Stock" quick actions
+- Enhanced Customers Tab: gradient stat cards, alternating rows, Debt Status column with colored indicators (green/amber/red), Loyalty Tier badges (Bronze/Silver/Gold), gradient avatars, Transaction History section in detail sheet showing last 5 transactions, "Send SMS Reminder" and "View Transactions" quick actions
+- Enhanced Financial Tab: gradient accent banner with 4 key metrics (Total Revenue, Expenses, Net Profit, Total Accounts), expandable account groups by type with color coding, enhanced journal entries with monospace badges and color-coded Dr/Cr, CSS bar charts with gradient fills and grid lines, "This Year" date preset added
+- Enhanced Rentals Tab: gradient banner with 4 overview cards, visual dot-and-line timeline (Start → Expected → Actual), enhanced return dialog with charge breakdown and damage assessment cards, animated status badges (pulse for ACTIVE/OVERDUE), alternating rows with overdue highlighting, Duration and Revenue/Day columns
+- Enhanced Reports Tab: comparison indicators (↑ 12.5% vs last period), payment method stacked bar with icons, Top 5 Products with rank circles, MiniSparkline component for sales trend, conic-gradient pie chart for inventory valuation, Stock Health indicator with SVG ring, inventory turnover estimate, PDF/Schedule report buttons (toast), enhanced report generation cards
+- Enhanced Admin Tab: animated status dots on health indicators, API response sparkline, database size indicator, active sessions counter, uptime display, role-colored user badges (SUPER_ADMIN red, CASHIER green, ACCOUNTANT amber), status toggle switch, enhanced stock adjustment with product search, ADD/SUBTRACT toggle, reason categories with icons, relative timestamps in activity feed, confirmation dialogs for destructive actions, Export Logs button
+- All lint checks pass (0 errors excluding runner.js)
+- All API endpoints verified: 29 products, 10 categories, 5 customers, 2 rentals, dashboard stats, transactions
+
+Stage Summary:
+- 8 major new features added: Low Stock Alert, Notification Center, Customer Debt Payment, User Profile Dropdown, Global Search (Ctrl+K), enhanced all 6 tab components
+- All tabs have consistent gradient stat cards, border-l-4 treatment, alternating row backgrounds, and improved visual hierarchy
+- Zero browser errors, zero lint errors
+- All 24 API routes responding correctly
+- System is stable and fully functional
+
+---
+Current Project Status:
+- COMPLETE: All backend API routes (24 endpoints) verified working
+- COMPLETE: Database schema with 20+ models and full seed data (29 products, 10 categories, 5 customers)
+- COMPLETE: Frontend application with 8 tabs and full POS functionality
+- COMPLETE: Receipt generation after checkout with print support
+- COMPLETE: Transaction history tab with filters, search, and CSV export
+- COMPLETE: AI-generated category images on product cards and filter chips
+- COMPLETE: Enhanced login page (gradient animation, frosted glass, Kenyan flag accent, role-colored demo buttons)
+- COMPLETE: Improved sidebar (grouped navigation, active indicators, store selector, user profile dropdown, notification bell with center)
+- COMPLETE: Global Search with Ctrl+K keyboard shortcut
+- COMPLETE: Low Stock Alert panel (clickable from dashboard)
+- COMPLETE: Notification Center (real-time alerts for stock, rentals, debts)
+- COMPLETE: Customer Debt Payment dialog
+- COMPLETE: Enhanced styling across ALL tabs (gradient cards, alternating rows, profit margins, loyalty tiers, visual timelines, conic-gradient charts, sparklines)
+- COMPLETE: Dark mode support across all tabs
+- COMPLETE: All bug fixes from previous rounds
+
+Unresolved Issues / Next Phase Priorities:
+- M-Pesa mock service needs Docker to run (not tested in sandbox)
+- Notification service (mini-service) not yet built (email/SMS/WhatsApp)
+- Mobile responsiveness could be further improved
+- Receipt print layout could be refined for actual thermal printers
+- PDF report export not yet implemented (toast placeholder exists)
+- User profile settings page not yet implemented
+- Barcode/SKU scanner integration not yet implemented
+- Offline mode / sync not yet implemented
+- Multi-store switching not yet functional (UI exists but logic pending)
 - Receipt print layout could be further refined for actual thermal printers
 - Add data export (PDF reports) capability
 - Add user profile/settings page
 - Add search functionality for products by barcode/SKU scan
+
+---
+Task ID: 2
+Agent: Feature Developer
+Task: Add Low Stock Alert Panel and Notification Center
+
+Work Log:
+- Added imports: Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription from @/components/ui/sheet, Progress from @/components/ui/progress, useRef from React, BellRing/PackageX/AlertOctagon/CircleDollarSign/CheckCheck from lucide-react, rentalsApi/debtApi and RentalItem/DebtLedgerItem types from @/lib/api
+- Created NotificationCenter component: Sheet that opens from right side, accepts open/onOpenChange/storeId props, uses useQuery to fetch products (low stock), rentals (overdue), debt (large debts >50k KES), auto-calculates unread notifications, shows notification items with severity icons (PackageX for out-of-stock, AlertTriangle for low stock, AlertOctagon for overdue rental, CircleDollarSign for large debt), color-coded backgrounds (red for critical, amber for warning), unread dot indicator, mark all read button, click to navigate to relevant tab
+- Created LowStockAlertDialog component: Dialog that opens when Low Stock stat card is clicked, fetches all products, separates into out-of-stock (red, qty<=0) and low-stock (amber, qty<=reorderLevel && qty>0), shows each product with name/category/current stock/reorder level/visual progress bar, restock suggestions with quantity calculation, total count summary
+- Modified DashboardStats: Added onLowStockClick optional prop, added clickable field to stats array, Low Stock card has cursor-pointer/hover shadow/translate effect/keyboard accessibility, shows → indicator on clickable cards
+- Modified AppSidebar: Added currentStoreId from useAppStore, added notificationOpen state, replaced Bell button onClick from toast.info to setNotificationOpen(true), added animate-pulse to bell dot, added NotificationCenter Sheet component with storeId prop
+- Modified POSTab: Added lowStockAlertOpen state, passed onLowStockClick callback to DashboardStats, added LowStockAlertDialog component at end of render
+- All files pass ESLint with no errors (only pre-existing runner.js errors)
+- Dev server running, all APIs responding
+
+Stage Summary:
+- Two new features fully implemented: Low Stock Alert Panel and Notification Center
+- Notification Center replaces simple toast with a full Sheet panel showing low stock alerts, overdue rentals, and large outstanding debts
+- Low Stock Alert Dialog shows detailed product information with color-coded sections and progress bars
+- Low Stock stat card is now clickable with hover effects and keyboard accessibility
+- No new npm packages added, all existing functionality preserved
+- Uses existing shadcn/ui components (Sheet, Dialog, Badge, Button, ScrollArea, Progress)

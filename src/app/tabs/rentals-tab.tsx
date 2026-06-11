@@ -6,7 +6,8 @@ import { toast } from 'sonner';
 import {
   KeyRound, AlertTriangle, DollarSign, Layers, Plus,
   CheckCircle, Loader2, Clock, ArrowRight, Wrench,
-  ShieldAlert, ShieldCheck, ShieldOff,
+  ShieldAlert, ShieldCheck, ShieldOff, CalendarDays,
+  TrendingUp, Activity,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
@@ -29,7 +30,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 
 // ============================================================================
-// Rental Timeline Visual Component
+// Rental Timeline Visual Component - Enhanced with Dots and Lines
 // ============================================================================
 
 function RentalTimeline({ rental }: { rental: RentalItem }) {
@@ -39,49 +40,89 @@ function RentalTimeline({ rental }: { rental: RentalItem }) {
   const actual = rental.actualReturnDate ? new Date(rental.actualReturnDate).getTime() : null;
   const isOverdue = rental.status === 'OVERDUE' || (!actual && now > expected);
   const isReturned = rental.status === 'RETURNED' || rental.status === 'DAMAGED';
+  const isActive = rental.status === 'ACTIVE' && !isOverdue;
 
-  // Calculate total span for proportioning
-  const totalSpan = Math.max(expected - start, 86400000); // at least 1 day
-  const rentedSpan = isReturned ? Math.max((actual || expected) - start, 0) : Math.min(now - start, totalSpan * 1.5);
+  // Calculate days remaining or overdue
+  const daysRemaining = !isReturned && !isOverdue
+    ? Math.max(Math.ceil((expected - now) / 86400000), 0)
+    : 0;
+  const daysOverdue = isOverdue
+    ? Math.ceil((now - expected) / 86400000)
+    : 0;
 
-  const rentedPct = Math.min((rentedSpan / totalSpan) * 100, 100);
-  const expectedPct = 100;
+  // Color logic: green if on track, amber if close (<=3 days), red if overdue
+  const isCloseToDue = !isOverdue && !isReturned && daysRemaining <= 3 && daysRemaining > 0;
+  const statusColor = isOverdue ? 'red' : isCloseToDue ? 'amber' : isActive ? 'green' : isReturned ? 'gray' : 'green';
+
+  const dotColors: Record<string, string> = {
+    green: 'bg-green-500 shadow-green-500/50',
+    amber: 'bg-amber-500 shadow-amber-500/50',
+    red: 'bg-red-500 shadow-red-500/50',
+    gray: 'bg-gray-400 shadow-gray-400/50',
+  };
+
+  const lineColors: Record<string, string> = {
+    green: 'bg-green-400',
+    amber: 'bg-amber-400',
+    red: 'bg-red-400',
+    gray: 'bg-gray-300',
+  };
 
   return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-        <span>{formatDate(rental.rentalStartDate)}</span>
-        <ArrowRight className="h-3 w-3" />
-        <span>{formatDate(rental.expectedReturnDate)}</span>
+    <div className="space-y-1.5">
+      {/* Visual Timeline with Dots and Lines */}
+      <div className="flex items-center gap-0 w-full">
+        {/* Start dot */}
+        <div className="flex flex-col items-center flex-shrink-0">
+          <div className={`w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50`} />
+          <span className="text-[8px] text-muted-foreground mt-0.5 whitespace-nowrap">{formatDate(rental.rentalStartDate).slice(0, 6)}</span>
+        </div>
+        {/* Progress line */}
+        <div className="flex-1 h-0.5 mx-1 relative">
+          <div className={`absolute inset-0 ${isReturned ? lineColors.gray : lineColors[statusColor]}`} style={{ opacity: 0.4 }} />
+          <div
+            className={`absolute top-0 left-0 h-full ${isReturned ? lineColors.gray : lineColors[statusColor]}`}
+            style={{ width: isReturned ? '100%' : `${Math.min(((now - start) / (expected - start)) * 100, 100)}%` }}
+          />
+        </div>
+        {/* Expected return dot */}
+        <div className="flex flex-col items-center flex-shrink-0">
+          <div className={`w-2.5 h-2.5 rounded-full ${dotColors[statusColor]} shadow-sm`} />
+          <span className="text-[8px] text-muted-foreground mt-0.5 whitespace-nowrap">{formatDate(rental.expectedReturnDate).slice(0, 6)}</span>
+        </div>
+        {/* Actual return line & dot */}
         {actual && (
           <>
-            <ArrowRight className="h-3 w-3" />
-            <span className={isOverdue ? 'text-red-500 font-medium' : 'text-green-600'}>
-              {formatDate(rental.actualReturnDate)}
-            </span>
+            <div className={`flex-1 h-0.5 mx-1 ${isOverdue ? lineColors.red : lineColors.green}`} style={{ opacity: 0.4 }} />
+            <div className="flex flex-col items-center flex-shrink-0">
+              <div className={`w-2.5 h-2.5 rounded-full ${isOverdue ? dotColors.red : dotColors.green} shadow-sm`} />
+              <span className="text-[8px] text-muted-foreground mt-0.5 whitespace-nowrap">{formatDate(rental.actualReturnDate!).slice(0, 6)}</span>
+            </div>
           </>
         )}
       </div>
-      <div className="relative h-3 bg-muted/30 rounded-full overflow-hidden">
-        {/* Expected period bar */}
-        <div
-          className="absolute top-0 left-0 h-full rounded-full bg-blue-200 dark:bg-blue-800/40"
-          style={{ width: `${expectedPct}%` }}
-        />
-        {/* Actual rented period */}
-        <div
-          className={`absolute top-0 left-0 h-full rounded-full ${
-            isOverdue ? 'bg-red-400 dark:bg-red-600/60' :
-            isReturned ? 'bg-green-400 dark:bg-green-600/60' :
-            'bg-primary/60'
-          }`}
-          style={{ width: `${rentedPct}%` }}
-        />
-        {/* Expected return marker */}
-        <div
-          className="absolute top-0 h-full w-0.5 bg-blue-600 dark:bg-blue-400 z-10"
-          style={{ left: `${expectedPct}%` }}
-        />
+      {/* Status indicator */}
+      <div className="text-center">
+        {isOverdue && (
+          <span className="text-[10px] font-medium text-red-600 dark:text-red-400">
+            {daysOverdue}d overdue
+          </span>
+        )}
+        {isCloseToDue && (
+          <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400">
+            {daysRemaining}d remaining
+          </span>
+        )}
+        {isActive && daysRemaining > 3 && (
+          <span className="text-[10px] font-medium text-green-600 dark:text-green-400">
+            {daysRemaining}d remaining
+          </span>
+        )}
+        {isReturned && (
+          <span className="text-[10px] font-medium text-muted-foreground">
+            Returned
+          </span>
+        )}
       </div>
     </div>
   );
@@ -171,7 +212,7 @@ function RentalForm({ storeId, products, customers, onSuccess }: { storeId: stri
 }
 
 // ============================================================================
-// Damage Assessment Form Component
+// Damage Assessment Form Component - Enhanced with Visual Summary
 // ============================================================================
 
 function DamageAssessmentForm({
@@ -202,6 +243,13 @@ function DamageAssessmentForm({
     SEVERE: 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30',
   };
 
+  const damageSelectedRing: Record<string, string> = {
+    NONE: 'ring-2 ring-green-500',
+    MINOR: 'ring-2 ring-yellow-500',
+    MODERATE: 'ring-2 ring-orange-500',
+    SEVERE: 'ring-2 ring-red-500',
+  };
+
   const daysRented = Math.ceil((Date.now() - new Date(rental.rentalStartDate).getTime()) / 86400000);
   const isLate = new Date() > new Date(rental.expectedReturnDate);
   const lateDays = isLate ? Math.ceil((Date.now() - new Date(rental.expectedReturnDate).getTime()) / 86400000) : 0;
@@ -211,25 +259,59 @@ function DamageAssessmentForm({
 
   return (
     <div className="space-y-4">
-      {/* Rental Info Summary */}
-      <div className="p-3 bg-muted rounded-lg space-y-1">
-        <p className="text-sm"><strong>Equipment:</strong> {rental.product?.name || rental.productId}</p>
-        <p className="text-sm"><strong>Customer:</strong> {rental.customer?.name || rental.customerId}</p>
-        <p className="text-sm"><strong>Days Rented:</strong> {daysRented} day{daysRented !== 1 ? 's' : ''}</p>
-        <p className="text-sm"><strong>Rental Charge:</strong> {formatKES(rental.totalRentalCharge)}</p>
+      {/* Rental Info Summary - Enhanced */}
+      <div className="p-3 bg-gradient-to-r from-muted to-muted/50 rounded-lg space-y-2 border">
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Equipment</p>
+            <p className="text-sm font-medium">{rental.product?.name || rental.productId}</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Customer</p>
+            <p className="text-sm font-medium">{rental.customer?.name || rental.customerId}</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Rental Duration</p>
+            <p className="text-sm font-bold">{daysRented} day{daysRented !== 1 ? 's' : ''}</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Rate Per Day</p>
+            <p className="text-sm font-medium">{formatKES(rental.ratePerDay)}/day</p>
+          </div>
+        </div>
         {isLate && (
-          <p className="text-sm text-red-600 font-medium">
-            <AlertTriangle className="inline h-3 w-3 mr-1" />
-            {lateDays} day{lateDays !== 1 ? 's' : ''} late — Late fee: {formatKES(lateFee)}
-          </p>
+          <div className="p-2 bg-red-50 dark:bg-red-950/30 rounded border border-red-200 dark:border-red-800">
+            <p className="text-sm text-red-600 font-medium flex items-center gap-1">
+              <AlertTriangle className="h-3 w-3" />
+              {lateDays} day{lateDays !== 1 ? 's' : ''} overdue — Late fee: {formatKES(lateFee)}
+            </p>
+          </div>
         )}
-        <Separator className="my-2" />
-        <p className="text-sm"><strong>Security Deposit:</strong> {formatKES(depositAmount)}</p>
+      </div>
+
+      {/* Expected Charge Summary */}
+      <div className="p-3 border rounded-lg space-y-2">
+        <p className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Charge Breakdown</p>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Rental Charge ({daysRented} × {formatKES(rental.ratePerDay)})</span>
+          <span className="font-mono">{formatKES(rental.totalRentalCharge)}</span>
+        </div>
+        {lateFee > 0 && (
+          <div className="flex justify-between text-sm text-red-600">
+            <span>Late Fee ({lateDays} day{lateDays !== 1 ? 's' : ''} × {formatKES(rental.ratePerDay)})</span>
+            <span className="font-mono">{formatKES(lateFee)}</span>
+          </div>
+        )}
+        <Separator />
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Security Deposit Held</span>
+          <span className="font-mono text-green-600">{formatKES(depositAmount)}</span>
+        </div>
       </div>
 
       {/* Damage Level Selection with Visual Cards */}
       <div className="space-y-2">
-        <Label>Damage Assessment</Label>
+        <Label className="text-xs font-bold uppercase tracking-wider">Damage Assessment</Label>
         <div className="grid grid-cols-2 gap-2">
           {(['NONE', 'MINOR', 'MODERATE', 'SEVERE'] as const).map((level) => (
             <button
@@ -241,7 +323,7 @@ function DamageAssessmentForm({
               }}
               className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-all text-left ${
                 damageLevel === level
-                  ? damageColors[level]
+                  ? `${damageColors[level]} ${damageSelectedRing[level]}`
                   : 'border-transparent bg-muted/30 hover:bg-muted/50'
               }`}
             >
@@ -289,37 +371,37 @@ function DamageAssessmentForm({
       </div>
 
       {/* Financial Summary */}
-      <div className="p-3 border rounded-lg space-y-2">
-        <p className="text-xs font-medium uppercase text-muted-foreground">Return Summary</p>
+      <div className="p-3 border-2 rounded-lg space-y-2 bg-muted/30">
+        <p className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Total Return Summary</p>
         <div className="flex justify-between text-sm">
           <span>Rental Charge</span>
-          <span>{formatKES(rental.totalRentalCharge)}</span>
+          <span className="font-mono">{formatKES(rental.totalRentalCharge)}</span>
         </div>
         {lateFee > 0 && (
           <div className="flex justify-between text-sm text-red-600">
             <span>Late Fee</span>
-            <span>{formatKES(lateFee)}</span>
+            <span className="font-mono">{formatKES(lateFee)}</span>
           </div>
         )}
         {Number(damageCharge) > 0 && (
           <div className="flex justify-between text-sm text-orange-600">
             <span>Damage Charge</span>
-            <span>{formatKES(Number(damageCharge))}</span>
+            <span className="font-mono">{formatKES(Number(damageCharge))}</span>
           </div>
         )}
         <Separator />
         <div className="flex justify-between text-sm font-bold">
           <span>Total Charge</span>
-          <span>{formatKES(totalCharge)}</span>
+          <span className="font-mono">{formatKES(totalCharge)}</span>
         </div>
         <div className="flex justify-between text-sm">
           <span>Less: Security Deposit</span>
-          <span className="text-green-600">-{formatKES(depositAmount)}</span>
+          <span className="text-green-600 font-mono">-{formatKES(depositAmount)}</span>
         </div>
         <Separator />
         <div className={`flex justify-between text-sm font-bold ${refundAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
           <span>{refundAmount >= 0 ? 'Refund to Customer' : 'Customer Owes'}</span>
-          <span>{formatKES(Math.abs(refundAmount))}</span>
+          <span className="font-mono">{formatKES(Math.abs(refundAmount))}</span>
         </div>
       </div>
 
@@ -327,14 +409,59 @@ function DamageAssessmentForm({
         <Button
           onClick={() => onSubmit({ damageAssessment: damageLevel, damageCharge: Number(damageCharge), notes: returnNotes })}
           disabled={isPending}
-          className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+          className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground h-11"
         >
           {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
-          Confirm Return
+          Confirm Return — {formatKES(Math.abs(refundAmount))} {refundAmount >= 0 ? 'Refund' : 'Due'}
         </Button>
       </DialogFooter>
     </div>
   );
+}
+
+// ============================================================================
+// Rental Status Badge with Animations
+// ============================================================================
+
+function RentalStatusBadge({ status }: { status: string }) {
+  switch (status) {
+    case 'ACTIVE':
+      return (
+        <Badge className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400 border-green-200 dark:border-green-800 gap-1">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+          </span>
+          ACTIVE
+        </Badge>
+      );
+    case 'OVERDUE':
+      return (
+        <Badge className="text-[10px] bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border-red-200 dark:border-red-800 gap-1">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+          </span>
+          OVERDUE
+        </Badge>
+      );
+    case 'RETURNED':
+      return (
+        <Badge className="text-[10px] bg-gray-100 text-gray-600 dark:bg-gray-800/40 dark:text-gray-400 border-gray-200 dark:border-gray-700 gap-1">
+          <CheckCircle className="h-2.5 w-2.5" />
+          RETURNED
+        </Badge>
+      );
+    case 'DAMAGED':
+      return (
+        <Badge className="text-[10px] bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400 border-orange-200 dark:border-orange-800 gap-1">
+          <Wrench className="h-2.5 w-2.5" />
+          DAMAGED
+        </Badge>
+      );
+    default:
+      return <Badge variant="outline" className="text-[10px]">{status}</Badge>;
+  }
 }
 
 // ============================================================================
@@ -393,87 +520,133 @@ export default function RentalsTab() {
     return { totalRevenue, totalDeposits, totalLateFees, totalDamageCharges };
   }, [rentals]);
 
+  // Total rental revenue (charges + late fees + damage)
+  const totalRentalRevenue = revenueSummary.totalRevenue + revenueSummary.totalLateFees + revenueSummary.totalDamageCharges;
+
   return (
     <div className="space-y-4">
-      {/* Active Rentals Overview */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Active Rentals Overview</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20">
-              <KeyRound className="h-5 w-5 text-blue-600" />
+      {/* Gradient Accent Banner */}
+      <div className="rounded-xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 p-4 text-white shadow-lg">
+        <div className="flex items-center gap-2 mb-3">
+          <Activity className="h-5 w-5 text-amber-400" />
+          <h2 className="text-base font-bold">Rentals Overview</h2>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/10">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-1 rounded bg-green-500/20">
+                <DollarSign className="h-3.5 w-3.5 text-green-400" />
+              </div>
+              <span className="text-[10px] uppercase tracking-wider text-slate-300">Total Revenue</span>
+            </div>
+            <p className="text-lg font-bold text-green-400">{formatKES(totalRentalRevenue)}</p>
+          </div>
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/10">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-1 rounded bg-blue-500/20">
+                <KeyRound className="h-3.5 w-3.5 text-blue-400" />
+              </div>
+              <span className="text-[10px] uppercase tracking-wider text-slate-300">Active Rentals</span>
+            </div>
+            <p className="text-lg font-bold text-blue-400">{statusCounts.active}</p>
+          </div>
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/10">
+            <div className="flex items-center gap-2 mb-1">
+              <div className={`p-1 rounded ${statusCounts.overdue > 0 ? 'bg-red-500/20' : 'bg-slate-500/20'}`}>
+                <AlertTriangle className={`h-3.5 w-3.5 ${statusCounts.overdue > 0 ? 'text-red-400' : 'text-slate-400'}`} />
+              </div>
+              <span className="text-[10px] uppercase tracking-wider text-slate-300">Overdue</span>
+            </div>
+            <p className={`text-lg font-bold ${statusCounts.overdue > 0 ? 'text-red-400' : 'text-slate-400'}`}>{statusCounts.overdue}</p>
+          </div>
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/10">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-1 rounded bg-emerald-500/20">
+                <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
+              </div>
+              <span className="text-[10px] uppercase tracking-wider text-slate-300">Charges</span>
+            </div>
+            <p className="text-lg font-bold text-emerald-400">{formatKES(revenueSummary.totalRevenue)}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Enhanced Overview Cards with border-l-4 and gradient */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Card className="border-l-4 border-l-green-500">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30">
+                <KeyRound className="h-4 w-4 text-green-600" />
+              </div>
               <div>
                 <p className="text-xs text-muted-foreground">Active</p>
-                <p className="text-lg font-bold text-blue-600">{statusCounts.active}</p>
+                <p className="text-lg font-bold text-green-600">{statusCounts.active}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20">
-              <AlertTriangle className="h-5 w-5 text-red-600" />
+          </CardContent>
+        </Card>
+        <Card className={`border-l-4 ${statusCounts.overdue > 0 ? 'border-l-red-500' : 'border-l-gray-300'}`}>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <div className={`p-1.5 rounded-lg bg-gradient-to-br ${statusCounts.overdue > 0 ? 'from-red-100 to-red-200 dark:from-red-900/30 dark:to-red-800/30' : 'from-gray-100 to-gray-200 dark:from-gray-900/30 dark:to-gray-800/30'}`}>
+                <AlertTriangle className={`h-4 w-4 ${statusCounts.overdue > 0 ? 'text-red-600' : 'text-gray-400'}`} />
+              </div>
               <div>
                 <p className="text-xs text-muted-foreground">Overdue</p>
-                <p className="text-lg font-bold text-red-600">{statusCounts.overdue}</p>
+                <p className={`text-lg font-bold ${statusCounts.overdue > 0 ? 'text-red-600' : 'text-gray-400'}`}>{statusCounts.overdue}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-900/20">
-              <CheckCircle className="h-5 w-5 text-green-600" />
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-gray-400">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800/30 dark:to-gray-700/30">
+                <CheckCircle className="h-4 w-4 text-gray-600" />
+              </div>
               <div>
                 <p className="text-xs text-muted-foreground">Returned</p>
-                <p className="text-lg font-bold text-green-600">{statusCounts.returned}</p>
+                <p className="text-lg font-bold">{statusCounts.returned}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20">
-              <Wrench className="h-5 w-5 text-orange-600" />
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-orange-500">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-gradient-to-br from-orange-100 to-orange-200 dark:from-orange-900/30 dark:to-orange-800/30">
+                <Wrench className="h-4 w-4 text-orange-600" />
+              </div>
               <div>
                 <p className="text-xs text-muted-foreground">Damaged</p>
                 <p className="text-lg font-bold text-orange-600">{statusCounts.damaged}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50">
-              <Layers className="h-5 w-5 text-muted-foreground" />
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-primary">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-gradient-to-br from-primary/10 to-primary/20">
+                <Layers className="h-4 w-4 text-primary" />
+              </div>
               <div>
                 <p className="text-xs text-muted-foreground">Total</p>
                 <p className="text-lg font-bold">{statusCounts.total}</p>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - Revenue & Deposits */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card>
+        <Card className="border-l-4 border-l-emerald-500">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                <KeyRound className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Active</p>
-                <p className="text-xl font-bold">{statusCounts.active}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
-                <AlertTriangle className="h-5 w-5 text-red-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Overdue</p>
-                <p className="text-xl font-bold">{statusCounts.overdue}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30">
-                <DollarSign className="h-5 w-5 text-green-600" />
+              <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-100 to-emerald-200 dark:from-emerald-900/30 dark:to-emerald-800/30">
+                <DollarSign className="h-5 w-5 text-emerald-600" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Rental Revenue</p>
@@ -482,41 +655,69 @@ export default function RentalsTab() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-l-4 border-l-blue-500">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
-                <Layers className="h-5 w-5 text-purple-600" />
+              <div className="p-2 rounded-lg bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30">
+                <Layers className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Rentals</p>
-                <p className="text-xl font-bold">{rentals.length}</p>
+                <p className="text-sm text-muted-foreground">Total Deposits</p>
+                <p className="text-xl font-bold">{formatKES(revenueSummary.totalDeposits)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-orange-500">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-gradient-to-br from-orange-100 to-orange-200 dark:from-orange-900/30 dark:to-orange-800/30">
+                <Clock className="h-5 w-5 text-orange-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Late Fees</p>
+                <p className="text-xl font-bold">{formatKES(revenueSummary.totalLateFees)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-red-500">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-gradient-to-br from-red-100 to-red-200 dark:from-red-900/30 dark:to-red-800/30">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Damage Charges</p>
+                <p className="text-xl font-bold">{formatKES(revenueSummary.totalDamageCharges)}</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Rental Revenue Summary */}
+      {/* Rental Revenue Summary - Enhanced */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Rental Revenue Summary</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            <TrendingUp className="h-4 w-4" /> Rental Revenue Summary
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="space-y-1">
+            <div className="space-y-1 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20">
               <p className="text-xs text-muted-foreground">Rental Charges</p>
               <p className="text-lg font-bold text-emerald-600">{formatKES(revenueSummary.totalRevenue)}</p>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20">
               <p className="text-xs text-muted-foreground">Security Deposits</p>
               <p className="text-lg font-bold text-blue-600">{formatKES(revenueSummary.totalDeposits)}</p>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20">
               <p className="text-xs text-muted-foreground">Late Fees Collected</p>
               <p className="text-lg font-bold text-orange-600">{formatKES(revenueSummary.totalLateFees)}</p>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 p-3 rounded-lg bg-red-50 dark:bg-red-900/20">
               <p className="text-xs text-muted-foreground">Damage Charges</p>
               <p className="text-lg font-bold text-red-600">{formatKES(revenueSummary.totalDamageCharges)}</p>
             </div>
@@ -541,7 +742,7 @@ export default function RentalsTab() {
         </Button>
       </div>
 
-      {/* Rentals Table */}
+      {/* Rentals Table - Enhanced */}
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
@@ -555,7 +756,9 @@ export default function RentalsTab() {
                     <TableHead>Customer</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Timeline</TableHead>
+                    <TableHead className="text-right">Duration</TableHead>
                     <TableHead className="text-right">Rate/Day</TableHead>
+                    <TableHead className="text-right">Rev/Day</TableHead>
                     <TableHead className="text-right">Total Charge</TableHead>
                     <TableHead className="text-right">Deposit</TableHead>
                     <TableHead className="w-[80px]">Actions</TableHead>
@@ -563,13 +766,21 @@ export default function RentalsTab() {
                 </TableHeader>
                 <TableBody>
                   {rentals.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No rentals found</TableCell></TableRow>
-                  ) : rentals.map((rental) => {
+                    <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">No rentals found</TableCell></TableRow>
+                  ) : rentals.map((rental, idx) => {
                     const isOverdue = rental.status === 'OVERDUE';
+                    const daysRented = Math.ceil(
+                      ((rental.actualReturnDate ? new Date(rental.actualReturnDate).getTime() : Date.now()) - new Date(rental.rentalStartDate).getTime()) / 86400000
+                    );
+                    const revPerDay = daysRented > 0 ? rental.totalRentalCharge / daysRented : 0;
                     return (
                       <TableRow
                         key={rental.id}
-                        className={isOverdue ? 'bg-red-50/50 dark:bg-red-950/20 hover:bg-red-50 dark:hover:bg-red-950/30' : ''}
+                        className={`
+                          ${isOverdue ? 'bg-red-50/70 dark:bg-red-950/20 hover:bg-red-50 dark:hover:bg-red-950/30' : ''}
+                          ${!isOverdue && idx % 2 === 1 ? 'bg-muted/20' : ''}
+                          transition-colors
+                        `}
                       >
                         <TableCell className="font-medium text-sm">
                           <div className="flex items-center gap-2">
@@ -579,18 +790,9 @@ export default function RentalsTab() {
                         </TableCell>
                         <TableCell className="text-sm">{rental.customer?.name || rental.customerId}</TableCell>
                         <TableCell>
-                          <Badge
-                            variant={
-                              rental.status === 'ACTIVE' ? 'default' :
-                              rental.status === 'OVERDUE' ? 'destructive' :
-                              rental.status === 'RETURNED' ? 'secondary' : 'outline'
-                            }
-                            className="text-[10px]"
-                          >
-                            {rental.status}
-                          </Badge>
+                          <RentalStatusBadge status={rental.status} />
                           {isOverdue && (
-                            <p className="text-[10px] text-red-500 mt-0.5">
+                            <p className="text-[10px] text-red-500 mt-0.5 font-medium">
                               {Math.ceil((Date.now() - new Date(rental.expectedReturnDate).getTime()) / 86400000)}d overdue
                             </p>
                           )}
@@ -598,7 +800,13 @@ export default function RentalsTab() {
                         <TableCell className="w-[200px]">
                           <RentalTimeline rental={rental} />
                         </TableCell>
+                        <TableCell className="text-right text-sm font-mono">
+                          {daysRented}d
+                        </TableCell>
                         <TableCell className="text-right text-sm">{formatKES(rental.ratePerDay)}</TableCell>
+                        <TableCell className="text-right text-sm font-mono">
+                          {formatKES(Math.round(revPerDay))}
+                        </TableCell>
                         <TableCell className="text-right font-medium text-sm">{formatKES(rental.totalRentalCharge)}</TableCell>
                         <TableCell className="text-right text-sm">{formatKES(rental.securityDeposit)}</TableCell>
                         <TableCell>
@@ -622,11 +830,14 @@ export default function RentalsTab() {
         </CardContent>
       </Card>
 
-      {/* Return Dialog with Damage Assessment */}
+      {/* Return Dialog with Enhanced Damage Assessment */}
       <Dialog open={returnDialogOpen} onOpenChange={setReturnDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Process Return</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              Process Return
+            </DialogTitle>
             <DialogDescription>Return rental equipment and assess any damage</DialogDescription>
           </DialogHeader>
           {selectedRental && (

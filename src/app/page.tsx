@@ -5,7 +5,7 @@
  * UI Overhaul: Dashboard stats, category chips, enhanced cards, improved cart, better login, footer fix, empty states, live clock
  */
 
-import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
@@ -19,15 +19,18 @@ import {
   Banknote, Wallet,
   TrendingUp, ArrowDownRight, AlertTriangle, DollarSign, Wrench, Hammer,
   CalendarDays, Printer, Bell, ChevronDown,
+  BellRing, PackageX, AlertOctagon, CircleDollarSign, CheckCheck,
 } from 'lucide-react';
 
 import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
 import {
   productsApi, categoriesApi, customersApi, transactionsApi,
   paymentsApi, dashboardApi,
+  rentalsApi, debtApi,
   formatKES, formatDate, formatDateTime,
   type ProductListItem, type CustomerItem,
   type CategoryItem, type TransactionItem,
+  type RentalItem, type DebtLedgerItem,
 } from '@/lib/api';
 import type { PaymentMethod, CartItem, UnitType, DashboardStats } from '@/lib/types';
 
@@ -44,6 +47,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Progress } from '@/components/ui/progress';
 
 // ============================================================================
 // LAZY-LOADED TAB COMPONENTS
@@ -281,14 +287,409 @@ function LoginScreen() {
 }
 
 // ============================================================================
+// NOTIFICATION CENTER
+// ============================================================================
+
+interface NotificationItem {
+  id: string;
+  type: 'low_stock' | 'out_of_stock' | 'overdue_rental' | 'large_debt';
+  title: string;
+  description: string;
+  timestamp: string;
+  severity: 'critical' | 'warning' | 'info';
+  targetTab?: AppTab;
+}
+
+function NotificationCenter({
+  open,
+  onOpenChange,
+  storeId,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  storeId: string;
+}) {
+  const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const { setActiveTab } = useAppStore();
+
+  const { data: productsData } = useQuery({
+    queryKey: ['products-notifications', storeId],
+    queryFn: () => productsApi.list({ storeId, limit: 200 }),
+    enabled: open,
+  });
+
+  const { data: rentalsData } = useQuery({
+    queryKey: ['rentals-notifications', storeId],
+    queryFn: () => rentalsApi.list({ storeId, limit: 100 }),
+    enabled: open,
+  });
+
+  const { data: debtData } = useQuery({
+    queryKey: ['debt-notifications', storeId],
+    queryFn: () => debtApi.list({ storeId, limit: 100 }),
+    enabled: open,
+  });
+
+  const products = productsData?.data || [];
+  const rentals = rentalsData?.data || [];
+  const debts = debtData?.data || [];
+
+  const notifications = useMemo<NotificationItem[]>(() => {
+    const items: NotificationItem[] = [];
+
+    // Out of stock products
+    products
+      .filter((p) => p.quantityInStock <= 0)
+      .forEach((p) => {
+        items.push({
+          id: `oos-${p.id}`,
+          type: 'out_of_stock',
+          title: 'Out of Stock',
+          description: `${p.name} is completely out of stock`,
+          timestamp: p.updatedAt,
+          severity: 'critical',
+          targetTab: 'inventory',
+        });
+      });
+
+    // Low stock products
+    products
+      .filter((p) => p.quantityInStock > 0 && p.quantityInStock <= p.reorderLevel)
+      .forEach((p) => {
+        items.push({
+          id: `low-${p.id}`,
+          type: 'low_stock',
+          title: 'Low Stock Alert',
+          description: `${p.name} has only ${p.quantityInStock} ${p.unitType.toLowerCase()}s left (reorder at ${p.reorderLevel})`,
+          timestamp: p.updatedAt,
+          severity: 'warning',
+          targetTab: 'inventory',
+        });
+      });
+
+    // Overdue rentals
+    rentals
+      .filter((r) => r.status === 'OVERDUE')
+      .forEach((r) => {
+        items.push({
+          id: `rental-${r.id}`,
+          type: 'overdue_rental',
+          title: 'Overdue Rental',
+          description: `${r.product?.name || 'Equipment'} rented by ${r.customer?.name || 'Customer'} is overdue`,
+          timestamp: r.expectedReturnDate,
+          severity: 'critical',
+          targetTab: 'rentals',
+        });
+      });
+
+    // Large outstanding debts (>50,000 KES)
+    debts
+      .filter((d) => d.balance > 50000 && d.status !== 'SETTLED')
+      .forEach((d) => {
+        items.push({
+          id: `debt-${d.id}`,
+          type: 'large_debt',
+          title: 'Large Outstanding Debt',
+          description: `${d.customer?.name || 'Customer'} owes ${formatKES(d.balance)}`,
+          timestamp: d.dueDate,
+          severity: 'warning',
+          targetTab: 'customers',
+        });
+      });
+
+    // Sort by severity (critical first), then by timestamp (newest first)
+    items.sort((a, b) => {
+      const sevOrder = { critical: 0, warning: 1, info: 2 };
+      const sevDiff = sevOrder[a.severity] - sevOrder[b.severity];
+      if (sevDiff !== 0) return sevDiff;
+      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+    });
+
+    return items;
+  }, [products, rentals, debts]);
+
+  const unreadCount = notifications.filter((n) => !readIds.has(n.id)).length;
+
+  const markAllRead = () => {
+    setReadIds(new Set(notifications.map((n) => n.id)));
+  };
+
+  const handleNotificationClick = (notification: NotificationItem) => {
+    setReadIds((prev) => new Set([...prev, notification.id]));
+    if (notification.targetTab) {
+      setActiveTab(notification.targetTab);
+      onOpenChange(false);
+    }
+  };
+
+  const getSeverityIcon = (type: NotificationItem['type']) => {
+    switch (type) {
+      case 'out_of_stock': return <PackageX className="h-4 w-4 text-red-500" />;
+      case 'low_stock': return <AlertTriangle className="h-4 w-4 text-amber-500" />;
+      case 'overdue_rental': return <AlertOctagon className="h-4 w-4 text-red-500" />;
+      case 'large_debt': return <CircleDollarSign className="h-4 w-4 text-amber-500" />;
+    }
+  };
+
+  const getSeverityBg = (severity: NotificationItem['severity']) => {
+    switch (severity) {
+      case 'critical': return 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/40';
+      case 'warning': return 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40';
+      case 'info': return 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/40';
+    }
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full sm:max-w-md p-0">
+        <SheetHeader className="p-4 pb-2 border-b">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <SheetTitle className="text-lg">Notifications</SheetTitle>
+              {unreadCount > 0 && (
+                <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                  {unreadCount}
+                </Badge>
+              )}
+            </div>
+            {unreadCount > 0 && (
+              <Button variant="ghost" size="sm" className="text-xs h-7" onClick={markAllRead}>
+                <CheckCheck className="h-3.5 w-3.5 mr-1" />
+                Mark all read
+              </Button>
+            )}
+          </div>
+          <SheetDescription>
+            Stay updated on stock levels, overdue rentals, and outstanding debts
+          </SheetDescription>
+        </SheetHeader>
+        <ScrollArea className="flex-1 h-[calc(100vh-120px)]">
+          {notifications.length === 0 ? (
+            <div className="p-8 text-center">
+              <BellRing className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
+              <p className="text-sm font-medium text-muted-foreground">No notifications</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">You&apos;re all caught up!</p>
+            </div>
+          ) : (
+            <div className="p-3 space-y-2">
+              {notifications.map((notification) => {
+                const isUnread = !readIds.has(notification.id);
+                return (
+                  <button
+                    key={notification.id}
+                    type="button"
+                    onClick={() => handleNotificationClick(notification)}
+                    className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm cursor-pointer ${getSeverityBg(notification.severity)} ${isUnread ? 'ring-1 ring-primary/20' : 'opacity-70'}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="shrink-0 mt-0.5">{getSeverityIcon(notification.type)}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium">{notification.title}</p>
+                          {isUnread && (
+                            <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                          {notification.description}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground/60 mt-1">
+                          {formatDate(notification.timestamp)}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </ScrollArea>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ============================================================================
+// LOW STOCK ALERT DIALOG
+// ============================================================================
+
+function LowStockAlertDialog({
+  open,
+  onOpenChange,
+  storeId,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  storeId: string;
+}) {
+  const { data: productsData, isLoading } = useQuery({
+    queryKey: ['products-lowstock', storeId],
+    queryFn: () => productsApi.list({ storeId, limit: 200 }),
+    enabled: open,
+  });
+
+  const products = productsData?.data || [];
+
+  const outOfStockProducts = useMemo(
+    () => products.filter((p) => p.quantityInStock <= 0),
+    [products]
+  );
+
+  const lowStockProducts = useMemo(
+    () => products.filter((p) => p.quantityInStock > 0 && p.quantityInStock <= p.reorderLevel),
+    [products]
+  );
+
+  const totalAffected = outOfStockProducts.length + lowStockProducts.length;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            Low Stock Alert
+          </DialogTitle>
+          <DialogDescription>
+            {totalAffected} product{totalAffected !== 1 ? 's' : ''} need attention
+            — {outOfStockProducts.length} out of stock, {lowStockProducts.length} low stock
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="space-y-3 p-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-20 w-full" />
+            ))}
+          </div>
+        ) : totalAffected === 0 ? (
+          <div className="p-8 text-center">
+            <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-3" />
+            <p className="text-sm font-medium">All products are well stocked!</p>
+            <p className="text-xs text-muted-foreground mt-1">No items require restocking at this time</p>
+          </div>
+        ) : (
+          <ScrollArea className="flex-1 min-h-0 max-h-[60vh]">
+            <div className="space-y-4 p-1">
+              {/* Out of Stock Section */}
+              {outOfStockProducts.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <PackageX className="h-4 w-4 text-red-500" />
+                    <h4 className="text-sm font-semibold text-red-600 dark:text-red-400">
+                      Out of Stock ({outOfStockProducts.length})
+                    </h4>
+                  </div>
+                  <div className="space-y-2">
+                    {outOfStockProducts.map((product) => (
+                      <div
+                        key={product.id}
+                        className="p-3 rounded-lg border border-red-200 dark:border-red-900/40 bg-red-50/50 dark:bg-red-950/10"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium">{product.name}</p>
+                            {product.category && (
+                              <p className="text-[10px] text-muted-foreground">{product.category.name}</p>
+                            )}
+                          </div>
+                          <Badge variant="destructive" className="text-[10px] shrink-0">
+                            0 in stock
+                          </Badge>
+                        </div>
+                        <div className="mt-2">
+                          <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+                            <span>Reorder level: {product.reorderLevel}</span>
+                            <span className="text-red-500 font-medium">Needs immediate restock</span>
+                          </div>
+                          <div className="h-2 bg-muted rounded-full overflow-hidden">
+                            <div className="h-full bg-red-500 rounded-full" style={{ width: '2%' }} />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Low Stock Section */}
+              {lowStockProducts.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    <h4 className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+                      Low Stock ({lowStockProducts.length})
+                    </h4>
+                  </div>
+                  <div className="space-y-2">
+                    {lowStockProducts.map((product) => {
+                      const stockPercent = product.reorderLevel > 0
+                        ? Math.min((product.quantityInStock / (product.reorderLevel * 3)) * 100, 100)
+                        : product.quantityInStock > 0 ? 50 : 0;
+                      const restockQty = Math.max(product.reorderLevel * 2 - product.quantityInStock, product.reorderLevel);
+                      return (
+                        <div
+                          key={product.id}
+                          className="p-3 rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/10"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">{product.name}</p>
+                              {product.category && (
+                                <p className="text-[10px] text-muted-foreground">{product.category.name}</p>
+                              )}
+                            </div>
+                            <Badge className="text-[10px] shrink-0 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200 dark:border-amber-800">
+                              {product.quantityInStock} left
+                            </Badge>
+                          </div>
+                          <div className="mt-2">
+                            <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+                              <span>Current: {product.quantityInStock} / Reorder at: {product.reorderLevel}</span>
+                              <span className="text-amber-600 dark:text-amber-400 font-medium">
+                                Restock ~{restockQty} {product.unitType.toLowerCase()}s
+                              </span>
+                            </div>
+                            <div className="h-2 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-amber-500 rounded-full transition-all"
+                                style={{ width: `${stockPercent}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {totalAffected > 0 && (
+                <div className="p-3 rounded-lg border bg-muted/30">
+                  <p className="text-xs text-muted-foreground">
+                    💡 <strong>Tip:</strong> Consider restocking to at least 2× the reorder level to maintain healthy inventory.
+                    Use the <strong>Admin → Stock Adjustment</strong> tool to update stock levels.
+                  </p>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============================================================================
 // SIDEBAR
 // ============================================================================
 
 function AppSidebar() {
-  const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen } = useAppStore();
+  const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen, currentStoreId } = useAppStore();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { theme, setTheme } = useTheme();
+  const [notificationOpen, setNotificationOpen] = useState(false);
 
   const handleNav = (tab: AppTab) => {
     setActiveTab(tab);
@@ -353,10 +754,10 @@ function AppSidebar() {
               variant="ghost"
               size="icon"
               className="shrink-0 text-sidebar-foreground/60 hover:text-sidebar-foreground relative"
-              onClick={() => toast.info('No new notifications')}
+              onClick={() => setNotificationOpen(true)}
             >
               <Bell className="h-4 w-4" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
             </Button>
             <Button
               variant="ghost"
@@ -388,45 +789,62 @@ function AppSidebar() {
             {managementNavItems.map(renderNavItem)}
           </nav>
 
-          {/* Footer */}
+          {/* Footer - User Profile Dropdown */}
           <div className="border-t border-sidebar-border px-3 py-3 space-y-2">
-            <div className="flex items-center gap-3 px-3 py-2">
-              <div className="relative">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground text-xs">
-                    {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
-                  </AvatarFallback>
-                </Avatar>
-                {/* Online dot */}
-                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-sidebar rounded-full" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
-                <p className="text-xs text-sidebar-foreground/60 truncate">{user?.role || 'Cashier'}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 px-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex-1 text-sidebar-foreground/70 hover:text-sidebar-foreground"
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              >
-                {theme === 'dark' ? <Sun className="h-4 w-4 mr-2" /> : <Moon className="h-4 w-4 mr-2" />}
-                {theme === 'dark' ? 'Light' : 'Dark'}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-sidebar-foreground/70 hover:text-destructive"
-                onClick={handleLogout}
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors text-left">
+                  <div className="relative">
+                    <Avatar className="h-9 w-9 ring-2 ring-sidebar-primary/20">
+                      <AvatarFallback className="bg-gradient-to-br from-sidebar-primary to-sidebar-primary/70 text-sidebar-primary-foreground text-xs font-semibold">
+                        {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
+                      </AvatarFallback>
+                    </Avatar>
+                    {/* Online dot */}
+                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-sidebar rounded-full" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
+                    <p className="text-xs text-sidebar-foreground/60 truncate">{user?.role === 'SUPER_ADMIN' ? 'Super Admin' : user?.role === 'CASHIER' ? 'Cashier' : user?.role || 'User'}</p>
+                  </div>
+                  <ChevronDown className="h-3.5 w-3.5 text-sidebar-foreground/40 shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" className="w-56 mb-2">
+                <DropdownMenuLabel className="font-normal">
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium">{user?.name || 'User'}</p>
+                    <p className="text-xs text-muted-foreground">{user?.email || ''}</p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+                  {theme === 'dark' ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
+                  {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => toast.info('Profile settings coming soon')}>
+                  <ShieldCheck className="mr-2 h-4 w-4" />
+                  Profile & Settings
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => toast.info('Keyboard shortcuts: Ctrl+K for search')}>
+                  <Search className="mr-2 h-4 w-4" />
+                  Keyboard Shortcuts
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </aside>
+      <NotificationCenter
+        open={notificationOpen}
+        onOpenChange={setNotificationOpen}
+        storeId={currentStoreId}
+      />
     </>
   );
 }
@@ -436,44 +854,171 @@ function AppSidebar() {
 // ============================================================================
 
 function TopBar() {
-  const { activeTab, toggleSidebar } = useAppStore();
+  const { activeTab, toggleSidebar, setActiveTab } = useAppStore();
   const cartItemCount = useCartStore((s) => s.getItemCount());
+  const currentStoreId = useAppStore((s) => s.currentStoreId);
   const currentTab = TAB_CONFIG.find(t => t.id === activeTab);
   const TabIcon = currentTab?.icon || Home;
   const now = useLiveClock();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Global search with Ctrl+K
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const { data: searchResults } = useQuery({
+    queryKey: ['globalSearch', searchQuery, currentStoreId],
+    queryFn: async () => {
+      if (!searchQuery || searchQuery.length < 2) return { products: [] as ProductListItem[], customers: [] as CustomerItem[] };
+      const [prodRes, custRes] = await Promise.all([
+        productsApi.list({ storeId: currentStoreId, search: searchQuery, limit: 5 }),
+        customersApi.list({ storeId: currentStoreId, search: searchQuery, limit: 5 }),
+      ]);
+      return {
+        products: prodRes.data || [],
+        customers: custRes.data || [],
+      };
+    },
+    enabled: searchQuery.length >= 2,
+  });
 
   return (
-    <header className="sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
-      <div className="flex items-center gap-3 px-4 py-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="lg:hidden"
-          onClick={toggleSidebar}
-        >
-          <Menu className="h-5 w-5" />
-        </Button>
-        <div className="flex items-center gap-2">
-          <TabIcon className="h-5 w-5 text-primary" />
-          <h2 className="font-semibold text-lg">{currentTab?.label || 'Dashboard'}</h2>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          {activeTab === 'pos' && (
-            <Badge variant="secondary" className="flex items-center gap-1">
-              <ShoppingCart className="h-3 w-3" />
-              {cartItemCount}
+    <>
+      <header className="sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden"
+            onClick={toggleSidebar}
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+          <div className="flex items-center gap-2">
+            <TabIcon className="h-5 w-5 text-primary" />
+            <h2 className="font-semibold text-lg">{currentTab?.label || 'Dashboard'}</h2>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            {/* Quick Search Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="hidden md:flex items-center gap-2 text-muted-foreground h-8 px-3"
+              onClick={() => setSearchOpen(true)}
+            >
+              <Search className="h-3.5 w-3.5" />
+              <span className="text-xs">Search...</span>
+              <kbd className="ml-2 pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                ⌘K
+              </kbd>
+            </Button>
+            {activeTab === 'pos' && (
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <ShoppingCart className="h-3 w-3" />
+                {cartItemCount}
+              </Badge>
+            )}
+            <Badge variant="outline" className="hidden sm:flex items-center gap-1.5">
+              <CalendarDays className="h-3 w-3" />
+              {now.toLocaleDateString('en-KE', { weekday: 'short', month: 'short', day: 'numeric' })}
+              <span className="text-muted-foreground">|</span>
+              <Clock className="h-3 w-3" />
+              {now.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}
             </Badge>
-          )}
-          <Badge variant="outline" className="hidden sm:flex items-center gap-1.5">
-            <CalendarDays className="h-3 w-3" />
-            {now.toLocaleDateString('en-KE', { weekday: 'short', month: 'short', day: 'numeric' })}
-            <span className="text-muted-foreground">|</span>
-            <Clock className="h-3 w-3" />
-            {now.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}
-          </Badge>
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      {/* Global Search Dialog */}
+      <Dialog open={searchOpen} onOpenChange={(open) => { setSearchOpen(open); if (!open) setSearchQuery(''); }}>
+        <DialogContent className="sm:max-w-lg p-0 gap-0">
+          <div className="flex items-center border-b px-4 py-3">
+            <Search className="h-4 w-4 text-muted-foreground shrink-0 mr-2" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search products, customers..."
+              className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-8"
+              autoFocus
+            />
+            <kbd className="ml-2 pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+              ESC
+            </kbd>
+          </div>
+          <div className="max-h-80 overflow-y-auto custom-scrollbar">
+            {searchQuery.length < 2 ? (
+              <div className="p-6 text-center">
+                <Search className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+                <p className="text-sm text-muted-foreground">Type at least 2 characters to search</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Search across products and customers</p>
+              </div>
+            ) : searchResults && (searchResults.products.length > 0 || searchResults.customers.length > 0) ? (
+              <div className="py-2">
+                {searchResults.products.length > 0 && (
+                  <div>
+                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Products</p>
+                    {searchResults.products.map((p) => (
+                      <button
+                        key={p.id}
+                        className="w-full flex items-center gap-3 px-4 py-2 hover:bg-muted/50 transition-colors text-left"
+                        onClick={() => { setActiveTab('inventory'); setSearchOpen(false); setSearchQuery(''); }}
+                      >
+                        <div className="shrink-0 w-8 h-8 rounded-md bg-muted flex items-center justify-center">
+                          <Package className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{p.name}</p>
+                          <p className="text-xs text-muted-foreground">{p.sku} · {p.category?.name || 'No category'}</p>
+                        </div>
+                        <span className="text-sm font-semibold text-primary whitespace-nowrap">{formatKES(p.pricePerUnit)}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {searchResults.customers.length > 0 && (
+                  <div>
+                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-t mt-1 pt-2">Customers</p>
+                    {searchResults.customers.map((c) => (
+                      <button
+                        key={c.id}
+                        className="w-full flex items-center gap-3 px-4 py-2 hover:bg-muted/50 transition-colors text-left"
+                        onClick={() => { setActiveTab('customers'); setSearchOpen(false); setSearchQuery(''); }}
+                      >
+                        <Avatar className="h-8 w-8 shrink-0">
+                          <AvatarFallback className="text-xs">{c.name.split(' ').map(n => n[0]).join('').slice(0, 2)}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{c.name}</p>
+                          <p className="text-xs text-muted-foreground">{c.phone || c.email || 'No contact'}</p>
+                        </div>
+                        {c.currentDebtBalance > 0 && (
+                          <Badge variant="destructive" className="text-[10px]">{formatKES(c.currentDebtBalance)}</Badge>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : searchQuery.length >= 2 ? (
+              <div className="p-6 text-center">
+                <Package className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+                <p className="text-sm text-muted-foreground">No results found</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Try a different search term</p>
+              </div>
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -481,7 +1026,7 @@ function TopBar() {
 // DASHBOARD STATS ROW
 // ============================================================================
 
-function DashboardStats({ storeId }: { storeId: string }) {
+function DashboardStats({ storeId, onLowStockClick }: { storeId: string; onLowStockClick?: () => void }) {
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', storeId],
     queryFn: async () => {
@@ -500,6 +1045,7 @@ function DashboardStats({ storeId }: { storeId: string }) {
       color: 'text-green-600 dark:text-green-400',
       bg: 'bg-green-50 dark:bg-green-950/30',
       borderColor: 'border-l-green-500',
+      clickable: false,
     },
     {
       label: 'Transactions',
@@ -509,6 +1055,7 @@ function DashboardStats({ storeId }: { storeId: string }) {
       color: 'text-blue-600 dark:text-blue-400',
       bg: 'bg-blue-50 dark:bg-blue-950/30',
       borderColor: 'border-l-blue-500',
+      clickable: false,
     },
     {
       label: 'Low Stock',
@@ -518,6 +1065,7 @@ function DashboardStats({ storeId }: { storeId: string }) {
       color: 'text-amber-600 dark:text-amber-400',
       bg: 'bg-amber-50 dark:bg-amber-950/30',
       borderColor: 'border-l-amber-500',
+      clickable: true,
     },
     {
       label: 'Outstanding Debt',
@@ -527,6 +1075,7 @@ function DashboardStats({ storeId }: { storeId: string }) {
       color: 'text-red-600 dark:text-red-400',
       bg: 'bg-red-50 dark:bg-red-950/30',
       borderColor: 'border-l-red-500',
+      clickable: false,
     },
   ];
 
@@ -544,17 +1093,32 @@ function DashboardStats({ storeId }: { storeId: string }) {
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {stats.map((stat) => {
         const Icon = stat.icon;
+        const isClickable = stat.clickable && onLowStockClick;
         return (
-          <Card key={stat.label} className={`border-l-4 ${stat.borderColor} py-0 bg-gradient-to-br from-card to-muted/30`}>
+          <Card
+            key={stat.label}
+            className={`border-l-4 ${stat.borderColor} py-0 bg-gradient-to-br from-card to-muted/30 ${
+              isClickable ? 'cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0' : ''
+            }`}
+            onClick={isClickable ? onLowStockClick : undefined}
+            role={isClickable ? 'button' : undefined}
+            tabIndex={isClickable ? 0 : undefined}
+            onKeyDown={isClickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onLowStockClick(); } } : undefined}
+          >
             <CardContent className="p-3 flex items-center gap-3">
               <div className={`shrink-0 p-2 rounded-lg bg-gradient-to-br ${stat.bg}`}>
                 <Icon className={`h-4 w-4 ${stat.color}`} />
               </div>
               <div className="min-w-0">
                 <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{stat.label}</p>
-                <p className={`text-sm sm:text-base font-bold ${stat.color} whitespace-nowrap`}>
-                  {stat.format === 'kes' ? formatKES(stat.value) : stat.value}
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className={`text-sm sm:text-base font-bold ${stat.color} whitespace-nowrap`}>
+                    {stat.format === 'kes' ? formatKES(stat.value) : stat.value}
+                  </p>
+                  {isClickable && (
+                    <span className="text-[9px] text-muted-foreground/50">→</span>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -829,6 +1393,7 @@ function POSTab() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
   const [cashReceived, setCashReceived] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<string>('');
+  const [lowStockAlertOpen, setLowStockAlertOpen] = useState(false);
   const currentStoreId = useAppStore((s) => s.currentStoreId);
 
   const cart = useCartStore();
@@ -970,7 +1535,7 @@ function POSTab() {
       {/* Product Grid */}
       <div className="flex-1 min-w-0 space-y-4">
         {/* Dashboard Stats */}
-        <DashboardStats storeId={currentStoreId} />
+        <DashboardStats storeId={currentStoreId} onLowStockClick={() => setLowStockAlertOpen(true)} />
 
         {/* Search and Category Chips */}
         <div className="space-y-3">
@@ -1420,6 +1985,13 @@ function POSTab() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Low Stock Alert Dialog */}
+      <LowStockAlertDialog
+        open={lowStockAlertOpen}
+        onOpenChange={setLowStockAlertOpen}
+        storeId={currentStoreId}
+      />
     </div>
   );
 }
