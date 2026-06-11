@@ -1,0 +1,587 @@
+   400→
+   401→        <Card className="border-l-4 border-l-red-500 bg-gradient-to-br from-card to-red-50/30 dark:to-red-900/10">
+   402→          <CardContent className="p-4">
+   403→            <div className="flex items-center gap-3">
+   404→              <div className="p-2.5 rounded-xl bg-gradient-to-br from-red-100 to-red-200 dark:from-red-900/40 dark:to-red-800/30">
+   405→                <TrendingDown className="h-5 w-5 text-red-600" />
+   406→              </div>
+   407→              <div className="flex-1 min-w-0">
+   408→                <p className="text-xs text-muted-foreground">Outstanding Debt</p>
+   409→                <p className="text-lg font-bold whitespace-nowrap">{formatKES(quickStats.outstandingDebt)}</p>
+   410→              </div>
+   411→            </div>
+   412→            <div className="flex items-center gap-1 mt-2">
+   413→              {changeIndicator(quickStats.debtChange)}
+   414→              <span className={`text-xs font-medium ${changeColor(quickStats.debtChange)}`}>
+   415→                {quickStats.debtChange >= 0 ? '+' : ''}{quickStats.debtChange}% vs last period
+   416→              </span>
+   417→            </div>
+   418→          </CardContent>
+   419→        </Card>
+   420→      </div>
+   421→
+   422→      {/* ================================================================== */}
+   423→      {/* Enhanced Report Generation Dashboard                                */}
+   424→      {/* ================================================================== */}
+   425→      <Card>
+   426→        <CardHeader className="pb-2">
+   427→          <div className="flex items-center justify-between">
+   428→            <div>
+   429→              <CardTitle className="text-base flex items-center gap-2">
+   430→                <Sparkles className="h-4 w-4 text-primary" /> Report Generation Dashboard
+   431→              </CardTitle>
+   432→              <CardDescription className="text-xs mt-1">Select a report type to generate and view detailed analytics</CardDescription>
+   433→            </div>
+   434→            <Badge variant="outline" className="text-[10px]">
+   435→              <Calendar className="mr-1 h-3 w-3" /> {dateRangeDisplay}
+   436→            </Badge>
+   437→          </div>
+   438→        </CardHeader>
+   439→        <CardContent>
+   440→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   441→            <ReportTypeCard
+   442→              icon={<BarChart3 className="h-5 w-5 text-primary" />}
+   443→              title="Sales Report"
+   444→              description="Revenue, transactions, payment methods, and trends analysis for the selected period."
+   445→              isActive={reportType === 'sales'}
+   446→              onClick={() => setReportType('sales')}
+   447→              colorClass="text-primary"
+   448→              lastGenerated="2 hours ago"
+   449→              previewThumbnail={
+   450→                <MiniSparkline data={salesSparkline} color="text-primary" height={20} />
+   451→              }
+   452→            />
+   453→            <ReportTypeCard
+   454→              icon={<Boxes className="h-5 w-5 text-orange-600" />}
+   455→              title="Inventory Report"
+   456→              description="Stock levels, category valuation, top sellers, and reorder alerts."
+   457→              isActive={reportType === 'inventory'}
+   458→              onClick={() => setReportType('inventory')}
+   459→              colorClass="text-orange-600"
+   460→              lastGenerated="1 day ago"
+   461→              previewThumbnail={
+   462→                <div className="flex gap-0.5">
+   463→                  {[65, 45, 80, 30, 55].map((h, i) => (
+   464→                    <div key={i} className="w-1.5 bg-orange-400 rounded-sm" style={{ height: `${h * 0.2}px` }} />
+   465→                  ))}
+   466→                </div>
+   467→              }
+   468→            />
+   469→          </div>
+   470→        </CardContent>
+   471→      </Card>
+   472→
+   473→      {/* ================================================================== */}
+   474→      {/* Enhanced Controls / Export Bar                                      */}
+   475→      {/* ================================================================== */}
+   476→      <Card>
+   477→        <CardContent className="p-4">
+   478→          <div className="flex flex-col sm:flex-row gap-3 items-end">
+   479→            {reportType === 'sales' && (
+   480→              <>
+   481→                <div className="space-y-1">
+   482→                  <Label className="text-sm">From</Label>
+   483→                  <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-40" />
+   484→                </div>
+   485→                <div className="space-y-1">
+   486→                  <Label className="text-sm">To</Label>
+   487→                  <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-40" />
+   488→                </div>
+   489→              </>
+   490→            )}
+   491→            <div className="ml-auto flex items-center gap-2 flex-wrap">
+   492→              <div className="text-right mr-2">
+   493→                <p className="text-xs text-muted-foreground">Estimated size</p>
+   494→                <div className="flex items-center gap-1.5">
+   495→                  <FileSpreadsheet className="h-4 w-4 text-green-600" />
+   496→                  <span className="text-sm font-medium">{estimatedFileSize}</span>
+   497→                </div>
+   498→              </div>
+   499→              <Button
+   500→                variant="outline"
+   501→                size="sm"
+   502→                className="h-8"
+   503→                onClick={() => toast.info('PDF export coming soon')}
+   504→              >
+   505→                <FileDown className="mr-1.5 h-3.5 w-3.5 text-red-500" /> PDF
+   506→              </Button>
+   507→              <Button
+   508→                variant="outline"
+   509→                size="sm"
+   510→                className="h-8"
+   511→                onClick={() => toast.info('Report scheduling coming soon')}
+   512→              >
+   513→                <Clock className="mr-1.5 h-3.5 w-3.5" /> Schedule
+   514→              </Button>
+   515→              <Button onClick={handleExport} size="sm" className="h-8 bg-primary hover:bg-primary/90 text-primary-foreground">
+   516→                <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+   517→              </Button>
+   518→            </div>
+   519→          </div>
+   520→        </CardContent>
+   521→      </Card>
+   522→
+   523→      {/* ================================================================== */}
+   524→      {/* Sales Report                                                        */}
+   525→      {/* ================================================================== */}
+   526→      {reportType === 'sales' && (
+   527→        <>
+   528→          {salesLoading ? (
+   529→            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   530→              {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+   531→            </div>
+   532→          ) : salesReport ? (
+   533→            <>
+   534→              {/* Sales Stats with Comparison - Enhanced */}
+   535→              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   536→                <Card className="border-l-4 border-l-green-500">
+   537→                  <CardContent className="p-4">
+   538→                    <p className="text-sm text-muted-foreground">Total Revenue</p>
+   539→                    <div className="flex items-center gap-2">
+   540→                      <p className="text-2xl font-bold text-green-600">{formatKES(salesReport.totalRevenue)}</p>
+   541→                      {salesComparison && changeIndicator(salesComparison.revenueChange)}
+   542→                    </div>
+   543→                    {salesComparison && (
+   544→                      <p className={`text-xs ${changeColor(salesComparison.revenueChange)}`}>
+   545→                        {salesComparison.revenueChange >= 0 ? '+' : ''}{salesComparison.revenueChange.toFixed(1)}% vs prev period
+   546→                      </p>
+   547→                    )}
+   548→                  </CardContent>
+   549→                </Card>
+   550→                <Card className="border-l-4 border-l-primary">
+   551→                  <CardContent className="p-4">
+   552→                    <p className="text-sm text-muted-foreground">Total Sales</p>
+   553→                    <div className="flex items-center gap-2">
+   554→                      <p className="text-2xl font-bold">{salesReport.transactionCount}</p>
+   555→                      {salesComparison && changeIndicator(salesComparison.transactionChange)}
+   556→                    </div>
+   557→                    {salesComparison && (
+   558→                      <p className={`text-xs ${changeColor(salesComparison.transactionChange)}`}>
+   559→                        {salesComparison.transactionChange >= 0 ? '+' : ''}{salesComparison.transactionChange.toFixed(1)}% vs prev period
+   560→                      </p>
+   561→                    )}
+   562→                  </CardContent>
+   563→                </Card>
+   564→                <Card className="border-l-4 border-l-orange-500">
+   565→                  <CardContent className="p-4">
+   566→                    <p className="text-sm text-muted-foreground">Total Tax</p>
+   567→                    <p className="text-2xl font-bold">{formatKES(salesReport.totalTax)}</p>
+   568→                  </CardContent>
+   569→                </Card>
+   570→                <Card className="border-l-4 border-l-purple-500">
+   571→                  <CardContent className="p-4">
+   572→                    <div className="flex items-center gap-2">
+   573→                      <div className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/30">
+   574→                        <ShoppingCart className="h-3.5 w-3.5 text-purple-600" />
+   575→                      </div>
+   576→                      <p className="text-sm text-muted-foreground">Avg Transaction</p>
+   577→                    </div>
+   578→                    <p className="text-2xl font-bold mt-1">{formatKES(salesReport.avgTransactionValue)}</p>
+   579→                    <p className="text-[10px] text-muted-foreground mt-0.5">Per transaction average</p>
+   580→                  </CardContent>
+   581→                </Card>
+   582→              </div>
+   583→
+   584→              {/* Sales Trend Sparkline */}
+   585→              <Card>
+   586→                <CardHeader className="pb-2">
+   587→                  <CardTitle className="text-base flex items-center gap-2">
+   588→                    <TrendingUp className="h-4 w-4" /> Sales Trend
+   589→                  </CardTitle>
+   590→                </CardHeader>
+   591→                <CardContent>
+   592→                  <div className="flex items-center gap-4">
+   593→                    <MiniSparkline data={salesSparkline} color="text-green-600" height={40} />
+   594→                    <div>
+   595→                      <p className="text-sm font-medium">Revenue Trend</p>
+   596→                      <p className="text-xs text-muted-foreground">Last 12 periods — showing upward momentum</p>
+   597→                      <div className="flex items-center gap-1 mt-1">
+   598→                        <ArrowUpRight className="h-3 w-3 text-green-600" />
+   599→                        <span className="text-xs text-green-600 font-medium">+15.2% growth rate</span>
+   600→                      </div>
+   601→                    </div>
+   602→                  </div>
+   603→                </CardContent>
+   604→              </Card>
+   605→
+   606→              {/* Sales by Payment Method - Enhanced with Stacked Bar */}
+   607→              {(salesReport.byPaymentMethod || []).length > 0 && (
+   608→                <Card>
+   609→                  <CardHeader className="pb-2">
+   610→                    <CardTitle className="text-base flex items-center gap-2">
+   611→                      <CreditCard className="h-4 w-4" /> Sales by Payment Method
+   612→                    </CardTitle>
+   613→                  </CardHeader>
+   614→                  <CardContent>
+   615→                    {/* Stacked horizontal bar */}
+   616→                    {(() => {
+   617→                      const byPM = salesReport.byPaymentMethod || [];
+   618→                      const totalAmount = byPM.reduce((s, p) => s + p.amount, 0) || 1;
+   619→                      const pmColors: Record<string, string> = {
+   620→                        CASH: 'bg-green-500', MPESA: 'bg-primary', DEBT: 'bg-orange-500', SPLIT: 'bg-purple-500',
+   621→                      };
+   622→                      const pmColorsHex: Record<string, string> = {
+   623→                        CASH: '#22c55e', MPESA: '#3b82f6', DEBT: '#f97316', SPLIT: '#a855f7',
+   624→                      };
+   625→                      return (
+   626→                        <>
+   627→                          {/* Stacked Bar */}
+   628→                          <div className="h-6 bg-muted/30 rounded-full overflow-hidden flex mb-4">
+   629→                            {byPM.map((pm, i) => {
+   630→                              const pct = (pm.amount / totalAmount) * 100;
+   631→                              return (
+   632→                                <div
+   633→                                  key={i}
+   634→                                  className={`h-full transition-all duration-500 ${pmColors[pm.method] || 'bg-gray-400'}`}
+   635→                                  style={{ width: `${pct}%` }}
+   636→                                  title={`${pm.method}: ${formatKES(pm.amount)} (${pct.toFixed(1)}%)`}
+   637→                                />
+   638→                              );
+   639→                            })}
+   640→                          </div>
+   641→
+   642→                          {/* Method breakdown */}
+   643→                          <div className="space-y-4">
+   644→                            {byPM.map((pm, i) => {
+   645→                              const maxAmount = Math.max(...byPM.map(p => p.amount), 1);
+   646→                              const pct = (pm.amount / maxAmount) * 100;
+   647→                              const colorClass = pmColors[pm.method] || 'bg-gray-500';
+   648→                              return (
+   649→                                <div key={i} className="space-y-2">
+   650→                                  <div className="flex items-center justify-between text-sm">
+   651→                                    <div className="flex items-center gap-2">
+   652→                                      <div className={`w-6 h-6 rounded-md flex items-center justify-center ${colorClass} text-white`}>
+   653→                                        {paymentMethodIcons[pm.method] || <CreditCard className="h-3.5 w-3.5" />}
+   654→                                      </div>
+   655→                                      <span className="font-medium">{pm.method}</span>
+   656→                                      <Badge variant="outline" className="text-[9px]">{pm.count} txns</Badge>
+   657→                                    </div>
+   658→                                    <div className="text-right">
+   659→                                      <span className="font-medium">{formatKES(pm.amount)}</span>
+   660→                                      <span className="text-xs text-muted-foreground ml-2">
+   661→                                        {((pm.amount / totalAmount) * 100).toFixed(0)}%
+   662→                                      </span>
+   663→                                    </div>
+   664→                                  </div>
+   665→                                  <div className="h-3 bg-muted/30 rounded-full overflow-hidden">
+   666→                                    <div
+   667→                                      className={`h-full rounded-full transition-all duration-500 ${colorClass}`}
+   668→                                      style={{ width: `${pct}%` }}
+   669→                                    />
+   670→                                  </div>
+   671→                                </div>
+   672→                              );
+   673→                            })}
+   674→                          </div>
+   675→                        </>
+   676→                      );
+   677→                    })()}
+   678→                  </CardContent>
+   679→                </Card>
+   680→              )}
+   681→
+   682→              {/* Top 5 Products by Revenue - Enhanced */}
+   683→              {topProducts.length > 0 && (
+   684→                <Card>
+   685→                  <CardHeader className="pb-2">
+   686→                    <CardTitle className="text-base flex items-center gap-2">
+   687→                      <TrendingUp className="h-4 w-4" /> Top 5 Products by Revenue
+   688→                    </CardTitle>
+   689→                  </CardHeader>
+   690→                  <CardContent>
+   691→                    <div className="space-y-3 max-h-72 overflow-y-auto pr-2 custom-scrollbar">
+   692→                      {topProducts.slice(0, 5).map((product, i) => {
+   693→                        const maxRevenue = Math.max(...topProducts.map(p => p.revenue), 1);
+   694→                        const pct = (product.revenue / maxRevenue) * 100;
+   695→                        const rankColors = [
+   696→                          'bg-yellow-500 text-white',
+   697→                          'bg-gray-400 text-white',
+   698→                          'bg-amber-600 text-white',
+   699→                        ];
+   700→                        return (
+   701→                          <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/30 transition-colors">
+   702→                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+   703→                              i < 3 ? rankColors[i] : 'bg-muted text-muted-foreground'
+   704→                            }`}>
+   705→                              {i + 1}
+   706→                            </div>
+   707→                            <div className="flex-1 min-w-0">
+   708→                              <div className="flex items-center justify-between mb-1">
+   709→                                <span className="text-sm font-medium truncate">{product.productName}</span>
+   710→                                <span className="text-sm font-bold ml-2">{formatKES(product.revenue)}</span>
+   711→                              </div>
+   712→                              <div className="flex items-center gap-2">
+   713→                                <div className="flex-1">
+   714→                                  <div className="h-2 bg-muted/30 rounded-full overflow-hidden">
+   715→                                    <div
+   716→                                      className="h-full rounded-full bg-gradient-to-r from-primary/60 to-primary transition-all duration-500"
+   717→                                      style={{ width: `${pct}%` }}
+   718→                                    />
+   719→                                  </div>
+   720→                                </div>
+   721→                                <span className="text-[10px] text-muted-foreground whitespace-nowrap">{product.quantitySold} sold</span>
+   722→                              </div>
+   723→                            </div>
+   724→                          </div>
+   725→                        );
+   726→                      })}
+   727→                    </div>
+   728→                  </CardContent>
+   729→                </Card>
+   730→              )}
+   731→            </>
+   732→          ) : (
+   733→            <Card>
+   734→              <CardContent className="p-8 text-center text-muted-foreground">
+   735→                <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
+   736→                <p>No sales data available for the selected period</p>
+   737→                <p className="text-xs mt-1">Try adjusting the date range</p>
+   738→              </CardContent>
+   739→            </Card>
+   740→          )}
+   741→        </>
+   742→      )}
+   743→
+   744→      {/* ================================================================== */}
+   745→      {/* Inventory Report                                                    */}
+   746→      {/* ================================================================== */}
+   747→      {reportType === 'inventory' && (
+   748→        <>
+   749→          {inventoryLoading ? (
+   750→            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   751→              {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+   752→            </div>
+   753→          ) : inventoryReport ? (
+   754→            <>
+   755→              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   756→                <Card className="border-l-4 border-l-primary">
+   757→                  <CardContent className="p-4">
+   758→                    <div className="flex items-center gap-2 mb-1">
+   759→                      <Package className="h-4 w-4 text-primary" />
+   760→                      <p className="text-sm text-muted-foreground">Total Products</p>
+   761→                    </div>
+   762→                    <p className="text-2xl font-bold">{inventoryReport.totalProducts}</p>
+   763→                  </CardContent>
+   764→                </Card>
+   765→                <Card className="border-l-4 border-l-amber-500">
+   766→                  <CardContent className="p-4">
+   767→                    <div className="flex items-center gap-2 mb-1">
+   768→                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+   769→                      <p className="text-sm text-muted-foreground">Low Stock</p>
+   770→                    </div>
+   771→                    <p className="text-2xl font-bold text-amber-600">{inventoryReport.lowStockCount}</p>
+   772→                  </CardContent>
+   773→                </Card>
+   774→                <Card className="border-l-4 border-l-red-500">
+   775→                  <CardContent className="p-4">
+   776→                    <div className="flex items-center gap-2 mb-1">
+   777→                      <TrendingDown className="h-4 w-4 text-red-500" />
+   778→                      <p className="text-sm text-muted-foreground">Out of Stock</p>
+   779→                    </div>
+   780→                    <p className="text-2xl font-bold text-red-600">{inventoryReport.outOfStockCount}</p>
+   781→                  </CardContent>
+   782→                </Card>
+   783→                <Card className="border-l-4 border-l-green-500">
+   784→                  <CardContent className="p-4">
+   785→                    <div className="flex items-center gap-2 mb-1">
+   786→                      <DollarSign className="h-4 w-4 text-green-500" />
+   787→                      <p className="text-sm text-muted-foreground">Inventory Value</p>
+   788→                    </div>
+   789→                    <p className="text-2xl font-bold whitespace-nowrap">{formatKES(inventoryReport.totalInventoryValue)}</p>
+   790→                  </CardContent>
+   791→                </Card>
+   792→              </div>
+   793→
+   794→              {/* Stock Health & Turnover */}
+   795→              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+   796→                <Card>
+   797→                  <CardHeader className="pb-2">
+   798→                    <CardTitle className="text-base flex items-center gap-2">
+   799→                      <HeartPulse className="h-4 w-4 text-green-600" /> Stock Health
+   800→                    </CardTitle>
+   801→                  </CardHeader>
+   802→                  <CardContent>
+   803→                    <div className="flex items-center gap-4">
+   804→                      <div className="relative w-20 h-20">
+   805→                        <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
+   806→                          <circle cx="40" cy="40" r="35" fill="none" stroke="currentColor" className="text-muted/30" strokeWidth="6" />
+   807→                          <circle
+   808→                            cx="40" cy="40" r="35" fill="none"
+   809→                            stroke={stockHealth >= 70 ? '#22c55e' : stockHealth >= 40 ? '#eab308' : '#ef4444'}
+   810→                            strokeWidth="6"
+   811→                            strokeLinecap="round"
+   812→                            strokeDasharray={`${(stockHealth / 100) * 220} 220`}
+   813→                          />
+   814→                        </svg>
+   815→                        <div className="absolute inset-0 flex items-center justify-center">
+   816→                          <span className="text-lg font-bold">{stockHealth}%</span>
+   817→                        </div>
+   818→                      </div>
+   819→                      <div>
+   820→                        <p className="text-sm font-medium">
+   821→                          {stockHealth >= 70 ? 'Healthy' : stockHealth >= 40 ? 'Needs Attention' : 'Critical'}
+   822→                        </p>
+   823→                        <p className="text-xs text-muted-foreground">
+   824→                          {inventoryReport.totalProducts - inventoryReport.lowStockCount - inventoryReport.outOfStockCount} of {inventoryReport.totalProducts} products in good stock
+   825→                        </p>
+   826→                        <div className="flex items-center gap-2 mt-2">
+   827→                          <Badge variant="outline" className="text-[9px] bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
+   828→                            Good: {inventoryReport.totalProducts - inventoryReport.lowStockCount - inventoryReport.outOfStockCount}
+   829→                          </Badge>
+   830→                          <Badge variant="outline" className="text-[9px] bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800">
+   831→                            Low: {inventoryReport.lowStockCount}
+   832→                          </Badge>
+   833→                          <Badge variant="outline" className="text-[9px] bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800">
+   834→                            Out: {inventoryReport.outOfStockCount}
+   835→                          </Badge>
+   836→                        </div>
+   837→                      </div>
+   838→                    </div>
+   839→                  </CardContent>
+   840→                </Card>
+   841→
+   842→                <Card>
+   843→                  <CardHeader className="pb-2">
+   844→                    <CardTitle className="text-base flex items-center gap-2">
+   845→                      <RotateCcw className="h-4 w-4 text-primary" /> Inventory Turnover
+   846→                    </CardTitle>
+   847→                  </CardHeader>
+   848→                  <CardContent>
+   849→                    <div className="space-y-3">
+   850→                      <div className="flex items-center gap-3">
+   851→                        <div className="p-3 rounded-xl bg-primary/10">
+   852→                          <span className="text-2xl font-bold text-primary">{inventoryTurnover || '—'}</span>
+   853→                        </div>
+   854→                        <div>
+   855→                          <p className="text-sm font-medium">Turnover Ratio</p>
+   856→                          <p className="text-xs text-muted-foreground">
+   857→                            {Number(inventoryTurnover) >= 2
+   858→                              ? 'Excellent — inventory moves quickly'
+   859→                              : Number(inventoryTurnover) >= 1
+   860→                              ? 'Good — healthy stock rotation'
+   861→                              : 'Low — consider reducing stock levels'}
+   862→                          </p>
+   863→                        </div>
+   864→                      </div>
+   865→                      <Separator />
+   866→                      <div className="grid grid-cols-2 gap-2 text-xs">
+   867→                        <div className="p-2 rounded-lg bg-muted/30">
+   868→                          <p className="text-muted-foreground">Revenue</p>
+   869→                          <p className="font-medium">{salesReport ? formatKES(salesReport.totalRevenue) : '—'}</p>
+   870→                        </div>
+   871→                        <div className="p-2 rounded-lg bg-muted/30">
+   872→                          <p className="text-muted-foreground">Inventory Value</p>
+   873→                          <p className="font-medium">{formatKES(inventoryReport.totalInventoryValue)}</p>
+   874→                        </div>
+   875→                      </div>
+   876→                    </div>
+   877→                  </CardContent>
+   878→                </Card>
+   879→              </div>
+   880→
+   881→              {/* Inventory Valuation by Category - Pie Chart */}
+   882→              {categoryBreakdown.length > 0 && (
+   883→                <Card>
+   884→                  <CardHeader className="pb-2">
+   885→                    <CardTitle className="text-base flex items-center gap-2">
+   886→                      <PieChart className="h-4 w-4" /> Inventory Valuation by Category
+   887→                    </CardTitle>
+   888→                  </CardHeader>
+   889→                  <CardContent>
+   890→                    <ConicPieChart segments={pieSegments} />
+   891→                    <Separator className="my-4" />
+   892→                    <div className="space-y-3">
+   893→                      {categoryBreakdown.map((cat, i) => {
+   894→                        const colors = [
+   895→                          'bg-blue-500', 'bg-green-500', 'bg-orange-500',
+   896→                          'bg-purple-500', 'bg-teal-500', 'bg-pink-500',
+   897→                          'bg-amber-500', 'bg-cyan-500', 'bg-lime-500', 'bg-rose-500',
+   898→                        ];
+   899→                        return (
+   900→                          <div key={i} className="space-y-1">
+   901→                            <div className="flex items-center justify-between text-sm">
+   902→                              <div className="flex items-center gap-2">
+   903→                                <div className={`w-3 h-3 rounded-sm ${colors[i % colors.length]}`} />
+   904→                                <span className="font-medium">{cat.name}</span>
+   905→                                <Badge variant="outline" className="text-[9px]">{cat.productCount} items</Badge>
+   906→                              </div>
+   907→                              <span className="font-medium">{formatKES(cat.totalValue)}</span>
+   908→                            </div>
+   909→                            <HorizontalBar
+   910→                              value={cat.totalValue}
+   911→                              maxValue={maxCategoryValue}
+   912→                              colorClass={colors[i % colors.length]}
+   913→                              height="h-2"
+   914→                            />
+   915→                          </div>
+   916→                        );
+   917→                      })}
+   918→                      <Separator />
+   919→                      <div className="flex items-center justify-between text-sm font-bold">
+   920→                        <span>Total Inventory Value</span>
+   921→                        <span>{formatKES(inventoryReport.totalInventoryValue)}</span>
+   922→                      </div>
+   923→                    </div>
+   924→                  </CardContent>
+   925→                </Card>
+   926→              )}
+   927→
+   928→              {/* Top Products by Revenue */}
+   929→              {topProducts.length > 0 && (
+   930→                <Card>
+   931→                  <CardHeader className="pb-2">
+   932→                    <CardTitle className="text-base flex items-center gap-2">
+   933→                      <TrendingUp className="h-4 w-4" /> Top Products by Revenue
+   934→                    </CardTitle>
+   935→                  </CardHeader>
+   936→                  <CardContent>
+   937→                    <div className="space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+   938→                      {topProducts.map((product, i) => {
+   939→                        const maxRevenue = Math.max(...topProducts.map(p => p.revenue), 1);
+   940→                        const pct = (product.revenue / maxRevenue) * 100;
+   941→                        const rankColors = [
+   942→                          'bg-yellow-500 text-white',
+   943→                          'bg-gray-400 text-white',
+   944→                          'bg-amber-600 text-white',
+   945→                        ];
+   946→                        return (
+   947→                          <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/30 transition-colors">
+   948→                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+   949→                              i < 3 ? rankColors[i] : 'bg-muted text-muted-foreground'
+   950→                            }`}>
+   951→                              {i + 1}
+   952→                            </div>
+   953→                            <div className="flex-1 min-w-0">
+   954→                              <div className="flex items-center justify-between mb-1">
+   955→                                <span className="text-sm font-medium truncate">{product.productName}</span>
+   956→                                <span className="text-sm font-bold ml-2">{formatKES(product.revenue)}</span>
+   957→                              </div>
+   958→                              <div className="h-2 bg-muted/30 rounded-full overflow-hidden">
+   959→                                <div
+   960→                                  className="h-full rounded-full bg-gradient-to-r from-primary/60 to-primary transition-all duration-500"
+   961→                                  style={{ width: `${pct}%` }}
+   962→                                />
+   963→                              </div>
+   964→                            </div>
+   965→                          </div>
+   966→                        );
+   967→                      })}
+   968→                    </div>
+   969→                  </CardContent>
+   970→                </Card>
+   971→              )}
+   972→            </>
+   973→          ) : (
+   974→            <Card>
+   975→              <CardContent className="p-8 text-center text-muted-foreground">
+   976→                <Boxes className="h-12 w-12 mx-auto mb-3 opacity-50" />
+   977→                <p>No inventory data available</p>
+   978→              </CardContent>
+   979→            </Card>
+   980→          )}
+   981→        </>
+   982→      )}
+   983→    </div>
+   984→  );
+   985→}
+   986→

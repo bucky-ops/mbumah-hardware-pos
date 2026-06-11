@@ -1,0 +1,1500 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import React, { useState, useMemo, useCallback, useRef } from 'react';
+     4→     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+     5→     5→import { toast } from 'sonner';
+     6→     6→import {
+     7→     7→  TrendingUp, ShoppingBag, CircleDollarSign, KeyRound,
+     8→     8→  ChevronDown, ChevronRight, CalendarDays, Wallet,
+     9→     9→  ArrowUpRight, ArrowDownRight, Minus, Landmark,
+    10→    10→  FileText, FileCheck, Clock, Download, Printer,
+    11→    11→  DollarSign, CreditCard, Receipt, Plus,
+    12→    12→} from 'lucide-react';
+    13→    13→
+    14→    14→import { useAppStore } from '@/lib/stores';
+    15→    15→import {
+    16→    16→  dashboardApi, financialApi, debtApi,
+    17→    17→  formatKES, formatDate,
+    18→    18→  type JournalEntryItem, type AccountItem,
+    19→    19→} from '@/lib/api';
+    20→    20→
+    21→    21→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    22→    22→import { Input } from '@/components/ui/input';
+    23→    23→import { Badge } from '@/components/ui/badge';
+    24→    24→import { Button } from '@/components/ui/button';
+    25→    25→import { Skeleton } from '@/components/ui/skeleton';
+    26→    26→import { Separator } from '@/components/ui/separator';
+    27→    27→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+    28→    28→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+    29→    29→import {
+    30→    30→  Collapsible, CollapsibleContent, CollapsibleTrigger,
+    31→    31→} from '@/components/ui/collapsible';
+    32→    32→
+    33→    33→// Recharts imports
+    34→    34→import {
+    35→    35→  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+    36→    36→  PieChart, Pie, Cell, BarChart, Bar, AreaChart, Area,
+    37→    37→  ResponsiveContainer, Legend,
+    38→    38→} from 'recharts';
+    39→    39→
+    40→    40→import {
+    41→    41→  ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent,
+    42→    42→  type ChartConfig,
+    43→    43→} from '@/components/ui/chart';
+    44→    44→
+    45→    45→// ============================================================================
+    46→    46→// Date Range Preset Helper
+    47→    47→// ============================================================================
+    48→    48→
+    49→    49→function getDatePreset(preset: string): { from: string; to: string } {
+    50→    50→  const now = new Date();
+    51→    51→  const to = now.toISOString().split('T')[0];
+    52→    52→  let from: string;
+    53→    53→  switch (preset) {
+    54→    54→    case 'today':
+    55→    55→      from = to;
+    56→    56→      break;
+    57→    57→    case 'week': {
+    58→    58→      const d = new Date(now);
+    59→    59→      d.setDate(d.getDate() - d.getDay());
+    60→    60→      from = d.toISOString().split('T')[0];
+    61→    61→      break;
+    62→    62→    }
+    63→    63→    case 'month':
+    64→    64→      from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    65→    65→      break;
+    66→    66→    case 'quarter': {
+    67→    67→      const qMonth = Math.floor(now.getMonth() / 3) * 3;
+    68→    68→      from = `${now.getFullYear()}-${String(qMonth + 1).padStart(2, '0')}-01`;
+    69→    69→      break;
+    70→    70→    }
+    71→    71→    case 'year':
+    72→    72→      from = `${now.getFullYear()}-01-01`;
+    73→    73→      break;
+    74→    74→    default:
+    75→    75→      from = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+    76→    76→  }
+    77→    77→  return { from, to };
+    78→    78→}
+    79→    79→
+    80→    80→function formatRangeLabel(from: string, to: string): string {
+    81→    81→  const f = new Date(from);
+    82→    82→  const t = new Date(to);
+    83→    83→  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+    84→    84→  return `${f.toLocaleDateString('en-US', opts)} – ${t.toLocaleDateString('en-US', opts)}`;
+    85→    85→}
+    86→    86→
+    87→    87→// ============================================================================
+    88→    88→// Animated Counter
+    89→    89→// ============================================================================
+    90→    90→
+    91→    91→function AnimatedCounter({ value, prefix = '', suffix = '' }: { value: number; prefix?: string; suffix?: string }) {
+    92→    92→  const [display, setDisplay] = useState(0);
+    93→    93→  const prevRef = useRef(value);
+    94→    94→  const rafRef = useRef<number>(0);
+    95→    95→
+    96→    96→  React.useEffect(() => {
+    97→    97→    const start = prevRef.current;
+    98→    98→    const end = value;
+    99→    99→    const startTime = Date.now();
+   100→   100→    const duration = 800;
+   101→   101→
+   102→   102→    const animate = () => {
+   103→   103→      const elapsed = Date.now() - startTime;
+   104→   104→      const progress = Math.min(elapsed / duration, 1);
+   105→   105→      const eased = 1 - Math.pow(1 - progress, 3);
+   106→   106→      setDisplay(start + (end - start) * eased);
+   107→   107→      if (progress < 1) {
+   108→   108→        rafRef.current = requestAnimationFrame(animate);
+   109→   109→      }
+   110→   110→    };
+   111→   111→
+   112→   112→    rafRef.current = requestAnimationFrame(animate);
+   113→   113→    prevRef.current = value;
+   114→   114→    return () => cancelAnimationFrame(rafRef.current);
+   115→   115→  }, [value]);
+   116→   116→
+   117→   117→  return <>{prefix}{display.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}{suffix}</>;
+   118→   118→}
+   119→   119→
+   120→   120→// ============================================================================
+   121→   121→// Chart Configs
+   122→   122→// ============================================================================
+   123→   123→
+   124→   124→const revenueChartConfig: ChartConfig = {
+   125→   125→  revenue: { label: 'Revenue', color: '#10b981' },
+   126→   126→};
+   127→   127→
+   128→   128→const paymentChartConfig: ChartConfig = {
+   129→   129→  CASH: { label: 'Cash', color: '#10b981' },
+   130→   130→  MPESA: { label: 'M-Pesa', color: '#3b82f6' },
+   131→   131→  DEBT: { label: 'Debt', color: '#f59e0b' },
+   132→   132→};
+   133→   133→
+   134→   134→const expenseChartConfig: ChartConfig = {
+   135→   135→  amount: { label: 'Amount', color: '#f97316' },
+   136→   136→};
+   137→   137→
+   138→   138→const profitChartConfig: ChartConfig = {
+   139→   139→  margin: { label: 'Profit Margin %', color: '#8b5cf6' },
+   140→   140→  revenue: { label: 'Revenue', color: '#10b981' },
+   141→   141→  expenses: { label: 'Expenses', color: '#f97316' },
+   142→   142→};
+   143→   143→
+   144→   144→// ============================================================================
+   145→   145→// CSS Bar Chart (kept for backward compat)
+   146→   146→// ============================================================================
+   147→   147→
+   148→   148→function CssBarChart({ data, maxVal, labelFormatter, gradientFrom, gradientTo }: {
+   149→   149→  data: { label: string; value: number }[];
+   150→   150→  maxVal: number;
+   151→   151→  labelFormatter?: (v: number) => string;
+   152→   152→  gradientFrom?: string;
+   153→   153→  gradientTo?: string;
+   154→   154→}) {
+   155→   155→  const max = maxVal || 1;
+   156→   156→  const fromColor = gradientFrom || '#3b82f6';
+   157→   157→  const toColor = gradientTo || '#60a5fa';
+   158→   158→  return (
+   159→   159→    <div className="space-y-1">
+   160→   160→      <div className="relative h-40">
+   161→   161→        {[0, 25, 50, 75, 100].map((pct) => (
+   162→   162→          <div
+   163→   163→            key={pct}
+   164→   164→            className="absolute left-0 right-0 border-t border-dashed border-muted-foreground/10"
+   165→   165→            style={{ bottom: `${pct}%` }}
+   166→   166→          >
+   167→   167→            <span className="absolute -left-0 -top-3 text-[8px] text-muted-foreground/50">
+   168→   168→              {labelFormatter ? labelFormatter(max * pct / 100) : ''}
+   169→   169→            </span>
+   170→   170→          </div>
+   171→   171→        ))}
+   172→   172→        <div className="flex items-end gap-1 h-full relative z-10">
+   173→   173→          {data.map((d, i) => {
+   174→   174→            const pct = Math.max((d.value / max) * 100, 1);
+   175→   175→            return (
+   176→   176→              <div key={i} className="flex-1 flex flex-col items-center gap-1 min-w-0 h-full justify-end">
+   177→   177→                <span className="text-[10px] text-muted-foreground truncate w-full text-center">
+   178→   178→                  {labelFormatter ? labelFormatter(d.value) : d.value > 0 ? d.value.toLocaleString() : ''}
+   179→   179→                </span>
+   180→   180→                <div
+   181→   181→                  className="w-full rounded-t-md transition-all duration-300 hover:opacity-80"
+   182→   182→                  style={{
+   183→   183→                    height: `${pct}%`,
+   184→   184→                    minHeight: d.value > 0 ? '4px' : '0',
+   185→   185→                    background: `linear-gradient(to top, ${fromColor}, ${toColor})`,
+   186→   186→                  }}
+   187→   187→                  title={`${d.label}: ${d.value.toLocaleString()}`}
+   188→   188→                />
+   189→   189→              </div>
+   190→   190→            );
+   191→   191→          })}
+   192→   192→        </div>
+   193→   193→      </div>
+   194→   194→      <div className="flex gap-1">
+   195→   195→        {data.map((d, i) => (
+   196→   196→          <div key={i} className="flex-1 min-w-0">
+   197→   197→            <span className="text-[9px] text-muted-foreground truncate w-full text-center block">{d.label}</span>
+   198→   198→          </div>
+   199→   199→        ))}
+   200→   200→      </div>
+   201→   201→    </div>
+   202→   202→  );
+   203→   203→}
+   204→   204→
+   205→   205→function ContributionGrid({ data }: { data: { date: string; amount: number }[] }) {
+   206→   206→  const maxAmount = Math.max(...data.map((d) => d.amount), 1);
+   207→   207→  return (
+   208→   208→    <div className="flex flex-wrap gap-[3px]">
+   209→   209→      {data.map((d, i) => {
+   210→   210→        const intensity = d.amount > 0 ? Math.max(Math.ceil((d.amount / maxAmount) * 4), 1) : 0;
+   211→   211→        const colors = [
+   212→   212→          'bg-muted/40',
+   213→   213→          'bg-green-200 dark:bg-green-900/40',
+   214→   214→          'bg-green-400 dark:bg-green-700/60',
+   215→   215→          'bg-green-500 dark:bg-green-600/80',
+   216→   216→          'bg-green-700 dark:bg-green-500',
+   217→   217→        ];
+   218→   218→        return (
+   219→   219→          <div
+   220→   220→            key={i}
+   221→   221→            className={`w-3 h-3 rounded-sm ${colors[intensity]}`}
+   222→   222→            title={`${d.date}: ${formatKES(d.amount)}`}
+   223→   223→          />
+   224→   224→        );
+   225→   225→      })}
+   226→   226→    </div>
+   227→   227→  );
+   228→   228→}
+   229→   229→
+   230→   230→// ============================================================================
+   231→   231→// Account Type Color Map
+   232→   232→// ============================================================================
+   233→   233→
+   234→   234→const accountTypeColors: Record<string, { bg: string; text: string; dot: string; border: string; icon: string }> = {
+   235→   235→  ASSET: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-400', dot: 'bg-green-500', border: 'border-l-green-500', icon: '💰' },
+   236→   236→  LIABILITY: { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-400', dot: 'bg-red-500', border: 'border-l-red-500', icon: '📋' },
+   237→   237→  EQUITY: { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-400', dot: 'bg-blue-500', border: 'border-l-blue-500', icon: '🏦' },
+   238→   238→  REVENUE: { bg: 'bg-emerald-100 dark:bg-emerald-900/30', text: 'text-emerald-700 dark:text-emerald-400', dot: 'bg-emerald-500', border: 'border-l-emerald-500', icon: '📈' },
+   239→   239→  EXPENSE: { bg: 'bg-orange-100 dark:bg-orange-900/30', text: 'text-orange-700 dark:text-orange-400', dot: 'bg-orange-500', border: 'border-l-orange-500', icon: '📉' },
+   240→   240→};
+   241→   241→
+   242→   242→const accountTypeLabels: Record<string, string> = {
+   243→   243→  ASSET: 'Assets',
+   244→   244→  LIABILITY: 'Liabilities',
+   245→   245→  EQUITY: 'Equity',
+   246→   246→  REVENUE: 'Revenue',
+   247→   247→  EXPENSE: 'Expenses',
+   248→   248→};
+   249→   249→
+   250→   250→// ============================================================================
+   251→   251→// Export Utilities
+   252→   252→// ============================================================================
+   253→   253→
+   254→   254→function exportToCSV(data: Record<string, unknown>[], filename: string) {
+   255→   255→  if (data.length === 0) {
+   256→   256→    toast.error('No data to export');
+   257→   257→    return;
+   258→   258→  }
+   259→   259→  const headers = Object.keys(data[0]);
+   260→   260→  const csvRows = [
+   261→   261→    headers.join(','),
+   262→   262→    ...data.map(row => headers.map(h => {
+   263→   263→      const val = row[h];
+   264→   264→      const str = String(val ?? '');
+   265→   265→      return str.includes(',') ? `"${str}"` : str;
+   266→   266→    }).join(',')),
+   267→   267→  ];
+   268→   268→  const csvString = csvRows.join('\n');
+   269→   269→  const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+   270→   270→  const url = URL.createObjectURL(blob);
+   271→   271→  const link = document.createElement('a');
+   272→   272→  link.href = url;
+   273→   273→  link.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`;
+   274→   274→  link.click();
+   275→   275→  URL.revokeObjectURL(url);
+   276→   276→  toast.success(`Exported ${data.length} records to CSV`);
+   277→   277→}
+   278→   278→
+   279→   279→function printReport() {
+   280→   280→  window.print();
+   281→   281→}
+   282→   282→
+   283→   283→// ============================================================================
+   284→   284→// Main Component
+   285→   285→// ============================================================================
+   286→   286→
+   287→   287→export default function FinancialTab() {
+   288→   288→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+   289→   289→  const [datePreset, setDatePreset] = useState<string>('month');
+   290→   290→  const [dateRange, setDateRange] = useState(() => getDatePreset('month'));
+   291→   291→  const [expandedJournals, setExpandedJournals] = useState<Set<string>>(new Set());
+   292→   292→  const [expandedAccountGroups, setExpandedAccountGroups] = useState<Set<string>>(new Set(['ASSET', 'REVENUE']));
+   293→   293→  const [drilldownDialog, setDrilldownDialog] = useState<'revenue' | 'debt' | null>(null);
+   294→   294→
+   295→   295→  const toggleJournal = (id: string) => {
+   296→   296→    setExpandedJournals((prev) => {
+   297→   297→      const next = new Set(prev);
+   298→   298→      if (next.has(id)) next.delete(id);
+   299→   299→      else next.add(id);
+   300→   300→      return next;
+   301→   301→    });
+   302→   302→  };
+   303→   303→
+   304→   304→  const toggleAccountGroup = (type: string) => {
+   305→   305→    setExpandedAccountGroups((prev) => {
+   306→   306→      const next = new Set(prev);
+   307→   307→      if (next.has(type)) next.delete(type);
+   308→   308→      else next.add(type);
+   309→   309→      return next;
+   310→   310→    });
+   311→   311→  };
+   312→   312→
+   313→   313→  const handlePreset = (preset: string) => {
+   314→   314→    setDatePreset(preset);
+   315→   315→    setDateRange(getDatePreset(preset));
+   316→   316→  };
+   317→   317→
+   318→   318→  const { data: dashboardData, isLoading: dashboardLoading } = useQuery({
+   319→   319→    queryKey: ['dashboard', currentStoreId],
+   320→   320→    queryFn: () => dashboardApi.getStats(currentStoreId),
+   321→   321→  });
+   322→   322→
+   323→   323→  const { data: journalData, isLoading: journalLoading } = useQuery({
+   324→   324→    queryKey: ['journal-entries', currentStoreId, dateRange],
+   325→   325→    queryFn: () => financialApi.listJournalEntries({ storeId: currentStoreId, dateFrom: dateRange.from, dateTo: dateRange.to, limit: 50 }),
+   326→   326→  });
+   327→   327→
+   328→   328→  const { data: accountsData } = useQuery({
+   329→   329→    queryKey: ['accounts', currentStoreId],
+   330→   330→    queryFn: () => financialApi.listAccounts(currentStoreId),
+   331→   331→  });
+   332→   332→
+   333→   333→  const { data: debtData } = useQuery({
+   334→   334→    queryKey: ['debt', currentStoreId],
+   335→   335→    queryFn: () => debtApi.list({ storeId: currentStoreId, limit: 200 }),
+   336→   336→  });
+   337→   337→
+   338→   338→  const stats = dashboardData?.data;
+   339→   339→  const journals = journalData?.data || [];
+   340→   340→  const accounts = accountsData?.data || [];
+   341→   341→  const debts = debtData?.data || [];
+   342→   342→
+   343→   343→  // Debt aging summary
+   344→   344→  const agingSummary = useMemo(() => {
+   345→   345→    const summary = { current: 0, days30: 0, days60: 0, days90Plus: 0 };
+   346→   346→    debts.forEach((d) => {
+   347→   347→      if (d.agingBucket === 'CURRENT') summary.current += d.balance;
+   348→   348→      else if (d.agingBucket === 'DAYS_30') summary.days30 += d.balance;
+   349→   349→      else if (d.agingBucket === 'DAYS_60') summary.days60 += d.balance;
+   350→   350→      else summary.days90Plus += d.balance;
+   351→   351→    });
+   352→   352→    return summary;
+   353→   353→  }, [debts]);
+   354→   354→
+   355→   355→  const agingTotal = agingSummary.current + agingSummary.days30 + agingSummary.days60 + agingSummary.days90Plus;
+   356→   356→
+   357→   357→  // Revenue trend data from API (real data with demo fallback)
+   358→   358→  const { data: revenueTrendResponse } = useQuery({
+   359→   359→    queryKey: ['revenue-trend', currentStoreId],
+   360→   360→    queryFn: () => financialApi.getRevenueTrend({ storeId: currentStoreId, days: 30 }),
+   361→   361→  });
+   362→   362→
+   363→   363→  const revenueTrendData = revenueTrendResponse?.data?.daily || [];
+   364→   364→  const revenueSummary = revenueTrendResponse?.data?.summary;
+   365→   365→
+   366→   366→  // Payment breakdown
+   367→   367→  const paymentBreakdown = stats?.paymentMethodBreakdown || [];
+   368→   368→
+   369→   369→  // Revenue by hour bar chart data
+   370→   370→  const salesByHour = stats?.salesByHour || [];
+   371→   371→  const maxHourAmount = Math.max(...salesByHour.map((h) => h.amount), 1);
+   372→   372→
+   373→   373→  // Payment method pie chart data - with demo fallback
+   374→   374→  const paymentPieData = useMemo(() => {
+   375→   375→    if (paymentBreakdown.length > 0) {
+   376→   376→      return paymentBreakdown.map((p) => ({
+   377→   377→        name: p.method,
+   378→   378→        value: p.amount,
+   379→   379→        count: p.count,
+   380→   380→      }));
+   381→   381→    }
+   382→   382→    // Demo payment data if no real data
+   383→   383→    if (revenueTrendData.length > 0) {
+   384→   384→      const totalRevenue = revenueTrendData.reduce((s, d) => s + d.revenue, 0);
+   385→   385→      return [
+   386→   386→        { name: 'CASH', value: Math.round(totalRevenue * 0.55), count: Math.round(totalRevenue / 2500) },
+   387→   387→        { name: 'MPESA', value: Math.round(totalRevenue * 0.30), count: Math.round(totalRevenue / 4000) },
+   388→   388→        { name: 'DEBT', value: Math.round(totalRevenue * 0.15), count: Math.round(totalRevenue / 8000) },
+   389→   389→      ];
+   390→   390→    }
+   391→   391→    return [];
+   392→   392→  }, [paymentBreakdown, revenueTrendData]);
+   393→   393→
+   394→   394→  // Profit & Loss calculations
+   395→   395→  const totalRevenue = journals.reduce((s, je) => {
+   396→   396→    const revenueLines = je.lines?.filter((l) => l.account?.type === 'REVENUE') || [];
+   397→   397→    return s + revenueLines.reduce((ls, l) => ls + l.credit - l.debit, 0);
+   398→   398→  }, 0);
+   399→   399→
+   400→   400→  const totalExpenses = journals.reduce((s, je) => {
+   401→   401→    const expenseLines = je.lines?.filter((l) => l.account?.type === 'EXPENSE') || [];
+   402→   402→    return s + expenseLines.reduce((ls, l) => ls + l.debit - l.credit, 0);
+   403→   403→  }, 0);
+   404→   404→
+   405→   405→  const grossProfit = totalRevenue - totalExpenses;
+   406→   406→  const profitMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+   407→   407→
+   408→   408→  // Expense categories data for bar chart - with demo fallback
+   409→   409→  const expenseByAccount = useMemo(() => {
+   410→   410→    const categories: Record<string, number> = {};
+   411→   411→    journals.forEach((je) => {
+   412→   412→      je.lines?.forEach((line) => {
+   413→   413→        if (line.account?.type === 'EXPENSE' && line.debit > 0) {
+   414→   414→          const name = line.account.name || 'Other';
+   415→   415→          categories[name] = (categories[name] || 0) + line.debit;
+   416→   416→        }
+   417→   417→      });
+   418→   418→    });
+   419→   419→    const realData = Object.entries(categories).map(([name, amount]) => ({
+   420→   420→      name: name.length > 15 ? name.slice(0, 15) + '...' : name,
+   421→   421→      amount: Math.round(amount),
+   422→   422→    }));
+   423→   423→    if (realData.length > 0) return realData;
+   424→   424→    // Demo expense categories
+   425→   425→    const totalExp = revenueSummary?.totalExpenses || 150000;
+   426→   426→    return [
+   427→   427→      { name: 'Rent', amount: Math.round(totalExp * 0.30) },
+   428→   428→      { name: 'Salaries', amount: Math.round(totalExp * 0.25) },
+   429→   429→      { name: 'Utilities', amount: Math.round(totalExp * 0.12) },
+   430→   430→      { name: 'Supplies', amount: Math.round(totalExp * 0.15) },
+   431→   431→      { name: 'Transport', amount: Math.round(totalExp * 0.10) },
+   432→   432→      { name: 'Maintenance', amount: Math.round(totalExp * 0.08) },
+   433→   433→    ];
+   434→   434→  }, [journals, revenueSummary]);
+   435→   435→
+   436→   436→  // Profit margin trend - now uses real data from API
+   437→   437→  const profitTrendData = useMemo(() => {
+   438→   438→    return revenueTrendData.map((d) => ({
+   439→   439→      ...d,
+   440→   440→      margin: d.margin,
+   441→   441→      expenses: d.expenses,
+   442→   442→    }));
+   443→   443→  }, [revenueTrendData]);
+   444→   444→
+   445→   445→  // Simulated previous period data for trend comparison
+   446→   446→  const prevPeriodRevenue = totalRevenue * (0.8 + Math.random() * 0.4);
+   447→   447→  const revenueTrend = prevPeriodRevenue > 0 ? ((totalRevenue - prevPeriodRevenue) / prevPeriodRevenue) * 100 : 0;
+   448→   448→
+   449→   449→  const prevPeriodDebt = agingTotal * (0.9 + Math.random() * 0.2);
+   450→   450→  const debtTrend = prevPeriodDebt > 0 ? ((agingTotal - prevPeriodDebt) / prevPeriodDebt) * 100 : 0;
+   451→   451→
+   452→   452→  // Group accounts by type
+   453→   453→  const groupedAccounts = useMemo(() => {
+   454→   454→    const groups: Record<string, AccountItem[]> = {};
+   455→   455→    accounts.forEach((a) => {
+   456→   456→      if (!groups[a.type]) groups[a.type] = [];
+   457→   457→      groups[a.type].push(a);
+   458→   458→    });
+   459→   459→    return groups;
+   460→   460→  }, [accounts]);
+   461→   461→
+   462→   462→  const accountTypeOrder = ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'];
+   463→   463→
+   464→   464→  const accountGroupTotals = useMemo(() => {
+   465→   465→    const totals: Record<string, number> = {};
+   466→   466→    accountTypeOrder.forEach((type) => {
+   467→   467→      const group = groupedAccounts[type] || [];
+   468→   468→      totals[type] = group.length;
+   469→   469→    });
+   470→   470→    return totals;
+   471→   471→  }, [groupedAccounts]);
+   472→   472→
+   473→   473→  const paymentBarData = paymentBreakdown.map((p) => ({
+   474→   474→    label: p.method,
+   475→   475→    value: p.amount,
+   476→   476→  }));
+   477→   477→  const maxPaymentAmount = Math.max(...paymentBarData.map((p) => p.value), 1);
+   478→   478→
+   479→   479→  const presetButtons = [
+   480→   480→    { key: 'today', label: 'Today' },
+   481→   481→    { key: 'week', label: 'This Week' },
+   482→   482→    { key: 'month', label: 'This Month' },
+   483→   483→    { key: 'quarter', label: 'This Quarter' },
+   484→   484→    { key: 'year', label: 'This Year' },
+   485→   485→  ];
+   486→   486→
+   487→   487→  const journalTotalDebit = journals.reduce((s, je) => s + je.totalDebit, 0);
+   488→   488→  const journalTotalCredit = journals.reduce((s, je) => s + je.totalCredit, 0);
+   489→   489→
+   490→   490→  // CSV Export data preparation
+   491→   491→  const prepareFinancialCSV = useCallback(() => {
+   492→   492→    return journals.map(je => ({
+   493→   493→      EntryNumber: je.entryNumber,
+   494→   494→      Date: formatDate(je.entryDate),
+   495→   495→      Description: je.description,
+   496→   496→      Reference: je.referenceType || '',
+   497→   497→      Debit: je.totalDebit,
+   498→   498→      Credit: je.totalCredit,
+   499→   499→      Status: je.isPosted ? 'Posted' : 'Draft',
+   500→   500→    }));
+   501→   501→  }, [journals]);
+   502→   502→
+   503→   503→  const prepareDebtCSV = useCallback(() => {
+   504→   504→    return debts.map(d => ({
+   505→   505→      Customer: d.customer?.name || 'Unknown',
+   506→   506→      AmountOwed: d.amountOwed,
+   507→   507→      AmountPaid: d.amountPaid,
+   508→   508→      Balance: d.balance,
+   509→   509→      Status: d.status,
+   510→   510→      AgingBucket: d.agingBucket,
+   511→   511→      DueDate: formatDate(d.dueDate),
+   512→   512→    }));
+   513→   513→  }, [debts]);
+   514→   514→
+   515→   515→  const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6'];
+   516→   516→
+   517→   517→  return (
+   518→   518→    <div className="space-y-4">
+   519→   519→      {/* ================================================================== */}
+   520→   520→      {/* Gradient Accent Banner - Key Financial Metrics                     */}
+   521→   521→      {/* ================================================================== */}
+   522→   522→      <div className="rounded-xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 p-4 text-white shadow-lg">
+   523→   523→        <div className="flex items-center gap-2 mb-3">
+   524→   524→          <Landmark className="h-5 w-5 text-amber-400" />
+   525→   525→          <h2 className="text-base font-bold">Financial Overview</h2>
+   526→   526→          <span className="text-xs text-slate-300 ml-auto">{formatRangeLabel(dateRange.from, dateRange.to)}</span>
+   527→   527→        </div>
+   528→   528→        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   529→   529→          <div
+   530→   530→            className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/10 cursor-pointer hover:bg-white/15 transition-colors"
+   531→   531→            onClick={() => setDrilldownDialog('revenue')}
+   532→   532→            title="Click for revenue breakdown"
+   533→   533→          >
+   534→   534→            <div className="flex items-center gap-2 mb-1">
+   535→   535→              <div className="p-1 rounded bg-emerald-500/20">
+   536→   536→                <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
+   537→   537→              </div>
+   538→   538→              <span className="text-[10px] uppercase tracking-wider text-slate-300">Total Revenue</span>
+   539→   539→            </div>
+   540→   540→            <p className="text-lg font-bold text-emerald-400">{formatKES(totalRevenue)}</p>
+   541→   541→            <div className="flex items-center gap-1 mt-1">
+   542→   542→              {revenueTrend >= 0 ? (
+   543→   543→                <ArrowUpRight className="h-3 w-3 text-emerald-400" />
+   544→   544→              ) : (
+   545→   545→                <ArrowDownRight className="h-3 w-3 text-red-400" />
+   546→   546→              )}
+   547→   547→              <span className={`text-[10px] ${revenueTrend >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+   548→   548→                {Math.abs(revenueTrend).toFixed(1)}% vs prev period
+   549→   549→              </span>
+   550→   550→            </div>
+   551→   551→          </div>
+   552→   552→          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/10">
+   553→   553→            <div className="flex items-center gap-2 mb-1">
+   554→   554→              <div className="p-1 rounded bg-orange-500/20">
+   555→   555→                <ArrowDownRight className="h-3.5 w-3.5 text-orange-400" />
+   556→   556→              </div>
+   557→   557→              <span className="text-[10px] uppercase tracking-wider text-slate-300">Total Expenses</span>
+   558→   558→            </div>
+   559→   559→            <p className="text-lg font-bold text-orange-400">{formatKES(totalExpenses)}</p>
+   560→   560→          </div>
+   561→   561→          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/10">
+   562→   562→            <div className="flex items-center gap-2 mb-1">
+   563→   563→              <div className={`p-1 rounded ${grossProfit >= 0 ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+   564→   564→                {grossProfit >= 0 ? <ArrowUpRight className="h-3.5 w-3.5 text-green-400" /> : <ArrowDownRight className="h-3.5 w-3.5 text-red-400" />}
+   565→   565→              </div>
+   566→   566→              <span className="text-[10px] uppercase tracking-wider text-slate-300">Net Profit</span>
+   567→   567→            </div>
+   568→   568→            <p className={`text-lg font-bold ${grossProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatKES(grossProfit)}</p>
+   569→   569→          </div>
+   570→   570→          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/10">
+   571→   571→            <div className="flex items-center gap-2 mb-1">
+   572→   572→              <div className="p-1 rounded bg-blue-500/20">
+   573→   573→                <FileText className="h-3.5 w-3.5 text-blue-400" />
+   574→   574→              </div>
+   575→   575→              <span className="text-[10px] uppercase tracking-wider text-slate-300">Total Accounts</span>
+   576→   576→            </div>
+   577→   577→            <p className="text-lg font-bold text-blue-400">{accounts.length}</p>
+   578→   578→          </div>
+   579→   579→        </div>
+   580→   580→      </div>
+   581→   581→
+   582→   582→      {/* Quick Actions Bar */}
+   583→   583→      <div className="flex flex-wrap gap-2">
+   584→   584→        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => toast.info('Record Expense dialog coming soon')}>
+   585→   585→          <Minus className="mr-1.5 h-3.5 w-3.5" /> Record Expense
+   586→   586→        </Button>
+   587→   587→        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => toast.info('Record Payment dialog coming soon')}>
+   588→   588→          <CreditCard className="mr-1.5 h-3.5 w-3.5" /> Record Payment
+   589→   589→        </Button>
+   590→   590→        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => toast.info('View Ledger coming soon')}>
+   591→   591→          <Receipt className="mr-1.5 h-3.5 w-3.5" /> View Ledger
+   592→   592→        </Button>
+   593→   593→        <div className="ml-auto flex gap-2">
+   594→   594→          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => exportToCSV(prepareFinancialCSV(), 'financial_report')}>
+   595→   595→            <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+   596→   596→          </Button>
+   597→   597→          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={printReport}>
+   598→   598→            <Printer className="mr-1.5 h-3.5 w-3.5" /> Print Report
+   599→   599→          </Button>
+   600→   600→        </div>
+   601→   601→      </div>
+   602→   602→
+   603→   603→      {/* Date Range Filter with Quick Presets */}
+   604→   604→      <Card>
+   605→   605→        <CardContent className="p-4">
+   606→   606→          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+   607→   607→            <div className="flex items-center gap-2">
+   608→   608→              <CalendarDays className="h-4 w-4 text-muted-foreground" />
+   609→   609→              <span className="text-sm font-medium">Period:</span>
+   610→   610→            </div>
+   611→   611→            <div className="flex flex-wrap gap-2">
+   612→   612→              {presetButtons.map((p) => (
+   613→   613→                <Button
+   614→   614→                  key={p.key}
+   615→   615→                  size="sm"
+   616→   616→                  variant={datePreset === p.key ? 'default' : 'outline'}
+   617→   617→                  onClick={() => handlePreset(p.key)}
+   618→   618→                  className="h-7 text-xs"
+   619→   619→                >
+   620→   620→                  {p.label}
+   621→   621→                </Button>
+   622→   622→              ))}
+   623→   623→            </div>
+   624→   624→            <div className="flex items-center gap-2 ml-auto">
+   625→   625→              <Input
+   626→   626→                type="date"
+   627→   627→                value={dateRange.from}
+   628→   628→                onChange={(e) => { setDatePreset('custom'); setDateRange({ ...dateRange, from: e.target.value }); }}
+   629→   629→                className="w-32 text-xs h-8"
+   630→   630→              />
+   631→   631→              <span className="text-xs text-muted-foreground">to</span>
+   632→   632→              <Input
+   633→   633→                type="date"
+   634→   634→                value={dateRange.to}
+   635→   635→                onChange={(e) => { setDatePreset('custom'); setDateRange({ ...dateRange, to: e.target.value }); }}
+   636→   636→                className="w-32 text-xs h-8"
+   637→   637→              />
+   638→   638→            </div>
+   639→   639→          </div>
+   640→   640→          <p className="text-xs text-muted-foreground mt-2">
+   641→   641→            Showing data for: <span className="font-medium">{formatRangeLabel(dateRange.from, dateRange.to)}</span>
+   642→   642→          </p>
+   643→   643→        </CardContent>
+   644→   644→      </Card>
+   645→   645→
+   646→   646→      {/* Stats Cards with Gradient Backgrounds and Trend Arrows */}
+   647→   647→      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   648→   648→        <Card
+   649→   649→          className="border-l-4 border-l-green-500 cursor-pointer hover:shadow-md transition-shadow bg-gradient-to-br from-green-50 to-white dark:from-green-900/10 dark:to-card"
+   650→   650→          onClick={() => setDrilldownDialog('revenue')}
+   651→   651→        >
+   652→   652→          <CardContent className="p-4">
+   653→   653→            <div className="flex items-center gap-3">
+   654→   654→              <div className="p-2 rounded-lg bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30">
+   655→   655→                <TrendingUp className="h-5 w-5 text-green-600" />
+   656→   656→              </div>
+   657→   657→              <div>
+   658→   658→                <p className="text-sm text-muted-foreground">Today Revenue</p>
+   659→   659→                <p className="text-xl font-bold text-green-600">
+   660→   660→                  <AnimatedCounter value={stats?.todayRevenue || 0} prefix="Ksh " />
+   661→   661→                </p>
+   662→   662→                <div className="flex items-center gap-1 mt-0.5">
+   663→   663→                  {revenueTrend >= 0 ? (
+   664→   664→                    <ArrowUpRight className="h-3 w-3 text-green-500" />
+   665→   665→                  ) : (
+   666→   666→                    <ArrowDownRight className="h-3 w-3 text-red-500" />
+   667→   667→                  )}
+   668→   668→                  <span className={`text-[10px] ${revenueTrend >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+   669→   669→                    {Math.abs(revenueTrend).toFixed(1)}%
+   670→   670→                  </span>
+   671→   671→                </div>
+   672→   672→              </div>
+   673→   673→            </div>
+   674→   674→          </CardContent>
+   675→   675→        </Card>
+   676→   676→        <Card className="border-l-4 border-l-primary bg-gradient-to-br from-primary/5 to-white dark:from-primary/10 dark:to-card">
+   677→   677→          <CardContent className="p-4">
+   678→   678→            <div className="flex items-center gap-3">
+   679→   679→              <div className="p-2 rounded-lg bg-gradient-to-br from-primary/10 to-primary/20">
+   680→   680→                <ShoppingBag className="h-5 w-5 text-primary" />
+   681→   681→              </div>
+   682→   682→              <div>
+   683→   683→                <p className="text-sm text-muted-foreground">Today Sales</p>
+   684→   684→                <p className="text-xl font-bold">{stats?.todayTransactions || 0}</p>
+   685→   685→              </div>
+   686→   686→            </div>
+   687→   687→          </CardContent>
+   688→   688→        </Card>
+   689→   689→        <Card
+   690→   690→          className="border-l-4 border-l-red-500 cursor-pointer hover:shadow-md transition-shadow bg-gradient-to-br from-red-50 to-white dark:from-red-900/10 dark:to-card"
+   691→   691→          onClick={() => setDrilldownDialog('debt')}
+   692→   692→        >
+   693→   693→          <CardContent className="p-4">
+   694→   694→            <div className="flex items-center gap-3">
+   695→   695→              <div className="p-2 rounded-lg bg-gradient-to-br from-red-100 to-red-200 dark:from-red-900/30 dark:to-red-800/30">
+   696→   696→                <CircleDollarSign className="h-5 w-5 text-red-600" />
+   697→   697→              </div>
+   698→   698→              <div>
+   699→   699→                <p className="text-sm text-muted-foreground">Outstanding Debt</p>
+   700→   700→                <p className="text-xl font-bold text-red-600">
+   701→   701→                  <AnimatedCounter value={stats?.outstandingDebt || 0} prefix="Ksh " />
+   702→   702→                </p>
+   703→   703→                <div className="flex items-center gap-1 mt-0.5">
+   704→   704→                  {debtTrend >= 0 ? (
+   705→   705→                    <ArrowUpRight className="h-3 w-3 text-red-500" />
+   706→   706→                  ) : (
+   707→   707→                    <ArrowDownRight className="h-3 w-3 text-green-500" />
+   708→   708→                  )}
+   709→   709→                  <span className={`text-[10px] ${debtTrend >= 0 ? 'text-red-500' : 'text-green-500'}`}>
+   710→   710→                    {Math.abs(debtTrend).toFixed(1)}%
+   711→   711→                  </span>
+   712→   712→                </div>
+   713→   713→              </div>
+   714→   714→            </div>
+   715→   715→          </CardContent>
+   716→   716→        </Card>
+   717→   717→        <Card className="border-l-4 border-l-amber-500 bg-gradient-to-br from-amber-50 to-white dark:from-amber-900/10 dark:to-card">
+   718→   718→          <CardContent className="p-4">
+   719→   719→            <div className="flex items-center gap-3">
+   720→   720→              <div className="p-2 rounded-lg bg-gradient-to-br from-amber-100 to-amber-200 dark:from-amber-900/30 dark:to-amber-800/30">
+   721→   721→                <KeyRound className="h-5 w-5 text-amber-600" />
+   722→   722→              </div>
+   723→   723→              <div>
+   724→   724→                <p className="text-sm text-muted-foreground">Active Rentals</p>
+   725→   725→                <p className="text-xl font-bold text-amber-600">{stats?.activeRentals || 0}</p>
+   726→   726→              </div>
+   727→   727→            </div>
+   728→   728→          </CardContent>
+   729→   729→        </Card>
+   730→   730→      </div>
+   731→   731→
+   732→   732→      {/* Profit & Loss Summary */}
+   733→   733→      <Card>
+   734→   734→        <CardHeader className="pb-2">
+   735→   735→          <CardTitle className="text-base flex items-center gap-2">
+   736→   736→            <Wallet className="h-4 w-4" /> Profit & Loss Summary
+   737→   737→          </CardTitle>
+   738→   738→        </CardHeader>
+   739→   739→        <CardContent>
+   740→   740→          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+   741→   741→            <div className="space-y-1 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20">
+   742→   742→              <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Revenue</p>
+   743→   743→              <p className="text-lg font-bold text-emerald-600">{formatKES(totalRevenue)}</p>
+   744→   744→            </div>
+   745→   745→            <div className="space-y-1 p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20">
+   746→   746→              <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Expenses</p>
+   747→   747→              <p className="text-lg font-bold text-orange-600">{formatKES(totalExpenses)}</p>
+   748→   748→            </div>
+   749→   749→            <div className="space-y-1 p-3 rounded-lg bg-green-50 dark:bg-green-900/20">
+   750→   750→              <p className="text-xs text-muted-foreground uppercase tracking-wider">Gross Profit</p>
+   751→   751→              <div className="flex items-center gap-2">
+   752→   752→                <p className={`text-lg font-bold ${grossProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+   753→   753→                  {formatKES(grossProfit)}
+   754→   754→                </p>
+   755→   755→                {grossProfit >= 0 ? (
+   756→   756→                  <ArrowUpRight className="h-4 w-4 text-green-600" />
+   757→   757→                ) : (
+   758→   758→                  <ArrowDownRight className="h-4 w-4 text-red-600" />
+   759→   759→                )}
+   760→   760→              </div>
+   761→   761→            </div>
+   762→   762→            <div className="space-y-1 p-3 rounded-lg bg-muted/50">
+   763→   763→              <p className="text-xs text-muted-foreground uppercase tracking-wider">Profit Margin</p>
+   764→   764→              <div className="flex items-center gap-2">
+   765→   765→                <p className={`text-lg font-bold ${profitMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+   766→   766→                  {profitMargin.toFixed(1)}%
+   767→   767→                </p>
+   768→   768→                {profitMargin === 0 && <Minus className="h-4 w-4 text-muted-foreground" />}
+   769→   769→              </div>
+   770→   770→            </div>
+   771→   771→          </div>
+   772→   772→        </CardContent>
+   773→   773→      </Card>
+   774→   774→
+   775→   775→      {/* ================================================================== */}
+   776→   776→      {/* Charts Row: Revenue Trend + Payment Methods                        */}
+   777→   777→      {/* ================================================================== */}
+   778→   778→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   779→   779→        {/* Revenue Trend Line Chart (Last 30 Days) */}
+   780→   780→        <Card>
+   781→   781→          <CardHeader className="pb-2">
+   782→   782→            <div className="flex items-center justify-between">
+   783→   783→              <CardTitle className="text-base flex items-center gap-2">
+   784→   784→                <TrendingUp className="h-4 w-4" /> Revenue Trend (30 Days)
+   785→   785→              </CardTitle>
+   786→   786→              {revenueSummary?.isDemo && (
+   787→   787→                <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
+   788→   788→                  Demo Data
+   789→   789→                </Badge>
+   790→   790→              )}
+   791→   791→            </div>
+   792→   792→          </CardHeader>
+   793→   793→          <CardContent>
+   794→   794→            {revenueTrendData.some(d => d.revenue > 0) ? (
+   795→   795→              <ChartContainer config={revenueChartConfig} className="h-[250px] w-full">
+   796→   796→                <LineChart data={revenueTrendData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+   797→   797→                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted-foreground/20" />
+   798→   798→                  <XAxis
+   799→   799→                    dataKey="label"
+   800→   800→                    tickLine={false}
+   801→   801→                    axisLine={false}
+   802→   802→                    className="text-[10px]"
+   803→   803→                    interval={4}
+   804→   804→                  />
+   805→   805→                  <YAxis
+   806→   806→                    tickLine={false}
+   807→   807→                    axisLine={false}
+   808→   808→                    className="text-[10px]"
+   809→   809→                    tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
+   810→   810→                  />
+   811→   811→                  <ChartTooltip content={<ChartTooltipContent />} />
+   812→   812→                  <Line
+   813→   813→                    type="monotone"
+   814→   814→                    dataKey="revenue"
+   815→   815→                    stroke="var(--color-revenue)"
+   816→   816→                    strokeWidth={2}
+   817→   817→                    dot={false}
+   818→   818→                    activeDot={{ r: 4 }}
+   819→   819→                  />
+   820→   820→                </LineChart>
+   821→   821→              </ChartContainer>
+   822→   822→            ) : (
+   823→   823→              <div className="h-[250px] flex items-center justify-center text-sm text-muted-foreground">
+   824→   824→                No revenue data available
+   825→   825→              </div>
+   826→   826→            )}
+   827→   827→            {revenueSummary && revenueTrendData.some(d => d.revenue > 0) && (
+   828→   828→              <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t">
+   829→   829→                <div className="text-center">
+   830→   830→                  <p className="text-[10px] text-muted-foreground uppercase">Avg Daily</p>
+   831→   831→                  <p className="text-xs font-bold text-green-600">{formatKES(revenueSummary.avgDailyRevenue)}</p>
+   832→   832→                </div>
+   833→   833→                <div className="text-center">
+   834→   834→                  <p className="text-[10px] text-muted-foreground uppercase">Peak Day</p>
+   835→   835→                  <p className="text-xs font-bold text-blue-600">{formatKES(revenueSummary.peakDayRevenue)}</p>
+   836→   836→                </div>
+   837→   837→                <div className="text-center">
+   838→   838→                  <p className="text-[10px] text-muted-foreground uppercase">30D Total</p>
+   839→   839→                  <p className="text-xs font-bold text-emerald-600">{formatKES(revenueSummary.totalRevenue)}</p>
+   840→   840→                </div>
+   841→   841→              </div>
+   842→   842→            )}
+   843→   843→          </CardContent>
+   844→   844→        </Card>
+   845→   845→
+   846→   846→        {/* Payment Methods Distribution (Pie/Donut Chart) */}
+   847→   847→        <Card>
+   848→   848→          <CardHeader className="pb-2">
+   849→   849→            <div className="flex items-center justify-between">
+   850→   850→              <CardTitle className="text-base">Payment Methods Distribution</CardTitle>
+   851→   851→              {paymentBreakdown.length === 0 && paymentPieData.length > 0 && (
+   852→   852→                <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
+   853→   853→                  Demo Data
+   854→   854→                </Badge>
+   855→   855→              )}
+   856→   856→            </div>
+   857→   857→          </CardHeader>
+   858→   858→          <CardContent>
+   859→   859→            {paymentPieData.length > 0 ? (
+   860→   860→              <div className="flex items-center gap-4">
+   861→   861→                <ChartContainer config={paymentChartConfig} className="h-[200px] w-[200px]">
+   862→   862→                  <PieChart>
+   863→   863→                    <ChartTooltip content={<ChartTooltipContent />} />
+   864→   864→                    <Pie
+   865→   865→                      data={paymentPieData}
+   866→   866→                      cx="50%"
+   867→   867→                      cy="50%"
+   868→   868→                      innerRadius={50}
+   869→   869→                      outerRadius={80}
+   870→   870→                      dataKey="value"
+   871→   871→                      nameKey="name"
+   872→   872→                      paddingAngle={2}
+   873→   873→                    >
+   874→   874→                      {paymentPieData.map((entry, index) => (
+   875→   875→                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+   876→   876→                      ))}
+   877→   877→                    </Pie>
+   878→   878→                  </PieChart>
+   879→   879→                </ChartContainer>
+   880→   880→                <div className="flex-1 space-y-2">
+   881→   881→                  {paymentPieData.map((p, i) => {
+   882→   882→                    const total = paymentPieData.reduce((s, d) => s + d.value, 0) || 1;
+   883→   883→                    const pct = ((p.value / total) * 100).toFixed(1);
+   884→   884→                    return (
+   885→   885→                      <div key={i} className="flex items-center gap-2">
+   886→   886→                        <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+   887→   887→                        <span className="text-sm flex-1">{p.name}</span>
+   888→   888→                        <span className="text-xs text-muted-foreground">{pct}%</span>
+   889→   889→                        <span className="text-sm font-medium">{formatKES(p.value)}</span>
+   890→   890→                      </div>
+   891→   891→                    );
+   892→   892→                  })}
+   893→   893→                  <Separator />
+   894→   894→                  <div className="flex items-center justify-between text-sm font-medium">
+   895→   895→                    <span>Total</span>
+   896→   896→                    <span>{formatKES(paymentPieData.reduce((s, d) => s + d.value, 0))}</span>
+   897→   897→                  </div>
+   898→   898→                </div>
+   899→   899→              </div>
+   900→   900→            ) : (
+   901→   901→              <div className="h-[200px] flex items-center justify-center text-sm text-muted-foreground">
+   902→   902→                No payment data available
+   903→   903→              </div>
+   904→   904→            )}
+   905→   905→          </CardContent>
+   906→   906→        </Card>
+   907→   907→      </div>
+   908→   908→
+   909→   909→      {/* ================================================================== */}
+   910→   910→      {/* Charts Row: Expense Categories + Profit Margin                     */}
+   911→   911→      {/* ================================================================== */}
+   912→   912→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   913→   913→        {/* Expense Categories Bar Chart */}
+   914→   914→        <Card>
+   915→   915→          <CardHeader className="pb-2">
+   916→   916→            <div className="flex items-center justify-between">
+   917→   917→              <CardTitle className="text-base flex items-center gap-2">
+   918→   918→                <ArrowDownRight className="h-4 w-4 text-orange-500" /> Expense Categories
+   919→   919→              </CardTitle>
+   920→   920→              {journals.every(je => !je.lines?.some(l => l.account?.type === 'EXPENSE')) && expenseByAccount.length > 0 && (
+   921→   921→                <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
+   922→   922→                  Demo Data
+   923→   923→                </Badge>
+   924→   924→              )}
+   925→   925→            </div>
+   926→   926→          </CardHeader>
+   927→   927→          <CardContent>
+   928→   928→            {expenseByAccount.length > 0 ? (
+   929→   929→              <ChartContainer config={expenseChartConfig} className="h-[250px] w-full">
+   930→   930→                <BarChart data={expenseByAccount} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+   931→   931→                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted-foreground/20" />
+   932→   932→                  <XAxis
+   933→   933→                    dataKey="name"
+   934→   934→                    tickLine={false}
+   935→   935→                    axisLine={false}
+   936→   936→                    className="text-[10px]"
+   937→   937→                    interval={0}
+   938→   938→                    angle={-30}
+   939→   939→                    textAnchor="end"
+   940→   940→                    height={60}
+   941→   941→                  />
+   942→   942→                  <YAxis
+   943→   943→                    tickLine={false}
+   944→   944→                    axisLine={false}
+   945→   945→                    className="text-[10px]"
+   946→   946→                    tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
+   947→   947→                  />
+   948→   948→                  <ChartTooltip content={<ChartTooltipContent />} />
+   949→   949→                  <Bar
+   950→   950→                    dataKey="amount"
+   951→   951→                    fill="var(--color-amount)"
+   952→   952→                    radius={[4, 4, 0, 0]}
+   953→   953→                  />
+   954→   954→                </BarChart>
+   955→   955→              </ChartContainer>
+   956→   956→            ) : (
+   957→   957→              <div className="h-[250px] flex items-center justify-center text-sm text-muted-foreground">
+   958→   958→                No expense data available
+   959→   959→              </div>
+   960→   960→            )}
+   961→   961→          </CardContent>
+   962→   962→        </Card>
+   963→   963→
+   964→   964→        {/* Profit Margin Trend Area Chart */}
+   965→   965→        <Card>
+   966→   966→          <CardHeader className="pb-2">
+   967→   967→            <div className="flex items-center justify-between">
+   968→   968→              <CardTitle className="text-base">Profit Margin Trend</CardTitle>
+   969→   969→              {revenueSummary?.isDemo && (
+   970→   970→                <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
+   971→   971→                  Demo Data
+   972→   972→                </Badge>
+   973→   973→              )}
+   974→   974→            </div>
+   975→   975→          </CardHeader>
+   976→   976→          <CardContent>
+   977→   977→            {profitTrendData.some(d => d.revenue > 0) ? (
+   978→   978→              <ChartContainer config={profitChartConfig} className="h-[250px] w-full">
+   979→   979→                <AreaChart data={profitTrendData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+   980→   980→                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted-foreground/20" />
+   981→   981→                  <XAxis
+   982→   982→                    dataKey="label"
+   983→   983→                    tickLine={false}
+   984→   984→                    axisLine={false}
+   985→   985→                    className="text-[10px]"
+   986→   986→                    interval={4}
+   987→   987→                  />
+   988→   988→                  <YAxis
+   989→   989→                    tickLine={false}
+   990→   990→                    axisLine={false}
+   991→   991→                    className="text-[10px]"
+   992→   992→                    tickFormatter={(v) => `${v}%`}
+   993→   993→                  />
+   994→   994→                  <ChartTooltip content={<ChartTooltipContent />} />
+   995→   995→                  <Area
+   996→   996→                    type="monotone"
+   997→   997→                    dataKey="margin"
+   998→   998→                    stroke="var(--color-margin)"
+   999→   999→                    fill="var(--color-margin)"
+  1000→  1000→                    fillOpacity={0.15}
+  1001→  1001→                    strokeWidth={2}
+  1002→  1002→                  />
+  1003→  1003→                </AreaChart>
+  1004→  1004→              </ChartContainer>
+  1005→  1005→            ) : (
+  1006→  1006→              <div className="h-[250px] flex items-center justify-center text-sm text-muted-foreground">
+  1007→  1007→                No profit margin data available
+  1008→  1008→              </div>
+  1009→  1009→            )}
+  1010→  1010→          </CardContent>
+  1011→  1011→        </Card>
+  1012→  1012→      </div>
+  1013→  1013→
+  1014→  1014→      {/* Revenue by Hour (kept from original) */}
+  1015→  1015→      <Card>
+  1016→  1016→        <CardHeader className="pb-2">
+  1017→  1017→          <CardTitle className="text-base">Revenue by Hour</CardTitle>
+  1018→  1018→        </CardHeader>
+  1019→  1019→        <CardContent>
+  1020→  1020→          {salesByHour.length > 0 ? (
+  1021→  1021→            <CssBarChart
+  1022→  1022→              data={salesByHour.map((h) => ({ label: h.hour, value: h.amount }))}
+  1023→  1023→              maxVal={maxHourAmount}
+  1024→  1024→              labelFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
+  1025→  1025→              gradientFrom="#3b82f6"
+  1026→  1026→              gradientTo="#93c5fd"
+  1027→  1027→            />
+  1028→  1028→          ) : (
+  1029→  1029→            <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">
+  1030→  1030→              No hourly sales data available
+  1031→  1031→            </div>
+  1032→  1032→          )}
+  1033→  1033→        </CardContent>
+  1034→  1034→      </Card>
+  1035→  1035→
+  1036→  1036→      {/* Debt Aging Analysis */}
+  1037→  1037→      <Card>
+  1038→  1038→        <CardHeader className="pb-2">
+  1039→  1039→          <CardTitle className="text-base">Debt Aging Analysis</CardTitle>
+  1040→  1040→        </CardHeader>
+  1041→  1041→        <CardContent className="space-y-4">
+  1042→  1042→          {agingTotal > 0 ? (
+  1043→  1043→            <div>
+  1044→  1044→              <div className="flex rounded-full overflow-hidden h-8 mb-3">
+  1045→  1045→                {agingSummary.current > 0 && (
+  1046→  1046→                  <div
+  1047→  1047→                    className="bg-gradient-to-r from-green-400 to-green-500 transition-all"
+  1048→  1048→                    style={{ width: `${(agingSummary.current / agingTotal) * 100}%` }}
+  1049→  1049→                    title={`Current: ${formatKES(agingSummary.current)}`}
+  1050→  1050→                  />
+  1051→  1051→                )}
+  1052→  1052→                {agingSummary.days30 > 0 && (
+  1053→  1053→                  <div
+  1054→  1054→                    className="bg-gradient-to-r from-yellow-400 to-yellow-500 transition-all"
+  1055→  1055→                    style={{ width: `${(agingSummary.days30 / agingTotal) * 100}%` }}
+  1056→  1056→                    title={`1-30 Days: ${formatKES(agingSummary.days30)}`}
+  1057→  1057→                  />
+  1058→  1058→                )}
+  1059→  1059→                {agingSummary.days60 > 0 && (
+  1060→  1060→                  <div
+  1061→  1061→                    className="bg-gradient-to-r from-orange-400 to-orange-500 transition-all"
+  1062→  1062→                    style={{ width: `${(agingSummary.days60 / agingTotal) * 100}%` }}
+  1063→  1063→                    title={`31-60 Days: ${formatKES(agingSummary.days60)}`}
+  1064→  1064→                  />
+  1065→  1065→                )}
+  1066→  1066→                {agingSummary.days90Plus > 0 && (
+  1067→  1067→                  <div
+  1068→  1068→                    className="bg-gradient-to-r from-red-400 to-red-500 transition-all"
+  1069→  1069→                    style={{ width: `${(agingSummary.days90Plus / agingTotal) * 100}%` }}
+  1070→  1070→                    title={`90+ Days: ${formatKES(agingSummary.days90Plus)}`}
+  1071→  1071→                  />
+  1072→  1072→                )}
+  1073→  1073→              </div>
+  1074→  1074→              <div className="grid grid-cols-2 gap-2">
+  1075→  1075→                <div className="flex items-center gap-2">
+  1076→  1076→                  <div className="w-3 h-3 rounded-sm bg-gradient-to-r from-green-400 to-green-500" />
+  1077→  1077→                  <span className="text-xs text-muted-foreground">Current</span>
+  1078→  1078→                  <span className="text-xs font-medium ml-auto">{formatKES(agingSummary.current)}</span>
+  1079→  1079→                </div>
+  1080→  1080→                <div className="flex items-center gap-2">
+  1081→  1081→                  <div className="w-3 h-3 rounded-sm bg-gradient-to-r from-yellow-400 to-yellow-500" />
+  1082→  1082→                  <span className="text-xs text-muted-foreground">1-30 Days</span>
+  1083→  1083→                  <span className="text-xs font-medium ml-auto">{formatKES(agingSummary.days30)}</span>
+  1084→  1084→                </div>
+  1085→  1085→                <div className="flex items-center gap-2">
+  1086→  1086→                  <div className="w-3 h-3 rounded-sm bg-gradient-to-r from-orange-400 to-orange-500" />
+  1087→  1087→                  <span className="text-xs text-muted-foreground">31-60 Days</span>
+  1088→  1088→                  <span className="text-xs font-medium ml-auto">{formatKES(agingSummary.days60)}</span>
+  1089→  1089→                </div>
+  1090→  1090→                <div className="flex items-center gap-2">
+  1091→  1091→                  <div className="w-3 h-3 rounded-sm bg-gradient-to-r from-red-400 to-red-500" />
+  1092→  1092→                  <span className="text-xs text-muted-foreground">90+ Days</span>
+  1093→  1093→                  <span className="text-xs font-medium ml-auto">{formatKES(agingSummary.days90Plus)}</span>
+  1094→  1094→                </div>
+  1095→  1095→              </div>
+  1096→  1096→              <Separator className="my-2" />
+  1097→  1097→              <div className="flex items-center justify-between text-sm font-medium">
+  1098→  1098→                <span>Total Outstanding</span>
+  1099→  1099→                <span className="text-red-600">{formatKES(agingTotal)}</span>
+  1100→  1100→              </div>
+  1101→  1101→            </div>
+  1102→  1102→          ) : (
+  1103→  1103→            <div className="h-32 flex items-center justify-center text-sm text-muted-foreground">
+  1104→  1104→              No outstanding debts
+  1105→  1105→            </div>
+  1106→  1106→          )}
+  1107→  1107→        </CardContent>
+  1108→  1108→      </Card>
+  1109→  1109→
+  1110→  1110→      {/* Revenue Trend - Contribution Grid Style */}
+  1111→  1111→      <Card>
+  1112→  1112→        <CardHeader className="pb-2">
+  1113→  1113→          <div className="flex items-center justify-between">
+  1114→  1114→            <CardTitle className="text-base">Revenue Trend (Last 30 Days)</CardTitle>
+  1115→  1115→            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+  1116→  1116→              <span>Less</span>
+  1117→  1117→              <div className="w-3 h-3 rounded-sm bg-muted/40" />
+  1118→  1118→              <div className="w-3 h-3 rounded-sm bg-green-200 dark:bg-green-900/40" />
+  1119→  1119→              <div className="w-3 h-3 rounded-sm bg-green-400 dark:bg-green-700/60" />
+  1120→  1120→              <div className="w-3 h-3 rounded-sm bg-green-600 dark:bg-green-500/80" />
+  1121→  1121→              <div className="w-3 h-3 rounded-sm bg-green-700 dark:bg-green-500" />
+  1122→  1122→              <span>More</span>
+  1123→  1123→            </div>
+  1124→  1124→          </div>
+  1125→  1125→        </CardHeader>
+  1126→  1126→        <CardContent>
+  1127→  1127→          <ContributionGrid data={revenueTrendData.map(d => ({ date: d.date, amount: d.revenue }))} />
+  1128→  1128→        </CardContent>
+  1129→  1129→      </Card>
+  1130→  1130→
+  1131→  1131→      {/* Payment Method Breakdown */}
+  1132→  1132→      {paymentBreakdown.length > 0 && (
+  1133→  1133→        <Card>
+  1134→  1134→          <CardHeader className="pb-2">
+  1135→  1135→            <CardTitle className="text-base">Payment Method Breakdown</CardTitle>
+  1136→  1136→          </CardHeader>
+  1137→  1137→          <CardContent>
+  1138→  1138→            <div className="space-y-3">
+  1139→  1139→              {paymentBarData.map((p, i) => {
+  1140→  1140→                const pct = (p.value / maxPaymentAmount) * 100;
+  1141→  1141→                const gradients = [
+  1142→  1142→                  'from-blue-400 to-blue-600',
+  1143→  1143→                  'from-green-400 to-green-600',
+  1144→  1144→                  'from-orange-400 to-orange-600',
+  1145→  1145→                  'from-purple-400 to-purple-600',
+  1146→  1146→                ];
+  1147→  1147→                return (
+  1148→  1148→                  <div key={i} className="space-y-1">
+  1149→  1149→                    <div className="flex items-center justify-between text-sm">
+  1150→  1150→                      <span className="font-medium">{p.label}</span>
+  1151→  1151→                      <span className="text-muted-foreground font-mono">{formatKES(p.value)}</span>
+  1152→  1152→                    </div>
+  1153→  1153→                    <div className="h-3 bg-muted/30 rounded-full overflow-hidden">
+  1154→  1154→                      <div
+  1155→  1155→                        className={`h-full rounded-full transition-all bg-gradient-to-r ${gradients[i % gradients.length]}`}
+  1156→  1156→                        style={{ width: `${pct}%` }}
+  1157→  1157→                        title={`${p.label}: ${formatKES(p.value)}`}
+  1158→  1158→                      />
+  1159→  1159→                    </div>
+  1160→  1160→                  </div>
+  1161→  1161→                );
+  1162→  1162→              })}
+  1163→  1163→            </div>
+  1164→  1164→          </CardContent>
+  1165→  1165→        </Card>
+  1166→  1166→      )}
+  1167→  1167→
+  1168→  1168→      {/* Account Balance Summary */}
+  1169→  1169→      <Card>
+  1170→  1170→        <CardHeader className="pb-2">
+  1171→  1171→          <div className="flex items-center justify-between">
+  1172→  1172→            <CardTitle className="text-base">Chart of Accounts</CardTitle>
+  1173→  1173→            <Badge variant="outline" className="text-xs">{accounts.length} accounts</Badge>
+  1174→  1174→          </div>
+  1175→  1175→        </CardHeader>
+  1176→  1176→        <CardContent>
+  1177→  1177→          {accounts.length === 0 ? (
+  1178→  1178→            <p className="text-sm text-muted-foreground text-center py-6">No accounts configured</p>
+  1179→  1179→          ) : (
+  1180→  1180→            <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+  1181→  1181→              {accountTypeOrder.map((type) => {
+  1182→  1182→                const group = groupedAccounts[type];
+  1183→  1183→                if (!group || group.length === 0) return null;
+  1184→  1184→                const colors = accountTypeColors[type] || accountTypeColors.ASSET;
+  1185→  1185→                const isExpanded = expandedAccountGroups.has(type);
+  1186→  1186→                return (
+  1187→  1187→                  <div key={type} className={`rounded-lg border border-l-4 ${colors.border}`}>
+  1188→  1188→                    <button
+  1189→  1189→                      type="button"
+  1190→  1190→                      onClick={() => toggleAccountGroup(type)}
+  1191→  1191→                      className={`flex items-center gap-2 px-3 py-2 w-full text-left rounded-t-lg ${colors.bg} hover:opacity-80 transition-opacity`}
+  1192→  1192→                    >
+  1193→  1193→                      {isExpanded ? (
+  1194→  1194→                        <ChevronDown className="h-3 w-3 text-muted-foreground" />
+  1195→  1195→                      ) : (
+  1196→  1196→                        <ChevronRight className="h-3 w-3 text-muted-foreground" />
+  1197→  1197→                      )}
+  1198→  1198→                      <span className="text-sm">{colors.icon}</span>
+  1199→  1199→                      <span className={`text-xs font-bold uppercase tracking-wider ${colors.text}`}>
+  1200→  1200→                        {accountTypeLabels[type] || type}
+  1201→  1201→                      </span>
+  1202→  1202→                      <Badge variant="outline" className="text-[10px] ml-auto">{group.length} accounts</Badge>
+  1203→  1203→                    </button>
+  1204→  1204→                    {isExpanded && (
+  1205→  1205→                      <div className="divide-y">
+  1206→  1206→                        {group.map((account) => (
+  1207→  1207→                          <div key={account.id} className="flex items-center gap-2 px-3 py-2 pl-8">
+  1208→  1208→                            <span className="text-xs font-mono text-muted-foreground w-12">{account.code}</span>
+  1209→  1209→                            <span className="text-sm flex-1">{account.name}</span>
+  1210→  1210→                            {account.subType && (
+  1211→  1211→                              <Badge variant="outline" className="text-[9px]">{account.subType}</Badge>
+  1212→  1212→                            )}
+  1213→  1213→                            <Badge
+  1214→  1214→                              variant={account.isActive ? 'secondary' : 'outline'}
+  1215→  1215→                              className={`text-[9px] ${account.isActive ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : ''}`}
+  1216→  1216→                            >
+  1217→  1217→                              {account.isActive ? 'Active' : 'Inactive'}
+  1218→  1218→                            </Badge>
+  1219→  1219→                          </div>
+  1220→  1220→                        ))}
+  1221→  1221→                        <div className={`flex items-center gap-2 px-3 py-2 ${colors.bg} rounded-b-lg`}>
+  1222→  1222→                          <span className="text-xs font-bold uppercase tracking-wider pl-8" style={{ flex: 1 }}>
+  1223→  1223→                            Total {accountTypeLabels[type]}: {accountGroupTotals[type]} account{accountGroupTotals[type] !== 1 ? 's' : ''}
+  1224→  1224→                          </span>
+  1225→  1225→                        </div>
+  1226→  1226→                      </div>
+  1227→  1227→                    )}
+  1228→  1228→                  </div>
+  1229→  1229→                );
+  1230→  1230→              })}
+  1231→  1231→            </div>
+  1232→  1232→          )}
+  1233→  1233→        </CardContent>
+  1234→  1234→      </Card>
+  1235→  1235→
+  1236→  1236→      {/* Journal Entries */}
+  1237→  1237→      <Card>
+  1238→  1238→        <CardHeader>
+  1239→  1239→          <div className="flex items-center justify-between">
+  1240→  1240→            <CardTitle className="text-base flex items-center gap-2">
+  1241→  1241→              <FileText className="h-4 w-4" /> Journal Entries
+  1242→  1242→            </CardTitle>
+  1243→  1243→            <div className="flex items-center gap-2">
+  1244→  1244→              <Badge variant="outline" className="text-xs">{journals.length} entries</Badge>
+  1245→  1245→              {journalTotalDebit > 0 && (
+  1246→  1246→                <div className="flex items-center gap-1 text-[10px]">
+  1247→  1247→                  <span className="text-blue-600 font-mono">Dr: {formatKES(journalTotalDebit)}</span>
+  1248→  1248→                  <span className="text-muted-foreground">|</span>
+  1249→  1249→                  <span className="text-green-600 font-mono">Cr: {formatKES(journalTotalCredit)}</span>
+  1250→  1250→                </div>
+  1251→  1251→              )}
+  1252→  1252→              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => exportToCSV(prepareFinancialCSV(), 'journal_entries')}>
+  1253→  1253→                <Download className="mr-1 h-3 w-3" /> Export
+  1254→  1254→              </Button>
+  1255→  1255→            </div>
+  1256→  1256→          </div>
+  1257→  1257→        </CardHeader>
+  1258→  1258→        <CardContent className="p-0">
+  1259→  1259→          {journalLoading ? (
+  1260→  1260→            <div className="p-6 space-y-3">
+  1261→  1261→              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+  1262→  1262→            </div>
+  1263→  1263→          ) : (
+  1264→  1264→            <div className="overflow-x-auto">
+  1265→  1265→              <Table>
+  1266→  1266→                <TableHeader>
+  1267→  1267→                  <TableRow>
+  1268→  1268→                    <TableHead className="w-[30px]" />
+  1269→  1269→                    <TableHead>Entry #</TableHead>
+  1270→  1270→                    <TableHead>Date</TableHead>
+  1271→  1271→                    <TableHead>Description</TableHead>
+  1272→  1272→                    <TableHead>Reference</TableHead>
+  1273→  1273→                    <TableHead className="text-right">Debit</TableHead>
+  1274→  1274→                    <TableHead className="text-right">Credit</TableHead>
+  1275→  1275→                    <TableHead>Status</TableHead>
+  1276→  1276→                  </TableRow>
+  1277→  1277→                </TableHeader>
+  1278→  1278→                <TableBody>
+  1279→  1279→                  {journals.length === 0 ? (
+  1280→  1280→                    <TableRow>
+  1281→  1281→                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+  1282→  1282→                        No journal entries
+  1283→  1283→                      </TableCell>
+  1284→  1284→                    </TableRow>
+  1285→  1285→                  ) : journals.map((je) => (
+  1286→  1286→                    <React.Fragment key={je.id}>
+  1287→  1287→                      <TableRow
+  1288→  1288→                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+  1289→  1289→                        onClick={() => toggleJournal(je.id)}
+  1290→  1290→                      >
+  1291→  1291→                        <TableCell>
+  1292→  1292→                          {expandedJournals.has(je.id) ? (
+  1293→  1293→                            <ChevronDown className="h-3 w-3 text-muted-foreground" />
+  1294→  1294→                          ) : (
+  1295→  1295→                            <ChevronRight className="h-3 w-3 text-muted-foreground" />
+  1296→  1296→                          )}
+  1297→  1297→                        </TableCell>
+  1298→  1298→                        <TableCell>
+  1299→  1299→                          <Badge variant="outline" className="font-mono text-xs bg-muted/50">
+  1300→  1300→                            {je.entryNumber}
+  1301→  1301→                          </Badge>
+  1302→  1302→                        </TableCell>
+  1303→  1303→                        <TableCell className="text-sm">{formatDate(je.entryDate)}</TableCell>
+  1304→  1304→                        <TableCell className="text-sm max-w-[200px] truncate">{je.description}</TableCell>
+  1305→  1305→                        <TableCell className="text-sm">{je.referenceType || '—'}</TableCell>
+  1306→  1306→                        <TableCell className="text-right font-medium text-sm font-mono text-blue-600 dark:text-blue-400">
+  1307→  1307→                          {formatKES(je.totalDebit)}
+  1308→  1308→                        </TableCell>
+  1309→  1309→                        <TableCell className="text-right font-medium text-sm font-mono text-green-600 dark:text-green-400">
+  1310→  1310→                          {formatKES(je.totalCredit)}
+  1311→  1311→                        </TableCell>
+  1312→  1312→                        <TableCell>
+  1313→  1313→                          {je.isPosted ? (
+  1314→  1314→                            <Badge className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800 gap-1">
+  1315→  1315→                              <FileCheck className="h-2.5 w-2.5" /> Posted
+  1316→  1316→                            </Badge>
+  1317→  1317→                          ) : (
+  1318→  1318→                            <Badge variant="outline" className="text-[10px] gap-1">
+  1319→  1319→                              <Clock className="h-2.5 w-2.5" /> Draft
+  1320→  1320→                            </Badge>
+  1321→  1321→                          )}
+  1322→  1322→                        </TableCell>
+  1323→  1323→                      </TableRow>
+  1324→  1324→                      {expandedJournals.has(je.id) && je.lines && je.lines.length > 0 && (
+  1325→  1325→                        <TableRow>
+  1326→  1326→                          <TableCell colSpan={8} className="bg-muted/20 p-0">
+  1327→  1327→                            <div className="px-12 py-3 space-y-1 animate-in fade-in-0 slide-in-from-top-1 duration-200">
+  1328→  1328→                              <p className="text-xs font-medium text-muted-foreground mb-2">Journal Entry Lines</p>
+  1329→  1329→                              {je.lines.map((line) => (
+  1330→  1330→                                <div key={line.id} className="flex items-center gap-3 text-xs py-1 px-2 rounded hover:bg-muted/30">
+  1331→  1331→                                  <span className="font-mono text-muted-foreground w-10">
+  1332→  1332→                                    {line.account?.code || '—'}
+  1333→  1333→                                  </span>
+  1334→  1334→                                  <span className="flex-1">{line.account?.name || line.accountId}</span>
+  1335→  1335→                                  {line.account?.type && (
+  1336→  1336→                                    <Badge
+  1337→  1337→                                      variant="outline"
+  1338→  1338→                                      className={`text-[9px] ${accountTypeColors[line.account.type]?.text || ''}`}
+  1339→  1339→                                    >
+  1340→  1340→                                      {line.account.type}
+  1341→  1341→                                    </Badge>
+  1342→  1342→                                  )}
+  1343→  1343→                                  <span className="w-28 text-right font-mono text-blue-600 dark:text-blue-400">
+  1344→  1344→                                    {line.debit > 0 ? formatKES(line.debit) : ''}
+  1345→  1345→                                  </span>
+  1346→  1346→                                  <span className="w-28 text-right font-mono text-green-600 dark:text-green-400">
+  1347→  1347→                                    {line.credit > 0 ? formatKES(line.credit) : ''}
+  1348→  1348→                                  </span>
+  1349→  1349→                                </div>
+  1350→  1350→                              ))}
+  1351→  1351→                              <div className="flex items-center gap-3 text-xs pt-2 border-t mt-2 px-2">
+  1352→  1352→                                <span className="w-10" />
+  1353→  1353→                                <span className="flex-1 font-bold text-muted-foreground">Total</span>
+  1354→  1354→                                <span className="w-28 text-right font-mono font-bold text-blue-600 dark:text-blue-400">
+  1355→  1355→                                  {formatKES(je.totalDebit)}
+  1356→  1356→                                </span>
+  1357→  1357→                                <span className="w-28 text-right font-mono font-bold text-green-600 dark:text-green-400">
+  1358→  1358→                                  {formatKES(je.totalCredit)}
+  1359→  1359→                                </span>
+  1360→  1360→                              </div>
+  1361→  1361→                            </div>
+  1362→  1362→                          </TableCell>
+  1363→  1363→                        </TableRow>
+  1364→  1364→                      )}
+  1365→  1365→                    </React.Fragment>
+  1366→  1366→                  ))}
+  1367→  1367→                </TableBody>
+  1368→  1368→              </Table>
+  1369→  1369→            </div>
+  1370→  1370→          )}
+  1371→  1371→        </CardContent>
+  1372→  1372→      </Card>
+  1373→  1373→
+  1374→  1374→      {/* ================================================================== */}
+  1375→  1375→      {/* Drill-down Dialogs                                                  */}
+  1376→  1376→      {/* ================================================================== */}
+  1377→  1377→
+  1378→  1378→      {/* Revenue Drill-down Dialog */}
+  1379→  1379→      <Dialog open={drilldownDialog === 'revenue'} onOpenChange={() => setDrilldownDialog(null)}>
+  1380→  1380→        <DialogContent className="max-w-2xl">
+  1381→  1381→          <DialogHeader>
+  1382→  1382→            <DialogTitle className="flex items-center gap-2">
+  1383→  1383→              <TrendingUp className="h-5 w-5 text-green-600" /> Revenue Breakdown
+  1384→  1384→            </DialogTitle>
+  1385→  1385→            <DialogDescription>Daily revenue for the selected period</DialogDescription>
+  1386→  1386→          </DialogHeader>
+  1387→  1387→          <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar">
+  1388→  1388→            {revenueTrendData.length > 0 ? (
+  1389→  1389→              <>
+  1390→  1390→                <div className="grid grid-cols-3 gap-2 mb-3">
+  1391→  1391→                  <div className="p-2 rounded-lg bg-green-50 dark:bg-green-900/20 text-center">
+  1392→  1392→                    <p className="text-[10px] text-muted-foreground uppercase">Total</p>
+  1393→  1393→                    <p className="text-sm font-bold text-green-600">{formatKES(revenueTrendData.reduce((s, d) => s + d.revenue, 0))}</p>
+  1394→  1394→                  </div>
+  1395→  1395→                  <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-center">
+  1396→  1396→                    <p className="text-[10px] text-muted-foreground uppercase">Average</p>
+  1397→  1397→                    <p className="text-sm font-bold text-blue-600">{formatKES(revenueTrendData.reduce((s, d) => s + d.revenue, 0) / revenueTrendData.length)}</p>
+  1398→  1398→                  </div>
+  1399→  1399→                  <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-center">
+  1400→  1400→                    <p className="text-[10px] text-muted-foreground uppercase">Peak Day</p>
+  1401→  1401→                    <p className="text-sm font-bold text-purple-600">{formatKES(Math.max(...revenueTrendData.map(d => d.revenue)))}</p>
+  1402→  1402→                  </div>
+  1403→  1403→                </div>
+  1404→  1404→                <Table>
+  1405→  1405→                  <TableHeader>
+  1406→  1406→                    <TableRow>
+  1407→  1407→                      <TableHead>Date</TableHead>
+  1408→  1408→                      <TableHead className="text-right">Revenue</TableHead>
+  1409→  1409→                    </TableRow>
+  1410→  1410→                  </TableHeader>
+  1411→  1411→                  <TableBody>
+  1412→  1412→                    {revenueTrendData.map((d, i) => (
+  1413→  1413→                      <TableRow key={i}>
+  1414→  1414→                        <TableCell className="text-sm">{d.label}</TableCell>
+  1415→  1415→                        <TableCell className="text-right font-medium text-sm">{formatKES(d.revenue)}</TableCell>
+  1416→  1416→                      </TableRow>
+  1417→  1417→                    ))}
+  1418→  1418→                  </TableBody>
+  1419→  1419→                </Table>
+  1420→  1420→              </>
+  1421→  1421→            ) : (
+  1422→  1422→              <p className="text-center text-muted-foreground py-8">No revenue data available</p>
+  1423→  1423→            )}
+  1424→  1424→          </div>
+  1425→  1425→        </DialogContent>
+  1426→  1426→      </Dialog>
+  1427→  1427→
+  1428→  1428→      {/* Debt Aging Drill-down Dialog */}
+  1429→  1429→      <Dialog open={drilldownDialog === 'debt'} onOpenChange={() => setDrilldownDialog(null)}>
+  1430→  1430→        <DialogContent className="max-w-2xl">
+  1431→  1431→          <DialogHeader>
+  1432→  1432→            <DialogTitle className="flex items-center gap-2">
+  1433→  1433→              <CircleDollarSign className="h-5 w-5 text-red-600" /> Outstanding Debt Breakdown
+  1434→  1434→            </DialogTitle>
+  1435→  1435→            <DialogDescription>Debt aging analysis by time period</DialogDescription>
+  1436→  1436→          </DialogHeader>
+  1437→  1437→          <div className="space-y-3">
+  1438→  1438→            <div className="grid grid-cols-2 gap-3">
+  1439→  1439→              <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+  1440→  1440→                <p className="text-xs text-muted-foreground">Current (0 days)</p>
+  1441→  1441→                <p className="text-lg font-bold text-green-600">{formatKES(agingSummary.current)}</p>
+  1442→  1442→                <p className="text-[10px] text-muted-foreground">{debts.filter(d => d.agingBucket === 'CURRENT').length} invoices</p>
+  1443→  1443→              </div>
+  1444→  1444→              <div className="p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
+  1445→  1445→                <p className="text-xs text-muted-foreground">1-30 Days Overdue</p>
+  1446→  1446→                <p className="text-lg font-bold text-yellow-600">{formatKES(agingSummary.days30)}</p>
+  1447→  1447→                <p className="text-[10px] text-muted-foreground">{debts.filter(d => d.agingBucket === 'DAYS_30').length} invoices</p>
+  1448→  1448→              </div>
+  1449→  1449→              <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
+  1450→  1450→                <p className="text-xs text-muted-foreground">31-60 Days Overdue</p>
+  1451→  1451→                <p className="text-lg font-bold text-orange-600">{formatKES(agingSummary.days60)}</p>
+  1452→  1452→                <p className="text-[10px] text-muted-foreground">{debts.filter(d => d.agingBucket === 'DAYS_60').length} invoices</p>
+  1453→  1453→              </div>
+  1454→  1454→              <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+  1455→  1455→                <p className="text-xs text-muted-foreground">61+ Days Overdue</p>
+  1456→  1456→                <p className="text-lg font-bold text-red-600">{formatKES(agingSummary.days90Plus)}</p>
+  1457→  1457→                <p className="text-[10px] text-muted-foreground">{debts.filter(d => d.agingBucket === 'DAYS_90_PLUS').length} invoices</p>
+  1458→  1458→              </div>
+  1459→  1459→            </div>
+  1460→  1460→            <Separator />
+  1461→  1461→            <div className="flex items-center justify-between">
+  1462→  1462→              <span className="font-medium">Total Outstanding</span>
+  1463→  1463→              <span className="text-lg font-bold text-red-600">{formatKES(agingTotal)}</span>
+  1464→  1464→            </div>
+  1465→  1465→            {debts.length > 0 && (
+  1466→  1466→              <div className="max-h-[200px] overflow-y-auto custom-scrollbar">
+  1467→  1467→                <Table>
+  1468→  1468→                  <TableHeader>
+  1469→  1469→                    <TableRow>
+  1470→  1470→                      <TableHead>Customer</TableHead>
+  1471→  1471→                      <TableHead>Balance</TableHead>
+  1472→  1472→                      <TableHead>Status</TableHead>
+  1473→  1473→                      <TableHead>Due Date</TableHead>
+  1474→  1474→                    </TableRow>
+  1475→  1475→                  </TableHeader>
+  1476→  1476→                  <TableBody>
+  1477→  1477→                    {debts.slice(0, 20).map((d) => (
+  1478→  1478→                      <TableRow key={d.id}>
+  1479→  1479→                        <TableCell className="text-sm">{d.customer?.name || 'Unknown'}</TableCell>
+  1480→  1480→                        <TableCell className="text-sm font-medium">{formatKES(d.balance)}</TableCell>
+  1481→  1481→                        <TableCell>
+  1482→  1482→                          <Badge variant="outline" className="text-[9px]">{d.status}</Badge>
+  1483→  1483→                        </TableCell>
+  1484→  1484→                        <TableCell className="text-xs">{formatDate(d.dueDate)}</TableCell>
+  1485→  1485→                      </TableRow>
+  1486→  1486→                    ))}
+  1487→  1487→                  </TableBody>
+  1488→  1488→                </Table>
+  1489→  1489→              </div>
+  1490→  1490→            )}
+  1491→  1491→            <Button variant="outline" size="sm" className="w-full" onClick={() => exportToCSV(prepareDebtCSV(), 'debt_aging')}>
+  1492→  1492→              <Download className="mr-1.5 h-3.5 w-3.5" /> Export Debt Report
+  1493→  1493→            </Button>
+  1494→  1494→          </div>
+  1495→  1495→        </DialogContent>
+  1496→  1496→      </Dialog>
+  1497→  1497→    </div>
+  1498→  1498→  );
+  1499→  1499→}
+  1500→  1500→

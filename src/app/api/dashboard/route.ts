@@ -3,7 +3,8 @@
  * GET /api/dashboard - Aggregated dashboard statistics
  *
  * Returns today's sales, revenue, low stock alerts, active rentals, outstanding debt,
- * top products, sales by hour, and payment method breakdown.
+ * top products, sales by hour, payment method breakdown, hourly sales breakdown,
+ * top selling categories, inventory value, and recent activities.
  */
 
 import { NextRequest } from 'next/server';
@@ -42,6 +43,10 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
     yesterdayRevenue,
     totalProducts,
     totalCustomers,
+    // New queries
+    topSellingCategories,
+    inventoryValue,
+    recentActivities,
   ] = await Promise.all([
     // Today's transaction count
     db.salesTransaction.count({
@@ -118,7 +123,7 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
       take: 10,
     }),
 
-    // Sales by hour today
+    // Sales by hour today (raw data for processing)
     db.salesTransaction.findMany({
       where: {
         storeId,
@@ -185,23 +190,82 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
     db.customer.count({
       where: { storeId, isActive: true },
     }),
+
+    // ===== NEW: Top selling categories (revenue by category, last 30 days) =====
+    db.saleItem.findMany({
+      where: {
+        transaction: {
+          storeId,
+          createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+          transactionType: 'SALE',
+          paymentStatus: { in: ['COMPLETED', 'PARTIAL'] },
+        },
+      },
+      select: {
+        lineTotal: true,
+        quantity: true,
+        product: {
+          select: {
+            categoryId: true,
+            category: {
+              select: { id: true, name: true, color: true, icon: true },
+            },
+          },
+        },
+      },
+    }),
+
+    // ===== NEW: Inventory value (total qty × costPrice) =====
+    db.product.aggregate({
+      where: { storeId, isActive: true },
+      _sum: { quantityInStock: true, costPrice: true },
+    }),
+
+    // ===== NEW: Recent activities across all modules =====
+    db.systemLog.findMany({
+      where: {
+        storeId,
+        severity: { in: ['INFO', 'WARN', 'ERROR'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        action: true,
+        component: true,
+        severity: true,
+        message: true,
+        metadata: true,
+        createdAt: true,
+        user: { select: { id: true, name: true, role: true } },
+      },
+    }),
   ]);
 
   // Process sales by hour
-  const hourlyData: Record<string, number> = {};
+  const hourlyData: Record<string, { amount: number; count: number }> = {};
   for (let h = 0; h < 24; h++) {
-    hourlyData[String(h).padStart(2, '0')] = 0;
+    const key = String(h).padStart(2, '0');
+    hourlyData[key] = { amount: 0, count: 0 };
   }
 
   for (const tx of salesByHour) {
     const hour = new Date(tx.createdAt).getHours();
     const key = String(hour).padStart(2, '0');
-    hourlyData[key] = (hourlyData[key] || 0) + tx.totalAmount;
+    hourlyData[key].amount += tx.totalAmount;
+    hourlyData[key].count += 1;
   }
 
-  const salesByHourResult = Object.entries(hourlyData).map(([hour, amount]) => ({
+  const salesByHourResult = Object.entries(hourlyData).map(([hour, data]) => ({
     hour,
-    amount,
+    amount: data.amount,
+  }));
+
+  // Enhanced: hourly sales breakdown with transaction count
+  const hourlySalesBreakdown = Object.entries(hourlyData).map(([hour, data]) => ({
+    hour,
+    amount: Math.round(data.amount * 100) / 100,
+    transactionCount: data.count,
   }));
 
   // Process payment method breakdown
@@ -226,6 +290,75 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
     totalRevenue: tp._sum.lineTotal || 0,
   }));
 
+  // ===== NEW: Process top selling categories =====
+  const categoryRevenueMap = new Map<string, { name: string; color: string | null; icon: string | null; revenue: number; quantitySold: number }>();
+
+  for (const item of topSellingCategories) {
+    const category = item.product.category;
+    const categoryId = category?.id || 'uncategorized';
+
+    if (!categoryRevenueMap.has(categoryId)) {
+      categoryRevenueMap.set(categoryId, {
+        name: category?.name || 'Uncategorized',
+        color: category?.color || null,
+        icon: category?.icon || null,
+        revenue: 0,
+        quantitySold: 0,
+      });
+    }
+
+    const entry = categoryRevenueMap.get(categoryId)!;
+    entry.revenue += item.lineTotal;
+    entry.quantitySold += item.quantity;
+  }
+
+  const topSellingCategoriesResult = Array.from(categoryRevenueMap.entries())
+    .map(([categoryId, data]) => ({
+      categoryId,
+      categoryName: data.name,
+      color: data.color,
+      icon: data.icon,
+      revenue: Math.round(data.revenue * 100) / 100,
+      quantitySold: data.quantitySold,
+    }))
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 10);
+
+  // ===== NEW: Calculate inventory value =====
+  // Since SQLite aggregate can't compute sum(qty * costPrice) directly,
+  // we fetch all products and compute in JS
+  const allProductsForInventory = await db.product.findMany({
+    where: { storeId, isActive: true },
+    select: { quantityInStock: true, costPrice: true, pricePerUnit: true },
+  });
+
+  const inventoryValueResult = {
+    costValue: allProductsForInventory.reduce(
+      (sum, p) => sum + (p.quantityInStock * p.costPrice), 0
+    ),
+    retailValue: allProductsForInventory.reduce(
+      (sum, p) => sum + (p.quantityInStock * p.pricePerUnit), 0
+    ),
+    totalItems: allProductsForInventory.length,
+    totalQuantity: allProductsForInventory.reduce(
+      (sum, p) => sum + p.quantityInStock, 0
+    ),
+  };
+
+  // ===== NEW: Format recent activities =====
+  const recentActivitiesResult = recentActivities.map((log) => ({
+    id: log.id,
+    action: log.action,
+    component: log.component,
+    severity: log.severity,
+    message: log.message,
+    metadata: log.metadata ? (() => {
+      try { return JSON.parse(log.metadata); } catch { return null; }
+    })() : null,
+    createdAt: log.createdAt,
+    user: log.user,
+  }));
+
   const dashboardData = {
     todaySales: todayTransactions,
     todayTransactions,
@@ -243,6 +376,12 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
     recentTransactions,
     totalProducts,
     totalCustomers,
+
+    // New fields
+    hourlySalesBreakdown,
+    topSellingCategories: topSellingCategoriesResult,
+    inventoryValue: inventoryValueResult,
+    recentActivities: recentActivitiesResult,
   };
 
   return Response.json({ success: true, data: dashboardData });

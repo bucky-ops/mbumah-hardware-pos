@@ -2,15 +2,16 @@
 
 /**
  * MBUMAH HARDWARE POS - Transactions History Tab
- * View past transactions with summary cards, filters, search, and CSV export
+ * View past transactions with summary cards, filters, search, receipt modal, refund/void actions
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingBag, Search, Download, ChevronDown, ChevronUp,
   CalendarDays, TrendingUp, Hash, CreditCard, Smartphone, Banknote, Wallet,
-  Filter, FileText,
+  Filter, FileText, RotateCcw, Ban, Eye, Printer, AlertTriangle,
+  ArrowUpRight, ArrowDownRight, Minus, Receipt, X,
 } from 'lucide-react';
 
 import { transactionsApi, formatKES, formatDateTime, type TransactionItem, type SaleItemDetail } from '@/lib/api';
@@ -25,6 +26,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog';
 
 // ============================================================================
 // DATE HELPERS
@@ -89,6 +93,42 @@ function getDateRange(preset: DatePreset): { from: Date; to: Date } {
 }
 
 // ============================================================================
+// TRANSACTION TYPE HELPERS
+// ============================================================================
+
+type TransactionType = 'sale' | 'refund' | 'void';
+
+function getTransactionType(transaction: TransactionItem): TransactionType {
+  if (transaction.paymentStatus === 'REFUNDED') return 'refund';
+  if (transaction.paymentStatus === 'VOIDED' || transaction.paymentStatus === 'CANCELLED') return 'void';
+  return 'sale';
+}
+
+function getTransactionTypeIcon(type: TransactionType) {
+  switch (type) {
+    case 'sale': return <ShoppingBag className="h-3.5 w-3.5" />;
+    case 'refund': return <RotateCcw className="h-3.5 w-3.5" />;
+    case 'void': return <Ban className="h-3.5 w-3.5" />;
+  }
+}
+
+function getTransactionTypeColor(type: TransactionType): string {
+  switch (type) {
+    case 'sale': return 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300';
+    case 'refund': return 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300';
+    case 'void': return 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300';
+  }
+}
+
+function getTransactionTypeLabel(type: TransactionType): string {
+  switch (type) {
+    case 'sale': return 'Sale';
+    case 'refund': return 'Refund';
+    case 'void': return 'Void';
+  }
+}
+
+// ============================================================================
 // PAYMENT METHOD HELPERS
 // ============================================================================
 
@@ -101,6 +141,15 @@ function getPaymentMethodColor(method: string): string {
   }
 }
 
+function getPaymentMethodIcon(method: string) {
+  switch (method) {
+    case 'CASH': return <Banknote className="h-3 w-3" />;
+    case 'MPESA': return <Smartphone className="h-3 w-3" />;
+    case 'DEBT': return <CreditCard className="h-3 w-3" />;
+    default: return <Wallet className="h-3 w-3" />;
+  }
+}
+
 function getPaymentStatusLabel(status: string): string {
   switch (status) {
     case 'COMPLETED': return 'Completed';
@@ -108,6 +157,8 @@ function getPaymentStatusLabel(status: string): string {
     case 'FAILED': return 'Failed';
     case 'REFUNDED': return 'Refunded';
     case 'PARTIAL': return 'Partial';
+    case 'VOIDED': return 'Voided';
+    case 'CANCELLED': return 'Cancelled';
     default: return status;
   }
 }
@@ -118,6 +169,7 @@ function getPaymentStatusColor(status: string): string {
     case 'PENDING': return 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300';
     case 'FAILED': return 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300';
     case 'REFUNDED': return 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300';
+    case 'VOIDED': return 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300';
     default: return 'bg-muted text-muted-foreground';
   }
 }
@@ -129,11 +181,12 @@ function getPaymentStatusColor(status: string): string {
 function exportTransactionsCSV(transactions: TransactionItem[]): void {
   if (transactions.length === 0) return;
 
-  const headers = ['Receipt #', 'Date', 'Customer', 'Items', 'Subtotal', 'Tax', 'Discount', 'Total', 'Payment Method', 'Status'];
+  const headers = ['Receipt #', 'Date', 'Customer', 'Type', 'Items', 'Subtotal', 'Tax', 'Discount', 'Total', 'Payment Method', 'Status'];
   const rows = transactions.map((t) => [
     t.receiptNumber,
     formatDateTime(t.createdAt),
     t.customer?.name || 'Walk-in',
+    getTransactionTypeLabel(getTransactionType(t)),
     String(t.items?.length || 0),
     String(t.subtotal),
     String(t.taxAmount),
@@ -156,20 +209,238 @@ function exportTransactionsCSV(transactions: TransactionItem[]): void {
 }
 
 // ============================================================================
-// TRANSACTION ROW (expandable)
+// MINI TREND CHART (SVG-based)
 // ============================================================================
 
-function TransactionRow({ transaction, isExpanded, onToggle }: {
+function MiniTrendChart({ data, height = 40 }: { data: { label: string; value: number }[]; height?: number }) {
+  if (data.length === 0) return null;
+  const max = Math.max(...data.map(d => d.value), 1);
+  const w = 160;
+
+  return (
+    <svg width={w} height={height} className="w-full">
+      <defs>
+        <linearGradient id="trendGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
+      {/* Area fill */}
+      <path
+        d={data.map((d, i) => {
+          const x = (i / (data.length - 1)) * w;
+          const y = height - (d.value / max) * (height - 6) - 3;
+          return `${i === 0 ? 'M' : 'L'}${x},${y}`;
+        }).join(' ') + ` L${w},${height} L0,${height} Z`}
+        fill="url(#trendGrad)"
+        className="text-primary"
+      />
+      {/* Line */}
+      <polyline
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        points={data.map((d, i) => {
+          const x = (i / (data.length - 1)) * w;
+          const y = height - (d.value / max) * (height - 6) - 3;
+          return `${x},${y}`;
+        }).join(' ')}
+        className="text-primary"
+      />
+    </svg>
+  );
+}
+
+// ============================================================================
+// RECEIPT MODAL COMPONENT
+// ============================================================================
+
+function ReceiptModal({
+  open,
+  onOpenChange,
+  transaction,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  transaction: TransactionItem | null;
+}) {
+  if (!transaction) return null;
+
+  const items = transaction.items || [];
+
+  const handlePrint = () => {
+    const printContent = document.getElementById('receipt-print-area');
+    if (!printContent) return;
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <html>
+        <head><title>Receipt ${transaction.receiptNumber}</title>
+        <style>
+          body { font-family: monospace; padding: 20px; font-size: 12px; max-width: 300px; margin: 0 auto; }
+          .center { text-align: center; }
+          .bold { font-weight: bold; }
+          .line { border-top: 1px dashed #000; margin: 8px 0; }
+          table { width: 100%; }
+          td { padding: 2px 0; }
+          .right { text-align: right; }
+        </style></head>
+        <body>${printContent.innerHTML}</body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Receipt className="h-5 w-5" /> View Receipt
+          </DialogTitle>
+          <DialogDescription>Receipt #{transaction.receiptNumber}</DialogDescription>
+        </DialogHeader>
+        <div id="receipt-print-area" className="space-y-4">
+          {/* Store Header */}
+          <div className="text-center space-y-1">
+            <h3 className="font-bold text-lg">MBUMAH HARDWARE</h3>
+            <p className="text-xs text-muted-foreground">Receipt #{transaction.receiptNumber}</p>
+            <p className="text-xs text-muted-foreground">{formatDateTime(transaction.createdAt)}</p>
+          </div>
+          <Separator />
+          {/* Customer Info */}
+          <div className="text-xs">
+            <span className="text-muted-foreground">Customer: </span>
+            <span className="font-medium">{transaction.customer?.name || 'Walk-in'}</span>
+          </div>
+          {/* Line Items */}
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-muted/50">
+                  <th className="text-left p-2">Item</th>
+                  <th className="text-center p-2">Qty</th>
+                  <th className="text-right p-2">Price</th>
+                  <th className="text-right p-2">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item: SaleItemDetail) => (
+                  <tr key={item.id} className="border-t border-border/50">
+                    <td className="p-2">{item.productName}</td>
+                    <td className="p-2 text-center">{item.quantity}</td>
+                    <td className="p-2 text-right">{formatKES(item.pricePerUnit)}</td>
+                    <td className="p-2 text-right font-medium">{formatKES(item.lineTotal)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {/* Totals */}
+          <div className="space-y-1 text-xs">
+            <div className="flex justify-between"><span className="text-muted-foreground">Subtotal:</span><span>{formatKES(transaction.subtotal)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">VAT:</span><span>{formatKES(transaction.taxAmount)}</span></div>
+            {transaction.discountAmount > 0 && (
+              <div className="flex justify-between text-green-600"><span>Discount:</span><span>-{formatKES(transaction.discountAmount)}</span></div>
+            )}
+            <Separator />
+            <div className="flex justify-between font-bold text-sm"><span>TOTAL:</span><span>{formatKES(transaction.totalAmount)}</span></div>
+          </div>
+          {/* Payment Info */}
+          <div className="text-xs text-center text-muted-foreground space-y-0.5">
+            <p>Paid via {transaction.paymentMethod}</p>
+            <p>Status: {getPaymentStatusLabel(transaction.paymentStatus)}</p>
+            {transaction.cashier && <p>Cashier: {transaction.cashier.name}</p>}
+          </div>
+          <div className="text-center text-[10px] text-muted-foreground pt-2">Thank you for your business!</div>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" size="sm" onClick={handlePrint}>
+            <Printer className="h-4 w-4 mr-1.5" /> Print
+          </Button>
+          <Button size="sm" onClick={() => onOpenChange(false)}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============================================================================
+// CONFIRM ACTION DIALOG
+// ============================================================================
+
+function ConfirmActionDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  onConfirm,
+  isPending,
+  variant = 'destructive',
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  description: string;
+  onConfirm: () => void;
+  isPending: boolean;
+  variant?: 'destructive' | 'default';
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className={`h-5 w-5 ${variant === 'destructive' ? 'text-red-600' : 'text-amber-600'}`} />
+            {title}
+          </DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant={variant} onClick={onConfirm} disabled={isPending}>
+            {isPending && <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />}
+            Confirm
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============================================================================
+// TRANSACTION ROW (expandable with actions)
+// ============================================================================
+
+function TransactionRow({
+  transaction,
+  isExpanded,
+  onToggle,
+  onViewReceipt,
+  onRefund,
+  onVoid,
+}: {
   transaction: TransactionItem;
   isExpanded: boolean;
   onToggle: () => void;
+  onViewReceipt: () => void;
+  onRefund: () => void;
+  onVoid: () => void;
 }) {
   const items = transaction.items || [];
+  const txType = getTransactionType(transaction);
 
   return (
     <>
       <TableRow
-        className="cursor-pointer hover:bg-muted/50 transition-colors"
+        className={`cursor-pointer transition-colors ${
+          txType === 'void' ? 'opacity-50 bg-red-50/50 dark:bg-red-950/10' :
+          txType === 'refund' ? 'bg-amber-50/50 dark:bg-amber-950/10 hover:bg-amber-50 dark:hover:bg-amber-950/20' :
+          'hover:bg-muted/50'
+        }`}
         onClick={onToggle}
       >
         <TableCell className="font-mono text-xs">
@@ -178,16 +449,23 @@ function TransactionRow({ transaction, isExpanded, onToggle }: {
             {transaction.receiptNumber}
           </div>
         </TableCell>
+        <TableCell className="text-xs">
+          <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 gap-0.5 ${getTransactionTypeColor(txType)}`}>
+            {getTransactionTypeIcon(txType)}
+            {getTransactionTypeLabel(txType)}
+          </Badge>
+        </TableCell>
         <TableCell className="text-xs">{formatDateTime(transaction.createdAt)}</TableCell>
         <TableCell className="text-xs">{transaction.customer?.name || 'Walk-in'}</TableCell>
         <TableCell className="text-xs text-center">{items.length}</TableCell>
-        <TableCell className="text-xs font-semibold text-right">{formatKES(transaction.totalAmount)}</TableCell>
+        <TableCell className="text-xs font-bold text-right">
+          <span className={txType === 'refund' ? 'text-amber-600' : txType === 'void' ? 'text-red-600 line-through' : 'text-foreground'}>
+            {txType === 'refund' ? '-' : ''}{formatKES(transaction.totalAmount)}
+          </span>
+        </TableCell>
         <TableCell>
-          <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 ${getPaymentMethodColor(transaction.paymentMethod)}`}>
-            {transaction.paymentMethod === 'CASH' && <Banknote className="h-3 w-3 mr-1" />}
-            {transaction.paymentMethod === 'MPESA' && <Smartphone className="h-3 w-3 mr-1" />}
-            {transaction.paymentMethod === 'DEBT' && <Wallet className="h-3 w-3 mr-1" />}
-            {!['CASH', 'MPESA', 'DEBT'].includes(transaction.paymentMethod) && <CreditCard className="h-3 w-3 mr-1" />}
+          <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 gap-0.5 ${getPaymentMethodColor(transaction.paymentMethod)}`}>
+            {getPaymentMethodIcon(transaction.paymentMethod)}
             {transaction.paymentMethod}
           </Badge>
         </TableCell>
@@ -197,58 +475,71 @@ function TransactionRow({ transaction, isExpanded, onToggle }: {
           </Badge>
         </TableCell>
       </TableRow>
-      {isExpanded && items.length > 0 && (
-        <TableRow className="bg-muted/30">
-          <TableCell colSpan={7} className="p-3">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Line Items</p>
-              <div className="rounded-lg border overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-muted/50">
-                      <th className="text-left p-2 font-medium">Product</th>
-                      <th className="text-center p-2 font-medium">Qty</th>
-                      <th className="text-center p-2 font-medium">Unit</th>
-                      <th className="text-right p-2 font-medium">Price</th>
-                      <th className="text-right p-2 font-medium">Line Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((item: SaleItemDetail) => (
-                      <tr key={item.id} className="border-t border-border/50">
-                        <td className="p-2">{item.productName}</td>
-                        <td className="p-2 text-center">{item.quantity}</td>
-                        <td className="p-2 text-center">{item.unitType}</td>
-                        <td className="p-2 text-right">{formatKES(item.pricePerUnit)}</td>
-                        <td className="p-2 text-right font-medium">{formatKES(item.lineTotal)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex justify-end gap-6 text-xs pt-1">
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground">Subtotal:</span>
-                  <span className="font-medium">{formatKES(transaction.subtotal)}</span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground">VAT:</span>
-                  <span className="font-medium">{formatKES(transaction.taxAmount)}</span>
-                </div>
-                {transaction.discountAmount > 0 && (
-                  <div className="flex gap-2">
-                    <span className="text-muted-foreground">Discount:</span>
-                    <span className="font-medium text-green-600">-{formatKES(transaction.discountAmount)}</span>
+      {isExpanded && (
+        <TableRow className={`bg-muted/20 ${txType === 'void' ? 'opacity-50' : ''}`}>
+          <TableCell colSpan={8} className="p-3">
+            <div className="space-y-3">
+              {/* Line Items */}
+              {items.length > 0 && (
+                <>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Line Items</p>
+                  <div className="rounded-lg border overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-muted/50">
+                          <th className="text-left p-2 font-medium">Product</th>
+                          <th className="text-center p-2 font-medium">Qty</th>
+                          <th className="text-center p-2 font-medium">Unit</th>
+                          <th className="text-right p-2 font-medium">Price</th>
+                          <th className="text-right p-2 font-medium">Line Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {items.map((item: SaleItemDetail) => (
+                          <tr key={item.id} className="border-t border-border/50">
+                            <td className="p-2">{item.productName}</td>
+                            <td className="p-2 text-center">{item.quantity}</td>
+                            <td className="p-2 text-center">{item.unitType}</td>
+                            <td className="p-2 text-right">{formatKES(item.pricePerUnit)}</td>
+                            <td className="p-2 text-right font-medium">{formatKES(item.lineTotal)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
+                </>
+              )}
+              {/* Totals Row */}
+              <div className="flex flex-wrap justify-end gap-4 text-xs">
+                <div className="flex gap-2"><span className="text-muted-foreground">Subtotal:</span><span className="font-medium">{formatKES(transaction.subtotal)}</span></div>
+                <div className="flex gap-2"><span className="text-muted-foreground">VAT:</span><span className="font-medium">{formatKES(transaction.taxAmount)}</span></div>
+                {transaction.discountAmount > 0 && (
+                  <div className="flex gap-2"><span className="text-muted-foreground">Discount:</span><span className="font-medium text-green-600">-{formatKES(transaction.discountAmount)}</span></div>
                 )}
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground font-semibold">Total:</span>
-                  <span className="font-bold">{formatKES(transaction.totalAmount)}</span>
-                </div>
+                <div className="flex gap-2"><span className="text-muted-foreground font-semibold">Total:</span><span className="font-bold">{formatKES(transaction.totalAmount)}</span></div>
               </div>
               {transaction.cashier && (
                 <p className="text-[10px] text-muted-foreground">Cashier: {transaction.cashier.name}</p>
               )}
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 pt-1 border-t">
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); onViewReceipt(); }}>
+                  <Eye className="h-3 w-3 mr-1" /> View Receipt
+                </Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); onViewReceipt(); }}>
+                  <Printer className="h-3 w-3 mr-1" /> Reprint
+                </Button>
+                {txType === 'sale' && transaction.paymentStatus === 'COMPLETED' && (
+                  <Button variant="outline" size="sm" className="h-7 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30" onClick={(e) => { e.stopPropagation(); onRefund(); }}>
+                    <RotateCcw className="h-3 w-3 mr-1" /> Refund
+                  </Button>
+                )}
+                {txType === 'sale' && transaction.paymentStatus === 'COMPLETED' && (
+                  <Button variant="outline" size="sm" className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={(e) => { e.stopPropagation(); onVoid(); }}>
+                    <Ban className="h-3 w-3 mr-1" /> Void
+                  </Button>
+                )}
+              </div>
             </div>
           </TableCell>
         </TableRow>
@@ -269,6 +560,18 @@ export default function TransactionsTab() {
   const [customDateTo, setCustomDateTo] = useState('');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [paymentFilter, setPaymentFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [amountFilterMin, setAmountFilterMin] = useState('');
+  const [amountFilterMax, setAmountFilterMax] = useState('');
+  const [showAmountFilter, setShowAmountFilter] = useState(false);
+
+  // Receipt modal state
+  const [receiptTransaction, setReceiptTransaction] = useState<TransactionItem | null>(null);
+  const [receiptOpen, setReceiptOpen] = useState(false);
+
+  // Refund/Void dialog state
+  const [refundTransaction, setRefundTransaction] = useState<TransactionItem | null>(null);
+  const [voidTransaction, setVoidTransaction] = useState<TransactionItem | null>(null);
 
   // Compute date range
   const dateRange = useMemo(() => {
@@ -301,89 +604,133 @@ export default function TransactionsTab() {
 
   const transactions = transactionsData || [];
 
-  // Filter by search query
+  // Filter by search query, type, and amount
   const filteredTransactions = useMemo(() => {
-    if (!searchQuery.trim()) return transactions;
-    const q = searchQuery.toLowerCase();
-    return transactions.filter(
-      (t) =>
-        t.receiptNumber.toLowerCase().includes(q) ||
-        (t.customer?.name || '').toLowerCase().includes(q)
-    );
-  }, [transactions, searchQuery]);
+    let result = transactions;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (t) =>
+          t.receiptNumber.toLowerCase().includes(q) ||
+          (t.customer?.name || '').toLowerCase().includes(q)
+      );
+    }
+    if (typeFilter !== 'all') {
+      result = result.filter((t) => getTransactionType(t) === typeFilter);
+    }
+    if (amountFilterMin) {
+      result = result.filter((t) => t.totalAmount >= Number(amountFilterMin));
+    }
+    if (amountFilterMax) {
+      result = result.filter((t) => t.totalAmount <= Number(amountFilterMax));
+    }
+    return result;
+  }, [transactions, searchQuery, typeFilter, amountFilterMin, amountFilterMax]);
 
-  // Summary stats
+  // Enhanced Summary stats
   const summaryStats = useMemo(() => {
-    const totalSales = filteredTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
+    const totalSales = filteredTransactions
+      .filter(t => getTransactionType(t) === 'sale')
+      .reduce((sum, t) => sum + t.totalAmount, 0);
+    const totalRefunds = filteredTransactions
+      .filter(t => getTransactionType(t) === 'refund')
+      .reduce((sum, t) => sum + t.totalAmount, 0);
+    const netRevenue = totalSales - totalRefunds;
     const totalCount = filteredTransactions.length;
-    const avgValue = totalCount > 0 ? totalSales / totalCount : 0;
+    const avgValue = totalCount > 0 ? totalSales / filteredTransactions.filter(t => getTransactionType(t) === 'sale').length || 0 : 0;
 
-    // Top payment method
-    const methodCounts: Record<string, number> = {};
-    filteredTransactions.forEach((t) => {
-      methodCounts[t.paymentMethod] = (methodCounts[t.paymentMethod] || 0) + 1;
-    });
-    const topMethod = Object.entries(methodCounts).sort((a, b) => b[1] - a[1])[0];
-
-    return { totalSales, totalCount, avgValue, topMethod: topMethod ? topMethod[0] : 'N/A' };
+    return { totalSales, totalRefunds, netRevenue, totalCount, avgValue };
   }, [filteredTransactions]);
+
+  // Mini trend chart data - daily totals
+  const trendData = useMemo(() => {
+    const dailyMap: Record<string, number> = {};
+    transactions.forEach(t => {
+      const day = new Date(t.createdAt).toISOString().split('T')[0];
+      dailyMap[day] = (dailyMap[day] || 0) + t.totalAmount;
+    });
+    return Object.entries(dailyMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, value]) => ({ label: date.slice(5), value }));
+  }, [transactions]);
 
   const handleToggleRow = useCallback((id: string) => {
     setExpandedRow((prev) => (prev === id ? null : id));
   }, []);
 
+  const handleViewReceipt = useCallback((transaction: TransactionItem) => {
+    setReceiptTransaction(transaction);
+    setReceiptOpen(true);
+  }, []);
+
+  const handleRefund = useCallback((transaction: TransactionItem) => {
+    setRefundTransaction(transaction);
+  }, []);
+
+  const handleVoid = useCallback((transaction: TransactionItem) => {
+    setVoidTransaction(transaction);
+  }, []);
+
   return (
     <div className="space-y-6">
-      {/* Summary Cards */}
+      {/* Enhanced Summary Cards - Glass-morphism */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card className="border-l-4 border-l-green-500 py-0">
+        <Card className="border-l-4 border-l-green-500 backdrop-blur-sm bg-card/80">
           <CardContent className="p-3 flex items-center gap-3">
             <div className="shrink-0 p-2 rounded-lg bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/40 dark:to-green-900/20">
               <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-muted-foreground">Period Sales</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">Total Sales</p>
               <p className="text-sm sm:text-base font-bold text-green-600 dark:text-green-400 whitespace-nowrap">{formatKES(summaryStats.totalSales)}</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-blue-500 py-0">
-          <CardContent className="p-3 flex items-center gap-3">
-            <div className="shrink-0 p-2 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/40 dark:to-blue-900/20">
-              <Hash className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-muted-foreground">Transactions</p>
-              <p className="text-sm sm:text-base font-bold text-blue-600 dark:text-blue-400">{summaryStats.totalCount}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-l-4 border-l-amber-500 py-0">
+        <Card className="border-l-4 border-l-amber-500 backdrop-blur-sm bg-card/80">
           <CardContent className="p-3 flex items-center gap-3">
             <div className="shrink-0 p-2 rounded-lg bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950/40 dark:to-amber-900/20">
-              <CreditCard className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <RotateCcw className="h-4 w-4 text-amber-600 dark:text-amber-400" />
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-muted-foreground">Avg. Value</p>
-              <p className="text-sm sm:text-base font-bold text-amber-600 dark:text-amber-400 whitespace-nowrap">{formatKES(summaryStats.avgValue)}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">Total Refunds</p>
+              <p className="text-sm sm:text-base font-bold text-amber-600 dark:text-amber-400 whitespace-nowrap">{formatKES(summaryStats.totalRefunds)}</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-purple-500 py-0">
+        <Card className="border-l-4 border-l-emerald-500 backdrop-blur-sm bg-card/80">
           <CardContent className="p-3 flex items-center gap-3">
-            <div className="shrink-0 p-2 rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/40 dark:to-purple-900/20">
-              <ShoppingBag className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+            <div className="shrink-0 p-2 rounded-lg bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950/40 dark:to-emerald-900/20">
+              <Hash className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-muted-foreground">Top Method</p>
-              <p className="text-sm sm:text-base font-bold text-purple-600 dark:text-purple-400">{summaryStats.topMethod}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">Net Revenue</p>
+              <p className="text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{formatKES(summaryStats.netRevenue)}</p>
             </div>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-blue-500 backdrop-blur-sm bg-card/80">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-3">
+              <div className="shrink-0 p-2 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/40 dark:to-blue-900/20">
+                <ShoppingBag className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] sm:text-xs text-muted-foreground">Transactions</p>
+                <p className="text-sm sm:text-base font-bold text-blue-600 dark:text-blue-400">{summaryStats.totalCount}</p>
+              </div>
+            </div>
+            {/* Mini Trend Chart */}
+            {trendData.length > 1 && (
+              <div className="mt-2 pt-2 border-t border-border/30">
+                <MiniTrendChart data={trendData} height={28} />
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters & Search */}
-      <Card>
+      {/* Filters & Search - Glass Card */}
+      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
         <CardContent className="p-4 space-y-3">
           {/* Date presets */}
           <div className="flex flex-wrap items-center gap-2">
@@ -427,16 +774,73 @@ export default function TransactionsTab() {
               <button
                 key={method}
                 onClick={() => setPaymentFilter(method)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex items-center gap-1 ${
                   paymentFilter === method
                     ? 'bg-primary text-primary-foreground border-primary shadow-sm'
                     : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
                 }`}
               >
+                {method !== 'all' && getPaymentMethodIcon(method)}
                 {method === 'all' ? 'All Methods' : method}
               </button>
             ))}
           </div>
+
+          {/* Transaction type filter */}
+          <div className="flex flex-wrap items-center gap-2">
+            <ShoppingBag className="h-4 w-4 text-muted-foreground shrink-0" />
+            {['all', 'sale', 'refund', 'void'].map((type) => (
+              <button
+                key={type}
+                onClick={() => setTypeFilter(type)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex items-center gap-1 ${
+                  typeFilter === type
+                    ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                    : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
+                }`}
+              >
+                {type !== 'all' && getTransactionTypeIcon(type as TransactionType)}
+                {type === 'all' ? 'All Types' : getTransactionTypeLabel(type as TransactionType)}
+              </button>
+            ))}
+            <button
+              onClick={() => setShowAmountFilter(!showAmountFilter)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                showAmountFilter || amountFilterMin || amountFilterMax
+                  ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                  : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
+              }`}
+            >
+              Amount Range
+            </button>
+          </div>
+
+          {/* Amount range filter */}
+          {showAmountFilter && (
+            <div className="flex items-center gap-2 pl-6">
+              <span className="text-xs text-muted-foreground">KES</span>
+              <Input
+                type="number"
+                placeholder="Min"
+                value={amountFilterMin}
+                onChange={(e) => setAmountFilterMin(e.target.value)}
+                className="h-8 text-xs w-28"
+              />
+              <span className="text-xs text-muted-foreground">to</span>
+              <Input
+                type="number"
+                placeholder="Max"
+                value={amountFilterMax}
+                onChange={(e) => setAmountFilterMax(e.target.value)}
+                className="h-8 text-xs w-28"
+              />
+              {(amountFilterMin || amountFilterMax) && (
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setAmountFilterMin(''); setAmountFilterMax(''); }}>
+                  <X className="h-3 w-3 mr-1" /> Clear
+                </Button>
+              )}
+            </div>
+          )}
 
           {/* Search and Export */}
           <div className="flex items-center gap-2">
@@ -464,7 +868,7 @@ export default function TransactionsTab() {
       </Card>
 
       {/* Transaction Table */}
-      <Card>
+      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
@@ -484,18 +888,19 @@ export default function TransactionsTab() {
           ) : filteredTransactions.length === 0 ? (
             <div className="text-center py-16">
               <div className="relative mx-auto w-20 h-20 mb-4">
-                <div className="absolute inset-0 bg-muted rounded-2xl" />
+                <div className="absolute inset-0 bg-muted/50 backdrop-blur-sm rounded-2xl border border-border/30" />
                 <ShoppingBag className="absolute inset-0 m-auto h-10 w-10 text-muted-foreground/30" />
               </div>
               <p className="text-base font-medium text-muted-foreground">No transactions found</p>
               <p className="text-sm text-muted-foreground/60 mt-1">Try adjusting your date range or filters</p>
             </div>
           ) : (
-            <div className="overflow-x-auto max-h-[calc(100vh-28rem)] overflow-y-auto custom-scrollbar">
+            <div className="overflow-x-auto max-h-[calc(100vh-32rem)] overflow-y-auto custom-scrollbar">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-xs">Receipt #</TableHead>
+                    <TableHead className="text-xs">Type</TableHead>
                     <TableHead className="text-xs">Date</TableHead>
                     <TableHead className="text-xs">Customer</TableHead>
                     <TableHead className="text-xs text-center">Items</TableHead>
@@ -511,6 +916,9 @@ export default function TransactionsTab() {
                       transaction={transaction}
                       isExpanded={expandedRow === transaction.id}
                       onToggle={() => handleToggleRow(transaction.id)}
+                      onViewReceipt={() => handleViewReceipt(transaction)}
+                      onRefund={() => handleRefund(transaction)}
+                      onVoid={() => handleVoid(transaction)}
                     />
                   ))}
                 </TableBody>
@@ -519,6 +927,41 @@ export default function TransactionsTab() {
           )}
         </CardContent>
       </Card>
+
+      {/* Receipt Modal */}
+      <ReceiptModal
+        open={receiptOpen}
+        onOpenChange={setReceiptOpen}
+        transaction={receiptTransaction}
+      />
+
+      {/* Refund Confirmation */}
+      <ConfirmActionDialog
+        open={!!refundTransaction}
+        onOpenChange={(open) => { if (!open) setRefundTransaction(null); }}
+        title="Confirm Refund"
+        description={`Are you sure you want to refund transaction ${refundTransaction?.receiptNumber}? This will reverse the payment of ${refundTransaction ? formatKES(refundTransaction.totalAmount) : ''}.`}
+        onConfirm={() => {
+          // Refund placeholder - would call API
+          setRefundTransaction(null);
+        }}
+        isPending={false}
+        variant="destructive"
+      />
+
+      {/* Void Confirmation */}
+      <ConfirmActionDialog
+        open={!!voidTransaction}
+        onOpenChange={(open) => { if (!open) setVoidTransaction(null); }}
+        title="Confirm Void"
+        description={`Are you sure you want to void transaction ${voidTransaction?.receiptNumber}? This action cannot be undone.`}
+        onConfirm={() => {
+          // Void placeholder - would call API
+          setVoidTransaction(null);
+        }}
+        isPending={false}
+        variant="destructive"
+      />
     </div>
   );
 }

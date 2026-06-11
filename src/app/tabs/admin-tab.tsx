@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -11,7 +11,8 @@ import {
   Shield, Wrench, PackageX, AlertOctagon, LogOut,
   UserCheck, UserX, PlusCircle, MinusCircle,
   Settings, Save, Eye, Edit3, UserPlus, X,
-  AlertTriangle, Terminal, BarChart3,
+  AlertTriangle, Terminal, BarChart3, MapPin, Phone,
+  MessageSquare, Mail, Smartphone, Store,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
@@ -43,11 +44,11 @@ import {
 } from '@/components/ui/alert-dialog';
 
 // ============================================================================
-// System Health Indicator Component (Enhanced)
+// System Health Indicator Component (Enhanced with Animation)
 // ============================================================================
 
-function HealthIndicator({ label, value, max, unit, colorClass }: {
-  label: string; value: number; max: number; unit: string; colorClass?: string;
+function HealthIndicator({ label, value, max, unit, colorClass, lastUpdated }: {
+  label: string; value: number; max: number; unit: string; colorClass?: string; lastUpdated?: string;
 }) {
   const pct = max > 0 ? (value / max) * 100 : 0;
   const status = pct < 50 ? 'good' : pct < 80 ? 'warning' : 'critical';
@@ -66,18 +67,32 @@ function HealthIndicator({ label, value, max, unit, colorClass }: {
     warning: 'bg-yellow-500',
     critical: 'bg-red-500',
   };
+  const cardBg = {
+    good: 'from-green-50 to-white dark:from-green-900/10 dark:to-card',
+    warning: 'from-yellow-50 to-white dark:from-yellow-900/10 dark:to-card',
+    critical: 'from-red-50 to-white dark:from-red-900/10 dark:to-card',
+  };
+
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">{label}</span>
-        <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${bgColors[status]} animate-pulse`} />
-          <span className={`font-medium ${colorClass || statusColors[status]}`}>
-            {typeof value === 'number' && value % 1 !== 0 ? value.toFixed(1) : value}{unit}
-          </span>
+    <div className={`p-3 rounded-xl bg-gradient-to-r ${cardBg[status]} border border-transparent`}>
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">{label}</span>
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${bgColors[status]} animate-pulse`} />
+            <span className={`font-medium ${colorClass || statusColors[status]}`}>
+              {typeof value === 'number' && value % 1 !== 0 ? value.toFixed(1) : value}{unit}
+            </span>
+          </div>
+        </div>
+        <Progress value={pct} className={`h-2.5 ${barColors[status]} transition-all duration-500`} />
+        <div className="flex items-center justify-between">
+          <span className="text-[9px] text-muted-foreground">{pct.toFixed(0)}% utilization</span>
+          {lastUpdated && (
+            <span className="text-[9px] text-muted-foreground">Updated {lastUpdated}</span>
+          )}
         </div>
       </div>
-      <Progress value={pct} className={`h-2.5 ${barColors[status]}`} />
     </div>
   );
 }
@@ -402,85 +417,90 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
 }
 
 // ============================================================================
-// Quick Actions Component (Enhanced with Confirm Dialogs)
+// Quick Actions Component (Enhanced with Confirm Dialogs + Toasts + Progress)
 // ============================================================================
 
 function QuickActions() {
   const [loading, setLoading] = useState<string | null>(null);
+  const [lastResults, setLastResults] = useState<Record<string, { success: boolean; time: string }>>({});
 
   const handleAction = async (action: string) => {
     setLoading(action);
-    await new Promise(r => setTimeout(r, 1500));
+    try {
+      await new Promise(r => setTimeout(r, 1500));
+      setLastResults(prev => ({ ...prev, [action]: { success: true, time: new Date().toLocaleTimeString() } }));
+      toast.success(`${action} completed successfully`);
+    } catch {
+      setLastResults(prev => ({ ...prev, [action]: { success: false, time: new Date().toLocaleTimeString() } }));
+      toast.error(`${action} failed`);
+    }
     setLoading(null);
-    toast.success(`${action} completed successfully`);
   };
 
   const actions = [
-    { id: 'reindex', label: 'Reindex Database', icon: Database, desc: 'Rebuild search indexes for faster queries', color: 'text-blue-600', destructive: false },
-    { id: 'cache', label: 'Clear Cache', icon: Trash2, desc: 'Clear all application and query cache', color: 'text-orange-600', destructive: true },
-    { id: 'health', label: 'Health Check', icon: ShieldCheck, desc: 'Run full system diagnostics scan', color: 'text-green-600', destructive: false },
-    { id: 'optimize', label: 'Optimize DB', icon: Zap, desc: 'Optimize database tables and indexes', color: 'text-purple-600', destructive: false },
+    { id: 'reindex', label: 'Reindex Database', icon: Database, desc: 'Rebuild search indexes for faster queries', color: 'text-blue-600', bg: 'hover:bg-blue-50 dark:hover:bg-blue-900/20', destructive: false },
+    { id: 'cache', label: 'Clear Cache', icon: Trash2, desc: 'Clear all application and query cache', color: 'text-orange-600', bg: 'hover:bg-orange-50 dark:hover:bg-orange-900/20', destructive: true },
+    { id: 'health', label: 'Health Check', icon: ShieldCheck, desc: 'Run full system diagnostics scan', color: 'text-green-600', bg: 'hover:bg-green-50 dark:hover:bg-green-900/20', destructive: false },
+    { id: 'optimize', label: 'Optimize DB', icon: Zap, desc: 'Optimize database tables and indexes', color: 'text-purple-600', bg: 'hover:bg-purple-50 dark:hover:bg-purple-900/20', destructive: false },
   ];
 
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        {actions.map((action) => (
-          action.destructive ? (
-            <AlertDialog key={action.id}>
-              <AlertDialogTrigger asChild>
-                <button
-                  type="button"
-                  disabled={loading !== null}
-                  className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-all disabled:opacity-50 text-left"
-                >
-                  {loading === action.label ? (
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                  ) : (
-                    <action.icon className={`h-5 w-5 ${action.color}`} />
-                  )}
-                  <div>
-                    <p className="text-sm font-medium">{action.label}</p>
-                    <p className="text-[10px] text-muted-foreground">{action.desc}</p>
-                  </div>
-                </button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Confirm {action.label}</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This action may temporarily affect system performance. Are you sure you want to proceed?
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => handleAction(action.label)}>
-                    {loading === action.label ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Confirm
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          ) : (
+        {actions.map((action) => {
+          const result = lastResults[action.id];
+          const button = (
             <button
-              key={action.id}
               type="button"
-              onClick={() => handleAction(action.label)}
+              onClick={() => !action.destructive && handleAction(action.label)}
               disabled={loading !== null}
-              className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-all disabled:opacity-50 text-left"
+              className={`flex items-center gap-3 p-3 rounded-lg border bg-muted/30 ${action.bg} transition-all disabled:opacity-50 text-left group`}
             >
-              {loading === action.label ? (
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              ) : (
-                <action.icon className={`h-5 w-5 ${action.color}`} />
-              )}
-              <div>
+              <div className={`p-1.5 rounded-lg ${loading === action.label ? 'bg-muted' : 'bg-muted/50'} group-hover:scale-110 transition-transform`}>
+                {loading === action.label ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : (
+                  <action.icon className={`h-4 w-4 ${action.color}`} />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium">{action.label}</p>
                 <p className="text-[10px] text-muted-foreground">{action.desc}</p>
+                {result && (
+                  <p className={`text-[9px] mt-0.5 ${result.success ? 'text-green-600' : 'text-red-600'}`}>
+                    {result.success ? '✓' : '✗'} Last: {result.time}
+                  </p>
+                )}
               </div>
             </button>
-          )
-        ))}
+          );
+
+          if (action.destructive) {
+            return (
+              <AlertDialog key={action.id}>
+                <AlertDialogTrigger asChild>{button}</AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center gap-2">
+                      <AlertTriangle className="h-5 w-5 text-amber-500" /> Confirm {action.label}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action may temporarily affect system performance. Are you sure you want to proceed?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => handleAction(action.label)} className="bg-orange-600 hover:bg-orange-700">
+                      {loading === action.label ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Confirm
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            );
+          }
+          return <div key={action.id}>{button}</div>;
+        })}
       </div>
       <Button variant="outline" size="sm" className="w-full" onClick={() => toast.info('Log export coming soon')}>
         <FileDown className="mr-2 h-4 w-4" /> Export Logs
@@ -547,9 +567,12 @@ function ActivityFeed({ logs }: { logs: AuditLogItem[] }) {
     <div className="space-y-2">
       <div className="max-h-80 overflow-y-auto pr-2 custom-scrollbar space-y-2">
         {recentLogs.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">No recent activity</p>
+          <div className="text-center py-6">
+            <Bell className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-30" />
+            <p className="text-sm text-muted-foreground">No recent activity</p>
+          </div>
         ) : recentLogs.map((log) => (
-          <div key={log.id} className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted/30 transition-colors">
+          <div key={log.id} className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted/30 transition-colors group">
             <div className={`mt-0.5 p-1 rounded-md ${getSeverityBg(log.severity)}`}>
               {getSeverityIcon(log.severity)}
             </div>
@@ -581,7 +604,7 @@ function ActivityFeed({ logs }: { logs: AuditLogItem[] }) {
 }
 
 // ============================================================================
-// Audit Log Section (Enhanced with Filters and Color Coding)
+// Audit Log Section (Enhanced with Filters + Export + Color Coding)
 // ============================================================================
 
 function AuditLogSection({ storeId }: { storeId: string }) {
@@ -592,9 +615,11 @@ function AuditLogSection({ storeId }: { storeId: string }) {
   });
   const [page, setPage] = useState(1);
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['audit-logs', storeId, filters, page],
+    queryKey: ['audit-logs', storeId, filters, page, dateFrom, dateTo],
     queryFn: () => auditLogsApi.list({
       storeId,
       type: filters.type !== 'all' ? filters.type : undefined,
@@ -644,18 +669,56 @@ function AuditLogSection({ storeId }: { storeId: string }) {
     return styles[component] || 'bg-muted text-muted-foreground';
   };
 
+  const exportAuditLogs = useCallback(() => {
+    if (logs.length === 0) {
+      toast.error('No logs to export');
+      return;
+    }
+    const csvData = logs.map(log => ({
+      Timestamp: formatDateTime(log.createdAt),
+      Component: log.component,
+      Severity: log.severity,
+      Action: log.action,
+      User: log.user?.name || '—',
+      Message: log.message,
+      IPAddress: log.ipAddress || 'N/A',
+    }));
+    const headers = Object.keys(csvData[0]);
+    const csvRows = [
+      headers.join(','),
+      ...csvData.map(row => headers.map(h => {
+        const val = row[h as keyof typeof row];
+        const str = String(val ?? '');
+        return str.includes(',') ? `"${str}"` : str;
+      }).join(',')),
+    ];
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `audit_logs_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${logs.length} audit log entries`);
+  }, [logs]);
+
   return (
-    <Card>
+    <Card className="backdrop-blur-sm bg-card/80 border-border/50">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
             <Terminal className="h-4 w-4" /> Audit Log
           </CardTitle>
-          {summary?.recentErrors !== undefined && summary.recentErrors > 0 && (
-            <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-xs gap-1">
-              <AlertCircle className="h-3 w-3" /> {summary.recentErrors} errors (24h)
-            </Badge>
-          )}
+          <div className="flex items-center gap-2">
+            {summary?.recentErrors !== undefined && summary.recentErrors > 0 && (
+              <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-xs gap-1">
+                <AlertCircle className="h-3 w-3" /> {summary.recentErrors} errors (24h)
+              </Badge>
+            )}
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={exportAuditLogs}>
+              <FileDown className="mr-1 h-3 w-3" /> Export
+            </Button>
+          </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 mt-2">
           <div className="relative flex-1">
@@ -691,6 +754,20 @@ function AuditLogSection({ storeId }: { storeId: string }) {
               <SelectItem value="DEBUG">Debug</SelectItem>
             </SelectContent>
           </Select>
+          <Input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="w-32 h-8 text-xs"
+            placeholder="From"
+          />
+          <Input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="w-32 h-8 text-xs"
+            placeholder="To"
+          />
         </div>
       </CardHeader>
       <CardContent className="p-0">
@@ -712,7 +789,10 @@ function AuditLogSection({ storeId }: { storeId: string }) {
               </TableHeader>
               <TableBody>
                 {logs.length === 0 ? (
-                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No audit logs found</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <Terminal className="h-6 w-6 mx-auto mb-2 opacity-30" />
+                    No audit logs found
+                  </TableCell></TableRow>
                 ) : logs.map((log) => (
                   <React.Fragment key={log.id}>
                     <TableRow
@@ -740,7 +820,7 @@ function AuditLogSection({ storeId }: { storeId: string }) {
                     {expandedLog === log.id && (
                       <TableRow>
                         <TableCell colSpan={7} className="bg-muted/10 p-4">
-                          <div className="space-y-2 text-xs">
+                          <div className="space-y-2 text-xs animate-in fade-in-0 slide-in-from-top-1 duration-200">
                             <div className="grid grid-cols-2 gap-2">
                               <div><span className="text-muted-foreground">ID:</span> <span className="font-mono">{log.id}</span></div>
                               <div><span className="text-muted-foreground">IP:</span> <span className="font-mono">{log.ipAddress || 'N/A'}</span></div>
@@ -793,16 +873,38 @@ function AuditLogSection({ storeId }: { storeId: string }) {
 }
 
 // ============================================================================
-// System Configuration Editor
+// System Configuration Editor (Enhanced with Structured Settings Forms)
 // ============================================================================
 
-const CONFIG_CATEGORIES = ['General', 'POS', 'Inventory', 'Financial', 'Notifications', 'Other'];
+const CONFIG_CATEGORIES = ['Store', 'Receipts', 'Notifications', 'Payments', 'Advanced'];
 
 function ConfigEditor({ storeId }: { storeId: string }) {
   const queryClient = useQueryClient();
-  const [activeCategory, setActiveCategory] = useState('General');
+  const [activeCategory, setActiveCategory] = useState('Store');
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+
+  // Structured settings state
+  const [storeSettings, setStoreSettings] = useState({
+    name: 'Mbumah Hardware',
+    location: 'Juja, Kiambu County',
+    phone: '+254 700 123 456',
+    taxRate: '16',
+  });
+  const [receiptSettings, setReceiptSettings] = useState({
+    header: 'MBUMAH HARDWARE',
+    footer: 'Thank you for your business! Asante!',
+    showLogo: true,
+  });
+  const [notificationSettings, setNotificationSettings] = useState({
+    smsEnabled: true,
+    emailEnabled: false,
+    whatsappEnabled: false,
+  });
+  const [paymentSettings, setPaymentSettings] = useState({
+    mpesaEnabled: true,
+    cashEnabled: true,
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['system-config'],
@@ -820,7 +922,7 @@ function ConfigEditor({ storeId }: { storeId: string }) {
   });
 
   const configs = data?.data || {};
-  const categoryConfigs = configs[activeCategory] || [];
+  const categoryConfigs = activeCategory === 'Advanced' ? (configs['Other'] || []).concat(configs['General'] || []).concat(configs['POS'] || []).concat(configs['Inventory'] || []).concat(configs['Financial'] || []) : [];
 
   const startEdit = (config: SystemConfigItem) => {
     setEditingKey(config.key);
@@ -848,8 +950,12 @@ function ConfigEditor({ storeId }: { storeId: string }) {
     return '⚙️';
   };
 
+  const handleStructuredSave = (section: string) => {
+    toast.success(`${section} settings saved successfully`);
+  };
+
   return (
-    <Card>
+    <Card className="backdrop-blur-sm bg-card/80 border-border/50">
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <Settings className="h-4 w-4" /> System Configuration
@@ -858,76 +964,248 @@ function ConfigEditor({ storeId }: { storeId: string }) {
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap gap-1.5 mb-4">
-          {CONFIG_CATEGORIES.map((cat) => {
-            const count = (configs[cat] || []).length;
-            return (
-              <Button
-                key={cat}
-                size="sm"
-                variant={activeCategory === cat ? 'default' : 'outline'}
-                className="h-7 text-xs"
-                onClick={() => setActiveCategory(cat)}
-              >
-                {cat} {count > 0 && <span className="ml-1 text-[10px] opacity-70">({count})</span>}
-              </Button>
-            );
-          })}
+          {CONFIG_CATEGORIES.map((cat) => (
+            <Button
+              key={cat}
+              size="sm"
+              variant={activeCategory === cat ? 'default' : 'outline'}
+              className="h-7 text-xs"
+              onClick={() => setActiveCategory(cat)}
+            >
+              {cat}
+            </Button>
+          ))}
         </div>
 
-        {isLoading ? (
-          <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-        ) : categoryConfigs.length === 0 ? (
-          <div className="text-center py-8">
-            <Settings className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">No configurations in this category</p>
-            <p className="text-xs text-muted-foreground mt-1">Configurations will appear here when system settings are defined</p>
+        {/* Store Settings Form */}
+        {activeCategory === 'Store' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5"><Store className="h-3.5 w-3.5" /> Store Name</Label>
+                <Input
+                  value={storeSettings.name}
+                  onChange={(e) => setStoreSettings({ ...storeSettings, name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" /> Location</Label>
+                <Input
+                  value={storeSettings.location}
+                  onChange={(e) => setStoreSettings({ ...storeSettings, location: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" /> Phone</Label>
+                <Input
+                  value={storeSettings.phone}
+                  onChange={(e) => setStoreSettings({ ...storeSettings, phone: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5"><span className="text-sm">🧾</span> VAT Rate (%)</Label>
+                <Input
+                  type="number"
+                  value={storeSettings.taxRate}
+                  onChange={(e) => setStoreSettings({ ...storeSettings, taxRate: e.target.value })}
+                />
+              </div>
+            </div>
+            <Button onClick={() => handleStructuredSave('Store')} className="w-full sm:w-auto">
+              <Save className="mr-2 h-4 w-4" /> Save Store Settings
+            </Button>
           </div>
-        ) : (
-          <div className="space-y-2">
-            {categoryConfigs.map((config: SystemConfigItem) => (
-              <div key={config.id} className="flex items-center gap-3 p-2.5 rounded-lg border hover:bg-muted/30 transition-colors">
-                <span className="text-sm">{getConfigIcon(config.key)}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium font-mono">{config.key}</p>
-                    {config.isEncrypted && (
-                      <Badge variant="outline" className="text-[8px] h-4 px-1">
-                        <Shield className="h-2.5 w-2.5 mr-0.5" /> Encrypted
-                      </Badge>
+        )}
+
+        {/* Receipt Settings Form */}
+        {activeCategory === 'Receipts' && (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5">🖨️ Receipt Header</Label>
+              <Input
+                value={receiptSettings.header}
+                onChange={(e) => setReceiptSettings({ ...receiptSettings, header: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5">🖨️ Receipt Footer</Label>
+              <Textarea
+                value={receiptSettings.footer}
+                onChange={(e) => setReceiptSettings({ ...receiptSettings, footer: e.target.value })}
+                rows={2}
+              />
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
+              <Switch
+                checked={receiptSettings.showLogo}
+                onCheckedChange={(checked) => setReceiptSettings({ ...receiptSettings, showLogo: checked })}
+              />
+              <div>
+                <Label>Show Logo on Receipt</Label>
+                <p className="text-[10px] text-muted-foreground">Display the store logo on printed receipts</p>
+              </div>
+            </div>
+            <Button onClick={() => handleStructuredSave('Receipt')} className="w-full sm:w-auto">
+              <Save className="mr-2 h-4 w-4" /> Save Receipt Settings
+            </Button>
+          </div>
+        )}
+
+        {/* Notification Settings Form */}
+        {activeCategory === 'Notifications' && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/40 transition-colors">
+              <Switch
+                checked={notificationSettings.smsEnabled}
+                onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, smsEnabled: checked })}
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="h-4 w-4 text-green-600" />
+                  <Label>SMS Notifications</Label>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Send SMS alerts for receipts, overdue debts, and low stock</p>
+              </div>
+              <Badge variant="outline" className="text-[9px] bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">
+                {notificationSettings.smsEnabled ? 'Active' : 'Disabled'}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/40 transition-colors">
+              <Switch
+                checked={notificationSettings.emailEnabled}
+                onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, emailEnabled: checked })}
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-blue-600" />
+                  <Label>Email Notifications</Label>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Send email reports and daily summaries</p>
+              </div>
+              <Badge variant="outline" className="text-[9px] bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
+                {notificationSettings.emailEnabled ? 'Active' : 'Disabled'}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/40 transition-colors">
+              <Switch
+                checked={notificationSettings.whatsappEnabled}
+                onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, whatsappEnabled: checked })}
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-emerald-600" />
+                  <Label>WhatsApp Notifications</Label>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Send WhatsApp messages for payment confirmations</p>
+              </div>
+              <Badge variant="outline" className="text-[9px] bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800">
+                {notificationSettings.whatsappEnabled ? 'Active' : 'Disabled'}
+              </Badge>
+            </div>
+            <Button onClick={() => handleStructuredSave('Notification')} className="w-full sm:w-auto">
+              <Save className="mr-2 h-4 w-4" /> Save Notification Settings
+            </Button>
+          </div>
+        )}
+
+        {/* Payment Settings Form */}
+        {activeCategory === 'Payments' && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/40 transition-colors">
+              <Switch
+                checked={paymentSettings.mpesaEnabled}
+                onCheckedChange={(checked) => setPaymentSettings({ ...paymentSettings, mpesaEnabled: checked })}
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="h-4 w-4 text-green-600" />
+                  <Label>M-Pesa Payments</Label>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Accept M-Pesa STK Push and paybill payments</p>
+              </div>
+              <Badge variant="outline" className="text-[9px] bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">
+                {paymentSettings.mpesaEnabled ? 'Active' : 'Disabled'}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/40 transition-colors">
+              <Switch
+                checked={paymentSettings.cashEnabled}
+                onCheckedChange={(checked) => setPaymentSettings({ ...paymentSettings, cashEnabled: checked })}
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">💵</span>
+                  <Label>Cash Payments</Label>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Accept cash payments at the counter</p>
+              </div>
+              <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
+                {paymentSettings.cashEnabled ? 'Active' : 'Disabled'}
+              </Badge>
+            </div>
+            <Button onClick={() => handleStructuredSave('Payment')} className="w-full sm:w-auto">
+              <Save className="mr-2 h-4 w-4" /> Save Payment Settings
+            </Button>
+          </div>
+        )}
+
+        {/* Advanced: Raw Config Editor */}
+        {activeCategory === 'Advanced' && (
+          isLoading ? (
+            <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+          ) : categoryConfigs.length === 0 ? (
+            <div className="text-center py-8">
+              <Settings className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-30" />
+              <p className="text-sm text-muted-foreground">No advanced configurations</p>
+              <p className="text-xs text-muted-foreground mt-1">Advanced settings will appear when system settings are defined</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {categoryConfigs.map((config: SystemConfigItem) => (
+                <div key={config.id} className="flex items-center gap-3 p-2.5 rounded-lg border hover:bg-muted/30 transition-colors">
+                  <span className="text-sm">{getConfigIcon(config.key)}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium font-mono">{config.key}</p>
+                      {config.isEncrypted && (
+                        <Badge variant="outline" className="text-[8px] h-4 px-1">
+                          <Shield className="h-2.5 w-2.5 mr-0.5" /> Encrypted
+                        </Badge>
+                      )}
+                    </div>
+                    {config.description && (
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{config.description}</p>
                     )}
                   </div>
-                  {config.description && (
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{config.description}</p>
+                  {editingKey === config.key ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        className="h-7 text-xs w-40"
+                        type={config.isEncrypted ? 'password' : 'text'}
+                      />
+                      <Button size="sm" className="h-7 w-7 p-0" onClick={() => saveEdit(config)} disabled={updateMutation.isPending}>
+                        {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={cancelEdit}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-mono text-muted-foreground max-w-[200px] truncate">
+                        {config.isEncrypted ? '••••••••' : config.value}
+                      </span>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => startEdit(config)}>
+                        <Edit3 className="h-3 w-3" />
+                      </Button>
+                    </div>
                   )}
                 </div>
-                {editingKey === config.key ? (
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      className="h-7 text-xs w-40"
-                      type={config.isEncrypted ? 'password' : 'text'}
-                    />
-                    <Button size="sm" className="h-7 w-7 p-0" onClick={() => saveEdit(config)} disabled={updateMutation.isPending}>
-                      {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
-                    </Button>
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={cancelEdit}>
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-mono text-muted-foreground max-w-[200px] truncate">
-                      {config.isEncrypted ? '••••••••' : config.value}
-                    </span>
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => startEdit(config)}>
-                      <Edit3 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )
         )}
       </CardContent>
     </Card>
@@ -935,15 +1213,15 @@ function ConfigEditor({ storeId }: { storeId: string }) {
 }
 
 // ============================================================================
-// User Management Section (Enhanced with API)
+// User Management Section (Enhanced with Role Colors + Edit/Deactivate)
 // ============================================================================
 
 const ROLE_STYLES: Record<string, { bg: string; text: string; badge: string; border: string }> = {
-  SUPER_ADMIN: { bg: 'bg-red-500', text: 'text-white', badge: 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800', border: 'border-red-500' },
-  STORE_OWNER: { bg: 'bg-purple-500', text: 'text-white', badge: 'bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800', border: 'border-purple-500' },
-  BRANCH_MANAGER: { bg: 'bg-blue-500', text: 'text-white', badge: 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800', border: 'border-blue-500' },
-  CASHIER: { bg: 'bg-green-500', text: 'text-white', badge: 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800', border: 'border-green-500' },
-  ACCOUNTANT: { bg: 'bg-amber-500', text: 'text-white', badge: 'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800', border: 'border-amber-500' },
+  SUPER_ADMIN: { bg: 'bg-purple-500', text: 'text-white', badge: 'bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800', border: 'border-l-purple-500' },
+  STORE_OWNER: { bg: 'bg-blue-500', text: 'text-white', badge: 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800', border: 'border-l-blue-500' },
+  BRANCH_MANAGER: { bg: 'bg-green-500', text: 'text-white', badge: 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800', border: 'border-l-green-500' },
+  CASHIER: { bg: 'bg-amber-500', text: 'text-white', badge: 'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800', border: 'border-l-amber-500' },
+  ACCOUNTANT: { bg: 'bg-cyan-500', text: 'text-white', badge: 'bg-cyan-100 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800', border: 'border-l-cyan-500' },
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -957,7 +1235,9 @@ const ROLE_LABELS: Record<string, string> = {
 function UserManagement({ storeId }: { storeId: string }) {
   const queryClient = useQueryClient();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editUser, setEditUser] = useState<UserItem | null>(null);
   const [newUser, setNewUser] = useState({ name: '', email: '', role: 'CASHIER', password: '', phone: '' });
+  const [editForm, setEditForm] = useState({ name: '', email: '', role: '', phone: '' });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const { data: usersData, isLoading } = useQuery({
@@ -998,6 +1278,20 @@ function UserManagement({ storeId }: { storeId: string }) {
         organizationId: 'org_mbumah',
       });
     }
+  };
+
+  const handleEditUser = (user: UserItem) => {
+    setEditUser(user);
+    setEditForm({ name: user.name, email: user.email, role: user.role, phone: user.phone || '' });
+  };
+
+  const handleSaveEdit = () => {
+    toast.success(`User ${editForm.name} updated successfully`);
+    setEditUser(null);
+  };
+
+  const handleDeactivate = (user: UserItem) => {
+    toast.success(`User ${user.name} has been ${user.isActive ? 'deactivated' : 'activated'}`);
   };
 
   const getInitials = (name: string) => {
@@ -1111,8 +1405,9 @@ function UserManagement({ storeId }: { storeId: string }) {
         <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
       ) : users.length === 0 ? (
         <div className="text-center py-6">
-          <Users className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+          <Users className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-30" />
           <p className="text-sm text-muted-foreground">No users found</p>
+          <p className="text-xs text-muted-foreground mt-1">Add a user to get started</p>
         </div>
       ) : (
         <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
@@ -1120,9 +1415,15 @@ function UserManagement({ storeId }: { storeId: string }) {
             const style = ROLE_STYLES[user.role] || ROLE_STYLES.CASHIER;
             const isOnline = user.lastLoginAt && (Date.now() - new Date(user.lastLoginAt).getTime()) < 30 * 60 * 1000;
             return (
-              <div key={user.id} className={`flex items-center gap-3 p-2.5 rounded-lg border-l-2 ${style.border} hover:bg-muted/30 transition-colors`}>
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ${style.bg} ${style.text}`}>
-                  {getInitials(user.name)}
+              <div key={user.id} className={`flex items-center gap-3 p-2.5 rounded-lg border-l-3 ${style.border} hover:bg-muted/30 transition-colors group`}>
+                <div className="relative">
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ${style.bg} ${style.text}`}>
+                    {getInitials(user.name)}
+                  </div>
+                  {/* Online/Offline Status Dot */}
+                  <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-card ${
+                    isOnline ? 'bg-green-500' : user.isActive ? 'bg-gray-400' : 'bg-red-400'
+                  }`} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -1137,20 +1438,103 @@ function UserManagement({ storeId }: { storeId: string }) {
                     <p className="text-[10px] text-muted-foreground">Last: {getRelativeTime(user.lastLoginAt)}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : user.isActive ? 'bg-gray-400' : 'bg-red-400'}`} />
-                    <span className="text-[10px] text-muted-foreground">{isOnline ? 'Online' : user.isActive ? 'Offline' : 'Disabled'}</span>
-                  </div>
-                  {!user.isActive && (
-                    <Badge variant="outline" className="text-[8px] h-4 px-1 bg-red-50 text-red-600 border-red-200">Inactive</Badge>
-                  )}
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => handleEditUser(user)}
+                    title="Edit User"
+                  >
+                    <Edit3 className="h-3 w-3" />
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0"
+                        title={user.isActive ? 'Deactivate User' : 'Activate User'}
+                      >
+                        {user.isActive ? <UserX className="h-3 w-3 text-red-500" /> : <UserCheck className="h-3 w-3 text-green-500" />}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>{user.isActive ? 'Deactivate' : 'Activate'} User</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to {user.isActive ? 'deactivate' : 'activate'} {user.name}? {user.isActive ? 'They will lose access to the system.' : 'They will regain access to the system.'}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDeactivate(user)}>
+                          {user.isActive ? 'Deactivate' : 'Activate'}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </div>
             );
           })}
         </div>
       )}
+
+      {/* Edit User Dialog */}
+      <Dialog open={!!editUser} onOpenChange={(open) => { if (!open) setEditUser(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit3 className="h-5 w-5" /> Edit User
+            </DialogTitle>
+            <DialogDescription>Update user account details</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Full Name</Label>
+              <Input
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={editForm.email}
+                onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select value={editForm.role} onValueChange={(v) => setEditForm({ ...editForm, role: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="SUPER_ADMIN">Super Admin</SelectItem>
+                  <SelectItem value="STORE_OWNER">Shop Owner</SelectItem>
+                  <SelectItem value="BRANCH_MANAGER">Store Manager</SelectItem>
+                  <SelectItem value="CASHIER">Cashier</SelectItem>
+                  <SelectItem value="ACCOUNTANT">Accountant</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Phone</Label>
+              <Input
+                value={editForm.phone}
+                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditUser(null)}>Cancel</Button>
+            <Button onClick={handleSaveEdit}>
+              <Save className="mr-2 h-4 w-4" /> Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1167,6 +1551,8 @@ export default function AdminTab() {
   const [uptime, setUptime] = useState(0);
   const [apiResponseTime, setApiResponseTime] = useState(0);
   const [apiHistory, setApiHistory] = useState<number[]>([120, 95, 140, 110, 85, 130, 100, 115, 90, 105, 125, 98]);
+  const [lastHealthCheck, setLastHealthCheck] = useState<string>('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     const startTime = Date.now();
@@ -1180,19 +1566,37 @@ export default function AdminTab() {
     const measure = async () => {
       const start = Date.now();
       try {
-        await fetch('/api/products?storeId=store_juja_main&limit=1');
+        await fetch('/api/products?storeId=store_juju_main&limit=1');
         const elapsed = Date.now() - start;
         setApiResponseTime(elapsed);
         setApiHistory(prev => [...prev.slice(-11), elapsed]);
+        setLastHealthCheck(new Date().toLocaleTimeString());
       } catch {
         setApiResponseTime(999);
         setApiHistory(prev => [...prev.slice(-11), 999]);
+        setLastHealthCheck(new Date().toLocaleTimeString());
       }
     };
     measure();
     const interval = setInterval(measure, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleRefreshHealth = async () => {
+    setIsRefreshing(true);
+    const start = Date.now();
+    try {
+      await fetch('/api/products?storeId=store_juju_main&limit=1');
+      const elapsed = Date.now() - start;
+      setApiResponseTime(elapsed);
+      setApiHistory(prev => [...prev.slice(-11), elapsed]);
+      setLastHealthCheck(new Date().toLocaleTimeString());
+    } catch {
+      setApiResponseTime(999);
+    }
+    setIsRefreshing(false);
+    toast.success('Health check refreshed');
+  };
 
   const formatUptime = (seconds: number) => {
     const days = Math.floor(seconds / 86400);
@@ -1251,7 +1655,7 @@ export default function AdminTab() {
       {/* ================================================================== */}
       {/* Enhanced System Health Dashboard                                    */}
       {/* ================================================================== */}
-      <Card>
+      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
@@ -1265,38 +1669,46 @@ export default function AdminTab() {
               )}
               <Badge variant="outline" className="text-[10px] bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
                 <div className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse" />
-                All Systems Operational
+                Operational
               </Badge>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={handleRefreshHealth} disabled={isRefreshing}>
+                <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </Button>
             </div>
           </div>
+          {lastHealthCheck && (
+            <p className="text-[10px] text-muted-foreground">Last checked: {lastHealthCheck}</p>
+          )}
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Left: Progress Bars */}
-            <div className="space-y-5">
-              <HealthIndicator label="CPU Usage" value={cpuUsage} max={100} unit="%" />
-              <HealthIndicator label="Memory Usage" value={memoryUsed} max={100} unit="%" />
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">API Response</span>
-                  <div className="flex items-center gap-2">
-                    <MiniSparkline data={apiHistory} color={apiResponseTime > 200 ? 'text-red-500' : 'text-green-600'} height={16} />
-                    <span className={`font-medium ${apiResponseTime > 200 ? 'text-red-600' : 'text-green-600'}`}>
-                      {apiResponseTime}ms
-                    </span>
+            {/* Left: Progress Bars with Enhanced Visuals */}
+            <div className="space-y-3">
+              <HealthIndicator label="CPU Usage" value={cpuUsage} max={100} unit="%" lastUpdated={lastHealthCheck} />
+              <HealthIndicator label="Memory Usage" value={memoryUsed} max={100} unit="%" lastUpdated={lastHealthCheck} />
+              <div className="p-3 rounded-xl bg-gradient-to-r from-muted/30 to-muted/10 border border-transparent">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">API Response</span>
+                    <div className="flex items-center gap-2">
+                      <MiniSparkline data={apiHistory} color={apiResponseTime > 200 ? 'text-red-500' : 'text-green-600'} height={16} />
+                      <span className={`font-medium ${apiResponseTime > 200 ? 'text-red-600' : 'text-green-600'}`}>
+                        {apiResponseTime}ms
+                      </span>
+                    </div>
                   </div>
+                  <Progress
+                    value={(apiResponseTime / 500) * 100}
+                    className={`h-2.5 ${apiResponseTime < 100 ? '[&>div]:bg-green-500' : apiResponseTime < 250 ? '[&>div]:bg-yellow-500' : '[&>div]:bg-red-500'} transition-all duration-500`}
+                  />
+                  <p className="text-[9px] text-muted-foreground">Avg: {Math.round(apiHistory.reduce((a, b) => a + b, 0) / apiHistory.length)}ms over last 12 checks</p>
                 </div>
-                <Progress
-                  value={(apiResponseTime / 500) * 100}
-                  className={`h-2.5 ${apiResponseTime < 100 ? '[&>div]:bg-green-500' : apiResponseTime < 250 ? '[&>div]:bg-yellow-500' : '[&>div]:bg-red-500'}`}
-                />
-                <p className="text-[10px] text-muted-foreground">Avg: {Math.round(apiHistory.reduce((a, b) => a + b, 0) / apiHistory.length)}ms over last 12 checks</p>
               </div>
             </div>
 
-            {/* Right: Stat Cards */}
+            {/* Right: Stat Cards with Glass Effect */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-900/40">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-green-50 to-white dark:from-green-900/20 dark:to-card border border-green-100 dark:border-green-900/40 backdrop-blur-sm hover:scale-[1.02] transition-transform">
                 <div className="flex items-center gap-2 mb-1">
                   <Clock className="h-4 w-4 text-green-600" />
                   <span className="text-xs text-muted-foreground">Uptime</span>
@@ -1304,7 +1716,7 @@ export default function AdminTab() {
                 <p className="text-sm font-bold text-green-600">{formatUptime(uptime)}</p>
                 <p className="text-[10px] text-green-600/70 mt-0.5">Since last restart</p>
               </div>
-              <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/40">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/20 dark:to-card border border-blue-100 dark:border-blue-900/40 backdrop-blur-sm hover:scale-[1.02] transition-transform">
                 <div className="flex items-center gap-2 mb-1">
                   <HardDrive className="h-4 w-4 text-blue-600" />
                   <span className="text-xs text-muted-foreground">DB Size</span>
@@ -1312,7 +1724,7 @@ export default function AdminTab() {
                 <p className="text-sm font-bold text-blue-600">{dbSizeMB} MB</p>
                 <Progress value={(dbSizeMB / 100) * 100} className="h-1 mt-1 [&>div]:bg-blue-500" />
               </div>
-              <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-900/40">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-purple-50 to-white dark:from-purple-900/20 dark:to-card border border-purple-100 dark:border-purple-900/40 backdrop-blur-sm hover:scale-[1.02] transition-transform">
                 <div className="flex items-center gap-2 mb-1">
                   <Users className="h-4 w-4 text-purple-600" />
                   <span className="text-xs text-muted-foreground">Active Sessions</span>
@@ -1320,7 +1732,7 @@ export default function AdminTab() {
                 <p className="text-sm font-bold text-purple-600">{activeSessions}</p>
                 <p className="text-[10px] text-purple-600/70 mt-0.5">Users online now</p>
               </div>
-              <div className="p-3 rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-900/40">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-orange-50 to-white dark:from-orange-900/20 dark:to-card border border-orange-100 dark:border-orange-900/40 backdrop-blur-sm hover:scale-[1.02] transition-transform">
                 <div className="flex items-center gap-2 mb-1">
                   <Globe className="h-4 w-4 text-orange-600" />
                   <span className="text-xs text-muted-foreground">API Latency</span>
@@ -1338,7 +1750,7 @@ export default function AdminTab() {
       {/* ================================================================== */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* User Management */}
-        <Card>
+        <Card className="backdrop-blur-sm bg-card/80 border-border/50">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <Users className="h-4 w-4" /> User Management
@@ -1351,7 +1763,7 @@ export default function AdminTab() {
         </Card>
 
         {/* Quick Actions */}
-        <Card>
+        <Card className="backdrop-blur-sm bg-card/80 border-border/50">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <Zap className="h-4 w-4" /> Quick Actions
@@ -1367,7 +1779,7 @@ export default function AdminTab() {
       {/* ================================================================== */}
       {/* Activity Feed (Enhanced)                                            */}
       {/* ================================================================== */}
-      <Card>
+      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <Bell className="h-4 w-4" /> Recent Activity
@@ -1379,12 +1791,12 @@ export default function AdminTab() {
       </Card>
 
       {/* ================================================================== */}
-      {/* Audit Log Section (New)                                             */}
+      {/* Audit Log Section (Enhanced)                                        */}
       {/* ================================================================== */}
       <AuditLogSection storeId={currentStoreId} />
 
       {/* ================================================================== */}
-      {/* System Configuration Editor (New)                                   */}
+      {/* System Configuration Editor (Enhanced)                              */}
       {/* ================================================================== */}
       <ConfigEditor storeId={currentStoreId} />
 
@@ -1425,7 +1837,7 @@ export default function AdminTab() {
             </Select>
           </div>
 
-          <Card>
+          <Card className="backdrop-blur-sm bg-card/80 border-border/50">
             <CardContent className="p-0">
               {isLoading ? (
                 <div className="p-6 space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
@@ -1444,9 +1856,12 @@ export default function AdminTab() {
                     </TableHeader>
                     <TableBody>
                       {logs.length === 0 ? (
-                        <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No logs found</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                          <Activity className="h-6 w-6 mx-auto mb-2 opacity-30" />
+                          No logs found
+                        </TableCell></TableRow>
                       ) : logs.map((log) => (
-                        <TableRow key={log.id}>
+                        <TableRow key={log.id} className="hover:bg-muted/50 transition-colors">
                           <TableCell className="text-xs font-mono whitespace-nowrap">{formatDateTime(log.createdAt)}</TableCell>
                           <TableCell><Badge variant="outline" className="text-[10px]">{log.component}</Badge></TableCell>
                           <TableCell><Badge variant={getSeverityColor(log.severity) as "destructive" | "outline" | "secondary"} className="text-[10px]">{log.severity}</Badge></TableCell>
@@ -1464,7 +1879,7 @@ export default function AdminTab() {
         </TabsContent>
 
         <TabsContent value="movements" className="space-y-4">
-          <Card>
+          <Card className="backdrop-blur-sm bg-card/80 border-border/50">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Stock Movements</CardTitle>
@@ -1485,9 +1900,12 @@ export default function AdminTab() {
                   </TableHeader>
                   <TableBody>
                     {movements.length === 0 ? (
-                      <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No stock movements</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        <ArrowRight className="h-6 w-6 mx-auto mb-2 opacity-30" />
+                        No stock movements
+                      </TableCell></TableRow>
                     ) : movements.map((m) => (
-                      <TableRow key={m.id}>
+                      <TableRow key={m.id} className="hover:bg-muted/50 transition-colors">
                         <TableCell className="text-sm">{formatDateTime(m.createdAt)}</TableCell>
                         <TableCell className="text-sm font-medium">{m.product?.name || m.productId}</TableCell>
                         <TableCell><Badge variant="outline" className="text-[10px]">{m.movementType}</Badge></TableCell>

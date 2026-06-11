@@ -7,16 +7,18 @@ import {
   Package, Search, Plus, AlertTriangle, AlertCircle, DollarSign,
   MoreVertical, Edit, Trash2, Loader2, CheckCircle, Copy, ArrowUpDown,
   Minus, TrendingUp, BarChart3, ChevronUp, ChevronDown, ChevronsUpDown,
-  Download, History, ArrowUp, ArrowDown, RotateCcw, X, ImageIcon
+  Download, History, ArrowUp, ArrowDown, RotateCcw, X, ImageIcon,
+  Filter, ChevronRight, Tag, Palette, Zap, ShoppingCart, Info
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
   productsApi, categoriesApi, stockMovementsApi,
-  formatKES, formatDate,
+  formatKES, formatDate, formatDateTime,
   type ProductListItem,
   type CategoryItem,
   type StockMovementItem,
+  type CreateProductPayload,
 } from '@/lib/api';
 
 import { Button } from '@/components/ui/button';
@@ -32,6 +34,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
+import { Progress } from '@/components/ui/progress';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Category color map for dots
 const CATEGORY_COLORS: Record<string, string> = {
@@ -46,6 +52,14 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Electrical Supplies': '#F97316',
   'Nails & Fasteners': '#78716C',
 };
+
+// Extended palette for custom category colors
+const CATEGORY_COLOR_PALETTE = [
+  '#6B7280', '#3B82F6', '#8B5CF6', '#EF4444', '#F59E0B',
+  '#6366F1', '#10B981', '#06B6D4', '#F97316', '#78716C',
+  '#EC4899', '#14B8A6', '#A855F7', '#E11D48', '#84CC16',
+  '#0EA5E9', '#D946EF', '#F43F5E', '#22D3EE', '#FBBF24',
+];
 
 // Category image mapping (same as page.tsx)
 const CATEGORY_IMAGES: Record<string, string> = {
@@ -80,30 +94,97 @@ function getProfitMarginColor(margin: number): { text: string; bg: string } {
 function getMovementBadge(type: string): { label: string; className: string } {
   switch (type) {
     case 'PURCHASE':
-    case 'SALE': // Positive sale (return)
-      return { label: 'IN', className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' };
+      return { label: 'PURCHASE', className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' };
+    case 'SALE':
+      return { label: 'SALE', className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' };
     case 'ADJUSTMENT':
-      return { label: 'ADJ', className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' };
+      return { label: 'ADJUSTMENT', className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' };
+    case 'TRANSFER':
+      return { label: 'TRANSFER', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' };
     case 'RETURN':
     case 'RENTAL_RETURN':
-      return { label: 'RETURN', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' };
-    case 'SALE': // Negative (outgoing)
+      return { label: 'RETURN', className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400' };
     case 'RENTAL_OUT':
-    case 'TRANSFER':
+      return { label: 'RENTAL', className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' };
     default:
-      return { label: type === 'SALE' ? 'OUT' : type.slice(0, 3), className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' };
+      return { label: type.slice(0, 3), className: 'bg-muted text-muted-foreground' };
   }
 }
+
+// Movement type options for filter
+const MOVEMENT_TYPE_OPTIONS = [
+  { value: 'all', label: 'All Types' },
+  { value: 'PURCHASE', label: 'Purchase' },
+  { value: 'SALE', label: 'Sale' },
+  { value: 'ADJUSTMENT', label: 'Adjustment' },
+  { value: 'TRANSFER', label: 'Transfer' },
+  { value: 'RETURN', label: 'Return' },
+];
 
 type SortField = 'name' | 'sku' | 'pricePerUnit' | 'costPrice' | 'quantityInStock' | 'profitMargin';
 type SortDirection = 'asc' | 'desc';
 
-// Sort indicator component - defined outside render to avoid re-creation
+// Sort indicator component
 function SortIndicator({ field, sortField, sortDirection }: { field: SortField; sortField: SortField; sortDirection: SortDirection }) {
   if (sortField !== field) return <ChevronsUpDown className="h-3 w-3 text-muted-foreground/40" />;
   return sortDirection === 'asc'
     ? <ChevronUp className="h-3 w-3 text-primary" />
     : <ChevronDown className="h-3 w-3 text-primary" />;
+}
+
+// Stock level progress bar with color coding
+function StockLevelBar({ product }: { product: ProductListItem }) {
+  const ratio = product.reorderLevel > 0 ? product.quantityInStock / (product.reorderLevel * 3) : 1;
+  const pct = Math.min(100, Math.max(0, ratio * 100));
+  const barColor = product.quantityInStock <= 0
+    ? 'bg-red-500'
+    : product.quantityInStock <= product.reorderLevel
+      ? 'bg-amber-500'
+      : 'bg-green-500';
+  return (
+    <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
+      <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+// Mini stock bar for table rows
+function MiniStockBar({ product }: { product: ProductListItem }) {
+  const ratio = product.reorderLevel > 0 ? product.quantityInStock / (product.reorderLevel * 3) : 1;
+  const pct = Math.min(100, Math.max(0, ratio * 100));
+  const barColor = product.quantityInStock <= 0
+    ? 'bg-red-500'
+    : product.quantityInStock <= product.reorderLevel
+      ? 'bg-amber-500'
+      : 'bg-green-500';
+  return (
+    <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
+      <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+// Stock status badge
+function StockStatusBadge({ product }: { product: ProductListItem }) {
+  if (product.quantityInStock <= 0) {
+    return (
+      <Badge variant="destructive" className="text-[10px] font-semibold px-2 gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-red-300 animate-pulse" /> Out of Stock
+      </Badge>
+    );
+  }
+  if (product.quantityInStock <= product.reorderLevel) {
+    return (
+      <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] font-semibold px-2 gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" /> Low Stock
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="secondary" className="text-[10px] font-semibold px-2 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 gap-1">
+      <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> In Stock
+    </Badge>
+  );
 }
 
 export default function InventoryTab() {
@@ -132,6 +213,22 @@ export default function InventoryTab() {
   const [quickAdjustId, setQuickAdjustId] = useState<string | null>(null);
   const [quickAdjustValue, setQuickAdjustValue] = useState('');
 
+  // Product detail modal
+  const [detailProduct, setDetailProduct] = useState<ProductListItem | null>(null);
+
+  // Stock movement filters
+  const [movementTypeFilter, setMovementTypeFilter] = useState<string>('all');
+  const [movementDateFrom, setMovementDateFrom] = useState('');
+  const [movementDateTo, setMovementDateTo] = useState('');
+  const [expandedMovement, setExpandedMovement] = useState<string | null>(null);
+  const [showMovementFilters, setShowMovementFilters] = useState(false);
+
+  // Category management
+  const [addCategoryOpen, setAddCategoryOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryColor, setNewCategoryColor] = useState('#6B7280');
+  const [newCategoryDesc, setNewCategoryDesc] = useState('');
+
   const [newProduct, setNewProduct] = useState({
     name: '', sku: '', barcode: '', pricePerUnit: '', costPrice: '', quantityInStock: '',
     reorderLevel: '10', unitType: 'PIECE', categoryId: '', description: '',
@@ -153,10 +250,21 @@ export default function InventoryTab() {
     queryFn: () => categoriesApi.list(currentStoreId),
   });
 
-  // Stock movements query for history section
+  // Stock movements query for history section with filters
   const { data: stockMovementsData } = useQuery({
-    queryKey: ['stock-movements', currentStoreId],
-    queryFn: () => stockMovementsApi.list({ storeId: currentStoreId, limit: 20 }),
+    queryKey: ['stock-movements', currentStoreId, movementTypeFilter, movementDateFrom, movementDateTo],
+    queryFn: () => stockMovementsApi.list({
+      storeId: currentStoreId,
+      limit: 50,
+      ...(movementTypeFilter !== 'all' ? { movementType: movementTypeFilter } : {}),
+    }),
+  });
+
+  // Product detail: recent movements for specific product
+  const { data: productMovementsData } = useQuery({
+    queryKey: ['product-movements', currentStoreId, detailProduct?.id],
+    queryFn: () => stockMovementsApi.list({ storeId: currentStoreId, productId: detailProduct?.id, limit: 10 }),
+    enabled: !!detailProduct,
   });
 
   const createProductMutation = useMutation({
@@ -170,7 +278,7 @@ export default function InventoryTab() {
   });
 
   const updateProductMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<ProductListItem> }) => productsApi.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Partial<CreateProductPayload> }) => productsApi.update(id, data),
     onSuccess: () => {
       toast.success('Product updated');
       setEditProduct(null);
@@ -193,6 +301,20 @@ export default function InventoryTab() {
       setStockAdjustReason('');
       queryClient.invalidateQueries({ queryKey: ['products', currentStoreId] });
       queryClient.invalidateQueries({ queryKey: ['stock-movements', currentStoreId] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // Category create mutation
+  const createCategoryMutation = useMutation({
+    mutationFn: categoriesApi.create,
+    onSuccess: () => {
+      toast.success('Category created');
+      setAddCategoryOpen(false);
+      setNewCategoryName('');
+      setNewCategoryColor('#6B7280');
+      setNewCategoryDesc('');
+      queryClient.invalidateQueries({ queryKey: ['categories', currentStoreId] });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -279,6 +401,34 @@ export default function InventoryTab() {
 
   const categories = categoriesData?.data || [];
   const stockMovements = stockMovementsData?.data || [];
+  const productMovements = productMovementsData?.data || [];
+
+  // Filter stock movements by date range
+  const filteredStockMovements = useMemo(() => {
+    let result = stockMovements;
+    if (movementDateFrom) {
+      const from = new Date(movementDateFrom);
+      result = result.filter((m) => new Date(m.createdAt) >= from);
+    }
+    if (movementDateTo) {
+      const to = new Date(movementDateTo);
+      to.setHours(23, 59, 59, 999);
+      result = result.filter((m) => new Date(m.createdAt) <= to);
+    }
+    return result;
+  }, [stockMovements, movementDateFrom, movementDateTo]);
+
+  // Category product count
+  const categoryProductCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    allProducts.forEach((p) => {
+      if (p.categoryId) {
+        counts[p.categoryId] = (counts[p.categoryId] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [allProducts]);
+
   const lowStockCount = allProducts.filter(p => p.quantityInStock <= p.reorderLevel && p.quantityInStock > 0).length;
   const outOfStockCount = allProducts.filter(p => p.quantityInStock <= 0).length;
   const totalInventoryValue = allProducts.reduce((sum, p) => sum + (p.costPrice * p.quantityInStock), 0);
@@ -405,28 +555,43 @@ export default function InventoryTab() {
     });
   };
 
-  // Mini stock bar component
-  const MiniStockBar = ({ product }: { product: ProductListItem }) => {
-    const ratio = product.reorderLevel > 0 ? product.quantityInStock / (product.reorderLevel * 3) : 1;
-    const pct = Math.min(100, Math.max(0, ratio * 100));
-    const barColor = product.quantityInStock <= 0
-      ? 'bg-red-500'
-      : product.quantityInStock <= product.reorderLevel
-        ? 'bg-amber-500'
-        : 'bg-green-500';
-    return (
-      <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
-        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
-      </div>
+  const handleCreateCategory = () => {
+    if (!newCategoryName.trim()) {
+      toast.error('Category name is required');
+      return;
+    }
+    createCategoryMutation.mutate({
+      storeId: currentStoreId,
+      name: newCategoryName.trim(),
+      description: newCategoryDesc || undefined,
+      color: newCategoryColor,
+    });
+  };
+
+  // Compute sales velocity (approximate from stock movements)
+  const getProductSalesVelocity = (productId: string): number => {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const saleMovements = productMovements.filter(
+      m => m.movementType === 'SALE' && new Date(m.createdAt) >= thirtyDaysAgo
     );
+    return Math.abs(saleMovements.reduce((sum, m) => sum + m.quantity, 0));
+  };
+
+  // Get related products (same category)
+  const getRelatedProducts = (product: ProductListItem): ProductListItem[] => {
+    if (!product.categoryId) return [];
+    return allProducts.filter(p => p.categoryId === product.categoryId && p.id !== product.id).slice(0, 5);
   };
 
   return (
     <div className="space-y-4">
-      {/* Low Stock Warning Banner */}
+      {/* Low Stock Alert Banner */}
       {(lowStockCount > 0 || outOfStockCount > 0) && (
-        <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3 flex items-center gap-3">
-          <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+        <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 p-3 flex items-center gap-3 backdrop-blur-sm">
+          <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/50">
+            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+          </div>
           <div className="flex-1 text-sm">
             <span className="font-semibold text-amber-800 dark:text-amber-300">
               {outOfStockCount > 0 && `${outOfStockCount} out of stock`}
@@ -435,15 +600,22 @@ export default function InventoryTab() {
             </span>
             <span className="text-amber-700 dark:text-amber-400"> — items need attention</span>
           </div>
-          <Button variant="outline" size="sm" className="h-7 text-xs border-amber-300 dark:border-amber-700" onClick={() => setStockFilter(outOfStockCount > 0 ? 'out' : 'low')}>
-            View Issues
-          </Button>
+          <div className="flex gap-2">
+            {outOfStockCount > 0 && (
+              <Button variant="outline" size="sm" className="h-7 text-xs border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={() => setStockFilter('out')}>
+                View Out of Stock
+              </Button>
+            )}
+            <Button variant="outline" size="sm" className="h-7 text-xs border-amber-300 dark:border-amber-700" onClick={() => setStockFilter(lowStockCount > 0 ? 'low' : 'out')}>
+              View Issues
+            </Button>
+          </div>
         </div>
       )}
 
-      {/* Stats Cards */}
+      {/* Stats Cards with glass-morphism */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card className="bg-gradient-to-br from-card to-muted/20 border-l-4 border-l-primary hover:-translate-y-0.5 transition-transform cursor-default">
+        <Card className="bg-gradient-to-br from-card/80 to-muted/10 border-l-4 border-l-primary hover:-translate-y-0.5 transition-all cursor-default backdrop-blur-sm shadow-sm hover:shadow-md">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-primary/10"><Package className="h-5 w-5 text-primary" /></div>
@@ -454,7 +626,7 @@ export default function InventoryTab() {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-card to-muted/20 border-l-4 border-l-yellow-500 hover:-translate-y-0.5 transition-transform cursor-default">
+        <Card className="bg-gradient-to-br from-card/80 to-muted/10 border-l-4 border-l-yellow-500 hover:-translate-y-0.5 transition-all cursor-default backdrop-blur-sm shadow-sm hover:shadow-md">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-yellow-100 dark:bg-yellow-900/30"><AlertTriangle className="h-5 w-5 text-yellow-600" /></div>
@@ -465,7 +637,7 @@ export default function InventoryTab() {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-card to-muted/20 border-l-4 border-l-red-500 hover:-translate-y-0.5 transition-transform cursor-default">
+        <Card className="bg-gradient-to-br from-card/80 to-muted/10 border-l-4 border-l-red-500 hover:-translate-y-0.5 transition-all cursor-default backdrop-blur-sm shadow-sm hover:shadow-md">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30"><AlertCircle className="h-5 w-5 text-red-600" /></div>
@@ -476,7 +648,7 @@ export default function InventoryTab() {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-card to-muted/20 border-l-4 border-l-green-500 hover:-translate-y-0.5 transition-transform cursor-default">
+        <Card className="bg-gradient-to-br from-card/80 to-muted/10 border-l-4 border-l-green-500 hover:-translate-y-0.5 transition-all cursor-default backdrop-blur-sm shadow-sm hover:shadow-md">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30"><DollarSign className="h-5 w-5 text-green-600" /></div>
@@ -499,7 +671,15 @@ export default function InventoryTab() {
           <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="All Categories" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
-            {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            {categories.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: c.color || getCategoryColor(c.name) }} />
+                  {c.name}
+                  <span className="text-muted-foreground text-xs">({categoryProductCounts[c.id] || 0})</span>
+                </div>
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <Select value={stockFilter} onValueChange={setStockFilter}>
@@ -511,6 +691,19 @@ export default function InventoryTab() {
             <SelectItem value="out">Out of Stock</SelectItem>
           </SelectContent>
         </Select>
+
+        {/* Category management button */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => setAddCategoryOpen(true)}>
+                <Tag className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Add Category</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
         <Dialog open={addProductOpen} onOpenChange={setAddProductOpen}>
           <DialogTrigger asChild>
             <Button className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground">
@@ -547,7 +740,14 @@ export default function InventoryTab() {
                     <Select value={newProduct.categoryId} onValueChange={(v) => setNewProduct({ ...newProduct, categoryId: v })}>
                       <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                       <SelectContent>
-                        {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                        {categories.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            <div className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: c.color || getCategoryColor(c.name) }} />
+                              {c.name}
+                            </div>
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -574,6 +774,18 @@ export default function InventoryTab() {
                     <Input type="number" value={newProduct.costPrice} onChange={(e) => setNewProduct({ ...newProduct, costPrice: e.target.value })} placeholder="0" />
                   </div>
                 </div>
+                {Number(newProduct.pricePerUnit) > 0 && Number(newProduct.costPrice) > 0 && (
+                  <div className="mt-2 rounded-lg border bg-muted/30 p-2 flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Profit Margin</span>
+                    <span className={`text-xs font-semibold ${
+                      ((Number(newProduct.pricePerUnit) - Number(newProduct.costPrice)) / Number(newProduct.pricePerUnit) * 100) >= 30
+                        ? 'text-green-600' : ((Number(newProduct.pricePerUnit) - Number(newProduct.costPrice)) / Number(newProduct.pricePerUnit) * 100) >= 15
+                        ? 'text-amber-600' : 'text-red-600'
+                    }`}>
+                      {((Number(newProduct.pricePerUnit) - Number(newProduct.costPrice)) / Number(newProduct.pricePerUnit) * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Section: Stock & Units */}
@@ -630,9 +842,48 @@ export default function InventoryTab() {
         </Dialog>
       </div>
 
+      {/* Category Tags Row */}
+      {categories.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setSelectedCategory('all')}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all hover:scale-105 ${
+              selectedCategory === 'all'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+            }`}
+          >
+            All
+            <span className="ml-0.5 bg-white/20 dark:bg-black/20 rounded-full px-1.5 py-0.5 text-[10px]">{allProducts.length}</span>
+          </button>
+          {categories.map((c) => {
+            const count = categoryProductCounts[c.id] || 0;
+            const color = c.color || getCategoryColor(c.name);
+            return (
+              <button
+                key={c.id}
+                onClick={() => setSelectedCategory(c.id === selectedCategory ? 'all' : c.id)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all hover:scale-105 ${
+                  selectedCategory === c.id
+                    ? 'text-white shadow-sm'
+                    : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                }`}
+                style={selectedCategory === c.id ? { backgroundColor: color } : {}}
+              >
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                {c.name}
+                <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] ${
+                  selectedCategory === c.id ? 'bg-white/20' : 'bg-muted'
+                }`}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Bulk Actions Toolbar */}
       {selectedIds.size > 0 && (
-        <div className="rounded-lg border bg-muted/50 p-3 flex items-center gap-3 flex-wrap">
+        <div className="rounded-lg border bg-muted/50 p-3 flex items-center gap-3 flex-wrap backdrop-blur-sm">
           <Badge variant="secondary" className="text-xs font-medium">
             {selectedIds.size} selected
           </Badge>
@@ -654,7 +905,7 @@ export default function InventoryTab() {
       )}
 
       {/* Product Table */}
-      <Card>
+      <Card className="backdrop-blur-sm shadow-sm">
         <CardContent className="p-0">
           {/* Product count summary */}
           <div className="px-4 py-2 border-b bg-muted/20">
@@ -725,10 +976,10 @@ export default function InventoryTab() {
                 <TableBody>
                   {filteredProducts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-center py-12">
-                        <div className="flex flex-col items-center gap-3">
-                          <div className="p-4 rounded-full bg-muted/50">
-                            <Package className="h-8 w-8 text-muted-foreground/50" />
+                      <TableCell colSpan={11} className="text-center py-16">
+                        <div className="flex flex-col items-center gap-4">
+                          <div className="p-6 rounded-full bg-gradient-to-br from-muted/50 to-muted/20 backdrop-blur-sm">
+                            <Package className="h-12 w-12 text-muted-foreground/30" />
                           </div>
                           <div>
                             <p className="text-sm font-medium text-muted-foreground">No products found</p>
@@ -738,9 +989,13 @@ export default function InventoryTab() {
                                 : 'Add your first product to get started'}
                             </p>
                           </div>
-                          {(searchQuery || stockFilter !== 'all' || selectedCategory !== 'all') && (
+                          {(searchQuery || stockFilter !== 'all' || selectedCategory !== 'all') ? (
                             <Button variant="outline" size="sm" className="text-xs mt-1" onClick={() => { setSearchQuery(''); setStockFilter('all'); setSelectedCategory('all'); }}>
                               Clear Filters
+                            </Button>
+                          ) : (
+                            <Button size="sm" className="text-xs bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground" onClick={() => setAddProductOpen(true)}>
+                              <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Your First Product
                             </Button>
                           )}
                         </div>
@@ -759,7 +1014,7 @@ export default function InventoryTab() {
                       return (
                         <TableRow
                           key={product.id}
-                          className={`${idx % 2 === 1 ? 'bg-muted/20' : ''} ${selectedIds.has(product.id) ? 'bg-primary/5' : ''} hover:bg-primary/5 transition-colors`}
+                          className={`${idx % 2 === 1 ? 'bg-muted/20' : ''} ${selectedIds.has(product.id) ? 'bg-primary/5' : ''} hover:bg-primary/5 transition-colors group`}
                         >
                           <TableCell>
                             <Checkbox
@@ -770,11 +1025,11 @@ export default function InventoryTab() {
                           </TableCell>
                           <TableCell>
                             {catImage ? (
-                              <div className="w-8 h-8 rounded overflow-hidden bg-muted shrink-0">
+                              <div className="w-8 h-8 rounded overflow-hidden bg-muted shrink-0 group-hover:scale-110 transition-transform cursor-pointer" onClick={() => setDetailProduct(product)}>
                                 <img src={catImage} alt={product.category?.name || 'Product category'} className="h-full w-full object-cover" />
                               </div>
                             ) : (
-                              <div className="w-8 h-8 rounded bg-muted flex items-center justify-center shrink-0">
+                              <div className="w-8 h-8 rounded bg-muted flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform cursor-pointer" onClick={() => setDetailProduct(product)}>
                                 <ImageIcon className="h-3.5 w-3.5 text-muted-foreground/40" />
                               </div>
                             )}
@@ -782,7 +1037,7 @@ export default function InventoryTab() {
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <div>
-                                <p className="font-medium text-sm">{product.name}</p>
+                                <p className="font-medium text-sm group-hover:text-primary transition-colors cursor-pointer" onClick={() => setDetailProduct(product)}>{product.name}</p>
                                 <div className="flex gap-1 mt-0.5">
                                   {product.isRental && <Badge variant="outline" className="text-[9px] h-4 px-1">RENTAL</Badge>}
                                   {product.isBundle && <Badge variant="outline" className="text-[9px] h-4 px-1">BUNDLE</Badge>}
@@ -858,7 +1113,7 @@ export default function InventoryTab() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-6 w-6 shrink-0"
+                                  className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
                                   onClick={() => {
                                     setQuickAdjustId(product.id);
                                     setQuickAdjustValue('');
@@ -871,13 +1126,7 @@ export default function InventoryTab() {
                             )}
                           </TableCell>
                           <TableCell>
-                            {product.quantityInStock <= 0 ? (
-                              <Badge variant="destructive" className="text-[10px] font-semibold px-2">Out of Stock</Badge>
-                            ) : product.quantityInStock <= product.reorderLevel ? (
-                              <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 text-[10px] font-semibold px-2">Low Stock</Badge>
-                            ) : (
-                              <Badge variant="secondary" className="text-[10px] font-semibold px-2 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">In Stock</Badge>
-                            )}
+                            <StockStatusBadge product={product} />
                           </TableCell>
                           <TableCell>
                             <DropdownMenu>
@@ -887,6 +1136,9 @@ export default function InventoryTab() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => setDetailProduct(product)}>
+                                  <Info className="mr-2 h-4 w-4" /> View Details
+                                </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => setEditProduct(product)}>
                                   <Edit className="mr-2 h-4 w-4" /> Edit
                                 </DropdownMenuItem>
@@ -921,28 +1173,76 @@ export default function InventoryTab() {
         </CardContent>
       </Card>
 
-      {/* Stock Movement History */}
-      <Card>
+      {/* Stock Movement History with Filters */}
+      <Card className="backdrop-blur-sm shadow-sm">
         <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <CardTitle className="text-base flex items-center gap-2">
               <History className="h-4 w-4" /> Recent Stock Movements
             </CardTitle>
-            <Badge variant="outline" className="text-xs">{stockMovements.length} recent</Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs">{filteredStockMovements.length} records</Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setShowMovementFilters(!showMovementFilters)}
+              >
+                <Filter className="mr-1.5 h-3 w-3" />
+                {showMovementFilters ? 'Hide Filters' : 'Show Filters'}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
-          {stockMovements.length === 0 ? (
-            <div className="flex flex-col items-center py-8 gap-2">
-              <RotateCcw className="h-8 w-8 text-muted-foreground/30" />
+          {/* Movement Filters */}
+          {showMovementFilters && (
+            <div className="mb-4 p-3 rounded-lg border bg-muted/20 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Movement Type</Label>
+                  <Select value={movementTypeFilter} onValueChange={setMovementTypeFilter}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {MOVEMENT_TYPE_OPTIONS.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Date From</Label>
+                  <Input type="date" value={movementDateFrom} onChange={(e) => setMovementDateFrom(e.target.value)} className="h-8 text-xs" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Date To</Label>
+                  <Input type="date" value={movementDateTo} onChange={(e) => setMovementDateTo(e.target.value)} className="h-8 text-xs" />
+                </div>
+              </div>
+              {(movementTypeFilter !== 'all' || movementDateFrom || movementDateTo) && (
+                <div className="flex justify-end">
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setMovementTypeFilter('all'); setMovementDateFrom(''); setMovementDateTo(''); }}>
+                    <RotateCcw className="mr-1 h-3 w-3" /> Reset Filters
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {filteredStockMovements.length === 0 ? (
+            <div className="flex flex-col items-center py-10 gap-3">
+              <div className="p-5 rounded-full bg-gradient-to-br from-muted/50 to-muted/20 backdrop-blur-sm">
+                <RotateCcw className="h-10 w-10 text-muted-foreground/20" />
+              </div>
               <p className="text-sm text-muted-foreground">No stock movements recorded yet</p>
               <p className="text-xs text-muted-foreground/70">Movements will appear when you adjust stock or make sales</p>
             </div>
           ) : (
-            <div className="overflow-x-auto max-h-[350px] overflow-y-auto custom-scrollbar">
+            <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[30px]"></TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Product</TableHead>
                     <TableHead>Type</TableHead>
@@ -951,30 +1251,69 @@ export default function InventoryTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {stockMovements.map((movement: StockMovementItem) => {
+                  {filteredStockMovements.map((movement: StockMovementItem) => {
                     const badge = getMovementBadge(movement.movementType);
+                    const isExpanded = expandedMovement === movement.id;
                     return (
-                      <TableRow key={movement.id}>
-                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                          {new Date(movement.createdAt).toLocaleDateString('en-KE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {movement.product?.name || 'Unknown'}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={`text-[10px] font-semibold px-2 ${badge.className}`}>
-                            {badge.label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className={`text-sm font-mono font-medium ${movement.quantity > 0 ? 'text-green-600' : movement.quantity < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
-                            {movement.quantity > 0 ? '+' : ''}{movement.quantity}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">
-                          {movement.notes || '—'}
-                        </TableCell>
-                      </TableRow>
+                      <React.Fragment key={movement.id}>
+                        <TableRow
+                          className={`hover:bg-primary/5 transition-colors cursor-pointer ${isExpanded ? 'bg-primary/5' : ''}`}
+                          onClick={() => setExpandedMovement(isExpanded ? null : movement.id)}
+                        >
+                          <TableCell>
+                            <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {new Date(movement.createdAt).toLocaleDateString('en-KE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {movement.product?.name || 'Unknown'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={`text-[10px] font-semibold px-2 ${badge.className}`}>
+                              {badge.label}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className={`text-sm font-mono font-medium ${movement.quantity > 0 ? 'text-green-600' : movement.quantity < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                              {movement.quantity > 0 ? '+' : ''}{movement.quantity}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">
+                            {movement.notes || '—'}
+                          </TableCell>
+                        </TableRow>
+                        {isExpanded && (
+                          <TableRow className="bg-muted/10">
+                            <TableCell colSpan={6} className="p-3">
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                <div>
+                                  <span className="text-muted-foreground">Movement ID</span>
+                                  <p className="font-mono mt-0.5">{movement.id.slice(0, 8)}...</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Full Date</span>
+                                  <p className="mt-0.5">{formatDateTime(movement.createdAt)}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Performed By</span>
+                                  <p className="mt-0.5">{movement.performedBy || 'System'}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Reference</span>
+                                  <p className="font-mono mt-0.5">{movement.referenceId || '—'}</p>
+                                </div>
+                                {movement.notes && (
+                                  <div className="col-span-2 sm:col-span-4">
+                                    <span className="text-muted-foreground">Notes</span>
+                                    <p className="mt-0.5">{movement.notes}</p>
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </TableBody>
@@ -983,6 +1322,230 @@ export default function InventoryTab() {
           )}
         </CardContent>
       </Card>
+
+      {/* Product Detail Modal */}
+      <Dialog open={!!detailProduct} onOpenChange={(open) => !open && setDetailProduct(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              {detailProduct && (
+                <>
+                  {(() => {
+                    const img = getCategoryImage(detailProduct.categoryId);
+                    return img ? (
+                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-muted shrink-0">
+                        <img src={img} alt={detailProduct.category?.name || ''} className="h-full w-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                        <Package className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                    );
+                  })()}
+                  <div>
+                    <span>{detailProduct.name}</span>
+                    <p className="text-xs font-normal text-muted-foreground mt-0.5">{detailProduct.sku}</p>
+                  </div>
+                </>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          {detailProduct && (() => {
+            const profitMargin = detailProduct.pricePerUnit > 0
+              ? ((detailProduct.pricePerUnit - detailProduct.costPrice) / detailProduct.pricePerUnit * 100)
+              : 0;
+            const marginColor = getProfitMarginColor(profitMargin);
+            const relatedProducts = getRelatedProducts(detailProduct);
+            const salesVelocity = getProductSalesVelocity(detailProduct.id);
+            const stockRatio = detailProduct.reorderLevel > 0
+              ? detailProduct.quantityInStock / (detailProduct.reorderLevel * 3)
+              : 1;
+            const stockPct = Math.min(100, Math.max(0, stockRatio * 100));
+
+            return (
+              <div className="space-y-5">
+                {/* Price & Margin Section */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-xs text-muted-foreground">Selling Price</p>
+                    <p className="text-lg font-bold text-green-600">{formatKES(detailProduct.pricePerUnit)}</p>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-xs text-muted-foreground">Cost Price</p>
+                    <p className="text-lg font-bold text-muted-foreground">{formatKES(detailProduct.costPrice)}</p>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-xs text-muted-foreground">Profit Margin</p>
+                    <p className={`text-lg font-bold ${marginColor.text}`}>{profitMargin.toFixed(1)}%</p>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-xs text-muted-foreground">Profit/Unit</p>
+                    <p className="text-lg font-bold">{formatKES(detailProduct.pricePerUnit - detailProduct.costPrice)}</p>
+                  </div>
+                </div>
+
+                {/* Stock Level with Visual Bar */}
+                <div className="rounded-lg border bg-gradient-to-r from-muted/30 to-muted/10 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4" /> Stock Level
+                    </h4>
+                    <StockStatusBadge product={detailProduct} />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Current: <span className="font-medium text-foreground">{detailProduct.quantityInStock}</span> {detailProduct.unitType.toLowerCase()}s</span>
+                      <span className="text-muted-foreground">Reorder Level: <span className="font-medium text-foreground">{detailProduct.reorderLevel}</span></span>
+                    </div>
+                    <div className="relative">
+                      <StockLevelBar product={detailProduct} />
+                      {detailProduct.reorderLevel > 0 && (
+                        <div
+                          className="absolute top-0 h-2 border-l-2 border-dashed border-amber-500"
+                          style={{ left: `${Math.min(100, (detailProduct.reorderLevel / (detailProduct.reorderLevel * 3)) * 100)}%` }}
+                        />
+                      )}
+                    </div>
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <span>0</span>
+                      <span className="text-amber-500">Reorder: {detailProduct.reorderLevel}</span>
+                      <span>{detailProduct.reorderLevel * 3}+</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sales Velocity */}
+                <div className="rounded-lg border bg-muted/20 p-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-amber-500" /> Sales Velocity
+                    </h4>
+                    <span className="text-lg font-bold">{salesVelocity} <span className="text-xs font-normal text-muted-foreground">units/30d</span></span>
+                  </div>
+                  {salesVelocity > 0 && detailProduct.quantityInStock > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Est. {Math.round(detailProduct.quantityInStock / salesVelocity * 30)} days of stock remaining
+                    </p>
+                  )}
+                  {salesVelocity === 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">No sales in the last 30 days</p>
+                  )}
+                </div>
+
+                {/* Category & Details */}
+                <div className="rounded-lg border bg-muted/20 p-4 space-y-2">
+                  <h4 className="text-sm font-semibold flex items-center gap-2">
+                    <Info className="h-4 w-4" /> Product Details
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Category:</span>{' '}
+                      {detailProduct.category ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: detailProduct.category.color || getCategoryColor(detailProduct.category.name) }} />
+                          {detailProduct.category.name}
+                        </span>
+                      ) : '—'}
+                    </div>
+                    <div><span className="text-muted-foreground">Unit Type:</span> {detailProduct.unitType}</div>
+                    <div><span className="text-muted-foreground">Barcode:</span> {detailProduct.barcode || '—'}</div>
+                    <div><span className="text-muted-foreground">Rental:</span> {detailProduct.isRental ? 'Yes' : 'No'}</div>
+                    <div><span className="text-muted-foreground">Bundle:</span> {detailProduct.isBundle ? 'Yes' : 'No'}</div>
+                    <div><span className="text-muted-foreground">Created:</span> {formatDate(detailProduct.createdAt)}</div>
+                  </div>
+                  {detailProduct.description && (
+                    <div className="mt-2 pt-2 border-t">
+                      <p className="text-xs text-muted-foreground">{detailProduct.description}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Recent Movements for this product */}
+                {productMovements.length > 0 && (
+                  <div className="rounded-lg border bg-muted/20 p-4">
+                    <h4 className="text-sm font-semibold flex items-center gap-2 mb-3">
+                      <History className="h-4 w-4" /> Recent Movements
+                    </h4>
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                      {productMovements.slice(0, 5).map((m) => {
+                        const badge = getMovementBadge(m.movementType);
+                        return (
+                          <div key={m.id} className="flex items-center justify-between p-2 rounded border bg-card text-xs">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${badge.className}`}>{badge.label}</Badge>
+                              <span className="text-muted-foreground">{formatDate(m.createdAt)}</span>
+                            </div>
+                            <span className={`font-mono font-medium ${m.quantity > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {m.quantity > 0 ? '+' : ''}{m.quantity}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Related Products */}
+                {relatedProducts.length > 0 && (
+                  <div className="rounded-lg border bg-muted/20 p-4">
+                    <h4 className="text-sm font-semibold flex items-center gap-2 mb-3">
+                      <ShoppingCart className="h-4 w-4" /> Related Products
+                    </h4>
+                    <div className="space-y-2">
+                      {relatedProducts.map((rp) => (
+                        <div
+                          key={rp.id}
+                          className="flex items-center justify-between p-2 rounded border bg-card hover:bg-muted/50 transition-colors cursor-pointer"
+                          onClick={() => setDetailProduct(rp)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded bg-muted flex items-center justify-center">
+                              <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-medium">{rp.name}</p>
+                              <p className="text-[10px] text-muted-foreground">{rp.sku}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs font-medium">{formatKES(rp.pricePerUnit)}</p>
+                            <p className="text-[10px] text-muted-foreground">Stock: {rp.quantityInStock}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      setDetailProduct(null);
+                      setEditProduct(detailProduct);
+                    }}
+                  >
+                    <Edit className="mr-2 h-4 w-4" /> Edit Product
+                  </Button>
+                  <Button
+                    className="flex-1 bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+                    onClick={() => {
+                      setDetailProduct(null);
+                      setAdjustStockProduct(detailProduct);
+                      setStockAdjustAmount(0);
+                      setStockAdjustReason('');
+                    }}
+                  >
+                    <ArrowUpDown className="mr-2 h-4 w-4" /> Adjust Stock
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Product Dialog */}
       <Dialog open={!!editProduct} onOpenChange={(open) => !open && setEditProduct(null)}>
@@ -1059,7 +1622,7 @@ export default function InventoryTab() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditProduct(null)}>Cancel</Button>
             <Button
-              onClick={() => editProduct && updateProductMutation.mutate({ id: editProduct.id, data: editProduct })}
+              onClick={() => editProduct && updateProductMutation.mutate({ id: editProduct.id, data: editProduct as unknown as Partial<CreateProductPayload> })}
               disabled={updateProductMutation.isPending}
             >
               {updateProductMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
@@ -1083,11 +1646,12 @@ export default function InventoryTab() {
           </DialogHeader>
           {adjustStockProduct && (
             <div className="space-y-4">
-              <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
+              <div className="rounded-lg border bg-gradient-to-r from-muted/30 to-muted/10 p-3 space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Current Stock</span>
                   <span className="text-sm font-bold">{adjustStockProduct.quantityInStock} {adjustStockProduct.unitType.toLowerCase()}s</span>
                 </div>
+                <StockLevelBar product={adjustStockProduct} />
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Reorder Level</span>
                   <span className="text-sm">{adjustStockProduct.reorderLevel}</span>
@@ -1221,6 +1785,76 @@ export default function InventoryTab() {
             >
               {bulkAdjustMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowUpDown className="mr-2 h-4 w-4" />}
               Apply to {selectedIds.size} Products
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Category Dialog */}
+      <Dialog open={addCategoryOpen} onOpenChange={setAddCategoryOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Tag className="h-5 w-5 text-accent-orange" />
+              Add New Category
+            </DialogTitle>
+            <DialogDescription>Create a new product category</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Category Name</Label>
+              <Input
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="e.g. Safety Equipment"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Description <span className="text-muted-foreground">(optional)</span></Label>
+              <Input
+                value={newCategoryDesc}
+                onChange={(e) => setNewCategoryDesc(e.target.value)}
+                placeholder="Category description..."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Palette className="h-4 w-4" /> Color
+              </Label>
+              <div className="flex flex-wrap gap-2">
+                {CATEGORY_COLOR_PALETTE.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    className={`w-7 h-7 rounded-full transition-all hover:scale-110 ${
+                      newCategoryColor === color ? 'ring-2 ring-offset-2 ring-primary scale-110' : ''
+                    }`}
+                    style={{ backgroundColor: color }}
+                    onClick={() => setNewCategoryColor(color)}
+                  />
+                ))}
+              </div>
+            </div>
+            {/* Preview */}
+            {newCategoryName && (
+              <div className="rounded-lg border bg-muted/20 p-3">
+                <p className="text-xs text-muted-foreground mb-1">Preview</p>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: newCategoryColor }} />
+                  <span className="text-sm font-medium">{newCategoryName}</span>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddCategoryOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+              disabled={createCategoryMutation.isPending || !newCategoryName.trim()}
+              onClick={handleCreateCategory}
+            >
+              {createCategoryMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+              Create Category
             </Button>
           </DialogFooter>
         </DialogContent>

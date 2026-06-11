@@ -1,21 +1,44 @@
 /**
  * MBUMAH HARDWARE POS - Chart of Accounts API
  * GET /api/financial/accounts - List chart of accounts with balances
+ * Accepts both organizationId and storeId (derives organizationId from store)
  */
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
-import { AccountType } from '@/lib/types';
 
 async function getAccountsHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const { searchParams } = new URL(request.url);
 
-  const organizationId = searchParams.get('organizationId');
+  let organizationId = searchParams.get('organizationId');
+  const storeId = searchParams.get('storeId');
+
+  // If storeId is provided but not organizationId, derive it from the store
+  if (!organizationId && storeId) {
+    const store = await db.store.findUnique({
+      where: { id: storeId },
+      select: { organizationId: true },
+    });
+    if (store) {
+      organizationId = store.organizationId;
+    }
+  }
+
+  // If still no organizationId, try to get the first organization (for demo/development)
+  if (!organizationId) {
+    const firstOrg = await db.organization.findFirst({
+      select: { id: true },
+    });
+    if (firstOrg) {
+      organizationId = firstOrg.id;
+    }
+  }
+
   if (!organizationId) {
     return Response.json(
-      { success: false, error: 'organizationId is required.' },
+      { success: false, error: 'organizationId or storeId is required.' },
       { status: 400 }
     );
   }

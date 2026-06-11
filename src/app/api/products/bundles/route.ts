@@ -2,6 +2,10 @@
  * MBUMAH HARDWARE POS - Product Bundles API
  * GET /api/products/bundles - List all bundle products with their constituent items
  * POST /api/products/bundles - Create a new bundle product with constituent items
+ *
+ * POST supports two interfaces:
+ * 1. Legacy: Explicit pricePerUnit, costPrice, items[] with childProductId + quantityRequired
+ * 2. New: componentProducts[] with productId + quantity, discountPercent - auto-calculates price
  */
 
 import { NextRequest } from 'next/server';
@@ -41,6 +45,7 @@ async function getBundlesHandler(...args: unknown[]): Promise<Response> {
                 sku: true,
                 quantityInStock: true,
                 pricePerUnit: true,
+                costPrice: true,
                 unitType: true,
                 isActive: true,
               },
@@ -55,9 +60,35 @@ async function getBundlesHandler(...args: unknown[]): Promise<Response> {
     db.product.count({ where }),
   ]);
 
+  // Enrich each bundle with computed discount and component pricing
+  const enrichedBundles = bundles.map((bundle) => {
+    const componentTotalPrice = bundle.bundleItems.reduce(
+      (sum, bi) => sum + (bi.childProduct.pricePerUnit * bi.quantityRequired),
+      0
+    );
+    const componentTotalCost = bundle.bundleItems.reduce(
+      (sum, bi) => sum + (bi.childProduct.costPrice * bi.quantityRequired),
+      0
+    );
+    const discountAmount = componentTotalPrice - bundle.pricePerUnit;
+    const discountPercent = componentTotalPrice > 0
+      ? Math.round((discountAmount / componentTotalPrice) * 10000) / 100
+      : 0;
+
+    return {
+      ...bundle,
+      computed: {
+        componentTotalPrice,
+        componentTotalCost,
+        discountAmount: Math.max(0, discountAmount),
+        discountPercent: Math.max(0, discountPercent),
+      },
+    };
+  });
+
   return Response.json({
     success: true,
-    data: bundles,
+    data: enrichedBundles,
     pagination: {
       page,
       limit,
@@ -81,31 +112,121 @@ async function createBundleHandler(...args: unknown[]): Promise<Response> {
     taxRate,
     sku,
     items,
+    // New interface fields
+    componentProducts,
+    discountPercent,
   } = body;
 
-  if (!storeId || !name || !pricePerUnit || !costPrice || !items || !Array.isArray(items) || items.length === 0) {
+  // ===== Determine which interface is being used =====
+  const useNewInterface = componentProducts && Array.isArray(componentProducts) && componentProducts.length > 0;
+  const useLegacyInterface = items && Array.isArray(items) && items.length > 0;
+
+  if (!storeId || !name) {
     return Response.json(
-      { success: false, error: 'storeId, name, pricePerUnit, costPrice, and items array are required.' },
+      { success: false, error: 'storeId and name are required.' },
       { status: 400 }
     );
   }
 
-  // Validate all constituent products exist
-  const childProductIds = items.map((item: { childProductId: string; quantityRequired: number }) => item.childProductId);
+  if (!useNewInterface && !useLegacyInterface) {
+    return Response.json(
+      { success: false, error: 'Either componentProducts or items array is required.' },
+      { status: 400 }
+    );
+  }
+
+  if (useLegacyInterface && (!pricePerUnit || !costPrice)) {
+    return Response.json(
+      { success: false, error: 'pricePerUnit and costPrice are required when using the items interface.' },
+      { status: 400 }
+    );
+  }
+
+  // ===== Normalize to a unified format =====
+  // bundleComponents: Array of { productId, quantity }
+  let bundleComponents: Array<{ productId: string; quantity: number }>;
+
+  if (useNewInterface) {
+    // New interface: componentProducts with productId + quantity
+    bundleComponents = componentProducts.map(
+      (cp: { productId: string; quantity: number }) => ({
+        productId: cp.productId,
+        quantity: parseFloat(String(cp.quantity || 1)),
+      })
+    );
+
+    // Validate componentProducts entries
+    for (const cp of bundleComponents) {
+      if (!cp.productId || cp.quantity <= 0) {
+        return Response.json(
+          { success: false, error: 'Each componentProduct must have a valid productId and quantity > 0.' },
+          { status: 400 }
+        );
+      }
+    }
+  } else {
+    // Legacy interface: items with childProductId + quantityRequired
+    bundleComponents = items.map(
+      (item: { childProductId: string; quantityRequired: number }) => ({
+        productId: item.childProductId,
+        quantity: parseFloat(String(item.quantityRequired || 1)),
+      })
+    );
+  }
+
+  // ===== Validate all constituent products exist =====
+  const childProductIds = bundleComponents.map((c) => c.productId);
   const childProducts = await db.product.findMany({
-    where: { id: { in: childProductIds }, storeId },
+    where: { id: { in: childProductIds }, storeId, isActive: true },
   });
 
   if (childProducts.length !== childProductIds.length) {
     const foundIds = childProducts.map((p) => p.id);
     const missingIds = childProductIds.filter((id: string) => !foundIds.includes(id));
     return Response.json(
-      { success: false, error: `Some constituent products not found: ${missingIds.join(', ')}` },
+      { success: false, error: `Some constituent products not found or inactive: ${missingIds.join(', ')}` },
       { status: 400 }
     );
   }
 
-  // Generate SKU if not provided
+  const childProductMap = new Map(childProducts.map((p) => [p.id, p]));
+
+  // ===== Calculate bundle price for new interface =====
+  let finalPricePerUnit: number;
+  let finalCostPrice: number;
+
+  if (useNewInterface) {
+    // Calculate from component prices minus discount
+    const componentTotalPrice = bundleComponents.reduce((sum, comp) => {
+      const product = childProductMap.get(comp.productId);
+      return sum + (product ? product.pricePerUnit * comp.quantity : 0);
+    }, 0);
+
+    const componentTotalCost = bundleComponents.reduce((sum, comp) => {
+      const product = childProductMap.get(comp.productId);
+      return sum + (product ? product.costPrice * comp.quantity : 0);
+    }, 0);
+
+    const discountValue = parseFloat(String(discountPercent || 0));
+    if (discountValue < 0 || discountValue >= 100) {
+      return Response.json(
+        { success: false, error: 'discountPercent must be between 0 and 99.' },
+        { status: 400 }
+      );
+    }
+
+    finalPricePerUnit = componentTotalPrice * (1 - discountValue / 100);
+    finalCostPrice = componentTotalCost;
+  } else {
+    finalPricePerUnit = parseFloat(String(pricePerUnit));
+    finalCostPrice = parseFloat(String(costPrice));
+  }
+
+  // Round to 2 decimal places
+  finalPricePerUnit = Math.round(finalPricePerUnit * 100) / 100;
+  finalCostPrice = Math.round(finalCostPrice * 100) / 100;
+
+  // ===== Generate SKU if not provided =====
   const bundleSku = sku || generateSKU('BDL');
 
   // Check for duplicate SKU
@@ -117,7 +238,7 @@ async function createBundleHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Create the bundle product and its constituent items in a transaction
+  // ===== Create the bundle product and its constituent items in a transaction =====
   const bundle = await db.$transaction(async (tx) => {
     const product = await tx.product.create({
       data: {
@@ -129,18 +250,18 @@ async function createBundleHandler(...args: unknown[]): Promise<Response> {
         unitType: 'SET',
         quantityInStock: 999,
         reorderLevel: 0,
-        pricePerUnit,
-        costPrice,
+        pricePerUnit: finalPricePerUnit,
+        costPrice: finalCostPrice,
         taxRate: taxRate ?? 16,
         isBundle: true,
         isActive: true,
       },
     });
 
-    const bundleItemsData = items.map((item: { childProductId: string; quantityRequired: number }) => ({
+    const bundleItemsData = bundleComponents.map((comp) => ({
       parentProductId: product.id,
-      childProductId: item.childProductId,
-      quantityRequired: item.quantityRequired,
+      childProductId: comp.productId,
+      quantityRequired: comp.quantity,
     }));
 
     await tx.productBundle.createMany({ data: bundleItemsData });
@@ -151,23 +272,51 @@ async function createBundleHandler(...args: unknown[]): Promise<Response> {
         category: { select: { id: true, name: true } },
         bundleItems: {
           include: {
-            childProduct: { select: { id: true, name: true, sku: true, pricePerUnit: true, unitType: true } },
+            childProduct: { select: { id: true, name: true, sku: true, pricePerUnit: true, costPrice: true, unitType: true } },
           },
         },
       },
     });
   });
 
+  // Calculate computed fields for the response
+  const componentTotalPrice = bundleComponents.reduce((sum, comp) => {
+    const product = childProductMap.get(comp.productId);
+    return sum + (product ? product.pricePerUnit * comp.quantity : 0);
+  }, 0);
+  const effectiveDiscount = componentTotalPrice - finalPricePerUnit;
+  const effectiveDiscountPercent = componentTotalPrice > 0
+    ? Math.round((effectiveDiscount / componentTotalPrice) * 10000) / 100
+    : 0;
+
   await systemLog({
     action: 'BUNDLE_CREATED',
     component: LogComponent.INVENTORY,
     severity: LogSeverity.INFO,
-    message: `Bundle "${name}" created with ${items.length} items`,
+    message: `Bundle "${name}" created with ${bundleComponents.length} items, price KES ${finalPricePerUnit}`,
     storeId,
-    metadata: { bundleId: bundle!.id, sku: bundleSku, itemCount: items.length },
+    metadata: {
+      bundleId: bundle!.id,
+      sku: bundleSku,
+      itemCount: bundleComponents.length,
+      pricePerUnit: finalPricePerUnit,
+      costPrice: finalCostPrice,
+      discountPercent: effectiveDiscountPercent,
+      interface: useNewInterface ? 'componentProducts' : 'items',
+    },
   });
 
-  return Response.json({ success: true, data: bundle }, { status: 201 });
+  return Response.json({
+    success: true,
+    data: {
+      ...bundle,
+      computed: {
+        componentTotalPrice,
+        discountAmount: Math.max(0, effectiveDiscount),
+        discountPercent: Math.max(0, effectiveDiscountPercent),
+      },
+    },
+  }, { status: 201 });
 }
 
 export const GET = withErrorBoundary(getBundlesHandler, 'BUNDLES_LIST');

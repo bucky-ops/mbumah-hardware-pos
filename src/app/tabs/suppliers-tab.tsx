@@ -7,7 +7,8 @@ import {
   Truck, Search, Plus, Star, Eye, Loader2,
   Phone, Mail, MapPin, Building2, User, FileText,
   ChevronRight, Download, Package, CalendarDays,
-  ClipboardCheck, AlertTriangle, Hash
+  ClipboardCheck, AlertTriangle, Hash, Clock, CheckCircle2,
+  Circle, ArrowRight, TrendingUp, Award, Timer,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
@@ -60,7 +61,7 @@ function getPOStatusBadge(status: string) {
   switch (status) {
     case 'DRAFT': return 'bg-gray-100 text-gray-700 dark:bg-gray-800/50 dark:text-gray-300';
     case 'SENT': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
-    case 'CONFIRMED': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
+    case 'CONFIRMED': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300';
     case 'RECEIVED': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300';
     case 'CANCELLED': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
     default: return 'bg-muted text-muted-foreground';
@@ -98,6 +99,209 @@ function StarRating({ rating, onRate, readonly = false }: { rating: number; onRa
         </button>
       ))}
     </div>
+  );
+}
+
+// ============================================================================
+// PO Status Timeline Component
+// ============================================================================
+
+function POStatusTimeline({ status }: { status: string }) {
+  const steps = ['DRAFT', 'SENT', 'CONFIRMED', 'RECEIVED'];
+  const currentIndex = steps.indexOf(status);
+  const isCancelled = status === 'CANCELLED';
+
+  return (
+    <div className="flex items-center gap-1">
+      {steps.map((step, i) => {
+        const isCompleted = !isCancelled && i <= currentIndex;
+        const isCurrent = !isCancelled && i === currentIndex;
+        const isPast = !isCancelled && i < currentIndex;
+
+        return (
+          <React.Fragment key={step}>
+            {i > 0 && (
+              <div className={`w-4 h-0.5 ${isPast ? 'bg-green-400' : 'bg-muted-foreground/20'}`} />
+            )}
+            <div className="flex flex-col items-center" title={step}>
+              {isCurrent ? (
+                <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                  <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                </div>
+              ) : isPast ? (
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+              ) : (
+                <Circle className="w-4 h-4 text-muted-foreground/30" />
+              )}
+              <span className={`text-[8px] mt-0.5 ${isCurrent ? 'text-primary font-bold' : isPast ? 'text-green-600' : 'text-muted-foreground/40'}`}>
+                {step}
+              </span>
+            </div>
+          </React.Fragment>
+        );
+      })}
+      {isCancelled && (
+        <Badge className="text-[9px] bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 ml-2">
+          CANCELLED
+        </Badge>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// PO Receiving Progress Component
+// ============================================================================
+
+function POReceivingProgress({ po }: { po: PurchaseOrderListItem }) {
+  if (!po.items || po.items.length === 0) return null;
+
+  const totalOrdered = po.items.reduce((s, item) => s + item.quantity, 0);
+  const totalReceived = po.items.reduce((s, item) => s + item.receivedQty, 0);
+  const pct = totalOrdered > 0 ? (totalReceived / totalOrdered) * 100 : 0;
+  const isPartial = pct > 0 && pct < 100;
+  const isComplete = pct >= 100;
+
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <Progress value={pct} className="h-1.5 flex-1" />
+      <span className={`font-medium whitespace-nowrap ${isComplete ? 'text-green-600' : isPartial ? 'text-amber-600' : 'text-muted-foreground'}`}>
+        {totalReceived}/{totalOrdered}
+      </span>
+    </div>
+  );
+}
+
+// ============================================================================
+// Delivery Status Indicator
+// ============================================================================
+
+function DeliveryStatusIndicator({ po }: { po: PurchaseOrderListItem }) {
+  const now = new Date().getTime();
+  const expected = po.expectedDate ? new Date(po.expectedDate).getTime() : null;
+
+  if (po.status === 'RECEIVED') {
+    return (
+      <Badge className="text-[9px] bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400 gap-0.5">
+        <CheckCircle2 className="h-3 w-3" /> Delivered
+      </Badge>
+    );
+  }
+
+  if (po.status === 'CANCELLED') {
+    return (
+      <Badge className="text-[9px] bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 gap-0.5">
+        <AlertTriangle className="h-3 w-3" /> Cancelled
+      </Badge>
+    );
+  }
+
+  if (expected && now > expected) {
+    return (
+      <Badge className="text-[9px] bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 gap-0.5">
+        <AlertTriangle className="h-3 w-3" /> Overdue
+      </Badge>
+    );
+  }
+
+  if (expected) {
+    const daysLeft = Math.ceil((expected - now) / 86400000);
+    return (
+      <Badge className="text-[9px] bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 gap-0.5">
+        <Clock className="h-3 w-3" /> {daysLeft}d left
+      </Badge>
+    );
+  }
+
+  return (
+    <Badge className="text-[9px] bg-gray-100 text-gray-600 dark:bg-gray-800/50 dark:text-gray-400 gap-0.5">
+      <Clock className="h-3 w-3" /> Pending
+    </Badge>
+  );
+}
+
+// ============================================================================
+// Supplier Performance Card
+// ============================================================================
+
+function SupplierPerformanceCard({ purchaseOrders }: { purchaseOrders: PurchaseOrderListItem[] }) {
+  const receivedPOs = purchaseOrders.filter(po => po.status === 'RECEIVED');
+  const onTimePOs = receivedPOs.filter(po => {
+    if (!po.expectedDate) return true;
+    return new Date(po.createdAt).getTime() <= new Date(po.expectedDate).getTime();
+  });
+  const fulfilledPOs = purchaseOrders.filter(po => po.status !== 'CANCELLED');
+  const totalPOValue = purchaseOrders.filter(po => po.status !== 'CANCELLED').reduce((s, po) => s + po.totalAmount, 0);
+
+  const onTimeRate = receivedPOs.length > 0 ? Math.round((onTimePOs.length / receivedPOs.length) * 100) : 0;
+  const fulfillmentRate = purchaseOrders.length > 0 ? Math.round((fulfilledPOs.length / purchaseOrders.length) * 100) : 100;
+  const avgLeadTime = receivedPOs.length > 0
+    ? Math.round(receivedPOs.reduce((s, po) => {
+        const created = new Date(po.orderDate).getTime();
+        const delivered = po.expectedDate ? new Date(po.expectedDate).getTime() : created;
+        return s + Math.max(Math.ceil((delivered - created) / 86400000), 1);
+      }, 0) / receivedPOs.length)
+    : 0;
+
+  // Quality rating based on received vs ordered quantities
+  const qualityRating = receivedPOs.length > 0
+    ? Math.min(5, Math.round((fulfillmentRate / 20) * 10) / 10)
+    : 0;
+
+  return (
+    <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Award className="h-4 w-4 text-amber-500" /> Supplier Performance
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="p-3 rounded-lg bg-green-50/80 dark:bg-green-900/20 backdrop-blur-sm border border-green-200/30 dark:border-green-800/30">
+            <div className="flex items-center gap-2 mb-1">
+              <Clock className="h-4 w-4 text-green-600" />
+              <span className="text-xs text-muted-foreground">On-Time Rate</span>
+            </div>
+            <p className="text-xl font-bold text-green-600">{onTimeRate}%</p>
+            <div className="mt-1 h-1 bg-green-200/50 rounded-full overflow-hidden">
+              <div className="h-full bg-green-500 rounded-full" style={{ width: `${onTimeRate}%` }} />
+            </div>
+          </div>
+          <div className="p-3 rounded-lg bg-blue-50/80 dark:bg-blue-900/20 backdrop-blur-sm border border-blue-200/30 dark:border-blue-800/30">
+            <div className="flex items-center gap-2 mb-1">
+              <ClipboardCheck className="h-4 w-4 text-blue-600" />
+              <span className="text-xs text-muted-foreground">Fulfillment Rate</span>
+            </div>
+            <p className="text-xl font-bold text-blue-600">{fulfillmentRate}%</p>
+            <div className="mt-1 h-1 bg-blue-200/50 rounded-full overflow-hidden">
+              <div className="h-full bg-blue-500 rounded-full" style={{ width: `${fulfillmentRate}%` }} />
+            </div>
+          </div>
+          <div className="p-3 rounded-lg bg-amber-50/80 dark:bg-amber-900/20 backdrop-blur-sm border border-amber-200/30 dark:border-amber-800/30">
+            <div className="flex items-center gap-2 mb-1">
+              <Timer className="h-4 w-4 text-amber-600" />
+              <span className="text-xs text-muted-foreground">Avg. Lead Time</span>
+            </div>
+            <p className="text-xl font-bold text-amber-600">{avgLeadTime > 0 ? `${avgLeadTime}d` : '—'}</p>
+          </div>
+          <div className="p-3 rounded-lg bg-purple-50/80 dark:bg-purple-900/20 backdrop-blur-sm border border-purple-200/30 dark:border-purple-800/30">
+            <div className="flex items-center gap-2 mb-1">
+              <Star className="h-4 w-4 text-purple-600" />
+              <span className="text-xs text-muted-foreground">Quality Rating</span>
+            </div>
+            <p className="text-xl font-bold text-purple-600">{qualityRating > 0 ? qualityRating : '—'}/5</p>
+            {qualityRating > 0 && <StarRating rating={Math.round(qualityRating)} readonly />}
+          </div>
+        </div>
+
+        {purchaseOrders.length === 0 && (
+          <div className="text-center py-6 text-muted-foreground">
+            <Award className="h-8 w-8 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">No purchase orders to evaluate performance</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -227,13 +431,13 @@ function AddSupplierDialog({
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="taxPin">Tax PIN (KRA)</Label>
-              <Input id="taxPin" value={form.taxPin} onChange={(e) => setForm({ ...form, taxPin: e.target.value })} placeholder="A00XXXXXXX" />
+              <Label htmlFor="taxPin">Tax PIN</Label>
+              <Input id="taxPin" value={form.taxPin} onChange={(e) => setForm({ ...form, taxPin: e.target.value })} placeholder="P0512345678" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="paymentTerms">Payment Terms</Label>
               <Select value={form.paymentTerms} onValueChange={(v) => setForm({ ...form, paymentTerms: v })}>
-                <SelectTrigger id="paymentTerms"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="IMMEDIATE">Immediate</SelectItem>
                   <SelectItem value="NET_15">Net 15</SelectItem>
@@ -242,7 +446,7 @@ function AddSupplierDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 sm:col-span-2">
               <Label>Rating</Label>
               <StarRating rating={form.rating} onRate={(r) => setForm({ ...form, rating: r })} />
             </div>
@@ -305,7 +509,6 @@ function CreatePODialog({
   const updateItem = (index: number, field: 'productId' | 'quantity' | 'unitPrice', value: string) => {
     const updated = [...poItems];
     updated[index] = { ...updated[index], [field]: value };
-    // Auto-fill unit price from product cost price
     if (field === 'productId') {
       const product = products.find((p) => p.id === value);
       if (product) {
@@ -617,10 +820,13 @@ function SupplierDetailView({
   if (!supplier) return null;
 
   const summary = supplier.summary || { totalPOs: 0, totalPOValue: 0, pendingPOs: 0 };
+  const lastOrderDate = purchaseOrders.length > 0
+    ? purchaseOrders.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime())[0]?.orderDate
+    : null;
 
   return (
     <div className="space-y-4">
-      {/* Header */}
+      {/* Header - Enhanced with Glass-morphism */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={onBack}>
           <ChevronRight className="h-4 w-4 rotate-180 mr-1" />
@@ -634,7 +840,8 @@ function SupplierDetailView({
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold">{supplier.name}</h2>
-            <Badge variant={supplier.isActive ? 'default' : 'secondary'}>
+            <Badge className={`text-xs ${supplier.isActive ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full mr-1 ${supplier.isActive ? 'bg-green-500' : 'bg-red-500'}`} />
               {supplier.isActive ? 'Active' : 'Inactive'}
             </Badge>
           </div>
@@ -659,12 +866,12 @@ function SupplierDetailView({
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
+      {/* Summary Cards - Enhanced with Glass-morphism */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card className="border-l-4 border-l-blue-500 backdrop-blur-sm bg-card/80">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+              <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
                 <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
@@ -674,10 +881,10 @@ function SupplierDetailView({
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-l-4 border-l-amber-500 backdrop-blur-sm bg-card/80">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+              <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
                 <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
@@ -687,15 +894,28 @@ function SupplierDetailView({
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-l-4 border-l-green-500 backdrop-blur-sm bg-card/80">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+              <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
                 <Truck className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Total PO Value</p>
+                <p className="text-xs text-muted-foreground">Total Spend</p>
                 <p className="text-xl font-bold">{formatKES(summary.totalPOValue)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-violet-500 backdrop-blur-sm bg-card/80">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
+                <CalendarDays className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Last Order</p>
+                <p className="text-lg font-bold">{lastOrderDate ? formatDate(lastOrderDate) : '—'}</p>
               </div>
             </div>
           </CardContent>
@@ -707,11 +927,12 @@ function SupplierDetailView({
         <TabsList>
           <TabsTrigger value="info">Info</TabsTrigger>
           <TabsTrigger value="orders">Purchase Orders</TabsTrigger>
+          <TabsTrigger value="performance">Performance</TabsTrigger>
           <TabsTrigger value="contact">Contact</TabsTrigger>
         </TabsList>
 
         <TabsContent value="info" className="mt-4">
-          <Card>
+          <Card className="backdrop-blur-sm bg-card/80">
             <CardContent className="p-4 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -744,7 +965,7 @@ function SupplierDetailView({
         </TabsContent>
 
         <TabsContent value="orders" className="mt-4">
-          <Card>
+          <Card className="backdrop-blur-sm bg-card/80">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Purchase Orders</CardTitle>
@@ -756,6 +977,7 @@ function SupplierDetailView({
                 <div className="text-center py-8 text-muted-foreground">
                   <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p className="text-sm">No purchase orders yet</p>
+                  <p className="text-xs mt-1">Create a PO to start tracking orders</p>
                 </div>
               ) : (
                 <div className="max-h-96 overflow-auto custom-scrollbar">
@@ -764,7 +986,9 @@ function SupplierDetailView({
                       <TableRow>
                         <TableHead>PO #</TableHead>
                         <TableHead>Date</TableHead>
-                        <TableHead>Status</TableHead>
+                        <TableHead>Status Timeline</TableHead>
+                        <TableHead>Delivery</TableHead>
+                        <TableHead>Received</TableHead>
                         <TableHead>Amount</TableHead>
                         <TableHead className="text-right">Action</TableHead>
                       </TableRow>
@@ -775,9 +999,13 @@ function SupplierDetailView({
                           <TableCell className="font-mono text-sm">{po.poNumber}</TableCell>
                           <TableCell className="text-sm">{formatDate(po.orderDate)}</TableCell>
                           <TableCell>
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getPOStatusBadge(po.status)}`}>
-                              {po.status}
-                            </span>
+                            <POStatusTimeline status={po.status} />
+                          </TableCell>
+                          <TableCell>
+                            <DeliveryStatusIndicator po={po} />
+                          </TableCell>
+                          <TableCell className="w-[120px]">
+                            <POReceivingProgress po={po} />
                           </TableCell>
                           <TableCell className="font-medium">{formatKES(po.totalAmount)}</TableCell>
                           <TableCell className="text-right">
@@ -802,8 +1030,12 @@ function SupplierDetailView({
           </Card>
         </TabsContent>
 
+        <TabsContent value="performance" className="mt-4">
+          <SupplierPerformanceCard purchaseOrders={purchaseOrders} />
+        </TabsContent>
+
         <TabsContent value="contact" className="mt-4">
-          <Card>
+          <Card className="backdrop-blur-sm bg-card/80">
             <CardContent className="p-4 space-y-4">
               {supplier.phone && (
                 <div className="flex items-center gap-3">
@@ -878,346 +1110,6 @@ function SupplierDetailView({
 }
 
 // ============================================================================
-// MAIN SUPPLIERS TAB
-// ============================================================================
-
-export default function SuppliersTab() {
-  const currentStoreId = useAppStore((s) => s.currentStoreId);
-  const queryClient = useQueryClient();
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [addOpen, setAddOpen] = useState(false);
-  const [createPOOpen, setCreatePOOpen] = useState(false);
-  const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
-  const [poFilterStatus, setPoFilterStatus] = useState<string>('all');
-
-  // Suppliers query
-  const { data: suppliersData, isLoading: suppliersLoading } = useQuery({
-    queryKey: ['suppliers', currentStoreId, searchQuery, filterStatus],
-    queryFn: () => suppliersApi.list({
-      storeId: currentStoreId,
-      search: searchQuery || undefined,
-      isActive: filterStatus === 'all' ? undefined : filterStatus === 'active' ? 'true' : 'false',
-      limit: 100,
-    }),
-    enabled: !!currentStoreId,
-  });
-
-  // Purchase orders query
-  const { data: poData, isLoading: poLoading } = useQuery({
-    queryKey: ['purchase-orders', currentStoreId, poFilterStatus],
-    queryFn: () => purchaseOrdersApi.list({
-      storeId: currentStoreId,
-      status: poFilterStatus === 'all' ? undefined : poFilterStatus,
-      limit: 50,
-    }),
-    enabled: !!currentStoreId,
-  });
-
-  const suppliers: SupplierItem[] = suppliersData?.data || [];
-  const purchaseOrders: PurchaseOrderListItem[] = poData?.data || [];
-
-  const activeSuppliers = suppliers.filter((s) => s.isActive).length;
-  const pendingPOs = purchaseOrders.filter((po) => ['DRAFT', 'SENT', 'CONFIRMED'].includes(po.status)).length;
-  const totalPOValue = purchaseOrders
-    .filter((po) => po.status !== 'CANCELLED')
-    .reduce((sum, po) => sum + po.totalAmount, 0);
-
-  // CSV Export
-  const exportCSV = () => {
-    const headers = ['Name', 'Email', 'Phone', 'City', 'Contact Person', 'Payment Terms', 'Rating', 'Active', 'PO Count'];
-    const rows = suppliers.map((s) => [
-      s.name,
-      s.email || '',
-      s.phone || '',
-      s.city || '',
-      s.contactPerson || '',
-      getPaymentTermsLabel(s.paymentTerms),
-      String(s.rating),
-      String(s.isActive),
-      String(s.purchaseOrderCount || 0),
-    ]);
-
-    const csv = [headers.join(','), ...rows.map((r) => r.map((c) => `"${c}"`).join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `suppliers_${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-    toast.success('CSV exported successfully');
-  };
-
-  // If a supplier is selected, show detail view
-  if (selectedSupplierId) {
-    return (
-      <div className="p-1">
-        <SupplierDetailView
-          supplierId={selectedSupplierId}
-          onBack={() => setSelectedSupplierId(null)}
-          storeId={currentStoreId}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="p-1 space-y-4">
-      {/* Overview Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
-                <Truck className="h-5 w-5 text-violet-600 dark:text-violet-400" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Total Suppliers</p>
-                <p className="text-xl font-bold">{suppliers.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
-                <Building2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Active Suppliers</p>
-                <p className="text-xl font-bold">{activeSuppliers}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
-                <ClipboardCheck className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Pending Orders</p>
-                <p className="text-xl font-bold">{pendingPOs}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center shrink-0">
-                <FileText className="h-5 w-5 text-teal-600 dark:text-teal-400" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Total PO Value</p>
-                <p className="text-xl font-bold">{formatKES(totalPOValue)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Supplier List */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <CardTitle className="text-base">Suppliers</CardTitle>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <div className="relative flex-1 sm:flex-initial">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search suppliers..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 h-9 w-full sm:w-56"
-                />
-              </div>
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="h-9 w-28">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button variant="outline" size="sm" className="h-9" onClick={exportCSV} disabled={suppliers.length === 0}>
-                <Download className="h-4 w-4 mr-1" />
-                <span className="hidden sm:inline">Export</span>
-              </Button>
-              <Button size="sm" className="h-9" onClick={() => setAddOpen(true)}>
-                <Plus className="h-4 w-4 mr-1" />
-                <span className="hidden sm:inline">Add</span>
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {suppliersLoading ? (
-            <div className="p-4 space-y-3">
-              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16" />)}
-            </div>
-          ) : suppliers.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Truck className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="font-medium">No suppliers found</p>
-              <p className="text-sm mt-1">Add your first supplier to get started</p>
-              <Button size="sm" className="mt-3" onClick={() => setAddOpen(true)}>
-                <Plus className="h-4 w-4 mr-1" /> Add Supplier
-              </Button>
-            </div>
-          ) : (
-            <div className="max-h-96 overflow-auto custom-scrollbar">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead className="hidden md:table-cell">Contact</TableHead>
-                    <TableHead className="hidden sm:table-cell">City</TableHead>
-                    <TableHead>Rating</TableHead>
-                    <TableHead className="hidden sm:table-cell">Terms</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">POs</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {suppliers.map((supplier) => (
-                    <TableRow
-                      key={supplier.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => setSelectedSupplierId(supplier.id)}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className={`bg-gradient-to-br ${getAvatarGradient(supplier.name)} text-white text-xs font-bold`}>
-                              {supplier.name.slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium text-sm">{supplier.name}</p>
-                            {supplier.contactPerson && (
-                              <p className="text-xs text-muted-foreground">{supplier.contactPerson}</p>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <div className="space-y-0.5">
-                          {supplier.phone && (
-                            <p className="text-xs flex items-center gap-1"><Phone className="h-3 w-3" />{supplier.phone}</p>
-                          )}
-                          {supplier.email && (
-                            <p className="text-xs flex items-center gap-1 truncate max-w-[180px]"><Mail className="h-3 w-3 shrink-0" />{supplier.email}</p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell text-sm">{supplier.city || '—'}</TableCell>
-                      <TableCell>
-                        <StarRating rating={supplier.rating} readonly />
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell text-sm">{getPaymentTermsLabel(supplier.paymentTerms)}</TableCell>
-                      <TableCell>
-                        <Badge variant={supplier.isActive ? 'default' : 'secondary'} className="text-xs">
-                          {supplier.isActive ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-medium">{supplier.purchaseOrderCount || 0}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Purchase Orders Section */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <CardTitle className="text-base">Purchase Orders</CardTitle>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <Select value={poFilterStatus} onValueChange={setPoFilterStatus}>
-                <SelectTrigger className="h-9 w-36">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="DRAFT">Draft</SelectItem>
-                  <SelectItem value="SENT">Sent</SelectItem>
-                  <SelectItem value="CONFIRMED">Confirmed</SelectItem>
-                  <SelectItem value="RECEIVED">Received</SelectItem>
-                  <SelectItem value="CANCELLED">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button size="sm" className="h-9" onClick={() => setCreatePOOpen(true)}>
-                <Plus className="h-4 w-4 mr-1" />
-                <span className="hidden sm:inline">New PO</span>
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {poLoading ? (
-            <div className="p-4 space-y-3">
-              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14" />)}
-            </div>
-          ) : purchaseOrders.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Package className="h-10 w-10 mx-auto mb-2 opacity-30" />
-              <p className="font-medium text-sm">No purchase orders</p>
-              <p className="text-xs mt-1">Create a purchase order to track supplier deliveries</p>
-            </div>
-          ) : (
-            <div className="max-h-96 overflow-auto custom-scrollbar">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>PO #</TableHead>
-                    <TableHead>Supplier</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {purchaseOrders.map((po) => (
-                    <TableRow key={po.id}>
-                      <TableCell className="font-mono text-sm">{po.poNumber}</TableCell>
-                      <TableCell className="text-sm">{po.supplier?.name || '—'}</TableCell>
-                      <TableCell className="text-sm">{formatDate(po.orderDate)}</TableCell>
-                      <TableCell>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getPOStatusBadge(po.status)}`}>
-                          {po.status}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right font-medium">{formatKES(po.totalAmount)}</TableCell>
-                      <TableCell className="text-right">
-                        <POActions po={po} storeId={currentStoreId} />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Dialogs */}
-      <AddSupplierDialog open={addOpen} onOpenChange={setAddOpen} storeId={currentStoreId} />
-      <CreatePODialog open={createPOOpen} onOpenChange={setCreatePOOpen} storeId={currentStoreId} suppliers={suppliers} />
-    </div>
-  );
-}
-
-// ============================================================================
 // PO ACTIONS COMPONENT
 // ============================================================================
 
@@ -1225,7 +1117,6 @@ function POActions({ po, storeId }: { po: PurchaseOrderListItem; storeId: string
   const queryClient = useQueryClient();
   const [receiveOpen, setReceiveOpen] = useState(false);
 
-  // Fetch full PO details for receiving
   const { data: poDetail } = useQuery({
     queryKey: ['purchase-order-detail', po.id],
     queryFn: () => purchaseOrdersApi.get(po.id),
@@ -1295,6 +1186,356 @@ function POActions({ po, storeId }: { po: PurchaseOrderListItem; storeId: string
         </Button>
       )}
       <ReceivePODialog open={receiveOpen} onOpenChange={setReceiveOpen} purchaseOrder={poDetail?.data || null} />
+    </div>
+  );
+}
+
+// ============================================================================
+// MAIN SUPPLIERS TAB
+// ============================================================================
+
+export default function SuppliersTab() {
+  const currentStoreId = useAppStore((s) => s.currentStoreId);
+  const queryClient = useQueryClient();
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [addOpen, setAddOpen] = useState(false);
+  const [createPOOpen, setCreatePOOpen] = useState(false);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
+  const [poFilterStatus, setPoFilterStatus] = useState<string>('all');
+
+  const { data: suppliersData, isLoading: suppliersLoading } = useQuery({
+    queryKey: ['suppliers', currentStoreId, searchQuery, filterStatus],
+    queryFn: () => suppliersApi.list({
+      storeId: currentStoreId,
+      search: searchQuery || undefined,
+      isActive: filterStatus === 'all' ? undefined : filterStatus === 'active' ? 'true' : 'false',
+      limit: 100,
+    }),
+    enabled: !!currentStoreId,
+  });
+
+  const { data: poData, isLoading: poLoading } = useQuery({
+    queryKey: ['purchase-orders', currentStoreId, poFilterStatus],
+    queryFn: () => purchaseOrdersApi.list({
+      storeId: currentStoreId,
+      status: poFilterStatus === 'all' ? undefined : poFilterStatus,
+      limit: 50,
+    }),
+    enabled: !!currentStoreId,
+  });
+
+  const suppliers: SupplierItem[] = suppliersData?.data || [];
+  const purchaseOrders: PurchaseOrderListItem[] = poData?.data || [];
+
+  const activeSuppliers = suppliers.filter((s) => s.isActive).length;
+  const pendingPOs = purchaseOrders.filter((po) => ['DRAFT', 'SENT', 'CONFIRMED'].includes(po.status)).length;
+  const totalPOValue = purchaseOrders
+    .filter((po) => po.status !== 'CANCELLED')
+    .reduce((sum, po) => sum + po.totalAmount, 0);
+  const avgRating = suppliers.length > 0
+    ? (suppliers.reduce((s, sup) => s + sup.rating, 0) / suppliers.length).toFixed(1)
+    : '0';
+
+  const exportCSV = () => {
+    const headers = ['Name', 'Email', 'Phone', 'City', 'Contact Person', 'Payment Terms', 'Rating', 'Active', 'PO Count'];
+    const rows = suppliers.map((s) => [
+      s.name,
+      s.email || '',
+      s.phone || '',
+      s.city || '',
+      s.contactPerson || '',
+      getPaymentTermsLabel(s.paymentTerms),
+      String(s.rating),
+      String(s.isActive),
+      String(s.purchaseOrderCount || 0),
+    ]);
+
+    const csv = [headers.join(','), ...rows.map((r) => r.map((c) => `"${c}"`).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `suppliers_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    toast.success('CSV exported successfully');
+  };
+
+  if (selectedSupplierId) {
+    return (
+      <div className="p-1">
+        <SupplierDetailView
+          supplierId={selectedSupplierId}
+          onBack={() => setSelectedSupplierId(null)}
+          storeId={currentStoreId}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-1 space-y-4">
+      {/* Overview Stats - Glass-morphism */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card className="border-l-4 border-l-violet-500 backdrop-blur-sm bg-card/80">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
+                <Truck className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Total Suppliers</p>
+                <p className="text-xl font-bold">{suppliers.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-green-500 backdrop-blur-sm bg-card/80">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
+                <Building2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Active Suppliers</p>
+                <p className="text-xl font-bold">{activeSuppliers}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-amber-500 backdrop-blur-sm bg-card/80">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+                <ClipboardCheck className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Pending Orders</p>
+                <p className="text-xl font-bold">{pendingPOs}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-teal-500 backdrop-blur-sm bg-card/80">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center shrink-0">
+                <Star className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Avg. Rating</p>
+                <p className="text-xl font-bold">{avgRating}/5</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Supplier List - Enhanced Cards */}
+      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <CardTitle className="text-base">Suppliers</CardTitle>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="relative flex-1 sm:flex-initial">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search suppliers..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 h-9 w-full sm:w-56"
+                />
+              </div>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="h-9 w-28">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" className="h-9" onClick={exportCSV} disabled={suppliers.length === 0}>
+                <Download className="h-4 w-4 mr-1" />
+                <span className="hidden sm:inline">Export</span>
+              </Button>
+              <Button size="sm" className="h-9" onClick={() => setAddOpen(true)}>
+                <Plus className="h-4 w-4 mr-1" />
+                <span className="hidden sm:inline">Add</span>
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {suppliersLoading ? (
+            <div className="p-4 space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16" />)}
+            </div>
+          ) : suppliers.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground">
+              <div className="relative mx-auto w-20 h-20 mb-4">
+                <div className="absolute inset-0 bg-muted/50 backdrop-blur-sm rounded-2xl border border-border/30" />
+                <Truck className="absolute inset-0 m-auto h-10 w-10 text-muted-foreground/30" />
+              </div>
+              <p className="text-base font-medium">No suppliers found</p>
+              <p className="text-sm text-muted-foreground/60 mt-1">Add your first supplier to get started</p>
+              <Button size="sm" className="mt-3" onClick={() => setAddOpen(true)}>
+                <Plus className="h-4 w-4 mr-1" /> Add Supplier
+              </Button>
+            </div>
+          ) : (
+            <div className="max-h-96 overflow-auto custom-scrollbar">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Supplier</TableHead>
+                    <TableHead className="hidden md:table-cell">Contact</TableHead>
+                    <TableHead className="hidden sm:table-cell">City</TableHead>
+                    <TableHead>Rating</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="hidden sm:table-cell">Last Order</TableHead>
+                    <TableHead className="text-right">POs</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {suppliers.map((supplier) => (
+                    <TableRow
+                      key={supplier.id}
+                      className="cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => setSelectedSupplierId(supplier.id)}
+                    >
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback className={`bg-gradient-to-br ${getAvatarGradient(supplier.name)} text-white text-xs font-bold`}>
+                              {supplier.name.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium text-sm">{supplier.name}</p>
+                            {supplier.contactPerson && (
+                              <p className="text-xs text-muted-foreground">{supplier.contactPerson}</p>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <div className="space-y-0.5">
+                          {supplier.phone && (
+                            <p className="text-xs flex items-center gap-1"><Phone className="h-3 w-3" />{supplier.phone}</p>
+                          )}
+                          {supplier.email && (
+                            <p className="text-xs flex items-center gap-1 truncate max-w-[180px]"><Mail className="h-3 w-3 shrink-0" />{supplier.email}</p>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell text-sm">{supplier.city || '—'}</TableCell>
+                      <TableCell>
+                        <StarRating rating={supplier.rating} readonly />
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={`text-xs ${supplier.isActive ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full mr-1 inline-block ${supplier.isActive ? 'bg-green-500' : 'bg-red-500'}`} />
+                          {supplier.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">
+                        {supplier.purchaseOrders?.[0]?.orderDate ? formatDate(supplier.purchaseOrders[0].orderDate) : '—'}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">{supplier.purchaseOrderCount || 0}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Purchase Orders Section - Enhanced */}
+      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <CardTitle className="text-base">Purchase Orders</CardTitle>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Select value={poFilterStatus} onValueChange={setPoFilterStatus}>
+                <SelectTrigger className="h-9 w-36">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="DRAFT">Draft</SelectItem>
+                  <SelectItem value="SENT">Sent</SelectItem>
+                  <SelectItem value="CONFIRMED">Confirmed</SelectItem>
+                  <SelectItem value="RECEIVED">Received</SelectItem>
+                  <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button size="sm" className="h-9" onClick={() => setCreatePOOpen(true)}>
+                <Plus className="h-4 w-4 mr-1" />
+                <span className="hidden sm:inline">New PO</span>
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {poLoading ? (
+            <div className="p-4 space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14" />)}
+            </div>
+          ) : purchaseOrders.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <div className="relative mx-auto w-16 h-16 mb-3">
+                <div className="absolute inset-0 bg-muted/50 backdrop-blur-sm rounded-2xl border border-border/30" />
+                <Package className="absolute inset-0 m-auto h-8 w-8 text-muted-foreground/30" />
+              </div>
+              <p className="font-medium text-sm">No purchase orders</p>
+              <p className="text-xs mt-1">Create a purchase order to track supplier deliveries</p>
+            </div>
+          ) : (
+            <div className="max-h-96 overflow-auto custom-scrollbar">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>PO #</TableHead>
+                    <TableHead>Supplier</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Status Timeline</TableHead>
+                    <TableHead>Delivery</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {purchaseOrders.map((po) => (
+                    <TableRow key={po.id}>
+                      <TableCell className="font-mono text-sm">{po.poNumber}</TableCell>
+                      <TableCell className="text-sm">{po.supplier?.name || '—'}</TableCell>
+                      <TableCell className="text-sm">{formatDate(po.orderDate)}</TableCell>
+                      <TableCell>
+                        <POStatusTimeline status={po.status} />
+                      </TableCell>
+                      <TableCell>
+                        <DeliveryStatusIndicator po={po} />
+                      </TableCell>
+                      <TableCell className="text-right font-medium">{formatKES(po.totalAmount)}</TableCell>
+                      <TableCell className="text-right">
+                        <POActions po={po} storeId={currentStoreId} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Dialogs */}
+      <AddSupplierDialog open={addOpen} onOpenChange={setAddOpen} storeId={currentStoreId} />
+      <CreatePODialog open={createPOOpen} onOpenChange={setCreatePOOpen} storeId={currentStoreId} suppliers={suppliers} />
     </div>
   );
 }

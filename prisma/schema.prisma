@@ -63,6 +63,7 @@ model Store {
   receipts        Receipt[]
   suppliers       Supplier[]
   purchaseOrders  PurchaseOrder[]
+  expenses        Expense[]
 
   @@index([organizationId])
   @@map("stores")
@@ -647,6 +648,32 @@ model PurchaseOrderItem {
   @@index([purchaseOrderId])
   @@index([productId])
   @@map("purchase_order_items")
+}
+
+// ============================================================================
+// EXPENSES
+// ============================================================================
+
+model Expense {
+  id              String   @id @default(cuid())
+  storeId         String
+  description     String
+  amount          Float
+  category        String   // RENT, SALARIES, UTILITIES, TRANSPORT, MAINTENANCE, SUPPLIES, OTHER
+  paidBy          String   // User ID who paid
+  paymentMethod   String   @default("CASH") // CASH, MPESA
+  journalEntryId  String?  // Reference to the created journal entry
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([category])
+  @@index([paidBy])
+  @@index([createdAt])
+  @@map("expenses")
 }
 
 // ============================================================================

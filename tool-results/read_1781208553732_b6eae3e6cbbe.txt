@@ -1,0 +1,722 @@
+     1→'use client';
+     2→
+     3→import React, { useState } from 'react';
+     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+     5→import { toast } from 'sonner';
+     6→import {
+     7→  Users, Search, Plus, CircleDollarSign, AlertTriangle,
+     8→  Eye, Loader2, HandCoins, Banknote, Smartphone,
+     9→  MessageSquare, ShoppingBag, Award, Phone, Mail, MapPin, CreditCard, Clock
+    10→} from 'lucide-react';
+    11→
+    12→import { useAppStore } from '@/lib/stores';
+    13→import {
+    14→  customersApi, debtApi, transactionsApi,
+    15→  formatKES, formatDate, formatDateTime,
+    16→  type CustomerItem,
+    17→  type TransactionItem,
+    18→} from '@/lib/api';
+    19→
+    20→import { Button } from '@/components/ui/button';
+    21→import { Card, CardContent } from '@/components/ui/card';
+    22→import { Input } from '@/components/ui/input';
+    23→import { Label } from '@/components/ui/label';
+    24→import { Badge } from '@/components/ui/badge';
+    25→import { Skeleton } from '@/components/ui/skeleton';
+    26→import { Separator } from '@/components/ui/separator';
+    27→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+    28→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+    29→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    30→import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+    31→import { Textarea } from '@/components/ui/textarea';
+    32→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    33→import { Progress } from '@/components/ui/progress';
+    34→
+    35→// Avatar gradient colors based on name
+    36→const AVATAR_GRADIENTS = [
+    37→  'from-rose-500 to-pink-600',
+    38→  'from-violet-500 to-purple-600',
+    39→  'from-blue-500 to-indigo-600',
+    40→  'from-cyan-500 to-teal-600',
+    41→  'from-emerald-500 to-green-600',
+    42→  'from-amber-500 to-orange-600',
+    43→  'from-red-500 to-rose-600',
+    44→  'from-indigo-500 to-blue-600',
+    45→  'from-teal-500 to-cyan-600',
+    46→  'from-orange-500 to-amber-600',
+    47→];
+    48→
+    49→function getAvatarGradient(name: string): string {
+    50→  let hash = 0;
+    51→  for (let i = 0; i < name.length; i++) {
+    52→    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    53→  }
+    54→  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
+    55→}
+    56→
+    57→function getLoyaltyTier(points: number): { tier: string; color: string; bg: string; icon: string } {
+    58→  if (points >= 1500) return { tier: 'Gold', color: 'text-yellow-700 dark:text-yellow-400', bg: 'bg-yellow-100 dark:bg-yellow-900/30', icon: '🥇' };
+    59→  if (points >= 500) return { tier: 'Silver', color: 'text-gray-600 dark:text-gray-300', bg: 'bg-gray-100 dark:bg-gray-800/50', icon: '🥈' };
+    60→  return { tier: 'Bronze', color: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30', icon: '🥉' };
+    61→}
+    62→
+    63→function getDebtStatus(debtBalance: number, debtLimit: number): { color: string; label: string } {
+    64→  if (debtBalance <= 0) return { color: 'bg-green-500', label: 'No Debt' };
+    65→  if (debtLimit > 0 && (debtBalance / debtLimit) > 0.5) return { color: 'bg-red-500', label: 'High Risk' };
+    66→  return { color: 'bg-amber-500', label: 'Has Debt' };
+    67→}
+    68→
+    69→function getPaymentMethodIcon(method: string) {
+    70→  switch (method) {
+    71→    case 'CASH': return <Banknote className="h-3 w-3" />;
+    72→    case 'MPESA': return <Smartphone className="h-3 w-3" />;
+    73→    case 'DEBT': return <CreditCard className="h-3 w-3" />;
+    74→    default: return null;
+    75→  }
+    76→}
+    77→
+    78→function getPaymentMethodBadge(method: string) {
+    79→  switch (method) {
+    80→    case 'CASH': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+    81→    case 'MPESA': return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+    82→    case 'DEBT': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+    83→    default: return 'bg-muted text-muted-foreground';
+    84→  }
+    85→}
+    86→
+    87→export default function CustomersTab() {
+    88→  const [searchQuery, setSearchQuery] = useState('');
+    89→  const [addCustomerOpen, setAddCustomerOpen] = useState(false);
+    90→  const [selectedCustomer, setSelectedCustomer] = useState<CustomerItem | null>(null);
+    91→  const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '', address: '', idNumber: '', debtLimit: '50000' });
+    92→  const [debtPaymentOpen, setDebtPaymentOpen] = useState(false);
+    93→  const [debtPaymentAmount, setDebtPaymentAmount] = useState('');
+    94→  const [debtPaymentMethod, setDebtPaymentMethod] = useState('CASH');
+    95→  const [debtPaymentReference, setDebtPaymentReference] = useState('');
+    96→  const [selectedDebtLedgerId, setSelectedDebtLedgerId] = useState<string>('');
+    97→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+    98→  const setActiveTab = useAppStore((s) => s.setActiveTab);
+    99→  const queryClient = useQueryClient();
+   100→
+   101→  const { data: customersData, isLoading } = useQuery({
+   102→    queryKey: ['customers', currentStoreId, searchQuery],
+   103→    queryFn: () => customersApi.list({ storeId: currentStoreId, search: searchQuery || undefined, limit: 200 }),
+   104→  });
+   105→
+   106→  const { data: debtData } = useQuery({
+   107→    queryKey: ['debt', currentStoreId, selectedCustomer?.id],
+   108→    queryFn: () => debtApi.list({ storeId: currentStoreId, customerId: selectedCustomer?.id, limit: 50 }),
+   109→    enabled: !!selectedCustomer,
+   110→  });
+   111→
+   112→  const { data: customerTransactionsData } = useQuery({
+   113→    queryKey: ['customer-transactions', currentStoreId, selectedCustomer?.id],
+   114→    queryFn: () => transactionsApi.list({ storeId: currentStoreId, limit: 5 }),
+   115→    enabled: !!selectedCustomer,
+   116→  });
+   117→
+   118→  const createCustomerMutation = useMutation({
+   119→    mutationFn: customersApi.create,
+   120→    onSuccess: () => {
+   121→      toast.success('Customer added');
+   122→      setAddCustomerOpen(false);
+   123→      setNewCustomer({ name: '', phone: '', email: '', address: '', idNumber: '', debtLimit: '50000' });
+   124→    },
+   125→    onError: (err: Error) => toast.error(err.message),
+   126→  });
+   127→
+   128→  const debtPaymentMutation = useMutation({
+   129→    mutationFn: debtApi.makePayment,
+   130→    onSuccess: (res) => {
+   131→      const newBalance = res.data?.balance ?? 0;
+   132→      toast.success(`Payment recorded! New balance: ${formatKES(newBalance)}`);
+   133→      queryClient.invalidateQueries({ queryKey: ['customers', currentStoreId] });
+   134→      queryClient.invalidateQueries({ queryKey: ['debt', currentStoreId, selectedCustomer?.id] });
+   135→      setDebtPaymentOpen(false);
+   136→      setDebtPaymentAmount('');
+   137→      setDebtPaymentMethod('CASH');
+   138→      setDebtPaymentReference('');
+   139→      setSelectedDebtLedgerId('');
+   140→    },
+   141→    onError: (err: Error) => toast.error(err.message || 'Failed to record payment'),
+   142→  });
+   143→
+   144→  const customers = customersData?.data || [];
+   145→  const debts = debtData?.data || [];
+   146→  const customerTransactions: TransactionItem[] = (customerTransactionsData?.data || []).slice(0, 5);
+   147→  const totalDebt = customers.reduce((s, c) => s + c.currentDebtBalance, 0);
+   148→  const activeDebts = debts.filter((d) => d.status !== 'SETTLED');
+   149→  const paymentAmountNum = parseFloat(debtPaymentAmount) || 0;
+   150→  const selectedDebt = activeDebts.find((d) => d.id === selectedDebtLedgerId);
+   151→  const currentDebtBalance = selectedDebt ? selectedDebt.amountOwed - selectedDebt.amountPaid : (selectedCustomer?.currentDebtBalance ?? 0);
+   152→  const newBalancePreview = Math.max(0, currentDebtBalance - paymentAmountNum);
+   153→  const goldCustomers = customers.filter(c => c.loyaltyPoints >= 1500).length;
+   154→
+   155→  return (
+   156→    <div className="space-y-4">
+   157→      {/* Stats Cards */}
+   158→      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   159→        <Card className="bg-gradient-to-br from-card to-muted/20 border-l-4 border-l-primary hover:-translate-y-0.5 transition-transform cursor-default">
+   160→          <CardContent className="p-4">
+   161→            <div className="flex items-center gap-3">
+   162→              <div className="p-2 rounded-full bg-gradient-to-br from-primary/20 to-primary/10">
+   163→                <Users className="h-5 w-5 text-primary" />
+   164→              </div>
+   165→              <div>
+   166→                <p className="text-sm text-muted-foreground">Total Customers</p>
+   167→                <p className="text-xl font-bold">{customers.length}</p>
+   168→              </div>
+   169→            </div>
+   170→          </CardContent>
+   171→        </Card>
+   172→        <Card className="bg-gradient-to-br from-card to-muted/20 border-l-4 border-l-red-500 hover:-translate-y-0.5 transition-transform cursor-default">
+   173→          <CardContent className="p-4">
+   174→            <div className="flex items-center gap-3">
+   175→              <div className="p-2 rounded-full bg-gradient-to-br from-red-500/20 to-red-500/10">
+   176→                <CircleDollarSign className="h-5 w-5 text-red-600" />
+   177→              </div>
+   178→              <div>
+   179→                <p className="text-sm text-muted-foreground">Outstanding Debt</p>
+   180→                <p className="text-xl font-bold whitespace-nowrap">{formatKES(totalDebt)}</p>
+   181→              </div>
+   182→            </div>
+   183→          </CardContent>
+   184→        </Card>
+   185→        <Card className="bg-gradient-to-br from-card to-muted/20 border-l-4 border-l-amber-500 hover:-translate-y-0.5 transition-transform cursor-default">
+   186→          <CardContent className="p-4">
+   187→            <div className="flex items-center gap-3">
+   188→              <div className="p-2 rounded-full bg-gradient-to-br from-amber-500/20 to-amber-500/10">
+   189→                <AlertTriangle className="h-5 w-5 text-amber-600" />
+   190→              </div>
+   191→              <div>
+   192→                <p className="text-sm text-muted-foreground">With Debt</p>
+   193→                <p className="text-xl font-bold">{customers.filter(c => c.currentDebtBalance > 0).length}</p>
+   194→              </div>
+   195→            </div>
+   196→          </CardContent>
+   197→        </Card>
+   198→        <Card className="bg-gradient-to-br from-card to-muted/20 border-l-4 border-l-yellow-500 hover:-translate-y-0.5 transition-transform cursor-default">
+   199→          <CardContent className="p-4">
+   200→            <div className="flex items-center gap-3">
+   201→              <div className="p-2 rounded-full bg-gradient-to-br from-yellow-500/20 to-yellow-500/10">
+   202→                <Award className="h-5 w-5 text-yellow-600" />
+   203→              </div>
+   204→              <div>
+   205→                <p className="text-sm text-muted-foreground">Gold Members</p>
+   206→                <p className="text-xl font-bold">{goldCustomers}</p>
+   207→              </div>
+   208→            </div>
+   209→          </CardContent>
+   210→        </Card>
+   211→      </div>
+   212→
+   213→      {/* Toolbar */}
+   214→      <div className="flex gap-3">
+   215→        <div className="relative flex-1">
+   216→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   217→          <Input placeholder="Search customers..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
+   218→        </div>
+   219→        <Dialog open={addCustomerOpen} onOpenChange={setAddCustomerOpen}>
+   220→          <DialogTrigger asChild>
+   221→            <Button className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground">
+   222→              <Plus className="mr-2 h-4 w-4" /> Add Customer
+   223→            </Button>
+   224→          </DialogTrigger>
+   225→          <DialogContent>
+   226→            <DialogHeader>
+   227→              <DialogTitle>Add Customer</DialogTitle>
+   228→              <DialogDescription>Register a new customer</DialogDescription>
+   229→            </DialogHeader>
+   230→            <div className="space-y-4">
+   231→              <div className="space-y-2"><Label>Full Name</Label><Input value={newCustomer.name} onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })} placeholder="John Kamau" /></div>
+   232→              <div className="grid grid-cols-2 gap-4">
+   233→                <div className="space-y-2"><Label>Phone</Label><Input value={newCustomer.phone} onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })} placeholder="0712 345 678" /></div>
+   234→                <div className="space-y-2"><Label>Email</Label><Input value={newCustomer.email} onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })} placeholder="john@email.com" /></div>
+   235→              </div>
+   236→              <div className="grid grid-cols-2 gap-4">
+   237→                <div className="space-y-2"><Label>ID Number</Label><Input value={newCustomer.idNumber} onChange={(e) => setNewCustomer({ ...newCustomer, idNumber: e.target.value })} placeholder="12345678" /></div>
+   238→                <div className="space-y-2"><Label>Debt Limit (KES)</Label><Input type="number" value={newCustomer.debtLimit} onChange={(e) => setNewCustomer({ ...newCustomer, debtLimit: e.target.value })} /></div>
+   239→              </div>
+   240→              <div className="space-y-2"><Label>Address</Label><Textarea value={newCustomer.address} onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })} placeholder="Nairobi, Kenya" /></div>
+   241→            </div>
+   242→            <DialogFooter>
+   243→              <Button variant="outline" onClick={() => setAddCustomerOpen(false)}>Cancel</Button>
+   244→              <Button onClick={() => createCustomerMutation.mutate({ storeId: currentStoreId, ...newCustomer, debtLimit: Number(newCustomer.debtLimit) })} disabled={createCustomerMutation.isPending || !newCustomer.name} className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground">
+   245→                {createCustomerMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+   246→                Add Customer
+   247→              </Button>
+   248→            </DialogFooter>
+   249→          </DialogContent>
+   250→        </Dialog>
+   251→      </div>
+   252→
+   253→      {/* Customer Table */}
+   254→      <Card>
+   255→        <CardContent className="p-0">
+   256→          {isLoading ? (
+   257→            <div className="p-6 space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+   258→          ) : (
+   259→            <div className="overflow-x-auto">
+   260→              <Table>
+   261→                <TableHeader>
+   262→                  <TableRow>
+   263→                    <TableHead>Customer</TableHead>
+   264→                    <TableHead>Phone</TableHead>
+   265→                    <TableHead className="text-right">Debt Balance</TableHead>
+   266→                    <TableHead>Debt Status</TableHead>
+   267→                    <TableHead>Loyalty Tier</TableHead>
+   268→                    <TableHead className="w-[60px]">View</TableHead>
+   269→                  </TableRow>
+   270→                </TableHeader>
+   271→                <TableBody>
+   272→                  {customers.length === 0 ? (
+   273→                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No customers found</TableCell></TableRow>
+   274→                  ) : customers.map((customer, idx) => {
+   275→                    const debtStatus = getDebtStatus(customer.currentDebtBalance, customer.debtLimit);
+   276→                    const loyalty = getLoyaltyTier(customer.loyaltyPoints);
+   277→                    const gradient = getAvatarGradient(customer.name);
+   278→                    const initials = customer.name.split(' ').map(n => n[0]).join('').slice(0, 2);
+   279→
+   280→                    return (
+   281→                      <TableRow
+   282→                        key={customer.id}
+   283→                        className={`${idx % 2 === 1 ? 'bg-muted/30' : ''} hover:bg-primary/5 transition-colors cursor-pointer`}
+   284→                        onClick={() => setSelectedCustomer(customer)}
+   285→                      >
+   286→                        <TableCell>
+   287→                          <div className="flex items-center gap-3">
+   288→                            <Avatar className="h-8 w-8">
+   289→                              <AvatarFallback className={`text-xs text-white font-semibold bg-gradient-to-br ${gradient}`}>
+   290→                                {initials}
+   291→                              </AvatarFallback>
+   292→                            </Avatar>
+   293→                            <div>
+   294→                              <p className="font-medium text-sm">{customer.name}</p>
+   295→                              {customer.email && <p className="text-xs text-muted-foreground">{customer.email}</p>}
+   296→                            </div>
+   297→                          </div>
+   298→                        </TableCell>
+   299→                        <TableCell className="text-sm">{customer.phone || '—'}</TableCell>
+   300→                        <TableCell className="text-right font-medium">
+   301→                          <span className={customer.currentDebtBalance > 0 ? 'text-red-600' : ''}>{formatKES(customer.currentDebtBalance)}</span>
+   302→                        </TableCell>
+   303→                        <TableCell>
+   304→                          <div className="flex items-center gap-2">
+   305→                            <span className={`w-2.5 h-2.5 rounded-full ${debtStatus.color}`} />
+   306→                            <span className="text-xs text-muted-foreground">{debtStatus.label}</span>
+   307→                          </div>
+   308→                        </TableCell>
+   309→                        <TableCell>
+   310→                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${loyalty.bg} ${loyalty.color}`}>
+   311→                            <span className="text-[10px]">{loyalty.icon}</span> {loyalty.tier}
+   312→                          </span>
+   313→                        </TableCell>
+   314→                        <TableCell>
+   315→                          <Button variant="ghost" size="icon" className="h-7 w-7"><Eye className="h-4 w-4" /></Button>
+   316→                        </TableCell>
+   317→                      </TableRow>
+   318→                    );
+   319→                  })}
+   320→                </TableBody>
+   321→              </Table>
+   322→            </div>
+   323→          )}
+   324→        </CardContent>
+   325→      </Card>
+   326→
+   327→      {/* Debt Payment Dialog */}
+   328→      <Dialog open={debtPaymentOpen} onOpenChange={(open) => {
+   329→        setDebtPaymentOpen(open);
+   330→        if (!open) {
+   331→          setDebtPaymentAmount('');
+   332→          setDebtPaymentMethod('CASH');
+   333→          setDebtPaymentReference('');
+   334→          setSelectedDebtLedgerId('');
+   335→        }
+   336→      }}>
+   337→        <DialogContent className="sm:max-w-md">
+   338→          <DialogHeader>
+   339→            <DialogTitle className="flex items-center gap-2">
+   340→              <HandCoins className="h-5 w-5 text-accent-orange" />
+   341→              Record Debt Payment
+   342→            </DialogTitle>
+   343→            <DialogDescription>
+   344→              Record a payment for {selectedCustomer?.name}&apos;s outstanding debt
+   345→            </DialogDescription>
+   346→          </DialogHeader>
+   347→          <div className="space-y-4">
+   348→            {/* Customer & Balance Info */}
+   349→            <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+   350→              <div className="flex justify-between items-center">
+   351→                <span className="text-sm text-muted-foreground">Customer</span>
+   352→                <span className="text-sm font-medium">{selectedCustomer?.name}</span>
+   353→              </div>
+   354→              <div className="flex justify-between items-center">
+   355→                <span className="text-sm text-muted-foreground">Current Balance</span>
+   356→                <span className="text-sm font-bold text-red-600">{formatKES(currentDebtBalance)}</span>
+   357→              </div>
+   358→            </div>
+   359→
+   360→            {/* Debt Selection */}
+   361→            {activeDebts.length > 1 && (
+   362→              <div className="space-y-2">
+   363→                <Label>Select Debt Record</Label>
+   364→                <Select value={selectedDebtLedgerId} onValueChange={setSelectedDebtLedgerId}>
+   365→                  <SelectTrigger className="w-full">
+   366→                    <SelectValue placeholder="Select a debt record" />
+   367→                  </SelectTrigger>
+   368→                  <SelectContent>
+   369→                    {activeDebts.map((debt) => (
+   370→                      <SelectItem key={debt.id} value={debt.id}>
+   371→                        {formatKES(debt.amountOwed - debt.amountPaid)} owed — Due {formatDate(debt.dueDate)}
+   372→                      </SelectItem>
+   373→                    ))}
+   374→                  </SelectContent>
+   375→                </Select>
+   376→              </div>
+   377→            )}
+   378→
+   379→            {/* Payment Amount */}
+   380→            <div className="space-y-2">
+   381→              <Label>Payment Amount</Label>
+   382→              <div className="relative">
+   383→                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">KES</span>
+   384→                <Input
+   385→                  type="number"
+   386→                  value={debtPaymentAmount}
+   387→                  onChange={(e) => setDebtPaymentAmount(e.target.value)}
+   388→                  placeholder="0"
+   389→                  className="pl-12"
+   390→                  min="0"
+   391→                  max={currentDebtBalance}
+   392→                />
+   393→              </div>
+   394→              {/* Quick amount buttons */}
+   395→              <div className="flex flex-wrap gap-2">
+   396→                <Button
+   397→                  type="button"
+   398→                  variant="outline"
+   399→                  size="sm"
+   400→                  className="text-xs"
+   401→                  onClick={() => setDebtPaymentAmount(String(currentDebtBalance))}
+   402→                >
+   403→                  Full Amount
+   404→                </Button>
+   405→                <Button
+   406→                  type="button"
+   407→                  variant="outline"
+   408→                  size="sm"
+   409→                  className="text-xs"
+   410→                  onClick={() => setDebtPaymentAmount(String(Math.round(currentDebtBalance / 2)))}
+   411→                >
+   412→                  Half
+   413→                </Button>
+   414→                <Button
+   415→                  type="button"
+   416→                  variant="outline"
+   417→                  size="sm"
+   418→                  className="text-xs"
+   419→                  onClick={() => setDebtPaymentAmount('5000')}
+   420→                >
+   421→                  KES 5,000
+   422→                </Button>
+   423→                <Button
+   424→                  type="button"
+   425→                  variant="outline"
+   426→                  size="sm"
+   427→                  className="text-xs"
+   428→                  onClick={() => setDebtPaymentAmount('10000')}
+   429→                >
+   430→                  KES 10,000
+   431→                </Button>
+   432→              </div>
+   433→            </div>
+   434→
+   435→            {/* Payment Method */}
+   436→            <div className="space-y-2">
+   437→              <Label>Payment Method</Label>
+   438→              <Select value={debtPaymentMethod} onValueChange={setDebtPaymentMethod}>
+   439→                <SelectTrigger className="w-full">
+   440→                  <SelectValue />
+   441→                </SelectTrigger>
+   442→                <SelectContent>
+   443→                  <SelectItem value="CASH">
+   444→                    <div className="flex items-center gap-2">
+   445→                      <Banknote className="h-4 w-4" /> Cash
+   446→                    </div>
+   447→                  </SelectItem>
+   448→                  <SelectItem value="MPESA">
+   449→                    <div className="flex items-center gap-2">
+   450→                      <Smartphone className="h-4 w-4" /> M-Pesa
+   451→                    </div>
+   452→                  </SelectItem>
+   453→                </SelectContent>
+   454→              </Select>
+   455→            </div>
+   456→
+   457→            {/* Reference Number */}
+   458→            <div className="space-y-2">
+   459→              <Label>Reference Number <span className="text-muted-foreground">(optional)</span></Label>
+   460→              <Input
+   461→                value={debtPaymentReference}
+   462→                onChange={(e) => setDebtPaymentReference(e.target.value)}
+   463→                placeholder={debtPaymentMethod === 'MPESA' ? 'M-Pesa transaction code' : 'Receipt number'}
+   464→              />
+   465→            </div>
+   466→
+   467→            {/* New Balance Preview */}
+   468→            {paymentAmountNum > 0 && (
+   469→              <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
+   470→                <div className="flex justify-between items-center">
+   471→                  <span className="text-sm text-muted-foreground">Payment</span>
+   472→                  <span className="text-sm font-medium">{formatKES(paymentAmountNum)}</span>
+   473→                </div>
+   474→                <div className="flex justify-between items-center">
+   475→                  <span className="text-sm text-muted-foreground">New Balance</span>
+   476→                  <span className={`text-sm font-bold ${newBalancePreview === 0 ? 'text-green-600' : 'text-red-600'}`}>
+   477→                    {formatKES(newBalancePreview)}
+   478→                  </span>
+   479→                </div>
+   480→                {paymentAmountNum > currentDebtBalance && (
+   481→                  <p className="text-xs text-yellow-600 flex items-center gap-1">
+   482→                    <AlertTriangle className="h-3 w-3" /> Amount exceeds balance — will be capped at {formatKES(currentDebtBalance)}
+   483→                  </p>
+   484→                )}
+   485→              </div>
+   486→            )}
+   487→          </div>
+   488→          <DialogFooter className="gap-2">
+   489→            <Button
+   490→              variant="outline"
+   491→              onClick={() => setDebtPaymentOpen(false)}
+   492→            >
+   493→              Cancel
+   494→            </Button>
+   495→            <Button
+   496→              className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+   497→              disabled={
+   498→                debtPaymentMutation.isPending ||
+   499→                paymentAmountNum <= 0 ||
+   500→                !selectedDebtLedgerId
+   501→              }
+   502→              onClick={() => {
+   503→                if (!selectedDebtLedgerId || paymentAmountNum <= 0) return;
+   504→                debtPaymentMutation.mutate({
+   505→                  debtLedgerId: selectedDebtLedgerId,
+   506→                  amount: Math.min(paymentAmountNum, currentDebtBalance),
+   507→                  paymentMethod: debtPaymentMethod,
+   508→                  reference: debtPaymentReference || undefined,
+   509→                });
+   510→              }}
+   511→            >
+   512→              {debtPaymentMutation.isPending ? (
+   513→                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</>
+   514→              ) : (
+   515→                <><HandCoins className="mr-2 h-4 w-4" /> Record Payment</>
+   516→              )}
+   517→            </Button>
+   518→          </DialogFooter>
+   519→        </DialogContent>
+   520→      </Dialog>
+   521→
+   522→      {/* Customer Detail Sheet */}
+   523→      <Sheet open={!!selectedCustomer} onOpenChange={(open) => !open && setSelectedCustomer(null)}>
+   524→        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+   525→          <SheetHeader>
+   526→            <SheetTitle>{selectedCustomer?.name}</SheetTitle>
+   527→            <SheetDescription>Customer details and history</SheetDescription>
+   528→          </SheetHeader>
+   529→          {selectedCustomer && (() => {
+   530→            const gradient = getAvatarGradient(selectedCustomer.name);
+   531→            const loyalty = getLoyaltyTier(selectedCustomer.loyaltyPoints);
+   532→            const debtStatus = getDebtStatus(selectedCustomer.currentDebtBalance, selectedCustomer.debtLimit);
+   533→            const hasOverdueDebt = debts.some(d => d.status === 'OVERDUE');
+   534→
+   535→            return (
+   536→              <div className="mt-6 space-y-6">
+   537→                {/* Customer Profile Header */}
+   538→                <div className="flex items-center gap-4">
+   539→                  <Avatar className="h-14 w-14">
+   540→                    <AvatarFallback className={`text-lg text-white font-bold bg-gradient-to-br ${gradient}`}>
+   541→                      {selectedCustomer.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+   542→                    </AvatarFallback>
+   543→                  </Avatar>
+   544→                  <div className="flex-1">
+   545→                    <h3 className="font-semibold text-lg">{selectedCustomer.name}</h3>
+   546→                    <div className="flex items-center gap-2 mt-1">
+   547→                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${loyalty.bg} ${loyalty.color}`}>
+   548→                        {loyalty.icon} {loyalty.tier} Member
+   549→                      </span>
+   550→                      <span className="flex items-center gap-1.5">
+   551→                        <span className={`w-2 h-2 rounded-full ${debtStatus.color}`} />
+   552→                        <span className="text-xs text-muted-foreground">{debtStatus.label}</span>
+   553→                      </span>
+   554→                    </div>
+   555→                  </div>
+   556→                </div>
+   557→
+   558→                {/* Contact Info */}
+   559→                <div className="grid grid-cols-2 gap-3">
+   560→                  {selectedCustomer.phone && (
+   561→                    <div className="flex items-center gap-2">
+   562→                      <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+   563→                      <span className="text-sm">{selectedCustomer.phone}</span>
+   564→                    </div>
+   565→                  )}
+   566→                  {selectedCustomer.email && (
+   567→                    <div className="flex items-center gap-2">
+   568→                      <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+   569→                      <span className="text-sm truncate">{selectedCustomer.email}</span>
+   570→                    </div>
+   571→                  )}
+   572→                  {selectedCustomer.idNumber && (
+   573→                    <div className="flex items-center gap-2">
+   574→                      <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
+   575→                      <span className="text-sm">ID: {selectedCustomer.idNumber}</span>
+   576→                    </div>
+   577→                  )}
+   578→                  {selectedCustomer.address && (
+   579→                    <div className="flex items-center gap-2">
+   580→                      <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+   581→                      <span className="text-sm">{selectedCustomer.address}</span>
+   582→                    </div>
+   583→                  )}
+   584→                </div>
+   585→
+   586→                {/* Debt Summary */}
+   587→                <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+   588→                  <div className="flex justify-between items-center">
+   589→                    <span className="text-sm font-medium">Debt Balance</span>
+   590→                    <span className="text-lg font-bold text-red-600">{formatKES(selectedCustomer.currentDebtBalance)}</span>
+   591→                  </div>
+   592→                  <div className="flex justify-between items-center">
+   593→                    <span className="text-sm text-muted-foreground">Debt Limit</span>
+   594→                    <span className="text-sm font-medium">{formatKES(selectedCustomer.debtLimit)}</span>
+   595→                  </div>
+   596→                  {selectedCustomer.debtLimit > 0 && (
+   597→                    <div className="space-y-1">
+   598→                      <div className="flex justify-between text-xs text-muted-foreground">
+   599→                        <span>Usage</span>
+   600→                        <span>{((selectedCustomer.currentDebtBalance / selectedCustomer.debtLimit) * 100).toFixed(0)}%</span>
+   601→                      </div>
+   602→                      <Progress
+   603→                        value={Math.min(100, (selectedCustomer.currentDebtBalance / selectedCustomer.debtLimit) * 100)}
+   604→                        className="h-2"
+   605→                      />
+   606→                    </div>
+   607→                  )}
+   608→                  <div className="flex justify-between items-center">
+   609→                    <span className="text-sm text-muted-foreground">Loyalty Points</span>
+   610→                    <span className="text-sm font-medium">{selectedCustomer.loyaltyPoints} pts</span>
+   611→                  </div>
+   612→                  <div className="flex justify-between items-center">
+   613→                    <span className="text-sm text-muted-foreground">Member Since</span>
+   614→                    <span className="text-sm font-medium">{formatDate(selectedCustomer.createdAt)}</span>
+   615→                  </div>
+   616→                </div>
+   617→
+   618→                {/* Quick Actions */}
+   619→                <div className="space-y-2">
+   620→                  {selectedCustomer.currentDebtBalance > 0 && (
+   621→                    <Button
+   622→                      className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+   623→                      onClick={() => {
+   624→                        const firstActiveDebt = activeDebts[0];
+   625→                        if (firstActiveDebt) setSelectedDebtLedgerId(firstActiveDebt.id);
+   626→                        setDebtPaymentOpen(true);
+   627→                      }}
+   628→                    >
+   629→                      <HandCoins className="mr-2 h-4 w-4" /> Record Payment
+   630→                    </Button>
+   631→                  )}
+   632→                  {hasOverdueDebt && (
+   633→                    <Button
+   634→                      variant="outline"
+   635→                      className="w-full"
+   636→                      onClick={() => toast.info(`SMS reminder would be sent to ${selectedCustomer.phone || 'N/A'}`)}
+   637→                    >
+   638→                      <MessageSquare className="mr-2 h-4 w-4" /> Send SMS Reminder
+   639→                    </Button>
+   640→                  )}
+   641→                  <Button
+   642→                    variant="outline"
+   643→                    className="w-full"
+   644→                    onClick={() => {
+   645→                      setSelectedCustomer(null);
+   646→                      setActiveTab('transactions');
+   647→                    }}
+   648→                  >
+   649→                    <ShoppingBag className="mr-2 h-4 w-4" /> View Transactions
+   650→                  </Button>
+   651→                </div>
+   652→
+   653→                <Separator />
+   654→
+   655→                {/* Transaction History */}
+   656→                <div>
+   657→                  <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+   658→                    <Clock className="h-4 w-4" /> Recent Transactions
+   659→                  </h3>
+   660→                  {customerTransactions.length === 0 ? (
+   661→                    <p className="text-sm text-muted-foreground">No recent transactions</p>
+   662→                  ) : (
+   663→                    <div className="space-y-2">
+   664→                      {customerTransactions.map((txn) => (
+   665→                        <div key={txn.id} className="flex items-center justify-between p-2.5 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
+   666→                          <div className="space-y-0.5">
+   667→                            <p className="text-sm font-medium">{txn.receiptNumber}</p>
+   668→                            <p className="text-xs text-muted-foreground">{formatDateTime(txn.createdAt)}</p>
+   669→                          </div>
+   670→                          <div className="flex items-center gap-2">
+   671→                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${getPaymentMethodBadge(txn.paymentMethod)}`}>
+   672→                              {getPaymentMethodIcon(txn.paymentMethod)}
+   673→                              {txn.paymentMethod}
+   674→                            </span>
+   675→                            <span className="text-sm font-semibold">{formatKES(txn.totalAmount)}</span>
+   676→                          </div>
+   677→                        </div>
+   678→                      ))}
+   679→                    </div>
+   680→                  )}
+   681→                </div>
+   682→
+   683→                <Separator />
+   684→
+   685→                {/* Debt History */}
+   686→                <div>
+   687→                  <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+   688→                    <CircleDollarSign className="h-4 w-4" /> Debt History
+   689→                  </h3>
+   690→                  {debts.length === 0 ? (
+   691→                    <p className="text-sm text-muted-foreground">No debt records</p>
+   692→                  ) : (
+   693→                    <div className="space-y-3">
+   694→                      {debts.map((debt) => (
+   695→                        <Card key={debt.id}>
+   696→                          <CardContent className="p-3">
+   697→                            <div className="flex justify-between items-start">
+   698→                              <div>
+   699→                                <p className="text-sm font-medium">{formatKES(debt.amountOwed)}</p>
+   700→                                <p className="text-xs text-muted-foreground">Due: {formatDate(debt.dueDate)}</p>
+   701→                              </div>
+   702→                              <Badge variant={debt.status === 'OVERDUE' ? 'destructive' : debt.status === 'SETTLED' ? 'secondary' : 'outline'} className="text-[10px]">
+   703→                                {debt.status}
+   704→                              </Badge>
+   705→                            </div>
+   706→                            <Progress value={(debt.amountPaid / debt.amountOwed) * 100} className="mt-2 h-1.5" />
+   707→                            <p className="text-xs text-muted-foreground mt-1">Paid: {formatKES(debt.amountPaid)} / {formatKES(debt.amountOwed)}</p>
+   708→                          </CardContent>
+   709→                        </Card>
+   710→                      ))}
+   711→                    </div>
+   712→                  )}
+   713→                </div>
+   714→              </div>
+   715→            );
+   716→          })()}
+   717→        </SheetContent>
+   718→      </Sheet>
+   719→    </div>
+   720→  );
+   721→}
+   722→

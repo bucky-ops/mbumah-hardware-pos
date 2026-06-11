@@ -1,0 +1,2002 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→/**
+     4→     4→ * MBUMAH HARDWARE POS & ERP System - Main Application Page
+     5→     5→ * UI Overhaul: Dashboard stats, category chips, enhanced cards, improved cart, better login, footer fix, empty states, live clock
+     6→     6→ */
+     7→     7→
+     8→     8→import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef } from 'react';
+     9→     9→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+    10→    10→import { useTheme } from 'next-themes';
+    11→    11→import { toast } from 'sonner';
+    12→    12→import {
+    13→    13→  ShoppingCart, Package, Users, KeyRound, BarChart3, FileText,
+    14→    14→  Settings, LogOut, Search, Plus, Minus, Trash2, X, Menu, Sun, Moon,
+    15→    15→  CheckCircle, Clock,
+    16→    16→  ShoppingBag, CreditCard, Smartphone,
+    17→    17→  AlertCircle, Loader2,
+    18→    18→  Home, Store, Mail, ShieldCheck, Eye, EyeOff,
+    19→    19→  Banknote, Wallet,
+    20→    20→  TrendingUp, ArrowDownRight, AlertTriangle, DollarSign, Wrench, Hammer,
+    21→    21→  CalendarDays, Printer, Bell, ChevronDown,
+    22→    22→  BellRing, PackageX, AlertOctagon, CircleDollarSign, CheckCheck,
+    23→    23→  Truck, UserPlus, Receipt, Filter, Info,
+    24→    24→} from 'lucide-react';
+    25→    25→
+    26→    26→import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
+    27→    27→import {
+    28→    28→  productsApi, categoriesApi, customersApi, transactionsApi,
+    29→    29→  paymentsApi, dashboardApi,
+    30→    30→  rentalsApi, debtApi, notificationsApi,
+    31→    31→  formatKES, formatDate, formatDateTime, formatRelativeTime,
+    32→    32→  type ProductListItem, type CustomerItem,
+    33→    33→  type CategoryItem, type TransactionItem,
+    34→    34→  type RentalItem, type DebtLedgerItem,
+    35→    35→  type NotificationItem,
+    36→    36→} from '@/lib/api';
+    37→    37→import type { PaymentMethod, CartItem, UnitType, DashboardStats } from '@/lib/types';
+    38→    38→
+    39→    39→import { Button } from '@/components/ui/button';
+    40→    40→import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+    41→    41→import { Input } from '@/components/ui/input';
+    42→    42→import { Label } from '@/components/ui/label';
+    43→    43→import { Badge } from '@/components/ui/badge';
+    44→    44→import { Separator } from '@/components/ui/separator';
+    45→    45→import { Skeleton } from '@/components/ui/skeleton';
+    46→    46→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+    47→    47→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    48→    48→import { ScrollArea } from '@/components/ui/scroll-area';
+    49→    49→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    50→    50→import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+    51→    51→import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+    52→    52→import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+    53→    53→import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+    54→    54→import { Progress } from '@/components/ui/progress';
+    55→    55→
+    56→    56→// ============================================================================
+    57→    57→// LAZY-LOADED TAB COMPONENTS
+    58→    58→// ============================================================================
+    59→    59→
+    60→    60→const LazyInventoryTab = lazy(() => import('./tabs/inventory-tab'));
+    61→    61→const LazyCustomersTab = lazy(() => import('./tabs/customers-tab'));
+    62→    62→const LazyRentalsTab = lazy(() => import('./tabs/rentals-tab'));
+    63→    63→const LazyFinancialTab = lazy(() => import('./tabs/financial-tab'));
+    64→    64→const LazyReportsTab = lazy(() => import('./tabs/reports-tab'));
+    65→    65→const LazyAdminTab = lazy(() => import('./tabs/admin-tab'));
+    66→    66→const LazyTransactionsTab = lazy(() => import('./tabs/transactions-tab'));
+    67→    67→const LazySuppliersTab = lazy(() => import('./tabs/suppliers-tab'));
+    68→    68→
+    69→    69→function TabLoadingFallback() {
+    70→    70→  return (
+    71→    71→    <div className="space-y-4">
+    72→    72→      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    73→    73→        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+    74→    74→      </div>
+    75→    75→      <Skeleton className="h-10 w-full" />
+    76→    76→      <Skeleton className="h-64 w-full" />
+    77→    77→    </div>
+    78→    78→  );
+    79→    79→}
+    80→    80→
+    81→    81→// ============================================================================
+    82→    82→// CONSTANTS
+    83→    83→// ============================================================================
+    84→    84→
+    85→    85→const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
+    86→    86→  { id: 'pos', label: 'POS', icon: ShoppingCart },
+    87→    87→  { id: 'inventory', label: 'Inventory', icon: Package },
+    88→    88→  { id: 'customers', label: 'Customers', icon: Users },
+    89→    89→  { id: 'rentals', label: 'Rentals', icon: KeyRound },
+    90→    90→  { id: 'financial', label: 'Financial', icon: BarChart3 },
+    91→    91→  { id: 'reports', label: 'Reports', icon: FileText },
+    92→    92→  { id: 'transactions', label: 'Transactions', icon: ShoppingBag },
+    93→    93→  { id: 'suppliers', label: 'Suppliers', icon: Truck },
+    94→    94→  { id: 'admin', label: 'Admin', icon: Settings },
+    95→    95→];
+    96→    96→
+    97→    97→const DEMO_ACCOUNTS = [
+    98→    98→  { email: 'admin@mbumahhardware.co.ke', password: 'password123', role: 'Super Admin', icon: ShieldCheck, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900 hover:bg-red-100 dark:hover:bg-red-950/50' },
+    99→    99→  { email: 'cashier@mbumahhardware.co.ke', password: 'password123', role: 'Cashier', icon: ShoppingCart, color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900 hover:bg-green-100 dark:hover:bg-green-950/50' },
+   100→   100→  { email: 'accountant@mbumahhardware.co.ke', password: 'password123', role: 'Accountant', icon: BarChart3, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900 hover:bg-amber-100 dark:hover:bg-amber-950/50' },
+   101→   101→];
+   102→   102→
+   103→   103→// Category image mapping
+   104→   104→const CATEGORY_IMAGES: Record<string, string> = {
+   105→   105→  cat_cement: '/categories/cat_cement.png',
+   106→   106→  cat_iron_sheets: '/categories/cat_iron.png',
+   107→   107→  cat_paints: '/categories/cat_paints.png',
+   108→   108→  cat_iron_bars: '/categories/cat_rebar.png',
+   109→   109→  cat_wheelbarrows: '/categories/cat_wheelbarrow.png',
+   110→   110→  cat_mesh_wires: '/categories/cat_mesh.png',
+   111→   111→  cat_tools: '/categories/cat_tools.png',
+   112→   112→  cat_plumbing: '/categories/cat_plumbing.png',
+   113→   113→  cat_electrical: '/categories/cat_electrical.png',
+   114→   114→  cat_nails_screws: '/categories/cat_nails.png',
+   115→   115→};
+   116→   116→
+   117→   117→function getCategoryImage(categoryId: string | null | undefined): string | null {
+   118→   118→  if (!categoryId) return null;
+   119→   119→  return CATEGORY_IMAGES[categoryId] || null;
+   120→   120→}
+   121→   121→
+   122→   122→// ============================================================================
+   123→   123→// LIVE CLOCK HOOK
+   124→   124→// ============================================================================
+   125→   125→
+   126→   126→function useLiveClock() {
+   127→   127→  const [now, setNow] = useState(new Date());
+   128→   128→
+   129→   129→  useEffect(() => {
+   130→   130→    const timer = setInterval(() => setNow(new Date()), 60000); // every minute
+   131→   131→    return () => clearInterval(timer);
+   132→   132→  }, []);
+   133→   133→
+   134→   134→  return now;
+   135→   135→}
+   136→   136→
+   137→   137→// ============================================================================
+   138→   138→// LOGIN SCREEN
+   139→   139→// ============================================================================
+   140→   140→
+   141→   141→function LoginScreen() {
+   142→   142→  const [email, setEmail] = useState('');
+   143→   143→  const [password, setPassword] = useState('');
+   144→   144→  const [showPassword, setShowPassword] = useState(false);
+   145→   145→  const login = useAuthStore((s) => s.login);
+   146→   146→  const isLoading = useAuthStore((s) => s.isLoading);
+   147→   147→
+   148→   148→  const handleSubmit = async (e: React.FormEvent) => {
+   149→   149→    e.preventDefault();
+   150→   150→    try {
+   151→   151→      await login(email, password);
+   152→   152→      toast.success('Welcome to MBUMAH HARDWARE POS!');
+   153→   153→    } catch (err: unknown) {
+   154→   154→      const message = err instanceof Error ? err.message : 'Login failed';
+   155→   155→      toast.error(message);
+   156→   156→    }
+   157→   157→  };
+   158→   158→
+   159→   159→  const fillDemo = (acct: typeof DEMO_ACCOUNTS[number]) => {
+   160→   160→    setEmail(acct.email);
+   161→   161→    setPassword(acct.password);
+   162→   162→  };
+   163→   163→
+   164→   164→  return (
+   165→   165→    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+   166→   166→      {/* Animated gradient background */}
+   167→   167→      <div className="absolute inset-0 bg-gradient-to-br from-[oklch(0.22_0.07_260)] via-[oklch(0.295_0.1_260)] to-[oklch(0.22_0.06_260)]" />
+   168→   168→      <div className="absolute inset-0 bg-gradient-to-tr from-[oklch(0.22_0.08_30)] via-transparent to-[oklch(0.25_0.09_150)] animate-gradient-shift" />
+   169→   169→
+   170→   170→      {/* Decorative hardware pattern */}
+   171→   171→      <div className="absolute inset-0 opacity-[0.04] pointer-events-none">
+   172→   172→        <div className="absolute top-10 left-10"><Wrench className="h-24 w-24 text-white" /></div>
+   173→   173→        <div className="absolute top-32 right-20"><Hammer className="h-16 w-16 text-white" /></div>
+   174→   174→        <div className="absolute bottom-20 left-1/4"><Package className="h-20 w-20 text-white" /></div>
+   175→   175→        <div className="absolute bottom-32 right-1/3"><Store className="h-28 w-28 text-white" /></div>
+   176→   176→        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"><Wrench className="h-40 w-40 text-white" /></div>
+   177→   177→        <div className="absolute top-60 left-1/2"><Hammer className="h-12 w-12 text-white rotate-45" /></div>
+   178→   178→        <div className="absolute bottom-60 right-10"><Package className="h-14 w-14 text-white -rotate-12" /></div>
+   179→   179→      </div>
+   180→   180→
+   181→   181→      <div className="w-full max-w-md relative z-10">
+   182→   182→        <Card className="shadow-2xl border border-white/10 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl">
+   183→   183→          <CardHeader className="text-center pb-2">
+   184→   184→            {/* Animated logo */}
+   185→   185→            <div className="mx-auto w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center mb-4 shadow-lg animate-pulse-slow">
+   186→   186→              <Store className="h-10 w-10 text-primary-foreground" />
+   187→   187→            </div>
+   188→   188→            <CardTitle className="text-2xl font-bold tracking-tight">MBUMAH HARDWARE</CardTitle>
+   189→   189→            <CardDescription className="text-base">POS & ERP System</CardDescription>
+   190→   190→          </CardHeader>
+   191→   191→          <CardContent>
+   192→   192→            <form onSubmit={handleSubmit} className="space-y-4">
+   193→   193→              <div className="space-y-2">
+   194→   194→                <Label htmlFor="email">Email Address</Label>
+   195→   195→                <div className="relative">
+   196→   196→                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   197→   197→                  <Input
+   198→   198→                    id="email"
+   199→   199→                    type="email"
+   200→   200→                    placeholder="cashier@mbumahhardware.co.ke"
+   201→   201→                    value={email}
+   202→   202→                    onChange={(e) => setEmail(e.target.value)}
+   203→   203→                    className="pl-10"
+   204→   204→                    required
+   205→   205→                    disabled={isLoading}
+   206→   206→                  />
+   207→   207→                </div>
+   208→   208→              </div>
+   209→   209→              <div className="space-y-2">
+   210→   210→                <Label htmlFor="password">Password</Label>
+   211→   211→                <div className="relative">
+   212→   212→                  <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   213→   213→                  <Input
+   214→   214→                    id="password"
+   215→   215→                    type={showPassword ? 'text' : 'password'}
+   216→   216→                    placeholder="Enter your password"
+   217→   217→                    value={password}
+   218→   218→                    onChange={(e) => setPassword(e.target.value)}
+   219→   219→                    className="pl-10 pr-10"
+   220→   220→                    required
+   221→   221→                    disabled={isLoading}
+   222→   222→                  />
+   223→   223→                  <button
+   224→   224→                    type="button"
+   225→   225→                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+   226→   226→                    onClick={() => setShowPassword(!showPassword)}
+   227→   227→                    tabIndex={-1}
+   228→   228→                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+   229→   229→                  >
+   230→   230→                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+   231→   231→                  </button>
+   232→   232→                </div>
+   233→   233→              </div>
+   234→   234→              <Button
+   235→   235→                type="submit"
+   236→   236→                className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground font-semibold"
+   237→   237→                disabled={isLoading}
+   238→   238→                size="lg"
+   239→   239→              >
+   240→   240→                {isLoading ? (
+   241→   241→                  <>
+   242→   242→                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+   243→   243→                    Signing In...
+   244→   244→                  </>
+   245→   245→                ) : (
+   246→   246→                  'Sign In'
+   247→   247→                )}
+   248→   248→              </Button>
+   249→   249→            </form>
+   250→   250→
+   251→   251→            {/* Demo Accounts */}
+   252→   252→            <div className="mt-6">
+   253→   253→              <Separator className="mb-4" />
+   254→   254→              <p className="text-xs text-muted-foreground text-center mb-3">Quick Demo Access</p>
+   255→   255→              <div className="grid grid-cols-3 gap-2">
+   256→   256→                {DEMO_ACCOUNTS.map((acct) => {
+   257→   257→                  const Icon = acct.icon;
+   258→   258→                  return (
+   259→   259→                    <button
+   260→   260→                      key={acct.email}
+   261→   261→                      type="button"
+   262→   262→                      onClick={() => fillDemo(acct)}
+   263→   263→                      className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all text-center ${acct.bg}`}
+   264→   264→                    >
+   265→   265→                      <Icon className={`h-5 w-5 ${acct.color}`} />
+   266→   266→                      <span className="text-[10px] font-medium leading-tight">{acct.role}</span>
+   267→   267→                    </button>
+   268→   268→                  );
+   269→   269→                })}
+   270→   270→              </div>
+   271→   271→            </div>
+   272→   272→          </CardContent>
+   273→   273→          <CardFooter className="flex flex-col gap-2 text-sm text-muted-foreground">
+   274→   274→            <p className="text-xs">Select a demo account above or enter credentials manually</p>
+   275→   275→          </CardFooter>
+   276→   276→          {/* Kenyan flag accent at bottom */}
+   277→   277→          <div className="flex h-1.5 rounded-b-xl overflow-hidden">
+   278→   278→            <div className="flex-1 bg-black" />
+   279→   279→            <div className="flex-1 bg-red-600" />
+   280→   280→            <div className="flex-1 bg-green-600" />
+   281→   281→            <div className="flex-1 bg-white" />
+   282→   282→          </div>
+   283→   283→        </Card>
+   284→   284→        {/* Branding text */}
+   285→   285→        <p className="text-center mt-4 text-xs text-white/40 font-medium tracking-wider">
+   286→   286→          Powered by MBUMAH HARDWARE
+   287→   287→        </p>
+   288→   288→      </div>
+   289→   289→    </div>
+   290→   290→  );
+   291→   291→}
+   292→   292→
+   293→   293→// ============================================================================
+   294→   294→// NOTIFICATION CENTER
+   295→   295→// ============================================================================
+   296→   296→
+   297→   297→// Hook to provide notification count globally
+   298→   298→function useNotificationCount(storeId: string) {
+   299→   299→  const { data } = useQuery({
+   300→   300→    queryKey: ['notification-count', storeId],
+   301→   301→    queryFn: async () => {
+   302→   302→      const res = await notificationsApi.list(storeId);
+   303→   303→      return res.data || [];
+   304→   304→    },
+   305→   305→    refetchInterval: 60000, // Refresh every minute
+   306→   306→    select: (notifications) => {
+   307→   307→      const stored = localStorage.getItem('mbt_read_notifications');
+   308→   308→      const storedDismissed = localStorage.getItem('mbt_dismissed_notifications');
+   309→   309→      const readIds: Set<string> = stored ? new Set(JSON.parse(stored)) : new Set();
+   310→   310→      const dismissedIds: Set<string> = storedDismissed ? new Set(JSON.parse(storedDismissed)) : new Set();
+   311→   311→      const active = notifications.filter((n) => !dismissedIds.has(n.id));
+   312→   312→      const unread = active.filter((n) => !readIds.has(n.id));
+   313→   313→      return {
+   314→   314→        total: active.length,
+   315→   315→        unread: unread.length,
+   316→   316→        critical: unread.filter((n) => n.severity === 'critical').length,
+   317→   317→        hasNew: unread.length > 0,
+   318→   318→      };
+   319→   319→    },
+   320→   320→  });
+   321→   321→  return data || { total: 0, unread: 0, critical: 0, hasNew: false };
+   322→   322→}
+   323→   323→
+   324→   324→type NotificationFilter = 'all' | 'critical' | 'warning' | 'info';
+   325→   325→
+   326→   326→function NotificationCenter({
+   327→   327→  open,
+   328→   328→  onOpenChange,
+   329→   329→  storeId,
+   330→   330→}: {
+   331→   331→  open: boolean;
+   332→   332→  onOpenChange: (open: boolean) => void;
+   333→   333→  storeId: string;
+   334→   334→}) {
+   335→   335→  const [filter, setFilter] = useState<NotificationFilter>('all');
+   336→   336→  const { setActiveTab } = useAppStore();
+   337→   337→
+   338→   338→  // Persist read/dismissed state in localStorage
+   339→   339→  const [readIds, setReadIds] = useState<Set<string>>(() => {
+   340→   340→    if (typeof window === 'undefined') return new Set();
+   341→   341→    try {
+   342→   342→      const stored = localStorage.getItem('mbt_read_notifications');
+   343→   343→      return stored ? new Set(JSON.parse(stored)) : new Set();
+   344→   344→    } catch {
+   345→   345→      return new Set();
+   346→   346→    }
+   347→   347→  });
+   348→   348→
+   349→   349→  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => {
+   350→   350→    if (typeof window === 'undefined') return new Set();
+   351→   351→    try {
+   352→   352→      const stored = localStorage.getItem('mbt_dismissed_notifications');
+   353→   353→      return stored ? new Set(JSON.parse(stored)) : new Set();
+   354→   354→    } catch {
+   355→   355→      return new Set();
+   356→   356→    }
+   357→   357→  });
+   358→   358→
+   359→   359→  // Save to localStorage whenever they change
+   360→   360→  useEffect(() => {
+   361→   361→    try {
+   362→   362→      localStorage.setItem('mbt_read_notifications', JSON.stringify([...readIds]));
+   363→   363→    } catch { /* ignore */ }
+   364→   364→  }, [readIds]);
+   365→   365→
+   366→   366→  useEffect(() => {
+   367→   367→    try {
+   368→   368→      localStorage.setItem('mbt_dismissed_notifications', JSON.stringify([...dismissedIds]));
+   369→   369→    } catch { /* ignore */ }
+   370→   370→  }, [dismissedIds]);
+   371→   371→
+   372→   372→  const { data: notificationsData, isLoading } = useQuery({
+   373→   373→    queryKey: ['notifications', storeId],
+   374→   374→    queryFn: async () => {
+   375→   375→      const res = await notificationsApi.list(storeId);
+   376→   376→      return res.data || [];
+   377→   377→    },
+   378→   378→    enabled: open,
+   379→   379→  });
+   380→   380→
+   381→   381→  const allNotifications = notificationsData || [];
+   382→   382→
+   383→   383→  // Filter out dismissed notifications
+   384→   384→  const activeNotifications = useMemo(
+   385→   385→    () => allNotifications.filter((n) => !dismissedIds.has(n.id)),
+   386→   386→    [allNotifications, dismissedIds]
+   387→   387→  );
+   388→   388→
+   389→   389→  // Apply severity filter
+   390→   390→  const filteredNotifications = useMemo(() => {
+   391→   391→    if (filter === 'all') return activeNotifications;
+   392→   392→    return activeNotifications.filter((n) => n.severity === filter);
+   393→   393→  }, [activeNotifications, filter]);
+   394→   394→
+   395→   395→  const unreadCount = activeNotifications.filter((n) => !readIds.has(n.id)).length;
+   396→   396→
+   397→   397→  // Vibrate on new critical notifications
+   398→   398→  useEffect(() => {
+   399→   399→    if (open && activeNotifications.length > 0) {
+   400→   400→      const criticalUnread = activeNotifications.filter(
+   401→   401→        (n) => n.severity === 'critical' && !readIds.has(n.id)
+   402→   402→      );
+   403→   403→      if (criticalUnread.length > 0 && navigator.vibrate) {
+   404→   404→        navigator.vibrate(200);
+   405→   405→      }
+   406→   406→    }
+   407→   407→  }, [open, activeNotifications, readIds]);
+   408→   408→
+   409→   409→  const markAllRead = () => {
+   410→   410→    setReadIds(new Set([...readIds, ...activeNotifications.map((n) => n.id)]));
+   411→   411→  };
+   412→   412→
+   413→   413→  const handleNotificationClick = (notification: NotificationItem) => {
+   414→   414→    setReadIds((prev) => new Set([...prev, notification.id]));
+   415→   415→    const targetTab = notification.targetTab as AppTab | undefined;
+   416→   416→    if (targetTab) {
+   417→   417→      setActiveTab(targetTab);
+   418→   418→      onOpenChange(false);
+   419→   419→    }
+   420→   420→  };
+   421→   421→
+   422→   422→  const handleDismiss = (e: React.MouseEvent, notificationId: string) => {
+   423→   423→    e.stopPropagation();
+   424→   424→    setDismissedIds((prev) => new Set([...prev, notificationId]));
+   425→   425→  };
+   426→   426→
+   427→   427→  const getNotificationIcon = (type: NotificationItem['type']) => {
+   428→   428→    switch (type) {
+   429→   429→      case 'out_of_stock': return <PackageX className="h-4 w-4 text-red-500" />;
+   430→   430→      case 'low_stock': return <AlertTriangle className="h-4 w-4 text-amber-500" />;
+   431→   431→      case 'overdue_rental': return <AlertOctagon className="h-4 w-4 text-red-500" />;
+   432→   432→      case 'large_debt': return <CircleDollarSign className="h-4 w-4 text-amber-500" />;
+   433→   433→      case 'new_customer': return <UserPlus className="h-4 w-4 text-green-500" />;
+   434→   434→      case 'recent_transaction': return <Receipt className="h-4 w-4 text-blue-500" />;
+   435→   435→    }
+   436→   436→  };
+   437→   437→
+   438→   438→  const getSeverityBg = (severity: NotificationItem['severity']) => {
+   439→   439→    switch (severity) {
+   440→   440→      case 'critical': return 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/40';
+   441→   441→      case 'warning': return 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40';
+   442→   442→      case 'info': return 'bg-green-50/50 dark:bg-green-950/10 border-green-200 dark:border-green-900/30';
+   443→   443→    }
+   444→   444→  };
+   445→   445→
+   446→   446→  const filterTabs: { id: NotificationFilter; label: string; count: number }[] = [
+   447→   447→    { id: 'all', label: 'All', count: activeNotifications.length },
+   448→   448→    { id: 'critical', label: 'Critical', count: activeNotifications.filter((n) => n.severity === 'critical').length },
+   449→   449→    { id: 'warning', label: 'Warnings', count: activeNotifications.filter((n) => n.severity === 'warning').length },
+   450→   450→    { id: 'info', label: 'Info', count: activeNotifications.filter((n) => n.severity === 'info').length },
+   451→   451→  ];
+   452→   452→
+   453→   453→  return (
+   454→   454→    <Sheet open={open} onOpenChange={onOpenChange}>
+   455→   455→      <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+   456→   456→        <SheetHeader className="p-4 pb-2 border-b shrink-0">
+   457→   457→          <div className="flex items-center justify-between">
+   458→   458→            <div className="flex items-center gap-2">
+   459→   459→              <SheetTitle className="text-lg">Notifications</SheetTitle>
+   460→   460→              {unreadCount > 0 && (
+   461→   461→                <Badge variant="destructive" className="text-[10px] px-1.5 py-0 animate-pulse-slow">
+   462→   462→                  {unreadCount}
+   463→   463→                </Badge>
+   464→   464→              )}
+   465→   465→            </div>
+   466→   466→            <div className="flex items-center gap-1">
+   467→   467→              {dismissedIds.size > 0 && (
+   468→   468→                <Button
+   469→   469→                  variant="ghost"
+   470→   470→                  size="sm"
+   471→   471→                  className="text-xs h-7 text-muted-foreground"
+   472→   472→                  onClick={() => setDismissedIds(new Set())}
+   473→   473→                >
+   474→   474→                  Show dismissed
+   475→   475→                </Button>
+   476→   476→              )}
+   477→   477→              {unreadCount > 0 && (
+   478→   478→                <Button variant="ghost" size="sm" className="text-xs h-7" onClick={markAllRead}>
+   479→   479→                  <CheckCheck className="h-3.5 w-3.5 mr-1" />
+   480→   480→                  Mark all read
+   481→   481→                </Button>
+   482→   482→              )}
+   483→   483→            </div>
+   484→   484→          </div>
+   485→   485→          <SheetDescription>
+   486→   486→            Stay updated on stock levels, rentals, debts, and more
+   487→   487→          </SheetDescription>
+   488→   488→        </SheetHeader>
+   489→   489→
+   490→   490→        {/* Filter Tabs */}
+   491→   491→        <div className="flex items-center gap-1 px-4 py-2 border-b shrink-0">
+   492→   492→          <Filter className="h-3.5 w-3.5 text-muted-foreground mr-1" />
+   493→   493→          {filterTabs.map((tab) => (
+   494→   494→            <button
+   495→   495→              key={tab.id}
+   496→   496→              onClick={() => setFilter(tab.id)}
+   497→   497→              className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+   498→   498→                filter === tab.id
+   499→   499→                  ? 'bg-primary text-primary-foreground'
+   500→   500→                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+   501→   501→              }`}
+   502→   502→            >
+   503→   503→              {tab.label}
+   504→   504→              {tab.count > 0 && (
+   505→   505→                <span className="ml-1 opacity-70">({tab.count})</span>
+   506→   506→              )}
+   507→   507→            </button>
+   508→   508→          ))}
+   509→   509→        </div>
+   510→   510→
+   511→   511→        <ScrollArea className="flex-1">
+   512→   512→          {isLoading ? (
+   513→   513→            <div className="p-4 space-y-3">
+   514→   514→              {Array.from({ length: 4 }).map((_, i) => (
+   515→   515→                <Skeleton key={i} className="h-20 w-full" />
+   516→   516→              ))}
+   517→   517→            </div>
+   518→   518→          ) : filteredNotifications.length === 0 ? (
+   519→   519→            <div className="p-8 text-center">
+   520→   520→              <BellRing className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
+   521→   521→              <p className="text-sm font-medium text-muted-foreground">
+   522→   522→                {filter === 'all' ? 'No notifications' : `No ${filter} notifications`}
+   523→   523→              </p>
+   524→   524→              <p className="text-xs text-muted-foreground/60 mt-1">You&apos;re all caught up!</p>
+   525→   525→            </div>
+   526→   526→          ) : (
+   527→   527→            <div className="p-3 space-y-2">
+   528→   528→              {filteredNotifications.map((notification) => {
+   529→   529→                const isUnread = !readIds.has(notification.id);
+   530→   530→                return (
+   531→   531→                  <div
+   532→   532→                    key={notification.id}
+   533→   533→                    onClick={() => handleNotificationClick(notification)}
+   534→   534→                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNotificationClick(notification); } }}
+   535→   535→                    tabIndex={0}
+   536→   536→                    className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm cursor-pointer group ${getSeverityBg(notification.severity)} ${isUnread ? 'ring-1 ring-primary/20' : 'opacity-70'}`}
+   537→   537→                  >
+   538→   538→                    <div className="flex items-start gap-3">
+   539→   539→                      <div className="shrink-0 mt-0.5">{getNotificationIcon(notification.type)}</div>
+   540→   540→                      <div className="flex-1 min-w-0">
+   541→   541→                        <div className="flex items-center gap-2">
+   542→   542→                          <p className="text-sm font-medium">{notification.title}</p>
+   543→   543→                          {isUnread && (
+   544→   544→                            <span className="w-2 h-2 rounded-full bg-primary shrink-0 animate-pulse" />
+   545→   545→                          )}
+   546→   546→                        </div>
+   547→   547→                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+   548→   548→                          {notification.description}
+   549→   549→                        </p>
+   550→   550→                        <p className="text-[10px] text-muted-foreground/60 mt-1" title={formatDateTime(notification.timestamp)}>
+   551→   551→                          {formatRelativeTime(notification.timestamp)}
+   552→   552→                        </p>
+   553→   553→                      </div>
+   554→   554→                      <button
+   555→   555→                        type="button"
+   556→   556→                        className="shrink-0 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-muted/80 transition-all"
+   557→   557→                        onClick={(e) => handleDismiss(e, notification.id)}
+   558→   558→                        aria-label="Dismiss notification"
+   559→   559→                      >
+   560→   560→                        <X className="h-3 w-3 text-muted-foreground" />
+   561→   561→                      </button>
+   562→   562→                    </div>
+   563→   563→                  </div>
+   564→   564→                );
+   565→   565→              })}
+   566→   566→            </div>
+   567→   567→          )}
+   568→   568→        </ScrollArea>
+   569→   569→      </SheetContent>
+   570→   570→    </Sheet>
+   571→   571→  );
+   572→   572→}
+   573→   573→
+   574→   574→// ============================================================================
+   575→   575→// LOW STOCK ALERT DIALOG
+   576→   576→// ============================================================================
+   577→   577→
+   578→   578→function LowStockAlertDialog({
+   579→   579→  open,
+   580→   580→  onOpenChange,
+   581→   581→  storeId,
+   582→   582→}: {
+   583→   583→  open: boolean;
+   584→   584→  onOpenChange: (open: boolean) => void;
+   585→   585→  storeId: string;
+   586→   586→}) {
+   587→   587→  const { data: productsData, isLoading } = useQuery({
+   588→   588→    queryKey: ['products-lowstock', storeId],
+   589→   589→    queryFn: () => productsApi.list({ storeId, limit: 200 }),
+   590→   590→    enabled: open,
+   591→   591→  });
+   592→   592→
+   593→   593→  const products = productsData?.data || [];
+   594→   594→
+   595→   595→  const outOfStockProducts = useMemo(
+   596→   596→    () => products.filter((p) => p.quantityInStock <= 0),
+   597→   597→    [products]
+   598→   598→  );
+   599→   599→
+   600→   600→  const lowStockProducts = useMemo(
+   601→   601→    () => products.filter((p) => p.quantityInStock > 0 && p.quantityInStock <= p.reorderLevel),
+   602→   602→    [products]
+   603→   603→  );
+   604→   604→
+   605→   605→  const totalAffected = outOfStockProducts.length + lowStockProducts.length;
+   606→   606→
+   607→   607→  return (
+   608→   608→    <Dialog open={open} onOpenChange={onOpenChange}>
+   609→   609→      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+   610→   610→        <DialogHeader>
+   611→   611→          <DialogTitle className="flex items-center gap-2">
+   612→   612→            <AlertTriangle className="h-5 w-5 text-amber-500" />
+   613→   613→            Low Stock Alert
+   614→   614→          </DialogTitle>
+   615→   615→          <DialogDescription>
+   616→   616→            {totalAffected} product{totalAffected !== 1 ? 's' : ''} need attention
+   617→   617→            — {outOfStockProducts.length} out of stock, {lowStockProducts.length} low stock
+   618→   618→          </DialogDescription>
+   619→   619→        </DialogHeader>
+   620→   620→
+   621→   621→        {isLoading ? (
+   622→   622→          <div className="space-y-3 p-4">
+   623→   623→            {Array.from({ length: 3 }).map((_, i) => (
+   624→   624→              <Skeleton key={i} className="h-20 w-full" />
+   625→   625→            ))}
+   626→   626→          </div>
+   627→   627→        ) : totalAffected === 0 ? (
+   628→   628→          <div className="p-8 text-center">
+   629→   629→            <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-3" />
+   630→   630→            <p className="text-sm font-medium">All products are well stocked!</p>
+   631→   631→            <p className="text-xs text-muted-foreground mt-1">No items require restocking at this time</p>
+   632→   632→          </div>
+   633→   633→        ) : (
+   634→   634→          <ScrollArea className="flex-1 min-h-0 max-h-[60vh]">
+   635→   635→            <div className="space-y-4 p-1">
+   636→   636→              {/* Out of Stock Section */}
+   637→   637→              {outOfStockProducts.length > 0 && (
+   638→   638→                <div>
+   639→   639→                  <div className="flex items-center gap-2 mb-2">
+   640→   640→                    <PackageX className="h-4 w-4 text-red-500" />
+   641→   641→                    <h4 className="text-sm font-semibold text-red-600 dark:text-red-400">
+   642→   642→                      Out of Stock ({outOfStockProducts.length})
+   643→   643→                    </h4>
+   644→   644→                  </div>
+   645→   645→                  <div className="space-y-2">
+   646→   646→                    {outOfStockProducts.map((product) => (
+   647→   647→                      <div
+   648→   648→                        key={product.id}
+   649→   649→                        className="p-3 rounded-lg border border-red-200 dark:border-red-900/40 bg-red-50/50 dark:bg-red-950/10"
+   650→   650→                      >
+   651→   651→                        <div className="flex items-start justify-between gap-2">
+   652→   652→                          <div className="min-w-0">
+   653→   653→                            <p className="text-sm font-medium">{product.name}</p>
+   654→   654→                            {product.category && (
+   655→   655→                              <p className="text-[10px] text-muted-foreground">{product.category.name}</p>
+   656→   656→                            )}
+   657→   657→                          </div>
+   658→   658→                          <Badge variant="destructive" className="text-[10px] shrink-0">
+   659→   659→                            0 in stock
+   660→   660→                          </Badge>
+   661→   661→                        </div>
+   662→   662→                        <div className="mt-2">
+   663→   663→                          <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+   664→   664→                            <span>Reorder level: {product.reorderLevel}</span>
+   665→   665→                            <span className="text-red-500 font-medium">Needs immediate restock</span>
+   666→   666→                          </div>
+   667→   667→                          <div className="h-2 bg-muted rounded-full overflow-hidden">
+   668→   668→                            <div className="h-full bg-red-500 rounded-full" style={{ width: '2%' }} />
+   669→   669→                          </div>
+   670→   670→                        </div>
+   671→   671→                      </div>
+   672→   672→                    ))}
+   673→   673→                  </div>
+   674→   674→                </div>
+   675→   675→              )}
+   676→   676→
+   677→   677→              {/* Low Stock Section */}
+   678→   678→              {lowStockProducts.length > 0 && (
+   679→   679→                <div>
+   680→   680→                  <div className="flex items-center gap-2 mb-2">
+   681→   681→                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+   682→   682→                    <h4 className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+   683→   683→                      Low Stock ({lowStockProducts.length})
+   684→   684→                    </h4>
+   685→   685→                  </div>
+   686→   686→                  <div className="space-y-2">
+   687→   687→                    {lowStockProducts.map((product) => {
+   688→   688→                      const stockPercent = product.reorderLevel > 0
+   689→   689→                        ? Math.min((product.quantityInStock / (product.reorderLevel * 3)) * 100, 100)
+   690→   690→                        : product.quantityInStock > 0 ? 50 : 0;
+   691→   691→                      const restockQty = Math.max(product.reorderLevel * 2 - product.quantityInStock, product.reorderLevel);
+   692→   692→                      return (
+   693→   693→                        <div
+   694→   694→                          key={product.id}
+   695→   695→                          className="p-3 rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/10"
+   696→   696→                        >
+   697→   697→                          <div className="flex items-start justify-between gap-2">
+   698→   698→                            <div className="min-w-0">
+   699→   699→                              <p className="text-sm font-medium">{product.name}</p>
+   700→   700→                              {product.category && (
+   701→   701→                                <p className="text-[10px] text-muted-foreground">{product.category.name}</p>
+   702→   702→                              )}
+   703→   703→                            </div>
+   704→   704→                            <Badge className="text-[10px] shrink-0 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200 dark:border-amber-800">
+   705→   705→                              {product.quantityInStock} left
+   706→   706→                            </Badge>
+   707→   707→                          </div>
+   708→   708→                          <div className="mt-2">
+   709→   709→                            <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+   710→   710→                              <span>Current: {product.quantityInStock} / Reorder at: {product.reorderLevel}</span>
+   711→   711→                              <span className="text-amber-600 dark:text-amber-400 font-medium">
+   712→   712→                                Restock ~{restockQty} {product.unitType.toLowerCase()}s
+   713→   713→                              </span>
+   714→   714→                            </div>
+   715→   715→                            <div className="h-2 bg-muted rounded-full overflow-hidden">
+   716→   716→                              <div
+   717→   717→                                className="h-full bg-amber-500 rounded-full transition-all"
+   718→   718→                                style={{ width: `${stockPercent}%` }}
+   719→   719→                              />
+   720→   720→                            </div>
+   721→   721→                          </div>
+   722→   722→                        </div>
+   723→   723→                      );
+   724→   724→                    })}
+   725→   725→                  </div>
+   726→   726→                </div>
+   727→   727→              )}
+   728→   728→
+   729→   729→              {totalAffected > 0 && (
+   730→   730→                <div className="p-3 rounded-lg border bg-muted/30">
+   731→   731→                  <p className="text-xs text-muted-foreground">
+   732→   732→                    💡 <strong>Tip:</strong> Consider restocking to at least 2× the reorder level to maintain healthy inventory.
+   733→   733→                    Use the <strong>Admin → Stock Adjustment</strong> tool to update stock levels.
+   734→   734→                  </p>
+   735→   735→                </div>
+   736→   736→              )}
+   737→   737→            </div>
+   738→   738→          </ScrollArea>
+   739→   739→        )}
+   740→   740→      </DialogContent>
+   741→   741→    </Dialog>
+   742→   742→  );
+   743→   743→}
+   744→   744→
+   745→   745→// ============================================================================
+   746→   746→// SIDEBAR
+   747→   747→// ============================================================================
+   748→   748→
+   749→   749→function AppSidebar() {
+   750→   750→  const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen, currentStoreId } = useAppStore();
+   751→   751→  const user = useAuthStore((s) => s.user);
+   752→   752→  const logout = useAuthStore((s) => s.logout);
+   753→   753→  const { theme, setTheme } = useTheme();
+   754→   754→  const [notificationOpen, setNotificationOpen] = useState(false);
+   755→   755→  const notificationCount = useNotificationCount(currentStoreId);
+   756→   756→
+   757→   757→  const handleNav = (tab: AppTab) => {
+   758→   758→    setActiveTab(tab);
+   759→   759→    setSidebarOpen(false);
+   760→   760→  };
+   761→   761→
+   762→   762→  const handleLogout = async () => {
+   763→   763→    await logout();
+   764→   764→    toast.success('Logged out successfully');
+   765→   765→  };
+   766→   766→
+   767→   767→  // Navigation groups
+   768→   768→  const mainNavItems = TAB_CONFIG.filter(t => ['pos', 'inventory', 'customers', 'transactions'].includes(t.id));
+   769→   769→  const managementNavItems = TAB_CONFIG.filter(t => ['rentals', 'suppliers', 'financial', 'reports', 'admin'].includes(t.id));
+   770→   770→
+   771→   771→  const renderNavItem = ({ id, label, icon: Icon }: { id: AppTab; label: string; icon: React.ElementType }) => (
+   772→   772→    <button
+   773→   773→      key={id}
+   774→   774→      onClick={() => handleNav(id)}
+   775→   775→      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all relative sidebar-nav-item ${
+   776→   776→        activeTab === id
+   777→   777→          ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
+   778→   778→          : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+   779→   779→      }`}
+   780→   780→    >
+   781→   781→      {/* Active left border indicator */}
+   782→   782→      {activeTab === id && (
+   783→   783→        <div className="absolute left-0 top-1 bottom-1 w-1 rounded-r-full bg-sidebar-primary-foreground/80" />
+   784→   784→      )}
+   785→   785→      <Icon className="h-4 w-4 shrink-0 relative z-10" />
+   786→   786→      <span className="relative z-10">{label}</span>
+   787→   787→    </button>
+   788→   788→  );
+   789→   789→
+   790→   790→  return (
+   791→   791→    <>
+   792→   792→      {/* Mobile overlay */}
+   793→   793→      {sidebarOpen && (
+   794→   794→        <div
+   795→   795→          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+   796→   796→          onClick={() => setSidebarOpen(false)}
+   797→   797→        />
+   798→   798→      )}
+   799→   799→
+   800→   800→      {/* Sidebar */}
+   801→   801→      <aside
+   802→   802→        className={`fixed top-0 left-0 z-50 h-full w-64 bg-sidebar text-sidebar-foreground transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:z-auto border-r border-sidebar-border ${
+   803→   803→          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+   804→   804→        }`}
+   805→   805→      >
+   806→   806→        <div className="flex flex-col h-full">
+   807→   807→          {/* Logo + Notification Bell */}
+   808→   808→          <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
+   809→   809→            <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center">
+   810→   810→              <Store className="h-5 w-5 text-sidebar-primary-foreground" />
+   811→   811→            </div>
+   812→   812→            <div className="flex-1 min-w-0">
+   813→   813→              <h1 className="font-bold text-sm leading-tight">MBUMAH HARDWARE</h1>
+   814→   814→              <p className="text-xs text-sidebar-foreground/60">POS & ERP</p>
+   815→   815→            </div>
+   816→   816→            <Button
+   817→   817→              variant="ghost"
+   818→   818→              size="icon"
+   819→   819→              className="shrink-0 text-sidebar-foreground/60 hover:text-sidebar-foreground relative"
+   820→   820→              onClick={() => setNotificationOpen(true)}
+   821→   821→            >
+   822→   822→              <Bell className="h-4 w-4" />
+   823→   823→              {notificationCount.unread > 0 ? (
+   824→   824→                <span className={`absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[9px] font-bold text-white px-1 ${notificationCount.critical > 0 ? 'bg-red-500 animate-pulse' : 'bg-amber-500'}`}>
+   825→   825→                  {notificationCount.unread > 99 ? '99+' : notificationCount.unread}
+   826→   826→                </span>
+   827→   827→              ) : null}
+   828→   828→            </Button>
+   829→   829→            <Button
+   830→   830→              variant="ghost"
+   831→   831→              size="icon"
+   832→   832→              className="shrink-0 lg:hidden text-sidebar-foreground/60 hover:text-sidebar-foreground"
+   833→   833→              onClick={() => setSidebarOpen(false)}
+   834→   834→            >
+   835→   835→              <X className="h-4 w-4" />
+   836→   836→            </Button>
+   837→   837→          </div>
+   838→   838→
+   839→   839→          {/* Store Selector */}
+   840→   840→          <div className="px-3 pt-3 pb-1">
+   841→   841→            <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-sidebar-border bg-sidebar-accent/50 text-xs text-sidebar-foreground/80 hover:bg-sidebar-accent transition-colors">
+   842→   842→              <Store className="h-3.5 w-3.5 shrink-0" />
+   843→   843→              <span className="truncate font-medium">Juja Main Branch</span>
+   844→   844→              <ChevronDown className="h-3 w-3 ml-auto shrink-0" />
+   845→   845→            </button>
+   846→   846→          </div>
+   847→   847→
+   848→   848→          {/* Navigation */}
+   849→   849→          <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto custom-scrollbar">
+   850→   850→            {/* Main Section */}
+   851→   851→            <p className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">Main</p>
+   852→   852→            {mainNavItems.map(renderNavItem)}
+   853→   853→
+   854→   854→            {/* Management Section */}
+   855→   855→            <p className="px-4 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">Management</p>
+   856→   856→            {managementNavItems.map(renderNavItem)}
+   857→   857→          </nav>
+   858→   858→
+   859→   859→          {/* Footer - User Profile Dropdown */}
+   860→   860→          <div className="border-t border-sidebar-border px-3 py-3 space-y-2">
+   861→   861→            <DropdownMenu>
+   862→   862→              <DropdownMenuTrigger asChild>
+   863→   863→                <div className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors text-left cursor-pointer" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}>
+   864→   864→                  <div className="relative">
+   865→   865→                    <Avatar className="h-9 w-9 ring-2 ring-sidebar-primary/20">
+   866→   866→                      <AvatarFallback className="bg-gradient-to-br from-sidebar-primary to-sidebar-primary/70 text-sidebar-primary-foreground text-xs font-semibold">
+   867→   867→                        {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
+   868→   868→                      </AvatarFallback>
+   869→   869→                    </Avatar>
+   870→   870→                    {/* Online dot */}
+   871→   871→                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-sidebar rounded-full" />
+   872→   872→                  </div>
+   873→   873→                  <div className="flex-1 min-w-0">
+   874→   874→                    <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
+   875→   875→                    <p className="text-xs text-sidebar-foreground/60 truncate">{user?.role === 'SUPER_ADMIN' ? 'Super Admin' : user?.role === 'CASHIER' ? 'Cashier' : user?.role || 'User'}</p>
+   876→   876→                  </div>
+   877→   877→                  <ChevronDown className="h-3.5 w-3.5 text-sidebar-foreground/40 shrink-0" />
+   878→   878→                </div>
+   879→   879→              </DropdownMenuTrigger>
+   880→   880→              <DropdownMenuContent side="top" className="w-56 mb-2">
+   881→   881→                <DropdownMenuLabel className="font-normal">
+   882→   882→                  <div className="flex flex-col space-y-1">
+   883→   883→                    <p className="text-sm font-medium">{user?.name || 'User'}</p>
+   884→   884→                    <p className="text-xs text-muted-foreground">{user?.email || ''}</p>
+   885→   885→                  </div>
+   886→   886→                </DropdownMenuLabel>
+   887→   887→                <DropdownMenuSeparator />
+   888→   888→                <DropdownMenuItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+   889→   889→                  {theme === 'dark' ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
+   890→   890→                  {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+   891→   891→                </DropdownMenuItem>
+   892→   892→                <DropdownMenuItem onClick={() => toast.info('Profile settings coming soon')}>
+   893→   893→                  <ShieldCheck className="mr-2 h-4 w-4" />
+   894→   894→                  Profile & Settings
+   895→   895→                </DropdownMenuItem>
+   896→   896→                <DropdownMenuItem onClick={() => toast.info('Keyboard shortcuts: Ctrl+K for search')}>
+   897→   897→                  <Search className="mr-2 h-4 w-4" />
+   898→   898→                  Keyboard Shortcuts
+   899→   899→                </DropdownMenuItem>
+   900→   900→                <DropdownMenuSeparator />
+   901→   901→                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={handleLogout}>
+   902→   902→                  <LogOut className="mr-2 h-4 w-4" />
+   903→   903→                  Log out
+   904→   904→                </DropdownMenuItem>
+   905→   905→              </DropdownMenuContent>
+   906→   906→            </DropdownMenu>
+   907→   907→          </div>
+   908→   908→        </div>
+   909→   909→      </aside>
+   910→   910→      <NotificationCenter
+   911→   911→        open={notificationOpen}
+   912→   912→        onOpenChange={setNotificationOpen}
+   913→   913→        storeId={currentStoreId}
+   914→   914→      />
+   915→   915→    </>
+   916→   916→  );
+   917→   917→}
+   918→   918→
+   919→   919→// ============================================================================
+   920→   920→// TOP BAR (with live Date/Time)
+   921→   921→// ============================================================================
+   922→   922→
+   923→   923→function TopBar() {
+   924→   924→  const { activeTab, toggleSidebar, setActiveTab } = useAppStore();
+   925→   925→  const cartItems = useCartStore((s) => s.items);
+   926→   926→  const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+   927→   927→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+   928→   928→  const currentTab = TAB_CONFIG.find(t => t.id === activeTab);
+   929→   929→  const TabIcon = currentTab?.icon || Home;
+   930→   930→  const now = useLiveClock();
+   931→   931→  const [searchOpen, setSearchOpen] = useState(false);
+   932→   932→  const [searchQuery, setSearchQuery] = useState('');
+   933→   933→
+   934→   934→  // Global search with Ctrl+K
+   935→   935→  useEffect(() => {
+   936→   936→    const handleKeyDown = (e: KeyboardEvent) => {
+   937→   937→      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+   938→   938→        e.preventDefault();
+   939→   939→        setSearchOpen(true);
+   940→   940→      }
+   941→   941→    };
+   942→   942→    document.addEventListener('keydown', handleKeyDown);
+   943→   943→    return () => document.removeEventListener('keydown', handleKeyDown);
+   944→   944→  }, []);
+   945→   945→
+   946→   946→  const { data: searchResults } = useQuery({
+   947→   947→    queryKey: ['globalSearch', searchQuery, currentStoreId],
+   948→   948→    queryFn: async () => {
+   949→   949→      if (!searchQuery || searchQuery.length < 2) return { products: [] as ProductListItem[], customers: [] as CustomerItem[] };
+   950→   950→      const [prodRes, custRes] = await Promise.all([
+   951→   951→        productsApi.list({ storeId: currentStoreId, search: searchQuery, limit: 5 }),
+   952→   952→        customersApi.list({ storeId: currentStoreId, search: searchQuery, limit: 5 }),
+   953→   953→      ]);
+   954→   954→      return {
+   955→   955→        products: prodRes.data || [],
+   956→   956→        customers: custRes.data || [],
+   957→   957→      };
+   958→   958→    },
+   959→   959→    enabled: searchQuery.length >= 2,
+   960→   960→  });
+   961→   961→
+   962→   962→  return (
+   963→   963→    <>
+   964→   964→      <header className="sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
+   965→   965→        <div className="flex items-center gap-3 px-4 py-3">
+   966→   966→          <Button
+   967→   967→            variant="ghost"
+   968→   968→            size="icon"
+   969→   969→            className="lg:hidden"
+   970→   970→            onClick={toggleSidebar}
+   971→   971→          >
+   972→   972→            <Menu className="h-5 w-5" />
+   973→   973→          </Button>
+   974→   974→          <div className="flex items-center gap-2">
+   975→   975→            <TabIcon className="h-5 w-5 text-primary" />
+   976→   976→            <h2 className="font-semibold text-lg">{currentTab?.label || 'Dashboard'}</h2>
+   977→   977→          </div>
+   978→   978→          <div className="ml-auto flex items-center gap-2">
+   979→   979→            {/* Quick Search Button */}
+   980→   980→            <Button
+   981→   981→              variant="outline"
+   982→   982→              size="sm"
+   983→   983→              className="hidden md:flex items-center gap-2 text-muted-foreground h-8 px-3"
+   984→   984→              onClick={() => setSearchOpen(true)}
+   985→   985→            >
+   986→   986→              <Search className="h-3.5 w-3.5" />
+   987→   987→              <span className="text-xs">Search...</span>
+   988→   988→              <kbd className="ml-2 pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+   989→   989→                ⌘K
+   990→   990→              </kbd>
+   991→   991→            </Button>
+   992→   992→            {cartItemCount > 0 && (
+   993→   993→              <Badge variant="secondary" className="flex items-center gap-1">
+   994→   994→                <ShoppingCart className="h-3 w-3" />
+   995→   995→                {cartItemCount}
+   996→   996→              </Badge>
+   997→   997→            )}
+   998→   998→            <Badge variant="outline" className="hidden sm:flex items-center gap-1.5">
+   999→   999→              <CalendarDays className="h-3 w-3" />
+  1000→  1000→              {now.toLocaleDateString('en-KE', { weekday: 'short', month: 'short', day: 'numeric' })}
+  1001→  1001→              <span className="text-muted-foreground">|</span>
+  1002→  1002→              <Clock className="h-3 w-3" />
+  1003→  1003→              {now.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}
+  1004→  1004→            </Badge>
+  1005→  1005→          </div>
+  1006→  1006→        </div>
+  1007→  1007→      </header>
+  1008→  1008→
+  1009→  1009→      {/* Global Search Dialog */}
+  1010→  1010→      <Dialog open={searchOpen} onOpenChange={(open) => { setSearchOpen(open); if (!open) setSearchQuery(''); }}>
+  1011→  1011→        <DialogContent className="sm:max-w-lg p-0 gap-0">
+  1012→  1012→          <div className="flex items-center border-b px-4 py-3">
+  1013→  1013→            <Search className="h-4 w-4 text-muted-foreground shrink-0 mr-2" />
+  1014→  1014→            <Input
+  1015→  1015→              value={searchQuery}
+  1016→  1016→              onChange={(e) => setSearchQuery(e.target.value)}
+  1017→  1017→              placeholder="Search products, customers..."
+  1018→  1018→              className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-8"
+  1019→  1019→              autoFocus
+  1020→  1020→            />
+  1021→  1021→            <kbd className="ml-2 pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+  1022→  1022→              ESC
+  1023→  1023→            </kbd>
+  1024→  1024→          </div>
+  1025→  1025→          <div className="max-h-80 overflow-y-auto custom-scrollbar">
+  1026→  1026→            {searchQuery.length < 2 ? (
+  1027→  1027→              <div className="p-6 text-center">
+  1028→  1028→                <Search className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+  1029→  1029→                <p className="text-sm text-muted-foreground">Type at least 2 characters to search</p>
+  1030→  1030→                <p className="text-xs text-muted-foreground/60 mt-1">Search across products and customers</p>
+  1031→  1031→              </div>
+  1032→  1032→            ) : searchResults && (searchResults.products.length > 0 || searchResults.customers.length > 0) ? (
+  1033→  1033→              <div className="py-2">
+  1034→  1034→                {searchResults.products.length > 0 && (
+  1035→  1035→                  <div>
+  1036→  1036→                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Products</p>
+  1037→  1037→                    {searchResults.products.map((p) => (
+  1038→  1038→                      <button
+  1039→  1039→                        key={p.id}
+  1040→  1040→                        className="w-full flex items-center gap-3 px-4 py-2 hover:bg-muted/50 transition-colors text-left"
+  1041→  1041→                        onClick={() => { setActiveTab('inventory'); setSearchOpen(false); setSearchQuery(''); }}
+  1042→  1042→                      >
+  1043→  1043→                        <div className="shrink-0 w-8 h-8 rounded-md bg-muted flex items-center justify-center">
+  1044→  1044→                          <Package className="h-4 w-4 text-muted-foreground" />
+  1045→  1045→                        </div>
+  1046→  1046→                        <div className="flex-1 min-w-0">
+  1047→  1047→                          <p className="text-sm font-medium truncate">{p.name}</p>
+  1048→  1048→                          <p className="text-xs text-muted-foreground">{p.sku} · {p.category?.name || 'No category'}</p>
+  1049→  1049→                        </div>
+  1050→  1050→                        <span className="text-sm font-semibold text-primary whitespace-nowrap">{formatKES(p.pricePerUnit)}</span>
+  1051→  1051→                      </button>
+  1052→  1052→                    ))}
+  1053→  1053→                  </div>
+  1054→  1054→                )}
+  1055→  1055→                {searchResults.customers.length > 0 && (
+  1056→  1056→                  <div>
+  1057→  1057→                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-t mt-1 pt-2">Customers</p>
+  1058→  1058→                    {searchResults.customers.map((c) => (
+  1059→  1059→                      <button
+  1060→  1060→                        key={c.id}
+  1061→  1061→                        className="w-full flex items-center gap-3 px-4 py-2 hover:bg-muted/50 transition-colors text-left"
+  1062→  1062→                        onClick={() => { setActiveTab('customers'); setSearchOpen(false); setSearchQuery(''); }}
+  1063→  1063→                      >
+  1064→  1064→                        <Avatar className="h-8 w-8 shrink-0">
+  1065→  1065→                          <AvatarFallback className="text-xs">{c.name.split(' ').map(n => n[0]).join('').slice(0, 2)}</AvatarFallback>
+  1066→  1066→                        </Avatar>
+  1067→  1067→                        <div className="flex-1 min-w-0">
+  1068→  1068→                          <p className="text-sm font-medium truncate">{c.name}</p>
+  1069→  1069→                          <p className="text-xs text-muted-foreground">{c.phone || c.email || 'No contact'}</p>
+  1070→  1070→                        </div>
+  1071→  1071→                        {c.currentDebtBalance > 0 && (
+  1072→  1072→                          <Badge variant="destructive" className="text-[10px]">{formatKES(c.currentDebtBalance)}</Badge>
+  1073→  1073→                        )}
+  1074→  1074→                      </button>
+  1075→  1075→                    ))}
+  1076→  1076→                  </div>
+  1077→  1077→                )}
+  1078→  1078→              </div>
+  1079→  1079→            ) : searchQuery.length >= 2 ? (
+  1080→  1080→              <div className="p-6 text-center">
+  1081→  1081→                <Package className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+  1082→  1082→                <p className="text-sm text-muted-foreground">No results found</p>
+  1083→  1083→                <p className="text-xs text-muted-foreground/60 mt-1">Try a different search term</p>
+  1084→  1084→              </div>
+  1085→  1085→            ) : null}
+  1086→  1086→          </div>
+  1087→  1087→        </DialogContent>
+  1088→  1088→      </Dialog>
+  1089→  1089→    </>
+  1090→  1090→  );
+  1091→  1091→}
+  1092→  1092→
+  1093→  1093→// ============================================================================
+  1094→  1094→// DASHBOARD STATS ROW
+  1095→  1095→// ============================================================================
+  1096→  1096→
+  1097→  1097→// Animated counter hook
+  1098→  1098→function useAnimatedCounter(target: number, duration = 800) {
+  1099→  1099→  const [count, setCount] = useState(0);
+  1100→  1100→  const prevTarget = useRef(0);
+  1101→  1101→
+  1102→  1102→  useEffect(() => {
+  1103→  1103→    if (target === prevTarget.current) return;
+  1104→  1104→    const start = prevTarget.current;
+  1105→  1105→    const diff = target - start;
+  1106→  1106→    const startTime = performance.now();
+  1107→  1107→
+  1108→  1108→    const animate = (now: number) => {
+  1109→  1109→      const elapsed = now - startTime;
+  1110→  1110→      const progress = Math.min(elapsed / duration, 1);
+  1111→  1111→      // Ease out cubic
+  1112→  1112→      const eased = 1 - Math.pow(1 - progress, 3);
+  1113→  1113→      setCount(Math.round(start + diff * eased));
+  1114→  1114→      if (progress < 1) {
+  1115→  1115→        requestAnimationFrame(animate);
+  1116→  1116→      } else {
+  1117→  1117→        prevTarget.current = target;
+  1118→  1118→      }
+  1119→  1119→    };
+  1120→  1120→
+  1121→  1121→    requestAnimationFrame(animate);
+  1122→  1122→  }, [target, duration]);
+  1123→  1123→
+  1124→  1124→  return count;
+  1125→  1125→}
+  1126→  1126→
+  1127→  1127→// Mini sparkline component
+  1128→  1128→function MiniSparkline({ data, color, height = 24 }: { data: number[]; color: string; height?: number }) {
+  1129→  1129→  if (data.length < 2) return null;
+  1130→  1130→  const max = Math.max(...data);
+  1131→  1131→  const min = Math.min(...data);
+  1132→  1132→  const range = max - min || 1;
+  1133→  1133→  const width = 60;
+  1134→  1134→  const points = data.map((v, i) => {
+  1135→  1135→    const x = (i / (data.length - 1)) * width;
+  1136→  1136→    const y = height - ((v - min) / range) * (height - 4) - 2;
+  1137→  1137→    return `${x},${y}`;
+  1138→  1138→  }).join(' ');
+  1139→  1139→
+  1140→  1140→  return (
+  1141→  1141→    <svg width={width} height={height} className="opacity-50 shrink-0" aria-hidden="true">
+  1142→  1142→      <polyline fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" points={points} />
+  1143→  1143→    </svg>
+  1144→  1144→  );
+  1145→  1145→}
+  1146→  1146→
+  1147→  1147→function DashboardStats({ storeId, onLowStockClick }: { storeId: string; onLowStockClick?: () => void }) {
+  1148→  1148→  const { data, isLoading } = useQuery({
+  1149→  1149→    queryKey: ['dashboard', storeId],
+  1150→  1150→    queryFn: async () => {
+  1151→  1151→      const res = await dashboardApi.getStats(storeId);
+  1152→  1152→      return res.data;
+  1153→  1153→    },
+  1154→  1154→    refetchInterval: 60000,
+  1155→  1155→  });
+  1156→  1156→
+  1157→  1157→  const animatedSales = useAnimatedCounter(data?.todaySales ?? 0);
+  1158→  1158→  const animatedTransactions = useAnimatedCounter(data?.todayTransactions ?? 0);
+  1159→  1159→  const animatedLowStock = useAnimatedCounter(data?.lowStockProducts ?? 0);
+  1160→  1160→  const animatedDebt = useAnimatedCounter(data?.outstandingDebt ?? 0);
+  1161→  1161→
+  1162→  1162→  // Generate fake sparkline data from salesByHour or random
+  1163→  1163→  const sparkData = useMemo(() => {
+  1164→  1164→    if (data && data.salesByHour && data.salesByHour.length > 1) {
+  1165→  1165→      return data.salesByHour.map(h => h.amount);
+  1166→  1166→    }
+  1167→  1167→    return [20, 40, 30, 60, 50, 80, 70, 90];
+  1168→  1168→  }, [data]);
+  1169→  1169→
+  1170→  1170→  const stats = [
+  1171→  1171→    {
+  1172→  1172→      label: "Today's Sales",
+  1173→  1173→      value: data?.todaySales ?? 0,
+  1174→  1174→      animatedValue: animatedSales,
+  1175→  1175→      format: 'kes' as const,
+  1176→  1176→      icon: TrendingUp,
+  1177→  1177→      color: 'text-green-600 dark:text-green-400',
+  1178→  1178→      bg: 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/40 dark:to-emerald-950/30',
+  1179→  1179→      borderColor: 'border-l-green-500',
+  1180→  1180→      sparkColor: '#16a34a',
+  1181→  1181→      trend: '+12%',
+  1182→  1182→      trendUp: true,
+  1183→  1183→      clickable: false,
+  1184→  1184→    },
+  1185→  1185→    {
+  1186→  1186→      label: 'Transactions',
+  1187→  1187→      value: data?.todayTransactions ?? 0,
+  1188→  1188→      animatedValue: animatedTransactions,
+  1189→  1189→      format: 'number' as const,
+  1190→  1190→      icon: ShoppingCart,
+  1191→  1191→      color: 'text-blue-600 dark:text-blue-400',
+  1192→  1192→      bg: 'bg-gradient-to-br from-blue-50 to-sky-50 dark:from-blue-950/40 dark:to-sky-950/30',
+  1193→  1193→      borderColor: 'border-l-blue-500',
+  1194→  1194→      sparkColor: '#2563eb',
+  1195→  1195→      trend: '+8%',
+  1196→  1196→      trendUp: true,
+  1197→  1197→      clickable: false,
+  1198→  1198→    },
+  1199→  1199→    {
+  1200→  1200→      label: 'Low Stock',
+  1201→  1201→      value: data?.lowStockProducts ?? 0,
+  1202→  1202→      animatedValue: animatedLowStock,
+  1203→  1203→      format: 'number' as const,
+  1204→  1204→      icon: AlertTriangle,
+  1205→  1205→      color: 'text-amber-600 dark:text-amber-400',
+  1206→  1206→      bg: 'bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/40 dark:to-yellow-950/30',
+  1207→  1207→      borderColor: 'border-l-amber-500',
+  1208→  1208→      sparkColor: '#d97706',
+  1209→  1209→      trend: '-3%',
+  1210→  1210→      trendUp: false,
+  1211→  1211→      clickable: true,
+  1212→  1212→    },
+  1213→  1213→    {
+  1214→  1214→      label: 'Outstanding Debt',
+  1215→  1215→      value: data?.outstandingDebt ?? 0,
+  1216→  1216→      animatedValue: animatedDebt,
+  1217→  1217→      format: 'kes' as const,
+  1218→  1218→      icon: DollarSign,
+  1219→  1219→      color: 'text-red-600 dark:text-red-400',
+  1220→  1220→      bg: 'bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/40 dark:to-rose-950/30',
+  1221→  1221→      borderColor: 'border-l-red-500',
+  1222→  1222→      sparkColor: '#dc2626',
+  1223→  1223→      trend: '+5%',
+  1224→  1224→      trendUp: true,
+  1225→  1225→      clickable: false,
+  1226→  1226→    },
+  1227→  1227→  ];
+  1228→  1228→
+  1229→  1229→  if (isLoading) {
+  1230→  1230→    return (
+  1231→  1231→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+  1232→  1232→        {Array.from({ length: 4 }).map((_, i) => (
+  1233→  1233→          <Card key={i} className="overflow-hidden">
+  1234→  1234→            <CardContent className="p-3">
+  1235→  1235→              <div className="flex items-center gap-3">
+  1236→  1236→                <Skeleton className="h-8 w-8 rounded-lg" />
+  1237→  1237→                <div className="flex-1 space-y-1.5">
+  1238→  1238→                  <Skeleton className="h-3 w-16" />
+  1239→  1239→                  <Skeleton className="h-5 w-24" />
+  1240→  1240→                </div>
+  1241→  1241→              </div>
+  1242→  1242→            </CardContent>
+  1243→  1243→          </Card>
+  1244→  1244→        ))}
+  1245→  1245→      </div>
+  1246→  1246→    );
+  1247→  1247→  }
+  1248→  1248→
+  1249→  1249→  return (
+  1250→  1250→    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+  1251→  1251→      {stats.map((stat) => {
+  1252→  1252→        const Icon = stat.icon;
+  1253→  1253→        const isClickable = stat.clickable && onLowStockClick;
+  1254→  1254→        return (
+  1255→  1255→          <Card
+  1256→  1256→            key={stat.label}
+  1257→  1257→            className={`border-l-4 ${stat.borderColor} py-0 ${stat.bg} ${
+  1258→  1258→              isClickable ? 'cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0' : 'transition-shadow duration-200 hover:shadow-sm'
+  1259→  1259→            }`}
+  1260→  1260→            onClick={isClickable ? onLowStockClick : undefined}
+  1261→  1261→            role={isClickable ? 'button' : undefined}
+  1262→  1262→            tabIndex={isClickable ? 0 : undefined}
+  1263→  1263→            onKeyDown={isClickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onLowStockClick(); } } : undefined}
+  1264→  1264→          >
+  1265→  1265→            <CardContent className="p-3 flex items-center gap-3">
+  1266→  1266→              <div className={`shrink-0 p-2 rounded-lg bg-white/60 dark:bg-black/20`}>
+  1267→  1267→                <Icon className={`h-4 w-4 ${stat.color}`} />
+  1268→  1268→              </div>
+  1269→  1269→              <div className="flex-1 min-w-0">
+  1270→  1270→                <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">{stat.label}</p>
+  1271→  1271→                <div className="flex items-center gap-1.5">
+  1272→  1272→                  <p className={`text-sm sm:text-base font-bold ${stat.color} whitespace-nowrap animate-count-up`}>
+  1273→  1273→                    {stat.format === 'kes' ? formatKES(stat.animatedValue) : stat.animatedValue}
+  1274→  1274→                  </p>
+  1275→  1275→                  {isClickable && (
+  1276→  1276→                    <span className="text-[9px] text-muted-foreground/50">→</span>
+  1277→  1277→                  )}
+  1278→  1278→                </div>
+  1279→  1279→              </div>
+  1280→  1280→              <div className="shrink-0 flex flex-col items-end gap-0.5">
+  1281→  1281→                <MiniSparkline data={sparkData} color={stat.sparkColor} />
+  1282→  1282→                <div className={`flex items-center gap-0.5 text-[9px] font-medium ${stat.trendUp ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+  1283→  1283→                  {stat.trendUp ? <TrendingUp className="h-2.5 w-2.5" /> : <ArrowDownRight className="h-2.5 w-2.5" />}
+  1284→  1284→                  {stat.trend}
+  1285→  1285→                </div>
+  1286→  1286→              </div>
+  1287→  1287→            </CardContent>
+  1288→  1288→          </Card>
+  1289→  1289→        );
+  1290→  1290→      })}
+  1291→  1291→    </div>
+  1292→  1292→  );
+  1293→  1293→}
+  1294→  1294→
+  1295→  1295→// ============================================================================
+  1296→  1296→// CATEGORY FILTER CHIPS
+  1297→  1297→// ============================================================================
+  1298→  1298→
+  1299→  1299→function CategoryChips({
+  1300→  1300→  categories,
+  1301→  1301→  selected,
+  1302→  1302→  onSelect,
+  1303→  1303→}: {
+  1304→  1304→  categories: CategoryItem[];
+  1305→  1305→  selected: string;
+  1306→  1306→  onSelect: (id: string) => void;
+  1307→  1307→}) {
+  1308→  1308→  const scrollRef = useRef<HTMLDivElement>(null);
+  1309→  1309→  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  1310→  1310→  const [canScrollRight, setCanScrollRight] = useState(false);
+  1311→  1311→
+  1312→  1312→  const checkScroll = useCallback(() => {
+  1313→  1313→    const el = scrollRef.current;
+  1314→  1314→    if (!el) return;
+  1315→  1315→    setCanScrollLeft(el.scrollLeft > 0);
+  1316→  1316→    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+  1317→  1317→  }, []);
+  1318→  1318→
+  1319→  1319→  useEffect(() => {
+  1320→  1320→    checkScroll();
+  1321→  1321→    const el = scrollRef.current;
+  1322→  1322→    if (el) {
+  1323→  1323→      el.addEventListener('scroll', checkScroll);
+  1324→  1324→      window.addEventListener('resize', checkScroll);
+  1325→  1325→    }
+  1326→  1326→    return () => {
+  1327→  1327→      if (el) el.removeEventListener('scroll', checkScroll);
+  1328→  1328→      window.removeEventListener('resize', checkScroll);
+  1329→  1329→    };
+  1330→  1330→  }, [checkScroll, categories]);
+  1331→  1331→
+  1332→  1332→  const scrollBy = (direction: 'left' | 'right') => {
+  1333→  1333→    const el = scrollRef.current;
+  1334→  1334→    if (el) {
+  1335→  1335→      el.scrollBy({ left: direction === 'left' ? -150 : 150, behavior: 'smooth' });
+  1336→  1336→    }
+  1337→  1337→  };
+  1338→  1338→
+  1339→  1339→  return (
+  1340→  1340→    <div className="relative flex items-center gap-1">
+  1341→  1341→      {canScrollLeft && (
+  1342→  1342→        <button
+  1343→  1343→          onClick={() => scrollBy('left')}
+  1344→  1344→          className="shrink-0 h-7 w-7 rounded-full border bg-background shadow-sm flex items-center justify-center hover:bg-muted transition-colors z-10"
+  1345→  1345→          aria-label="Scroll categories left"
+  1346→  1346→        >
+  1347→  1347→          <ChevronDown className="h-3 w-3 rotate-90" />
+  1348→  1348→        </button>
+  1349→  1349→      )}
+  1350→  1350→      <div ref={scrollRef} className="flex gap-2 overflow-x-auto scrollbar-none py-0.5 flex-1">
+  1351→  1351→        <button
+  1352→  1352→          onClick={() => onSelect('all')}
+  1353→  1353→          className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap ${
+  1354→  1354→            selected === 'all'
+  1355→  1355→              ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+  1356→  1356→              : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
+  1357→  1357→          }`}
+  1358→  1358→        >
+  1359→  1359→          All
+  1360→  1360→        </button>
+  1361→  1361→        {categories.map((cat) => {
+  1362→  1362→          const catColor = cat.color || '#6b7280';
+  1363→  1363→          const isActive = selected === cat.id;
+  1364→  1364→          const catImage = getCategoryImage(cat.id);
+  1365→  1365→          return (
+  1366→  1366→            <button
+  1367→  1367→              key={cat.id}
+  1368→  1368→              onClick={() => onSelect(cat.id)}
+  1369→  1369→              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap flex items-center gap-1.5 ${
+  1370→  1370→                isActive
+  1371→  1371→                  ? 'text-white border-transparent shadow-sm'
+  1372→  1372→                  : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
+  1373→  1373→              }`}
+  1374→  1374→              style={isActive ? { backgroundColor: catColor, borderColor: catColor } : { borderLeftColor: catColor, borderLeftWidth: '3px' }}
+  1375→  1375→            >
+  1376→  1376→              {catImage && (
+  1377→  1377→                <img src={catImage} alt="" className="h-4 w-4 rounded-full object-cover" />
+  1378→  1378→              )}
+  1379→  1379→              {cat.name}
+  1380→  1380→            </button>
+  1381→  1381→          );
+  1382→  1382→        })}
+  1383→  1383→      </div>
+  1384→  1384→      {canScrollRight && (
+  1385→  1385→        <button
+  1386→  1386→          onClick={() => scrollBy('right')}
+  1387→  1387→          className="shrink-0 h-7 w-7 rounded-full border bg-background shadow-sm flex items-center justify-center hover:bg-muted transition-colors z-10"
+  1388→  1388→          aria-label="Scroll categories right"
+  1389→  1389→        >
+  1390→  1390→          <ChevronDown className="h-3 w-3 -rotate-90" />
+  1391→  1391→        </button>
+  1392→  1392→      )}
+  1393→  1393→    </div>
+  1394→  1394→  );
+  1395→  1395→}
+  1396→  1396→
+  1397→  1397→// ============================================================================
+  1398→  1398→// PRODUCT CARD
+  1399→  1399→// ============================================================================
+  1400→  1400→
+  1401→  1401→function ProductCard({
+  1402→  1402→  product,
+  1403→  1403→  onAdd,
+  1404→  1404→}: {
+  1405→  1405→  product: ProductListItem;
+  1406→  1406→  onAdd: (p: ProductListItem) => void;
+  1407→  1407→}) {
+  1408→  1408→  const [isBouncing, setIsBouncing] = useState(false);
+  1409→  1409→  const categoryColor = product.category?.color || '#6b7280';
+  1410→  1410→  const stockPercent = product.reorderLevel > 0
+  1411→  1411→    ? Math.min((product.quantityInStock / (product.reorderLevel * 3)) * 100, 100)
+  1412→  1412→    : product.quantityInStock > 0 ? 100 : 0;
+  1413→  1413→  const isLowStock = product.quantityInStock <= product.reorderLevel && product.quantityInStock > 0;
+  1414→  1414→  const isOutOfStock = product.quantityInStock <= 0;
+  1415→  1415→
+  1416→  1416→  // Check if product is new (created within last 7 days)
+  1417→  1417→  const isNew = useMemo(() => {
+  1418→  1418→    const created = new Date(product.createdAt || Date.now());
+  1419→  1419→    const sevenDaysAgo = new Date();
+  1420→  1420→    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  1421→  1421→    return created > sevenDaysAgo;
+  1422→  1422→  }, [product.createdAt]);
+  1423→  1423→
+  1424→  1424→  const stockBarColor = isOutOfStock
+  1425→  1425→    ? 'bg-red-500'
+  1426→  1426→    : isLowStock
+  1427→  1427→      ? 'bg-amber-500'
+  1428→  1428→      : 'bg-green-500';
+  1429→  1429→
+  1430→  1430→  const unitBadgeColor: Record<string, string> = {
+  1431→  1431→    PIECE: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  1432→  1432→    KILOGRAM: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300',
+  1433→  1433→    METER: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300',
+  1434→  1434→    LITER: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+  1435→  1435→    BAG: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+  1436→  1436→    BOX: 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300',
+  1437→  1437→    SET: 'bg-pink-100 text-pink-700 dark:bg-pink-950 dark:text-pink-300',
+  1438→  1438→  };
+  1439→  1439→
+  1440→  1440→  const handleClick = () => {
+  1441→  1441→    setIsBouncing(true);
+  1442→  1442→    onAdd(product);
+  1443→  1443→    setTimeout(() => setIsBouncing(false), 400);
+  1444→  1444→  };
+  1445→  1445→
+  1446→  1446→  return (
+  1447→  1447→    <Card
+  1448→  1448→      className={`overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 hover:-translate-y-1 hover:border-primary/30 group border-l-4 card-glow ${isBouncing ? 'animate-bounce-add' : ''}`}
+  1449→  1449→      style={{ borderLeftColor: categoryColor }}
+  1450→  1450→      onClick={handleClick}
+  1451→  1451→    >
+  1452→  1452→      <div className="h-28 bg-muted flex items-center justify-center relative overflow-hidden">
+  1453→  1453→        {product.imageUrl ? (
+  1454→  1454→          <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500" />
+  1455→  1455→        ) : getCategoryImage(product.categoryId) ? (
+  1456→  1456→          <img src={getCategoryImage(product.categoryId)!} alt={product.category?.name || ''} className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500" />
+  1457→  1457→        ) : (
+  1458→  1458→          <Package className="h-9 w-9 text-muted-foreground/25" />
+  1459→  1459→        )}
+  1460→  1460→        {/* Gradient overlay on hover */}
+  1461→  1461→        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/0 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+  1462→  1462→          <div className="bg-white/90 dark:bg-black/70 rounded-full p-2 shadow-lg transform scale-50 group-hover:scale-100 transition-transform duration-200">
+  1463→  1463→            <Plus className="h-5 w-5 text-primary" />
+  1464→  1464→          </div>
+  1465→  1465→        </div>
+  1466→  1466→        {/* Badges */}
+  1467→  1467→        {product.isRental && (
+  1468→  1468→          <Badge className="absolute top-1.5 left-1.5 bg-blue-600 text-white text-[10px] px-1.5">RENTAL</Badge>
+  1469→  1469→        )}
+  1470→  1470→        {product.isBundle && (
+  1471→  1471→          <Badge className="absolute top-1.5 right-1.5 bg-purple-600 text-white text-[10px] px-1.5">BUNDLE</Badge>
+  1472→  1472→        )}
+  1473→  1473→        {isNew && !product.isRental && !product.isBundle && (
+  1474→  1474→          <Badge className="absolute top-1.5 right-1.5 bg-emerald-500 text-white text-[10px] px-1.5 font-bold animate-pulse">NEW</Badge>
+  1475→  1475→        )}
+  1476→  1476→        {isOutOfStock && (
+  1477→  1477→          <div className="absolute inset-0 bg-red-500/10 flex items-center justify-center">
+  1478→  1478→            <Badge variant="destructive" className="text-[10px] font-bold">OUT OF STOCK</Badge>
+  1479→  1479→          </div>
+  1480→  1480→        )}
+  1481→  1481→      </div>
+  1482→  1482→      <CardContent className="p-2.5">
+  1483→  1483→        <h3 className="font-medium text-sm line-clamp-2 leading-tight">{product.name}</h3>
+  1484→  1484→        {product.category && (
+  1485→  1485→          <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">{product.category.name}</p>
+  1486→  1486→        )}
+  1487→  1487→        <div className="flex items-center justify-between mt-1.5 gap-1">
+  1488→  1488→          <span className="font-bold text-primary text-sm truncate">{formatKES(product.pricePerUnit)}</span>
+  1489→  1489→          <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${unitBadgeColor[product.unitType] || 'bg-muted text-muted-foreground'}`}>
+  1490→  1490→            {product.unitType}
+  1491→  1491→          </span>
+  1492→  1492→        </div>
+  1493→  1493→        {/* Enhanced stock progress bar */}
+  1494→  1494→        <div className="mt-1.5 flex items-center gap-1.5">
+  1495→  1495→          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+  1496→  1496→            <div
+  1497→  1497→              className={`h-full rounded-full animate-stock-fill ${stockBarColor} relative`}
+  1498→  1498→              style={{ width: `${stockPercent}%` }}
+  1499→  1499→            >
+  1500→  1500→              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
+  1501→  1501→            </div>
+  1502→  1502→          </div>
+  1503→  1503→          <span className={`text-[9px] font-medium shrink-0 ${isOutOfStock ? 'text-red-500' : isLowStock ? 'text-amber-500' : 'text-muted-foreground'}`}>
+  1504→  1504→            {isOutOfStock ? 'Out' : `${product.quantityInStock}`}
+  1505→  1505→          </span>
+  1506→  1506→        </div>
+  1507→  1507→      </CardContent>
+  1508→  1508→    </Card>
+  1509→  1509→  );
+  1510→  1510→}
+  1511→  1511→
+  1512→  1512→// ============================================================================
+  1513→  1513→// CART ITEM ROW (enhanced)
+  1514→  1514→// ============================================================================
+  1515→  1515→
+  1516→  1516→function CartItemRow({
+  1517→  1517→  item,
+  1518→  1518→  onUpdateQty,
+  1519→  1519→  onRemove,
+  1520→  1520→  isNew,
+  1521→  1521→}: {
+  1522→  1522→  item: CartItem;
+  1523→  1523→  onUpdateQty: (productId: string, qty: number) => void;
+  1524→  1524→  onRemove: (productId: string) => void;
+  1525→  1525→  isNew?: boolean;
+  1526→  1526→}) {
+  1527→  1527→  const quickAddAmounts = [1, 2, 5, 10];
+  1528→  1528→
+  1529→  1529→  return (
+  1530→  1530→    <div className={`flex gap-2 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors ${isNew ? 'animate-slide-in' : ''}`}>
+  1531→  1531→      {/* Image placeholder */}
+  1532→  1532→      <div className="shrink-0 w-10 h-10 rounded-md bg-muted flex items-center justify-center">
+  1533→  1533→        <Package className="h-4 w-4 text-muted-foreground/40" />
+  1534→  1534→      </div>
+  1535→  1535→      <div className="flex-1 min-w-0">
+  1536→  1536→        <p className="text-sm font-medium truncate">{item.productName}</p>
+  1537→  1537→        <div className="flex items-center gap-1.5 mt-0.5">
+  1538→  1538→          <span className="text-xs text-muted-foreground">{formatKES(item.pricePerUnit)}</span>
+  1539→  1539→          <span className="text-[9px] px-1 py-0 rounded bg-muted text-muted-foreground font-medium">{item.unitType}</span>
+  1540→  1540→          {item.discountPercent > 0 && (
+  1541→  1541→            <span className="text-[9px] text-green-600 font-medium">{item.discountPercent}% off</span>
+  1542→  1542→          )}
+  1543→  1543→        </div>
+  1544→  1544→        {/* Quick Add buttons */}
+  1545→  1545→        <div className="flex items-center gap-1 mt-1.5">
+  1546→  1546→          {quickAddAmounts.map((amt) => (
+  1547→  1547→            <button
+  1548→  1548→              key={amt}
+  1549→  1549→              type="button"
+  1550→  1550→              onClick={() => onUpdateQty(item.productId, item.quantity + amt)}
+  1551→  1551→              className="px-1.5 py-0 text-[9px] font-medium rounded border border-border/50 bg-background hover:bg-primary hover:text-primary-foreground transition-colors"
+  1552→  1552→            >
+  1553→  1553→              +{amt}
+  1554→  1554→            </button>
+  1555→  1555→          ))}
+  1556→  1556→        </div>
+  1557→  1557→      </div>
+  1558→  1558→      <div className="flex flex-col items-end gap-1">
+  1559→  1559→        <Button
+  1560→  1560→          variant="ghost"
+  1561→  1561→          size="icon"
+  1562→  1562→          className="h-5 w-5 text-muted-foreground hover:text-destructive"
+  1563→  1563→          onClick={() => onRemove(item.productId)}
+  1564→  1564→        >
+  1565→  1565→          <X className="h-3 w-3" />
+  1566→  1566→        </Button>
+  1567→  1567→        <div className="flex items-center gap-0.5">
+  1568→  1568→          <Button
+  1569→  1569→            variant="outline"
+  1570→  1570→            size="icon"
+  1571→  1571→            className="h-6 w-6"
+  1572→  1572→            onClick={() => onUpdateQty(item.productId, item.quantity - 1)}
+  1573→  1573→          >
+  1574→  1574→            <Minus className="h-2.5 w-2.5" />
+  1575→  1575→          </Button>
+  1576→  1576→          <span className="w-7 text-center text-xs font-semibold">{item.quantity}</span>
+  1577→  1577→          <Button
+  1578→  1578→            variant="outline"
+  1579→  1579→            size="icon"
+  1580→  1580→            className="h-6 w-6"
+  1581→  1581→            onClick={() => onUpdateQty(item.productId, item.quantity + 1)}
+  1582→  1582→          >
+  1583→  1583→            <Plus className="h-2.5 w-2.5" />
+  1584→  1584→          </Button>
+  1585→  1585→        </div>
+  1586→  1586→        <p className="text-xs font-semibold text-primary">{formatKES(item.lineTotal)}</p>
+  1587→  1587→      </div>
+  1588→  1588→    </div>
+  1589→  1589→  );
+  1590→  1590→}
+  1591→  1591→
+  1592→  1592→// ============================================================================
+  1593→  1593→// EMPTY STATE COMPONENTS
+  1594→  1594→// ============================================================================
+  1595→  1595→
+  1596→  1596→function EmptyCartState() {
+  1597→  1597→  return (
+  1598→  1598→    <div className="p-8 text-center">
+  1599→  1599→      {/* CSS-only empty cart illustration */}
+  1600→  1600→      <div className="relative mx-auto w-24 h-24 mb-4">
+  1601→  1601→        {/* Cart body */}
+  1602→  1602→        <div className="absolute bottom-2 left-3 right-3 h-12 border-2 border-muted-foreground/20 rounded-b-lg bg-muted/30">
+  1603→  1603→          {/* Cart items placeholder lines */}
+  1604→  1604→          <div className="absolute top-2 left-2 right-2 space-y-1">
+  1605→  1605→            <div className="h-1 bg-muted-foreground/10 rounded" />
+  1606→  1606→            <div className="h-1 bg-muted-foreground/10 rounded w-3/4" />
+  1607→  1607→            <div className="h-1 bg-muted-foreground/10 rounded w-1/2" />
+  1608→  1608→          </div>
+  1609→  1609→        </div>
+  1610→  1610→        {/* Cart handle */}
+  1611→  1611→        <div className="absolute top-0 left-6 right-6 h-6 border-t-2 border-l-2 border-r-2 border-muted-foreground/20 rounded-t-full" />
+  1612→  1612→        {/* Wheels */}
+  1613→  1613→        <div className="absolute bottom-0 left-4 w-3 h-3 border-2 border-muted-foreground/20 rounded-full bg-background" />
+  1614→  1614→        <div className="absolute bottom-0 right-4 w-3 h-3 border-2 border-muted-foreground/20 rounded-full bg-background" />
+  1615→  1615→        {/* Floating plus sign */}
+  1616→  1616→        <div className="absolute -top-1 -right-1 w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center animate-bounce">
+  1617→  1617→          <Plus className="h-3 w-3 text-primary/50" />
+  1618→  1618→        </div>
+  1619→  1619→      </div>
+  1620→  1620→      <p className="text-sm font-medium text-muted-foreground">Your cart is empty</p>
+  1621→  1621→      <p className="text-xs text-muted-foreground/60 mt-1">Click on products to add them here</p>
+  1622→  1622→    </div>
+  1623→  1623→  );
+  1624→  1624→}
+  1625→  1625→
+  1626→  1626→function EmptyProductsState({ searchQuery }: { searchQuery: string }) {
+  1627→  1627→  return (
+  1628→  1628→    <div className="text-center py-16">
+  1629→  1629→      <div className="relative mx-auto w-20 h-20 mb-4">
+  1630→  1630→        <div className="absolute inset-0 bg-muted rounded-2xl" />
+  1631→  1631→        <Package className="absolute inset-0 m-auto h-10 w-10 text-muted-foreground/30" />
+  1632→  1632→      </div>
+  1633→  1633→      <p className="text-base font-medium text-muted-foreground">No products found</p>
+  1634→  1634→      {searchQuery ? (
+  1635→  1635→        <p className="text-sm text-muted-foreground/60 mt-1">
+  1636→  1636→          No results for &ldquo;{searchQuery}&rdquo;. Try a different search term.
+  1637→  1637→        </p>
+  1638→  1638→      ) : (
+  1639→  1639→        <p className="text-sm text-muted-foreground/60 mt-1">Try adjusting your search or filters</p>
+  1640→  1640→      )}
+  1641→  1641→    </div>
+  1642→  1642→  );
+  1643→  1643→}
+  1644→  1644→
+  1645→  1645→// ============================================================================
+  1646→  1646→// POS TAB (kept inline - core feature)
+  1647→  1647→// ============================================================================
+  1648→  1648→
+  1649→  1649→function POSTab() {
+  1650→  1650→  const [searchQuery, setSearchQuery] = useState('');
+  1651→  1651→  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  1652→  1652→  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  1653→  1653→  const [mpesaDialogOpen, setMpesaDialogOpen] = useState(false);
+  1654→  1654→  const [mpesaPhone, setMpesaPhone] = useState('');
+  1655→  1655→  const [mpesaStatus, setMpesaStatus] = useState<'idle' | 'processing' | 'success' | 'failed'>('idle');
+  1656→  1656→  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
+  1657→  1657→  const [cashReceived, setCashReceived] = useState('');
+  1658→  1658→  const [selectedCustomer, setSelectedCustomer] = useState<string>('');
+  1659→  1659→  const [lowStockAlertOpen, setLowStockAlertOpen] = useState(false);
+  1660→  1660→  const [discountCode, setDiscountCode] = useState('');
+  1661→  1661→  const [cartBadgeShake, setCartBadgeShake] = useState(false);
+  1662→  1662→  const [addedItemId, setAddedItemId] = useState<string | null>(null);
+  1663→  1663→  const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  1664→  1664→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+  1665→  1665→
+  1666→  1666→  const cart = useCartStore();
+  1667→  1667→  const subtotal = cart.getSubtotal();
+  1668→  1668→  const tax = cart.getTax();
+  1669→  1669→  const total = cart.getTotal();
+  1670→  1670→
+  1671→  1671→  const { data: productsData, isLoading: productsLoading } = useQuery({
+  1672→  1672→    queryKey: ['products', currentStoreId, searchQuery, selectedCategory],
+  1673→  1673→    queryFn: () => productsApi.list({
+  1674→  1674→      storeId: currentStoreId,
+  1675→  1675→      search: searchQuery || undefined,
+  1676→  1676→      limit: 100,
+  1677→  1677→      ...(selectedCategory !== 'all' ? { categoryId: selectedCategory } : {}),
+  1678→  1678→    }),
+  1679→  1679→  });
+  1680→  1680→
+  1681→  1681→  const { data: categoriesData } = useQuery({
+  1682→  1682→    queryKey: ['categories', currentStoreId],
+  1683→  1683→    queryFn: () => categoriesApi.list(currentStoreId),
+  1684→  1684→  });
+  1685→  1685→
+  1686→  1686→  const { data: customersData } = useQuery({
+  1687→  1687→    queryKey: ['customers', currentStoreId],
+  1688→  1688→    queryFn: () => customersApi.list({ storeId: currentStoreId, limit: 100 }),
+  1689→  1689→  });
+  1690→  1690→
+  1691→  1691→  const [receiptOpen, setReceiptOpen] = useState(false);
+  1692→  1692→  const [lastTransaction, setLastTransaction] = useState<TransactionItem | null>(null);
+  1693→  1693→  const [lastCashReceived, setLastCashReceived] = useState(0);
+  1694→  1694→  const [lastMpesaPhone, setLastMpesaPhone] = useState('');
+  1695→  1695→
+  1696→  1696→  const checkoutMutation = useMutation({
+  1697→  1697→    mutationFn: transactionsApi.create,
+  1698→  1698→    onSuccess: (res) => {
+  1699→  1699→      toast.success('Transaction completed successfully!');
+  1700→  1700→      if (res.data) {
+  1701→  1701→        setLastTransaction(res.data);
+  1702→  1702→        setLastCashReceived(paymentMethod === 'CASH' ? Number(cashReceived) || total : 0);
+  1703→  1703→        setLastMpesaPhone(mpesaPhone);
+  1704→  1704→        setReceiptOpen(true);
+  1705→  1705→      }
+  1706→  1706→      cart.clearCart();
+  1707→  1707→      setCheckoutOpen(false);
+  1708→  1708→      setCashReceived('');
+  1709→  1709→      setSelectedCustomer('');
+  1710→  1710→    },
+  1711→  1711→    onError: (err: Error) => {
+  1712→  1712→      toast.error(err.message || 'Checkout failed');
+  1713→  1713→    },
+  1714→  1714→  });
+  1715→  1715→
+  1716→  1716→  const mpesaMutation = useMutation({
+  1717→  1717→    mutationFn: paymentsApi.initiateMpesa,
+  1718→  1718→    onSuccess: (res) => {
+  1719→  1719→      if (res.data) {
+  1720→  1720→        setMpesaStatus('processing');
+  1721→  1721→        // Simulate M-Pesa processing (in production, this would poll a status endpoint)
+  1722→  1722→        setTimeout(() => {
+  1723→  1723→          if (res.data?.resultCode === '0') {
+  1724→  1724→            setMpesaStatus('success');
+  1725→  1725→          } else {
+  1726→  1726→            setMpesaStatus('success'); // Default to success for demo
+  1727→  1727→          }
+  1728→  1728→        }, 5000);
+  1729→  1729→      }
+  1730→  1730→    },
+  1731→  1731→    onError: () => {
+  1732→  1732→      setMpesaStatus('failed');
+  1733→  1733→    },
+  1734→  1734→  });
+  1735→  1735→
+  1736→  1736→  const products = productsData?.data || [];
+  1737→  1737→  const categories = categoriesData?.data || [];
+  1738→  1738→  const customers = customersData?.data || [];
+  1739→  1739→
+  1740→  1740→  const handleAddToCart = (product: ProductListItem) => {
+  1741→  1741→    if (product.quantityInStock <= 0 && !product.isRental) {
+  1742→  1742→      toast.error('Product is out of stock');
+  1743→  1743→      return;
+  1744→  1744→    }
+  1745→  1745→    cart.addItem({
+  1746→  1746→      productId: product.id,
+  1747→  1747→      productName: product.name,
+  1748→  1748→      sku: product.sku,
+  1749→  1749→      quantity: 1,
+  1750→  1750→      unitType: product.unitType as UnitType,
+  1751→  1751→      pricePerUnit: product.pricePerUnit,
+  1752→  1752→      costPrice: product.costPrice,
+  1753→  1753→      discountPercent: 0,
+  1754→  1754→      taxRate: product.taxRate,
+  1755→  1755→      isRentalItem: product.isRental,
+  1756→  1756→      isBundle: product.isBundle,
+  1757→  1757→    });
+  1758→  1758→    // Trigger animations
+  1759→  1759→    setAddedItemId(product.id);
+  1760→  1760→    setCartBadgeShake(true);
+  1761→  1761→    setTimeout(() => { setAddedItemId(null); setCartBadgeShake(false); }, 500);
+  1762→  1762→    toast.success(`${product.name} added to cart`);
+  1763→  1763→  };
+  1764→  1764→
+  1765→  1765→  // Hold/Recall cart functionality
+  1766→  1766→  const holdCart = () => {
+  1767→  1767→    if (cart.items.length === 0) {
+  1768→  1768→      toast.error('Cart is empty - nothing to hold');
+  1769→  1769→      return;
+  1770→  1770→    }
+  1771→  1771→    const heldCarts = JSON.parse(localStorage.getItem('mbt_held_carts') || '[]');
+  1772→  1772→    const holdId = `hold_${Date.now()}`;
+  1773→  1773→    heldCarts.push({ id: holdId, items: cart.items, customer: selectedCustomer, timestamp: new Date().toISOString() });
+  1774→  1774→    localStorage.setItem('mbt_held_carts', JSON.stringify(heldCarts));
+  1775→  1775→    cart.clearCart();
+  1776→  1776→    setSelectedCustomer('');
+  1777→  1777→    toast.success('Cart held successfully');
+  1778→  1778→  };
+  1779→  1779→
+  1780→  1780→  const recallCart = () => {
+  1781→  1781→    const heldCarts = JSON.parse(localStorage.getItem('mbt_held_carts') || '[]');
+  1782→  1782→    if (heldCarts.length === 0) {
+  1783→  1783→      toast.info('No held carts to recall');
+  1784→  1784→      return;
+  1785→  1785→    }
+  1786→  1786→    const lastHeld = heldCarts.pop();
+  1787→  1787→    if (lastHeld && lastHeld.items) {
+  1788→  1788→      // Clear current cart first
+  1789→  1789→      cart.clearCart();
+  1790→  1790→      // Add all items from held cart
+  1791→  1791→      lastHeld.items.forEach((item: CartItem) => {
+  1792→  1792→        cart.addItem({
+  1793→  1793→          productId: item.productId,
+  1794→  1794→          productName: item.productName,
+  1795→  1795→          sku: item.sku,
+  1796→  1796→          quantity: item.quantity,
+  1797→  1797→          unitType: item.unitType,
+  1798→  1798→          pricePerUnit: item.pricePerUnit,
+  1799→  1799→          costPrice: item.costPrice,
+  1800→  1800→          discountPercent: item.discountPercent,
+  1801→  1801→          taxRate: item.taxRate,
+  1802→  1802→          isRentalItem: item.isRentalItem,
+  1803→  1803→          isBundle: item.isBundle,
+  1804→  1804→        });
+  1805→  1805→      });
+  1806→  1806→      if (lastHeld.customer) setSelectedCustomer(lastHeld.customer);
+  1807→  1807→      localStorage.setItem('mbt_held_carts', JSON.stringify(heldCarts));
+  1808→  1808→      toast.success('Cart recalled successfully');
+  1809→  1809→    }
+  1810→  1810→  };
+  1811→  1811→
+  1812→  1812→  const heldCartCount = (() => {
+  1813→  1813→    try {
+  1814→  1814→      return JSON.parse(localStorage.getItem('mbt_held_carts') || '[]').length;
+  1815→  1815→    } catch { return 0; }
+  1816→  1816→  })();
+  1817→  1817→
+  1818→  1818→  const applyDiscountCode = () => {
+  1819→  1819→    if (!discountCode.trim()) {
+  1820→  1820→      toast.error('Enter a discount code');
+  1821→  1821→      return;
+  1822→  1822→    }
+  1823→  1823→    // Simple discount code validation for demo
+  1824→  1824→    const validCodes: Record<string, number> = {
+  1825→  1825→      'SAVE10': 10,
+  1826→  1826→      'SAVE20': 20,
+  1827→  1827→      'MBUMAH': 15,
+  1828→  1828→      'HARDWARE': 5,
+  1829→  1829→    };
+  1830→  1830→    const discount = validCodes[discountCode.toUpperCase()];
+  1831→  1831→    if (discount) {
+  1832→  1832→      cart.items.forEach((item) => {
+  1833→  1833→        if (item.discountPercent === 0) {
+  1834→  1834→          cart.applyDiscount(item.productId, discount);
+  1835→  1835→        }
+  1836→  1836→      });
+  1837→  1837→      toast.success(`${discount}% discount applied!`);
+  1838→  1838→      setDiscountCode('');
+  1839→  1839→    } else {
+  1840→  1840→      toast.error('Invalid discount code. Try: SAVE10, SAVE20, MBUMAH, or HARDWARE');
+  1841→  1841→    }
+  1842→  1842→  };
+  1843→  1843→
+  1844→  1844→  const handleCheckout = () => {
+  1845→  1845→    if (cart.items.length === 0) {
+  1846→  1846→      toast.error('Cart is empty');
+  1847→  1847→      return;
+  1848→  1848→    }
+  1849→  1849→
+  1850→  1850→    if (paymentMethod === 'MPESA') {
+  1851→  1851→      setMpesaDialogOpen(true);
+  1852→  1852→      return;
+  1853→  1853→    }
+  1854→  1854→
+  1855→  1855→    checkoutMutation.mutate({
+  1856→  1856→      storeId: currentStoreId,
+  1857→  1857→      customerId: selectedCustomer || undefined,
+  1858→  1858→      cashierId: useAuthStore.getState().user?.id || '',
+  1859→  1859→      items: cart.items,
+  1860→  1860→      paymentMethod,
+  1861→  1861→      paymentDetails: {
+  1862→  1862→        cashAmount: paymentMethod === 'CASH' ? Number(cashReceived) || total : undefined,
+  1863→  1863→        debtAccountId: paymentMethod === 'DEBT' ? selectedCustomer : undefined,
+  1864→  1864→      },
+  1865→  1865→    });
+  1866→  1866→  };
+  1867→  1867→
+  1868→  1868→  const handleMpesaPay = () => {
+  1869→  1869→    if (!mpesaPhone || mpesaPhone.length < 10) {
+  1870→  1870→      toast.error('Enter a valid phone number');
+  1871→  1871→      return;
+  1872→  1872→    }
+  1873→  1873→    mpesaMutation.mutate({
+  1874→  1874→      phoneNumber: mpesaPhone.startsWith('0') ? `254${mpesaPhone.slice(1)}` : mpesaPhone,
+  1875→  1875→      amount: total,
+  1876→  1876→      accountReference: `MBT-${Date.now()}`,
+  1877→  1877→      transactionDesc: 'MBUMAH HARDWARE Purchase',
+  1878→  1878→    });
+  1879→  1879→  };
+  1880→  1880→
+  1881→  1881→  const change = paymentMethod === 'CASH' && cashReceived ? Number(cashReceived) - total : 0;
+  1882→  1882→
+  1883→  1883→  return (
+  1884→  1884→    <div className="flex flex-col lg:flex-row gap-4 h-full">
+  1885→  1885→      {/* Product Grid */}
+  1886→  1886→      <div className="flex-1 min-w-0 space-y-4">
+  1887→  1887→        {/* Dashboard Stats */}
+  1888→  1888→        <DashboardStats storeId={currentStoreId} onLowStockClick={() => setLowStockAlertOpen(true)} />
+  1889→  1889→
+  1890→  1890→        {/* Search and Category Chips */}
+  1891→  1891→        <div className="space-y-3">
+  1892→  1892→          <div className="relative animate-pulse-search rounded-md">
+  1893→  1893→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1894→  1894→            <Input
+  1895→  1895→              placeholder="Search products by name, SKU, or barcode..."
+  1896→  1896→              value={searchQuery}
+  1897→  1897→              onChange={(e) => setSearchQuery(e.target.value)}
+  1898→  1898→              className="pl-10"
+  1899→  1899→            />
+  1900→  1900→          </div>
+  1901→  1901→          <CategoryChips
+  1902→  1902→            categories={categories}
+  1903→  1903→            selected={selectedCategory}
+  1904→  1904→            onSelect={setSelectedCategory}
+  1905→  1905→          />
+  1906→  1906→        </div>
+  1907→  1907→
+  1908→  1908→        {/* Products Grid */}
+  1909→  1909→        {productsLoading ? (
+  1910→  1910→          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+  1911→  1911→            {Array.from({ length: 8 }).map((_, i) => (
+  1912→  1912→              <Card key={i} className="overflow-hidden border-l-4 border-l-muted">
+  1913→  1913→                <div className="h-28 bg-muted relative">
+  1914→  1914→                  <div className="absolute inset-0 animate-shimmer" />
+  1915→  1915→                </div>
+  1916→  1916→                <CardContent className="p-2.5 space-y-2">
+  1917→  1917→                  <div className="relative"><Skeleton className="h-4 w-3/4" /><div className="absolute inset-0 animate-shimmer" /></div>
+  1918→  1918→                  <div className="relative"><Skeleton className="h-3 w-1/2" /><div className="absolute inset-0 animate-shimmer" /></div>
+  1919→  1919→                  <div className="relative"><Skeleton className="h-5 w-2/3" /><div className="absolute inset-0 animate-shimmer" /></div>
+  1920→  1920→                </CardContent>
+  1921→  1921→              </Card>
+  1922→  1922→            ))}
+  1923→  1923→          </div>
+  1924→  1924→        ) : products.length === 0 ? (
+  1925→  1925→          <EmptyProductsState searchQuery={searchQuery} />
+  1926→  1926→        ) : (
+  1927→  1927→          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+  1928→  1928→            {products.map((product) => (
+  1929→  1929→              <ProductCard
+  1930→  1930→                key={product.id}
+  1931→  1931→                product={product}
+  1932→  1932→                onAdd={handleAddToCart}
+  1933→  1933→              />
+  1934→  1934→            ))}
+  1935→  1935→          </div>
+  1936→  1936→        )}
+  1937→  1937→      </div>
+  1938→  1938→
+  1939→  1939→      {/* Cart Sidebar - Desktop only */}
+  1940→  1940→      <div className="hidden lg:block lg:w-96 shrink-0">
+  1941→  1941→        <Card className="sticky top-20 flex flex-col max-h-[calc(100vh-7rem)] bg-gradient-to-b from-card to-card/95">
+  1942→  1942→          <CardHeader className="pb-3">
+  1943→  1943→            <div className="flex items-center justify-between">
+  1944→  1944→              <CardTitle className="text-base flex items-center gap-2">
+  1945→  1945→                <ShoppingCart className="h-4 w-4" />
+  1946→  1946→                Cart
+  1947→  1947→                {cart.items.length > 0 && (
+  1948→  1948→                  <Badge variant="secondary" className={cartBadgeShake ? 'animate-shake' : ''}>{cart.getItemCount()}</Badge>
+  1949→  1949→                )}
+  1950→  1950→              </CardTitle>
+  1951→  1951→              <div className="flex items-center gap-1">
+  1952→  1952→                {heldCartCount > 0 && (
+  1953→  1953→                  <Button variant="ghost" size="sm" onClick={recallCart} className="text-blue-600 h-7" title="Recall held cart">
+  1954→  1954→                    <ShoppingBag className="h-3.5 w-3.5 mr-1" /> Recall ({heldCartCount})
+  1955→  1955→                  </Button>
+  1956→  1956→                )}
+  1957→  1957→                {cart.items.length > 0 && (
+  1958→  1958→                  <>
+  1959→  1959→                    <Button variant="ghost" size="sm" onClick={holdCart} className="text-amber-600 h-7" title="Hold current cart">
+  1960→  1960→                      <Clock className="h-3.5 w-3.5 mr-1" /> Hold
+  1961→  1961→                    </Button>
+  1962→  1962→                    <Button variant="ghost" size="sm" onClick={() => cart.clearCart()} className="text-destructive h-7">
+  1963→  1963→                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Clear
+  1964→  1964→                    </Button>
+  1965→  1965→                  </>
+  1966→  1966→                )}
+  1967→  1967→              </div>
+  1968→  1968→            </div>
+  1969→  1969→          </CardHeader>
+  1970→  1970→          <Separator />
+  1971→  1971→          <ScrollArea className="flex-1 min-h-0">
+  1972→  1972→            {cart.items.length === 0 ? (
+  1973→  1973→              <EmptyCartState />
+  1974→  1974→            ) : (
+  1975→  1975→              <div className="p-3 space-y-2">
+  1976→  1976→                {cart.items.map((item) => (
+  1977→  1977→                  <CartItemRow
+  1978→  1978→                    key={item.productId}
+  1979→  1979→                    item={item}
+  1980→  1980→                    onUpdateQty={cart.updateQuantity}
+  1981→  1981→                    onRemove={cart.removeItem}
+  1982→  1982→                    isNew={addedItemId === item.productId}
+  1983→  1983→                  />
+  1984→  1984→                ))}
+  1985→  1985→              </div>
+  1986→  1986→            )}
+  1987→  1987→          </ScrollArea>
+  1988→  1988→          {cart.items.length > 0 && (
+  1989→  1989→            <>
+  1990→  1990→              <Separator />
+  1991→  1991→              <div className="p-4 space-y-3">
+  1992→  1992→                {/* Discount Code */}
+  1993→  1993→                <div className="flex gap-1.5">
+  1994→  1994→                  <Input
+  1995→  1995→                    placeholder="Discount code"
+  1996→  1996→                    value={discountCode}
+  1997→  1997→                    onChange={(e) => setDiscountCode(e.target.value)}
+  1998→  1998→                    className="h-8 text-xs"
+  1999→  1999→                    onKeyDown={(e) => { if (e.key === 'Enter') applyDiscountCode(); }}
+  2000→  2000→                  />
+
+[showing lines 1-2000 of 2002; use offset=2001 with limit to continue reading]

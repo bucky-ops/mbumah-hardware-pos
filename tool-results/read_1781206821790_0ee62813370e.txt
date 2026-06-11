@@ -1,0 +1,539 @@
+  2100→                          {cashReceived && Number(cashReceived) < total && (
+  2101→                            <Alert variant="destructive">
+  2102→                              <AlertCircle className="h-4 w-4" />
+  2103→                              <AlertTitle>Insufficient amount</AlertTitle>
+  2104→                              <AlertDescription>Need {formatKES(total - Number(cashReceived))} more</AlertDescription>
+  2105→                            </Alert>
+  2106→                          )}
+  2107→                        </div>
+  2108→                      )}
+  2109→
+  2110→                      {paymentMethod === 'DEBT' && !selectedCustomer && (
+  2111→                        <Alert>
+  2112→                          <AlertCircle className="h-4 w-4" />
+  2113→                          <AlertTitle>Customer Required</AlertTitle>
+  2114→                          <AlertDescription>Please select a customer before proceeding with debt payment.</AlertDescription>
+  2115→                        </Alert>
+  2116→                      )}
+  2117→
+  2118→                      {paymentMethod === 'MPESA' && (
+  2119→                        <div>
+  2120→                          <Label htmlFor="mpesaPhone">M-Pesa Phone Number</Label>
+  2121→                          <Input
+  2122→                            id="mpesaPhone"
+  2123→                            type="tel"
+  2124→                            placeholder="0712 345 678"
+  2125→                            value={mpesaPhone}
+  2126→                            onChange={(e) => setMpesaPhone(e.target.value)}
+  2127→                            className="mt-1"
+  2128→                          />
+  2129→                        </div>
+  2130→                      )}
+  2131→                    </div>
+  2132→                    <DialogFooter>
+  2133→                      <Button variant="outline" onClick={() => setCheckoutOpen(false)}>Cancel</Button>
+  2134→                      <Button
+  2135→                        onClick={handleCheckout}
+  2136→                        disabled={
+  2137→                          checkoutMutation.isPending ||
+  2138→                          (paymentMethod === 'CASH' && (!cashReceived || Number(cashReceived) < total)) ||
+  2139→                          (paymentMethod === 'DEBT' && !selectedCustomer)
+  2140→                        }
+  2141→                        className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+  2142→                      >
+  2143→                        {checkoutMutation.isPending ? (
+  2144→                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
+  2145→                        ) : (
+  2146→                          <><CheckCircle className="mr-2 h-4 w-4" />Complete Sale</>
+  2147→                        )}
+  2148→                      </Button>
+  2149→                    </DialogFooter>
+  2150→                  </DialogContent>
+  2151→                </Dialog>
+  2152→              </div>
+  2153→            </>
+  2154→          )}
+  2155→        </Card>
+  2156→      </div>
+  2157→
+  2158→      {/* Receipt Dialog */}
+  2159→      <Dialog open={receiptOpen} onOpenChange={setReceiptOpen}>
+  2160→        <DialogContent className="sm:max-w-lg receipt-dialog">
+  2161→          <DialogHeader className="pb-2">
+  2162→            <DialogTitle className="text-center">Receipt</DialogTitle>
+  2163→          </DialogHeader>
+  2164→          {lastTransaction && (
+  2165→            <div className="receipt-content receipt-printable space-y-4 text-sm" id="receipt-content">
+  2166→              {/* Store Header */}
+  2167→              <div className="text-center space-y-0.5">
+  2168→                <h2 className="text-lg font-bold">MBUMAH HARDWARE</h2>
+  2169→                <p className="text-xs text-muted-foreground">Juja Main Branch</p>
+  2170→                <p className="text-xs text-muted-foreground">Tel: +254 700 123 456</p>
+  2171→              </div>
+  2172→              <Separator />
+  2173→              {/* Receipt Meta */}
+  2174→              <div className="space-y-1 text-xs">
+  2175→                <div className="flex justify-between">
+  2176→                  <span className="text-muted-foreground">Receipt #:</span>
+  2177→                  <span className="font-mono font-semibold">{lastTransaction.receiptNumber}</span>
+  2178→                </div>
+  2179→                <div className="flex justify-between">
+  2180→                  <span className="text-muted-foreground">Date:</span>
+  2181→                  <span>{formatDateTime(lastTransaction.createdAt)}</span>
+  2182→                </div>
+  2183→                <div className="flex justify-between">
+  2184→                  <span className="text-muted-foreground">Cashier:</span>
+  2185→                  <span>{lastTransaction.cashier?.name || useAuthStore.getState().user?.name || 'N/A'}</span>
+  2186→                </div>
+  2187→                <div className="flex justify-between">
+  2188→                  <span className="text-muted-foreground">Customer:</span>
+  2189→                  <span>{lastTransaction.customer?.name || 'Walk-in'}</span>
+  2190→                </div>
+  2191→              </div>
+  2192→              <Separator />
+  2193→              {/* Line Items */}
+  2194→              <div className="space-y-1">
+  2195→                <div className="grid grid-cols-12 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+  2196→                  <span className="col-span-5">Item</span>
+  2197→                  <span className="col-span-2 text-center">Qty</span>
+  2198→                  <span className="col-span-2 text-center">Unit</span>
+  2199→                  <span className="col-span-3 text-right">Total</span>
+  2200→                </div>
+  2201→                {(lastTransaction.items || []).map((item) => (
+  2202→                  <div key={item.id} className="grid grid-cols-12 text-xs py-0.5">
+  2203→                    <span className="col-span-5 truncate">{item.productName}</span>
+  2204→                    <span className="col-span-2 text-center">{item.quantity}</span>
+  2205→                    <span className="col-span-2 text-center">{item.unitType}</span>
+  2206→                    <span className="col-span-3 text-right">{formatKES(item.lineTotal)}</span>
+  2207→                  </div>
+  2208→                ))}
+  2209→              </div>
+  2210→              <Separator />
+  2211→              {/* Totals */}
+  2212→              <div className="space-y-1 text-xs">
+  2213→                <div className="flex justify-between">
+  2214→                  <span className="text-muted-foreground">Subtotal</span>
+  2215→                  <span>{formatKES(lastTransaction.subtotal)}</span>
+  2216→                </div>
+  2217→                <div className="flex justify-between">
+  2218→                  <span className="text-muted-foreground">VAT (16%)</span>
+  2219→                  <span>{formatKES(lastTransaction.taxAmount)}</span>
+  2220→                </div>
+  2221→                {lastTransaction.discountAmount > 0 && (
+  2222→                  <div className="flex justify-between text-green-600">
+  2223→                    <span>Discount</span>
+  2224→                    <span>-{formatKES(lastTransaction.discountAmount)}</span>
+  2225→                  </div>
+  2226→                )}
+  2227→                <Separator />
+  2228→                <div className="flex justify-between font-bold text-base">
+  2229→                  <span>Total</span>
+  2230→                  <span className="text-primary">{formatKES(lastTransaction.totalAmount)}</span>
+  2231→                </div>
+  2232→              </div>
+  2233→              <Separator />
+  2234→              {/* Payment Details */}
+  2235→              <div className="space-y-1 text-xs">
+  2236→                <div className="flex justify-between">
+  2237→                  <span className="text-muted-foreground">Payment Method</span>
+  2238→                  <Badge variant="secondary" className="text-[10px]">
+  2239→                    {lastTransaction.paymentMethod === 'CASH' && <Banknote className="h-3 w-3 mr-1" />}
+  2240→                    {lastTransaction.paymentMethod === 'MPESA' && <Smartphone className="h-3 w-3 mr-1" />}
+  2241→                    {lastTransaction.paymentMethod === 'DEBT' && <Wallet className="h-3 w-3 mr-1" />}
+  2242→                    {lastTransaction.paymentMethod}
+  2243→                  </Badge>
+  2244→                </div>
+  2245→                {lastTransaction.paymentMethod === 'CASH' && lastCashReceived > 0 && (
+  2246→                  <>
+  2247→                    <div className="flex justify-between">
+  2248→                      <span className="text-muted-foreground">Cash Received</span>
+  2249→                      <span>{formatKES(lastCashReceived)}</span>
+  2250→                    </div>
+  2251→                    {lastCashReceived - lastTransaction.totalAmount > 0 && (
+  2252→                      <div className="flex justify-between text-green-600 font-semibold">
+  2253→                        <span>Change</span>
+  2254→                        <span>{formatKES(lastCashReceived - lastTransaction.totalAmount)}</span>
+  2255→                      </div>
+  2256→                    )}
+  2257→                  </>
+  2258→                )}
+  2259→                {lastTransaction.paymentMethod === 'MPESA' && lastMpesaPhone && (
+  2260→                  <div className="flex justify-between">
+  2261→                    <span className="text-muted-foreground">M-Pesa Phone</span>
+  2262→                    <span>{lastMpesaPhone}</span>
+  2263→                  </div>
+  2264→                )}
+  2265→              </div>
+  2266→              <Separator />
+  2267→              {/* Footer */}
+  2268→              <div className="text-center space-y-1">
+  2269→                <p className="font-semibold text-xs">Thank you for shopping at MBUMAH HARDWARE!</p>
+  2270→                <p className="text-xs text-muted-foreground italic">Asante sana!</p>
+  2271→              </div>
+  2272→            </div>
+  2273→          )}
+  2274→          <DialogFooter className="gap-2 sm:gap-0">
+  2275→            <Button
+  2276→              variant="outline"
+  2277→              onClick={() => {
+  2278→                window.print();
+  2279→              }}
+  2280→            >
+  2281→              <Printer className="mr-2 h-4 w-4" />
+  2282→              Print Receipt
+  2283→            </Button>
+  2284→            <Button
+  2285→              onClick={() => {
+  2286→                setReceiptOpen(false);
+  2287→                setLastTransaction(null);
+  2288→              }}
+  2289→              className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+  2290→            >
+  2291→              <ShoppingCart className="mr-2 h-4 w-4" />
+  2292→              New Sale
+  2293→            </Button>
+  2294→          </DialogFooter>
+  2295→        </DialogContent>
+  2296→      </Dialog>
+  2297→
+  2298→      {/* M-Pesa STK Push Dialog */}
+  2299→      <Dialog open={mpesaDialogOpen} onOpenChange={setMpesaDialogOpen}>
+  2300→        <DialogContent className="sm:max-w-sm">
+  2301→          <DialogHeader>
+  2302→            <DialogTitle className="flex items-center gap-2">
+  2303→              <Smartphone className="h-5 w-5 text-green-600" />
+  2304→              M-Pesa Payment
+  2305→            </DialogTitle>
+  2306→            <DialogDescription>
+  2307→              Amount: <span className="font-bold">{formatKES(total)}</span>
+  2308→            </DialogDescription>
+  2309→          </DialogHeader>
+  2310→          {mpesaStatus === 'idle' && (
+  2311→            <div className="space-y-4">
+  2312→              <div>
+  2313→                <Label htmlFor="mpesaPhoneDialog">Phone Number</Label>
+  2314→                <Input
+  2315→                  id="mpesaPhoneDialog"
+  2316→                  type="tel"
+  2317→                  placeholder="0712 345 678"
+  2318→                  value={mpesaPhone}
+  2319→                  onChange={(e) => setMpesaPhone(e.target.value)}
+  2320→                />
+  2321→              </div>
+  2322→              <Button
+  2323→                className="w-full bg-green-600 hover:bg-green-700 text-white"
+  2324→                onClick={handleMpesaPay}
+  2325→                disabled={mpesaMutation.isPending}
+  2326→              >
+  2327→                {mpesaMutation.isPending ? (
+  2328→                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending STK Push...</>
+  2329→                ) : (
+  2330→                  'Send STK Push'
+  2331→                )}
+  2332→              </Button>
+  2333→            </div>
+  2334→          )}
+  2335→          {mpesaStatus === 'processing' && (
+  2336→            <div className="text-center py-8 space-y-4">
+  2337→              <div className="animate-pulse">
+  2338→                <Smartphone className="h-16 w-16 mx-auto text-green-600" />
+  2339→              </div>
+  2340→              <div>
+  2341→                <p className="font-semibold">Waiting for M-Pesa Confirmation</p>
+  2342→                <p className="text-sm text-muted-foreground mt-1">
+  2343→                  Please enter your M-Pesa PIN on your phone
+  2344→                </p>
+  2345→              </div>
+  2346→              <Loader2 className="h-6 w-6 animate-spin mx-auto text-green-600" />
+  2347→            </div>
+  2348→          )}
+  2349→          {mpesaStatus === 'success' && (
+  2350→            <div className="text-center py-8 space-y-4">
+  2351→              <CheckCircle className="h-16 w-16 mx-auto text-green-600" />
+  2352→              <p className="font-semibold text-green-600">Payment Successful!</p>
+  2353→              <Button onClick={() => { setMpesaDialogOpen(false); setMpesaStatus('idle'); }}>
+  2354→                Close
+  2355→              </Button>
+  2356→            </div>
+  2357→          )}
+  2358→          {mpesaStatus === 'failed' && (
+  2359→            <div className="text-center py-8 space-y-4">
+  2360→              <AlertCircle className="h-16 w-16 mx-auto text-destructive" />
+  2361→              <p className="font-semibold text-destructive">Payment Failed</p>
+  2362→              <Button variant="outline" onClick={() => setMpesaStatus('idle')}>Try Again</Button>
+  2363→            </div>
+  2364→          )}
+  2365→        </DialogContent>
+  2366→      </Dialog>
+  2367→
+  2368→      {/* Low Stock Alert Dialog */}
+  2369→      <LowStockAlertDialog
+  2370→        open={lowStockAlertOpen}
+  2371→        onOpenChange={setLowStockAlertOpen}
+  2372→        storeId={currentStoreId}
+  2373→      />
+  2374→
+  2375→      {/* Mobile Cart FAB (Floating Action Button) */}
+  2376→      {cart.items.length > 0 && (
+  2377→        <button
+  2378→          type="button"
+  2379→          className="lg:hidden fixed bottom-20 right-4 z-40 h-14 w-14 rounded-full bg-gradient-to-r from-accent-orange to-amber-500 text-white shadow-xl shadow-accent-orange/30 flex items-center justify-center hover:scale-110 transition-transform"
+  2380→          onClick={() => setMobileCartOpen(true)}
+  2381→          aria-label="Open cart"
+  2382→        >
+  2383→          <ShoppingCart className="h-6 w-6" />
+  2384→          <span className="absolute -top-1 -right-1 min-w-[20px] h-5 flex items-center justify-center rounded-full bg-red-500 text-[10px] font-bold px-1">
+  2385→            {cart.getItemCount()}
+  2386→          </span>
+  2387→        </button>
+  2388→      )}
+  2389→
+  2390→      {/* Mobile Cart Sheet */}
+  2391→      <Sheet open={mobileCartOpen} onOpenChange={setMobileCartOpen}>
+  2392→        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+  2393→          <SheetHeader className="p-4 pb-2 border-b shrink-0">
+  2394→            <div className="flex items-center justify-between">
+  2395→              <div className="flex items-center gap-2">
+  2396→                <SheetTitle className="text-lg flex items-center gap-2">
+  2397→                  <ShoppingCart className="h-4 w-4" /> Cart
+  2398→                  {cart.items.length > 0 && (
+  2399→                    <Badge variant="secondary" className={cartBadgeShake ? 'animate-shake' : ''}>{cart.getItemCount()}</Badge>
+  2400→                  )}
+  2401→                </SheetTitle>
+  2402→              </div>
+  2403→              <div className="flex items-center gap-1">
+  2404→                {heldCartCount > 0 && (
+  2405→                  <Button variant="ghost" size="sm" onClick={recallCart} className="text-blue-600 h-7 text-xs">
+  2406→                    <ShoppingBag className="h-3.5 w-3.5 mr-1" /> Recall
+  2407→                  </Button>
+  2408→                )}
+  2409→                {cart.items.length > 0 && (
+  2410→                  <>
+  2411→                    <Button variant="ghost" size="sm" onClick={holdCart} className="text-amber-600 h-7 text-xs">
+  2412→                      <Clock className="h-3.5 w-3.5 mr-1" /> Hold
+  2413→                    </Button>
+  2414→                    <Button variant="ghost" size="sm" onClick={() => cart.clearCart()} className="text-destructive h-7 text-xs">
+  2415→                      <Trash2 className="h-3.5 w-3.5" />
+  2416→                    </Button>
+  2417→                  </>
+  2418→                )}
+  2419→              </div>
+  2420→            </div>
+  2421→          </SheetHeader>
+  2422→          <ScrollArea className="flex-1 min-h-0">
+  2423→            {cart.items.length === 0 ? (
+  2424→              <EmptyCartState />
+  2425→            ) : (
+  2426→              <div className="p-3 space-y-2">
+  2427→                {cart.items.map((item) => (
+  2428→                  <CartItemRow
+  2429→                    key={item.productId}
+  2430→                    item={item}
+  2431→                    onUpdateQty={cart.updateQuantity}
+  2432→                    onRemove={cart.removeItem}
+  2433→                    isNew={addedItemId === item.productId}
+  2434→                  />
+  2435→                ))}
+  2436→              </div>
+  2437→            )}
+  2438→          </ScrollArea>
+  2439→          {cart.items.length > 0 && (
+  2440→            <>
+  2441→              <div className="p-4 space-y-3 border-t shrink-0">
+  2442→                <div className="flex gap-1.5">
+  2443→                  <Input
+  2444→                    placeholder="Discount code"
+  2445→                    value={discountCode}
+  2446→                    onChange={(e) => setDiscountCode(e.target.value)}
+  2447→                    className="h-8 text-xs"
+  2448→                    onKeyDown={(e) => { if (e.key === 'Enter') applyDiscountCode(); }}
+  2449→                  />
+  2450→                  <Button variant="outline" size="sm" onClick={applyDiscountCode} className="h-8 text-xs shrink-0">
+  2451→                    Apply
+  2452→                  </Button>
+  2453→                </div>
+  2454→                <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+  2455→                  <SelectTrigger>
+  2456→                    <SelectValue placeholder="Walk-in Customer" />
+  2457→                  </SelectTrigger>
+  2458→                  <SelectContent>
+  2459→                    <SelectItem value="walk-in">Walk-in Customer</SelectItem>
+  2460→                    {customers.map((c) => (
+  2461→                      <SelectItem key={c.id} value={c.id}>{c.name}{c.phone ? ` - ${c.phone}` : ''}</SelectItem>
+  2462→                    ))}
+  2463→                  </SelectContent>
+  2464→                </Select>
+  2465→                <div className="space-y-1 text-sm">
+  2466→                  <div className="flex justify-between">
+  2467→                    <span className="text-muted-foreground">Subtotal</span>
+  2468→                    <span>{formatKES(subtotal)}</span>
+  2469→                  </div>
+  2470→                  <div className="flex justify-between">
+  2471→                    <span className="text-muted-foreground">VAT (16%)</span>
+  2472→                    <span>{formatKES(tax)}</span>
+  2473→                  </div>
+  2474→                  <Separator />
+  2475→                  <div className="flex justify-between font-bold text-base">
+  2476→                    <span>Total</span>
+  2477→                    <span className="gradient-text">{formatKES(total)}</span>
+  2478→                  </div>
+  2479→                </div>
+  2480→                <Dialog open={checkoutOpen} onOpenChange={(v) => { setCheckoutOpen(v); if (!v) return; }}>
+  2481→                  <DialogTrigger asChild>
+  2482→                    <Button className="w-full bg-gradient-to-r from-accent-orange to-amber-500 hover:from-accent-orange/90 hover:to-amber-600 text-white font-semibold h-12 shadow-lg shadow-accent-orange/20" size="lg">
+  2483→                      <CreditCard className="mr-2 h-4 w-4" />
+  2484→                      <span className="flex flex-col items-start leading-tight">
+  2485→                        <span className="text-xs font-normal opacity-80">Checkout</span>
+  2486→                        <span>{formatKES(total)}</span>
+  2487→                      </span>
+  2488→                    </Button>
+  2489→                  </DialogTrigger>
+  2490→                  <DialogContent className="sm:max-w-md">
+  2491→                    <DialogHeader>
+  2492→                      <DialogTitle>Complete Payment</DialogTitle>
+  2493→                      <DialogDescription>
+  2494→                        Total: <span className="font-bold text-primary">{formatKES(total)}</span>
+  2495→                      </DialogDescription>
+  2496→                    </DialogHeader>
+  2497→                    <div className="space-y-4">
+  2498→                      <div>
+  2499→                        <Label className="text-sm font-medium">Payment Method</Label>
+  2500→                        <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)} className="grid grid-cols-3 gap-2 mt-2">
+  2501→                          <div>
+  2502→                            <RadioGroupItem value="CASH" id="mobile-cash" className="peer sr-only" />
+  2503→                            <Label htmlFor="mobile-cash" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+  2504→                              <Banknote className="h-5 w-5" />
+  2505→                              <span className="text-xs font-medium">Cash</span>
+  2506→                            </Label>
+  2507→                          </div>
+  2508→                          <div>
+  2509→                            <RadioGroupItem value="MPESA" id="mobile-mpesa" className="peer sr-only" />
+  2510→                            <Label htmlFor="mobile-mpesa" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+  2511→                              <Smartphone className="h-5 w-5" />
+  2512→                              <span className="text-xs font-medium">M-Pesa</span>
+  2513→                            </Label>
+  2514→                          </div>
+  2515→                          <div>
+  2516→                            <RadioGroupItem value="DEBT" id="mobile-debt" className="peer sr-only" />
+  2517→                            <Label htmlFor="mobile-debt" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+  2518→                              <Wallet className="h-5 w-5" />
+  2519→                              <span className="text-xs font-medium">Debt</span>
+  2520→                            </Label>
+  2521→                          </div>
+  2522→                        </RadioGroup>
+  2523→                      </div>
+  2524→                      {paymentMethod === 'CASH' && (
+  2525→                        <div className="space-y-3">
+  2526→                          <div>
+  2527→                            <Label htmlFor="mobile-cashReceived">Cash Received</Label>
+  2528→                            <Input id="mobile-cashReceived" type="number" placeholder="0" value={cashReceived} onChange={(e) => setCashReceived(e.target.value)} className="text-lg font-semibold mt-1" />
+  2529→                          </div>
+  2530→                          {change > 0 && (
+  2531→                            <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg">
+  2532→                              <p className="text-sm font-medium text-green-700 dark:text-green-400">Change: {formatKES(change)}</p>
+  2533→                            </div>
+  2534→                          )}
+  2535→                          {cashReceived && Number(cashReceived) < total && (
+  2536→                            <Alert variant="destructive">
+  2537→                              <AlertCircle className="h-4 w-4" />
+  2538→                              <AlertTitle>Insufficient amount</AlertTitle>
+  2539→                              <AlertDescription>Need {formatKES(total - Number(cashReceived))} more</AlertDescription>
+  2540→                            </Alert>
+  2541→                          )}
+  2542→                        </div>
+  2543→                      )}
+  2544→                      {paymentMethod === 'DEBT' && !selectedCustomer && (
+  2545→                        <Alert>
+  2546→                          <AlertCircle className="h-4 w-4" />
+  2547→                          <AlertTitle>Customer Required</AlertTitle>
+  2548→                          <AlertDescription>Please select a customer for debt payment.</AlertDescription>
+  2549→                        </Alert>
+  2550→                      )}
+  2551→                      {paymentMethod === 'MPESA' && (
+  2552→                        <div>
+  2553→                          <Label htmlFor="mobile-mpesaPhone">M-Pesa Phone Number</Label>
+  2554→                          <Input id="mobile-mpesaPhone" type="tel" placeholder="0712 345 678" value={mpesaPhone} onChange={(e) => setMpesaPhone(e.target.value)} className="mt-1" />
+  2555→                        </div>
+  2556→                      )}
+  2557→                    </div>
+  2558→                    <DialogFooter>
+  2559→                      <Button variant="outline" onClick={() => setCheckoutOpen(false)}>Cancel</Button>
+  2560→                      <Button
+  2561→                        onClick={handleCheckout}
+  2562→                        disabled={
+  2563→                          checkoutMutation.isPending ||
+  2564→                          (paymentMethod === 'CASH' && (!cashReceived || Number(cashReceived) < total)) ||
+  2565→                          (paymentMethod === 'DEBT' && !selectedCustomer)
+  2566→                        }
+  2567→                        className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+  2568→                      >
+  2569→                        {checkoutMutation.isPending ? (
+  2570→                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
+  2571→                        ) : (
+  2572→                          <><CheckCircle className="mr-2 h-4 w-4" />Complete Sale</>
+  2573→                        )}
+  2574→                      </Button>
+  2575→                    </DialogFooter>
+  2576→                  </DialogContent>
+  2577→                </Dialog>
+  2578→              </div>
+  2579→            </>
+  2580→          )}
+  2581→        </SheetContent>
+  2582→      </Sheet>
+  2583→    </div>
+  2584→  );
+  2585→}
+  2586→
+  2587→// ============================================================================
+  2588→// MAIN APP
+  2589→// ============================================================================
+  2590→
+  2591→function MainApp() {
+  2592→  const { activeTab } = useAppStore();
+  2593→
+  2594→  const renderTab = () => {
+  2595→    switch (activeTab) {
+  2596→      case 'pos': return <POSTab />;
+  2597→      case 'inventory': return <Suspense fallback={<TabLoadingFallback />}><LazyInventoryTab /></Suspense>;
+  2598→      case 'customers': return <Suspense fallback={<TabLoadingFallback />}><LazyCustomersTab /></Suspense>;
+  2599→      case 'rentals': return <Suspense fallback={<TabLoadingFallback />}><LazyRentalsTab /></Suspense>;
+  2600→      case 'financial': return <Suspense fallback={<TabLoadingFallback />}><LazyFinancialTab /></Suspense>;
+  2601→      case 'reports': return <Suspense fallback={<TabLoadingFallback />}><LazyReportsTab /></Suspense>;
+  2602→      case 'transactions': return <Suspense fallback={<TabLoadingFallback />}><LazyTransactionsTab /></Suspense>;
+  2603→      case 'admin': return <Suspense fallback={<TabLoadingFallback />}><LazyAdminTab /></Suspense>;
+  2604→      case 'suppliers': return <Suspense fallback={<TabLoadingFallback />}><LazySuppliersTab /></Suspense>;
+  2605→      default: return <POSTab />;
+  2606→    }
+  2607→  };
+  2608→
+  2609→  return (
+  2610→    <div className="flex h-screen overflow-hidden">
+  2611→      <AppSidebar />
+  2612→      <div className="flex-1 flex flex-col min-w-0 h-screen">
+  2613→        <TopBar />
+  2614→        <main className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+  2615→          <div className="animate-tab-enter" key={activeTab}>
+  2616→            {renderTab()}
+  2617→          </div>
+  2618→        </main>
+  2619→        <footer className="border-t bg-background px-4 py-2 text-center shrink-0">
+  2620→          <p className="text-xs text-muted-foreground">
+  2621→            MBUMAH HARDWARE POS & ERP System &copy; {new Date().getFullYear()} &mdash; All rights reserved
+  2622→          </p>
+  2623→        </footer>
+  2624→      </div>
+  2625→    </div>
+  2626→  );
+  2627→}
+  2628→
+  2629→// ============================================================================
+  2630→// PAGE EXPORT
+  2631→// ============================================================================
+  2632→
+  2633→export default function HomePage() {
+  2634→  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  2635→
+  2636→  return isAuthenticated ? <MainApp /> : <LoginScreen />;
+  2637→}
+  2638→

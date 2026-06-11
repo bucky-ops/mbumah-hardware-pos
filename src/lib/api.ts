@@ -477,7 +477,7 @@ export interface JournalEntryLineItem {
   debit: number;
   credit: number;
   description: string | null;
-  account?: { id: string; code: string; name: string; type: string };
+  account?: { id: string; code: string; name: string; type: string; subType?: string | null };
 }
 
 export interface AccountItem {
@@ -502,9 +502,10 @@ export const financialApi = {
     return request<JournalEntryItem[]>(`/financial/journal?${query.toString()}`);
   },
 
-  listAccounts: async (organizationId?: string) => {
+  listAccounts: async (storeId?: string) => {
     const params = new URLSearchParams();
-    if (organizationId) params.set('organizationId', organizationId);
+    if (storeId) params.set('storeId', storeId);
+    params.set('includeBalances', 'true');
     return request<AccountItem[]>(`/financial/accounts?${params.toString()}`);
   },
 
