@@ -1,0 +1,922 @@
+     1→'use client';
+     2→
+     3→/**
+     4→ * MBUMAH HARDWARE POS & ERP System - Main Application Page
+     5→ * Optimized: recharts removed, tab components lazy-loaded via React.lazy
+     6→ */
+     7→
+     8→import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+     9→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+    10→import { useTheme } from 'next-themes';
+    11→import { toast } from 'sonner';
+    12→import {
+    13→  ShoppingCart, Package, Users, KeyRound, BarChart3, FileText,
+    14→  Settings, LogOut, Search, Plus, Minus, Trash2, X, Menu, Sun, Moon,
+    15→  CheckCircle, Clock,
+    16→  ShoppingBag, CreditCard, Smartphone,
+    17→  AlertCircle, Loader2,
+    18→  Home, Store, Mail, ShieldCheck, Eye,
+    19→  Banknote, Wallet
+    20→} from 'lucide-react';
+    21→
+    22→import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
+    23→import {
+    24→  productsApi, categoriesApi, customersApi, transactionsApi,
+    25→  paymentsApi,
+    26→  formatKES, formatDate, formatDateTime,
+    27→  type ProductListItem, type CustomerItem,
+    28→  type CategoryItem,
+    29→} from '@/lib/api';
+    30→import type { PaymentMethod, CartItem, UnitType } from '@/lib/types';
+    31→
+    32→import { Button } from '@/components/ui/button';
+    33→import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+    34→import { Input } from '@/components/ui/input';
+    35→import { Label } from '@/components/ui/label';
+    36→import { Badge } from '@/components/ui/badge';
+    37→import { Separator } from '@/components/ui/separator';
+    38→import { Skeleton } from '@/components/ui/skeleton';
+    39→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+    40→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    41→import { ScrollArea } from '@/components/ui/scroll-area';
+    42→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    43→import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+    44→import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+    45→
+    46→// ============================================================================
+    47→// LAZY-LOADED TAB COMPONENTS
+    48→// ============================================================================
+    49→
+    50→const LazyInventoryTab = lazy(() => import('./tabs/inventory-tab'));
+    51→const LazyCustomersTab = lazy(() => import('./tabs/customers-tab'));
+    52→const LazyRentalsTab = lazy(() => import('./tabs/rentals-tab'));
+    53→const LazyFinancialTab = lazy(() => import('./tabs/financial-tab'));
+    54→const LazyReportsTab = lazy(() => import('./tabs/reports-tab'));
+    55→const LazyAdminTab = lazy(() => import('./tabs/admin-tab'));
+    56→
+    57→function TabLoadingFallback() {
+    58→  return (
+    59→    <div className="space-y-4">
+    60→      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    61→        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+    62→      </div>
+    63→      <Skeleton className="h-10 w-full" />
+    64→      <Skeleton className="h-64 w-full" />
+    65→    </div>
+    66→  );
+    67→}
+    68→
+    69→// ============================================================================
+    70→// CONSTANTS
+    71→// ============================================================================
+    72→
+    73→const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
+    74→  { id: 'pos', label: 'POS', icon: ShoppingCart },
+    75→  { id: 'inventory', label: 'Inventory', icon: Package },
+    76→  { id: 'customers', label: 'Customers', icon: Users },
+    77→  { id: 'rentals', label: 'Rentals', icon: KeyRound },
+    78→  { id: 'financial', label: 'Financial', icon: BarChart3 },
+    79→  { id: 'reports', label: 'Reports', icon: FileText },
+    80→  { id: 'admin', label: 'Admin', icon: Settings },
+    81→];
+    82→
+    83→// ============================================================================
+    84→// LOGIN SCREEN
+    85→// ============================================================================
+    86→
+    87→function LoginScreen() {
+    88→  const [email, setEmail] = useState('');
+    89→  const [password, setPassword] = useState('');
+    90→  const [showPassword, setShowPassword] = useState(false);
+    91→  const login = useAuthStore((s) => s.login);
+    92→  const isLoading = useAuthStore((s) => s.isLoading);
+    93→
+    94→  const handleSubmit = async (e: React.FormEvent) => {
+    95→    e.preventDefault();
+    96→    try {
+    97→      await login(email, password);
+    98→      toast.success('Welcome to MBUMAH HARDWARE POS!');
+    99→    } catch (err: unknown) {
+   100→      const message = err instanceof Error ? err.message : 'Login failed';
+   101→      toast.error(message);
+   102→    }
+   103→  };
+   104→
+   105→  return (
+   106→    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[oklch(0.22_0.07_260)] via-[oklch(0.295_0.1_260)] to-[oklch(0.22_0.06_260)] p-4">
+   107→      <div className="w-full max-w-md">
+   108→        <Card className="shadow-2xl border-0">
+   109→          <CardHeader className="text-center pb-2">
+   110→            <div className="mx-auto w-16 h-16 rounded-xl bg-primary flex items-center justify-center mb-4">
+   111→              <Store className="h-8 w-8 text-primary-foreground" />
+   112→            </div>
+   113→            <CardTitle className="text-2xl font-bold tracking-tight">MBUMAH HARDWARE</CardTitle>
+   114→            <CardDescription className="text-base">POS & ERP System</CardDescription>
+   115→          </CardHeader>
+   116→          <CardContent>
+   117→            <form onSubmit={handleSubmit} className="space-y-4">
+   118→              <div className="space-y-2">
+   119→                <Label htmlFor="email">Email Address</Label>
+   120→                <div className="relative">
+   121→                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   122→                  <Input
+   123→                    id="email"
+   124→                    type="email"
+   125→                    placeholder="cashier@mbumahhardware.co.ke"
+   126→                    value={email}
+   127→                    onChange={(e) => setEmail(e.target.value)}
+   128→                    className="pl-10"
+   129→                    required
+   130→                    disabled={isLoading}
+   131→                  />
+   132→                </div>
+   133→              </div>
+   134→              <div className="space-y-2">
+   135→                <Label htmlFor="password">Password</Label>
+   136→                <div className="relative">
+   137→                  <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   138→                  <Input
+   139→                    id="password"
+   140→                    type={showPassword ? 'text' : 'password'}
+   141→                    placeholder="Enter your password"
+   142→                    value={password}
+   143→                    onChange={(e) => setPassword(e.target.value)}
+   144→                    className="pl-10 pr-10"
+   145→                    required
+   146→                    disabled={isLoading}
+   147→                  />
+   148→                  <Button
+   149→                    type="button"
+   150→                    variant="ghost"
+   151→                    size="sm"
+   152→                    className="absolute right-0 top-0 h-full px-3"
+   153→                    onClick={() => setShowPassword(!showPassword)}
+   154→                  >
+   155→                    <Eye className="h-4 w-4" />
+   156→                  </Button>
+   157→                </div>
+   158→              </div>
+   159→              <Button
+   160→                type="submit"
+   161→                className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground font-semibold"
+   162→                disabled={isLoading}
+   163→                size="lg"
+   164→              >
+   165→                {isLoading ? (
+   166→                  <>
+   167→                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+   168→                    Signing In...
+   169→                  </>
+   170→                ) : (
+   171→                  'Sign In'
+   172→                )}
+   173→              </Button>
+   174→            </form>
+   175→          </CardContent>
+   176→          <CardFooter className="flex flex-col gap-2 text-sm text-muted-foreground">
+   177→            <p>Demo: cashier@mbumahhardware.co.ke / password123</p>
+   178→          </CardFooter>
+   179→        </Card>
+   180→      </div>
+   181→    </div>
+   182→  );
+   183→}
+   184→
+   185→// ============================================================================
+   186→// SIDEBAR
+   187→// ============================================================================
+   188→
+   189→function AppSidebar() {
+   190→  const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen } = useAppStore();
+   191→  const user = useAuthStore((s) => s.user);
+   192→  const logout = useAuthStore((s) => s.logout);
+   193→  const { theme, setTheme } = useTheme();
+   194→
+   195→  const handleNav = (tab: AppTab) => {
+   196→    setActiveTab(tab);
+   197→    setSidebarOpen(false);
+   198→  };
+   199→
+   200→  const handleLogout = async () => {
+   201→    await logout();
+   202→    toast.success('Logged out successfully');
+   203→  };
+   204→
+   205→  const navItems = TAB_CONFIG.map(({ id, label, icon: Icon }) => (
+   206→    <button
+   207→      key={id}
+   208→      onClick={() => handleNav(id)}
+   209→      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+   210→        activeTab === id
+   211→          ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
+   212→          : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+   213→      }`}
+   214→    >
+   215→      <Icon className="h-4 w-4 shrink-0" />
+   216→      <span>{label}</span>
+   217→    </button>
+   218→  ));
+   219→
+   220→  return (
+   221→    <>
+   222→      {/* Mobile overlay */}
+   223→      {sidebarOpen && (
+   224→        <div
+   225→          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+   226→          onClick={() => setSidebarOpen(false)}
+   227→        />
+   228→      )}
+   229→
+   230→      {/* Sidebar */}
+   231→      <aside
+   232→        className={`fixed top-0 left-0 z-50 h-full w-64 bg-sidebar text-sidebar-foreground transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:z-auto ${
+   233→          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+   234→        }`}
+   235→      >
+   236→        <div className="flex flex-col h-full">
+   237→          {/* Logo */}
+   238→          <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
+   239→            <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center">
+   240→              <Store className="h-5 w-5 text-sidebar-primary-foreground" />
+   241→            </div>
+   242→            <div>
+   243→              <h1 className="font-bold text-sm leading-tight">MBUMAH HARDWARE</h1>
+   244→              <p className="text-xs text-sidebar-foreground/60">POS & ERP</p>
+   245→            </div>
+   246→            <Button
+   247→              variant="ghost"
+   248→              size="icon"
+   249→              className="ml-auto lg:hidden text-sidebar-foreground/60 hover:text-sidebar-foreground"
+   250→              onClick={() => setSidebarOpen(false)}
+   251→            >
+   252→              <X className="h-4 w-4" />
+   253→            </Button>
+   254→          </div>
+   255→
+   256→          {/* Navigation */}
+   257→          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
+   258→            {navItems}
+   259→          </nav>
+   260→
+   261→          {/* Footer */}
+   262→          <div className="border-t border-sidebar-border px-3 py-3 space-y-2">
+   263→            <div className="flex items-center gap-3 px-3 py-2">
+   264→              <Avatar className="h-8 w-8">
+   265→                <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground text-xs">
+   266→                  {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
+   267→                </AvatarFallback>
+   268→              </Avatar>
+   269→              <div className="flex-1 min-w-0">
+   270→                <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
+   271→                <p className="text-xs text-sidebar-foreground/60 truncate">{user?.role || 'Cashier'}</p>
+   272→              </div>
+   273→            </div>
+   274→            <div className="flex items-center gap-2 px-2">
+   275→              <Button
+   276→                variant="ghost"
+   277→                size="sm"
+   278→                className="flex-1 text-sidebar-foreground/70 hover:text-sidebar-foreground"
+   279→                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+   280→              >
+   281→                {theme === 'dark' ? <Sun className="h-4 w-4 mr-2" /> : <Moon className="h-4 w-4 mr-2" />}
+   282→                {theme === 'dark' ? 'Light' : 'Dark'}
+   283→              </Button>
+   284→              <Button
+   285→                variant="ghost"
+   286→                size="sm"
+   287→                className="text-sidebar-foreground/70 hover:text-destructive"
+   288→                onClick={handleLogout}
+   289→              >
+   290→                <LogOut className="h-4 w-4" />
+   291→              </Button>
+   292→            </div>
+   293→          </div>
+   294→        </div>
+   295→      </aside>
+   296→    </>
+   297→  );
+   298→}
+   299→
+   300→// ============================================================================
+   301→// TOP BAR
+   302→// ============================================================================
+   303→
+   304→function TopBar() {
+   305→  const { activeTab, toggleSidebar } = useAppStore();
+   306→  const cartItemCount = useCartStore((s) => s.getItemCount());
+   307→  const currentTab = TAB_CONFIG.find(t => t.id === activeTab);
+   308→  const TabIcon = currentTab?.icon || Home;
+   309→
+   310→  return (
+   311→    <header className="sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
+   312→      <div className="flex items-center gap-3 px-4 py-3">
+   313→        <Button
+   314→          variant="ghost"
+   315→          size="icon"
+   316→          className="lg:hidden"
+   317→          onClick={toggleSidebar}
+   318→        >
+   319→          <Menu className="h-5 w-5" />
+   320→        </Button>
+   321→        <div className="flex items-center gap-2">
+   322→          <TabIcon className="h-5 w-5 text-primary" />
+   323→          <h2 className="font-semibold text-lg">{currentTab?.label || 'Dashboard'}</h2>
+   324→        </div>
+   325→        <div className="ml-auto flex items-center gap-2">
+   326→          {activeTab === 'pos' && (
+   327→            <Badge variant="secondary" className="flex items-center gap-1">
+   328→              <ShoppingCart className="h-3 w-3" />
+   329→              {cartItemCount}
+   330→            </Badge>
+   331→          )}
+   332→          <Badge variant="outline" className="hidden sm:flex items-center gap-1">
+   333→            <Clock className="h-3 w-3" />
+   334→            {new Date().toLocaleDateString('en-KE', { weekday: 'short', month: 'short', day: 'numeric' })}
+   335→          </Badge>
+   336→        </div>
+   337→      </div>
+   338→    </header>
+   339→  );
+   340→}
+   341→
+   342→// ============================================================================
+   343→// POS TAB (kept inline - core feature)
+   344→// ============================================================================
+   345→
+   346→function POSTab() {
+   347→  const [searchQuery, setSearchQuery] = useState('');
+   348→  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+   349→  const [checkoutOpen, setCheckoutOpen] = useState(false);
+   350→  const [mpesaDialogOpen, setMpesaDialogOpen] = useState(false);
+   351→  const [mpesaPhone, setMpesaPhone] = useState('');
+   352→  const [mpesaStatus, setMpesaStatus] = useState<'idle' | 'processing' | 'success' | 'failed'>('idle');
+   353→  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
+   354→  const [cashReceived, setCashReceived] = useState('');
+   355→  const [selectedCustomer, setSelectedCustomer] = useState<string>('');
+   356→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+   357→
+   358→  const cart = useCartStore();
+   359→  const subtotal = cart.getSubtotal();
+   360→  const tax = cart.getTax();
+   361→  const total = cart.getTotal();
+   362→
+   363→  const { data: productsData, isLoading: productsLoading } = useQuery({
+   364→    queryKey: ['products', currentStoreId, searchQuery, selectedCategory],
+   365→    queryFn: () => productsApi.list({
+   366→      storeId: currentStoreId,
+   367→      search: searchQuery || undefined,
+   368→      limit: 100,
+   369→      ...(selectedCategory !== 'all' ? { categoryId: selectedCategory } : {}),
+   370→    }),
+   371→  });
+   372→
+   373→  const { data: categoriesData } = useQuery({
+   374→    queryKey: ['categories', currentStoreId],
+   375→    queryFn: () => categoriesApi.list(currentStoreId),
+   376→  });
+   377→
+   378→  const { data: customersData } = useQuery({
+   379→    queryKey: ['customers', currentStoreId],
+   380→    queryFn: () => customersApi.list({ storeId: currentStoreId, limit: 100 }),
+   381→  });
+   382→
+   383→  const checkoutMutation = useMutation({
+   384→    mutationFn: transactionsApi.create,
+   385→    onSuccess: () => {
+   386→      toast.success('Transaction completed successfully!');
+   387→      cart.clearCart();
+   388→      setCheckoutOpen(false);
+   389→      setCashReceived('');
+   390→      setSelectedCustomer('');
+   391→    },
+   392→    onError: (err: Error) => {
+   393→      toast.error(err.message || 'Checkout failed');
+   394→    },
+   395→  });
+   396→
+   397→  const mpesaMutation = useMutation({
+   398→    mutationFn: paymentsApi.initiateMpesa,
+   399→    onSuccess: (res) => {
+   400→      if (res.data) {
+   401→        setMpesaStatus('processing');
+   402→        const poll = setInterval(async () => {
+   403→          try {
+   404→            const statusRes = await paymentsApi.getMpesaStatus(res.data!.checkoutRequestId);
+   405→            if (statusRes.data?.resultCode === '0') {
+   406→              setMpesaStatus('success');
+   407→              clearInterval(poll);
+   408→            } else if (statusRes.data?.resultCode && statusRes.data.resultCode !== '0') {
+   409→              setMpesaStatus('failed');
+   410→              clearInterval(poll);
+   411→            }
+   412→          } catch {
+   413→            // keep polling
+   414→          }
+   415→        }, 3000);
+   416→        setTimeout(() => clearInterval(poll), 120000);
+   417→      }
+   418→    },
+   419→    onError: () => {
+   420→      setMpesaStatus('failed');
+   421→    },
+   422→  });
+   423→
+   424→  const products = productsData?.data || [];
+   425→  const categories = categoriesData?.data || [];
+   426→  const customers = customersData?.data || [];
+   427→
+   428→  const handleAddToCart = (product: ProductListItem) => {
+   429→    if (product.quantityInStock <= 0 && !product.isRentalItem) {
+   430→      toast.error('Product is out of stock');
+   431→      return;
+   432→    }
+   433→    cart.addItem({
+   434→      productId: product.id,
+   435→      productName: product.name,
+   436→      sku: product.sku,
+   437→      quantity: 1,
+   438→      unitType: product.unitType as UnitType,
+   439→      pricePerUnit: product.pricePerUnit,
+   440→      costPrice: product.costPrice,
+   441→      discountPercent: 0,
+   442→      taxRate: product.taxRate,
+   443→      isRentalItem: product.isRental,
+   444→      isBundle: product.isBundle,
+   445→    });
+   446→    toast.success(`${product.name} added to cart`);
+   447→  };
+   448→
+   449→  const handleCheckout = () => {
+   450→    if (cart.items.length === 0) {
+   451→      toast.error('Cart is empty');
+   452→      return;
+   453→    }
+   454→
+   455→    if (paymentMethod === 'MPESA') {
+   456→      setMpesaDialogOpen(true);
+   457→      return;
+   458→    }
+   459→
+   460→    checkoutMutation.mutate({
+   461→      storeId: currentStoreId,
+   462→      customerId: selectedCustomer || undefined,
+   463→      cashierId: useAuthStore.getState().user?.id || '',
+   464→      items: cart.items,
+   465→      paymentMethod,
+   466→      paymentDetails: {
+   467→        cashAmount: paymentMethod === 'CASH' ? Number(cashReceived) || total : undefined,
+   468→        debtAccountId: paymentMethod === 'DEBT' ? selectedCustomer : undefined,
+   469→      },
+   470→    });
+   471→  };
+   472→
+   473→  const handleMpesaPay = () => {
+   474→    if (!mpesaPhone || mpesaPhone.length < 10) {
+   475→      toast.error('Enter a valid phone number');
+   476→      return;
+   477→    }
+   478→    mpesaMutation.mutate({
+   479→      phoneNumber: mpesaPhone.startsWith('0') ? `254${mpesaPhone.slice(1)}` : mpesaPhone,
+   480→      amount: total,
+   481→      accountReference: `MBT-${Date.now()}`,
+   482→      transactionDesc: 'MBUMAH HARDWARE Purchase',
+   483→    });
+   484→  };
+   485→
+   486→  const change = paymentMethod === 'CASH' && cashReceived ? Number(cashReceived) - total : 0;
+   487→
+   488→  return (
+   489→    <div className="flex flex-col lg:flex-row gap-4 h-full">
+   490→      {/* Product Grid */}
+   491→      <div className="flex-1 min-w-0 space-y-4">
+   492→        {/* Search and Filters */}
+   493→        <div className="flex flex-col sm:flex-row gap-3">
+   494→          <div className="relative flex-1">
+   495→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   496→            <Input
+   497→              placeholder="Search products by name, SKU, or barcode..."
+   498→              value={searchQuery}
+   499→              onChange={(e) => setSearchQuery(e.target.value)}
+   500→              className="pl-10"
+   501→            />
+   502→          </div>
+   503→          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+   504→            <SelectTrigger className="w-full sm:w-48">
+   505→              <SelectValue placeholder="All Categories" />
+   506→            </SelectTrigger>
+   507→            <SelectContent>
+   508→              <SelectItem value="all">All Categories</SelectItem>
+   509→              {categories.map((cat) => (
+   510→                <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+   511→              ))}
+   512→            </SelectContent>
+   513→          </Select>
+   514→        </div>
+   515→
+   516→        {/* Products Grid */}
+   517→        {productsLoading ? (
+   518→          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+   519→            {Array.from({ length: 8 }).map((_, i) => (
+   520→              <Card key={i} className="overflow-hidden">
+   521→                <Skeleton className="h-28" />
+   522→                <CardContent className="p-3 space-y-2">
+   523→                  <Skeleton className="h-4 w-3/4" />
+   524→                  <Skeleton className="h-3 w-1/2" />
+   525→                  <Skeleton className="h-5 w-2/3" />
+   526→                </CardContent>
+   527→              </Card>
+   528→            ))}
+   529→          </div>
+   530→        ) : products.length === 0 ? (
+   531→          <div className="text-center py-16">
+   532→            <Package className="h-12 w-12 mx-auto text-muted-foreground/40" />
+   533→            <p className="mt-4 text-muted-foreground">No products found</p>
+   534→            <p className="text-sm text-muted-foreground/60">Try adjusting your search or filters</p>
+   535→          </div>
+   536→        ) : (
+   537→          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+   538→            {products.map((product) => (
+   539→              <Card
+   540→                key={product.id}
+   541→                className="overflow-hidden cursor-pointer hover:shadow-md transition-all hover:border-primary/30 group"
+   542→                onClick={() => handleAddToCart(product)}
+   543→              >
+   544→                <div className="h-28 bg-muted flex items-center justify-center relative">
+   545→                  {product.imageUrl ? (
+   546→                    <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+   547→                  ) : (
+   548→                    <Package className="h-10 w-10 text-muted-foreground/30" />
+   549→                  )}
+   550→                  {product.isRental && (
+   551→                    <Badge className="absolute top-2 left-2 bg-blue-600 text-white text-[10px]">RENTAL</Badge>
+   552→                  )}
+   553→                  {product.isBundle && (
+   554→                    <Badge className="absolute top-2 right-2 bg-purple-600 text-white text-[10px]">BUNDLE</Badge>
+   555→                  )}
+   556→                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center">
+   557→                    <Plus className="h-8 w-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+   558→                  </div>
+   559→                </div>
+   560→                <CardContent className="p-3">
+   561→                  <h3 className="font-medium text-sm truncate">{product.name}</h3>
+   562→                  <p className="text-xs text-muted-foreground mt-0.5">SKU: {product.sku}</p>
+   563→                  <div className="flex items-center justify-between mt-2">
+   564→                    <span className="font-bold text-primary text-sm">{formatKES(product.pricePerUnit)}</span>
+   565→                    <Badge
+   566→                      variant={product.quantityInStock <= product.reorderLevel ? 'destructive' : 'secondary'}
+   567→                      className="text-[10px]"
+   568→                    >
+   569→                      {product.quantityInStock <= 0 ? 'Out' : `${product.quantityInStock} left`}
+   570→                    </Badge>
+   571→                  </div>
+   572→                </CardContent>
+   573→              </Card>
+   574→            ))}
+   575→          </div>
+   576→        )}
+   577→      </div>
+   578→
+   579→      {/* Cart Sidebar */}
+   580→      <div className="lg:w-96 shrink-0">
+   581→        <Card className="sticky top-20 flex flex-col max-h-[calc(100vh-7rem)]">
+   582→          <CardHeader className="pb-3">
+   583→            <div className="flex items-center justify-between">
+   584→              <CardTitle className="text-base flex items-center gap-2">
+   585→                <ShoppingCart className="h-4 w-4" />
+   586→                Cart
+   587→                {cart.items.length > 0 && (
+   588→                  <Badge variant="secondary">{cart.getItemCount()}</Badge>
+   589→                )}
+   590→              </CardTitle>
+   591→              {cart.items.length > 0 && (
+   592→                <Button variant="ghost" size="sm" onClick={() => cart.clearCart()} className="text-destructive h-7">
+   593→                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Clear
+   594→                </Button>
+   595→              )}
+   596→            </div>
+   597→          </CardHeader>
+   598→          <Separator />
+   599→          <ScrollArea className="flex-1 min-h-0">
+   600→            {cart.items.length === 0 ? (
+   601→              <div className="p-8 text-center">
+   602→                <ShoppingBag className="h-10 w-10 mx-auto text-muted-foreground/30" />
+   603→                <p className="mt-3 text-sm text-muted-foreground">Cart is empty</p>
+   604→                <p className="text-xs text-muted-foreground/60">Click products to add them</p>
+   605→              </div>
+   606→            ) : (
+   607→              <div className="p-4 space-y-3">
+   608→                {cart.items.map((item) => (
+   609→                  <div key={item.productId} className="flex gap-3 p-2 rounded-lg bg-muted/50">
+   610→                    <div className="flex-1 min-w-0">
+   611→                      <p className="text-sm font-medium truncate">{item.productName}</p>
+   612→                      <p className="text-xs text-muted-foreground">{formatKES(item.pricePerUnit)} x {item.quantity}</p>
+   613→                      {item.discountPercent > 0 && (
+   614→                        <p className="text-xs text-green-600">{item.discountPercent}% off</p>
+   615→                      )}
+   616→                    </div>
+   617→                    <div className="flex items-center gap-1">
+   618→                      <Button
+   619→                        variant="outline"
+   620→                        size="icon"
+   621→                        className="h-7 w-7"
+   622→                        onClick={() => cart.updateQuantity(item.productId, item.quantity - 1)}
+   623→                      >
+   624→                        <Minus className="h-3 w-3" />
+   625→                      </Button>
+   626→                      <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
+   627→                      <Button
+   628→                        variant="outline"
+   629→                        size="icon"
+   630→                        className="h-7 w-7"
+   631→                        onClick={() => cart.updateQuantity(item.productId, item.quantity + 1)}
+   632→                      >
+   633→                        <Plus className="h-3 w-3" />
+   634→                      </Button>
+   635→                      <Button
+   636→                        variant="ghost"
+   637→                        size="icon"
+   638→                        className="h-7 w-7 text-destructive"
+   639→                        onClick={() => cart.removeItem(item.productId)}
+   640→                      >
+   641→                        <X className="h-3 w-3" />
+   642→                      </Button>
+   643→                    </div>
+   644→                  </div>
+   645→                ))}
+   646→              </div>
+   647→            )}
+   648→          </ScrollArea>
+   649→          {cart.items.length > 0 && (
+   650→            <>
+   651→              <Separator />
+   652→              <div className="p-4 space-y-3">
+   653→                {/* Customer Selection */}
+   654→                <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+   655→                  <SelectTrigger>
+   656→                    <SelectValue placeholder="Walk-in Customer" />
+   657→                  </SelectTrigger>
+   658→                  <SelectContent>
+   659→                    <SelectItem value="walk-in">Walk-in Customer</SelectItem>
+   660→                    {customers.map((c) => (
+   661→                      <SelectItem key={c.id} value={c.id}>{c.name}{c.phone ? ` - ${c.phone}` : ''}</SelectItem>
+   662→                    ))}
+   663→                  </SelectContent>
+   664→                </Select>
+   665→
+   666→                <div className="space-y-1 text-sm">
+   667→                  <div className="flex justify-between">
+   668→                    <span className="text-muted-foreground">Subtotal</span>
+   669→                    <span>{formatKES(subtotal)}</span>
+   670→                  </div>
+   671→                  <div className="flex justify-between">
+   672→                    <span className="text-muted-foreground">VAT (16%)</span>
+   673→                    <span>{formatKES(tax)}</span>
+   674→                  </div>
+   675→                  <Separator />
+   676→                  <div className="flex justify-between font-bold text-base">
+   677→                    <span>Total</span>
+   678→                    <span className="text-primary">{formatKES(total)}</span>
+   679→                  </div>
+   680→                </div>
+   681→
+   682→                <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
+   683→                  <DialogTrigger asChild>
+   684→                    <Button className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground font-semibold" size="lg">
+   685→                      <CreditCard className="mr-2 h-4 w-4" />
+   686→                      Checkout {formatKES(total)}
+   687→                    </Button>
+   688→                  </DialogTrigger>
+   689→                  <DialogContent className="sm:max-w-md">
+   690→                    <DialogHeader>
+   691→                      <DialogTitle>Complete Payment</DialogTitle>
+   692→                      <DialogDescription>
+   693→                        Total: <span className="font-bold text-primary">{formatKES(total)}</span>
+   694→                      </DialogDescription>
+   695→                    </DialogHeader>
+   696→                    <div className="space-y-4">
+   697→                      <div>
+   698→                        <Label className="text-sm font-medium">Payment Method</Label>
+   699→                        <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)} className="grid grid-cols-3 gap-2 mt-2">
+   700→                          <div>
+   701→                            <RadioGroupItem value="CASH" id="cash" className="peer sr-only" />
+   702→                            <Label htmlFor="cash" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+   703→                              <Banknote className="h-5 w-5" />
+   704→                              <span className="text-xs font-medium">Cash</span>
+   705→                            </Label>
+   706→                          </div>
+   707→                          <div>
+   708→                            <RadioGroupItem value="MPESA" id="mpesa" className="peer sr-only" />
+   709→                            <Label htmlFor="mpesa" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+   710→                              <Smartphone className="h-5 w-5" />
+   711→                              <span className="text-xs font-medium">M-Pesa</span>
+   712→                            </Label>
+   713→                          </div>
+   714→                          <div>
+   715→                            <RadioGroupItem value="DEBT" id="debt" className="peer sr-only" />
+   716→                            <Label htmlFor="debt" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+   717→                              <Wallet className="h-5 w-5" />
+   718→                              <span className="text-xs font-medium">Debt</span>
+   719→                            </Label>
+   720→                          </div>
+   721→                        </RadioGroup>
+   722→                      </div>
+   723→
+   724→                      {paymentMethod === 'CASH' && (
+   725→                        <div className="space-y-3">
+   726→                          <div>
+   727→                            <Label htmlFor="cashReceived">Cash Received</Label>
+   728→                            <Input
+   729→                              id="cashReceived"
+   730→                              type="number"
+   731→                              placeholder="0"
+   732→                              value={cashReceived}
+   733→                              onChange={(e) => setCashReceived(e.target.value)}
+   734→                              className="text-lg font-semibold mt-1"
+   735→                            />
+   736→                          </div>
+   737→                          {change > 0 && (
+   738→                            <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg">
+   739→                              <p className="text-sm font-medium text-green-700 dark:text-green-400">
+   740→                                Change: {formatKES(change)}
+   741→                              </p>
+   742→                            </div>
+   743→                          )}
+   744→                          {cashReceived && Number(cashReceived) < total && (
+   745→                            <Alert variant="destructive">
+   746→                              <AlertCircle className="h-4 w-4" />
+   747→                              <AlertTitle>Insufficient amount</AlertTitle>
+   748→                              <AlertDescription>Need {formatKES(total - Number(cashReceived))} more</AlertDescription>
+   749→                            </Alert>
+   750→                          )}
+   751→                        </div>
+   752→                      )}
+   753→
+   754→                      {paymentMethod === 'DEBT' && !selectedCustomer && (
+   755→                        <Alert>
+   756→                          <AlertCircle className="h-4 w-4" />
+   757→                          <AlertTitle>Customer Required</AlertTitle>
+   758→                          <AlertDescription>Please select a customer before proceeding with debt payment.</AlertDescription>
+   759→                        </Alert>
+   760→                      )}
+   761→
+   762→                      {paymentMethod === 'MPESA' && (
+   763→                        <div>
+   764→                          <Label htmlFor="mpesaPhone">M-Pesa Phone Number</Label>
+   765→                          <Input
+   766→                            id="mpesaPhone"
+   767→                            type="tel"
+   768→                            placeholder="0712 345 678"
+   769→                            value={mpesaPhone}
+   770→                            onChange={(e) => setMpesaPhone(e.target.value)}
+   771→                            className="mt-1"
+   772→                          />
+   773→                        </div>
+   774→                      )}
+   775→                    </div>
+   776→                    <DialogFooter>
+   777→                      <Button variant="outline" onClick={() => setCheckoutOpen(false)}>Cancel</Button>
+   778→                      <Button
+   779→                        onClick={handleCheckout}
+   780→                        disabled={
+   781→                          checkoutMutation.isPending ||
+   782→                          (paymentMethod === 'CASH' && (!cashReceived || Number(cashReceived) < total)) ||
+   783→                          (paymentMethod === 'DEBT' && !selectedCustomer)
+   784→                        }
+   785→                        className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+   786→                      >
+   787→                        {checkoutMutation.isPending ? (
+   788→                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
+   789→                        ) : (
+   790→                          <><CheckCircle className="mr-2 h-4 w-4" />Complete Sale</>
+   791→                        )}
+   792→                      </Button>
+   793→                    </DialogFooter>
+   794→                  </DialogContent>
+   795→                </Dialog>
+   796→              </div>
+   797→            </>
+   798→          )}
+   799→        </Card>
+   800→      </div>
+   801→
+   802→      {/* M-Pesa STK Push Dialog */}
+   803→      <Dialog open={mpesaDialogOpen} onOpenChange={setMpesaDialogOpen}>
+   804→        <DialogContent className="sm:max-w-sm">
+   805→          <DialogHeader>
+   806→            <DialogTitle className="flex items-center gap-2">
+   807→              <Smartphone className="h-5 w-5 text-green-600" />
+   808→              M-Pesa Payment
+   809→            </DialogTitle>
+   810→            <DialogDescription>
+   811→              Amount: <span className="font-bold">{formatKES(total)}</span>
+   812→            </DialogDescription>
+   813→          </DialogHeader>
+   814→          {mpesaStatus === 'idle' && (
+   815→            <div className="space-y-4">
+   816→              <div>
+   817→                <Label htmlFor="mpesaPhoneDialog">Phone Number</Label>
+   818→                <Input
+   819→                  id="mpesaPhoneDialog"
+   820→                  type="tel"
+   821→                  placeholder="0712 345 678"
+   822→                  value={mpesaPhone}
+   823→                  onChange={(e) => setMpesaPhone(e.target.value)}
+   824→                />
+   825→              </div>
+   826→              <Button
+   827→                className="w-full bg-green-600 hover:bg-green-700 text-white"
+   828→                onClick={handleMpesaPay}
+   829→                disabled={mpesaMutation.isPending}
+   830→              >
+   831→                {mpesaMutation.isPending ? (
+   832→                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending STK Push...</>
+   833→                ) : (
+   834→                  'Send STK Push'
+   835→                )}
+   836→              </Button>
+   837→            </div>
+   838→          )}
+   839→          {mpesaStatus === 'processing' && (
+   840→            <div className="text-center py-8 space-y-4">
+   841→              <div className="animate-pulse">
+   842→                <Smartphone className="h-16 w-16 mx-auto text-green-600" />
+   843→              </div>
+   844→              <div>
+   845→                <p className="font-semibold">Waiting for M-Pesa Confirmation</p>
+   846→                <p className="text-sm text-muted-foreground mt-1">
+   847→                  Please enter your M-Pesa PIN on your phone
+   848→                </p>
+   849→              </div>
+   850→              <Loader2 className="h-6 w-6 animate-spin mx-auto text-green-600" />
+   851→            </div>
+   852→          )}
+   853→          {mpesaStatus === 'success' && (
+   854→            <div className="text-center py-8 space-y-4">
+   855→              <CheckCircle className="h-16 w-16 mx-auto text-green-600" />
+   856→              <p className="font-semibold text-green-600">Payment Successful!</p>
+   857→              <Button onClick={() => { setMpesaDialogOpen(false); setMpesaStatus('idle'); }}>
+   858→                Close
+   859→              </Button>
+   860→            </div>
+   861→          )}
+   862→          {mpesaStatus === 'failed' && (
+   863→            <div className="text-center py-8 space-y-4">
+   864→              <AlertCircle className="h-16 w-16 mx-auto text-destructive" />
+   865→              <p className="font-semibold text-destructive">Payment Failed</p>
+   866→              <Button variant="outline" onClick={() => setMpesaStatus('idle')}>Try Again</Button>
+   867→            </div>
+   868→          )}
+   869→        </DialogContent>
+   870→      </Dialog>
+   871→    </div>
+   872→  );
+   873→}
+   874→
+   875→// ============================================================================
+   876→// MAIN APP
+   877→// ============================================================================
+   878→
+   879→function MainApp() {
+   880→  const { activeTab } = useAppStore();
+   881→
+   882→  const renderTab = () => {
+   883→    switch (activeTab) {
+   884→      case 'pos': return <POSTab />;
+   885→      case 'inventory': return <Suspense fallback={<TabLoadingFallback />}><LazyInventoryTab /></Suspense>;
+   886→      case 'customers': return <Suspense fallback={<TabLoadingFallback />}><LazyCustomersTab /></Suspense>;
+   887→      case 'rentals': return <Suspense fallback={<TabLoadingFallback />}><LazyRentalsTab /></Suspense>;
+   888→      case 'financial': return <Suspense fallback={<TabLoadingFallback />}><LazyFinancialTab /></Suspense>;
+   889→      case 'reports': return <Suspense fallback={<TabLoadingFallback />}><LazyReportsTab /></Suspense>;
+   890→      case 'admin': return <Suspense fallback={<TabLoadingFallback />}><LazyAdminTab /></Suspense>;
+   891→      default: return <POSTab />;
+   892→    }
+   893→  };
+   894→
+   895→  return (
+   896→    <div className="flex h-screen overflow-hidden">
+   897→      <AppSidebar />
+   898→      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+   899→        <TopBar />
+   900→        <main className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+   901→          {renderTab()}
+   902→        </main>
+   903→        <footer className="border-t bg-background px-4 py-2 text-center">
+   904→          <p className="text-xs text-muted-foreground">
+   905→            MBUMAH HARDWARE POS & ERP System &copy; {new Date().getFullYear()} &mdash; All rights reserved
+   906→          </p>
+   907→        </footer>
+   908→      </div>
+   909→    </div>
+   910→  );
+   911→}
+   912→
+   913→// ============================================================================
+   914→// PAGE EXPORT
+   915→// ============================================================================
+   916→
+   917→export default function HomePage() {
+   918→  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+   919→
+   920→  return isAuthenticated ? <MainApp /> : <LoginScreen />;
+   921→}
+   922→

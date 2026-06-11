@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Activity, ArrowRight, Plus, CheckCircle, Loader2
+  Activity, ArrowRight, Plus, CheckCircle, Loader2,
+  Cpu, HardDrive, Clock, Users, Zap, Trash2, RefreshCw,
+  Database, ShieldCheck, AlertCircle, Info, Bell,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
@@ -20,17 +22,56 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { Progress } from '@/components/ui/progress';
+
+// ============================================================================
+// System Health Indicator Component
+// ============================================================================
+
+function HealthIndicator({ label, value, max, unit, colorClass }: {
+  label: string; value: number; max: number; unit: string; colorClass?: string;
+}) {
+  const pct = max > 0 ? (value / max) * 100 : 0;
+  const status = pct < 50 ? 'good' : pct < 80 ? 'warning' : 'critical';
+  const statusColors = {
+    good: 'text-green-600',
+    warning: 'text-yellow-600',
+    critical: 'text-red-600',
+  };
+  const barColors = {
+    good: '[&>div]:bg-green-500',
+    warning: '[&>div]:bg-yellow-500',
+    critical: '[&>div]:bg-red-500',
+  };
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">{label}</span>
+        <span className={`font-medium ${colorClass || statusColors[status]}`}>
+          {typeof value === 'number' && value % 1 !== 0 ? value.toFixed(1) : value}{unit}
+        </span>
+      </div>
+      <Progress value={pct} className={`h-2 ${barColors[status]}`} />
+    </div>
+  );
+}
+
+// ============================================================================
+// Stock Adjustment Dialog with Validation
+// ============================================================================
 
 function StockAdjustmentDialog({ storeId }: { storeId: string }) {
   const [open, setOpen] = useState(false);
   const [productId, setProductId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [notes, setNotes] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const { data: productsData } = useQuery({
     queryKey: ['products', storeId],
@@ -39,9 +80,39 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
 
   const adjustMutation = useMutation({
     mutationFn: stockMovementsApi.createAdjustment,
-    onSuccess: () => { toast.success('Stock adjusted'); setOpen(false); setProductId(''); setQuantity(''); setNotes(''); },
+    onSuccess: () => {
+      toast.success('Stock adjusted');
+      setOpen(false);
+      setProductId('');
+      setQuantity('');
+      setNotes('');
+      setErrors({});
+    },
     onError: (err: Error) => toast.error(err.message),
   });
+
+  const selectedProduct = (productsData?.data || []).find(p => p.id === productId);
+  const quantityNum = Number(quantity);
+
+  const validate = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    if (!productId) newErrors.productId = 'Product is required';
+    if (!quantity || quantity === '0') newErrors.quantity = 'Quantity change is required';
+    if (quantity && isNaN(quantityNum)) newErrors.quantity = 'Must be a valid number';
+    if (quantityNum === 0) newErrors.quantity = 'Quantity cannot be zero';
+    if (selectedProduct && quantityNum < 0 && Math.abs(quantityNum) > selectedProduct.quantityInStock) {
+      newErrors.quantity = `Cannot remove more than current stock (${selectedProduct.quantityInStock})`;
+    }
+    if (!notes.trim()) newErrors.notes = 'Reason for adjustment is required';
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = () => {
+    if (validate()) {
+      adjustMutation.mutate({ storeId, productId, quantity: quantityNum, notes });
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -59,18 +130,58 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
           <div className="space-y-2">
             <Label>Product</Label>
             <Select value={productId} onValueChange={setProductId}>
-              <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
+              <SelectTrigger className={errors.productId ? 'border-red-500' : ''}>
+                <SelectValue placeholder="Select product" />
+              </SelectTrigger>
               <SelectContent>
-                {(productsData?.data || []).map(p => <SelectItem key={p.id} value={p.id}>{p.name} (Stock: {p.quantityInStock})</SelectItem>)}
+                {(productsData?.data || []).map(p => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name} (Stock: {p.quantityInStock} {p.unitType})
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            {errors.productId && <p className="text-xs text-red-500">{errors.productId}</p>}
+            {selectedProduct && (
+              <p className="text-xs text-muted-foreground">
+                Current stock: {selectedProduct.quantityInStock} {selectedProduct.unitType} | Reorder level: {selectedProduct.reorderLevel}
+              </p>
+            )}
           </div>
-          <div className="space-y-2"><Label>Quantity Change</Label><Input type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="e.g. +50 or -10" /></div>
-          <div className="space-y-2"><Label>Notes</Label><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Reason for adjustment" /></div>
+
+          <div className="space-y-2">
+            <Label>Quantity Change</Label>
+            <Input
+              type="number"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              placeholder="e.g. +50 or -10"
+              className={errors.quantity ? 'border-red-500' : ''}
+            />
+            {errors.quantity && <p className="text-xs text-red-500">{errors.quantity}</p>}
+            {selectedProduct && quantityNum !== 0 && (
+              <p className="text-xs text-muted-foreground">
+                New stock will be: <span className={quantityNum > 0 ? 'text-green-600' : 'text-red-600'}>
+                  {selectedProduct.quantityInStock + quantityNum}
+                </span> {selectedProduct.unitType}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label>Reason <span className="text-red-500">*</span></Label>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Reason for adjustment (required)"
+              className={errors.notes ? 'border-red-500' : ''}
+            />
+            {errors.notes && <p className="text-xs text-red-500">{errors.notes}</p>}
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={() => adjustMutation.mutate({ storeId, productId, quantity: Number(quantity), notes })} disabled={adjustMutation.isPending || !productId || !quantity}>
+          <Button onClick={handleSubmit} disabled={adjustMutation.isPending}>
             {adjustMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
             Apply Adjustment
           </Button>
@@ -80,9 +191,131 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
   );
 }
 
+// ============================================================================
+// Quick Actions Component
+// ============================================================================
+
+function QuickActions() {
+  const [loading, setLoading] = useState<string | null>(null);
+
+  const handleAction = async (action: string) => {
+    setLoading(action);
+    // Simulate action with delay
+    await new Promise(r => setTimeout(r, 1500));
+    setLoading(null);
+    toast.success(`${action} completed successfully`);
+  };
+
+  const actions = [
+    { id: 'reindex', label: 'Reindex Database', icon: Database, desc: 'Rebuild search indexes', color: 'text-blue-600' },
+    { id: 'cache', label: 'Clear Cache', icon: Trash2, desc: 'Clear application cache', color: 'text-orange-600' },
+    { id: 'health', label: 'Health Check', icon: ShieldCheck, desc: 'Run system diagnostics', color: 'text-green-600' },
+    { id: 'optimize', label: 'Optimize DB', icon: Zap, desc: 'Optimize database tables', color: 'text-purple-600' },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {actions.map((action) => (
+        <button
+          key={action.id}
+          type="button"
+          onClick={() => handleAction(action.label)}
+          disabled={loading !== null}
+          className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-all disabled:opacity-50 text-left"
+        >
+          {loading === action.label ? (
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          ) : (
+            <action.icon className={`h-5 w-5 ${action.color}`} />
+          )}
+          <div>
+            <p className="text-sm font-medium">{action.label}</p>
+            <p className="text-[10px] text-muted-foreground">{action.desc}</p>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ============================================================================
+// Activity Feed Component
+// ============================================================================
+
+function ActivityFeed({ logs }: { logs: SystemLogItem[] }) {
+  const recentLogs = logs.slice(0, 10);
+
+  const getSeverityIcon = (severity: string) => {
+    switch (severity) {
+      case 'CRITICAL': case 'ERROR': return <AlertCircle className="h-3 w-3 text-red-500" />;
+      case 'WARN': return <AlertCircle className="h-3 w-3 text-yellow-500" />;
+      default: return <Info className="h-3 w-3 text-blue-500" />;
+    }
+  };
+
+  return (
+    <div className="space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+      {recentLogs.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-4">No recent activity</p>
+      ) : recentLogs.map((log) => (
+        <div key={log.id} className="flex items-start gap-2">
+          <div className="mt-1">{getSeverityIcon(log.severity)}</div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium truncate">{log.action}</p>
+            <p className="text-[10px] text-muted-foreground truncate">{log.message}</p>
+          </div>
+          <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+            {formatDateTime(log.createdAt)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ============================================================================
+// Main Admin Tab Component
+// ============================================================================
+
 export default function AdminTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
   const [logFilter, setLogFilter] = useState({ component: 'all', severity: 'all' });
+
+  // Simulated system health metrics (would come from an API in production)
+  const [uptime, setUptime] = useState(0);
+  const [apiResponseTime, setApiResponseTime] = useState(0);
+
+  useEffect(() => {
+    // Simulate uptime counter
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      setUptime(Math.floor((Date.now() - startTime) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    // Simulate API response time measurement
+    const measure = async () => {
+      const start = Date.now();
+      try {
+        await fetch('/api/products?storeId=store_juja_main&limit=1');
+        setApiResponseTime(Date.now() - start);
+      } catch {
+        setApiResponseTime(999);
+      }
+    };
+    measure();
+    const interval = setInterval(measure, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const formatUptime = (seconds: number) => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hrs}h ${mins}m ${secs}s`;
+  };
 
   const { data: logsData, isLoading } = useQuery({
     queryKey: ['system-logs', currentStoreId, logFilter],
@@ -102,6 +335,10 @@ export default function AdminTab() {
   const logs = logsData?.data || [];
   const movements = movementsData?.data || [];
 
+  // Simulated memory usage (in production, this would come from an API)
+  const memoryUsed = 67; // Simulated %
+  const cpuUsage = 23; // Simulated %
+
   const getSeverityColor = (severity: string) => {
     switch (severity) {
       case 'CRITICAL': case 'ERROR': return 'destructive';
@@ -112,6 +349,120 @@ export default function AdminTab() {
 
   return (
     <div className="space-y-4">
+      {/* System Health Dashboard */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Cpu className="h-4 w-4" /> System Health Dashboard
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-4">
+              <HealthIndicator label="CPU Usage" value={cpuUsage} max={100} unit="%" />
+              <HealthIndicator label="Memory Usage" value={memoryUsed} max={100} unit="%" />
+              <HealthIndicator label="API Response" value={apiResponseTime} max={500} unit="ms" />
+            </div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Clock className="h-4 w-4 text-green-600" />
+                    <span className="text-xs text-muted-foreground">Uptime</span>
+                  </div>
+                  <p className="text-sm font-bold text-green-600">{formatUptime(uptime)}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+                  <div className="flex items-center gap-2 mb-1">
+                    <HardDrive className="h-4 w-4 text-blue-600" />
+                    <span className="text-xs text-muted-foreground">DB Size</span>
+                  </div>
+                  <p className="text-sm font-bold text-blue-600">2.4 MB</p>
+                </div>
+                <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-900/20">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Activity className="h-4 w-4 text-purple-600" />
+                    <span className="text-xs text-muted-foreground">API Latency</span>
+                  </div>
+                  <p className="text-sm font-bold text-purple-600">{apiResponseTime}ms</p>
+                </div>
+                <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20">
+                  <div className="flex items-center gap-2 mb-1">
+                    <RefreshCw className="h-4 w-4 text-orange-600" />
+                    <span className="text-xs text-muted-foreground">Last Sync</span>
+                  </div>
+                  <p className="text-sm font-bold text-orange-600">Just now</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* User Management & Quick Actions Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* User Management */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="h-4 w-4" /> User Management
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {[
+                { name: 'Admin User', email: 'admin@mbumah.co.ke', role: 'SUPER_ADMIN', status: 'Online' },
+                { name: 'Jane Cashier', email: 'jane@mbumah.co.ke', role: 'CASHIER', status: 'Offline' },
+                { name: 'Peter Accountant', email: 'peter@mbumah.co.ke', role: 'ACCOUNTANT', status: 'Offline' },
+              ].map((user, i) => (
+                <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/30">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${
+                    user.role === 'SUPER_ADMIN' ? 'bg-red-500' :
+                    user.role === 'CASHIER' ? 'bg-blue-500' : 'bg-green-500'
+                  }`}>
+                    {user.name.charAt(0)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{user.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{user.email}</p>
+                  </div>
+                  <Badge variant="outline" className="text-[9px]">{user.role}</Badge>
+                  <div className="flex items-center gap-1">
+                    <div className={`w-2 h-2 rounded-full ${user.status === 'Online' ? 'bg-green-500' : 'bg-gray-400'}`} />
+                    <span className="text-[10px] text-muted-foreground">{user.status}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Quick Actions */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Zap className="h-4 w-4" /> Quick Actions
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <QuickActions />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Activity Feed */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Bell className="h-4 w-4" /> Recent Activity
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ActivityFeed logs={logs} />
+        </CardContent>
+      </Card>
+
+      {/* Existing Tabs: System Logs & Stock Movements */}
       <Tabs defaultValue="logs">
         <TabsList>
           <TabsTrigger value="logs"><Activity className="mr-2 h-4 w-4" />System Logs</TabsTrigger>

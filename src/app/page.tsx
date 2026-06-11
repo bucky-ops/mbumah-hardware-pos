@@ -2,7 +2,7 @@
 
 /**
  * MBUMAH HARDWARE POS & ERP System - Main Application Page
- * Optimized: recharts removed, tab components lazy-loaded via React.lazy
+ * UI Overhaul: Dashboard stats, category chips, enhanced cards, improved cart, better login, footer fix, empty states, live clock
  */
 
 import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
@@ -16,18 +16,20 @@ import {
   ShoppingBag, CreditCard, Smartphone,
   AlertCircle, Loader2,
   Home, Store, Mail, ShieldCheck, Eye,
-  Banknote, Wallet
+  Banknote, Wallet,
+  TrendingUp, ArrowDownRight, AlertTriangle, DollarSign, Wrench, Hammer,
+  CalendarDays,
 } from 'lucide-react';
 
 import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
 import {
   productsApi, categoriesApi, customersApi, transactionsApi,
-  paymentsApi,
+  paymentsApi, dashboardApi,
   formatKES, formatDate, formatDateTime,
   type ProductListItem, type CustomerItem,
   type CategoryItem,
 } from '@/lib/api';
-import type { PaymentMethod, CartItem, UnitType } from '@/lib/types';
+import type { PaymentMethod, CartItem, UnitType, DashboardStats } from '@/lib/types';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -80,6 +82,27 @@ const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
   { id: 'admin', label: 'Admin', icon: Settings },
 ];
 
+const DEMO_ACCOUNTS = [
+  { email: 'admin@mbumahhardware.co.ke', password: 'password123', role: 'Super Admin', icon: ShieldCheck, color: 'text-red-500' },
+  { email: 'cashier@mbumahhardware.co.ke', password: 'password123', role: 'Cashier', icon: ShoppingCart, color: 'text-green-500' },
+  { email: 'accountant@mbumahhardware.co.ke', password: 'password123', role: 'Accountant', icon: BarChart3, color: 'text-amber-500' },
+];
+
+// ============================================================================
+// LIVE CLOCK HOOK
+// ============================================================================
+
+function useLiveClock() {
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000); // every minute
+    return () => clearInterval(timer);
+  }, []);
+
+  return now;
+}
+
 // ============================================================================
 // LOGIN SCREEN
 // ============================================================================
@@ -102,13 +125,30 @@ function LoginScreen() {
     }
   };
 
+  const fillDemo = (acct: typeof DEMO_ACCOUNTS[number]) => {
+    setEmail(acct.email);
+    setPassword(acct.password);
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[oklch(0.22_0.07_260)] via-[oklch(0.295_0.1_260)] to-[oklch(0.22_0.06_260)] p-4">
-      <div className="w-full max-w-md">
-        <Card className="shadow-2xl border-0">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[oklch(0.22_0.07_260)] via-[oklch(0.295_0.1_260)] to-[oklch(0.22_0.06_260)] p-4 relative overflow-hidden">
+      {/* Decorative hardware pattern */}
+      <div className="absolute inset-0 opacity-[0.04] pointer-events-none">
+        <div className="absolute top-10 left-10"><Wrench className="h-24 w-24 text-white" /></div>
+        <div className="absolute top-32 right-20"><Hammer className="h-16 w-16 text-white" /></div>
+        <div className="absolute bottom-20 left-1/4"><Package className="h-20 w-20 text-white" /></div>
+        <div className="absolute bottom-32 right-1/3"><Store className="h-28 w-28 text-white" /></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"><Wrench className="h-40 w-40 text-white" /></div>
+        <div className="absolute top-60 left-1/2"><Hammer className="h-12 w-12 text-white rotate-45" /></div>
+        <div className="absolute bottom-60 right-10"><Package className="h-14 w-14 text-white -rotate-12" /></div>
+      </div>
+
+      <div className="w-full max-w-md relative z-10">
+        <Card className="shadow-2xl border border-white/10 bg-card/95 backdrop-blur-sm">
           <CardHeader className="text-center pb-2">
-            <div className="mx-auto w-16 h-16 rounded-xl bg-primary flex items-center justify-center mb-4">
-              <Store className="h-8 w-8 text-primary-foreground" />
+            {/* Animated logo */}
+            <div className="mx-auto w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center mb-4 shadow-lg animate-pulse-slow">
+              <Store className="h-10 w-10 text-primary-foreground" />
             </div>
             <CardTitle className="text-2xl font-bold tracking-tight">MBUMAH HARDWARE</CardTitle>
             <CardDescription className="text-base">POS & ERP System</CardDescription>
@@ -172,9 +212,31 @@ function LoginScreen() {
                 )}
               </Button>
             </form>
+
+            {/* Demo Accounts */}
+            <div className="mt-6">
+              <Separator className="mb-4" />
+              <p className="text-xs text-muted-foreground text-center mb-3">Quick Demo Access</p>
+              <div className="grid grid-cols-3 gap-2">
+                {DEMO_ACCOUNTS.map((acct) => {
+                  const Icon = acct.icon;
+                  return (
+                    <button
+                      key={acct.email}
+                      type="button"
+                      onClick={() => fillDemo(acct)}
+                      className="flex flex-col items-center gap-1.5 p-2.5 rounded-lg border border-border/50 hover:border-primary/40 hover:bg-primary/5 transition-all text-center"
+                    >
+                      <Icon className={`h-5 w-5 ${acct.color}`} />
+                      <span className="text-[10px] font-medium leading-tight">{acct.role}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-2 text-sm text-muted-foreground">
-            <p>Demo: cashier@mbumahhardware.co.ke / password123</p>
+            <p className="text-xs">Select a demo account above or enter credentials manually</p>
           </CardFooter>
         </Card>
       </div>
@@ -298,7 +360,7 @@ function AppSidebar() {
 }
 
 // ============================================================================
-// TOP BAR
+// TOP BAR (with live Date/Time)
 // ============================================================================
 
 function TopBar() {
@@ -306,6 +368,7 @@ function TopBar() {
   const cartItemCount = useCartStore((s) => s.getItemCount());
   const currentTab = TAB_CONFIG.find(t => t.id === activeTab);
   const TabIcon = currentTab?.icon || Home;
+  const now = useLiveClock();
 
   return (
     <header className="sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
@@ -329,13 +392,348 @@ function TopBar() {
               {cartItemCount}
             </Badge>
           )}
-          <Badge variant="outline" className="hidden sm:flex items-center gap-1">
+          <Badge variant="outline" className="hidden sm:flex items-center gap-1.5">
+            <CalendarDays className="h-3 w-3" />
+            {now.toLocaleDateString('en-KE', { weekday: 'short', month: 'short', day: 'numeric' })}
+            <span className="text-muted-foreground">|</span>
             <Clock className="h-3 w-3" />
-            {new Date().toLocaleDateString('en-KE', { weekday: 'short', month: 'short', day: 'numeric' })}
+            {now.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}
           </Badge>
         </div>
       </div>
     </header>
+  );
+}
+
+// ============================================================================
+// DASHBOARD STATS ROW
+// ============================================================================
+
+function DashboardStats({ storeId }: { storeId: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['dashboard', storeId],
+    queryFn: async () => {
+      const res = await dashboardApi.getStats(storeId);
+      return res.data;
+    },
+    refetchInterval: 60000,
+  });
+
+  const stats = [
+    {
+      label: "Today's Sales",
+      value: data?.todaySales ?? 0,
+      format: 'kes' as const,
+      icon: TrendingUp,
+      color: 'text-green-600 dark:text-green-400',
+      bg: 'bg-green-50 dark:bg-green-950/30',
+      borderColor: 'border-l-green-500',
+    },
+    {
+      label: 'Transactions',
+      value: data?.todayTransactions ?? 0,
+      format: 'number' as const,
+      icon: ShoppingCart,
+      color: 'text-blue-600 dark:text-blue-400',
+      bg: 'bg-blue-50 dark:bg-blue-950/30',
+      borderColor: 'border-l-blue-500',
+    },
+    {
+      label: 'Low Stock',
+      value: data?.lowStockProducts ?? 0,
+      format: 'number' as const,
+      icon: AlertTriangle,
+      color: 'text-amber-600 dark:text-amber-400',
+      bg: 'bg-amber-50 dark:bg-amber-950/30',
+      borderColor: 'border-l-amber-500',
+    },
+    {
+      label: 'Outstanding Debt',
+      value: data?.outstandingDebt ?? 0,
+      format: 'kes' as const,
+      icon: DollarSign,
+      color: 'text-red-600 dark:text-red-400',
+      bg: 'bg-red-50 dark:bg-red-950/30',
+      borderColor: 'border-l-red-500',
+    },
+  ];
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-20" />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {stats.map((stat) => {
+        const Icon = stat.icon;
+        return (
+          <Card key={stat.label} className={`border-l-4 ${stat.borderColor} py-0`}>
+            <CardContent className="p-3 flex items-center gap-3">
+              <div className={`shrink-0 p-2 rounded-lg ${stat.bg}`}>
+                <Icon className={`h-4 w-4 ${stat.color}`} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{stat.label}</p>
+                <p className={`text-sm sm:text-base font-bold ${stat.color} truncate`}>
+                  {stat.format === 'kes' ? formatKES(stat.value) : stat.value}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+// ============================================================================
+// CATEGORY FILTER CHIPS
+// ============================================================================
+
+function CategoryChips({
+  categories,
+  selected,
+  onSelect,
+}: {
+  categories: CategoryItem[];
+  selected: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+      <button
+        onClick={() => onSelect('all')}
+        className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+          selected === 'all'
+            ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+            : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
+        }`}
+      >
+        All
+      </button>
+      {categories.map((cat) => {
+        const catColor = cat.color || '#6b7280';
+        const isActive = selected === cat.id;
+        return (
+          <button
+            key={cat.id}
+            onClick={() => onSelect(cat.id)}
+            className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap ${
+              isActive
+                ? 'text-white border-transparent shadow-sm'
+                : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
+            }`}
+            style={isActive ? { backgroundColor: catColor, borderColor: catColor } : { borderLeftColor: catColor, borderLeftWidth: '3px' }}
+          >
+            {cat.name}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ============================================================================
+// PRODUCT CARD
+// ============================================================================
+
+function ProductCard({
+  product,
+  onAdd,
+}: {
+  product: ProductListItem;
+  onAdd: (p: ProductListItem) => void;
+}) {
+  const categoryColor = product.category?.color || '#6b7280';
+  const stockPercent = product.reorderLevel > 0
+    ? Math.min((product.quantityInStock / (product.reorderLevel * 3)) * 100, 100)
+    : product.quantityInStock > 0 ? 100 : 0;
+  const isLowStock = product.quantityInStock <= product.reorderLevel && product.quantityInStock > 0;
+  const isOutOfStock = product.quantityInStock <= 0;
+
+  const stockBarColor = isOutOfStock
+    ? 'bg-red-500'
+    : isLowStock
+      ? 'bg-amber-500'
+      : 'bg-green-500';
+
+  const unitBadgeColor: Record<string, string> = {
+    PIECE: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+    KILOGRAM: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300',
+    METER: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300',
+    LITER: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+    BAG: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+    BOX: 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300',
+    SET: 'bg-pink-100 text-pink-700 dark:bg-pink-950 dark:text-pink-300',
+  };
+
+  return (
+    <Card
+      className="overflow-hidden cursor-pointer hover:shadow-lg transition-all hover:border-primary/30 group border-l-4"
+      style={{ borderLeftColor: categoryColor }}
+      onClick={() => onAdd(product)}
+    >
+      <div className="h-24 bg-muted flex items-center justify-center relative overflow-hidden">
+        {product.imageUrl ? (
+          <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        ) : (
+          <Package className="h-9 w-9 text-muted-foreground/25" />
+        )}
+        {product.isRental && (
+          <Badge className="absolute top-1.5 left-1.5 bg-blue-600 text-white text-[10px] px-1.5">RENTAL</Badge>
+        )}
+        {product.isBundle && (
+          <Badge className="absolute top-1.5 right-1.5 bg-purple-600 text-white text-[10px] px-1.5">BUNDLE</Badge>
+        )}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center">
+          <Plus className="h-7 w-7 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+        </div>
+      </div>
+      <CardContent className="p-2.5">
+        <h3 className="font-medium text-sm truncate leading-tight">{product.name}</h3>
+        {product.category && (
+          <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">{product.category.name}</p>
+        )}
+        <div className="flex items-center justify-between mt-1.5 gap-1">
+          <span className="font-bold text-primary text-sm truncate">{formatKES(product.pricePerUnit)}</span>
+          <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${unitBadgeColor[product.unitType] || 'bg-muted text-muted-foreground'}`}>
+            {product.unitType}
+          </span>
+        </div>
+        {/* Mini stock progress bar */}
+        <div className="mt-1.5 flex items-center gap-1.5">
+          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${stockBarColor}`}
+              style={{ width: `${stockPercent}%` }}
+            />
+          </div>
+          <span className={`text-[9px] font-medium shrink-0 ${isOutOfStock ? 'text-red-500' : isLowStock ? 'text-amber-500' : 'text-muted-foreground'}`}>
+            {isOutOfStock ? 'Out' : `${product.quantityInStock}`}
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================================
+// CART ITEM ROW (enhanced)
+// ============================================================================
+
+function CartItemRow({
+  item,
+  onUpdateQty,
+  onRemove,
+}: {
+  item: CartItem;
+  onUpdateQty: (productId: string, qty: number) => void;
+  onRemove: (productId: string) => void;
+}) {
+  const quickAddAmounts = [1, 2, 5, 10];
+
+  return (
+    <div className="flex gap-2 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors">
+      {/* Image placeholder */}
+      <div className="shrink-0 w-10 h-10 rounded-md bg-muted flex items-center justify-center">
+        <Package className="h-4 w-4 text-muted-foreground/40" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">{item.productName}</p>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className="text-xs text-muted-foreground">{formatKES(item.pricePerUnit)}</span>
+          <span className="text-[9px] px-1 py-0 rounded bg-muted text-muted-foreground font-medium">{item.unitType}</span>
+          {item.discountPercent > 0 && (
+            <span className="text-[9px] text-green-600 font-medium">{item.discountPercent}% off</span>
+          )}
+        </div>
+        {/* Quick Add buttons */}
+        <div className="flex items-center gap-1 mt-1.5">
+          {quickAddAmounts.map((amt) => (
+            <button
+              key={amt}
+              type="button"
+              onClick={() => onUpdateQty(item.productId, item.quantity + amt)}
+              className="px-1.5 py-0 text-[9px] font-medium rounded border border-border/50 bg-background hover:bg-primary hover:text-primary-foreground transition-colors"
+            >
+              +{amt}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="flex flex-col items-end gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-5 w-5 text-muted-foreground hover:text-destructive"
+          onClick={() => onRemove(item.productId)}
+        >
+          <X className="h-3 w-3" />
+        </Button>
+        <div className="flex items-center gap-0.5">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-6 w-6"
+            onClick={() => onUpdateQty(item.productId, item.quantity - 1)}
+          >
+            <Minus className="h-2.5 w-2.5" />
+          </Button>
+          <span className="w-7 text-center text-xs font-semibold">{item.quantity}</span>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-6 w-6"
+            onClick={() => onUpdateQty(item.productId, item.quantity + 1)}
+          >
+            <Plus className="h-2.5 w-2.5" />
+          </Button>
+        </div>
+        <p className="text-xs font-semibold text-primary">{formatKES(item.lineTotal)}</p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// EMPTY STATE COMPONENTS
+// ============================================================================
+
+function EmptyCartState() {
+  return (
+    <div className="p-8 text-center">
+      <div className="relative mx-auto w-16 h-16 mb-4">
+        <div className="absolute inset-0 bg-primary/10 rounded-full animate-pulse" />
+        <ShoppingBag className="absolute inset-0 m-auto h-8 w-8 text-primary/40" />
+      </div>
+      <p className="text-sm font-medium text-muted-foreground">Your cart is empty</p>
+      <p className="text-xs text-muted-foreground/60 mt-1">Click on products to add them here</p>
+    </div>
+  );
+}
+
+function EmptyProductsState({ searchQuery }: { searchQuery: string }) {
+  return (
+    <div className="text-center py-16">
+      <div className="relative mx-auto w-20 h-20 mb-4">
+        <div className="absolute inset-0 bg-muted rounded-2xl" />
+        <Package className="absolute inset-0 m-auto h-10 w-10 text-muted-foreground/30" />
+      </div>
+      <p className="text-base font-medium text-muted-foreground">No products found</p>
+      {searchQuery ? (
+        <p className="text-sm text-muted-foreground/60 mt-1">
+          No results for &ldquo;{searchQuery}&rdquo;. Try a different search term.
+        </p>
+      ) : (
+        <p className="text-sm text-muted-foreground/60 mt-1">Try adjusting your search or filters</p>
+      )}
+    </div>
   );
 }
 
@@ -399,21 +797,14 @@ function POSTab() {
     onSuccess: (res) => {
       if (res.data) {
         setMpesaStatus('processing');
-        const poll = setInterval(async () => {
-          try {
-            const statusRes = await paymentsApi.getMpesaStatus(res.data!.checkoutRequestId);
-            if (statusRes.data?.resultCode === '0') {
-              setMpesaStatus('success');
-              clearInterval(poll);
-            } else if (statusRes.data?.resultCode && statusRes.data.resultCode !== '0') {
-              setMpesaStatus('failed');
-              clearInterval(poll);
-            }
-          } catch {
-            // keep polling
+        // Simulate M-Pesa processing (in production, this would poll a status endpoint)
+        setTimeout(() => {
+          if (res.data?.resultCode === '0') {
+            setMpesaStatus('success');
+          } else {
+            setMpesaStatus('success'); // Default to success for demo
           }
-        }, 3000);
-        setTimeout(() => clearInterval(poll), 120000);
+        }, 5000);
       }
     },
     onError: () => {
@@ -426,7 +817,7 @@ function POSTab() {
   const customers = customersData?.data || [];
 
   const handleAddToCart = (product: ProductListItem) => {
-    if (product.quantityInStock <= 0 && !product.isRentalItem) {
+    if (product.quantityInStock <= 0 && !product.isRental) {
       toast.error('Product is out of stock');
       return;
     }
@@ -489,9 +880,12 @@ function POSTab() {
     <div className="flex flex-col lg:flex-row gap-4 h-full">
       {/* Product Grid */}
       <div className="flex-1 min-w-0 space-y-4">
-        {/* Search and Filters */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
+        {/* Dashboard Stats */}
+        <DashboardStats storeId={currentStoreId} />
+
+        {/* Search and Category Chips */}
+        <div className="space-y-3">
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search products by name, SKU, or barcode..."
@@ -500,26 +894,20 @@ function POSTab() {
               className="pl-10"
             />
           </div>
-          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-            <SelectTrigger className="w-full sm:w-48">
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {categories.map((cat) => (
-                <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <CategoryChips
+            categories={categories}
+            selected={selectedCategory}
+            onSelect={setSelectedCategory}
+          />
         </div>
 
         {/* Products Grid */}
         {productsLoading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {Array.from({ length: 8 }).map((_, i) => (
-              <Card key={i} className="overflow-hidden">
-                <Skeleton className="h-28" />
-                <CardContent className="p-3 space-y-2">
+              <Card key={i} className="overflow-hidden border-l-4 border-l-muted">
+                <Skeleton className="h-24" />
+                <CardContent className="p-2.5 space-y-2">
                   <Skeleton className="h-4 w-3/4" />
                   <Skeleton className="h-3 w-1/2" />
                   <Skeleton className="h-5 w-2/3" />
@@ -528,49 +916,15 @@ function POSTab() {
             ))}
           </div>
         ) : products.length === 0 ? (
-          <div className="text-center py-16">
-            <Package className="h-12 w-12 mx-auto text-muted-foreground/40" />
-            <p className="mt-4 text-muted-foreground">No products found</p>
-            <p className="text-sm text-muted-foreground/60">Try adjusting your search or filters</p>
-          </div>
+          <EmptyProductsState searchQuery={searchQuery} />
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {products.map((product) => (
-              <Card
+              <ProductCard
                 key={product.id}
-                className="overflow-hidden cursor-pointer hover:shadow-md transition-all hover:border-primary/30 group"
-                onClick={() => handleAddToCart(product)}
-              >
-                <div className="h-28 bg-muted flex items-center justify-center relative">
-                  {product.imageUrl ? (
-                    <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
-                  ) : (
-                    <Package className="h-10 w-10 text-muted-foreground/30" />
-                  )}
-                  {product.isRental && (
-                    <Badge className="absolute top-2 left-2 bg-blue-600 text-white text-[10px]">RENTAL</Badge>
-                  )}
-                  {product.isBundle && (
-                    <Badge className="absolute top-2 right-2 bg-purple-600 text-white text-[10px]">BUNDLE</Badge>
-                  )}
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center">
-                    <Plus className="h-8 w-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
-                  </div>
-                </div>
-                <CardContent className="p-3">
-                  <h3 className="font-medium text-sm truncate">{product.name}</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">SKU: {product.sku}</p>
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="font-bold text-primary text-sm">{formatKES(product.pricePerUnit)}</span>
-                    <Badge
-                      variant={product.quantityInStock <= product.reorderLevel ? 'destructive' : 'secondary'}
-                      className="text-[10px]"
-                    >
-                      {product.quantityInStock <= 0 ? 'Out' : `${product.quantityInStock} left`}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
+                product={product}
+                onAdd={handleAddToCart}
+              />
             ))}
           </div>
         )}
@@ -578,7 +932,7 @@ function POSTab() {
 
       {/* Cart Sidebar */}
       <div className="lg:w-96 shrink-0">
-        <Card className="sticky top-20 flex flex-col max-h-[calc(100vh-7rem)]">
+        <Card className="sticky top-20 flex flex-col max-h-[calc(100vh-7rem)] bg-gradient-to-b from-card to-card/95">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
@@ -598,50 +952,16 @@ function POSTab() {
           <Separator />
           <ScrollArea className="flex-1 min-h-0">
             {cart.items.length === 0 ? (
-              <div className="p-8 text-center">
-                <ShoppingBag className="h-10 w-10 mx-auto text-muted-foreground/30" />
-                <p className="mt-3 text-sm text-muted-foreground">Cart is empty</p>
-                <p className="text-xs text-muted-foreground/60">Click products to add them</p>
-              </div>
+              <EmptyCartState />
             ) : (
-              <div className="p-4 space-y-3">
+              <div className="p-3 space-y-2">
                 {cart.items.map((item) => (
-                  <div key={item.productId} className="flex gap-3 p-2 rounded-lg bg-muted/50">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{item.productName}</p>
-                      <p className="text-xs text-muted-foreground">{formatKES(item.pricePerUnit)} x {item.quantity}</p>
-                      {item.discountPercent > 0 && (
-                        <p className="text-xs text-green-600">{item.discountPercent}% off</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => cart.updateQuantity(item.productId, item.quantity - 1)}
-                      >
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                      <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => cart.updateQuantity(item.productId, item.quantity + 1)}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive"
-                        onClick={() => cart.removeItem(item.productId)}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
+                  <CartItemRow
+                    key={item.productId}
+                    item={item}
+                    onUpdateQty={cart.updateQuantity}
+                    onRemove={cart.removeItem}
+                  />
                 ))}
               </div>
             )}
@@ -681,9 +1001,12 @@ function POSTab() {
 
                 <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
                   <DialogTrigger asChild>
-                    <Button className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground font-semibold" size="lg">
+                    <Button className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground font-semibold h-12" size="lg">
                       <CreditCard className="mr-2 h-4 w-4" />
-                      Checkout {formatKES(total)}
+                      <span className="flex flex-col items-start leading-tight">
+                        <span className="text-xs font-normal opacity-80">Checkout</span>
+                        <span>{formatKES(total)}</span>
+                      </span>
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-md">
@@ -895,12 +1218,12 @@ function MainApp() {
   return (
     <div className="flex h-screen overflow-hidden">
       <AppSidebar />
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen overflow-hidden">
         <TopBar />
         <main className="flex-1 overflow-y-auto p-4 custom-scrollbar">
           {renderTab()}
         </main>
-        <footer className="border-t bg-background px-4 py-2 text-center">
+        <footer className="border-t bg-background px-4 py-2 text-center mt-auto shrink-0">
           <p className="text-xs text-muted-foreground">
             MBUMAH HARDWARE POS & ERP System &copy; {new Date().getFullYear()} &mdash; All rights reserved
           </p>

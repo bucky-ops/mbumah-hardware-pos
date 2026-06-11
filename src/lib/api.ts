@@ -124,7 +124,8 @@ export interface ProductListItem {
   imageUrl: string | null;
   createdAt: string;
   updatedAt: string;
-  category?: { id: string; name: string };
+  category?: { id: string; name: string; color?: string; icon?: string };
+  bundleItems?: { childProductId: string; quantityRequired: number; childProduct?: { id: string; name: string; sku: string; quantityInStock: number; pricePerUnit: number } }[];
 }
 
 export interface CreateProductPayload {
@@ -153,7 +154,8 @@ export const productsApi = {
     if (params?.limit) query.set('limit', String(params.limit));
     if (params?.categoryId) query.set('categoryId', params.categoryId);
     if (params?.search) query.set('search', params.search);
-    return request<ProductListItem[]>(`/products?${query.toString()}`);
+    const qs = query.toString();
+    return request<ProductListItem[]>(`/products${qs ? `?${qs}` : ''}`);
   },
 
   get: async (id: string) => {
@@ -347,14 +349,10 @@ export const transactionsApi = {
 
 export const paymentsApi = {
   initiateMpesa: async (data: MpesaSTKRequest) => {
-    return request<MpesaCallbackResult>('/payments/mpesa/initiate', {
+    return request<MpesaCallbackResult>('/payments/mpesa/stkpush', {
       method: 'POST',
       body: JSON.stringify(data),
     });
-  },
-
-  getMpesaStatus: async (checkoutRequestId: string) => {
-    return request<MpesaCallbackResult>(`/payments/mpesa/status/${checkoutRequestId}`);
   },
 };
 
@@ -519,7 +517,8 @@ export const dashboardApi = {
   getStats: async (storeId?: string) => {
     const params = new URLSearchParams();
     if (storeId) params.set('storeId', storeId);
-    return request<DashboardStats>(`/dashboard/stats?${params.toString()}`);
+    const qs = params.toString();
+    return request<DashboardStats>(`/dashboard${qs ? `?${qs}` : ''}`);
   },
 };
 

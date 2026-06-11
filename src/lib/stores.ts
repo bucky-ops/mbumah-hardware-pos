@@ -201,6 +201,6 @@ export const useAppStore = create<AppState>((set) => ({
   sidebarOpen: false,
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
-  currentStoreId: 'store_1',
+  currentStoreId: 'store_juja_main',
   setCurrentStoreId: (id) => set({ currentStoreId: id }),
 }));
