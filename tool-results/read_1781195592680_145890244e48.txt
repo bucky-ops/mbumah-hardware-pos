@@ -1,0 +1,502 @@
+     1→   600→   600→                <ShoppingBag className="h-10 w-10 mx-auto text-muted-foreground/30" />
+     2→   601→   601→                <p className="mt-3 text-sm text-muted-foreground">Cart is empty</p>
+     3→   602→   602→                <p className="text-xs text-muted-foreground/60">Click products to add them</p>
+     4→   603→   603→              </div>
+     5→   604→   604→            ) : (
+     6→   605→   605→              <div className="p-4 space-y-3">
+     7→   606→   606→                {cart.items.map((item) => (
+     8→   607→   607→                  <div key={item.productId} className="flex gap-3 p-2 rounded-lg bg-muted/50">
+     9→   608→   608→                    <div className="flex-1 min-w-0">
+    10→   609→   609→                      <p className="text-sm font-medium truncate">{item.productName}</p>
+    11→   610→   610→                      <p className="text-xs text-muted-foreground">{formatKES(item.pricePerUnit)} x {item.quantity}</p>
+    12→   611→   611→                      {item.discountPercent > 0 && (
+    13→   612→   612→                        <p className="text-xs text-green-600">{item.discountPercent}% off</p>
+    14→   613→   613→                      )}
+    15→   614→   614→                    </div>
+    16→   615→   615→                    <div className="flex items-center gap-1">
+    17→   616→   616→                      <Button
+    18→   617→   617→                        variant="outline"
+    19→   618→   618→                        size="icon"
+    20→   619→   619→                        className="h-7 w-7"
+    21→   620→   620→                        onClick={() => cart.updateQuantity(item.productId, item.quantity - 1)}
+    22→   621→   621→                      >
+    23→   622→   622→                        <Minus className="h-3 w-3" />
+    24→   623→   623→                      </Button>
+    25→   624→   624→                      <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
+    26→   625→   625→                      <Button
+    27→   626→   626→                        variant="outline"
+    28→   627→   627→                        size="icon"
+    29→   628→   628→                        className="h-7 w-7"
+    30→   629→   629→                        onClick={() => cart.updateQuantity(item.productId, item.quantity + 1)}
+    31→   630→   630→                      >
+    32→   631→   631→                        <Plus className="h-3 w-3" />
+    33→   632→   632→                      </Button>
+    34→   633→   633→                    </div>
+    35→   634→   634→                    <div className="text-right min-w-[70px]">
+    36→   635→   635→                      <p className="text-sm font-semibold">{formatKES(item.lineTotal)}</p>
+    37→   636→   636→                      <Button
+    38→   637→   637→                        variant="ghost"
+    39→   638→   638→                        size="sm"
+    40→   639→   639→                        className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
+    41→   640→   640→                        onClick={() => cart.removeItem(item.productId)}
+    42→   641→   641→                      >
+    43→   642→   642→                        <X className="h-3 w-3" />
+    44→   643→   643→                      </Button>
+    45→   644→   644→                    </div>
+    46→   645→   645→                  </div>
+    47→   646→   646→                ))}
+    48→   647→   647→              </div>
+    49→   648→   648→            )}
+    50→   649→   649→          </ScrollArea>
+    51→   650→   650→          {cart.items.length > 0 && (
+    52→   651→   651→            <>
+    53→   652→   652→              <Separator />
+    54→   653→   653→              <div className="p-4 space-y-3">
+    55→   654→   654→                {/* Customer Selection */}
+    56→   655→   655→                <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+    57→   656→   656→                  <SelectTrigger>
+    58→   657→   657→                    <SelectValue placeholder="Walk-in Customer" />
+    59→   658→   658→                  </SelectTrigger>
+    60→   659→   659→                  <SelectContent>
+    61→   660→   660→                    <SelectItem value="walk-in">Walk-in Customer</SelectItem>
+    62→   661→   661→                    {customers.map((c) => (
+    63→   662→   662→                      <SelectItem key={c.id} value={c.id}>{c.name}{c.phone ? ` - ${c.phone}` : ''}</SelectItem>
+    64→   663→   663→                    ))}
+    65→   664→   664→                  </SelectContent>
+    66→   665→   665→                </Select>
+    67→   666→   666→
+    68→   667→   667→                <div className="space-y-1 text-sm">
+    69→   668→   668→                  <div className="flex justify-between">
+    70→   669→   669→                    <span className="text-muted-foreground">Subtotal</span>
+    71→   670→   670→                    <span>{formatKES(subtotal)}</span>
+    72→   671→   671→                  </div>
+    73→   672→   672→                  <div className="flex justify-between">
+    74→   673→   673→                    <span className="text-muted-foreground">VAT (16%)</span>
+    75→   674→   674→                    <span>{formatKES(tax)}</span>
+    76→   675→   675→                  </div>
+    77→   676→   676→                  <Separator />
+    78→   677→   677→                  <div className="flex justify-between font-bold text-base">
+    79→   678→   678→                    <span>Total</span>
+    80→   679→   679→                    <span className="text-primary">{formatKES(total)}</span>
+    81→   680→   680→                  </div>
+    82→   681→   681→                </div>
+    83→   682→   682→
+    84→   683→   683→                <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
+    85→   684→   684→                  <DialogTrigger asChild>
+    86→   685→   685→                    <Button className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground font-semibold" size="lg">
+    87→   686→   686→                      <CreditCard className="mr-2 h-4 w-4" />
+    88→   687→   687→                      Checkout {formatKES(total)}
+    89→   688→   688→                    </Button>
+    90→   689→   689→                  </DialogTrigger>
+    91→   690→   690→                  <DialogContent className="sm:max-w-md">
+    92→   691→   691→                    <DialogHeader>
+    93→   692→   692→                      <DialogTitle>Complete Payment</DialogTitle>
+    94→   693→   693→                      <DialogDescription>
+    95→   694→   694→                        Total: <span className="font-bold text-primary">{formatKES(total)}</span>
+    96→   695→   695→                      </DialogDescription>
+    97→   696→   696→                    </DialogHeader>
+    98→   697→   697→                    <div className="space-y-4">
+    99→   698→   698→                      <div>
+   100→   699→   699→                        <Label className="text-sm font-medium">Payment Method</Label>
+   101→   700→   700→                        <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)} className="grid grid-cols-3 gap-2 mt-2">
+   102→   701→   701→                          <div>
+   103→   702→   702→                            <RadioGroupItem value="CASH" id="cash" className="peer sr-only" />
+   104→   703→   703→                            <Label htmlFor="cash" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+   105→   704→   704→                              <Banknote className="h-5 w-5" />
+   106→   705→   705→                              <span className="text-xs font-medium">Cash</span>
+   107→   706→   706→                            </Label>
+   108→   707→   707→                          </div>
+   109→   708→   708→                          <div>
+   110→   709→   709→                            <RadioGroupItem value="MPESA" id="mpesa" className="peer sr-only" />
+   111→   710→   710→                            <Label htmlFor="mpesa" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+   112→   711→   711→                              <Smartphone className="h-5 w-5" />
+   113→   712→   712→                              <span className="text-xs font-medium">M-Pesa</span>
+   114→   713→   713→                            </Label>
+   115→   714→   714→                          </div>
+   116→   715→   715→                          <div>
+   117→   716→   716→                            <RadioGroupItem value="DEBT" id="debt" className="peer sr-only" />
+   118→   717→   717→                            <Label htmlFor="debt" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+   119→   718→   718→                              <Wallet className="h-5 w-5" />
+   120→   719→   719→                              <span className="text-xs font-medium">Debt</span>
+   121→   720→   720→                            </Label>
+   122→   721→   721→                          </div>
+   123→   722→   722→                        </RadioGroup>
+   124→   723→   723→                      </div>
+   125→   724→   724→
+   126→   725→   725→                      {paymentMethod === 'CASH' && (
+   127→   726→   726→                        <div className="space-y-3">
+   128→   727→   727→                          <div>
+   129→   728→   728→                            <Label htmlFor="cashReceived">Cash Received</Label>
+   130→   729→   729→                            <Input
+   131→   730→   730→                              id="cashReceived"
+   132→   731→   731→                              type="number"
+   133→   732→   732→                              placeholder="0"
+   134→   733→   733→                              value={cashReceived}
+   135→   734→   734→                              onChange={(e) => setCashReceived(e.target.value)}
+   136→   735→   735→                              className="text-lg font-semibold mt-1"
+   137→   736→   736→                            />
+   138→   737→   737→                          </div>
+   139→   738→   738→                          {change > 0 && (
+   140→   739→   739→                            <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg">
+   141→   740→   740→                              <p className="text-sm font-medium text-green-700 dark:text-green-400">
+   142→   741→   741→                                Change: {formatKES(change)}
+   143→   742→   742→                              </p>
+   144→   743→   743→                            </div>
+   145→   744→   744→                          )}
+   146→   745→   745→                          {cashReceived && Number(cashReceived) < total && (
+   147→   746→   746→                            <Alert variant="destructive">
+   148→   747→   747→                              <AlertCircle className="h-4 w-4" />
+   149→   748→   748→                              <AlertTitle>Insufficient amount</AlertTitle>
+   150→   749→   749→                              <AlertDescription>Need {formatKES(total - Number(cashReceived))} more</AlertDescription>
+   151→   750→   750→                            </Alert>
+   152→   751→   751→                          )}
+   153→   752→   752→                        </div>
+   154→   753→   753→                      )}
+   155→   754→   754→
+   156→   755→   755→                      {paymentMethod === 'DEBT' && !selectedCustomer && (
+   157→   756→   756→                        <Alert>
+   158→   757→   757→                          <AlertCircle className="h-4 w-4" />
+   159→   758→   758→                          <AlertTitle>Customer Required</AlertTitle>
+   160→   759→   759→                          <AlertDescription>Please select a customer before proceeding with debt payment.</AlertDescription>
+   161→   760→   760→                        </Alert>
+   162→   761→   761→                      )}
+   163→   762→   762→
+   164→   763→   763→                      {paymentMethod === 'MPESA' && (
+   165→   764→   764→                        <div>
+   166→   765→   765→                          <Label htmlFor="mpesaPhone">M-Pesa Phone Number</Label>
+   167→   766→   766→                          <Input
+   168→   767→   767→                            id="mpesaPhone"
+   169→   768→   768→                            type="tel"
+   170→   769→   769→                            placeholder="0712 345 678"
+   171→   770→   770→                            value={mpesaPhone}
+   172→   771→   771→                            onChange={(e) => setMpesaPhone(e.target.value)}
+   173→   772→   772→                            className="mt-1"
+   174→   773→   773→                          />
+   175→   774→   774→                        </div>
+   176→   775→   775→                      )}
+   177→   776→   776→                    </div>
+   178→   777→   777→                    <DialogFooter>
+   179→   778→   778→                      <Button variant="outline" onClick={() => setCheckoutOpen(false)}>Cancel</Button>
+   180→   779→   779→                      <Button
+   181→   780→   780→                        onClick={handleCheckout}
+   182→   781→   781→                        disabled={
+   183→   782→   782→                          checkoutMutation.isPending ||
+   184→   783→   783→                          (paymentMethod === 'CASH' && (!cashReceived || Number(cashReceived) < total)) ||
+   185→   784→   784→                          (paymentMethod === 'DEBT' && !selectedCustomer)
+   186→   785→   785→                        }
+   187→   786→   786→                        className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+   188→   787→   787→                      >
+   189→   788→   788→                        {checkoutMutation.isPending ? (
+   190→   789→   789→                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
+   191→   790→   790→                        ) : (
+   192→   791→   791→                          <><CheckCircle className="mr-2 h-4 w-4" />Complete Sale</>
+   193→   792→   792→                        )}
+   194→   793→   793→                      </Button>
+   195→   794→   794→                    </DialogFooter>
+   196→   795→   795→                  </DialogContent>
+   197→   796→   796→                </Dialog>
+   198→   797→   797→              </div>
+   199→   798→   798→            </>
+   200→   799→   799→          )}
+   201→   800→   800→        </Card>
+   202→   801→   801→      </div>
+   203→   802→   802→
+   204→   803→   803→      {/* M-Pesa STK Push Dialog */}
+   205→   804→   804→      <Dialog open={mpesaDialogOpen} onOpenChange={setMpesaDialogOpen}>
+   206→   805→   805→        <DialogContent className="sm:max-w-sm">
+   207→   806→   806→          <DialogHeader>
+   208→   807→   807→            <DialogTitle className="flex items-center gap-2">
+   209→   808→   808→              <Smartphone className="h-5 w-5 text-green-600" />
+   210→   809→   809→              M-Pesa Payment
+   211→   810→   810→            </DialogTitle>
+   212→   811→   811→            <DialogDescription>
+   213→   812→   812→              Amount: <span className="font-bold">{formatKES(total)}</span>
+   214→   813→   813→            </DialogDescription>
+   215→   814→   814→          </DialogHeader>
+   216→   815→   815→          {mpesaStatus === 'idle' && (
+   217→   816→   816→            <div className="space-y-4">
+   218→   817→   817→              <div>
+   219→   818→   818→                <Label htmlFor="mpesaPhoneDialog">Phone Number</Label>
+   220→   819→   819→                <Input
+   221→   820→   820→                  id="mpesaPhoneDialog"
+   222→   821→   821→                  type="tel"
+   223→   822→   822→                  placeholder="0712 345 678"
+   224→   823→   823→                  value={mpesaPhone}
+   225→   824→   824→                  onChange={(e) => setMpesaPhone(e.target.value)}
+   226→   825→   825→                />
+   227→   826→   826→              </div>
+   228→   827→   827→              <Button
+   229→   828→   828→                className="w-full bg-green-600 hover:bg-green-700 text-white"
+   230→   829→   829→                onClick={handleMpesaPay}
+   231→   830→   830→                disabled={mpesaMutation.isPending}
+   232→   831→   831→              >
+   233→   832→   832→                {mpesaMutation.isPending ? (
+   234→   833→   833→                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending STK Push...</>
+   235→   834→   834→                ) : (
+   236→   835→   835→                  'Send STK Push'
+   237→   836→   836→                )}
+   238→   837→   837→              </Button>
+   239→   838→   838→            </div>
+   240→   839→   839→          )}
+   241→   840→   840→          {mpesaStatus === 'processing' && (
+   242→   841→   841→            <div className="text-center py-8 space-y-4">
+   243→   842→   842→              <div className="animate-pulse">
+   244→   843→   843→                <Smartphone className="h-16 w-16 mx-auto text-green-600" />
+   245→   844→   844→              </div>
+   246→   845→   845→              <div>
+   247→   846→   846→                <p className="font-semibold">Waiting for M-Pesa Confirmation</p>
+   248→   847→   847→                <p className="text-sm text-muted-foreground mt-1">
+   249→   848→   848→                  Please enter your M-Pesa PIN on your phone
+   250→   849→   849→                </p>
+   251→   850→   850→              </div>
+   252→   851→   851→              <Loader2 className="h-6 w-6 animate-spin mx-auto text-green-600" />
+   253→   852→   852→            </div>
+   254→   853→   853→          )}
+   255→   854→   854→          {mpesaStatus === 'success' && (
+   256→   855→   855→            <div className="text-center py-8 space-y-4">
+   257→   856→   856→              <CheckCircle className="h-16 w-16 mx-auto text-green-600" />
+   258→   857→   857→              <p className="font-semibold text-green-600">Payment Successful!</p>
+   259→   858→   858→              <Button onClick={() => { setMpesaDialogOpen(false); setMpesaStatus('idle'); }}>
+   260→   859→   859→                Close
+   261→   860→   860→              </Button>
+   262→   861→   861→            </div>
+   263→   862→   862→          )}
+   264→   863→   863→          {mpesaStatus === 'failed' && (
+   265→   864→   864→            <div className="text-center py-8 space-y-4">
+   266→   865→   865→              <AlertCircle className="h-16 w-16 mx-auto text-destructive" />
+   267→   866→   866→              <p className="font-semibold text-destructive">Payment Failed</p>
+   268→   867→   867→              <Button variant="outline" onClick={() => setMpesaStatus('idle')}>Try Again</Button>
+   269→   868→   868→            </div>
+   270→   869→   869→          )}
+   271→   870→   870→        </DialogContent>
+   272→   871→   871→      </Dialog>
+   273→   872→   872→    </div>
+   274→   873→   873→  );
+   275→   874→   874→}
+   276→   875→   875→
+   277→   876→   876→// ============================================================================
+   278→   877→   877→// INVENTORY TAB
+   279→   878→   878→// ============================================================================
+   280→   879→   879→
+   281→   880→   880→function InventoryTab() {
+   282→   881→   881→  const [searchQuery, setSearchQuery] = useState('');
+   283→   882→   882→  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+   284→   883→   883→  const [addProductOpen, setAddProductOpen] = useState(false);
+   285→   884→   884→  const [editProduct, setEditProduct] = useState<ProductListItem | null>(null);
+   286→   885→   885→  const [stockFilter, setStockFilter] = useState<string>('all');
+   287→   886→   886→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+   288→   887→   887→
+   289→   888→   888→  const [newProduct, setNewProduct] = useState({
+   290→   889→   889→    name: '', sku: '', pricePerUnit: '', costPrice: '', quantityInStock: '',
+   291→   890→   890→    reorderLevel: '10', unitType: 'PIECE', categoryId: '', description: '',
+   292→   891→   891→    isRental: false, isBundle: false,
+   293→   892→   892→  });
+   294→   893→   893→
+   295→   894→   894→  const { data: productsData, isLoading } = useQuery({
+   296→   895→   895→    queryKey: ['products', currentStoreId, searchQuery, selectedCategory, stockFilter],
+   297→   896→   896→    queryFn: () => productsApi.list({
+   298→   897→   897→      storeId: currentStoreId,
+   299→   898→   898→      search: searchQuery || undefined,
+   300→   899→   899→      limit: 200,
+   301→   900→   900→      ...(selectedCategory !== 'all' ? { categoryId: selectedCategory } : {}),
+   302→   901→   901→    }),
+   303→   902→   902→  });
+   304→   903→   903→
+   305→   904→   904→  const { data: categoriesData } = useQuery({
+   306→   905→   905→    queryKey: ['categories', currentStoreId],
+   307→   906→   906→    queryFn: () => categoriesApi.list(currentStoreId),
+   308→   907→   907→  });
+   309→   908→   908→
+   310→   909→   909→  const createProductMutation = useMutation({
+   311→   910→   910→    mutationFn: productsApi.create,
+   312→   911→   911→    onSuccess: () => {
+   313→   912→   912→      toast.success('Product created successfully');
+   314→   913→   913→      setAddProductOpen(false);
+   315→   914→   914→      setNewProduct({ name: '', sku: '', pricePerUnit: '', costPrice: '', quantityInStock: '', reorderLevel: '10', unitType: 'PIECE', categoryId: '', description: '', isRental: false, isBundle: false });
+   316→   915→   915→    },
+   317→   916→   916→    onError: (err: Error) => toast.error(err.message),
+   318→   917→   917→  });
+   319→   918→   918→
+   320→   919→   919→  const updateProductMutation = useMutation({
+   321→   920→   920→    mutationFn: ({ id, data }: { id: string; data: Partial<ProductListItem> }) => productsApi.update(id, data),
+   322→   921→   921→    onSuccess: () => {
+   323→   922→   922→      toast.success('Product updated');
+   324→   923→   923→      setEditProduct(null);
+   325→   924→   924→    },
+   326→   925→   925→    onError: (err: Error) => toast.error(err.message),
+   327→   926→   926→  });
+   328→   927→   927→
+   329→   928→   928→  const deleteProductMutation = useMutation({
+   330→   929→   929→    mutationFn: productsApi.delete,
+   331→   930→   930→    onSuccess: () => toast.success('Product deleted'),
+   332→   931→   931→    onError: (err: Error) => toast.error(err.message),
+   333→   932→   932→  });
+   334→   933→   933→
+   335→   934→   934→  const products = (productsData?.data || []).filter((p) => {
+   336→   935→   935→    if (stockFilter === 'low') return p.quantityInStock <= p.reorderLevel && p.quantityInStock > 0;
+   337→   936→   936→    if (stockFilter === 'out') return p.quantityInStock <= 0;
+   338→   937→   937→    if (stockFilter === 'ok') return p.quantityInStock > p.reorderLevel;
+   339→   938→   938→    return true;
+   340→   939→   939→  });
+   341→   940→   940→
+   342→   941→   941→  const categories = categoriesData?.data || [];
+   343→   942→   942→  const lowStockCount = (productsData?.data || []).filter(p => p.quantityInStock <= p.reorderLevel && p.quantityInStock > 0).length;
+   344→   943→   943→  const outOfStockCount = (productsData?.data || []).filter(p => p.quantityInStock <= 0).length;
+   345→   944→   944→  const totalInventoryValue = (productsData?.data || []).reduce((sum, p) => sum + (p.costPrice * p.quantityInStock), 0);
+   346→   945→   945→
+   347→   946→   946→  const handleCreateProduct = () => {
+   348→   947→   947→    createProductMutation.mutate({
+   349→   948→   948→      storeId: currentStoreId,
+   350→   949→   949→      name: newProduct.name,
+   351→   950→   950→      sku: newProduct.sku,
+   352→   951→   951→      pricePerUnit: Number(newProduct.pricePerUnit),
+   353→   952→   952→      costPrice: Number(newProduct.costPrice),
+   354→   953→   953→      quantityInStock: Number(newProduct.quantityInStock),
+   355→   954→   954→      reorderLevel: Number(newProduct.reorderLevel),
+   356→   955→   955→      unitType: newProduct.unitType,
+   357→   956→   956→      categoryId: newProduct.categoryId || undefined,
+   358→   957→   957→      description: newProduct.description || undefined,
+   359→   958→   958→      isRental: newProduct.isRental,
+   360→   959→   959→      isBundle: newProduct.isBundle,
+   361→   960→   960→    });
+   362→   961→   961→  };
+   363→   962→   962→
+   364→   963→   963→  return (
+   365→   964→   964→    <div className="space-y-4">
+   366→   965→   965→      {/* Stats Cards */}
+   367→   966→   966→      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   368→   967→   967→        <Card>
+   369→   968→   968→          <CardContent className="p-4">
+   370→   969→   969→            <div className="flex items-center gap-3">
+   371→   970→   970→              <div className="p-2 rounded-lg bg-primary/10"><Package className="h-5 w-5 text-primary" /></div>
+   372→   971→   971→              <div>
+   373→   972→   972→                <p className="text-sm text-muted-foreground">Total Products</p>
+   374→   973→   973→                <p className="text-xl font-bold">{productsData?.data?.length || 0}</p>
+   375→   974→   974→              </div>
+   376→   975→   975→            </div>
+   377→   976→   976→          </CardContent>
+   378→   977→   977→        </Card>
+   379→   978→   978→        <Card>
+   380→   979→   979→          <CardContent className="p-4">
+   381→   980→   980→            <div className="flex items-center gap-3">
+   382→   981→   981→              <div className="p-2 rounded-lg bg-yellow-100 dark:bg-yellow-900/30"><AlertTriangle className="h-5 w-5 text-yellow-600" /></div>
+   383→   982→   982→              <div>
+   384→   983→   983→                <p className="text-sm text-muted-foreground">Low Stock</p>
+   385→   984→   984→                <p className="text-xl font-bold">{lowStockCount}</p>
+   386→   985→   985→              </div>
+   387→   986→   986→            </div>
+   388→   987→   987→          </CardContent>
+   389→   988→   988→        </Card>
+   390→   989→   989→        <Card>
+   391→   990→   990→          <CardContent className="p-4">
+   392→   991→   991→            <div className="flex items-center gap-3">
+   393→   992→   992→              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30"><AlertCircle className="h-5 w-5 text-red-600" /></div>
+   394→   993→   993→              <div>
+   395→   994→   994→                <p className="text-sm text-muted-foreground">Out of Stock</p>
+   396→   995→   995→                <p className="text-xl font-bold">{outOfStockCount}</p>
+   397→   996→   996→              </div>
+   398→   997→   997→            </div>
+   399→   998→   998→          </CardContent>
+   400→   999→   999→        </Card>
+   401→  1000→  1000→        <Card>
+   402→  1001→  1001→          <CardContent className="p-4">
+   403→  1002→  1002→            <div className="flex items-center gap-3">
+   404→  1003→  1003→              <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30"><DollarSign className="h-5 w-5 text-green-600" /></div>
+   405→  1004→  1004→              <div>
+   406→  1005→  1005→                <p className="text-sm text-muted-foreground">Inventory Value</p>
+   407→  1006→  1006→                <p className="text-xl font-bold">{formatKES(totalInventoryValue)}</p>
+   408→  1007→  1007→              </div>
+   409→  1008→  1008→            </div>
+   410→  1009→  1009→          </CardContent>
+   411→  1010→  1010→        </Card>
+   412→  1011→  1011→      </div>
+   413→  1012→  1012→
+   414→  1013→  1013→      {/* Toolbar */}
+   415→  1014→  1014→      <div className="flex flex-col sm:flex-row gap-3">
+   416→  1015→  1015→        <div className="relative flex-1">
+   417→  1016→  1016→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   418→  1017→  1017→          <Input placeholder="Search products..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
+   419→  1018→  1018→        </div>
+   420→  1019→  1019→        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+   421→  1020→  1020→          <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="All Categories" /></SelectTrigger>
+   422→  1021→  1021→          <SelectContent>
+   423→  1022→  1022→            <SelectItem value="all">All Categories</SelectItem>
+   424→  1023→  1023→            {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+   425→  1024→  1024→          </SelectContent>
+   426→  1025→  1025→        </Select>
+   427→  1026→  1026→        <Select value={stockFilter} onValueChange={setStockFilter}>
+   428→  1027→  1027→          <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="Stock Status" /></SelectTrigger>
+   429→  1028→  1028→          <SelectContent>
+   430→  1029→  1029→            <SelectItem value="all">All Stock</SelectItem>
+   431→  1030→  1030→            <SelectItem value="ok">In Stock</SelectItem>
+   432→  1031→  1031→            <SelectItem value="low">Low Stock</SelectItem>
+   433→  1032→  1032→            <SelectItem value="out">Out of Stock</SelectItem>
+   434→  1033→  1033→          </SelectContent>
+   435→  1034→  1034→        </Select>
+   436→  1035→  1035→        <Dialog open={addProductOpen} onOpenChange={setAddProductOpen}>
+   437→  1036→  1036→          <DialogTrigger asChild>
+   438→  1037→  1037→            <Button className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground">
+   439→  1038→  1038→              <Plus className="mr-2 h-4 w-4" /> Add Product
+   440→  1039→  1039→            </Button>
+   441→  1040→  1040→          </DialogTrigger>
+   442→  1041→  1041→          <DialogContent className="sm:max-w-lg">
+   443→  1042→  1042→            <DialogHeader>
+   444→  1043→  1043→              <DialogTitle>Add New Product</DialogTitle>
+   445→  1044→  1044→              <DialogDescription>Add a product to your inventory</DialogDescription>
+   446→  1045→  1045→            </DialogHeader>
+   447→  1046→  1046→            <div className="grid grid-cols-2 gap-4">
+   448→  1047→  1047→              <div className="space-y-2 col-span-2">
+   449→  1048→  1048→                <Label>Product Name</Label>
+   450→  1049→  1049→                <Input value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} placeholder="e.g. 20mm Nails" />
+   451→  1050→  1050→              </div>
+   452→  1051→  1051→              <div className="space-y-2">
+   453→  1052→  1052→                <Label>SKU</Label>
+   454→  1053→  1053→                <Input value={newProduct.sku} onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })} placeholder="e.g. NAIL-20" />
+   455→  1054→  1054→              </div>
+   456→  1055→  1055→              <div className="space-y-2">
+   457→  1056→  1056→                <Label>Category</Label>
+   458→  1057→  1057→                <Select value={newProduct.categoryId} onValueChange={(v) => setNewProduct({ ...newProduct, categoryId: v })}>
+   459→  1058→  1058→                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+   460→  1059→  1059→                  <SelectContent>
+   461→  1060→  1060→                    {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+   462→  1061→  1061→                  </SelectContent>
+   463→  1062→  1062→                </Select>
+   464→  1063→  1063→              </div>
+   465→  1064→  1064→              <div className="space-y-2">
+   466→  1065→  1065→                <Label>Selling Price (KES)</Label>
+   467→  1066→  1066→                <Input type="number" value={newProduct.pricePerUnit} onChange={(e) => setNewProduct({ ...newProduct, pricePerUnit: e.target.value })} placeholder="0" />
+   468→  1067→  1067→              </div>
+   469→  1068→  1068→              <div className="space-y-2">
+   470→  1069→  1069→                <Label>Cost Price (KES)</Label>
+   471→  1070→  1070→                <Input type="number" value={newProduct.costPrice} onChange={(e) => setNewProduct({ ...newProduct, costPrice: e.target.value })} placeholder="0" />
+   472→  1071→  1071→              </div>
+   473→  1072→  1072→              <div className="space-y-2">
+   474→  1073→  1073→                <Label>Quantity in Stock</Label>
+   475→  1074→  1074→                <Input type="number" value={newProduct.quantityInStock} onChange={(e) => setNewProduct({ ...newProduct, quantityInStock: e.target.value })} placeholder="0" />
+   476→  1075→  1075→              </div>
+   477→  1076→  1076→              <div className="space-y-2">
+   478→  1077→  1077→                <Label>Reorder Level</Label>
+   479→  1078→  1078→                <Input type="number" value={newProduct.reorderLevel} onChange={(e) => setNewProduct({ ...newProduct, reorderLevel: e.target.value })} placeholder="10" />
+   480→  1079→  1079→              </div>
+   481→  1080→  1080→              <div className="space-y-2">
+   482→  1081→  1081→                <Label>Unit Type</Label>
+   483→  1082→  1082→                <Select value={newProduct.unitType} onValueChange={(v) => setNewProduct({ ...newProduct, unitType: v })}>
+   484→  1083→  1083→                  <SelectTrigger><SelectValue /></SelectTrigger>
+   485→  1084→  1084→                  <SelectContent>
+   486→  1085→  1085→                    <SelectItem value="PIECE">Piece</SelectItem>
+   487→  1086→  1086→                    <SelectItem value="KILOGRAM">Kilogram</SelectItem>
+   488→  1087→  1087→                    <SelectItem value="METER">Meter</SelectItem>
+   489→  1088→  1088→                    <SelectItem value="LITER">Liter</SelectItem>
+   490→  1089→  1089→                    <SelectItem value="BAG">Bag</SelectItem>
+   491→  1090→  1090→                    <SelectItem value="BOX">Box</SelectItem>
+   492→  1091→  1091→                    <SelectItem value="SET">Set</SelectItem>
+   493→  1092→  1092→                  </SelectContent>
+   494→  1093→  1093→                </Select>
+   495→  1094→  1094→              </div>
+   496→  1095→  1095→              <div className="flex items-center gap-4 pt-6">
+   497→  1096→  1096→                <div className="flex items-center gap-2">
+   498→  1097→  1097→                  <Checkbox id="rental" checked={newProduct.isRental} onCheckedChange={(v) => setNewProduct({ ...newProduct, isRental: !!v })} />
+   499→  1098→  1098→                  <Label htmlFor="rental" className="text-sm">Rental</Label>
+   500→  1099→  1099→                </div>
+
+[showing lines 1-500 of 502; use offset=501 with limit to continue reading]

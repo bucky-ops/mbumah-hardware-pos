@@ -1,0 +1,502 @@
+   600→   600→                <ShoppingBag className="h-10 w-10 mx-auto text-muted-foreground/30" />
+   601→   601→                <p className="mt-3 text-sm text-muted-foreground">Cart is empty</p>
+   602→   602→                <p className="text-xs text-muted-foreground/60">Click products to add them</p>
+   603→   603→              </div>
+   604→   604→            ) : (
+   605→   605→              <div className="p-4 space-y-3">
+   606→   606→                {cart.items.map((item) => (
+   607→   607→                  <div key={item.productId} className="flex gap-3 p-2 rounded-lg bg-muted/50">
+   608→   608→                    <div className="flex-1 min-w-0">
+   609→   609→                      <p className="text-sm font-medium truncate">{item.productName}</p>
+   610→   610→                      <p className="text-xs text-muted-foreground">{formatKES(item.pricePerUnit)} x {item.quantity}</p>
+   611→   611→                      {item.discountPercent > 0 && (
+   612→   612→                        <p className="text-xs text-green-600">{item.discountPercent}% off</p>
+   613→   613→                      )}
+   614→   614→                    </div>
+   615→   615→                    <div className="flex items-center gap-1">
+   616→   616→                      <Button
+   617→   617→                        variant="outline"
+   618→   618→                        size="icon"
+   619→   619→                        className="h-7 w-7"
+   620→   620→                        onClick={() => cart.updateQuantity(item.productId, item.quantity - 1)}
+   621→   621→                      >
+   622→   622→                        <Minus className="h-3 w-3" />
+   623→   623→                      </Button>
+   624→   624→                      <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
+   625→   625→                      <Button
+   626→   626→                        variant="outline"
+   627→   627→                        size="icon"
+   628→   628→                        className="h-7 w-7"
+   629→   629→                        onClick={() => cart.updateQuantity(item.productId, item.quantity + 1)}
+   630→   630→                      >
+   631→   631→                        <Plus className="h-3 w-3" />
+   632→   632→                      </Button>
+   633→   633→                    </div>
+   634→   634→                    <div className="text-right min-w-[70px]">
+   635→   635→                      <p className="text-sm font-semibold">{formatKES(item.lineTotal)}</p>
+   636→   636→                      <Button
+   637→   637→                        variant="ghost"
+   638→   638→                        size="sm"
+   639→   639→                        className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
+   640→   640→                        onClick={() => cart.removeItem(item.productId)}
+   641→   641→                      >
+   642→   642→                        <X className="h-3 w-3" />
+   643→   643→                      </Button>
+   644→   644→                    </div>
+   645→   645→                  </div>
+   646→   646→                ))}
+   647→   647→              </div>
+   648→   648→            )}
+   649→   649→          </ScrollArea>
+   650→   650→          {cart.items.length > 0 && (
+   651→   651→            <>
+   652→   652→              <Separator />
+   653→   653→              <div className="p-4 space-y-3">
+   654→   654→                {/* Customer Selection */}
+   655→   655→                <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+   656→   656→                  <SelectTrigger>
+   657→   657→                    <SelectValue placeholder="Walk-in Customer" />
+   658→   658→                  </SelectTrigger>
+   659→   659→                  <SelectContent>
+   660→   660→                    <SelectItem value="walk-in">Walk-in Customer</SelectItem>
+   661→   661→                    {customers.map((c) => (
+   662→   662→                      <SelectItem key={c.id} value={c.id}>{c.name}{c.phone ? ` - ${c.phone}` : ''}</SelectItem>
+   663→   663→                    ))}
+   664→   664→                  </SelectContent>
+   665→   665→                </Select>
+   666→   666→
+   667→   667→                <div className="space-y-1 text-sm">
+   668→   668→                  <div className="flex justify-between">
+   669→   669→                    <span className="text-muted-foreground">Subtotal</span>
+   670→   670→                    <span>{formatKES(subtotal)}</span>
+   671→   671→                  </div>
+   672→   672→                  <div className="flex justify-between">
+   673→   673→                    <span className="text-muted-foreground">VAT (16%)</span>
+   674→   674→                    <span>{formatKES(tax)}</span>
+   675→   675→                  </div>
+   676→   676→                  <Separator />
+   677→   677→                  <div className="flex justify-between font-bold text-base">
+   678→   678→                    <span>Total</span>
+   679→   679→                    <span className="text-primary">{formatKES(total)}</span>
+   680→   680→                  </div>
+   681→   681→                </div>
+   682→   682→
+   683→   683→                <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
+   684→   684→                  <DialogTrigger asChild>
+   685→   685→                    <Button className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground font-semibold" size="lg">
+   686→   686→                      <CreditCard className="mr-2 h-4 w-4" />
+   687→   687→                      Checkout {formatKES(total)}
+   688→   688→                    </Button>
+   689→   689→                  </DialogTrigger>
+   690→   690→                  <DialogContent className="sm:max-w-md">
+   691→   691→                    <DialogHeader>
+   692→   692→                      <DialogTitle>Complete Payment</DialogTitle>
+   693→   693→                      <DialogDescription>
+   694→   694→                        Total: <span className="font-bold text-primary">{formatKES(total)}</span>
+   695→   695→                      </DialogDescription>
+   696→   696→                    </DialogHeader>
+   697→   697→                    <div className="space-y-4">
+   698→   698→                      <div>
+   699→   699→                        <Label className="text-sm font-medium">Payment Method</Label>
+   700→   700→                        <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)} className="grid grid-cols-3 gap-2 mt-2">
+   701→   701→                          <div>
+   702→   702→                            <RadioGroupItem value="CASH" id="cash" className="peer sr-only" />
+   703→   703→                            <Label htmlFor="cash" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+   704→   704→                              <Banknote className="h-5 w-5" />
+   705→   705→                              <span className="text-xs font-medium">Cash</span>
+   706→   706→                            </Label>
+   707→   707→                          </div>
+   708→   708→                          <div>
+   709→   709→                            <RadioGroupItem value="MPESA" id="mpesa" className="peer sr-only" />
+   710→   710→                            <Label htmlFor="mpesa" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+   711→   711→                              <Smartphone className="h-5 w-5" />
+   712→   712→                              <span className="text-xs font-medium">M-Pesa</span>
+   713→   713→                            </Label>
+   714→   714→                          </div>
+   715→   715→                          <div>
+   716→   716→                            <RadioGroupItem value="DEBT" id="debt" className="peer sr-only" />
+   717→   717→                            <Label htmlFor="debt" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+   718→   718→                              <Wallet className="h-5 w-5" />
+   719→   719→                              <span className="text-xs font-medium">Debt</span>
+   720→   720→                            </Label>
+   721→   721→                          </div>
+   722→   722→                        </RadioGroup>
+   723→   723→                      </div>
+   724→   724→
+   725→   725→                      {paymentMethod === 'CASH' && (
+   726→   726→                        <div className="space-y-3">
+   727→   727→                          <div>
+   728→   728→                            <Label htmlFor="cashReceived">Cash Received</Label>
+   729→   729→                            <Input
+   730→   730→                              id="cashReceived"
+   731→   731→                              type="number"
+   732→   732→                              placeholder="0"
+   733→   733→                              value={cashReceived}
+   734→   734→                              onChange={(e) => setCashReceived(e.target.value)}
+   735→   735→                              className="text-lg font-semibold mt-1"
+   736→   736→                            />
+   737→   737→                          </div>
+   738→   738→                          {change > 0 && (
+   739→   739→                            <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg">
+   740→   740→                              <p className="text-sm font-medium text-green-700 dark:text-green-400">
+   741→   741→                                Change: {formatKES(change)}
+   742→   742→                              </p>
+   743→   743→                            </div>
+   744→   744→                          )}
+   745→   745→                          {cashReceived && Number(cashReceived) < total && (
+   746→   746→                            <Alert variant="destructive">
+   747→   747→                              <AlertCircle className="h-4 w-4" />
+   748→   748→                              <AlertTitle>Insufficient amount</AlertTitle>
+   749→   749→                              <AlertDescription>Need {formatKES(total - Number(cashReceived))} more</AlertDescription>
+   750→   750→                            </Alert>
+   751→   751→                          )}
+   752→   752→                        </div>
+   753→   753→                      )}
+   754→   754→
+   755→   755→                      {paymentMethod === 'DEBT' && !selectedCustomer && (
+   756→   756→                        <Alert>
+   757→   757→                          <AlertCircle className="h-4 w-4" />
+   758→   758→                          <AlertTitle>Customer Required</AlertTitle>
+   759→   759→                          <AlertDescription>Please select a customer before proceeding with debt payment.</AlertDescription>
+   760→   760→                        </Alert>
+   761→   761→                      )}
+   762→   762→
+   763→   763→                      {paymentMethod === 'MPESA' && (
+   764→   764→                        <div>
+   765→   765→                          <Label htmlFor="mpesaPhone">M-Pesa Phone Number</Label>
+   766→   766→                          <Input
+   767→   767→                            id="mpesaPhone"
+   768→   768→                            type="tel"
+   769→   769→                            placeholder="0712 345 678"
+   770→   770→                            value={mpesaPhone}
+   771→   771→                            onChange={(e) => setMpesaPhone(e.target.value)}
+   772→   772→                            className="mt-1"
+   773→   773→                          />
+   774→   774→                        </div>
+   775→   775→                      )}
+   776→   776→                    </div>
+   777→   777→                    <DialogFooter>
+   778→   778→                      <Button variant="outline" onClick={() => setCheckoutOpen(false)}>Cancel</Button>
+   779→   779→                      <Button
+   780→   780→                        onClick={handleCheckout}
+   781→   781→                        disabled={
+   782→   782→                          checkoutMutation.isPending ||
+   783→   783→                          (paymentMethod === 'CASH' && (!cashReceived || Number(cashReceived) < total)) ||
+   784→   784→                          (paymentMethod === 'DEBT' && !selectedCustomer)
+   785→   785→                        }
+   786→   786→                        className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+   787→   787→                      >
+   788→   788→                        {checkoutMutation.isPending ? (
+   789→   789→                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
+   790→   790→                        ) : (
+   791→   791→                          <><CheckCircle className="mr-2 h-4 w-4" />Complete Sale</>
+   792→   792→                        )}
+   793→   793→                      </Button>
+   794→   794→                    </DialogFooter>
+   795→   795→                  </DialogContent>
+   796→   796→                </Dialog>
+   797→   797→              </div>
+   798→   798→            </>
+   799→   799→          )}
+   800→   800→        </Card>
+   801→   801→      </div>
+   802→   802→
+   803→   803→      {/* M-Pesa STK Push Dialog */}
+   804→   804→      <Dialog open={mpesaDialogOpen} onOpenChange={setMpesaDialogOpen}>
+   805→   805→        <DialogContent className="sm:max-w-sm">
+   806→   806→          <DialogHeader>
+   807→   807→            <DialogTitle className="flex items-center gap-2">
+   808→   808→              <Smartphone className="h-5 w-5 text-green-600" />
+   809→   809→              M-Pesa Payment
+   810→   810→            </DialogTitle>
+   811→   811→            <DialogDescription>
+   812→   812→              Amount: <span className="font-bold">{formatKES(total)}</span>
+   813→   813→            </DialogDescription>
+   814→   814→          </DialogHeader>
+   815→   815→          {mpesaStatus === 'idle' && (
+   816→   816→            <div className="space-y-4">
+   817→   817→              <div>
+   818→   818→                <Label htmlFor="mpesaPhoneDialog">Phone Number</Label>
+   819→   819→                <Input
+   820→   820→                  id="mpesaPhoneDialog"
+   821→   821→                  type="tel"
+   822→   822→                  placeholder="0712 345 678"
+   823→   823→                  value={mpesaPhone}
+   824→   824→                  onChange={(e) => setMpesaPhone(e.target.value)}
+   825→   825→                />
+   826→   826→              </div>
+   827→   827→              <Button
+   828→   828→                className="w-full bg-green-600 hover:bg-green-700 text-white"
+   829→   829→                onClick={handleMpesaPay}
+   830→   830→                disabled={mpesaMutation.isPending}
+   831→   831→              >
+   832→   832→                {mpesaMutation.isPending ? (
+   833→   833→                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending STK Push...</>
+   834→   834→                ) : (
+   835→   835→                  'Send STK Push'
+   836→   836→                )}
+   837→   837→              </Button>
+   838→   838→            </div>
+   839→   839→          )}
+   840→   840→          {mpesaStatus === 'processing' && (
+   841→   841→            <div className="text-center py-8 space-y-4">
+   842→   842→              <div className="animate-pulse">
+   843→   843→                <Smartphone className="h-16 w-16 mx-auto text-green-600" />
+   844→   844→              </div>
+   845→   845→              <div>
+   846→   846→                <p className="font-semibold">Waiting for M-Pesa Confirmation</p>
+   847→   847→                <p className="text-sm text-muted-foreground mt-1">
+   848→   848→                  Please enter your M-Pesa PIN on your phone
+   849→   849→                </p>
+   850→   850→              </div>
+   851→   851→              <Loader2 className="h-6 w-6 animate-spin mx-auto text-green-600" />
+   852→   852→            </div>
+   853→   853→          )}
+   854→   854→          {mpesaStatus === 'success' && (
+   855→   855→            <div className="text-center py-8 space-y-4">
+   856→   856→              <CheckCircle className="h-16 w-16 mx-auto text-green-600" />
+   857→   857→              <p className="font-semibold text-green-600">Payment Successful!</p>
+   858→   858→              <Button onClick={() => { setMpesaDialogOpen(false); setMpesaStatus('idle'); }}>
+   859→   859→                Close
+   860→   860→              </Button>
+   861→   861→            </div>
+   862→   862→          )}
+   863→   863→          {mpesaStatus === 'failed' && (
+   864→   864→            <div className="text-center py-8 space-y-4">
+   865→   865→              <AlertCircle className="h-16 w-16 mx-auto text-destructive" />
+   866→   866→              <p className="font-semibold text-destructive">Payment Failed</p>
+   867→   867→              <Button variant="outline" onClick={() => setMpesaStatus('idle')}>Try Again</Button>
+   868→   868→            </div>
+   869→   869→          )}
+   870→   870→        </DialogContent>
+   871→   871→      </Dialog>
+   872→   872→    </div>
+   873→   873→  );
+   874→   874→}
+   875→   875→
+   876→   876→// ============================================================================
+   877→   877→// INVENTORY TAB
+   878→   878→// ============================================================================
+   879→   879→
+   880→   880→function InventoryTab() {
+   881→   881→  const [searchQuery, setSearchQuery] = useState('');
+   882→   882→  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+   883→   883→  const [addProductOpen, setAddProductOpen] = useState(false);
+   884→   884→  const [editProduct, setEditProduct] = useState<ProductListItem | null>(null);
+   885→   885→  const [stockFilter, setStockFilter] = useState<string>('all');
+   886→   886→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+   887→   887→
+   888→   888→  const [newProduct, setNewProduct] = useState({
+   889→   889→    name: '', sku: '', pricePerUnit: '', costPrice: '', quantityInStock: '',
+   890→   890→    reorderLevel: '10', unitType: 'PIECE', categoryId: '', description: '',
+   891→   891→    isRental: false, isBundle: false,
+   892→   892→  });
+   893→   893→
+   894→   894→  const { data: productsData, isLoading } = useQuery({
+   895→   895→    queryKey: ['products', currentStoreId, searchQuery, selectedCategory, stockFilter],
+   896→   896→    queryFn: () => productsApi.list({
+   897→   897→      storeId: currentStoreId,
+   898→   898→      search: searchQuery || undefined,
+   899→   899→      limit: 200,
+   900→   900→      ...(selectedCategory !== 'all' ? { categoryId: selectedCategory } : {}),
+   901→   901→    }),
+   902→   902→  });
+   903→   903→
+   904→   904→  const { data: categoriesData } = useQuery({
+   905→   905→    queryKey: ['categories', currentStoreId],
+   906→   906→    queryFn: () => categoriesApi.list(currentStoreId),
+   907→   907→  });
+   908→   908→
+   909→   909→  const createProductMutation = useMutation({
+   910→   910→    mutationFn: productsApi.create,
+   911→   911→    onSuccess: () => {
+   912→   912→      toast.success('Product created successfully');
+   913→   913→      setAddProductOpen(false);
+   914→   914→      setNewProduct({ name: '', sku: '', pricePerUnit: '', costPrice: '', quantityInStock: '', reorderLevel: '10', unitType: 'PIECE', categoryId: '', description: '', isRental: false, isBundle: false });
+   915→   915→    },
+   916→   916→    onError: (err: Error) => toast.error(err.message),
+   917→   917→  });
+   918→   918→
+   919→   919→  const updateProductMutation = useMutation({
+   920→   920→    mutationFn: ({ id, data }: { id: string; data: Partial<ProductListItem> }) => productsApi.update(id, data),
+   921→   921→    onSuccess: () => {
+   922→   922→      toast.success('Product updated');
+   923→   923→      setEditProduct(null);
+   924→   924→    },
+   925→   925→    onError: (err: Error) => toast.error(err.message),
+   926→   926→  });
+   927→   927→
+   928→   928→  const deleteProductMutation = useMutation({
+   929→   929→    mutationFn: productsApi.delete,
+   930→   930→    onSuccess: () => toast.success('Product deleted'),
+   931→   931→    onError: (err: Error) => toast.error(err.message),
+   932→   932→  });
+   933→   933→
+   934→   934→  const products = (productsData?.data || []).filter((p) => {
+   935→   935→    if (stockFilter === 'low') return p.quantityInStock <= p.reorderLevel && p.quantityInStock > 0;
+   936→   936→    if (stockFilter === 'out') return p.quantityInStock <= 0;
+   937→   937→    if (stockFilter === 'ok') return p.quantityInStock > p.reorderLevel;
+   938→   938→    return true;
+   939→   939→  });
+   940→   940→
+   941→   941→  const categories = categoriesData?.data || [];
+   942→   942→  const lowStockCount = (productsData?.data || []).filter(p => p.quantityInStock <= p.reorderLevel && p.quantityInStock > 0).length;
+   943→   943→  const outOfStockCount = (productsData?.data || []).filter(p => p.quantityInStock <= 0).length;
+   944→   944→  const totalInventoryValue = (productsData?.data || []).reduce((sum, p) => sum + (p.costPrice * p.quantityInStock), 0);
+   945→   945→
+   946→   946→  const handleCreateProduct = () => {
+   947→   947→    createProductMutation.mutate({
+   948→   948→      storeId: currentStoreId,
+   949→   949→      name: newProduct.name,
+   950→   950→      sku: newProduct.sku,
+   951→   951→      pricePerUnit: Number(newProduct.pricePerUnit),
+   952→   952→      costPrice: Number(newProduct.costPrice),
+   953→   953→      quantityInStock: Number(newProduct.quantityInStock),
+   954→   954→      reorderLevel: Number(newProduct.reorderLevel),
+   955→   955→      unitType: newProduct.unitType,
+   956→   956→      categoryId: newProduct.categoryId || undefined,
+   957→   957→      description: newProduct.description || undefined,
+   958→   958→      isRental: newProduct.isRental,
+   959→   959→      isBundle: newProduct.isBundle,
+   960→   960→    });
+   961→   961→  };
+   962→   962→
+   963→   963→  return (
+   964→   964→    <div className="space-y-4">
+   965→   965→      {/* Stats Cards */}
+   966→   966→      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   967→   967→        <Card>
+   968→   968→          <CardContent className="p-4">
+   969→   969→            <div className="flex items-center gap-3">
+   970→   970→              <div className="p-2 rounded-lg bg-primary/10"><Package className="h-5 w-5 text-primary" /></div>
+   971→   971→              <div>
+   972→   972→                <p className="text-sm text-muted-foreground">Total Products</p>
+   973→   973→                <p className="text-xl font-bold">{productsData?.data?.length || 0}</p>
+   974→   974→              </div>
+   975→   975→            </div>
+   976→   976→          </CardContent>
+   977→   977→        </Card>
+   978→   978→        <Card>
+   979→   979→          <CardContent className="p-4">
+   980→   980→            <div className="flex items-center gap-3">
+   981→   981→              <div className="p-2 rounded-lg bg-yellow-100 dark:bg-yellow-900/30"><AlertTriangle className="h-5 w-5 text-yellow-600" /></div>
+   982→   982→              <div>
+   983→   983→                <p className="text-sm text-muted-foreground">Low Stock</p>
+   984→   984→                <p className="text-xl font-bold">{lowStockCount}</p>
+   985→   985→              </div>
+   986→   986→            </div>
+   987→   987→          </CardContent>
+   988→   988→        </Card>
+   989→   989→        <Card>
+   990→   990→          <CardContent className="p-4">
+   991→   991→            <div className="flex items-center gap-3">
+   992→   992→              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30"><AlertCircle className="h-5 w-5 text-red-600" /></div>
+   993→   993→              <div>
+   994→   994→                <p className="text-sm text-muted-foreground">Out of Stock</p>
+   995→   995→                <p className="text-xl font-bold">{outOfStockCount}</p>
+   996→   996→              </div>
+   997→   997→            </div>
+   998→   998→          </CardContent>
+   999→   999→        </Card>
+  1000→  1000→        <Card>
+  1001→  1001→          <CardContent className="p-4">
+  1002→  1002→            <div className="flex items-center gap-3">
+  1003→  1003→              <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30"><DollarSign className="h-5 w-5 text-green-600" /></div>
+  1004→  1004→              <div>
+  1005→  1005→                <p className="text-sm text-muted-foreground">Inventory Value</p>
+  1006→  1006→                <p className="text-xl font-bold">{formatKES(totalInventoryValue)}</p>
+  1007→  1007→              </div>
+  1008→  1008→            </div>
+  1009→  1009→          </CardContent>
+  1010→  1010→        </Card>
+  1011→  1011→      </div>
+  1012→  1012→
+  1013→  1013→      {/* Toolbar */}
+  1014→  1014→      <div className="flex flex-col sm:flex-row gap-3">
+  1015→  1015→        <div className="relative flex-1">
+  1016→  1016→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1017→  1017→          <Input placeholder="Search products..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
+  1018→  1018→        </div>
+  1019→  1019→        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+  1020→  1020→          <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="All Categories" /></SelectTrigger>
+  1021→  1021→          <SelectContent>
+  1022→  1022→            <SelectItem value="all">All Categories</SelectItem>
+  1023→  1023→            {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+  1024→  1024→          </SelectContent>
+  1025→  1025→        </Select>
+  1026→  1026→        <Select value={stockFilter} onValueChange={setStockFilter}>
+  1027→  1027→          <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="Stock Status" /></SelectTrigger>
+  1028→  1028→          <SelectContent>
+  1029→  1029→            <SelectItem value="all">All Stock</SelectItem>
+  1030→  1030→            <SelectItem value="ok">In Stock</SelectItem>
+  1031→  1031→            <SelectItem value="low">Low Stock</SelectItem>
+  1032→  1032→            <SelectItem value="out">Out of Stock</SelectItem>
+  1033→  1033→          </SelectContent>
+  1034→  1034→        </Select>
+  1035→  1035→        <Dialog open={addProductOpen} onOpenChange={setAddProductOpen}>
+  1036→  1036→          <DialogTrigger asChild>
+  1037→  1037→            <Button className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground">
+  1038→  1038→              <Plus className="mr-2 h-4 w-4" /> Add Product
+  1039→  1039→            </Button>
+  1040→  1040→          </DialogTrigger>
+  1041→  1041→          <DialogContent className="sm:max-w-lg">
+  1042→  1042→            <DialogHeader>
+  1043→  1043→              <DialogTitle>Add New Product</DialogTitle>
+  1044→  1044→              <DialogDescription>Add a product to your inventory</DialogDescription>
+  1045→  1045→            </DialogHeader>
+  1046→  1046→            <div className="grid grid-cols-2 gap-4">
+  1047→  1047→              <div className="space-y-2 col-span-2">
+  1048→  1048→                <Label>Product Name</Label>
+  1049→  1049→                <Input value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} placeholder="e.g. 20mm Nails" />
+  1050→  1050→              </div>
+  1051→  1051→              <div className="space-y-2">
+  1052→  1052→                <Label>SKU</Label>
+  1053→  1053→                <Input value={newProduct.sku} onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })} placeholder="e.g. NAIL-20" />
+  1054→  1054→              </div>
+  1055→  1055→              <div className="space-y-2">
+  1056→  1056→                <Label>Category</Label>
+  1057→  1057→                <Select value={newProduct.categoryId} onValueChange={(v) => setNewProduct({ ...newProduct, categoryId: v })}>
+  1058→  1058→                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+  1059→  1059→                  <SelectContent>
+  1060→  1060→                    {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+  1061→  1061→                  </SelectContent>
+  1062→  1062→                </Select>
+  1063→  1063→              </div>
+  1064→  1064→              <div className="space-y-2">
+  1065→  1065→                <Label>Selling Price (KES)</Label>
+  1066→  1066→                <Input type="number" value={newProduct.pricePerUnit} onChange={(e) => setNewProduct({ ...newProduct, pricePerUnit: e.target.value })} placeholder="0" />
+  1067→  1067→              </div>
+  1068→  1068→              <div className="space-y-2">
+  1069→  1069→                <Label>Cost Price (KES)</Label>
+  1070→  1070→                <Input type="number" value={newProduct.costPrice} onChange={(e) => setNewProduct({ ...newProduct, costPrice: e.target.value })} placeholder="0" />
+  1071→  1071→              </div>
+  1072→  1072→              <div className="space-y-2">
+  1073→  1073→                <Label>Quantity in Stock</Label>
+  1074→  1074→                <Input type="number" value={newProduct.quantityInStock} onChange={(e) => setNewProduct({ ...newProduct, quantityInStock: e.target.value })} placeholder="0" />
+  1075→  1075→              </div>
+  1076→  1076→              <div className="space-y-2">
+  1077→  1077→                <Label>Reorder Level</Label>
+  1078→  1078→                <Input type="number" value={newProduct.reorderLevel} onChange={(e) => setNewProduct({ ...newProduct, reorderLevel: e.target.value })} placeholder="10" />
+  1079→  1079→              </div>
+  1080→  1080→              <div className="space-y-2">
+  1081→  1081→                <Label>Unit Type</Label>
+  1082→  1082→                <Select value={newProduct.unitType} onValueChange={(v) => setNewProduct({ ...newProduct, unitType: v })}>
+  1083→  1083→                  <SelectTrigger><SelectValue /></SelectTrigger>
+  1084→  1084→                  <SelectContent>
+  1085→  1085→                    <SelectItem value="PIECE">Piece</SelectItem>
+  1086→  1086→                    <SelectItem value="KILOGRAM">Kilogram</SelectItem>
+  1087→  1087→                    <SelectItem value="METER">Meter</SelectItem>
+  1088→  1088→                    <SelectItem value="LITER">Liter</SelectItem>
+  1089→  1089→                    <SelectItem value="BAG">Bag</SelectItem>
+  1090→  1090→                    <SelectItem value="BOX">Box</SelectItem>
+  1091→  1091→                    <SelectItem value="SET">Set</SelectItem>
+  1092→  1092→                  </SelectContent>
+  1093→  1093→                </Select>
+  1094→  1094→              </div>
+  1095→  1095→              <div className="flex items-center gap-4 pt-6">
+  1096→  1096→                <div className="flex items-center gap-2">
+  1097→  1097→                  <Checkbox id="rental" checked={newProduct.isRental} onCheckedChange={(v) => setNewProduct({ ...newProduct, isRental: !!v })} />
+  1098→  1098→                  <Label htmlFor="rental" className="text-sm">Rental</Label>
+  1099→  1099→                </div>
+
+[showing lines 600-1099 of 2002; use offset=1100 with limit to continue reading]

@@ -1,0 +1,627 @@
+// ============================================================================
+// MBUMAH HARDWARE - Enterprise POS & ERP System
+// Complete Prisma Schema - Multi-Tenant Discriminator Column Model
+// Designed for PostgreSQL (Supabase) with SQLite compatibility for local dev
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// TENANCY & ORGANIZATION
+// ============================================================================
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  taxPin      String?  // KRA PIN for Kenyan businesses
+  status      String   @default("ACTIVE") // ACTIVE, SUSPENDED, ARCHIVED
+  logoUrl     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stores      Store[]
+  users       User[]
+  accounts    Account[]
+
+  @@map("organizations")
+}
+
+model Store {
+  id              String   @id @default(cuid())
+  organizationId  String
+  name            String
+  location        String?
+  address         String?
+  phone           String?
+  email           String?
+  taxPin          String?  // Store-level KRA PIN
+  status          String   @default("ACTIVE") // ACTIVE, CLOSED, RENOVATING
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users           User[]
+  products        Product[]
+  categories      ProductCategory[]
+  customers       Customer[]
+  transactions    SalesTransaction[]
+  payments        Payment[]
+  debtLedgers     DebtLedger[]
+  rentals         EquipmentRental[]
+  stockMovements  StockMovement[]
+  warehouseStocks WarehouseStock[]
+  journalEntries  JournalEntry[]
+  systemLogs      SystemLog[]
+  cashDrawerLogs  CashDrawerLog[]
+  receipts        Receipt[]
+
+  @@index([organizationId])
+  @@map("stores")
+}
+
+// ============================================================================
+// AUTHENTICATION & RBAC
+// ============================================================================
+
+model User {
+  id              String   @id @default(cuid())
+  organizationId  String
+  storeId         String?
+  email           String   @unique
+  name            String
+  passwordHash    String
+  role            String   @default("CASHIER") // SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER, CASHIER, ACCOUNTANT
+  phone           String?
+  avatarUrl       String?
+  isActive        Boolean  @default(true)
+  lastLoginAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  store           Store?       @relation(fields: [storeId], references: [id])
+  sessions        Session[]
+  systemLogs      SystemLog[]
+  transactions    SalesTransaction[]
+  cashDrawerLogs  CashDrawerLog[]
+
+  @@index([organizationId])
+  @@index([storeId])
+  @@index([email])
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  ipAddress    String?
+  userAgent    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("sessions")
+}
+
+model RolePermission {
+  id           String   @id @default(cuid())
+  role         String   // SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER, CASHIER, ACCOUNTANT
+  resource     String   // products, transactions, customers, financials, rentals, admin, reports
+  action       String   // create, read, update, delete, approve, refund, export
+  createdAt    DateTime @default(now())
+
+  @@unique([role, resource, action])
+  @@map("role_permissions")
+}
+
+// ============================================================================
+// PRODUCT & INVENTORY
+// ============================================================================
+
+model ProductCategory {
+  id              String   @id @default(cuid())
+  storeId         String
+  name            String
+  description     String?
+  icon            String?
+  color           String?
+  sortOrder       Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  products        Product[]
+
+  @@index([storeId])
+  @@map("product_categories")
+}
+
+model Product {
+  id                String   @id @default(cuid())
+  storeId           String
+  categoryId        String?
+  sku               String   @unique
+  barcode           String?  @unique
+  name              String
+  description       String?
+  unitType          String   @default("PIECE") // PIECE, KILOGRAM, METER, LITER, BAG, BOX, SET
+  quantityInStock   Float    @default(0)
+  reorderLevel      Float    @default(10)
+  pricePerUnit      Float    // Selling price
+  costPrice         Float    // Purchase/cost price
+  taxRate           Float    @default(16) // Kenya VAT 16%
+  isRental          Boolean  @default(false)
+  isBundle          Boolean  @default(false)
+  isActive          Boolean  @default(true)
+  imageUrl          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  store             Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  category          ProductCategory? @relation(fields: [categoryId], references: [id])
+  bundleItems       ProductBundle[]  @relation("BundleParent")
+  parentBundles     ProductBundle[]  @relation("BundleChild")
+  saleItems         SaleItem[]
+  stockMovements    StockMovement[]
+  warehouseStocks   WarehouseStock[]
+  rentals           EquipmentRental[]
+
+  @@index([storeId])
+  @@index([sku])
+  @@index([barcode])
+  @@index([name])
+  @@index([categoryId])
+  @@index([isActive])
+  @@map("products")
+}
+
+model ProductBundle {
+  id                String   @id @default(cuid())
+  parentProductId   String   // The bundle product
+  childProductId    String   // The constituent product
+  quantityRequired  Float    @default(1) // How many of child in one bundle
+
+  parentProduct     Product  @relation("BundleParent", fields: [parentProductId], references: [id], onDelete: Cascade)
+  childProduct      Product  @relation("BundleChild", fields: [childProductId], references: [id], onDelete: Cascade)
+
+  @@unique([parentProductId, childProductId])
+  @@index([parentProductId])
+  @@map("product_bundles")
+}
+
+model WarehouseStock {
+  id          String   @id @default(cuid())
+  storeId     String
+  productId   String
+  warehouse   String   @default("MAIN") // MAIN, BACKUP, RECEIVING
+  quantity    Float    @default(0)
+  updatedAt   DateTime @updatedAt
+
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, productId, warehouse])
+  @@index([storeId])
+  @@map("warehouse_stocks")
+}
+
+model StockMovement {
+  id              String   @id @default(cuid())
+  storeId         String
+  productId       String
+  movementType    String   // PURCHASE, SALE, ADJUSTMENT, TRANSFER, RETURN, RENTAL_OUT, RENTAL_RETURN
+  quantity        Float    // Positive for in, negative for out
+  referenceId     String?  // Transaction ID, PO ID, etc.
+  notes           String?
+  performedBy     String?  // User ID
+  createdAt       DateTime @default(now())
+
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([productId])
+  @@index([createdAt])
+  @@map("stock_movements")
+}
+
+// ============================================================================
+// CUSTOMERS & CRM
+// ============================================================================
+
+model Customer {
+  id                  String   @id @default(cuid())
+  storeId             String
+  name                String
+  phone               String?
+  email               String?
+  address             String?
+  idNumber            String?  // Kenyan National ID
+  currentDebtBalance  Float    @default(0)
+  debtLimit           Float    @default(50000) // KES default limit
+  loyaltyPoints       Int      @default(0)
+  preferredChannel    String   @default("SMS") // SMS, EMAIL, WHATSAPP, PRINT
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  store               Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  debtLedgers         DebtLedger[]
+  transactions        SalesTransaction[]
+  rentals             EquipmentRental[]
+
+  @@index([storeId])
+  @@index([phone])
+  @@index([name])
+  @@map("customers")
+}
+
+// ============================================================================
+// SALES & TRANSACTIONS
+// ============================================================================
+
+model SalesTransaction {
+  id              String   @id @default(cuid())
+  storeId         String
+  receiptNumber   String   @unique
+  customerId      String?
+  cashierId       String
+  subtotal        Float
+  taxAmount       Float
+  discountAmount  Float    @default(0)
+  totalAmount     Float
+  paymentMethod   String   // CASH, MPESA, DEBT, SPLIT
+  paymentStatus   String   @default("COMPLETED") // PENDING, COMPLETED, FAILED, REFUNDED, PARTIAL
+  transactionType String   @default("SALE") // SALE, REFUND, VOID
+  notes           String?
+  isOffline       Boolean  @default(false)
+  syncedAt        DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer        Customer?   @relation(fields: [customerId], references: [id])
+  cashier         User        @relation(fields: [cashierId], references: [id])
+  items           SaleItem[]
+  payments        Payment[]
+  debtLedgers     DebtLedger[]
+  receipt         Receipt?
+
+  @@index([storeId])
+  @@index([cashierId])
+  @@index([customerId])
+  @@index([paymentStatus])
+  @@index([createdAt])
+  @@map("sales_transactions")
+}
+
+model SaleItem {
+  id              String   @id @default(cuid())
+  transactionId   String
+  productId       String
+  productName     String   // Snapshot at time of sale
+  quantity        Float
+  unitType        String
+  pricePerUnit    Float
+  costPrice       Float    // Snapshot for profit calculation
+  discountPercent Float    @default(0)
+  taxRate         Float    @default(16)
+  lineTotal       Float
+  isRentalItem    Boolean  @default(false)
+
+  transaction     SalesTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  product         Product          @relation(fields: [productId], references: [id])
+
+  @@index([transactionId])
+  @@index([productId])
+  @@map("sale_items")
+}
+
+// ============================================================================
+// PAYMENTS
+// ============================================================================
+
+model Payment {
+  id              String   @id @default(cuid())
+  storeId         String
+  transactionId   String
+  paymentMethod   String   // CASH, MPESA, DEBT
+  amount          Float
+  currency        String   @default("KES")
+  status          String   @default("COMPLETED") // PENDING, COMPLETED, FAILED, REFUNDED
+  reference       String?  // M-Pesa CheckoutRequestID, receipt number, etc.
+  metadata        String?  // JSON string for additional payment details
+  processedAt     DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  store           Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  transaction     SalesTransaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([transactionId])
+  @@index([paymentMethod])
+  @@map("payments")
+}
+
+model MpesaTransaction {
+  id                    String   @id @default(cuid())
+  storeId               String
+  checkoutRequestId     String?
+  merchantRequestId     String?
+  mpesaReceiptNumber    String?
+  phoneNumber           String?
+  amount                Float
+  status                String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED
+  resultCode            String?
+  resultDesc            String?
+  callbackReceived      Boolean  @default(false)
+  transactionId         String?  // Link to SalesTransaction
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([storeId])
+  @@index([checkoutRequestId])
+  @@index([status])
+  @@map("mpesa_transactions")
+}
+
+// ============================================================================
+// DEBT / CREDIT MANAGEMENT
+// ============================================================================
+
+model DebtLedger {
+  id              String   @id @default(cuid())
+  storeId         String
+  customerId      String
+  transactionId   String?
+  amountOwed      Float
+  amountPaid      Float    @default(0)
+  balance         Float    // amountOwed - amountPaid
+  dueDate         DateTime
+  status          String   @default("OUTSTANDING") // OUTSTANDING, PARTIAL, SETTLED, OVERDUE, WRITTEN_OFF
+  agingBucket     String   @default("CURRENT") // CURRENT, DAYS_30, DAYS_60, DAYS_90_PLUS
+  lastReminderAt  DateTime?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer        Customer          @relation(fields: [customerId], references: [id])
+  transaction     SalesTransaction? @relation(fields: [transactionId], references: [id])
+
+  @@index([storeId])
+  @@index([customerId])
+  @@index([status])
+  @@index([agingBucket])
+  @@index([dueDate])
+  @@map("debt_ledgers")
+}
+
+model DebtPayment {
+  id              String   @id @default(cuid())
+  storeId         String
+  debtLedgerId    String
+  amount          Float
+  paymentMethod   String   // CASH, MPESA
+  reference       String?
+  receivedBy      String?  // User ID
+  createdAt       DateTime @default(now())
+
+  @@index([storeId])
+  @@index([debtLedgerId])
+  @@map("debt_payments")
+}
+
+// ============================================================================
+// EQUIPMENT RENTAL
+// ============================================================================
+
+model EquipmentRental {
+  id                  String   @id @default(cuid())
+  storeId             String
+  productId           String
+  customerId          String
+  status              String   @default("ACTIVE") // ACTIVE, RETURNED, OVERDUE, DAMAGED, LOST
+  rentalStartDate     DateTime @default(now())
+  expectedReturnDate  DateTime
+  actualReturnDate    DateTime?
+  securityDeposit     Float
+  ratePerDay          Float
+  ratePerWeek         Float?
+  ratePerMonth        Float?
+  totalRentalCharge   Float    @default(0)
+  lateFeeAccumulated  Float    @default(0)
+  damageAssessment    String?  // NONE, MINOR, MODERATE, SEVERE
+  damageCharge        Float    @default(0)
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  store               Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product             Product  @relation(fields: [productId], references: [id])
+  customer            Customer @relation(fields: [customerId], references: [id])
+
+  @@index([storeId])
+  @@index([customerId])
+  @@index([productId])
+  @@index([status])
+  @@index([expectedReturnDate])
+  @@map("equipment_rentals")
+}
+
+// ============================================================================
+// FINANCIAL ACCOUNTING - DOUBLE-ENTRY BOOKKEEPING
+// ============================================================================
+
+model Account {
+  id              String   @id @default(cuid())
+  organizationId  String
+  code            String   // Account code e.g. 1000, 2000, 3000
+  name            String
+  type            String   // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+  subType         String?  // CURRENT_ASSET, FIXED_ASSET, CURRENT_LIABILITY, etc.
+  normalBalance   String   @default("DEBIT") // DEBIT, CREDIT
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  journalEntryLines JournalEntryLine[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([type])
+  @@map("accounts")
+}
+
+model JournalEntry {
+  id              String   @id @default(cuid())
+  storeId         String
+  entryNumber     String   @unique
+  entryDate       DateTime @default(now())
+  description     String
+  referenceType   String?  // SALE, PAYMENT, REFUND, RENTAL, ADJUSTMENT
+  referenceId     String?  // Transaction ID, Payment ID, etc.
+  totalDebit      Float
+  totalCredit     Float
+  isPosted        Boolean  @default(false)
+  postedAt        DateTime?
+  createdBy       String?  // User ID
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  lines           JournalEntryLine[]
+
+  @@index([storeId])
+  @@index([entryDate])
+  @@index([referenceType])
+  @@index([isPosted])
+  @@map("journal_entries")
+}
+
+model JournalEntryLine {
+  id              String   @id @default(cuid())
+  journalEntryId  String
+  accountId       String
+  debit           Float    @default(0)
+  credit          Float    @default(0)
+  description     String?
+  createdAt       DateTime @default(now())
+
+  journalEntry    JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account         Account      @relation(fields: [accountId], references: [id])
+
+  @@index([journalEntryId])
+  @@index([accountId])
+  @@map("journal_entry_lines")
+}
+
+// ============================================================================
+// CASH DRAWER MANAGEMENT
+// ============================================================================
+
+model CashDrawerLog {
+  id              String   @id @default(cuid())
+  storeId         String
+  userId          String
+  action          String   // OPEN, CLOSE, CASH_IN, CASH_OUT, SALE, REFUND
+  amount          Float
+  balance         Float    // Running balance
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@index([storeId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("cash_drawer_logs")
+}
+
+// ============================================================================
+// RECEIPTS
+// ============================================================================
+
+model Receipt {
+  id              String   @id @default(cuid())
+  storeId         String
+  transactionId   String   @unique
+  receiptNumber   String   @unique
+  receiptType     String   @default("DIGITAL") // DIGITAL, PRINTED, EMAIL, SMS, WHATSAPP
+  sentTo          String?  // Phone or email
+  sentAt          DateTime?
+  createdAt       DateTime @default(now())
+
+  store           Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  transaction     SalesTransaction  @relation(fields: [transactionId], references: [id])
+
+  @@index([storeId])
+  @@index([transactionId])
+  @@map("receipts")
+}
+
+// ============================================================================
+// SYSTEM LOGGING & AUDIT
+// ============================================================================
+
+model SystemLog {
+  id              String   @id @default(cuid())
+  storeId         String?
+  userId          String?
+  action          String
+  component       String   // POS, INVENTORY, FINANCIAL, AUTH, PAYMENT, RENTAL
+  severity        String   @default("INFO") // DEBUG, INFO, WARN, ERROR, CRITICAL
+  message         String
+  metadata        String?  // JSON string for additional context
+  stackTrace      String?
+  ipAddress       String?
+  createdAt       DateTime @default(now())
+
+  store           Store?   @relation(fields: [storeId], references: [id])
+  user            User?    @relation(fields: [userId], references: [id])
+
+  @@index([storeId])
+  @@index([userId])
+  @@index([component])
+  @@index([severity])
+  @@index([createdAt])
+  @@map("system_logs")
+}
+
+// ============================================================================
+// SYSTEM CONFIGURATION
+// ============================================================================
+
+model SystemConfig {
+  id              String   @id @default(cuid())
+  key             String   @unique
+  value           String
+  description     String?
+  isEncrypted     Boolean  @default(false)
+  updatedAt       DateTime @updatedAt
+
+  @@map("system_configs")
+}
+
+model InitializationLog {
+  id              String   @id @default(cuid())
+  event           String
+  details         String?
+  executedAt      DateTime @default(now())
+
+  @@map("initialization_logs")
+}

@@ -1,0 +1,2002 @@
+     1→'use client';
+     2→
+     3→/**
+     4→ * MBUMAH HARDWARE POS & ERP System - Main Application Page
+     5→ * Single-page application with tab-based navigation
+     6→ */
+     7→
+     8→import React, { useState, useEffect, useCallback, useMemo } from 'react';
+     9→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+    10→import { useTheme } from 'next-themes';
+    11→import { toast } from 'sonner';
+    12→import {
+    13→  ShoppingCart, Package, Users, KeyRound, BarChart3, FileText,
+    14→  Settings, LogOut, Search, Plus, Minus, Trash2, X, Menu, Sun, Moon,
+    15→  ChevronRight, AlertTriangle, CheckCircle, Clock, DollarSign,
+    16→  TrendingUp, ShoppingBag, CreditCard, Smartphone, Receipt,
+    17→  ArrowUpRight, ArrowDownRight, Eye, Edit, RefreshCw, Download,
+    18→  Filter, MoreVertical, Wrench, CalendarDays, Phone, Mail,
+    19→  ArrowRight, Box, Tag, Store, UserCheck, ShieldCheck, Activity,
+    20→  CircleDollarSign, Banknote, Wallet, Timer, AlertCircle, Loader2,
+    21→  Home, Layers, PieChart
+    22→} from 'lucide-react';
+    23→
+    24→import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
+    25→import {
+    26→  productsApi, categoriesApi, customersApi, transactionsApi,
+    27→  paymentsApi, debtApi, rentalsApi, financialApi, dashboardApi,
+    28→  reportsApi, systemLogsApi, stockMovementsApi,
+    29→  formatKES, formatDate, formatDateTime,
+    30→  type ProductListItem, type CustomerItem, type TransactionItem,
+    31→  type DebtLedgerItem, type RentalItem, type JournalEntryItem,
+    32→  type AccountItem, type SystemLogItem, type StockMovementItem,
+    33→  type CategoryItem,
+    34→} from '@/lib/api';
+    35→import type { PaymentMethod, CartItem, UnitType } from '@/lib/types';
+    36→
+    37→import { Button } from '@/components/ui/button';
+    38→import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+    39→import { Input } from '@/components/ui/input';
+    40→import { Label } from '@/components/ui/label';
+    41→import { Badge } from '@/components/ui/badge';
+    42→import { Separator } from '@/components/ui/separator';
+    43→import { Skeleton } from '@/components/ui/skeleton';
+    44→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    45→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+    46→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+    47→import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+    48→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    49→import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+    50→import { ScrollArea } from '@/components/ui/scroll-area';
+    51→import { Progress } from '@/components/ui/progress';
+    52→import { Checkbox } from '@/components/ui/checkbox';
+    53→import { Textarea } from '@/components/ui/textarea';
+    54→import { Switch } from '@/components/ui/switch';
+    55→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    56→import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+    57→import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+    58→import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+    59→
+    60→import {
+    61→  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
+    62→  Tooltip as RechartsTooltip, ResponsiveContainer, Legend, PieChart as RechartsPie, Pie, Cell
+    63→} from 'recharts';
+    64→
+    65→// ============================================================================
+    66→// CONSTANTS
+    67→// ============================================================================
+    68→
+    69→const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
+    70→  { id: 'pos', label: 'POS', icon: ShoppingCart },
+    71→  { id: 'inventory', label: 'Inventory', icon: Package },
+    72→  { id: 'customers', label: 'Customers', icon: Users },
+    73→  { id: 'rentals', label: 'Rentals', icon: KeyRound },
+    74→  { id: 'financial', label: 'Financial', icon: BarChart3 },
+    75→  { id: 'reports', label: 'Reports', icon: FileText },
+    76→  { id: 'admin', label: 'Admin', icon: Settings },
+    77→];
+    78→
+    79→const CHART_COLORS = ['#1e3a5f', '#e87722', '#2e8b57', '#8b5cf6', '#ef4444', '#06b6d4'];
+    80→
+    81→// ============================================================================
+    82→// LOGIN SCREEN
+    83→// ============================================================================
+    84→
+    85→function LoginScreen() {
+    86→  const [email, setEmail] = useState('');
+    87→  const [password, setPassword] = useState('');
+    88→  const [showPassword, setShowPassword] = useState(false);
+    89→  const login = useAuthStore((s) => s.login);
+    90→  const isLoading = useAuthStore((s) => s.isLoading);
+    91→
+    92→  const handleSubmit = async (e: React.FormEvent) => {
+    93→    e.preventDefault();
+    94→    try {
+    95→      await login(email, password);
+    96→      toast.success('Welcome to MBUMAH HARDWARE POS!');
+    97→    } catch (err: unknown) {
+    98→      const message = err instanceof Error ? err.message : 'Login failed';
+    99→      toast.error(message);
+   100→    }
+   101→  };
+   102→
+   103→  return (
+   104→    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[oklch(0.22_0.07_260)] via-[oklch(0.295_0.1_260)] to-[oklch(0.22_0.06_260)] p-4">
+   105→      <div className="w-full max-w-md">
+   106→        <Card className="shadow-2xl border-0">
+   107→          <CardHeader className="text-center pb-2">
+   108→            <div className="mx-auto w-16 h-16 rounded-xl bg-primary flex items-center justify-center mb-4">
+   109→              <Store className="h-8 w-8 text-primary-foreground" />
+   110→            </div>
+   111→            <CardTitle className="text-2xl font-bold tracking-tight">MBUMAH HARDWARE</CardTitle>
+   112→            <CardDescription className="text-base">POS & ERP System</CardDescription>
+   113→          </CardHeader>
+   114→          <CardContent>
+   115→            <form onSubmit={handleSubmit} className="space-y-4">
+   116→              <div className="space-y-2">
+   117→                <Label htmlFor="email">Email Address</Label>
+   118→                <div className="relative">
+   119→                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   120→                  <Input
+   121→                    id="email"
+   122→                    type="email"
+   123→                    placeholder="cashier@mbumahhardware.co.ke"
+   124→                    value={email}
+   125→                    onChange={(e) => setEmail(e.target.value)}
+   126→                    className="pl-10"
+   127→                    required
+   128→                    disabled={isLoading}
+   129→                  />
+   130→                </div>
+   131→              </div>
+   132→              <div className="space-y-2">
+   133→                <Label htmlFor="password">Password</Label>
+   134→                <div className="relative">
+   135→                  <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   136→                  <Input
+   137→                    id="password"
+   138→                    type={showPassword ? 'text' : 'password'}
+   139→                    placeholder="Enter your password"
+   140→                    value={password}
+   141→                    onChange={(e) => setPassword(e.target.value)}
+   142→                    className="pl-10 pr-10"
+   143→                    required
+   144→                    disabled={isLoading}
+   145→                  />
+   146→                  <Button
+   147→                    type="button"
+   148→                    variant="ghost"
+   149→                    size="sm"
+   150→                    className="absolute right-0 top-0 h-full px-3"
+   151→                    onClick={() => setShowPassword(!showPassword)}
+   152→                  >
+   153→                    <Eye className="h-4 w-4" />
+   154→                  </Button>
+   155→                </div>
+   156→              </div>
+   157→              <Button
+   158→                type="submit"
+   159→                className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground font-semibold"
+   160→                disabled={isLoading}
+   161→                size="lg"
+   162→              >
+   163→                {isLoading ? (
+   164→                  <>
+   165→                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+   166→                    Signing In...
+   167→                  </>
+   168→                ) : (
+   169→                  'Sign In'
+   170→                )}
+   171→              </Button>
+   172→            </form>
+   173→          </CardContent>
+   174→          <CardFooter className="flex flex-col gap-2 text-sm text-muted-foreground">
+   175→            <p>Demo: cashier@mbumahhardware.co.ke / password123</p>
+   176→          </CardFooter>
+   177→        </Card>
+   178→      </div>
+   179→    </div>
+   180→  );
+   181→}
+   182→
+   183→// ============================================================================
+   184→// SIDEBAR
+   185→// ============================================================================
+   186→
+   187→function AppSidebar() {
+   188→  const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen } = useAppStore();
+   189→  const user = useAuthStore((s) => s.user);
+   190→  const logout = useAuthStore((s) => s.logout);
+   191→  const { theme, setTheme } = useTheme();
+   192→
+   193→  const handleNav = (tab: AppTab) => {
+   194→    setActiveTab(tab);
+   195→    setSidebarOpen(false);
+   196→  };
+   197→
+   198→  const handleLogout = async () => {
+   199→    await logout();
+   200→    toast.success('Logged out successfully');
+   201→  };
+   202→
+   203→  const navItems = TAB_CONFIG.map(({ id, label, icon: Icon }) => (
+   204→    <button
+   205→      key={id}
+   206→      onClick={() => handleNav(id)}
+   207→      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+   208→        activeTab === id
+   209→          ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
+   210→          : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+   211→      }`}
+   212→    >
+   213→      <Icon className="h-4 w-4 shrink-0" />
+   214→      <span>{label}</span>
+   215→    </button>
+   216→  ));
+   217→
+   218→  return (
+   219→    <>
+   220→      {/* Mobile overlay */}
+   221→      {sidebarOpen && (
+   222→        <div
+   223→          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+   224→          onClick={() => setSidebarOpen(false)}
+   225→        />
+   226→      )}
+   227→
+   228→      {/* Sidebar */}
+   229→      <aside
+   230→        className={`fixed top-0 left-0 z-50 h-full w-64 bg-sidebar text-sidebar-foreground transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:z-auto ${
+   231→          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+   232→        }`}
+   233→      >
+   234→        <div className="flex flex-col h-full">
+   235→          {/* Logo */}
+   236→          <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
+   237→            <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center">
+   238→              <Store className="h-5 w-5 text-sidebar-primary-foreground" />
+   239→            </div>
+   240→            <div>
+   241→              <h1 className="font-bold text-sm leading-tight">MBUMAH HARDWARE</h1>
+   242→              <p className="text-xs text-sidebar-foreground/60">POS & ERP</p>
+   243→            </div>
+   244→            <Button
+   245→              variant="ghost"
+   246→              size="icon"
+   247→              className="ml-auto lg:hidden text-sidebar-foreground/60 hover:text-sidebar-foreground"
+   248→              onClick={() => setSidebarOpen(false)}
+   249→            >
+   250→              <X className="h-4 w-4" />
+   251→            </Button>
+   252→          </div>
+   253→
+   254→          {/* Navigation */}
+   255→          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
+   256→            {navItems}
+   257→          </nav>
+   258→
+   259→          {/* Footer */}
+   260→          <div className="border-t border-sidebar-border px-3 py-3 space-y-2">
+   261→            <div className="flex items-center gap-3 px-3 py-2">
+   262→              <Avatar className="h-8 w-8">
+   263→                <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground text-xs">
+   264→                  {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
+   265→                </AvatarFallback>
+   266→              </Avatar>
+   267→              <div className="flex-1 min-w-0">
+   268→                <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
+   269→                <p className="text-xs text-sidebar-foreground/60 truncate">{user?.role || 'Cashier'}</p>
+   270→              </div>
+   271→            </div>
+   272→            <div className="flex items-center gap-2 px-2">
+   273→              <Button
+   274→                variant="ghost"
+   275→                size="sm"
+   276→                className="flex-1 text-sidebar-foreground/70 hover:text-sidebar-foreground"
+   277→                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+   278→              >
+   279→                {theme === 'dark' ? <Sun className="h-4 w-4 mr-2" /> : <Moon className="h-4 w-4 mr-2" />}
+   280→                {theme === 'dark' ? 'Light' : 'Dark'}
+   281→              </Button>
+   282→              <Button
+   283→                variant="ghost"
+   284→                size="sm"
+   285→                className="text-sidebar-foreground/70 hover:text-destructive"
+   286→                onClick={handleLogout}
+   287→              >
+   288→                <LogOut className="h-4 w-4" />
+   289→              </Button>
+   290→            </div>
+   291→          </div>
+   292→        </div>
+   293→      </aside>
+   294→    </>
+   295→  );
+   296→}
+   297→
+   298→// ============================================================================
+   299→// TOP BAR
+   300→// ============================================================================
+   301→
+   302→function TopBar() {
+   303→  const { activeTab, toggleSidebar } = useAppStore();
+   304→  const cartItemCount = useCartStore((s) => s.getItemCount());
+   305→  const currentTab = TAB_CONFIG.find(t => t.id === activeTab);
+   306→  const TabIcon = currentTab?.icon || Home;
+   307→
+   308→  return (
+   309→    <header className="sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
+   310→      <div className="flex items-center gap-3 px-4 py-3">
+   311→        <Button
+   312→          variant="ghost"
+   313→          size="icon"
+   314→          className="lg:hidden"
+   315→          onClick={toggleSidebar}
+   316→        >
+   317→          <Menu className="h-5 w-5" />
+   318→        </Button>
+   319→        <div className="flex items-center gap-2">
+   320→          <TabIcon className="h-5 w-5 text-primary" />
+   321→          <h2 className="font-semibold text-lg">{currentTab?.label || 'Dashboard'}</h2>
+   322→        </div>
+   323→        <div className="ml-auto flex items-center gap-2">
+   324→          {activeTab === 'pos' && (
+   325→            <Badge variant="secondary" className="flex items-center gap-1">
+   326→              <ShoppingCart className="h-3 w-3" />
+   327→              {cartItemCount}
+   328→            </Badge>
+   329→          )}
+   330→          <Badge variant="outline" className="hidden sm:flex items-center gap-1">
+   331→            <Clock className="h-3 w-3" />
+   332→            {new Date().toLocaleDateString('en-KE', { weekday: 'short', month: 'short', day: 'numeric' })}
+   333→          </Badge>
+   334→        </div>
+   335→      </div>
+   336→    </header>
+   337→  );
+   338→}
+   339→
+   340→// ============================================================================
+   341→// POS TAB
+   342→// ============================================================================
+   343→
+   344→function POSTab() {
+   345→  const [searchQuery, setSearchQuery] = useState('');
+   346→  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+   347→  const [checkoutOpen, setCheckoutOpen] = useState(false);
+   348→  const [mpesaDialogOpen, setMpesaDialogOpen] = useState(false);
+   349→  const [mpesaPhone, setMpesaPhone] = useState('');
+   350→  const [mpesaStatus, setMpesaStatus] = useState<'idle' | 'processing' | 'success' | 'failed'>('idle');
+   351→  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
+   352→  const [cashReceived, setCashReceived] = useState('');
+   353→  const [selectedCustomer, setSelectedCustomer] = useState<string>('');
+   354→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+   355→
+   356→  const cart = useCartStore();
+   357→  const subtotal = cart.getSubtotal();
+   358→  const tax = cart.getTax();
+   359→  const total = cart.getTotal();
+   360→
+   361→  const { data: productsData, isLoading: productsLoading } = useQuery({
+   362→    queryKey: ['products', currentStoreId, searchQuery, selectedCategory],
+   363→    queryFn: () => productsApi.list({
+   364→      storeId: currentStoreId,
+   365→      search: searchQuery || undefined,
+   366→      limit: 100,
+   367→      ...(selectedCategory !== 'all' ? { categoryId: selectedCategory } : {}),
+   368→    }),
+   369→  });
+   370→
+   371→  const { data: categoriesData } = useQuery({
+   372→    queryKey: ['categories', currentStoreId],
+   373→    queryFn: () => categoriesApi.list(currentStoreId),
+   374→  });
+   375→
+   376→  const { data: customersData } = useQuery({
+   377→    queryKey: ['customers', currentStoreId],
+   378→    queryFn: () => customersApi.list({ storeId: currentStoreId, limit: 100 }),
+   379→  });
+   380→
+   381→  const checkoutMutation = useMutation({
+   382→    mutationFn: transactionsApi.create,
+   383→    onSuccess: () => {
+   384→      toast.success('Transaction completed successfully!');
+   385→      cart.clearCart();
+   386→      setCheckoutOpen(false);
+   387→      setCashReceived('');
+   388→      setSelectedCustomer('');
+   389→    },
+   390→    onError: (err: Error) => {
+   391→      toast.error(err.message || 'Checkout failed');
+   392→    },
+   393→  });
+   394→
+   395→  const mpesaMutation = useMutation({
+   396→    mutationFn: paymentsApi.initiateMpesa,
+   397→    onSuccess: (res) => {
+   398→      if (res.data) {
+   399→        setMpesaStatus('processing');
+   400→        const poll = setInterval(async () => {
+   401→          try {
+   402→            const statusRes = await paymentsApi.getMpesaStatus(res.data!.checkoutRequestId);
+   403→            if (statusRes.data?.resultCode === '0') {
+   404→              setMpesaStatus('success');
+   405→              clearInterval(poll);
+   406→            } else if (statusRes.data?.resultCode && statusRes.data.resultCode !== '0') {
+   407→              setMpesaStatus('failed');
+   408→              clearInterval(poll);
+   409→            }
+   410→          } catch {
+   411→            // keep polling
+   412→          }
+   413→        }, 3000);
+   414→        setTimeout(() => clearInterval(poll), 120000);
+   415→      }
+   416→    },
+   417→    onError: () => {
+   418→      setMpesaStatus('failed');
+   419→    },
+   420→  });
+   421→
+   422→  const products = productsData?.data || [];
+   423→  const categories = categoriesData?.data || [];
+   424→  const customers = customersData?.data || [];
+   425→
+   426→  const handleAddToCart = (product: ProductListItem) => {
+   427→    if (product.quantityInStock <= 0 && !product.isRentalItem) {
+   428→      toast.error('Product is out of stock');
+   429→      return;
+   430→    }
+   431→    cart.addItem({
+   432→      productId: product.id,
+   433→      productName: product.name,
+   434→      sku: product.sku,
+   435→      quantity: 1,
+   436→      unitType: product.unitType as UnitType,
+   437→      pricePerUnit: product.pricePerUnit,
+   438→      costPrice: product.costPrice,
+   439→      discountPercent: 0,
+   440→      taxRate: product.taxRate,
+   441→      isRentalItem: product.isRental,
+   442→      isBundle: product.isBundle,
+   443→    });
+   444→    toast.success(`${product.name} added to cart`);
+   445→  };
+   446→
+   447→  const handleCheckout = () => {
+   448→    if (cart.items.length === 0) {
+   449→      toast.error('Cart is empty');
+   450→      return;
+   451→    }
+   452→
+   453→    if (paymentMethod === 'MPESA') {
+   454→      setMpesaDialogOpen(true);
+   455→      return;
+   456→    }
+   457→
+   458→    checkoutMutation.mutate({
+   459→      storeId: currentStoreId,
+   460→      customerId: selectedCustomer || undefined,
+   461→      cashierId: useAuthStore.getState().user?.id || '',
+   462→      items: cart.items,
+   463→      paymentMethod,
+   464→      paymentDetails: {
+   465→        cashAmount: paymentMethod === 'CASH' ? Number(cashReceived) || total : undefined,
+   466→        debtAccountId: paymentMethod === 'DEBT' ? selectedCustomer : undefined,
+   467→      },
+   468→    });
+   469→  };
+   470→
+   471→  const handleMpesaPay = () => {
+   472→    if (!mpesaPhone || mpesaPhone.length < 10) {
+   473→      toast.error('Enter a valid phone number');
+   474→      return;
+   475→    }
+   476→    mpesaMutation.mutate({
+   477→      phoneNumber: mpesaPhone.startsWith('0') ? `254${mpesaPhone.slice(1)}` : mpesaPhone,
+   478→      amount: total,
+   479→      accountReference: `MBT-${Date.now()}`,
+   480→      transactionDesc: 'MBUMAH HARDWARE Purchase',
+   481→    });
+   482→  };
+   483→
+   484→  const change = paymentMethod === 'CASH' && cashReceived ? Number(cashReceived) - total : 0;
+   485→
+   486→  return (
+   487→    <div className="flex flex-col lg:flex-row gap-4 h-full">
+   488→      {/* Product Grid */}
+   489→      <div className="flex-1 min-w-0 space-y-4">
+   490→        {/* Search and Filters */}
+   491→        <div className="flex flex-col sm:flex-row gap-3">
+   492→          <div className="relative flex-1">
+   493→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   494→            <Input
+   495→              placeholder="Search products by name, SKU, or barcode..."
+   496→              value={searchQuery}
+   497→              onChange={(e) => setSearchQuery(e.target.value)}
+   498→              className="pl-10"
+   499→            />
+   500→          </div>
+   501→          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+   502→            <SelectTrigger className="w-full sm:w-48">
+   503→              <SelectValue placeholder="All Categories" />
+   504→            </SelectTrigger>
+   505→            <SelectContent>
+   506→              <SelectItem value="all">All Categories</SelectItem>
+   507→              {categories.map((cat) => (
+   508→                <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+   509→              ))}
+   510→            </SelectContent>
+   511→          </Select>
+   512→        </div>
+   513→
+   514→        {/* Products Grid */}
+   515→        {productsLoading ? (
+   516→          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+   517→            {Array.from({ length: 8 }).map((_, i) => (
+   518→              <Card key={i} className="overflow-hidden">
+   519→                <Skeleton className="h-28" />
+   520→                <CardContent className="p-3 space-y-2">
+   521→                  <Skeleton className="h-4 w-3/4" />
+   522→                  <Skeleton className="h-3 w-1/2" />
+   523→                  <Skeleton className="h-5 w-2/3" />
+   524→                </CardContent>
+   525→              </Card>
+   526→            ))}
+   527→          </div>
+   528→        ) : products.length === 0 ? (
+   529→          <div className="text-center py-16">
+   530→            <Package className="h-12 w-12 mx-auto text-muted-foreground/40" />
+   531→            <p className="mt-4 text-muted-foreground">No products found</p>
+   532→            <p className="text-sm text-muted-foreground/60">Try adjusting your search or filters</p>
+   533→          </div>
+   534→        ) : (
+   535→          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+   536→            {products.map((product) => (
+   537→              <Card
+   538→                key={product.id}
+   539→                className="overflow-hidden cursor-pointer hover:shadow-md transition-all hover:border-primary/30 group"
+   540→                onClick={() => handleAddToCart(product)}
+   541→              >
+   542→                <div className="h-28 bg-muted flex items-center justify-center relative">
+   543→                  {product.imageUrl ? (
+   544→                    <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+   545→                  ) : (
+   546→                    <Package className="h-10 w-10 text-muted-foreground/30" />
+   547→                  )}
+   548→                  {product.isRental && (
+   549→                    <Badge className="absolute top-2 left-2 bg-blue-600 text-white text-[10px]">RENTAL</Badge>
+   550→                  )}
+   551→                  {product.isBundle && (
+   552→                    <Badge className="absolute top-2 right-2 bg-purple-600 text-white text-[10px]">BUNDLE</Badge>
+   553→                  )}
+   554→                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center">
+   555→                    <Plus className="h-8 w-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+   556→                  </div>
+   557→                </div>
+   558→                <CardContent className="p-3">
+   559→                  <h3 className="font-medium text-sm truncate">{product.name}</h3>
+   560→                  <p className="text-xs text-muted-foreground mt-0.5">SKU: {product.sku}</p>
+   561→                  <div className="flex items-center justify-between mt-2">
+   562→                    <span className="font-bold text-primary text-sm">{formatKES(product.pricePerUnit)}</span>
+   563→                    <Badge
+   564→                      variant={product.quantityInStock <= product.reorderLevel ? 'destructive' : 'secondary'}
+   565→                      className="text-[10px]"
+   566→                    >
+   567→                      {product.quantityInStock <= 0 ? 'Out' : `${product.quantityInStock} left`}
+   568→                    </Badge>
+   569→                  </div>
+   570→                </CardContent>
+   571→              </Card>
+   572→            ))}
+   573→          </div>
+   574→        )}
+   575→      </div>
+   576→
+   577→      {/* Cart Sidebar */}
+   578→      <div className="lg:w-96 shrink-0">
+   579→        <Card className="sticky top-20 flex flex-col max-h-[calc(100vh-7rem)]">
+   580→          <CardHeader className="pb-3">
+   581→            <div className="flex items-center justify-between">
+   582→              <CardTitle className="text-base flex items-center gap-2">
+   583→                <ShoppingCart className="h-4 w-4" />
+   584→                Cart
+   585→                {cart.items.length > 0 && (
+   586→                  <Badge variant="secondary">{cart.getItemCount()}</Badge>
+   587→                )}
+   588→              </CardTitle>
+   589→              {cart.items.length > 0 && (
+   590→                <Button variant="ghost" size="sm" onClick={() => cart.clearCart()} className="text-destructive h-7">
+   591→                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Clear
+   592→                </Button>
+   593→              )}
+   594→            </div>
+   595→          </CardHeader>
+   596→          <Separator />
+   597→          <ScrollArea className="flex-1 min-h-0">
+   598→            {cart.items.length === 0 ? (
+   599→              <div className="p-8 text-center">
+   600→                <ShoppingBag className="h-10 w-10 mx-auto text-muted-foreground/30" />
+   601→                <p className="mt-3 text-sm text-muted-foreground">Cart is empty</p>
+   602→                <p className="text-xs text-muted-foreground/60">Click products to add them</p>
+   603→              </div>
+   604→            ) : (
+   605→              <div className="p-4 space-y-3">
+   606→                {cart.items.map((item) => (
+   607→                  <div key={item.productId} className="flex gap-3 p-2 rounded-lg bg-muted/50">
+   608→                    <div className="flex-1 min-w-0">
+   609→                      <p className="text-sm font-medium truncate">{item.productName}</p>
+   610→                      <p className="text-xs text-muted-foreground">{formatKES(item.pricePerUnit)} x {item.quantity}</p>
+   611→                      {item.discountPercent > 0 && (
+   612→                        <p className="text-xs text-green-600">{item.discountPercent}% off</p>
+   613→                      )}
+   614→                    </div>
+   615→                    <div className="flex items-center gap-1">
+   616→                      <Button
+   617→                        variant="outline"
+   618→                        size="icon"
+   619→                        className="h-7 w-7"
+   620→                        onClick={() => cart.updateQuantity(item.productId, item.quantity - 1)}
+   621→                      >
+   622→                        <Minus className="h-3 w-3" />
+   623→                      </Button>
+   624→                      <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
+   625→                      <Button
+   626→                        variant="outline"
+   627→                        size="icon"
+   628→                        className="h-7 w-7"
+   629→                        onClick={() => cart.updateQuantity(item.productId, item.quantity + 1)}
+   630→                      >
+   631→                        <Plus className="h-3 w-3" />
+   632→                      </Button>
+   633→                    </div>
+   634→                    <div className="text-right min-w-[70px]">
+   635→                      <p className="text-sm font-semibold">{formatKES(item.lineTotal)}</p>
+   636→                      <Button
+   637→                        variant="ghost"
+   638→                        size="sm"
+   639→                        className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
+   640→                        onClick={() => cart.removeItem(item.productId)}
+   641→                      >
+   642→                        <X className="h-3 w-3" />
+   643→                      </Button>
+   644→                    </div>
+   645→                  </div>
+   646→                ))}
+   647→              </div>
+   648→            )}
+   649→          </ScrollArea>
+   650→          {cart.items.length > 0 && (
+   651→            <>
+   652→              <Separator />
+   653→              <div className="p-4 space-y-3">
+   654→                {/* Customer Selection */}
+   655→                <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+   656→                  <SelectTrigger>
+   657→                    <SelectValue placeholder="Walk-in Customer" />
+   658→                  </SelectTrigger>
+   659→                  <SelectContent>
+   660→                    <SelectItem value="walk-in">Walk-in Customer</SelectItem>
+   661→                    {customers.map((c) => (
+   662→                      <SelectItem key={c.id} value={c.id}>{c.name}{c.phone ? ` - ${c.phone}` : ''}</SelectItem>
+   663→                    ))}
+   664→                  </SelectContent>
+   665→                </Select>
+   666→
+   667→                <div className="space-y-1 text-sm">
+   668→                  <div className="flex justify-between">
+   669→                    <span className="text-muted-foreground">Subtotal</span>
+   670→                    <span>{formatKES(subtotal)}</span>
+   671→                  </div>
+   672→                  <div className="flex justify-between">
+   673→                    <span className="text-muted-foreground">VAT (16%)</span>
+   674→                    <span>{formatKES(tax)}</span>
+   675→                  </div>
+   676→                  <Separator />
+   677→                  <div className="flex justify-between font-bold text-base">
+   678→                    <span>Total</span>
+   679→                    <span className="text-primary">{formatKES(total)}</span>
+   680→                  </div>
+   681→                </div>
+   682→
+   683→                <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
+   684→                  <DialogTrigger asChild>
+   685→                    <Button className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground font-semibold" size="lg">
+   686→                      <CreditCard className="mr-2 h-4 w-4" />
+   687→                      Checkout {formatKES(total)}
+   688→                    </Button>
+   689→                  </DialogTrigger>
+   690→                  <DialogContent className="sm:max-w-md">
+   691→                    <DialogHeader>
+   692→                      <DialogTitle>Complete Payment</DialogTitle>
+   693→                      <DialogDescription>
+   694→                        Total: <span className="font-bold text-primary">{formatKES(total)}</span>
+   695→                      </DialogDescription>
+   696→                    </DialogHeader>
+   697→                    <div className="space-y-4">
+   698→                      <div>
+   699→                        <Label className="text-sm font-medium">Payment Method</Label>
+   700→                        <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)} className="grid grid-cols-3 gap-2 mt-2">
+   701→                          <div>
+   702→                            <RadioGroupItem value="CASH" id="cash" className="peer sr-only" />
+   703→                            <Label htmlFor="cash" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+   704→                              <Banknote className="h-5 w-5" />
+   705→                              <span className="text-xs font-medium">Cash</span>
+   706→                            </Label>
+   707→                          </div>
+   708→                          <div>
+   709→                            <RadioGroupItem value="MPESA" id="mpesa" className="peer sr-only" />
+   710→                            <Label htmlFor="mpesa" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+   711→                              <Smartphone className="h-5 w-5" />
+   712→                              <span className="text-xs font-medium">M-Pesa</span>
+   713→                            </Label>
+   714→                          </div>
+   715→                          <div>
+   716→                            <RadioGroupItem value="DEBT" id="debt" className="peer sr-only" />
+   717→                            <Label htmlFor="debt" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
+   718→                              <Wallet className="h-5 w-5" />
+   719→                              <span className="text-xs font-medium">Debt</span>
+   720→                            </Label>
+   721→                          </div>
+   722→                        </RadioGroup>
+   723→                      </div>
+   724→
+   725→                      {paymentMethod === 'CASH' && (
+   726→                        <div className="space-y-3">
+   727→                          <div>
+   728→                            <Label htmlFor="cashReceived">Cash Received</Label>
+   729→                            <Input
+   730→                              id="cashReceived"
+   731→                              type="number"
+   732→                              placeholder="0"
+   733→                              value={cashReceived}
+   734→                              onChange={(e) => setCashReceived(e.target.value)}
+   735→                              className="text-lg font-semibold mt-1"
+   736→                            />
+   737→                          </div>
+   738→                          {change > 0 && (
+   739→                            <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg">
+   740→                              <p className="text-sm font-medium text-green-700 dark:text-green-400">
+   741→                                Change: {formatKES(change)}
+   742→                              </p>
+   743→                            </div>
+   744→                          )}
+   745→                          {cashReceived && Number(cashReceived) < total && (
+   746→                            <Alert variant="destructive">
+   747→                              <AlertCircle className="h-4 w-4" />
+   748→                              <AlertTitle>Insufficient amount</AlertTitle>
+   749→                              <AlertDescription>Need {formatKES(total - Number(cashReceived))} more</AlertDescription>
+   750→                            </Alert>
+   751→                          )}
+   752→                        </div>
+   753→                      )}
+   754→
+   755→                      {paymentMethod === 'DEBT' && !selectedCustomer && (
+   756→                        <Alert>
+   757→                          <AlertCircle className="h-4 w-4" />
+   758→                          <AlertTitle>Customer Required</AlertTitle>
+   759→                          <AlertDescription>Please select a customer before proceeding with debt payment.</AlertDescription>
+   760→                        </Alert>
+   761→                      )}
+   762→
+   763→                      {paymentMethod === 'MPESA' && (
+   764→                        <div>
+   765→                          <Label htmlFor="mpesaPhone">M-Pesa Phone Number</Label>
+   766→                          <Input
+   767→                            id="mpesaPhone"
+   768→                            type="tel"
+   769→                            placeholder="0712 345 678"
+   770→                            value={mpesaPhone}
+   771→                            onChange={(e) => setMpesaPhone(e.target.value)}
+   772→                            className="mt-1"
+   773→                          />
+   774→                        </div>
+   775→                      )}
+   776→                    </div>
+   777→                    <DialogFooter>
+   778→                      <Button variant="outline" onClick={() => setCheckoutOpen(false)}>Cancel</Button>
+   779→                      <Button
+   780→                        onClick={handleCheckout}
+   781→                        disabled={
+   782→                          checkoutMutation.isPending ||
+   783→                          (paymentMethod === 'CASH' && (!cashReceived || Number(cashReceived) < total)) ||
+   784→                          (paymentMethod === 'DEBT' && !selectedCustomer)
+   785→                        }
+   786→                        className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+   787→                      >
+   788→                        {checkoutMutation.isPending ? (
+   789→                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
+   790→                        ) : (
+   791→                          <><CheckCircle className="mr-2 h-4 w-4" />Complete Sale</>
+   792→                        )}
+   793→                      </Button>
+   794→                    </DialogFooter>
+   795→                  </DialogContent>
+   796→                </Dialog>
+   797→              </div>
+   798→            </>
+   799→          )}
+   800→        </Card>
+   801→      </div>
+   802→
+   803→      {/* M-Pesa STK Push Dialog */}
+   804→      <Dialog open={mpesaDialogOpen} onOpenChange={setMpesaDialogOpen}>
+   805→        <DialogContent className="sm:max-w-sm">
+   806→          <DialogHeader>
+   807→            <DialogTitle className="flex items-center gap-2">
+   808→              <Smartphone className="h-5 w-5 text-green-600" />
+   809→              M-Pesa Payment
+   810→            </DialogTitle>
+   811→            <DialogDescription>
+   812→              Amount: <span className="font-bold">{formatKES(total)}</span>
+   813→            </DialogDescription>
+   814→          </DialogHeader>
+   815→          {mpesaStatus === 'idle' && (
+   816→            <div className="space-y-4">
+   817→              <div>
+   818→                <Label htmlFor="mpesaPhoneDialog">Phone Number</Label>
+   819→                <Input
+   820→                  id="mpesaPhoneDialog"
+   821→                  type="tel"
+   822→                  placeholder="0712 345 678"
+   823→                  value={mpesaPhone}
+   824→                  onChange={(e) => setMpesaPhone(e.target.value)}
+   825→                />
+   826→              </div>
+   827→              <Button
+   828→                className="w-full bg-green-600 hover:bg-green-700 text-white"
+   829→                onClick={handleMpesaPay}
+   830→                disabled={mpesaMutation.isPending}
+   831→              >
+   832→                {mpesaMutation.isPending ? (
+   833→                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending STK Push...</>
+   834→                ) : (
+   835→                  'Send STK Push'
+   836→                )}
+   837→              </Button>
+   838→            </div>
+   839→          )}
+   840→          {mpesaStatus === 'processing' && (
+   841→            <div className="text-center py-8 space-y-4">
+   842→              <div className="animate-pulse">
+   843→                <Smartphone className="h-16 w-16 mx-auto text-green-600" />
+   844→              </div>
+   845→              <div>
+   846→                <p className="font-semibold">Waiting for M-Pesa Confirmation</p>
+   847→                <p className="text-sm text-muted-foreground mt-1">
+   848→                  Please enter your M-Pesa PIN on your phone
+   849→                </p>
+   850→              </div>
+   851→              <Loader2 className="h-6 w-6 animate-spin mx-auto text-green-600" />
+   852→            </div>
+   853→          )}
+   854→          {mpesaStatus === 'success' && (
+   855→            <div className="text-center py-8 space-y-4">
+   856→              <CheckCircle className="h-16 w-16 mx-auto text-green-600" />
+   857→              <p className="font-semibold text-green-600">Payment Successful!</p>
+   858→              <Button onClick={() => { setMpesaDialogOpen(false); setMpesaStatus('idle'); }}>
+   859→                Close
+   860→              </Button>
+   861→            </div>
+   862→          )}
+   863→          {mpesaStatus === 'failed' && (
+   864→            <div className="text-center py-8 space-y-4">
+   865→              <AlertCircle className="h-16 w-16 mx-auto text-destructive" />
+   866→              <p className="font-semibold text-destructive">Payment Failed</p>
+   867→              <Button variant="outline" onClick={() => setMpesaStatus('idle')}>Try Again</Button>
+   868→            </div>
+   869→          )}
+   870→        </DialogContent>
+   871→      </Dialog>
+   872→    </div>
+   873→  );
+   874→}
+   875→
+   876→// ============================================================================
+   877→// INVENTORY TAB
+   878→// ============================================================================
+   879→
+   880→function InventoryTab() {
+   881→  const [searchQuery, setSearchQuery] = useState('');
+   882→  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+   883→  const [addProductOpen, setAddProductOpen] = useState(false);
+   884→  const [editProduct, setEditProduct] = useState<ProductListItem | null>(null);
+   885→  const [stockFilter, setStockFilter] = useState<string>('all');
+   886→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+   887→
+   888→  const [newProduct, setNewProduct] = useState({
+   889→    name: '', sku: '', pricePerUnit: '', costPrice: '', quantityInStock: '',
+   890→    reorderLevel: '10', unitType: 'PIECE', categoryId: '', description: '',
+   891→    isRental: false, isBundle: false,
+   892→  });
+   893→
+   894→  const { data: productsData, isLoading } = useQuery({
+   895→    queryKey: ['products', currentStoreId, searchQuery, selectedCategory, stockFilter],
+   896→    queryFn: () => productsApi.list({
+   897→      storeId: currentStoreId,
+   898→      search: searchQuery || undefined,
+   899→      limit: 200,
+   900→      ...(selectedCategory !== 'all' ? { categoryId: selectedCategory } : {}),
+   901→    }),
+   902→  });
+   903→
+   904→  const { data: categoriesData } = useQuery({
+   905→    queryKey: ['categories', currentStoreId],
+   906→    queryFn: () => categoriesApi.list(currentStoreId),
+   907→  });
+   908→
+   909→  const createProductMutation = useMutation({
+   910→    mutationFn: productsApi.create,
+   911→    onSuccess: () => {
+   912→      toast.success('Product created successfully');
+   913→      setAddProductOpen(false);
+   914→      setNewProduct({ name: '', sku: '', pricePerUnit: '', costPrice: '', quantityInStock: '', reorderLevel: '10', unitType: 'PIECE', categoryId: '', description: '', isRental: false, isBundle: false });
+   915→    },
+   916→    onError: (err: Error) => toast.error(err.message),
+   917→  });
+   918→
+   919→  const updateProductMutation = useMutation({
+   920→    mutationFn: ({ id, data }: { id: string; data: Partial<ProductListItem> }) => productsApi.update(id, data),
+   921→    onSuccess: () => {
+   922→      toast.success('Product updated');
+   923→      setEditProduct(null);
+   924→    },
+   925→    onError: (err: Error) => toast.error(err.message),
+   926→  });
+   927→
+   928→  const deleteProductMutation = useMutation({
+   929→    mutationFn: productsApi.delete,
+   930→    onSuccess: () => toast.success('Product deleted'),
+   931→    onError: (err: Error) => toast.error(err.message),
+   932→  });
+   933→
+   934→  const products = (productsData?.data || []).filter((p) => {
+   935→    if (stockFilter === 'low') return p.quantityInStock <= p.reorderLevel && p.quantityInStock > 0;
+   936→    if (stockFilter === 'out') return p.quantityInStock <= 0;
+   937→    if (stockFilter === 'ok') return p.quantityInStock > p.reorderLevel;
+   938→    return true;
+   939→  });
+   940→
+   941→  const categories = categoriesData?.data || [];
+   942→  const lowStockCount = (productsData?.data || []).filter(p => p.quantityInStock <= p.reorderLevel && p.quantityInStock > 0).length;
+   943→  const outOfStockCount = (productsData?.data || []).filter(p => p.quantityInStock <= 0).length;
+   944→  const totalInventoryValue = (productsData?.data || []).reduce((sum, p) => sum + (p.costPrice * p.quantityInStock), 0);
+   945→
+   946→  const handleCreateProduct = () => {
+   947→    createProductMutation.mutate({
+   948→      storeId: currentStoreId,
+   949→      name: newProduct.name,
+   950→      sku: newProduct.sku,
+   951→      pricePerUnit: Number(newProduct.pricePerUnit),
+   952→      costPrice: Number(newProduct.costPrice),
+   953→      quantityInStock: Number(newProduct.quantityInStock),
+   954→      reorderLevel: Number(newProduct.reorderLevel),
+   955→      unitType: newProduct.unitType,
+   956→      categoryId: newProduct.categoryId || undefined,
+   957→      description: newProduct.description || undefined,
+   958→      isRental: newProduct.isRental,
+   959→      isBundle: newProduct.isBundle,
+   960→    });
+   961→  };
+   962→
+   963→  return (
+   964→    <div className="space-y-4">
+   965→      {/* Stats Cards */}
+   966→      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   967→        <Card>
+   968→          <CardContent className="p-4">
+   969→            <div className="flex items-center gap-3">
+   970→              <div className="p-2 rounded-lg bg-primary/10"><Package className="h-5 w-5 text-primary" /></div>
+   971→              <div>
+   972→                <p className="text-sm text-muted-foreground">Total Products</p>
+   973→                <p className="text-xl font-bold">{productsData?.data?.length || 0}</p>
+   974→              </div>
+   975→            </div>
+   976→          </CardContent>
+   977→        </Card>
+   978→        <Card>
+   979→          <CardContent className="p-4">
+   980→            <div className="flex items-center gap-3">
+   981→              <div className="p-2 rounded-lg bg-yellow-100 dark:bg-yellow-900/30"><AlertTriangle className="h-5 w-5 text-yellow-600" /></div>
+   982→              <div>
+   983→                <p className="text-sm text-muted-foreground">Low Stock</p>
+   984→                <p className="text-xl font-bold">{lowStockCount}</p>
+   985→              </div>
+   986→            </div>
+   987→          </CardContent>
+   988→        </Card>
+   989→        <Card>
+   990→          <CardContent className="p-4">
+   991→            <div className="flex items-center gap-3">
+   992→              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30"><AlertCircle className="h-5 w-5 text-red-600" /></div>
+   993→              <div>
+   994→                <p className="text-sm text-muted-foreground">Out of Stock</p>
+   995→                <p className="text-xl font-bold">{outOfStockCount}</p>
+   996→              </div>
+   997→            </div>
+   998→          </CardContent>
+   999→        </Card>
+  1000→        <Card>
+  1001→          <CardContent className="p-4">
+  1002→            <div className="flex items-center gap-3">
+  1003→              <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30"><DollarSign className="h-5 w-5 text-green-600" /></div>
+  1004→              <div>
+  1005→                <p className="text-sm text-muted-foreground">Inventory Value</p>
+  1006→                <p className="text-xl font-bold">{formatKES(totalInventoryValue)}</p>
+  1007→              </div>
+  1008→            </div>
+  1009→          </CardContent>
+  1010→        </Card>
+  1011→      </div>
+  1012→
+  1013→      {/* Toolbar */}
+  1014→      <div className="flex flex-col sm:flex-row gap-3">
+  1015→        <div className="relative flex-1">
+  1016→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1017→          <Input placeholder="Search products..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
+  1018→        </div>
+  1019→        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+  1020→          <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="All Categories" /></SelectTrigger>
+  1021→          <SelectContent>
+  1022→            <SelectItem value="all">All Categories</SelectItem>
+  1023→            {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+  1024→          </SelectContent>
+  1025→        </Select>
+  1026→        <Select value={stockFilter} onValueChange={setStockFilter}>
+  1027→          <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="Stock Status" /></SelectTrigger>
+  1028→          <SelectContent>
+  1029→            <SelectItem value="all">All Stock</SelectItem>
+  1030→            <SelectItem value="ok">In Stock</SelectItem>
+  1031→            <SelectItem value="low">Low Stock</SelectItem>
+  1032→            <SelectItem value="out">Out of Stock</SelectItem>
+  1033→          </SelectContent>
+  1034→        </Select>
+  1035→        <Dialog open={addProductOpen} onOpenChange={setAddProductOpen}>
+  1036→          <DialogTrigger asChild>
+  1037→            <Button className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground">
+  1038→              <Plus className="mr-2 h-4 w-4" /> Add Product
+  1039→            </Button>
+  1040→          </DialogTrigger>
+  1041→          <DialogContent className="sm:max-w-lg">
+  1042→            <DialogHeader>
+  1043→              <DialogTitle>Add New Product</DialogTitle>
+  1044→              <DialogDescription>Add a product to your inventory</DialogDescription>
+  1045→            </DialogHeader>
+  1046→            <div className="grid grid-cols-2 gap-4">
+  1047→              <div className="space-y-2 col-span-2">
+  1048→                <Label>Product Name</Label>
+  1049→                <Input value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} placeholder="e.g. 20mm Nails" />
+  1050→              </div>
+  1051→              <div className="space-y-2">
+  1052→                <Label>SKU</Label>
+  1053→                <Input value={newProduct.sku} onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })} placeholder="e.g. NAIL-20" />
+  1054→              </div>
+  1055→              <div className="space-y-2">
+  1056→                <Label>Category</Label>
+  1057→                <Select value={newProduct.categoryId} onValueChange={(v) => setNewProduct({ ...newProduct, categoryId: v })}>
+  1058→                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+  1059→                  <SelectContent>
+  1060→                    {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+  1061→                  </SelectContent>
+  1062→                </Select>
+  1063→              </div>
+  1064→              <div className="space-y-2">
+  1065→                <Label>Selling Price (KES)</Label>
+  1066→                <Input type="number" value={newProduct.pricePerUnit} onChange={(e) => setNewProduct({ ...newProduct, pricePerUnit: e.target.value })} placeholder="0" />
+  1067→              </div>
+  1068→              <div className="space-y-2">
+  1069→                <Label>Cost Price (KES)</Label>
+  1070→                <Input type="number" value={newProduct.costPrice} onChange={(e) => setNewProduct({ ...newProduct, costPrice: e.target.value })} placeholder="0" />
+  1071→              </div>
+  1072→              <div className="space-y-2">
+  1073→                <Label>Quantity in Stock</Label>
+  1074→                <Input type="number" value={newProduct.quantityInStock} onChange={(e) => setNewProduct({ ...newProduct, quantityInStock: e.target.value })} placeholder="0" />
+  1075→              </div>
+  1076→              <div className="space-y-2">
+  1077→                <Label>Reorder Level</Label>
+  1078→                <Input type="number" value={newProduct.reorderLevel} onChange={(e) => setNewProduct({ ...newProduct, reorderLevel: e.target.value })} placeholder="10" />
+  1079→              </div>
+  1080→              <div className="space-y-2">
+  1081→                <Label>Unit Type</Label>
+  1082→                <Select value={newProduct.unitType} onValueChange={(v) => setNewProduct({ ...newProduct, unitType: v })}>
+  1083→                  <SelectTrigger><SelectValue /></SelectTrigger>
+  1084→                  <SelectContent>
+  1085→                    <SelectItem value="PIECE">Piece</SelectItem>
+  1086→                    <SelectItem value="KILOGRAM">Kilogram</SelectItem>
+  1087→                    <SelectItem value="METER">Meter</SelectItem>
+  1088→                    <SelectItem value="LITER">Liter</SelectItem>
+  1089→                    <SelectItem value="BAG">Bag</SelectItem>
+  1090→                    <SelectItem value="BOX">Box</SelectItem>
+  1091→                    <SelectItem value="SET">Set</SelectItem>
+  1092→                  </SelectContent>
+  1093→                </Select>
+  1094→              </div>
+  1095→              <div className="flex items-center gap-4 pt-6">
+  1096→                <div className="flex items-center gap-2">
+  1097→                  <Checkbox id="rental" checked={newProduct.isRental} onCheckedChange={(v) => setNewProduct({ ...newProduct, isRental: !!v })} />
+  1098→                  <Label htmlFor="rental" className="text-sm">Rental</Label>
+  1099→                </div>
+  1100→                <div className="flex items-center gap-2">
+  1101→                  <Checkbox id="bundle" checked={newProduct.isBundle} onCheckedChange={(v) => setNewProduct({ ...newProduct, isBundle: !!v })} />
+  1102→                  <Label htmlFor="bundle" className="text-sm">Bundle</Label>
+  1103→                </div>
+  1104→              </div>
+  1105→            </div>
+  1106→            <DialogFooter>
+  1107→              <Button variant="outline" onClick={() => setAddProductOpen(false)}>Cancel</Button>
+  1108→              <Button onClick={handleCreateProduct} disabled={createProductMutation.isPending || !newProduct.name || !newProduct.sku} className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground">
+  1109→                {createProductMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+  1110→                Add Product
+  1111→              </Button>
+  1112→            </DialogFooter>
+  1113→          </DialogContent>
+  1114→        </Dialog>
+  1115→      </div>
+  1116→
+  1117→      {/* Product Table */}
+  1118→      <Card>
+  1119→        <CardContent className="p-0">
+  1120→          {isLoading ? (
+  1121→            <div className="p-6 space-y-3">
+  1122→              {Array.from({ length: 5 }).map((_, i) => (
+  1123→                <div key={i} className="flex gap-4"><Skeleton className="h-10 flex-1" /></div>
+  1124→              ))}
+  1125→            </div>
+  1126→          ) : (
+  1127→            <div className="overflow-x-auto">
+  1128→              <Table>
+  1129→                <TableHeader>
+  1130→                  <TableRow>
+  1131→                    <TableHead className="w-[250px]">Product</TableHead>
+  1132→                    <TableHead>SKU</TableHead>
+  1133→                    <TableHead>Category</TableHead>
+  1134→                    <TableHead className="text-right">Price</TableHead>
+  1135→                    <TableHead className="text-right">Cost</TableHead>
+  1136→                    <TableHead className="text-right">Stock</TableHead>
+  1137→                    <TableHead>Status</TableHead>
+  1138→                    <TableHead className="w-[80px]">Actions</TableHead>
+  1139→                  </TableRow>
+  1140→                </TableHeader>
+  1141→                <TableBody>
+  1142→                  {products.length === 0 ? (
+  1143→                    <TableRow>
+  1144→                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+  1145→                        No products found
+  1146→                      </TableCell>
+  1147→                    </TableRow>
+  1148→                  ) : (
+  1149→                    products.map((product) => (
+  1150→                      <TableRow key={product.id}>
+  1151→                        <TableCell>
+  1152→                          <div className="flex items-center gap-3">
+  1153→                            <div className="w-8 h-8 rounded bg-muted flex items-center justify-center shrink-0">
+  1154→                              <Package className="h-4 w-4 text-muted-foreground" />
+  1155→                            </div>
+  1156→                            <div>
+  1157→                              <p className="font-medium text-sm">{product.name}</p>
+  1158→                              <div className="flex gap-1 mt-0.5">
+  1159→                                {product.isRental && <Badge variant="outline" className="text-[9px] h-4 px-1">RENTAL</Badge>}
+  1160→                                {product.isBundle && <Badge variant="outline" className="text-[9px] h-4 px-1">BUNDLE</Badge>}
+  1161→                              </div>
+  1162→                            </div>
+  1163→                          </div>
+  1164→                        </TableCell>
+  1165→                        <TableCell className="text-sm font-mono">{product.sku}</TableCell>
+  1166→                        <TableCell className="text-sm">{product.category?.name || '—'}</TableCell>
+  1167→                        <TableCell className="text-right font-medium">{formatKES(product.pricePerUnit)}</TableCell>
+  1168→                        <TableCell className="text-right text-sm text-muted-foreground">{formatKES(product.costPrice)}</TableCell>
+  1169→                        <TableCell className="text-right">{product.quantityInStock}</TableCell>
+  1170→                        <TableCell>
+  1171→                          {product.quantityInStock <= 0 ? (
+  1172→                            <Badge variant="destructive" className="text-[10px]">Out</Badge>
+  1173→                          ) : product.quantityInStock <= product.reorderLevel ? (
+  1174→                            <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 text-[10px]">Low</Badge>
+  1175→                          ) : (
+  1176→                            <Badge variant="secondary" className="text-[10px]">In Stock</Badge>
+  1177→                          )}
+  1178→                        </TableCell>
+  1179→                        <TableCell>
+  1180→                          <DropdownMenu>
+  1181→                            <DropdownMenuTrigger asChild>
+  1182→                              <Button variant="ghost" size="icon" className="h-8 w-8">
+  1183→                                <MoreVertical className="h-4 w-4" />
+  1184→                              </Button>
+  1185→                            </DropdownMenuTrigger>
+  1186→                            <DropdownMenuContent align="end">
+  1187→                              <DropdownMenuItem onClick={() => setEditProduct(product)}>
+  1188→                                <Edit className="mr-2 h-4 w-4" /> Edit
+  1189→                              </DropdownMenuItem>
+  1190→                              <DropdownMenuSeparator />
+  1191→                              <DropdownMenuItem
+  1192→                                className="text-destructive"
+  1193→                                onClick={() => deleteProductMutation.mutate(product.id)}
+  1194→                              >
+  1195→                                <Trash2 className="mr-2 h-4 w-4" /> Delete
+  1196→                              </DropdownMenuItem>
+  1197→                            </DropdownMenuContent>
+  1198→                          </DropdownMenu>
+  1199→                        </TableCell>
+  1200→                      </TableRow>
+  1201→                    ))
+  1202→                  )}
+  1203→                </TableBody>
+  1204→              </Table>
+  1205→            </div>
+  1206→          )}
+  1207→        </CardContent>
+  1208→      </Card>
+  1209→
+  1210→      {/* Edit Product Dialog */}
+  1211→      <Dialog open={!!editProduct} onOpenChange={(open) => !open && setEditProduct(null)}>
+  1212→        <DialogContent className="sm:max-w-lg">
+  1213→          <DialogHeader>
+  1214→            <DialogTitle>Edit Product</DialogTitle>
+  1215→            <DialogDescription>Update product details</DialogDescription>
+  1216→          </DialogHeader>
+  1217→          {editProduct && (
+  1218→            <div className="grid grid-cols-2 gap-4">
+  1219→              <div className="space-y-2 col-span-2">
+  1220→                <Label>Product Name</Label>
+  1221→                <Input value={editProduct.name} onChange={(e) => setEditProduct({ ...editProduct, name: e.target.value })} />
+  1222→              </div>
+  1223→              <div className="space-y-2">
+  1224→                <Label>Selling Price</Label>
+  1225→                <Input type="number" value={editProduct.pricePerUnit} onChange={(e) => setEditProduct({ ...editProduct, pricePerUnit: Number(e.target.value) })} />
+  1226→              </div>
+  1227→              <div className="space-y-2">
+  1228→                <Label>Cost Price</Label>
+  1229→                <Input type="number" value={editProduct.costPrice} onChange={(e) => setEditProduct({ ...editProduct, costPrice: Number(e.target.value) })} />
+  1230→              </div>
+  1231→              <div className="space-y-2">
+  1232→                <Label>Stock</Label>
+  1233→                <Input type="number" value={editProduct.quantityInStock} onChange={(e) => setEditProduct({ ...editProduct, quantityInStock: Number(e.target.value) })} />
+  1234→              </div>
+  1235→              <div className="space-y-2">
+  1236→                <Label>Reorder Level</Label>
+  1237→                <Input type="number" value={editProduct.reorderLevel} onChange={(e) => setEditProduct({ ...editProduct, reorderLevel: Number(e.target.value) })} />
+  1238→              </div>
+  1239→            </div>
+  1240→          )}
+  1241→          <DialogFooter>
+  1242→            <Button variant="outline" onClick={() => setEditProduct(null)}>Cancel</Button>
+  1243→            <Button
+  1244→              onClick={() => editProduct && updateProductMutation.mutate({ id: editProduct.id, data: editProduct })}
+  1245→              disabled={updateProductMutation.isPending}
+  1246→            >
+  1247→              {updateProductMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+  1248→              Save Changes
+  1249→            </Button>
+  1250→          </DialogFooter>
+  1251→        </DialogContent>
+  1252→      </Dialog>
+  1253→    </div>
+  1254→  );
+  1255→}
+  1256→
+  1257→// ============================================================================
+  1258→// CUSTOMERS TAB
+  1259→// ============================================================================
+  1260→
+  1261→function CustomersTab() {
+  1262→  const [searchQuery, setSearchQuery] = useState('');
+  1263→  const [addCustomerOpen, setAddCustomerOpen] = useState(false);
+  1264→  const [selectedCustomer, setSelectedCustomer] = useState<CustomerItem | null>(null);
+  1265→  const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '', address: '', idNumber: '', debtLimit: '50000' });
+  1266→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+  1267→
+  1268→  const { data: customersData, isLoading } = useQuery({
+  1269→    queryKey: ['customers', currentStoreId, searchQuery],
+  1270→    queryFn: () => customersApi.list({ storeId: currentStoreId, search: searchQuery || undefined, limit: 200 }),
+  1271→  });
+  1272→
+  1273→  const { data: debtData } = useQuery({
+  1274→    queryKey: ['debt', currentStoreId, selectedCustomer?.id],
+  1275→    queryFn: () => debtApi.list({ storeId: currentStoreId, customerId: selectedCustomer?.id, limit: 50 }),
+  1276→    enabled: !!selectedCustomer,
+  1277→  });
+  1278→
+  1279→  const createCustomerMutation = useMutation({
+  1280→    mutationFn: customersApi.create,
+  1281→    onSuccess: () => {
+  1282→      toast.success('Customer added');
+  1283→      setAddCustomerOpen(false);
+  1284→      setNewCustomer({ name: '', phone: '', email: '', address: '', idNumber: '', debtLimit: '50000' });
+  1285→    },
+  1286→    onError: (err: Error) => toast.error(err.message),
+  1287→  });
+  1288→
+  1289→  const customers = customersData?.data || [];
+  1290→  const debts = debtData?.data || [];
+  1291→  const totalDebt = customers.reduce((s, c) => s + c.currentDebtBalance, 0);
+  1292→
+  1293→  return (
+  1294→    <div className="space-y-4">
+  1295→      {/* Stats */}
+  1296→      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+  1297→        <Card>
+  1298→          <CardContent className="p-4">
+  1299→            <div className="flex items-center gap-3">
+  1300→              <div className="p-2 rounded-lg bg-primary/10"><Users className="h-5 w-5 text-primary" /></div>
+  1301→              <div>
+  1302→                <p className="text-sm text-muted-foreground">Total Customers</p>
+  1303→                <p className="text-xl font-bold">{customers.length}</p>
+  1304→              </div>
+  1305→            </div>
+  1306→          </CardContent>
+  1307→        </Card>
+  1308→        <Card>
+  1309→          <CardContent className="p-4">
+  1310→            <div className="flex items-center gap-3">
+  1311→              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30"><CircleDollarSign className="h-5 w-5 text-red-600" /></div>
+  1312→              <div>
+  1313→                <p className="text-sm text-muted-foreground">Outstanding Debt</p>
+  1314→                <p className="text-xl font-bold">{formatKES(totalDebt)}</p>
+  1315→              </div>
+  1316→            </div>
+  1317→          </CardContent>
+  1318→        </Card>
+  1319→        <Card>
+  1320→          <CardContent className="p-4">
+  1321→            <div className="flex items-center gap-3">
+  1322→              <div className="p-2 rounded-lg bg-yellow-100 dark:bg-yellow-900/30"><AlertTriangle className="h-5 w-5 text-yellow-600" /></div>
+  1323→              <div>
+  1324→                <p className="text-sm text-muted-foreground">With Debt</p>
+  1325→                <p className="text-xl font-bold">{customers.filter(c => c.currentDebtBalance > 0).length}</p>
+  1326→              </div>
+  1327→            </div>
+  1328→          </CardContent>
+  1329→        </Card>
+  1330→      </div>
+  1331→
+  1332→      {/* Toolbar */}
+  1333→      <div className="flex gap-3">
+  1334→        <div className="relative flex-1">
+  1335→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1336→          <Input placeholder="Search customers..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
+  1337→        </div>
+  1338→        <Dialog open={addCustomerOpen} onOpenChange={setAddCustomerOpen}>
+  1339→          <DialogTrigger asChild>
+  1340→            <Button className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground">
+  1341→              <Plus className="mr-2 h-4 w-4" /> Add Customer
+  1342→            </Button>
+  1343→          </DialogTrigger>
+  1344→          <DialogContent>
+  1345→            <DialogHeader>
+  1346→              <DialogTitle>Add Customer</DialogTitle>
+  1347→              <DialogDescription>Register a new customer</DialogDescription>
+  1348→            </DialogHeader>
+  1349→            <div className="space-y-4">
+  1350→              <div className="space-y-2"><Label>Full Name</Label><Input value={newCustomer.name} onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })} placeholder="John Kamau" /></div>
+  1351→              <div className="grid grid-cols-2 gap-4">
+  1352→                <div className="space-y-2"><Label>Phone</Label><Input value={newCustomer.phone} onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })} placeholder="0712 345 678" /></div>
+  1353→                <div className="space-y-2"><Label>Email</Label><Input value={newCustomer.email} onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })} placeholder="john@email.com" /></div>
+  1354→              </div>
+  1355→              <div className="grid grid-cols-2 gap-4">
+  1356→                <div className="space-y-2"><Label>ID Number</Label><Input value={newCustomer.idNumber} onChange={(e) => setNewCustomer({ ...newCustomer, idNumber: e.target.value })} placeholder="12345678" /></div>
+  1357→                <div className="space-y-2"><Label>Debt Limit (KES)</Label><Input type="number" value={newCustomer.debtLimit} onChange={(e) => setNewCustomer({ ...newCustomer, debtLimit: e.target.value })} /></div>
+  1358→              </div>
+  1359→              <div className="space-y-2"><Label>Address</Label><Textarea value={newCustomer.address} onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })} placeholder="Nairobi, Kenya" /></div>
+  1360→            </div>
+  1361→            <DialogFooter>
+  1362→              <Button variant="outline" onClick={() => setAddCustomerOpen(false)}>Cancel</Button>
+  1363→              <Button onClick={() => createCustomerMutation.mutate({ storeId: currentStoreId, ...newCustomer, debtLimit: Number(newCustomer.debtLimit) })} disabled={createCustomerMutation.isPending || !newCustomer.name} className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground">
+  1364→                {createCustomerMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+  1365→                Add Customer
+  1366→              </Button>
+  1367→            </DialogFooter>
+  1368→          </DialogContent>
+  1369→        </Dialog>
+  1370→      </div>
+  1371→
+  1372→      {/* Customer Table */}
+  1373→      <Card>
+  1374→        <CardContent className="p-0">
+  1375→          {isLoading ? (
+  1376→            <div className="p-6 space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+  1377→          ) : (
+  1378→            <div className="overflow-x-auto">
+  1379→              <Table>
+  1380→                <TableHeader>
+  1381→                  <TableRow>
+  1382→                    <TableHead>Customer</TableHead>
+  1383→                    <TableHead>Phone</TableHead>
+  1384→                    <TableHead>ID Number</TableHead>
+  1385→                    <TableHead className="text-right">Debt Balance</TableHead>
+  1386→                    <TableHead className="text-right">Debt Limit</TableHead>
+  1387→                    <TableHead>Loyalty</TableHead>
+  1388→                    <TableHead className="w-[60px]">View</TableHead>
+  1389→                  </TableRow>
+  1390→                </TableHeader>
+  1391→                <TableBody>
+  1392→                  {customers.length === 0 ? (
+  1393→                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No customers found</TableCell></TableRow>
+  1394→                  ) : customers.map((customer) => (
+  1395→                    <TableRow key={customer.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedCustomer(customer)}>
+  1396→                      <TableCell>
+  1397→                        <div className="flex items-center gap-3">
+  1398→                          <Avatar className="h-8 w-8"><AvatarFallback className="text-xs">{customer.name.split(' ').map(n => n[0]).join('').slice(0, 2)}</AvatarFallback></Avatar>
+  1399→                          <div><p className="font-medium text-sm">{customer.name}</p>{customer.email && <p className="text-xs text-muted-foreground">{customer.email}</p>}</div>
+  1400→                        </div>
+  1401→                      </TableCell>
+  1402→                      <TableCell className="text-sm">{customer.phone || '—'}</TableCell>
+  1403→                      <TableCell className="text-sm">{customer.idNumber || '—'}</TableCell>
+  1404→                      <TableCell className="text-right font-medium">
+  1405→                        <span className={customer.currentDebtBalance > 0 ? 'text-red-600' : ''}>{formatKES(customer.currentDebtBalance)}</span>
+  1406→                      </TableCell>
+  1407→                      <TableCell className="text-right text-sm text-muted-foreground">{formatKES(customer.debtLimit)}</TableCell>
+  1408→                      <TableCell><Badge variant="secondary" className="text-[10px]">{customer.loyaltyPoints} pts</Badge></TableCell>
+  1409→                      <TableCell>
+  1410→                        <Button variant="ghost" size="icon" className="h-7 w-7"><Eye className="h-4 w-4" /></Button>
+  1411→                      </TableCell>
+  1412→                    </TableRow>
+  1413→                  ))}
+  1414→                </TableBody>
+  1415→              </Table>
+  1416→            </div>
+  1417→          )}
+  1418→        </CardContent>
+  1419→      </Card>
+  1420→
+  1421→      {/* Customer Detail Sheet */}
+  1422→      <Sheet open={!!selectedCustomer} onOpenChange={(open) => !open && setSelectedCustomer(null)}>
+  1423→        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+  1424→          <SheetHeader>
+  1425→            <SheetTitle>{selectedCustomer?.name}</SheetTitle>
+  1426→            <SheetDescription>Customer details and debt history</SheetDescription>
+  1427→          </SheetHeader>
+  1428→          {selectedCustomer && (
+  1429→            <div className="mt-6 space-y-6">
+  1430→              <div className="grid grid-cols-2 gap-4">
+  1431→                <div><p className="text-xs text-muted-foreground">Phone</p><p className="text-sm font-medium">{selectedCustomer.phone || 'N/A'}</p></div>
+  1432→                <div><p className="text-xs text-muted-foreground">Email</p><p className="text-sm font-medium">{selectedCustomer.email || 'N/A'}</p></div>
+  1433→                <div><p className="text-xs text-muted-foreground">ID Number</p><p className="text-sm font-medium">{selectedCustomer.idNumber || 'N/A'}</p></div>
+  1434→                <div><p className="text-xs text-muted-foreground">Address</p><p className="text-sm font-medium">{selectedCustomer.address || 'N/A'}</p></div>
+  1435→                <div><p className="text-xs text-muted-foreground">Debt Balance</p><p className="text-sm font-bold text-red-600">{formatKES(selectedCustomer.currentDebtBalance)}</p></div>
+  1436→                <div><p className="text-xs text-muted-foreground">Debt Limit</p><p className="text-sm font-medium">{formatKES(selectedCustomer.debtLimit)}</p></div>
+  1437→                <div><p className="text-xs text-muted-foreground">Loyalty Points</p><p className="text-sm font-medium">{selectedCustomer.loyaltyPoints}</p></div>
+  1438→                <div><p className="text-xs text-muted-foreground">Joined</p><p className="text-sm font-medium">{formatDate(selectedCustomer.createdAt)}</p></div>
+  1439→              </div>
+  1440→
+  1441→              <Separator />
+  1442→
+  1443→              <div>
+  1444→                <h3 className="font-semibold text-sm mb-3">Debt History</h3>
+  1445→                {debts.length === 0 ? (
+  1446→                  <p className="text-sm text-muted-foreground">No debt records</p>
+  1447→                ) : (
+  1448→                  <div className="space-y-3">
+  1449→                    {debts.map((debt) => (
+  1450→                      <Card key={debt.id}>
+  1451→                        <CardContent className="p-3">
+  1452→                          <div className="flex justify-between items-start">
+  1453→                            <div>
+  1454→                              <p className="text-sm font-medium">{formatKES(debt.amountOwed)}</p>
+  1455→                              <p className="text-xs text-muted-foreground">Due: {formatDate(debt.dueDate)}</p>
+  1456→                            </div>
+  1457→                            <Badge variant={debt.status === 'OVERDUE' ? 'destructive' : debt.status === 'SETTLED' ? 'secondary' : 'outline'} className="text-[10px]">
+  1458→                              {debt.status}
+  1459→                            </Badge>
+  1460→                          </div>
+  1461→                          <Progress value={(debt.amountPaid / debt.amountOwed) * 100} className="mt-2 h-1.5" />
+  1462→                          <p className="text-xs text-muted-foreground mt-1">Paid: {formatKES(debt.amountPaid)} / {formatKES(debt.amountOwed)}</p>
+  1463→                        </CardContent>
+  1464→                      </Card>
+  1465→                    ))}
+  1466→                  </div>
+  1467→                )}
+  1468→              </div>
+  1469→            </div>
+  1470→          )}
+  1471→        </SheetContent>
+  1472→      </Sheet>
+  1473→    </div>
+  1474→  );
+  1475→}
+  1476→
+  1477→// ============================================================================
+  1478→// RENTALS TAB
+  1479→// ============================================================================
+  1480→
+  1481→function RentalsTab() {
+  1482→  const [statusFilter, setStatusFilter] = useState<string>('all');
+  1483→  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
+  1484→  const [selectedRental, setSelectedRental] = useState<RentalItem | null>(null);
+  1485→  const [newRentalOpen, setNewRentalOpen] = useState(false);
+  1486→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+  1487→
+  1488→  const { data: rentalsData, isLoading } = useQuery({
+  1489→    queryKey: ['rentals', currentStoreId, statusFilter],
+  1490→    queryFn: () => rentalsApi.list({ storeId: currentStoreId, status: statusFilter !== 'all' ? statusFilter : undefined, limit: 100 }),
+  1491→  });
+  1492→
+  1493→  const { data: productsData } = useQuery({
+  1494→    queryKey: ['products', currentStoreId],
+  1495→    queryFn: () => productsApi.list({ storeId: currentStoreId, limit: 200 }),
+  1496→  });
+  1497→
+  1498→  const { data: customersData } = useQuery({
+  1499→    queryKey: ['customers', currentStoreId],
+  1500→    queryFn: () => customersApi.list({ storeId: currentStoreId, limit: 100 }),
+  1501→  });
+  1502→
+  1503→  const returnRentalMutation = useMutation({
+  1504→    mutationFn: ({ id, data }: { id: string; data: { damageAssessment?: string; damageCharge?: number; notes?: string } }) => rentalsApi.returnRental(id, data),
+  1505→    onSuccess: () => {
+  1506→      toast.success('Rental returned successfully');
+  1507→      setReturnDialogOpen(false);
+  1508→      setSelectedRental(null);
+  1509→    },
+  1510→    onError: (err: Error) => toast.error(err.message),
+  1511→  });
+  1512→
+  1513→  const rentals = rentalsData?.data || [];
+  1514→  const activeRentals = rentals.filter(r => r.status === 'ACTIVE').length;
+  1515→  const overdueRentals = rentals.filter(r => r.status === 'OVERDUE').length;
+  1516→  const totalRentalRevenue = rentals.reduce((s, r) => s + r.totalRentalCharge, 0);
+  1517→
+  1518→  return (
+  1519→    <div className="space-y-4">
+  1520→      {/* Stats */}
+  1521→      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+  1522→        <Card><CardContent className="p-4"><div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30"><KeyRound className="h-5 w-5 text-blue-600" /></div><div><p className="text-sm text-muted-foreground">Active</p><p className="text-xl font-bold">{activeRentals}</p></div></div></CardContent></Card>
+  1523→        <Card><CardContent className="p-4"><div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30"><AlertTriangle className="h-5 w-5 text-red-600" /></div><div><p className="text-sm text-muted-foreground">Overdue</p><p className="text-xl font-bold">{overdueRentals}</p></div></div></CardContent></Card>
+  1524→        <Card><CardContent className="p-4"><div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30"><DollarSign className="h-5 w-5 text-green-600" /></div><div><p className="text-sm text-muted-foreground">Rental Revenue</p><p className="text-xl font-bold">{formatKES(totalRentalRevenue)}</p></div></div></CardContent></Card>
+  1525→        <Card><CardContent className="p-4"><div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30"><Layers className="h-5 w-5 text-purple-600" /></div><div><p className="text-sm text-muted-foreground">Total Rentals</p><p className="text-xl font-bold">{rentals.length}</p></div></div></CardContent></Card>
+  1526→      </div>
+  1527→
+  1528→      {/* Toolbar */}
+  1529→      <div className="flex gap-3">
+  1530→        <Select value={statusFilter} onValueChange={setStatusFilter}>
+  1531→          <SelectTrigger className="w-48"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+  1532→          <SelectContent>
+  1533→            <SelectItem value="all">All Statuses</SelectItem>
+  1534→            <SelectItem value="ACTIVE">Active</SelectItem>
+  1535→            <SelectItem value="OVERDUE">Overdue</SelectItem>
+  1536→            <SelectItem value="RETURNED">Returned</SelectItem>
+  1537→            <SelectItem value="DAMAGED">Damaged</SelectItem>
+  1538→          </SelectContent>
+  1539→        </Select>
+  1540→        <Button className="ml-auto bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground" onClick={() => setNewRentalOpen(true)}>
+  1541→          <Plus className="mr-2 h-4 w-4" /> New Rental
+  1542→        </Button>
+  1543→      </div>
+  1544→
+  1545→      {/* Rentals Table */}
+  1546→      <Card>
+  1547→        <CardContent className="p-0">
+  1548→          {isLoading ? (
+  1549→            <div className="p-6 space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+  1550→          ) : (
+  1551→            <div className="overflow-x-auto">
+  1552→              <Table>
+  1553→                <TableHeader>
+  1554→                  <TableRow>
+  1555→                    <TableHead>Equipment</TableHead>
+  1556→                    <TableHead>Customer</TableHead>
+  1557→                    <TableHead>Status</TableHead>
+  1558→                    <TableHead>Start Date</TableHead>
+  1559→                    <TableHead>Return By</TableHead>
+  1560→                    <TableHead className="text-right">Rate/Day</TableHead>
+  1561→                    <TableHead className="text-right">Total Charge</TableHead>
+  1562→                    <TableHead className="text-right">Deposit</TableHead>
+  1563→                    <TableHead className="w-[80px]">Actions</TableHead>
+  1564→                  </TableRow>
+  1565→                </TableHeader>
+  1566→                <TableBody>
+  1567→                  {rentals.length === 0 ? (
+  1568→                    <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">No rentals found</TableCell></TableRow>
+  1569→                  ) : rentals.map((rental) => (
+  1570→                    <TableRow key={rental.id}>
+  1571→                      <TableCell className="font-medium text-sm">{rental.product?.name || rental.productId}</TableCell>
+  1572→                      <TableCell className="text-sm">{rental.customer?.name || rental.customerId}</TableCell>
+  1573→                      <TableCell>
+  1574→                        <Badge variant={
+  1575→                          rental.status === 'ACTIVE' ? 'default' :
+  1576→                          rental.status === 'OVERDUE' ? 'destructive' :
+  1577→                          rental.status === 'RETURNED' ? 'secondary' : 'outline'
+  1578→                        } className="text-[10px]">
+  1579→                          {rental.status}
+  1580→                        </Badge>
+  1581→                      </TableCell>
+  1582→                      <TableCell className="text-sm">{formatDate(rental.rentalStartDate)}</TableCell>
+  1583→                      <TableCell className="text-sm">{formatDate(rental.expectedReturnDate)}</TableCell>
+  1584→                      <TableCell className="text-right text-sm">{formatKES(rental.ratePerDay)}</TableCell>
+  1585→                      <TableCell className="text-right font-medium text-sm">{formatKES(rental.totalRentalCharge)}</TableCell>
+  1586→                      <TableCell className="text-right text-sm">{formatKES(rental.securityDeposit)}</TableCell>
+  1587→                      <TableCell>
+  1588→                        {(rental.status === 'ACTIVE' || rental.status === 'OVERDUE') && (
+  1589→                          <Button
+  1590→                            variant="outline"
+  1591→                            size="sm"
+  1592→                            onClick={() => { setSelectedRental(rental); setReturnDialogOpen(true); }}
+  1593→                          >
+  1594→                            Return
+  1595→                          </Button>
+  1596→                        )}
+  1597→                      </TableCell>
+  1598→                    </TableRow>
+  1599→                  ))}
+  1600→                </TableBody>
+  1601→              </Table>
+  1602→            </div>
+  1603→          )}
+  1604→        </CardContent>
+  1605→      </Card>
+  1606→
+  1607→      {/* Return Dialog */}
+  1608→      <Dialog open={returnDialogOpen} onOpenChange={setReturnDialogOpen}>
+  1609→        <DialogContent>
+  1610→          <DialogHeader>
+  1611→            <DialogTitle>Process Return</DialogTitle>
+  1612→            <DialogDescription>Return rental equipment and assess any damage</DialogDescription>
+  1613→          </DialogHeader>
+  1614→          {selectedRental && (
+  1615→            <div className="space-y-4">
+  1616→              <div className="p-3 bg-muted rounded-lg">
+  1617→                <p className="text-sm"><strong>Equipment:</strong> {selectedRental.product?.name || selectedRental.productId}</p>
+  1618→                <p className="text-sm"><strong>Customer:</strong> {selectedRental.customer?.name || selectedRental.customerId}</p>
+  1619→                <p className="text-sm"><strong>Days Rented:</strong> {Math.ceil((Date.now() - new Date(selectedRental.rentalStartDate).getTime()) / 86400000)}</p>
+  1620→                <p className="text-sm"><strong>Total Charge:</strong> {formatKES(selectedRental.totalRentalCharge)}</p>
+  1621→              </div>
+  1622→              <div className="space-y-2">
+  1623→                <Label>Damage Assessment</Label>
+  1624→                <Select onValueChange={(v) => setSelectedRental({ ...selectedRental, damageAssessment: v })}>
+  1625→                  <SelectTrigger><SelectValue placeholder="Select damage level" /></SelectTrigger>
+  1626→                  <SelectContent>
+  1627→                    <SelectItem value="NONE">No Damage</SelectItem>
+  1628→                    <SelectItem value="MINOR">Minor Damage</SelectItem>
+  1629→                    <SelectItem value="MODERATE">Moderate Damage</SelectItem>
+  1630→                    <SelectItem value="SEVERE">Severe Damage</SelectItem>
+  1631→                  </SelectContent>
+  1632→                </Select>
+  1633→              </div>
+  1634→            </div>
+  1635→          )}
+  1636→          <DialogFooter>
+  1637→            <Button variant="outline" onClick={() => setReturnDialogOpen(false)}>Cancel</Button>
+  1638→            <Button
+  1639→              onClick={() => selectedRental && returnRentalMutation.mutate({
+  1640→                id: selectedRental.id,
+  1641→                data: {
+  1642→                  damageAssessment: selectedRental.damageAssessment || 'NONE',
+  1643→                  damageCharge: selectedRental.damageCharge || 0,
+  1644→                },
+  1645→              })}
+  1646→              disabled={returnRentalMutation.isPending}
+  1647→            >
+  1648→              {returnRentalMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+  1649→              Confirm Return
+  1650→            </Button>
+  1651→          </DialogFooter>
+  1652→        </DialogContent>
+  1653→      </Dialog>
+  1654→
+  1655→      {/* New Rental Dialog */}
+  1656→      <Dialog open={newRentalOpen} onOpenChange={setNewRentalOpen}>
+  1657→        <DialogContent>
+  1658→          <DialogHeader>
+  1659→            <DialogTitle>New Equipment Rental</DialogTitle>
+  1660→            <DialogDescription>Register a new equipment rental</DialogDescription>
+  1661→          </DialogHeader>
+  1662→          <RentalForm
+  1663→            storeId={currentStoreId}
+  1664→            products={productsData?.data || []}
+  1665→            customers={customersData?.data || []}
+  1666→            onSuccess={() => setNewRentalOpen(false)}
+  1667→          />
+  1668→        </DialogContent>
+  1669→      </Dialog>
+  1670→    </div>
+  1671→  );
+  1672→}
+  1673→
+  1674→function RentalForm({ storeId, products, customers, onSuccess }: { storeId: string; products: ProductListItem[]; customers: CustomerItem[]; onSuccess: () => void }) {
+  1675→  const [form, setForm] = useState({ productId: '', customerId: '', expectedReturnDate: '', securityDeposit: '', ratePerDay: '', notes: '' });
+  1676→
+  1677→  const createRentalMutation = useMutation({
+  1678→    mutationFn: rentalsApi.create,
+  1679→    onSuccess: () => { toast.success('Rental created'); onSuccess(); },
+  1680→    onError: (err: Error) => toast.error(err.message),
+  1681→  });
+  1682→
+  1683→  const rentalProducts = products.filter(p => p.isRental);
+  1684→
+  1685→  return (
+  1686→    <div className="space-y-4">
+  1687→      <div className="space-y-2">
+  1688→        <Label>Equipment</Label>
+  1689→        <Select value={form.productId} onValueChange={(v) => setForm({ ...form, productId: v })}>
+  1690→          <SelectTrigger><SelectValue placeholder="Select equipment" /></SelectTrigger>
+  1691→          <SelectContent>
+  1692→            {rentalProducts.map((p) => <SelectItem key={p.id} value={p.id}>{p.name} ({formatKES(p.pricePerUnit)}/day)</SelectItem>)}
+  1693→            {rentalProducts.length === 0 && <SelectItem value="none" disabled>No rental products available</SelectItem>}
+  1694→          </SelectContent>
+  1695→        </Select>
+  1696→      </div>
+  1697→      <div className="space-y-2">
+  1698→        <Label>Customer</Label>
+  1699→        <Select value={form.customerId} onValueChange={(v) => setForm({ ...form, customerId: v })}>
+  1700→          <SelectTrigger><SelectValue placeholder="Select customer" /></SelectTrigger>
+  1701→          <SelectContent>
+  1702→            {customers.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+  1703→          </SelectContent>
+  1704→        </Select>
+  1705→      </div>
+  1706→      <div className="grid grid-cols-2 gap-4">
+  1707→        <div className="space-y-2"><Label>Expected Return</Label><Input type="date" value={form.expectedReturnDate} onChange={(e) => setForm({ ...form, expectedReturnDate: e.target.value })} /></div>
+  1708→        <div className="space-y-2"><Label>Security Deposit (KES)</Label><Input type="number" value={form.securityDeposit} onChange={(e) => setForm({ ...form, securityDeposit: e.target.value })} placeholder="0" /></div>
+  1709→      </div>
+  1710→      <div className="space-y-2"><Label>Rate Per Day (KES)</Label><Input type="number" value={form.ratePerDay} onChange={(e) => setForm({ ...form, ratePerDay: e.target.value })} placeholder="0" /></div>
+  1711→      <div className="space-y-2"><Label>Notes</Label><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Any special instructions..." /></div>
+  1712→      <DialogFooter>
+  1713→        <Button variant="outline" onClick={onSuccess}>Cancel</Button>
+  1714→        <Button
+  1715→          onClick={() => createRentalMutation.mutate({ storeId, ...form, securityDeposit: Number(form.securityDeposit), ratePerDay: Number(form.ratePerDay) })}
+  1716→          disabled={createRentalMutation.isPending || !form.productId || !form.customerId}
+  1717→          className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+  1718→        >
+  1719→          {createRentalMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+  1720→          Create Rental
+  1721→        </Button>
+  1722→      </DialogFooter>
+  1723→    </div>
+  1724→  );
+  1725→}
+  1726→
+  1727→// ============================================================================
+  1728→// FINANCIAL TAB
+  1729→// ============================================================================
+  1730→
+  1731→function FinancialTab() {
+  1732→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+  1733→  const [dateRange, setDateRange] = useState({ from: new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0], to: new Date().toISOString().split('T')[0] });
+  1734→
+  1735→  const { data: dashboardData, isLoading: dashboardLoading } = useQuery({
+  1736→    queryKey: ['dashboard', currentStoreId],
+  1737→    queryFn: () => dashboardApi.getStats(currentStoreId),
+  1738→  });
+  1739→
+  1740→  const { data: journalData, isLoading: journalLoading } = useQuery({
+  1741→    queryKey: ['journal-entries', currentStoreId, dateRange],
+  1742→    queryFn: () => financialApi.listJournalEntries({ storeId: currentStoreId, dateFrom: dateRange.from, dateTo: dateRange.to, limit: 50 }),
+  1743→  });
+  1744→
+  1745→  const { data: accountsData } = useQuery({
+  1746→    queryKey: ['accounts'],
+  1747→    queryFn: () => financialApi.listAccounts(),
+  1748→  });
+  1749→
+  1750→  const { data: debtData } = useQuery({
+  1751→    queryKey: ['debt', currentStoreId],
+  1752→    queryFn: () => debtApi.list({ storeId: currentStoreId, limit: 200 }),
+  1753→  });
+  1754→
+  1755→  const stats = dashboardData?.data;
+  1756→  const journals = journalData?.data || [];
+  1757→  const debts = debtData?.data || [];
+  1758→
+  1759→  // Debt aging summary
+  1760→  const agingSummary = useMemo(() => {
+  1761→    const summary = { current: 0, days30: 0, days60: 0, days90Plus: 0 };
+  1762→    debts.forEach(d => {
+  1763→      if (d.agingBucket === 'CURRENT') summary.current += d.balance;
+  1764→      else if (d.agingBucket === 'DAYS_30') summary.days30 += d.balance;
+  1765→      else if (d.agingBucket === 'DAYS_60') summary.days60 += d.balance;
+  1766→      else summary.days90Plus += d.balance;
+  1767→    });
+  1768→    return summary;
+  1769→  }, [debts]);
+  1770→
+  1771→  const agingChartData = [
+  1772→    { name: 'Current', value: agingSummary.current, fill: CHART_COLORS[2] },
+  1773→    { name: '1-30 Days', value: agingSummary.days30, fill: CHART_COLORS[0] },
+  1774→    { name: '31-60 Days', value: agingSummary.days60, fill: CHART_COLORS[1] },
+  1775→    { name: '90+ Days', value: agingSummary.days90Plus, fill: CHART_COLORS[4] },
+  1776→  ];
+  1777→
+  1778→  const salesByHourData = stats?.salesByHour || Array.from({ length: 12 }).map((_, i) => ({ hour: `${8 + i}:00`, amount: 0 }));
+  1779→  const paymentBreakdown = stats?.paymentMethodBreakdown || [];
+  1780→
+  1781→  return (
+  1782→    <div className="space-y-4">
+  1783→      {/* Stats Cards */}
+  1784→      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+  1785→        <Card><CardContent className="p-4"><div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30"><TrendingUp className="h-5 w-5 text-green-600" /></div><div><p className="text-sm text-muted-foreground">Today Revenue</p><p className="text-xl font-bold">{formatKES(stats?.todayRevenue || 0)}</p></div></div></CardContent></Card>
+  1786→        <Card><CardContent className="p-4"><div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-primary/10"><ShoppingBag className="h-5 w-5 text-primary" /></div><div><p className="text-sm text-muted-foreground">Today Sales</p><p className="text-xl font-bold">{stats?.todayTransactions || 0}</p></div></div></CardContent></Card>
+  1787→        <Card><CardContent className="p-4"><div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30"><CircleDollarSign className="h-5 w-5 text-red-600" /></div><div><p className="text-sm text-muted-foreground">Outstanding Debt</p><p className="text-xl font-bold">{formatKES(stats?.outstandingDebt || 0)}</p></div></div></CardContent></Card>
+  1788→        <Card><CardContent className="p-4"><div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30"><KeyRound className="h-5 w-5 text-blue-600" /></div><div><p className="text-sm text-muted-foreground">Active Rentals</p><p className="text-xl font-bold">{stats?.activeRentals || 0}</p></div></div></CardContent></Card>
+  1789→      </div>
+  1790→
+  1791→      {/* Charts Row */}
+  1792→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  1793→        {/* Sales by Hour Chart */}
+  1794→        <Card>
+  1795→          <CardHeader className="pb-2"><CardTitle className="text-base">Revenue by Hour</CardTitle></CardHeader>
+  1796→          <CardContent>
+  1797→            <div className="h-64">
+  1798→              <ResponsiveContainer width="100%" height="100%">
+  1799→                <BarChart data={salesByHourData}>
+  1800→                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+  1801→                  <XAxis dataKey="hour" tick={{ fontSize: 11 }} />
+  1802→                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `KES ${(v / 1000).toFixed(0)}k`} />
+  1803→                  <RechartsTooltip formatter={(value: number) => formatKES(value)} />
+  1804→                  <Bar dataKey="amount" fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} />
+  1805→                </BarChart>
+  1806→              </ResponsiveContainer>
+  1807→            </div>
+  1808→          </CardContent>
+  1809→        </Card>
+  1810→
+  1811→        {/* Debt Aging Chart */}
+  1812→        <Card>
+  1813→          <CardHeader className="pb-2"><CardTitle className="text-base">Debt Aging Analysis</CardTitle></CardHeader>
+  1814→          <CardContent>
+  1815→            <div className="h-64 flex items-center justify-center">
+  1816→              <ResponsiveContainer width="100%" height="100%">
+  1817→                <RechartsPie>
+  1818→                  <Pie
+  1819→                    data={agingChartData}
+  1820→                    dataKey="value"
+  1821→                    nameKey="name"
+  1822→                    cx="50%"
+  1823→                    cy="50%"
+  1824→                    outerRadius={90}
+  1825→                    label={({ name, value }) => `${name}: ${formatKES(value)}`}
+  1826→                  >
+  1827→                    {agingChartData.map((entry, index) => (
+  1828→                      <Cell key={`cell-${index}`} fill={entry.fill} />
+  1829→                    ))}
+  1830→                  </Pie>
+  1831→                  <RechartsTooltip formatter={(value: number) => formatKES(value)} />
+  1832→                  <Legend />
+  1833→                </RechartsPie>
+  1834→              </ResponsiveContainer>
+  1835→            </div>
+  1836→          </CardContent>
+  1837→        </Card>
+  1838→      </div>
+  1839→
+  1840→      {/* Payment Method Breakdown */}
+  1841→      {paymentBreakdown.length > 0 && (
+  1842→        <Card>
+  1843→          <CardHeader className="pb-2"><CardTitle className="text-base">Payment Method Breakdown</CardTitle></CardHeader>
+  1844→          <CardContent>
+  1845→            <div className="h-48">
+  1846→              <ResponsiveContainer width="100%" height="100%">
+  1847→                <BarChart data={paymentBreakdown}>
+  1848→                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+  1849→                  <XAxis dataKey="method" tick={{ fontSize: 11 }} />
+  1850→                  <YAxis tick={{ fontSize: 11 }} />
+  1851→                  <RechartsTooltip formatter={(value: number) => formatKES(value)} />
+  1852→                  <Bar dataKey="amount" fill={CHART_COLORS[1]} radius={[4, 4, 0, 0]} />
+  1853→                </BarChart>
+  1854→              </ResponsiveContainer>
+  1855→            </div>
+  1856→          </CardContent>
+  1857→        </Card>
+  1858→      )}
+  1859→
+  1860→      {/* Journal Entries */}
+  1861→      <Card>
+  1862→        <CardHeader>
+  1863→          <div className="flex items-center justify-between">
+  1864→            <CardTitle className="text-base">Journal Entries</CardTitle>
+  1865→            <div className="flex gap-2">
+  1866→              <Input type="date" value={dateRange.from} onChange={(e) => setDateRange({ ...dateRange, from: e.target.value })} className="w-36 text-sm" />
+  1867→              <Input type="date" value={dateRange.to} onChange={(e) => setDateRange({ ...dateRange, to: e.target.value })} className="w-36 text-sm" />
+  1868→            </div>
+  1869→          </div>
+  1870→        </CardHeader>
+  1871→        <CardContent className="p-0">
+  1872→          {journalLoading ? (
+  1873→            <div className="p-6 space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+  1874→          ) : (
+  1875→            <div className="overflow-x-auto">
+  1876→              <Table>
+  1877→                <TableHeader>
+  1878→                  <TableRow>
+  1879→                    <TableHead>Entry #</TableHead>
+  1880→                    <TableHead>Date</TableHead>
+  1881→                    <TableHead>Description</TableHead>
+  1882→                    <TableHead>Reference</TableHead>
+  1883→                    <TableHead className="text-right">Debit</TableHead>
+  1884→                    <TableHead className="text-right">Credit</TableHead>
+  1885→                    <TableHead>Status</TableHead>
+  1886→                  </TableRow>
+  1887→                </TableHeader>
+  1888→                <TableBody>
+  1889→                  {journals.length === 0 ? (
+  1890→                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No journal entries</TableCell></TableRow>
+  1891→                  ) : journals.map((je) => (
+  1892→                    <TableRow key={je.id}>
+  1893→                      <TableCell className="font-mono text-sm">{je.entryNumber}</TableCell>
+  1894→                      <TableCell className="text-sm">{formatDate(je.entryDate)}</TableCell>
+  1895→                      <TableCell className="text-sm max-w-[200px] truncate">{je.description}</TableCell>
+  1896→                      <TableCell className="text-sm">{je.referenceType || '—'}</TableCell>
+  1897→                      <TableCell className="text-right font-medium text-sm">{formatKES(je.totalDebit)}</TableCell>
+  1898→                      <TableCell className="text-right font-medium text-sm">{formatKES(je.totalCredit)}</TableCell>
+  1899→                      <TableCell><Badge variant={je.isPosted ? 'secondary' : 'outline'} className="text-[10px]">{je.isPosted ? 'Posted' : 'Draft'}</Badge></TableCell>
+  1900→                    </TableRow>
+  1901→                  ))}
+  1902→                </TableBody>
+  1903→              </Table>
+  1904→            </div>
+  1905→          )}
+  1906→        </CardContent>
+  1907→      </Card>
+  1908→    </div>
+  1909→  );
+  1910→}
+  1911→
+  1912→// ============================================================================
+  1913→// REPORTS TAB
+  1914→// ============================================================================
+  1915→
+  1916→function ReportsTab() {
+  1917→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+  1918→  const [reportType, setReportType] = useState<'sales' | 'inventory'>('sales');
+  1919→  const [dateFrom, setDateFrom] = useState(new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]);
+  1920→  const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0]);
+  1921→
+  1922→  const { data: salesData, isLoading: salesLoading } = useQuery({
+  1923→    queryKey: ['sales-report', currentStoreId, dateFrom, dateTo],
+  1924→    queryFn: () => reportsApi.getSalesReport({ storeId: currentStoreId, dateFrom, dateTo }),
+  1925→    enabled: reportType === 'sales',
+  1926→  });
+  1927→
+  1928→  const { data: inventoryData, isLoading: inventoryLoading } = useQuery({
+  1929→    queryKey: ['inventory-report', currentStoreId],
+  1930→    queryFn: () => reportsApi.getInventoryReport(currentStoreId),
+  1931→    enabled: reportType === 'inventory',
+  1932→  });
+  1933→
+  1934→  const salesReport = salesData?.data;
+  1935→  const inventoryReport = inventoryData?.data;
+  1936→
+  1937→  const handleExport = async () => {
+  1938→    try {
+  1939→      const res = await reportsApi.exportCSV({ storeId: currentStoreId, type: reportType, dateFrom, dateTo });
+  1940→      if (res.data?.url) {
+  1941→        window.open(res.data.url, '_blank');
+  1942→        toast.success('Report exported');
+  1943→      }
+  1944→    } catch {
+  1945→      toast.error('Export failed');
+  1946→    }
+  1947→  };
+  1948→
+  1949→  return (
+  1950→    <div className="space-y-4">
+  1951→      {/* Controls */}
+  1952→      <Card>
+  1953→        <CardContent className="p-4">
+  1954→          <div className="flex flex-col sm:flex-row gap-3 items-end">
+  1955→            <div className="space-y-1">
+  1956→              <Label className="text-sm">Report Type</Label>
+  1957→              <Select value={reportType} onValueChange={(v) => setReportType(v as 'sales' | 'inventory')}>
+  1958→                <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+  1959→                <SelectContent>
+  1960→                  <SelectItem value="sales">Sales Report</SelectItem>
+  1961→                  <SelectItem value="inventory">Inventory Report</SelectItem>
+  1962→                </SelectContent>
+  1963→              </Select>
+  1964→            </div>
+  1965→            {reportType === 'sales' && (
+  1966→              <>
+  1967→                <div className="space-y-1"><Label className="text-sm">From</Label><Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-40" /></div>
+  1968→                <div className="space-y-1"><Label className="text-sm">To</Label><Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-40" /></div>
+  1969→              </>
+  1970→            )}
+  1971→            <Button onClick={handleExport} variant="outline" className="ml-auto">
+  1972→              <Download className="mr-2 h-4 w-4" /> Export CSV
+  1973→            </Button>
+  1974→          </div>
+  1975→        </CardContent>
+  1976→      </Card>
+  1977→
+  1978→      {/* Sales Report */}
+  1979→      {reportType === 'sales' && (
+  1980→        <>
+  1981→          {salesLoading ? (
+  1982→            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+  1983→              {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+  1984→            </div>
+  1985→          ) : salesReport ? (
+  1986→            <>
+  1987→              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+  1988→                <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">Total Revenue</p><p className="text-2xl font-bold text-green-600">{formatKES(salesReport.totalRevenue)}</p></CardContent></Card>
+  1989→                <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">Total Sales</p><p className="text-2xl font-bold">{salesReport.transactionCount}</p></CardContent></Card>
+  1990→                <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">Total Tax</p><p className="text-2xl font-bold">{formatKES(salesReport.totalTax)}</p></CardContent></Card>
+  1991→                <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">Avg Transaction</p><p className="text-2xl font-bold">{formatKES(salesReport.avgTransactionValue)}</p></CardContent></Card>
+  1992→              </div>
+  1993→              {salesReport.byPaymentMethod.length > 0 && (
+  1994→                <Card>
+  1995→                  <CardHeader className="pb-2"><CardTitle className="text-base">Sales by Payment Method</CardTitle></CardHeader>
+  1996→                  <CardContent>
+  1997→                    <div className="h-64">
+  1998→                      <ResponsiveContainer width="100%" height="100%">
+  1999→                        <BarChart data={salesReport.byPaymentMethod}>
+  2000→                          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+
+[showing lines 1-2000 of 2317; use offset=2001 with limit to continue reading]

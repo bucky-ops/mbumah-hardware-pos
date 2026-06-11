@@ -1,0 +1,73 @@
+# ============================================================================
+# MBUMAH HARDWARE POS & ERP - Local Development Docker Compose
+# PostgreSQL + Redis + Mock M-Pesa API Service
+# ============================================================================
+
+version: "3.9"
+
+services:
+  # --------------------------------------------------------------------------
+  # PostgreSQL 15 with pg_trgm extension for fuzzy search
+  # --------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: mbumah_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mbumah
+      POSTGRES_PASSWORD: mbumah_dev_2024
+      POSTGRES_DB: mbumah_pos
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mbumah -d mbumah_pos"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --------------------------------------------------------------------------
+  # Redis 7 Alpine - Caching & BullMQ Job Queue
+  # --------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: mbumah_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --------------------------------------------------------------------------
+  # Mock M-Pesa Daraja API - Simulates Safaricom STK Push & Callbacks
+  # --------------------------------------------------------------------------
+  mpesa-mock:
+    image: node:20-alpine
+    container_name: mbumah_mpesa_mock
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      PORT: 3001
+      CALLBACK_URL: "http://host.docker.internal:3000/api/payments/mpesa/callback"
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./docker/mpesa-mock:/app
+    command: sh -c "npm install express cors && node server.js"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_data:
+  redis_data:

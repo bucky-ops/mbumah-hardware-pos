@@ -1,0 +1,2002 @@
+     1→# Z.AI COMPREHENSIVE PROMPT: ENTERPRISE HARDWARE STORE POS SYSTEM
+     2→
+     3→## PROJECT EXECUTIVE SUMMARY
+     4→
+     5→Build a **complete, production-ready, enterprise-grade Hardware Store Point of Sale (POS) System** with multi-tenancy support, real-time inventory management, advanced financial accounting, and integrated payment systems. The system must serve multiple independent hardware stores through a single platform while maintaining data isolation and supporting both cloud (Vercel/GitHub Pages) and local self-hosted deployments.
+     6→
+     7→---
+     8→
+     9→## SECTION 1: TECHNICAL STACK & ARCHITECTURE SPECIFICATIONS
+    10→
+    11→### 1.1 Frontend Stack
+    12→```
+    13→- Framework: Next.js 14+ (App Router, React 18+, TypeScript)
+    14→- UI Library: Shadcn/UI + TailwindCSS 3.x for enterprise-grade UI
+    15→- State Management: Zustand + React Query (TanStack Query v5+)
+    16→- Real-time Updates: Socket.io Client + Tanstack Virtual for large lists
+    17→- Charts & Analytics: Recharts + Chart.js for financial dashboards
+    18→- Form Management: React Hook Form + Zod validation
+    19→- Styling: TailwindCSS with custom enterprise color schemes
+    20→- Authentication: NextAuth.js v5 with JWT + Session management
+    21→- Data Export: xlsx (Excel), papaparse (CSV), jsPDF (Receipts)
+    22→- QR Code Generation: qrcode.react for inventory tracking
+    23→- Barcode Scanning: jsbarcode for POS entry
+    24→- Notifications: React Toastify + Custom Toast System
+    25→- Date Management: dayjs
+    26→- File Upload: react-dropzone with image compression
+    27→```
+    28→
+    29→### 1.2 Backend Stack
+    30→```
+    31→- Runtime: Node.js 20.x LTS
+    32→- Framework: NestJS 10.x (with strict TypeScript)
+    33→- ORM: TypeORM 0.3.x or Prisma 5.x (recommended: Prisma for better migrations)
+    34→- Database: PostgreSQL 15+ (production) | SQLite (local development)
+    35→- Cache Layer: Redis 7.x for session, inventory cache, rate limiting
+    36→- Message Queue: Bull/BullMQ for async operations (receipts, notifications)
+    37→- API Documentation: Swagger/OpenAPI 3.1
+    38→- Validation: class-validator, class-transformer
+    39→- Logging: Winston + Morgan (HTTP logging)
+    40→- Error Tracking: Sentry integration
+    41→- Environment Management: dotenv
+    42→```
+    43→
+    44→### 1.3 Microservices Architecture
+    45→```
+    46→Core Services:
+    47→├── API Gateway (Port 3000)
+    48→├── Auth Service (Port 3001) - JWT, RBAC, permissions
+    49→├── POS Service (Port 3002) - Sales transactions, checkout
+    50→├── Inventory Service (Port 3003) - Stock, products, warehouses
+    51→├── Payment Service (Port 3004) - M-Pesa, Cash, Debt tracking
+    52→├── Reporting Service (Port 3005) - Analytics, reports, exports
+    53→├── Notification Service (Port 3006) - Email, WhatsApp, SMS
+    54→├── Customer Service (Port 3007) - CRM, debt management
+    55→├── Accounting Service (Port 3008) - Financial records, ledger
+    56→├── Admin Service (Port 3009) - System management, backup/restore
+    57→└── Cache/Queue Service (Redis + Bull) - Background jobs
+    58→
+    59→Communication: gRPC or REST APIs with circuit breakers
+    60→Service Discovery: Docker Compose / Manual configuration
+    61→```
+    62→
+    63→### 1.4 Database Architecture
+    64→```
+    65→Primary DB: PostgreSQL (production) with read replicas
+    66→Cache Layer: Redis (inventory, sessions, OTP)
+    67→Backup Strategy: Automated daily snapshots + Point-in-time recovery
+    68→Replication: WAL-based for data consistency
+    69→Connection Pooling: PgBouncer or native pooling (min: 10, max: 50)
+    70→Search Indexing: Full-text search on products, customers
+    71→Audit Trail: Immutable transaction logs in separate schema
+    72→```
+    73→
+    74→### 1.5 Deployment Architecture
+    75→```
+    76→Cloud Deployment (Vercel + GitHub):
+    77→├── Vercel: Frontend (Next.js) + API Routes (Serverless)
+    78→├── GitHub Actions: CI/CD Pipeline
+    79→├── Vercel Postgres: Managed PostgreSQL
+    80→├── Vercel Redis: Managed Redis
+    81→├── Vercel Blob: File storage for receipts/documents
+    82→└── S3/MinIO: Document storage alternative
+    83→
+    84→Local/Self-Hosted (Docker):
+    85→├── Docker Compose orchestration
+    86→├── PostgreSQL in container
+    87→├── Redis in container
+    88→├── All microservices in containers
+    89→├── Nginx as reverse proxy
+    90→└── Automated health checks + restarts
+    91→```
+    92→
+    93→---
+    94→
+    95→## SECTION 2: DATABASE SCHEMA (NORMALIZED, PRODUCTION-READY)
+    96→
+    97→### 2.1 Core Tables
+    98→
+    99→```sql
+   100→-- Multi-tenancy
+   101→CREATE TABLE organizations (
+   102→  id UUID PRIMARY KEY,
+   103→  name VARCHAR(255) NOT NULL,
+   104→  slug VARCHAR(100) UNIQUE,
+   105→  logo_url TEXT,
+   106→  phone VARCHAR(20),
+   107→  email VARCHAR(100),
+   108→  address TEXT,
+   109→  city VARCHAR(100),
+   110→  country VARCHAR(100),
+   111→  subscription_tier ENUM('free', 'basic', 'professional', 'enterprise'),
+   112→  subscription_ends_at TIMESTAMP,
+   113→  is_active BOOLEAN DEFAULT true,
+   114→  settings JSONB DEFAULT '{}', -- theme, currency, tax_rate, etc
+   115→  created_at TIMESTAMP DEFAULT NOW(),
+   116→  updated_at TIMESTAMP DEFAULT NOW(),
+   117→  deleted_at TIMESTAMP -- soft delete
+   118→);
+   119→
+   120→-- Stores (physical locations)
+   121→CREATE TABLE stores (
+   122→  id UUID PRIMARY KEY,
+   123→  organization_id UUID NOT NULL REFERENCES organizations(id),
+   124→  name VARCHAR(255) NOT NULL,
+   125→  code VARCHAR(20) UNIQUE,
+   126→  address TEXT,
+   127→  phone VARCHAR(20),
+   128→  manager_id UUID REFERENCES users(id),
+   129→  opening_time TIME,
+   130→  closing_time TIME,
+   131→  is_active BOOLEAN DEFAULT true,
+   132→  settings JSONB DEFAULT '{}',
+   133→  created_at TIMESTAMP DEFAULT NOW(),
+   134→  updated_at TIMESTAMP DEFAULT NOW(),
+   135→  UNIQUE(organization_id, code)
+   136→);
+   137→
+   138→-- Users & RBAC
+   139→CREATE TABLE users (
+   140→  id UUID PRIMARY KEY,
+   141→  organization_id UUID NOT NULL REFERENCES organizations(id),
+   142→  store_id UUID REFERENCES stores(id),
+   143→  username VARCHAR(100) NOT NULL,
+   144→  email VARCHAR(100),
+   145→  password_hash VARCHAR(255),
+   146→  first_name VARCHAR(100),
+   147→  last_name VARCHAR(100),
+   148→  phone VARCHAR(20),
+   149→  profile_picture_url TEXT,
+   150→  status ENUM('active', 'inactive', 'suspended'),
+   151→  last_login_at TIMESTAMP,
+   152→  is_locked BOOLEAN DEFAULT false,
+   153→  lock_until TIMESTAMP,
+   154→  failed_login_attempts INT DEFAULT 0,
+   155→  created_at TIMESTAMP DEFAULT NOW(),
+   156→  updated_at TIMESTAMP DEFAULT NOW(),
+   157→  deleted_at TIMESTAMP,
+   158→  UNIQUE(organization_id, username),
+   159→  UNIQUE(organization_id, email)
+   160→);
+   161→
+   162→CREATE TABLE roles (
+   163→  id UUID PRIMARY KEY,
+   164→  organization_id UUID NOT NULL REFERENCES organizations(id),
+   165→  name VARCHAR(100) NOT NULL,
+   166→  description TEXT,
+   167→  is_system_role BOOLEAN DEFAULT false,
+   168→  created_at TIMESTAMP DEFAULT NOW(),
+   169→  UNIQUE(organization_id, name)
+   170→);
+   171→
+   172→CREATE TABLE permissions (
+   173→  id UUID PRIMARY KEY,
+   174→  name VARCHAR(100) NOT NULL UNIQUE,
+   175→  description TEXT,
+   176→  resource VARCHAR(100),
+   177→  action VARCHAR(100),
+   178→  created_at TIMESTAMP DEFAULT NOW()
+   179→);
+   180→
+   181→CREATE TABLE role_permissions (
+   182→  id UUID PRIMARY KEY,
+   183→  role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+   184→  permission_id UUID NOT NULL REFERENCES permissions(id),
+   185→  created_at TIMESTAMP DEFAULT NOW(),
+   186→  UNIQUE(role_id, permission_id)
+   187→);
+   188→
+   189→CREATE TABLE user_roles (
+   190→  id UUID PRIMARY KEY,
+   191→  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+   192→  role_id UUID NOT NULL REFERENCES roles(id),
+   193→  created_at TIMESTAMP DEFAULT NOW(),
+   194→  UNIQUE(user_id, role_id)
+   195→);
+   196→
+   197→-- Products & Categories
+   198→CREATE TABLE product_categories (
+   199→  id UUID PRIMARY KEY,
+   200→  organization_id UUID NOT NULL REFERENCES organizations(id),
+   201→  parent_id UUID REFERENCES product_categories(id),
+   202→  name VARCHAR(255) NOT NULL,
+   203→  description TEXT,
+   204→  icon_url TEXT,
+   205→  is_active BOOLEAN DEFAULT true,
+   206→  display_order INT,
+   207→  created_at TIMESTAMP DEFAULT NOW(),
+   208→  UNIQUE(organization_id, parent_id, name)
+   209→);
+   210→
+   211→CREATE TABLE products (
+   212→  id UUID PRIMARY KEY,
+   213→  organization_id UUID NOT NULL REFERENCES organizations(id),
+   214→  category_id UUID NOT NULL REFERENCES product_categories(id),
+   215→  sku VARCHAR(100) NOT NULL,
+   216→  barcode VARCHAR(100),
+   217→  name VARCHAR(255) NOT NULL,
+   218→  description TEXT,
+   219→  unit_of_measure ENUM('piece', 'kg', 'meter', 'liter', 'set', 'box', 'bundle'),
+   220→  cost_price DECIMAL(12,2),
+   221→  selling_price DECIMAL(12,2) NOT NULL,
+   222→  rental_price_per_day DECIMAL(12,2),
+   223→  rental_price_per_week DECIMAL(12,2),
+   224→  rental_price_per_month DECIMAL(12,2),
+   225→  minimum_stock_level INT,
+   226→  reorder_point INT,
+   227→  supplier_id UUID,
+   228→  image_url TEXT,
+   229→  is_active BOOLEAN DEFAULT true,
+   230→  allow_rental BOOLEAN DEFAULT false,
+   231→  tax_applicable BOOLEAN DEFAULT true,
+   232→  created_at TIMESTAMP DEFAULT NOW(),
+   233→  updated_at TIMESTAMP DEFAULT NOW(),
+   234→  deleted_at TIMESTAMP,
+   235→  UNIQUE(organization_id, sku),
+   236→  UNIQUE(organization_id, barcode)
+   237→);
+   238→
+   239→CREATE TABLE product_attributes (
+   240→  id UUID PRIMARY KEY,
+   241→  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+   242→  name VARCHAR(100),
+   243→  value VARCHAR(255),
+   244→  created_at TIMESTAMP DEFAULT NOW()
+   245→);
+   246→
+   247→-- Inventory Management
+   248→CREATE TABLE warehouse_stock (
+   249→  id UUID PRIMARY KEY,
+   250→  store_id UUID NOT NULL REFERENCES stores(id),
+   251→  product_id UUID NOT NULL REFERENCES products(id),
+   252→  quantity_on_hand INT NOT NULL DEFAULT 0,
+   253→  quantity_available INT NOT NULL DEFAULT 0,
+   254→  quantity_reserved INT NOT NULL DEFAULT 0,
+   255→  quantity_damaged INT NOT NULL DEFAULT 0,
+   256→  last_counted_at TIMESTAMP,
+   257→  restock_date TIMESTAMP,
+   258→  updated_at TIMESTAMP DEFAULT NOW(),
+   259→  UNIQUE(store_id, product_id)
+   260→);
+   261→
+   262→CREATE TABLE stock_movements (
+   263→  id UUID PRIMARY KEY,
+   264→  store_id UUID NOT NULL REFERENCES stores(id),
+   265→  product_id UUID NOT NULL REFERENCES products(id),
+   266→  movement_type ENUM('purchase', 'sale', 'adjustment', 'damage', 'return', 'rental_out', 'rental_return'),
+   267→  quantity INT NOT NULL,
+   268→  reference_id UUID,
+   269→  reference_type VARCHAR(50),
+   270→  notes TEXT,
+   271→  created_by_id UUID REFERENCES users(id),
+   272→  created_at TIMESTAMP DEFAULT NOW()
+   273→);
+   274→
+   275→CREATE INDEX idx_stock_movements_store_product ON stock_movements(store_id, product_id);
+   276→CREATE INDEX idx_stock_movements_created_at ON stock_movements(created_at);
+   277→
+   278→-- Customers
+   279→CREATE TABLE customers (
+   280→  id UUID PRIMARY KEY,
+   281→  organization_id UUID NOT NULL REFERENCES organizations(id),
+   282→  customer_type ENUM('walk-in', 'registered', 'wholesale', 'contractor'),
+   283→  name VARCHAR(255) NOT NULL,
+   284→  phone VARCHAR(20),
+   285→  email VARCHAR(100),
+   286→  national_id VARCHAR(50),
+   287→  business_name VARCHAR(255),
+   288→  address TEXT,
+   289→  city VARCHAR(100),
+   290→  max_debt_limit DECIMAL(12,2),
+   291→  credit_status ENUM('active', 'suspended', 'blocked'),
+   292→  total_debt DECIMAL(12,2) DEFAULT 0,
+   293→  total_spent DECIMAL(12,2) DEFAULT 0,
+   294→  purchase_count INT DEFAULT 0,
+   295→  last_purchase_at TIMESTAMP,
+   296→  created_at TIMESTAMP DEFAULT NOW(),
+   297→  updated_at TIMESTAMP DEFAULT NOW(),
+   298→  deleted_at TIMESTAMP
+   299→);
+   300→
+   301→CREATE TABLE customer_debt (
+   302→  id UUID PRIMARY KEY,
+   303→  customer_id UUID NOT NULL REFERENCES customers(id),
+   304→  original_amount DECIMAL(12,2) NOT NULL,
+   305→  remaining_amount DECIMAL(12,2) NOT NULL,
+   306→  due_date TIMESTAMP,
+   307→  status ENUM('active', 'overdue', 'partially_paid', 'paid'),
+   308→  notes TEXT,
+   309→  created_at TIMESTAMP DEFAULT NOW(),
+   310→  updated_at TIMESTAMP DEFAULT NOW()
+   311→);
+   312→
+   313→-- Sales Transactions
+   314→CREATE TABLE sales_transactions (
+   315→  id UUID PRIMARY KEY,
+   316→  organization_id UUID NOT NULL REFERENCES organizations(id),
+   317→  store_id UUID NOT NULL REFERENCES stores(id),
+   318→  sale_number VARCHAR(50) NOT NULL,
+   319→  customer_id UUID REFERENCES customers(id),
+   320→  cashier_id UUID NOT NULL REFERENCES users(id),
+   321→  subtotal DECIMAL(12,2) NOT NULL,
+   322→  tax_amount DECIMAL(12,2) DEFAULT 0,
+   323→  discount_amount DECIMAL(12,2) DEFAULT 0,
+   324→  total_amount DECIMAL(12,2) NOT NULL,
+   325→  payment_method ENUM('cash', 'mpesa', 'debt', 'card', 'cheque') NOT NULL,
+   326→  payment_status ENUM('pending', 'completed', 'failed', 'refunded') DEFAULT 'pending',
+   327→  mpesa_transaction_id VARCHAR(100),
+   328→  debt_id UUID REFERENCES customer_debt(id),
+   329→  notes TEXT,
+   330→  receipt_printed BOOLEAN DEFAULT false,
+   331→  receipt_emailed BOOLEAN DEFAULT false,
+   332→  receipt_smssent BOOLEAN DEFAULT false,
+   333→  receipt_whatsapp_sent BOOLEAN DEFAULT false,
+   334→  created_at TIMESTAMP DEFAULT NOW(),
+   335→  completed_at TIMESTAMP,
+   336→  UNIQUE(organization_id, sale_number)
+   337→);
+   338→
+   339→CREATE TABLE sale_items (
+   340→  id UUID PRIMARY KEY,
+   341→  sale_id UUID NOT NULL REFERENCES sales_transactions(id) ON DELETE CASCADE,
+   342→  product_id UUID NOT NULL REFERENCES products(id),
+   343→  quantity DECIMAL(10,3) NOT NULL,
+   344→  unit_price DECIMAL(12,2) NOT NULL,
+   345→  tax_rate DECIMAL(5,2),
+   346→  tax_amount DECIMAL(12,2),
+   347→  line_total DECIMAL(12,2) NOT NULL,
+   348→  item_note TEXT,
+   349→  created_at TIMESTAMP DEFAULT NOW()
+   350→);
+   351→
+   352→-- Rental Management
+   353→CREATE TABLE equipment_rentals (
+   354→  id UUID PRIMARY KEY,
+   355→  store_id UUID NOT NULL REFERENCES stores(id),
+   356→  product_id UUID NOT NULL REFERENCES products(id),
+   357→  customer_id UUID NOT NULL REFERENCES customers(id),
+   358→  rental_type ENUM('daily', 'weekly', 'monthly') NOT NULL,
+   359→  quantity INT NOT NULL,
+   360→  start_date TIMESTAMP NOT NULL,
+   361→  end_date TIMESTAMP NOT NULL,
+   362→  rate_per_unit DECIMAL(12,2) NOT NULL,
+   363→  deposit_amount DECIMAL(12,2),
+   364→  total_rental_cost DECIMAL(12,2) NOT NULL,
+   365→  status ENUM('active', 'returned', 'overdue', 'damaged') DEFAULT 'active',
+   366→  damage_notes TEXT,
+   367→  created_at TIMESTAMP DEFAULT NOW(),
+   368→  returned_at TIMESTAMP
+   369→);
+   370→
+   371→-- Payments
+   372→CREATE TABLE payments (
+   373→  id UUID PRIMARY KEY,
+   374→  sale_id UUID REFERENCES sales_transactions(id),
+   375→  debt_id UUID REFERENCES customer_debt(id),
+   376→  rental_id UUID REFERENCES equipment_rentals(id),
+   377→  payment_method ENUM('cash', 'mpesa', 'card', 'cheque') NOT NULL,
+   378→  amount DECIMAL(12,2) NOT NULL,
+   379→  reference_number VARCHAR(100),
+   380→  mpesa_receipt_number VARCHAR(100),
+   381→  payment_status ENUM('pending', 'confirmed', 'failed') DEFAULT 'pending',
+   382→  recorded_by_id UUID NOT NULL REFERENCES users(id),
+   383→  created_at TIMESTAMP DEFAULT NOW(),
+   384→  confirmed_at TIMESTAMP
+   385→);
+   386→
+   387→-- Suppliers
+   388→CREATE TABLE suppliers (
+   389→  id UUID PRIMARY KEY,
+   390→  organization_id UUID NOT NULL REFERENCES organizations(id),
+   391→  name VARCHAR(255) NOT NULL,
+   392→  contact_person VARCHAR(255),
+   393→  phone VARCHAR(20),
+   394→  email VARCHAR(100),
+   395→  address TEXT,
+   396→  payment_terms VARCHAR(100),
+   397→  is_active BOOLEAN DEFAULT true,
+   398→  created_at TIMESTAMP DEFAULT NOW()
+   399→);
+   400→
+   401→CREATE TABLE purchase_orders (
+   402→  id UUID PRIMARY KEY,
+   403→  organization_id UUID NOT NULL REFERENCES organizations(id),
+   404→  store_id UUID NOT NULL REFERENCES stores(id),
+   405→  supplier_id UUID NOT NULL REFERENCES suppliers(id),
+   406→  po_number VARCHAR(50) NOT NULL,
+   407→  order_date TIMESTAMP DEFAULT NOW(),
+   408→  expected_delivery_date TIMESTAMP,
+   409→  actual_delivery_date TIMESTAMP,
+   410→  subtotal DECIMAL(12,2),
+   411→  tax_amount DECIMAL(12,2),
+   412→  total DECIMAL(12,2),
+   413→  status ENUM('draft', 'confirmed', 'delivered', 'invoiced') DEFAULT 'draft',
+   414→  notes TEXT,
+   415→  created_at TIMESTAMP DEFAULT NOW(),
+   416→  UNIQUE(organization_id, po_number)
+   417→);
+   418→
+   419→CREATE TABLE po_items (
+   420→  id UUID PRIMARY KEY,
+   421→  po_id UUID NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
+   422→  product_id UUID NOT NULL REFERENCES products(id),
+   423→  quantity_ordered INT NOT NULL,
+   424→  quantity_received INT DEFAULT 0,
+   425→  unit_cost DECIMAL(12,2) NOT NULL,
+   426→  line_total DECIMAL(12,2),
+   427→  created_at TIMESTAMP DEFAULT NOW()
+   428→);
+   429→
+   430→-- Financial Records (General Ledger)
+   431→CREATE TABLE journal_entries (
+   432→  id UUID PRIMARY KEY,
+   433→  organization_id UUID NOT NULL REFERENCES organizations(id),
+   434→  store_id UUID REFERENCES stores(id),
+   435→  entry_date TIMESTAMP DEFAULT NOW(),
+   436→  reference_id UUID,
+   437→  reference_type VARCHAR(50),
+   438→  description TEXT,
+   439→  total_debit DECIMAL(12,2),
+   440→  total_credit DECIMAL(12,2),
+   441→  created_by_id UUID REFERENCES users(id),
+   442→  created_at TIMESTAMP DEFAULT NOW()
+   443→);
+   444→
+   445→CREATE TABLE journal_entry_lines (
+   446→  id UUID PRIMARY KEY,
+   447→  journal_entry_id UUID NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
+   448→  account_id UUID NOT NULL REFERENCES accounts(id),
+   449→  debit DECIMAL(12,2) DEFAULT 0,
+   450→  credit DECIMAL(12,2) DEFAULT 0,
+   451→  description TEXT,
+   452→  created_at TIMESTAMP DEFAULT NOW()
+   453→);
+   454→
+   455→CREATE TABLE accounts (
+   456→  id UUID PRIMARY KEY,
+   457→  organization_id UUID NOT NULL REFERENCES organizations(id),
+   458→  account_number VARCHAR(20) NOT NULL,
+   459→  account_name VARCHAR(255) NOT NULL,
+   460→  account_type ENUM('asset', 'liability', 'equity', 'revenue', 'expense'),
+   461→  parent_account_id UUID REFERENCES accounts(id),
+   462→  is_active BOOLEAN DEFAULT true,
+   463→  created_at TIMESTAMP DEFAULT NOW(),
+   464→  UNIQUE(organization_id, account_number)
+   465→);
+   466→
+   467→-- System Logs
+   468→CREATE TABLE system_logs (
+   469→  id UUID PRIMARY KEY,
+   470→  organization_id UUID REFERENCES organizations(id),
+   471→  user_id UUID REFERENCES users(id),
+   472→  action VARCHAR(255) NOT NULL,
+   473→  resource_type VARCHAR(100),
+   474→  resource_id UUID,
+   475→  details JSONB,
+   476→  ip_address INET,
+   477→  user_agent TEXT,
+   478→  created_at TIMESTAMP DEFAULT NOW()
+   479→);
+   480→
+   481→CREATE INDEX idx_system_logs_user ON system_logs(user_id, created_at);
+   482→CREATE INDEX idx_system_logs_resource ON system_logs(resource_type, resource_id);
+   483→
+   484→CREATE TABLE error_logs (
+   485→  id UUID PRIMARY KEY,
+   486→  organization_id UUID REFERENCES organizations(id),
+   487→  service_name VARCHAR(100),
+   488→  error_code VARCHAR(20),
+   489→  error_message TEXT,
+   490→  stack_trace TEXT,
+   491→  request_path VARCHAR(500),
+   492→  request_method VARCHAR(10),
+   493→  user_id UUID REFERENCES users(id),
+   494→  severity ENUM('low', 'medium', 'high', 'critical') DEFAULT 'medium',
+   495→  is_resolved BOOLEAN DEFAULT false,
+   496→  resolved_at TIMESTAMP,
+   497→  created_at TIMESTAMP DEFAULT NOW()
+   498→);
+   499→
+   500→-- Backup & Restore
+   501→CREATE TABLE system_snapshots (
+   502→  id UUID PRIMARY KEY,
+   503→  organization_id UUID NOT NULL REFERENCES organizations(id),
+   504→  snapshot_name VARCHAR(255) NOT NULL,
+   505→  snapshot_timestamp TIMESTAMP NOT NULL,
+   506→  metadata JSONB,
+   507→  backup_size_bytes BIGINT,
+   508→  status ENUM('in_progress', 'completed', 'failed') DEFAULT 'in_progress',
+   509→  created_by_id UUID REFERENCES users(id),
+   510→  created_at TIMESTAMP DEFAULT NOW(),
+   511→  expires_at TIMESTAMP
+   512→);
+   513→
+   514→-- Receipts & Documents
+   515→CREATE TABLE receipts (
+   516→  id UUID PRIMARY KEY,
+   517→  sale_id UUID NOT NULL REFERENCES sales_transactions(id),
+   518→  receipt_number VARCHAR(50) NOT NULL,
+   519→  pdf_url TEXT,
+   520→  html_content TEXT,
+   521→  total_amount DECIMAL(12,2),
+   522→  issued_at TIMESTAMP DEFAULT NOW(),
+   523→  email_sent_at TIMESTAMP,
+   524→  sms_sent_at TIMESTAMP,
+   525→  whatsapp_sent_at TIMESTAMP,
+   526→  UNIQUE(sale_id)
+   527→);
+   528→```
+   529→
+   530→### 2.2 Database Optimization Strategies
+   531→
+   532→```sql
+   533→-- Full-text search index for products
+   534→CREATE INDEX idx_products_search ON products 
+   535→USING GIN (to_tsvector('english', name || ' ' || COALESCE(description, '')));
+   536→
+   537→-- Financial queries optimization
+   538→CREATE INDEX idx_sales_date_store ON sales_transactions(store_id, created_at DESC);
+   539→CREATE INDEX idx_sales_payment_method ON sales_transactions(payment_method, created_at);
+   540→CREATE INDEX idx_journal_entries_date ON journal_entries(organization_id, entry_date DESC);
+   541→
+   542→-- Inventory queries
+   543→CREATE INDEX idx_warehouse_stock_low ON warehouse_stock 
+   544→WHERE quantity_on_hand <= (SELECT reorder_point FROM products p WHERE p.id = product_id);
+   545→
+   546→-- Customer queries
+   547→CREATE INDEX idx_customers_debt ON customers WHERE total_debt > 0;
+   548→
+   549→-- Materialized views for reporting
+   550→CREATE MATERIALIZED VIEW daily_sales_summary AS
+   551→SELECT 
+   552→  st.store_id,
+   553→  DATE(st.created_at) as sale_date,
+   554→  st.payment_method,
+   555→  COUNT(*) as transaction_count,
+   556→  SUM(st.total_amount) as total_sales,
+   557→  SUM(st.tax_amount) as total_tax
+   558→FROM sales_transactions st
+   559→GROUP BY st.store_id, DATE(st.created_at), st.payment_method;
+   560→
+   561→CREATE MATERIALIZED VIEW monthly_financial_summary AS
+   562→SELECT 
+   563→  organization_id,
+   564→  store_id,
+   565→  DATE_TRUNC('month', created_at) as month,
+   566→  SUM(CASE WHEN payment_method = 'cash' THEN total_amount ELSE 0 END) as cash_sales,
+   567→  SUM(CASE WHEN payment_method = 'mpesa' THEN total_amount ELSE 0 END) as mpesa_sales,
+   568→  SUM(CASE WHEN payment_method = 'debt' THEN total_amount ELSE 0 END) as debt_sales,
+   569→  SUM(tax_amount) as total_tax
+   570→FROM sales_transactions
+   571→GROUP BY organization_id, store_id, DATE_TRUNC('month', created_at);
+   572→```
+   573→
+   574→---
+   575→
+   576→## SECTION 3: CORE FEATURES SPECIFICATION
+   577→
+   578→### 3.1 Point of Sale (POS) Module
+   579→
+   580→#### 3.1.1 Sales Entry & Checkout
+   581→```
+   582→Features:
+   583→- Barcode scanning with duplicate prevention
+   584→- Manual SKU search with autocomplete
+   585→- Quantity entry with decimal support (for kg, meters, etc)
+   586→- Real-time stock validation (prevent overselling)
+   587→- Quick add to cart with Ctrl+Enter
+   588→- Remove/Edit line items from cart
+   589→- Apply discounts (percentage or fixed amount, with reasons)
+   590→- Tax calculation (automatic per product & manual override)
+   591→- Payment method selection (Cash, M-Pesa, Debt, Card)
+   592→- Customer lookup by phone/name (for debt tracking)
+   593→- Debt limit validation
+   594→- Receipt preview before completion
+   595→- Transaction logging and error recovery
+   596→- Support for batch quantity entry
+   597→```
+   598→
+   599→#### 3.1.2 Payment Processing
+   600→```
+   601→Cash:
+   602→- Amount tendered
+   603→- Change calculation
+   604→- Denomination breakdown (visual)
+   605→
+   606→M-Pesa Integration:
+   607→- API integration with Daraja API (production + sandbox)
+   608→- QR code generation for payment
+   609→- STK Push for automatic prompt
+   610→- Webhook for payment confirmation
+   611→- Real-time payment status (polling + webhook)
+   612→- Error handling (timeout, network, invalid amount)
+   613→- Transaction reference tracking
+   614→- Daily M-Pesa reconciliation
+   615→
+   616→Debt/Credit:
+   617→- Debt limit validation
+   618→- Debt status (active, overdue, suspended)
+   619→- Due date setting
+   620→- Automatic notification for overdue debt
+   621→
+   622→Card Payments (Future):
+   623→- Stripe integration placeholder
+   624→- Processing fee calculation
+   625→```
+   626→
+   627→#### 3.1.3 Rental Management
+   628→```
+   629→- Select rental duration (daily, weekly, monthly)
+   630→- Automatic cost calculation
+   631→- Deposit collection
+   632→- Return tracking
+   633→- Damage assessment & additional charges
+   634→- Automatic overdue detection
+   635→```
+   636→
+   637→### 3.2 Inventory Management Module
+   638→
+   639→#### 3.2.1 Stock Tracking
+   640→```
+   641→Features:
+   642→- Real-time quantity tracking per store
+   643→- Multiple warehouses per store support
+   644→- Stock status indicators (in-stock, low-stock, out-of-stock)
+   645→- Automatic reorder point alerts
+   646→- Damaged goods tracking
+   647→- Stock allocation for pending orders
+   648→- Stock movement history with user tracking
+   649→- Batch/Serial number tracking (optional)
+   650→- Expiry date management (future)
+   651→- Stock count/Physical verification
+   652→- Cycle counting workflows
+   653→- Stock transfer between stores
+   654→- Negative stock prevention (with override capability)
+   655→```
+   656→
+   657→#### 3.2.2 Product Management
+   658→```
+   659→- Multiple categories with sub-categories
+   660→- SKU auto-generation with custom format
+   661→- Barcode generation & assignment
+   662→- Multiple units of measure (piece, kg, meter, liter, set, box, bundle)
+   663→- Cost & selling price management
+   664→- Price history tracking
+   665→- Supplier assignment
+   666→- Product images with compression
+   667→- Bulk product import (CSV/Excel)
+   668→- Product attributes (color, size, brand, etc)
+   669→- Search indexing for fast lookup
+   670→- Product availability by store
+   671→```
+   672→
+   673→#### 3.2.3 Supplier Management
+   674→```
+   675→- Supplier master data
+   676→- Contact information & payment terms
+   677→- Purchase order creation
+   678→- Delivery tracking
+   679→- Invoice matching
+   680→- Supplier performance metrics
+   681→```
+   682→
+   683→### 3.3 Financial & Accounting Module
+   684→
+   685→#### 3.3.1 General Ledger
+   686→```
+   687→- Chart of Accounts (COA) with hierarchy
+   688→- Double-entry bookkeeping (debits = credits)
+   689→- Automatic journal entry creation from:
+   690→  - Sales transactions
+   691→  - Debt transactions
+   692→  - Payments received
+   693→  - Expenses
+   694→- Manual journal entry capability
+   695→- Trial balance report
+   696→- Balance sheet generation
+   697→- Income statement generation
+   698→```
+   699→
+   700→#### 3.3.2 Daily Cash Management
+   701→```
+   702→- Sales summary by payment method
+   703→- Cash vs system discrepancies
+   704→- Bank deposit slips
+   705→- Cash reconciliation workflow
+   706→- Float management
+   707→```
+   708→
+   709→#### 3.3.3 Debt Management
+   710→```
+   711→- Debt creation from sales
+   712→- Debt list with status (active, overdue, partially paid, paid)
+   713→- Payment posting to debt
+   714→- Overdue tracking & aging report
+   715→- Debt write-off capability
+   716→- Debt collection reminders (SMS/Email/WhatsApp)
+   717→- Late payment fees
+   718→```
+   719→
+   720→### 3.4 Reporting & Analytics Module
+   721→
+   722→#### 3.4.1 Sales Reports
+   723→```
+   724→Reports:
+   725→- Daily sales summary
+   726→  - Total sales, quantity, transactions
+   727→  - By payment method
+   728→  - By product/category
+   729→  - By cashier
+   730→  - By customer
+   731→  
+   732→- Weekly sales summary
+   733→  - Comparison with previous week
+   734→  - Top products
+   735→  - Trend analysis
+   736→  
+   737→- Monthly sales summary
+   738→  - Monthly totals
+   739→  - Year-to-date comparison
+   740→  - Seasonal trends
+   741→  
+   742→- Product performance
+   743→  - Best sellers
+   744→  - Slow movers
+   745→  - Revenue by product
+   746→  - Profitability analysis
+   747→  
+   748→- Cashier performance
+   749→  - Sales per cashier
+   750→  - Average transaction value
+   751→  - Error rate
+   752→```
+   753→
+   754→#### 3.4.2 Financial Reports
+   755→```
+   756→- Cash flow statement
+   757→- Profit & loss statement
+   758→- Balance sheet
+   759→- Tax reports (VAT, sales tax)
+   760→- Debt aging report
+   761→- Expense summary
+   762→- Budget variance analysis
+   763→```
+   764→
+   765→#### 3.4.3 Inventory Reports
+   766→```
+   767→- Stock status by product
+   768→- Low stock alerts
+   769→- Slow-moving inventory
+   770→- Dead stock report
+   771→- Stock turnover ratio
+   772→- Inventory value report
+   773→- Stock movement history
+   774→```
+   775→
+   776→#### 3.4.4 Data Export
+   777→```
+   778→- CSV export (all reports)
+   779→- Excel export with formatting
+   780→- PDF export (with branding)
+   781→- Email reports (scheduled)
+   782→- Custom report builder
+   783→- Batch download
+   784→```
+   785→
+   786→### 3.5 Customer Management Module
+   787→
+   788→#### 3.5.1 Customer Database
+   789→```
+   790→- Customer registration (walk-in, registered)
+   791→- Merchant/wholesale classification
+   792→- Customer contact information
+   793→- Address management
+   794→- Credit limit setting
+   795→- Customer tier/classification
+   796→- Purchase history tracking
+   797→- Debt tracking & visibility
+   798→- Birthday/anniversary tracking (for loyalty)
+   799→```
+   800→
+   801→#### 3.5.2 Customer Loyalty
+   802→```
+   803→- Points accumulation
+   804→- Points redemption
+   805→- Tiered discounts
+   806→- Special offers
+   807→```
+   808→
+   809→#### 3.5.3 Customer Communication
+   810→```
+   811→- SMS reminders (debt, promotions)
+   812→- Email newsletters
+   813→- WhatsApp business messages
+   814→- In-app notifications
+   815→```
+   816→
+   817→### 3.6 Notification & Communication Module
+   818→
+   819→#### 3.6.1 Receipt Delivery
+   820→```
+   821→Channels:
+   822→- Print (thermal printer or standard printer)
+   823→- Email
+   824→- SMS (M-Pesa style short receipt)
+   825→- WhatsApp (formatted message with items)
+   826→- QR code for online receipt lookup
+   827→
+   828→Content:
+   829→- Store name & logo
+   830→- Transaction details
+   831→- Item list with prices
+   832→- Tax breakdown
+   833→- Payment method & reference
+   834→- Customer details
+   835→- Return policy
+   836→```
+   837→
+   838→#### 3.6.2 Customer Notifications
+   839→```
+   840→- Debt reminders (daily, weekly)
+   841→- Overdue payment alerts
+   842→- Payment confirmation
+   843→- Order status updates
+   844→- Promotional messages
+   845→```
+   846→
+   847→#### 3.6.3 Admin Notifications
+   848→```
+   849→- Low stock alerts
+   850→- Daily sales summary
+   851→- Payment discrepancies
+   852→- System errors
+   853→- Backup completion
+   854→```
+   855→
+   856→### 3.7 System Administration Module
+   857→
+   858→#### 3.7.1 Admin Dashboard (Auto-Load on Boot)
+   859→```
+   860→Features:
+   861→- System health status
+   862→- Active user sessions
+   863→- Database status
+   864→- Service status (all microservices)
+   865→- Today's sales summary
+   866→- Top products
+   867→- Critical alerts
+   868→- Recent errors/logs
+   869→- Backup status
+   870→- Performance metrics
+   871→
+   872→Actions:
+   873→- Manual system backup
+   874→- Snapshot management
+   875→- Service restart
+   876→- Cache clearing
+   877→- Report generation
+   878→```
+   879→
+   880→#### 3.7.2 User Management
+   881→```
+   882→- User CRUD operations
+   883→- Role assignment
+   884→- Store assignment
+   885→- Permission management
+   886→- Login history
+   887→- Account lockout management
+   888→- Password reset workflows
+   889→- 2FA setup (TOTP/SMS)
+   890→```
+   891→
+   892→#### 3.7.3 Organization Settings
+   893→```
+   894→- Business information
+   895→- Store configuration
+   896→- Payment method settings (M-Pesa API keys, etc)
+   897→- Email configuration
+   898→- SMS/WhatsApp provider setup
+   899→- Tax configuration
+   900→- Receipt customization
+   901→- Backup schedule
+   902→- Theme & branding
+   903→```
+   904→
+   905→#### 3.7.4 Backup & Restore
+   906→```
+   907→Features:
+   908→- Automated daily backups
+   909→- Point-in-time restore capability
+   910→- Manual backup triggers
+   911→- Backup verification
+   912→- Backup retention policies
+   913→- Incremental backups
+   914→- Cross-region backup replication (cloud)
+   915→- One-click restore to specific point-in-time
+   916→- Backup integrity checks
+   917→- Backup size monitoring
+   918→```
+   919→
+   920→#### 3.7.5 Audit & Logging
+   921→```
+   922→- User activity logging
+   923→  - Login/logout
+   924→  - Data access
+   925→  - Data modifications
+   926→  - Deletions (soft-delete audit trail)
+   927→
+   928→- Error logging
+   929→  - Service errors with stack trace
+   930→  - User-facing errors
+   931→  - API errors
+   932→  - Database errors
+   933→  - Integration errors
+   934→
+   935→- System events
+   936→  - Backup completion
+   937→  - Service restarts
+   938→  - Configuration changes
+   939→  - Permission changes
+   940→
+   941→- Compliance logging (future)
+   942→  - GDPR compliance
+   943→  - Data retention policies
+   944→  - Audit trails for regulatory reporting
+   945→```
+   946→
+   947→### 3.8 Error Handling & Recovery
+   948→
+   949→#### 3.8.1 Error Handling Strategy
+   950→```
+   951→Approach:
+   952→- Try-catch wrappers on all operations
+   953→- Service-level error codes (1000-9999)
+   954→- User-friendly error messages
+   955→- Technical error logs (server-side only)
+   956→- Graceful degradation
+   957→
+   958→Error Categories:
+   959→1. Validation Errors (400)
+   960→   - User input validation
+   961→   - Business logic violations
+   962→   - Stock/limit violations
+   963→
+   964→2. Authorization Errors (403)
+   965→   - Permission denied
+   966→   - Invalid token
+   967→   - Role restriction
+   968→
+   969→3. Not Found Errors (404)
+   970→   - Resource not found
+   971→   - Store not found
+   972→   - Customer not found
+   973→
+   974→4. Conflict Errors (409)
+   975→   - Duplicate entry
+   976→   - Concurrent modification
+   977→   - Stock oversell
+   978→
+   979→5. Server Errors (500)
+   980→   - Database connection failure
+   981→   - Service unavailable
+   982→   - Integration failure
+   983→   - Unexpected exceptions
+   984→
+   985→6. Integration Errors
+   986→   - M-Pesa API timeout
+   987→   - Email service failure
+   988→   - SMS service failure
+   989→   - External service unreachable
+   990→
+   991→Error Recovery:
+   992→- Automatic retry with exponential backoff
+   993→- Circuit breaker pattern for external services
+   994→- Transaction rollback on failure
+   995→- Queue failed messages for retry
+   996→- Alert admin on critical errors
+   997→```
+   998→
+   999→#### 3.8.2 Self-Healing Mechanisms
+  1000→```
+  1001→- Database connection pool recovery
+  1002→- Automatic reconnection on disconnect
+  1003→- Stale cache invalidation
+  1004→- Orphaned transaction cleanup
+  1005→- Duplicate payment detection & deduplication
+  1006→- Index rebuild on performance degradation
+  1007→- Dead letter queue for failed messages
+  1008→- Automatic retry of failed notifications
+  1009→```
+  1010→
+  1011→### 3.9 Multi-Store Management
+  1012→
+  1013→```
+  1014→Features:
+  1015→- Centralized inventory management
+  1016→- Store-specific inventory levels
+  1017→- Inter-store transfers
+  1018→- Consolidated reporting
+  1019→- Per-store settings
+  1020→- Store-specific users
+  1021→- Organization-wide permissions
+  1022→- Multi-store dashboard
+  1023→- Inventory rebalancing across stores
+  1024→- Centralized supplier management
+  1025→```
+  1026→
+  1027→### 3.10 Search Algorithm & Indexing
+  1028→
+  1029→```
+  1030→Implementation:
+  1031→- PostgreSQL full-text search for products
+  1032→- Elasticsearch integration (optional, for large scale)
+  1033→- Typeahead/autocomplete on product search
+  1034→- Customer search by name/phone/ID
+  1035→- Advanced search filters
+  1036→  - Category
+  1037→  - Price range
+  1038→  - Stock status
+  1039→  - Supplier
+  1040→
+  1041→Optimization:
+  1042→- Search caching (Redis)
+  1043→- Index maintenance
+  1044→- Query optimization
+  1045→- Result pagination
+  1046→```
+  1047→
+  1048→---
+  1049→
+  1050→## SECTION 4: API SPECIFICATIONS (REST + gRPC)
+  1051→
+  1052→### 4.1 Authentication API
+  1053→```
+  1054→POST /api/auth/login
+  1055→  Body: { username, password }
+  1056→  Response: { access_token, refresh_token, user }
+  1057→
+  1058→POST /api/auth/register
+  1059→  Body: { email, password, organization_name }
+  1060→  Response: { user, organization }
+  1061→
+  1062→POST /api/auth/refresh
+  1063→  Body: { refresh_token }
+  1064→  Response: { access_token }
+  1065→
+  1066→POST /api/auth/logout
+  1067→  Response: { success }
+  1068→
+  1069→POST /api/auth/2fa/setup
+  1070→  Response: { qr_code_url }
+  1071→
+  1072→POST /api/auth/2fa/verify
+  1073→  Body: { token }
+  1074→  Response: { verified }
+  1075→```
+  1076→
+  1077→### 4.2 Sales API
+  1078→```
+  1079→POST /api/sales/transactions
+  1080→  Body: {
+  1081→    store_id, customer_id, items: [{product_id, quantity}],
+  1082→    payment_method, discount_reason
+  1083→  }
+  1084→  Response: { transaction_id, receipt }
+  1085→
+  1086→GET /api/sales/transactions/:id
+  1087→  Response: { transaction details }
+  1088→
+  1089→POST /api/sales/transactions/:id/complete
+  1090→  Body: { payment_reference }
+  1091→  Response: { transaction }
+  1092→
+  1093→GET /api/sales/transactions (with filters)
+  1094→  Query: store_id, date_from, date_to, payment_method
+  1095→  Response: { transactions: [], total, count }
+  1096→
+  1097→POST /api/sales/transactions/:id/refund
+  1098→  Body: { items, reason }
+  1099→  Response: { refund_id, receipt }
+  1100→
+  1101→POST /api/sales/verify-stock
+  1102→  Body: { items: [{product_id, quantity}] }
+  1103→  Response: { available, conflicts }
+  1104→```
+  1105→
+  1106→### 4.3 Inventory API
+  1107→```
+  1108→GET /api/inventory/stock/:store_id
+  1109→  Response: { products: [{product_id, quantity_on_hand, etc}] }
+  1110→
+  1111→POST /api/inventory/stock/adjust
+  1112→  Body: { store_id, product_id, quantity_change, reason }
+  1113→  Response: { new_quantity }
+  1114→
+  1115→POST /api/inventory/stock-transfer
+  1116→  Body: { from_store_id, to_store_id, items }
+  1117→  Response: { transfer_id }
+  1118→
+  1119→GET /api/inventory/low-stock/:store_id
+  1120→  Response: { products: [] }
+  1121→
+  1122→POST /api/inventory/products
+  1123→  Body: { sku, name, category_id, selling_price }
+  1124→  Response: { product_id }
+  1125→
+  1126→GET /api/inventory/products (with search)
+  1127→  Query: q, category_id, store_id
+  1128→  Response: { products: [], count }
+  1129→
+  1130→POST /api/inventory/products/import
+  1131→  Body: FormData { file }
+  1132→  Response: { imported_count, errors }
+  1133→```
+  1134→
+  1135→### 4.4 Payments API
+  1136→```
+  1137→POST /api/payments/mpesa/initiate
+  1138→  Body: { phone_number, amount, account_reference }
+  1139→  Response: { checkout_request_id }
+  1140→
+  1141→GET /api/payments/mpesa/:request_id/status
+  1142→  Response: { status, result_code, result_description }
+  1143→
+  1144→POST /api/payments/mpesa/webhook
+  1145→  Body: { CheckoutRequestID, ResultCode, ... }
+  1146→  Response: { success }
+  1147→
+  1148→POST /api/payments/record-payment
+  1149→  Body: { sale_id, amount, payment_method, reference }
+  1150→  Response: { payment_id }
+  1151→
+  1152→GET /api/payments/daily-reconciliation/:store_id/:date
+  1153→  Response: { cash_receipts, mpesa_receipts, discrepancies }
+  1154→```
+  1155→
+  1156→### 4.5 Customers API
+  1157→```
+  1158→POST /api/customers
+  1159→  Body: { name, phone, email, customer_type }
+  1160→  Response: { customer_id }
+  1161→
+  1162→GET /api/customers/:id
+  1163→  Response: { customer details, debt, purchase history }
+  1164→
+  1165→GET /api/customers (with search)
+  1166→  Query: q, customer_type
+  1167→  Response: { customers: [], count }
+  1168→
+  1169→GET /api/customers/:id/debt
+  1170→  Response: { total_debt, debts: [] }
+  1171→
+  1172→POST /api/customers/:id/debt/payment
+  1173→  Body: { amount, payment_method, reference }
+  1174→  Response: { remaining_debt }
+  1175→
+  1176→POST /api/customers/:id/set-credit-limit
+  1177→  Body: { credit_limit }
+  1178→  Response: { customer }
+  1179→```
+  1180→
+  1181→### 4.6 Reporting API
+  1182→```
+  1183→GET /api/reports/daily-sales/:store_id/:date
+  1184→  Response: { total_sales, transactions, by_payment_method }
+  1185→
+  1186→GET /api/reports/weekly-sales/:store_id/:week
+  1187→  Response: { weekly_summary, comparison }
+  1188→
+  1189→GET /api/reports/monthly-sales/:store_id/:month
+  1190→  Response: { monthly_summary, year_comparison }
+  1191→
+  1192→GET /api/reports/product-performance/:store_id
+  1193→  Query: month, category_id
+  1194→  Response: { products: [{name, quantity_sold, revenue}] }
+  1195→
+  1196→GET /api/reports/financial/:org_id/:month
+  1197→  Response: { p&l, cash_flow, balance_sheet }
+  1198→
+  1199→POST /api/reports/export
+  1200→  Body: { report_type, format, filters }
+  1201→  Response: { download_url }
+  1202→
+  1203→GET /api/reports/custom
+  1204→  Query: date_from, date_to, metrics[], groupby
+  1205→  Response: { custom_report }
+  1206→```
+  1207→
+  1208→### 4.7 Admin API
+  1209→```
+  1210→GET /api/admin/dashboard
+  1211→  Response: { sales_summary, alerts, service_status }
+  1212→
+  1213→POST /api/admin/backup
+  1214→  Response: { backup_id, status }
+  1215→
+  1216→GET /api/admin/backups
+  1217→  Response: { backups: [] }
+  1218→
+  1219→POST /api/admin/restore/:backup_id
+  1220→  Response: { success, restored_at }
+  1221→
+  1222→GET /api/admin/system-logs
+  1223→  Query: user_id, action, date_from, date_to
+  1224→  Response: { logs: [] }
+  1225→
+  1226→GET /api/admin/error-logs
+  1227→  Query: severity, service_name, is_resolved
+  1228→  Response: { errors: [] }
+  1229→
+  1230→POST /api/admin/error-logs/:id/resolve
+  1231→  Response: { error }
+  1232→```
+  1233→
+  1234→---
+  1235→
+  1236→## SECTION 5: FRONTEND REQUIREMENTS & USER FLOWS
+  1237→
+  1238→### 5.1 Page Structure
+  1239→
+  1240→```
+  1241→Root Layout:
+  1242→├── Auth Pages
+  1243→│   ├── Login
+  1244→│   ├── Register
+  1245→│   ├── 2FA Setup
+  1246→│   └── Forgot Password
+  1247→│
+  1248→├── Protected Routes (Authenticated)
+  1249→│   ├── Dashboard
+  1250→│   │   ├── Sales Summary
+  1251→│   │   ├── Inventory Status
+  1252→│   │   ├── Financial Summary
+  1253→│   │   └── Alerts
+  1254→│   │
+  1255→│   ├── POS
+  1256→│   │   ├── Sales Entry
+  1257→│   │   ├── Active Transactions
+  1258→│   │   ├── Transaction History
+  1259→│   │   └── Receipt Management
+  1260→│   │
+  1261→│   ├── Inventory
+  1262→│   │   ├── Stock Levels
+  1263→│   │   ├── Product Management
+  1264→│   │   ├── Stock Adjustments
+  1265→│   │   ├── Stock Transfers
+  1266→│   │   ├── Supplier Management
+  1267→│   │   └── Purchase Orders
+  1268→│   │
+  1269→│   ├── Customers
+  1270→│   │   ├── Customer List
+  1271→│   │   ├── Customer Details
+  1272→│   │   ├── Debt Management
+  1273→│   │   └── Loyalty Programs
+  1274→│   │
+  1275→│   ├── Financial
+  1276→│   │   ├── General Ledger
+  1277→│   │   ├── Chart of Accounts
+  1278→│   │   ├── Journal Entries
+  1279→│   │   ├── Reports (P&L, Balance Sheet)
+  1280→│   │   ├── Cash Management
+  1281→│   │   └── Debt Tracking
+  1282→│   │
+  1283→│   ├── Reports
+  1284→│   │   ├── Sales Reports
+  1285→│   │   ├── Inventory Reports
+  1286→│   │   ├── Financial Reports
+  1287→│   │   ├── Custom Report Builder
+  1288→│   │   └── Report Scheduling
+  1289→│   │
+  1290→│   ├── Admin
+  1291→│   │   ├── Dashboard
+  1292→│   │   ├── User Management
+  1293→│   │   ├── Role Management
+  1294→│   │   ├── Organization Settings
+  1295→│   │   ├── Backup & Restore
+  1296→│   │   ├── System Logs
+  1297→│   │   ├── Error Logs
+  1298→│   │   └── Integration Settings
+  1299→│   │
+  1300→│   └── Settings
+  1301→│       ├── Profile
+  1302→│       ├── Security
+  1303→│       ├── Notifications
+  1304→│       └── Preferences
+  1305→```
+  1306→
+  1307→### 5.2 Core UI Components (Shadcn/UI based)
+  1308→
+  1309→```
+  1310→Data Display:
+  1311→- Data Tables with sorting, filtering, pagination
+  1312→- Charts (line, bar, pie)
+  1313→- Cards with metrics
+  1314→- Tabs & Accordions
+  1315→- Badges for status
+  1316→
+  1317→Forms & Input:
+  1318→- Input fields with validation
+  1319→- Select dropdowns with search
+  1320→- Date pickers
+  1321→- Number inputs with currency formatting
+  1322→- Text areas
+  1323→- Checkboxes & Radio buttons
+  1324→- File upload
+  1325→
+  1326→Modals & Overlays:
+  1327→- Confirm dialogs
+  1328→- Action sheets
+  1329→- Side panels
+  1330→- Toasts & Notifications
+  1331→
+  1332→Navigation:
+  1333→- Top navbar with user menu
+  1334→- Sidebar with collapsible menu
+  1335→- Breadcrumbs
+  1336→- Mobile-responsive hamburger menu
+  1337→```
+  1338→
+  1339→### 5.3 Mobile Responsiveness
+  1340→
+  1341→```
+  1342→- Fully responsive design (mobile first)
+  1343→- Touch-friendly buttons (48px minimum)
+  1344→- Mobile POS interface
+  1345→  - Large buttons for quick scanning
+  1346→  - Simplified checkout flow
+  1347→  - Mobile-optimized keyboard
+  1348→- Offline mode for POS (service worker)
+  1349→- Data sync when online
+  1350→```
+  1351→
+  1352→### 5.4 Keyboard Shortcuts & UX
+  1353→
+  1354→```
+  1355→POS Shortcuts:
+  1356→- Ctrl+Enter: Add item to cart
+  1357→- Ctrl+S: Complete sale
+  1358→- F2: New transaction
+  1359→- F3: Customer search
+  1360→- F4: Discount entry
+  1361→- F5: Refund
+  1362→- Esc: Clear/Cancel
+  1363→
+  1364→Navigation Shortcuts:
+  1365→- Ctrl+D: Dashboard
+  1366→- Ctrl+P: POS
+  1367→- Ctrl+I: Inventory
+  1368→- Ctrl+R: Reports
+  1369→- Ctrl+A: Admin
+  1370→
+  1371→Global:
+  1372→- Ctrl+K: Command palette
+  1373→- Ctrl+/: Help
+  1374→- Alt+Theme: Toggle dark mode
+  1375→```
+  1376→
+  1377→---
+  1378→
+  1379→## SECTION 6: MICROSERVICES ARCHITECTURE DETAILS
+  1380→
+  1381→### 6.1 Service Communication
+  1382→
+  1383→```
+  1384→API Gateway (Port 3000):
+  1385→├── Authentication middleware
+  1386→├── Rate limiting
+  1387→├── Request logging
+  1388→├── Error handling
+  1389→└── Service routing
+  1390→
+  1391→Services communicate via:
+  1392→- REST APIs (HTTP/JSON)
+  1393→- gRPC for internal services (high-performance)
+  1394→- Message Queue (Bull/Redis) for async operations
+  1395→
+  1396→Service Discovery:
+  1397→- Manual configuration in .env (development)
+  1398→- Service registry (production) or Docker Compose DNS
+  1399→```
+  1400→
+  1401→### 6.2 Async Operations (Queue System)
+  1402→
+  1403→```
+  1404→Tasks queued via Bull:
+  1405→- Email notifications
+  1406→- SMS sending
+  1407→- WhatsApp messages
+  1408→- Report generation
+  1409→- Backup operations
+  1410→- Data export
+  1411→- Stock level calculations
+  1412→- Notification batching
+  1413→- Image optimization
+  1414→
+  1415→Job retries:
+  1416→- 3 attempts with exponential backoff
+  1417→- Dead letter queue for failed jobs
+  1418→- Admin visibility into job status
+  1419→```
+  1420→
+  1421→### 6.3 Service Responsibilities
+  1422→
+  1423→```
+  1424→Auth Service:
+  1425→- User authentication & authorization
+  1426→- JWT token generation & validation
+  1427→- RBAC enforcement
+  1428→- Session management
+  1429→- 2FA handling
+  1430→
+  1431→POS Service:
+  1432→- Sales transaction creation
+  1433→- Shopping cart management
+  1434→- Checkout workflow
+  1435→- Transaction validation
+  1436→- Stock reservation
+  1437→
+  1438→Inventory Service:
+  1439→- Stock level management
+  1440→- Product catalog
+  1441→- Stock movements
+  1442→- Supplier management
+  1443→- Purchase orders
+  1444→
+  1445→Payment Service:
+  1446→- M-Pesa integration
+  1447→- Payment recording
+  1448→- Reconciliation
+  1449→- Refund handling
+  1450→- Payment status tracking
+  1451→
+  1452→Reporting Service:
+  1453→- Report generation
+  1454→- Data aggregation
+  1455→- Export operations
+  1456→- Cached report serving
+  1457→- Scheduled reports
+  1458→
+  1459→Notification Service:
+  1460→- Email sending (SMTP)
+  1461→- SMS sending (Twilio/Africa's Talking)
+  1462→- WhatsApp messaging
+  1463→- In-app notifications
+  1464→- Notification templates
+  1465→
+  1466→Customer Service:
+  1467→- Customer CRUD
+  1468→- Debt tracking
+  1469→- Purchase history
+  1470→- Customer search
+  1471→
+  1472→Accounting Service:
+  1473→- General ledger management
+  1474→- Journal entry creation
+  1475→- Financial report generation
+  1476→- Budget tracking
+  1477→
+  1478→Admin Service:
+  1479→- System configuration
+  1480→- Backup/restore operations
+  1481→- User management
+  1482→- System monitoring
+  1483→- Audit logging
+  1484→```
+  1485→
+  1486→---
+  1487→
+  1488→## SECTION 7: DEPLOYMENT & DEVOPS
+  1489→
+  1490→### 7.1 Local Development (Docker Compose)
+  1491→
+  1492→```yaml
+  1493→# docker-compose.yml structure
+  1494→services:
+  1495→  api-gateway:
+  1496→    build: ./services/api-gateway
+  1497→    ports: ["3000:3000"]
+  1498→    depends_on: [postgres, redis]
+  1499→    
+  1500→  postgres:
+  1501→    image: postgres:15
+  1502→    environment:
+  1503→      POSTGRES_PASSWORD: dev_password
+  1504→      POSTGRES_DB: hardware_pos
+  1505→    ports: ["5432:5432"]
+  1506→    volumes:
+  1507→      - postgres_data:/var/lib/postgresql/data
+  1508→      - ./init.sql:/docker-entrypoint-initdb.d/
+  1509→    
+  1510→  redis:
+  1511→    image: redis:7-alpine
+  1512→    ports: ["6379:6379"]
+  1513→    
+  1514→  [other services similarly configured]
+  1515→  
+  1516→volumes:
+  1517→  postgres_data:
+  1518→```
+  1519→
+  1520→### 7.2 Cloud Deployment (Vercel + GitHub)
+  1521→
+  1522→```
+  1523→Vercel Configuration:
+  1524→├── Frontend (Next.js)
+  1525→│   ├── Automatic deployments from main branch
+  1526→│   ├── Preview deployments for PRs
+  1527→│   ├── Environment variables per environment
+  1528→│   └── Vercel Postgres (managed DB)
+  1529→│
+  1530→├── API Routes (Serverless)
+  1531→│   ├── /api/auth/*
+  1532→│   ├── /api/sales/*
+  1533→│   ├── /api/inventory/*
+  1534→│   └── [other routes as serverless functions]
+  1535→│
+  1536→└── Edge Middleware
+  1537→    ├── Authentication
+  1538→    ├── Rate limiting
+  1539→    └── Request logging
+  1540→
+  1541→GitHub Actions CI/CD:
+  1542→├── Lint & format check
+  1543→├── Unit tests
+  1544→├── Integration tests
+  1545→├── Build verification
+  1546→├── Security scanning (Dependabot)
+  1547→├── Deployment trigger (on merge to main)
+  1548→└── Post-deployment tests
+  1549→```
+  1550→
+  1551→### 7.3 Self-Hosted Deployment
+  1552→
+  1553→```
+  1554→Server Setup (Ubuntu 22.04 LTS):
+  1555→├── Docker & Docker Compose
+  1556→├── Nginx reverse proxy
+  1557→├── SSL/TLS (Let's Encrypt)
+  1558→├── PostgreSQL backup cron jobs
+  1559→├── System monitoring (Prometheus + Grafana)
+  1560→├── Logging (ELK stack)
+  1561→└── Health checks & auto-restart
+  1562→
+  1563→Nginx Configuration:
+  1564→├── Frontend static serving
+  1565→├── API route proxying
+  1566→├── SSL termination
+  1567→├── Gzip compression
+  1568→├── Cache headers
+  1569→└── Security headers
+  1570→```
+  1571→
+  1572→---
+  1573→
+  1574→## SECTION 8: SECURITY SPECIFICATIONS
+  1575→
+  1576→### 8.1 Authentication & Authorization
+  1577→
+  1578→```
+  1579→- JWT with 15min expiry + refresh tokens (7 days)
+  1580→- Password requirements: 12+ chars, mixed case, numbers, symbols
+  1581→- Bcrypt password hashing (cost: 12)
+  1582→- Account lockout after 5 failed attempts (30min cooldown)
+  1583→- 2FA (TOTP + SMS options)
+  1584→- Session management with Redis
+  1585→- CORS properly configured
+  1586→- CSRF protection on forms
+  1587→- Rate limiting (100 requests/minute per IP)
+  1588→```
+  1589→
+  1590→### 8.2 Data Security
+  1591→
+  1592→```
+  1593→- Database encryption at rest
+  1594→- SSL/TLS for all data in transit
+  1595→- Sensitive data fields encrypted (SSN, card numbers if stored)
+  1596→- Password reset tokens with 1-hour expiry
+  1597→- Soft deletes (no permanent data loss without audit)
+  1598→- Audit trail for all data modifications
+  1599→- Data retention policies per organization
+  1600→```
+  1601→
+  1602→### 8.3 API Security
+  1603→
+  1604→```
+  1605→- API key authentication for service-to-service
+  1606→- OAuth2 for third-party integrations
+  1607→- Request signing for critical operations
+  1608→- Response validation & sanitization
+  1609→- Input validation & sanitization
+  1610→- SQL injection prevention (parameterized queries)
+  1611→- XSS prevention (output encoding)
+  1612→- CSRF protection
+  1613→- Content Security Policy (CSP) headers
+  1614→- Security headers (HSTS, X-Frame-Options, etc)
+  1615→```
+  1616→
+  1617→### 8.4 Payment Security
+  1618→
+  1619→```
+  1620→- PCI DSS compliance (for M-Pesa integration)
+  1621→- Never store full M-Pesa credentials in code
+  1622→- Use environment variables + secrets manager
+  1623→- Webhook signature verification
+  1624→- HTTPS only for payment APIs
+  1625→- Encryption of payment transaction details
+  1626→- Audit trail for all payment operations
+  1627→```
+  1628→
+  1629→---
+  1630→
+  1631→## SECTION 9: TESTING STRATEGY
+  1632→
+  1633→### 9.1 Test Coverage
+  1634→
+  1635→```
+  1636→Unit Tests (80%+ coverage):
+  1637→- Service logic
+  1638→- API endpoints
+  1639→- Utility functions
+  1640→- Database models
+  1641→
+  1642→Integration Tests (50%+ coverage):
+  1643→- API flows (create order, complete payment, etc)
+  1644→- Database transactions
+  1645→- Service interactions
+  1646→- External integrations (mock APIs)
+  1647→
+  1648→E2E Tests (critical user flows):
+  1649→- Login → Sales → Receipt
+  1650→- Customer → Add Debt → Payment
+  1651→- Inventory → Stock Adjustment → Report
+  1652→- Admin → Backup → Restore
+  1653→
+  1654→Performance Tests:
+  1655→- Load testing (100+ concurrent users)
+  1656→- Database query optimization
+  1657→- API response times
+  1658→- Report generation speed
+  1659→```
+  1660→
+  1661→### 9.2 Testing Stack
+  1662→
+  1663→```
+  1664→- Jest (unit & integration tests)
+  1665→- Supertest (API testing)
+  1666→- Cypress (E2E testing)
+  1667→- Artillery (load testing)
+  1668→- Mock data using Faker.js
+  1669→- Test database seeding
+  1670→```
+  1671→
+  1672→---
+  1673→
+  1674→## SECTION 10: MONITORING & OBSERVABILITY
+  1675→
+  1676→### 10.1 Logging
+  1677→
+  1678→```
+  1679→Structured Logging:
+  1680→- Winston logger with JSON formatting
+  1681→- Log levels: debug, info, warn, error, critical
+  1682→- Request ID tracking (correlation IDs)
+  1683→- User & organization context in logs
+  1684→- Performance metrics (query time, API latency)
+  1685→
+  1686→Log Aggregation:
+  1687→- ELK Stack or similar (production)
+  1688→- Searchable logs by user, action, resource
+  1689→- Log retention: 90 days (configurable)
+  1690→- Alerts for error spikes
+  1691→```
+  1692→
+  1693→### 10.2 Monitoring
+  1694→
+  1695→```
+  1696→Metrics:
+  1697→- API response times
+  1698→- Error rates
+  1699→- Database query performance
+  1700→- Cache hit rates
+  1701→- Message queue depths
+  1702→- Service availability
+  1703→
+  1704→Dashboards:
+  1705→- Real-time service health
+  1706→- Error rates & types
+  1707→- API latency percentiles (p50, p95, p99)
+  1708→- Database connection pool usage
+  1709→- Queue processing times
+  1710→
+  1711→Alerting:
+  1712→- Service down (critical)
+  1713→- Error rate > 5% (high)
+  1714→- P95 latency > 2s (medium)
+  1715→- Database errors (high)
+  1716→- Payment API failures (critical)
+  1717→```
+  1718→
+  1719→---
+  1720→
+  1721→## SECTION 11: INTEGRATION REQUIREMENTS
+  1722→
+  1723→### 11.1 M-Pesa Integration (Daraja API)
+  1724→
+  1725→```
+  1726→Implementation:
+  1727→- Consumer Key & Secret from Safaricom
+  1728→- OAuth2 authentication flow
+  1729→- STK Push for customer-initiated payments
+  1730→- Query Transaction API for status checks
+  1731→- Webhook for payment confirmations
+  1732→- Reconciliation at end of day
+  1733→- Error handling for network timeouts
+  1734→- Duplicate payment prevention
+  1735→- Transaction logging
+  1736→
+  1737→Features:
+  1738→- Real-time payment confirmation
+  1739→- Automatic ledger entry on payment
+  1740→- Payment reference tracking
+  1741→- Daily settlement reports
+  1742→```
+  1743→
+  1744→### 11.2 Email Integration
+  1745→
+  1746→```
+  1747→Provider: SendGrid / AWS SES / SMTP
+  1748→Capabilities:
+  1749→- Transactional emails (receipts, confirmations)
+  1750→- Template-based emails
+  1751→- HTML & text versions
+  1752→- Attachment support (PDFs)
+  1753→- Bulk sending with throttling
+  1754→- Delivery tracking
+  1755→- Bounce handling
+  1756→```
+  1757→
+  1758→### 11.3 SMS Integration
+  1759→
+  1760→```
+  1761→Provider: Africa's Talking / Twilio / Vonage
+  1762→Use Cases:
+  1763→- Debt reminders
+  1764→- Payment confirmations
+  1765→- OTP delivery
+  1766→- Order notifications
+  1767→- Promotional messages
+  1768→- Short receipts
+  1769→
+  1770→Features:
+  1771→- Character encoding (Unicode support for Kiswahili)
+  1772→- Delivery reports
+  1773→- Scheduled sending
+  1774→- Bulk SMS batching
+  1775→```
+  1776→
+  1777→### 11.4 WhatsApp Business Integration
+  1778→
+  1779→```
+  1780→Provider: Meta Business API
+  1781→Features:
+  1782→- Template-based messages
+  1783→- Interactive menus
+  1784→- Media attachments
+  1785→- Receipt delivery
+  1786→- Debt reminders
+  1787→- Order updates
+  1788→- Group notifications
+  1789→
+  1790→Implementation:
+  1791→- Webhook for incoming messages
+  1792→- Message queueing for reliability
+  1793→- Rate limiting per customer
+  1794→```
+  1795→
+  1796→---
+  1797→
+  1798→## SECTION 12: PERFORMANCE OPTIMIZATION
+  1799→
+  1800→### 12.1 Database Optimization
+  1801→
+  1802→```
+  1803→- Connection pooling (PgBouncer)
+  1804→- Query optimization (EXPLAIN ANALYZE)
+  1805→- Indexing strategy for frequently queried columns
+  1806→- Materialized views for expensive aggregations
+  1807→- Partitioning for large tables (sales by month)
+  1808→- Read replicas for reporting queries
+  1809→- Query caching (Redis)
+  1810→```
+  1811→
+  1812→### 12.2 Caching Strategy
+  1813→
+  1814→```
+  1815→Cache Layers:
+  1816→1. Browser cache (static assets, 1 year)
+  1817→2. HTTP cache (API responses, 5-60 minutes)
+  1818→3. Application cache (Redis)
+  1819→   - Product catalog (1 hour)
+  1820→   - Store settings (1 hour)
+  1821→   - User permissions (30 minutes)
+  1822→   - Stock levels (5 minutes)
+  1823→4. Database query cache (automatic, powered by indexes)
+  1824→
+  1825→Cache Invalidation:
+  1826→- Time-based expiry
+  1827→- Event-based invalidation (on data change)
+  1828→- Manual invalidation by admin
+  1829→```
+  1830→
+  1831→### 12.3 Frontend Performance
+  1832→
+  1833→```
+  1834→- Code splitting by route
+  1835→- Lazy loading of components
+  1836→- Image optimization & compression
+  1837→- CSS/JS minification & compression
+  1838→- Service Workers for offline capability
+  1839→- Virtual scrolling for large lists
+  1840→- Pagination over infinite scroll
+  1841→- Debouncing of search/filter inputs
+  1842→```
+  1843→
+  1844→---
+  1845→
+  1846→## SECTION 13: ERROR HANDLING & USER EXPERIENCE
+  1847→
+  1848→### 13.1 Error Message Strategy
+  1849→
+  1850→```
+  1851→User-Facing Errors:
+  1852→- Clear, non-technical language
+  1853→- Specific guidance on resolution
+  1854→- Suggested next steps
+  1855→- Contact support if unresolvable
+  1856→
+  1857→Examples:
+  1858→❌ Bad: "Internal Server Error 500"
+  1859→✅ Good: "Unable to process payment right now. Please try again in a few minutes or contact support."
+  1860→
+  1861→❌ Bad: "FK constraint violation"
+  1862→✅ Good: "Cannot delete this product as it has existing sales records."
+  1863→
+  1864→❌ Bad: "Timeout error"
+  1865→✅ Good: "Payment is taking longer than expected. Check M-Pesa balance or try again."
+  1866→```
+  1867→
+  1868→### 13.2 Graceful Degradation
+  1869→
+  1870→```
+  1871→Partial Service Failures:
+  1872→- If M-Pesa API down: Allow cash/debt sales only, queue M-Pesa payments
+  1873→- If Email down: Queue emails for retry, show notification
+  1874→- If SMS down: Allow WhatsApp alternative
+  1875→- If Inventory Service down: Display cached data, allow readonly access
+  1876→- If Reports down: Show cached reports, notify of limitations
+  1877→```
+  1878→
+  1879→### 13.3 Transaction Safety
+  1880→
+  1881→```
+  1882→Features:
+  1883→- Optimistic locking to prevent overselling
+  1884→- Distributed transactions with saga pattern
+  1885→- Idempotency keys for payment operations
+  1886→- Automatic rollback on any failure
+  1887→- User-friendly rollback notifications
+  1888→- Transaction logs for auditability
+  1889→```
+  1890→
+  1891→---
+  1892→
+  1893→## SECTION 14: COMPLIANCE & DATA GOVERNANCE
+  1894→
+  1895→### 14.1 Regulatory Compliance
+  1896→
+  1897→```
+  1898→- GDPR (if serving EU customers)
+  1899→  - Data privacy consent
+  1900→  - Right to be forgotten (data deletion)
+  1901→  - Data export capability
+  1902→  
+  1903→- Local Tax Compliance
+  1904→  - VAT/Sales Tax tracking
+  1905→  - Tax report generation
+  1906→  - Transaction auditing for tax authority
+  1907→  
+  1908→- Business Laws
+  1909→  - Receipt generation requirements
+  1910→  - Transaction logging
+  1911→  - Data retention policies
+  1912→```
+  1913→
+  1914→### 14.2 Data Governance
+  1915→
+  1916→```
+  1917→- Data classification (public, internal, confidential)
+  1918→- Data retention policies (by organization)
+  1919→- Data deletion schedules
+  1920→- GDPR compliance (PII handling)
+  1921→- Privacy policy enforcement
+  1922→- Terms of service acceptance
+  1923→```
+  1924→
+  1925→---
+  1926→
+  1927→## SECTION 15: FUTURE ENHANCEMENTS (Roadmap)
+  1928→
+  1929→```
+  1930→Phase 2:
+  1931→- Loyalty program with points & rewards
+  1932→- Purchase analytics with ML predictions
+  1933→- Supplier management with cost optimization
+  1934→- Equipment rental with calendar integration
+  1935→- Multi-currency support
+  1936→- Barcode/RFID inventory tracking
+  1937→- Advanced financial reporting
+  1938→- Consignment inventory management
+  1939→
+  1940→Phase 3:
+  1941→- Mobile app (Flutter) with offline POS
+  1942→- AI-powered demand forecasting
+  1943→- Customer behavior analytics
+  1944→- Dynamic pricing
+  1945→- Supply chain optimization
+  1946→- Budget management with variance analysis
+  1947→- API for third-party integrations
+  1948→
+  1949→Phase 4:
+  1950→- B2B marketplace for suppliers
+  1951→- Cloud synchronization for multiple devices
+  1952→- Video receipt delivery
+  1953→- Voice-based inventory updates
+  1954→- Advanced fraud detection
+  1955→- Carbon footprint tracking
+  1956→```
+  1957→
+  1958→---
+  1959→
+  1960→## SECTION 16: DEVELOPMENT WORKFLOW & GUIDELINES
+  1961→
+  1962→### 16.1 Project Structure
+  1963→
+  1964→```
+  1965→hardware-pos-system/
+  1966→├── frontend/
+  1967→│   ├── app/ (Next.js App Router)
+  1968→│   ├── components/
+  1969→│   ├── lib/
+  1970→│   ├── styles/
+  1971→│   ├── public/
+  1972→│   ├── types/
+  1973→│   └── next.config.js
+  1974→│
+  1975→├── backend/
+  1976→│   ├── services/
+  1977→│   │   ├── api-gateway/
+  1978→│   │   ├── auth-service/
+  1979→│   │   ├── pos-service/
+  1980→│   │   ├── inventory-service/
+  1981→│   │   ├── payment-service/
+  1982→│   │   ├── reporting-service/
+  1983→│   │   ├── notification-service/
+  1984→│   │   ├── customer-service/
+  1985→│   │   ├── accounting-service/
+  1986→│   │   └── admin-service/
+  1987→│   ├── shared/ (common code)
+  1988→│   │   ├── database/
+  1989→│   │   ├── decorators/
+  1990→│   │   ├── guards/
+  1991→│   │   ├── interceptors/
+  1992→│   │   ├── pipes/
+  1993→│   │   └── utils/
+  1994→│   ├── docker-compose.yml
+  1995→│   └── .env.example
+  1996→│
+  1997→├── infrastructure/
+  1998→│   ├── docker/
+  1999→│   ├── kubernetes/ (optional)
+  2000→│   ├── nginx.conf
+
+[showing lines 1-2000 of 2109; use offset=2001 with limit to continue reading]
