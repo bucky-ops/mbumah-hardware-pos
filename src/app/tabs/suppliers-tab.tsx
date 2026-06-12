@@ -37,7 +37,6 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-// Avatar gradient colors
 const AVATAR_GRADIENTS = [
   'from-rose-500 to-pink-600',
   'from-violet-500 to-purple-600',
@@ -458,7 +457,6 @@ function AddSupplierDialog({
   );
 }
 
-
 function CreatePODialog({
   open,
   onOpenChange,
@@ -648,7 +646,6 @@ function CreatePODialog({
   );
 }
 
-
 function ReceivePODialog({
   open,
   onOpenChange,
@@ -742,7 +739,6 @@ function ReceivePODialog({
     </Dialog>
   );
 }
-
 
 function SupplierDetailView({
   supplierId,
@@ -1090,7 +1086,6 @@ function SupplierDetailView({
   );
 }
 
-
 function POActions({ po, storeId }: { po: PurchaseOrderListItem; storeId: string }) {
   const queryClient = useQueryClient();
   const [receiveOpen, setReceiveOpen] = useState(false);
@@ -1167,7 +1162,6 @@ function POActions({ po, storeId }: { po: PurchaseOrderListItem; storeId: string
     </div>
   );
 }
-
 
 export default function SuppliersTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);

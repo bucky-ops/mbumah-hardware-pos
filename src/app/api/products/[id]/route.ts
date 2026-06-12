@@ -1,9 +1,4 @@
-/**
- * MBUMAH HARDWARE - Product Detail API
- * GET /api/products/[id] - Get product by ID
- * PUT /api/products/[id] - Update product
- * DELETE /api/products/[id] - Delete product
- */
+// GET/PUT/DELETE /api/products/[id]
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -72,8 +67,7 @@ async function updateProductHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Check for duplicate barcode if being updated
-  if (body.barcode && body.barcode !== existing.barcode) {
+    if (body.barcode && body.barcode !== existing.barcode) {
     const duplicateBarcode = await db.product.findUnique({ where: { barcode: body.barcode } });
     if (duplicateBarcode) {
       return Response.json(
@@ -144,8 +138,7 @@ async function deleteProductHandler(...args: unknown[]): Promise<Response> {
   }
 
   if (existing.saleItems.length > 0 || existing.stockMovements.length > 0) {
-    // Soft delete instead
-    await db.product.update({
+        await db.product.update({
       where: { id },
       data: { isActive: false },
     });

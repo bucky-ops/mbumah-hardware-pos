@@ -1,6 +1,4 @@
-/**
- * MBUMAH HARDWARE - Type Definitions
- */
+// Type definitions
 
 export const UserRole = {
   SUPER_ADMIN: 'SUPER_ADMIN',

@@ -25,7 +25,6 @@ import {
 import { Separator } from '@/components/ui/separator';
 
 // ---------------------------------------------------------------------------
-// Constants & helpers
 // ---------------------------------------------------------------------------
 
 type SortKey = 'name' | 'price_asc' | 'price_desc' | 'stock';

@@ -1,6 +1,4 @@
-/**
- * MBUMAH HARDWARE - State Stores
- */
+// Zustand state stores
 
 import { create } from 'zustand';
 import type { AuthUser, CartItem, UnitType } from './types';

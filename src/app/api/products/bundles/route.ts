@@ -1,8 +1,4 @@
-/**
- * MBUMAH HARDWARE - Product Bundles API
- * GET /api/products/bundles
- * POST /api/products/bundles
- */
+// GET/POST /api/products/bundles
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -56,8 +52,7 @@ async function getBundlesHandler(...args: unknown[]): Promise<Response> {
     db.product.count({ where }),
   ]);
 
-  // Enrich each bundle with computed discount and component pricing
-  const enrichedBundles = bundles.map((bundle) => {
+    const enrichedBundles = bundles.map((bundle) => {
     const componentTotalPrice = bundle.bundleItems.reduce(
       (sum, bi) => sum + (bi.childProduct.pricePerUnit * bi.quantityRequired),
       0
@@ -113,8 +108,7 @@ async function createBundleHandler(...args: unknown[]): Promise<Response> {
     discountPercent,
   } = body;
 
-  Determine which interface is being used
-  const useNewInterface = componentProducts && Array.isArray(componentProducts) && componentProducts.length > 0;
+    const useNewInterface = componentProducts && Array.isArray(componentProducts) && componentProducts.length > 0;
   const useLegacyInterface = items && Array.isArray(items) && items.length > 0;
 
   if (!storeId || !name) {
@@ -138,8 +132,7 @@ async function createBundleHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  Normalize to a unified format
-  // bundleComponents: Array of { productId, quantity }
+    // bundleComponents: Array of { productId, quantity }
   let bundleComponents: Array<{ productId: string; quantity: number }>;
 
   if (useNewInterface) {
@@ -151,8 +144,7 @@ async function createBundleHandler(...args: unknown[]): Promise<Response> {
       })
     );
 
-    // Validate componentProducts entries
-    for (const cp of bundleComponents) {
+        for (const cp of bundleComponents) {
       if (!cp.productId || cp.quantity <= 0) {
         return Response.json(
           { success: false, error: 'Each componentProduct must have a valid productId and quantity > 0.' },
@@ -170,8 +162,7 @@ async function createBundleHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  Validate all constituent products exist
-  const childProductIds = bundleComponents.map((c) => c.productId);
+    const childProductIds = bundleComponents.map((c) => c.productId);
   const childProducts = await db.product.findMany({
     where: { id: { in: childProductIds }, storeId, isActive: true },
   });
@@ -187,13 +178,11 @@ async function createBundleHandler(...args: unknown[]): Promise<Response> {
 
   const childProductMap = new Map(childProducts.map((p) => [p.id, p]));
 
-  Calculate bundle price for new interface
-  let finalPricePerUnit: number;
+    let finalPricePerUnit: number;
   let finalCostPrice: number;
 
   if (useNewInterface) {
-    // Calculate from component prices minus discount
-    const componentTotalPrice = bundleComponents.reduce((sum, comp) => {
+        const componentTotalPrice = bundleComponents.reduce((sum, comp) => {
       const product = childProductMap.get(comp.productId);
       return sum + (product ? product.pricePerUnit * comp.quantity : 0);
     }, 0);
@@ -218,15 +207,12 @@ async function createBundleHandler(...args: unknown[]): Promise<Response> {
     finalCostPrice = parseFloat(String(costPrice));
   }
 
-  // Round to 2 decimal places
-  finalPricePerUnit = Math.round(finalPricePerUnit * 100) / 100;
+    finalPricePerUnit = Math.round(finalPricePerUnit * 100) / 100;
   finalCostPrice = Math.round(finalCostPrice * 100) / 100;
 
-  Generate SKU if not provided
-  const bundleSku = sku || generateSKU('BDL');
+    const bundleSku = sku || generateSKU('BDL');
 
-  // Check for duplicate SKU
-  const existingSku = await db.product.findUnique({ where: { sku: bundleSku } });
+    const existingSku = await db.product.findUnique({ where: { sku: bundleSku } });
   if (existingSku) {
     return Response.json(
       { success: false, error: 'A product with this SKU already exists.' },
@@ -234,8 +220,7 @@ async function createBundleHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  Create the bundle product and its constituent items in a transaction
-  const bundle = await db.$transaction(async (tx) => {
+    const bundle = await db.$transaction(async (tx) => {
     const product = await tx.product.create({
       data: {
         storeId,
@@ -275,8 +260,7 @@ async function createBundleHandler(...args: unknown[]): Promise<Response> {
     });
   });
 
-  // Calculate computed fields for the response
-  const componentTotalPrice = bundleComponents.reduce((sum, comp) => {
+    const componentTotalPrice = bundleComponents.reduce((sum, comp) => {
     const product = childProductMap.get(comp.productId);
     return sum + (product ? product.pricePerUnit * comp.quantity : 0);
   }, 0);

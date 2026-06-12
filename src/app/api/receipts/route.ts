@@ -1,7 +1,4 @@
-/**
- * MBUMAH HARDWARE - Receipts API
- * GET /api/receipts - List receipts with pagination and filtering
- */
+// GET /api/receipts
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';

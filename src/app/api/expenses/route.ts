@@ -1,12 +1,4 @@
-/**
- * MBUMAH HARDWARE - Expenses API
- * GET /api/expenses - List expenses with filters
- * POST /api/expenses - Create a new expense with journal entry
- *
- * GET filters: storeId, dateFrom, dateTo, category, limit
- * POST required: storeId, description, amount, category, paidBy
- * POST creates: Expense record + JournalEntry (debit expense account, credit cash/mpesa account)
- */
+// GET/POST /api/expenses
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -15,7 +7,7 @@ import { generateJournalEntryNumber } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES, type AccountCode } from '@/lib/account-helper';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
-// Expense category to account code mapping
+// Expense category -> account code mapping
 const CATEGORY_ACCOUNT_MAP: Record<string, string> = {
   RENT: ACCOUNT_CODES.RENT_EXPENSE,
   SALARIES: ACCOUNT_CODES.SALARIES_EXPENSE,
@@ -112,8 +104,7 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
     notes,
   } = body;
 
-  // Validate required fields
-  if (!storeId || !description || !amount || !category || !paidBy) {
+    if (!storeId || !description || !amount || !category || !paidBy) {
     return Response.json(
       { success: false, error: 'storeId, description, amount, category, and paidBy are required.' },
       { status: 400 }
@@ -142,8 +133,7 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Verify the user (paidBy) exists
-  const user = await db.user.findUnique({ where: { id: paidBy } });
+    const user = await db.user.findUnique({ where: { id: paidBy } });
   if (!user || !user.isActive) {
     return Response.json(
       { success: false, error: 'Invalid or inactive user for paidBy.' },
@@ -151,14 +141,12 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Resolve account IDs for journal entries
-  const orgId = user.organizationId;
+    const orgId = user.organizationId;
   const creditAccountCode = expensePaymentMethod === 'MPESA'
     ? ACCOUNT_CODES.MPESA_ACCOUNT
     : ACCOUNT_CODES.CASH_ON_HAND;
 
-  // Determine the expense account based on category
-  const expenseAccountCode = CATEGORY_ACCOUNT_MAP[category] || ACCOUNT_CODES.SALARIES_EXPENSE;
+    const expenseAccountCode = CATEGORY_ACCOUNT_MAP[category] || ACCOUNT_CODES.SALARIES_EXPENSE;
 
   const accounts = await getAccountIds(orgId, [
     expenseAccountCode as AccountCode,
@@ -178,10 +166,8 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Create expense record and journal entry in a transaction
-  const result = await db.$transaction(async (tx) => {
-    // Create the expense record
-    const expense = await tx.expense.create({
+    const result = await db.$transaction(async (tx) => {
+        const expense = await tx.expense.create({
       data: {
         storeId,
         description,
@@ -226,14 +212,12 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
       },
     });
 
-    // Update the expense with the journal entry reference
-    await tx.expense.update({
+        await tx.expense.update({
       where: { id: expense.id },
       data: { journalEntryId: journalEntry.id },
     });
 
-    // If cash payment, record in cash drawer
-    if (expensePaymentMethod === 'CASH') {
+        if (expensePaymentMethod === 'CASH') {
       const lastDrawerEntry = await tx.cashDrawerLog.findFirst({
         where: { storeId },
         orderBy: { createdAt: 'desc' },
@@ -271,8 +255,7 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
     },
   });
 
-  // Fetch the complete expense for response
-  const fullExpense = await db.expense.findUnique({
+    const fullExpense = await db.expense.findUnique({
     where: { id: result.expense.id },
     include: {
       store: { select: { id: true, name: true, location: true } },

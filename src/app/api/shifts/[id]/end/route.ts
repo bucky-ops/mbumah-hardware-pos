@@ -1,7 +1,4 @@
-/**
- * MBUMAH HARDWARE POS - End Shift API
- * POST /api/shifts/{id}/end - End an active shift (clock out)
- */
+// POST /api/shifts/[id]/end
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -23,8 +20,7 @@ async function endShiftHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Find the shift
-  const shift = await db.shift.findUnique({
+    const shift = await db.shift.findUnique({
     where: { id: shiftId },
     include: {
       user: { select: { id: true, name: true, email: true, role: true } },
@@ -45,8 +41,7 @@ async function endShiftHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Calculate expected cash: startingCash + totalSales
-  const expectedCash = shift.startingCash + shift.totalSales;
+    const expectedCash = shift.startingCash + shift.totalSales;
   const cashDifference = countedCash - expectedCash;
 
   const updatedShift = await db.shift.update({

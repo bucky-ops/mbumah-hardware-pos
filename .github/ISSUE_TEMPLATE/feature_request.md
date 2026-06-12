@@ -1,73 +1,79 @@
 ---
 name: Feature Request
-about: Suggest a new feature or enhancement
+about: Suggest a new feature or enhancement for MBUMAH HARDWARE POS
 title: '[FEATURE] '
-labels: enhancement, triage
+labels: enhancement, needs-triage
 assignees: ''
 ---
 
-## 💡 Feature Description
+## Problem Statement
 
-A clear and concise description of the feature you'd like to see implemented.
+A clear and concise description of what problem this feature would solve. Example: "I'm always frustrated when [...]"
 
-## 🎯 Problem Statement
-
-What problem does this feature solve? Why is it needed?
-
-**Is your feature request related to a problem? Please describe.**
-Example: I'm always frustrated when [...]
-
-## 🏗️ Proposed Solution
+## Proposed Solution
 
 A clear and concise description of what you want to happen.
 
-## 🔄 Alternatives Considered
+## Alternatives Considered
 
 A clear and concise description of any alternative solutions or features you've considered.
 
-## 📋 Target Module
+## Detailed Design
 
-Which module(s) would this feature affect? (Check all that apply)
+### User Flow
 
-- [ ] Product & Inventory
-- [ ] Sales & POS
-- [ ] Purchase Management
-- [ ] Supplier Management
-- [ ] Customer Loyalty
-- [ ] Multi-Store
-- [ ] Quotes & Invoices
-- [ ] Tax Management (eTIMS)
-- [ ] Expense Management
-- [ ] Voucher Management
-- [ ] Accounts & Accounting
-- [ ] Banking & Reconciliation
-- [ ] User Management & Security
-- [ ] M-Pesa Integration
-- [ ] Cross-cutting / Multiple modules
-- [ ] Other: ___
+Describe the expected user interaction step by step:
 
-## 👥 Who Would Benefit?
+1. User navigates to...
+2. User clicks on...
+3. System responds with...
 
-- [ ] Super Admins
-- [ ] Store Managers
-- [ ] Cashiers
-- [ ] Accountants
-- [ ] Store Keepers
-- [ ] Customers
-- [ ] All users
+### API Changes
 
-## 🇰🇪 Kenya-Specific?
+If this feature requires new or modified API endpoints, describe them here:
 
-Is this feature specific to the Kenyan business environment?
+- `GET /api/...` - Description
+- `POST /api/...` - Description
 
-- [ ] Yes — Kenya-specific (e.g., KRA, M-Pesa, eTIMS)
-- [ ] No — Generally applicable
-- [ ] Partially — Has both local and general aspects
+### Database Changes
 
-## 📐 Mockups / Examples
+If this feature requires schema changes, describe them here:
 
-If applicable, add mockups, screenshots, or examples from other systems.
+```prisma
+model Example {
+  id    String @id @default(cuid())
+  // Add proposed fields
+}
+```
 
-## 📝 Additional Context
+### UI Components
 
-Add any other context or screenshots about the feature request here.
+List any new UI components or modifications needed:
+
+- [ ] Component A
+- [ ] Component B
+
+## Business Impact
+
+- **Affected roles**: [e.g. Cashier, Admin, Accountant]
+- **Store operations impact**: [e.g. Faster checkout, Better inventory tracking]
+- **Priority level**: [e.g. Low, Medium, High, Critical]
+
+## Acceptance Criteria
+
+- [ ] Criterion 1
+- [ ] Criterion 2
+- [ ] Criterion 3
+
+## Additional Context
+
+Add any other context, mockups, or screenshots about the feature request here.
+
+## Kenya-Specific Considerations
+
+Does this feature involve any Kenya-specific requirements?
+
+- [ ] KRA compliance (e-invoicing, tax reporting)
+- [ ] M-Pesa integration changes
+- [ ] KES currency handling
+- [ ] Kenyan business regulations

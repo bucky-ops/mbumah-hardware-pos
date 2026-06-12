@@ -1,9 +1,4 @@
-/**
- * MBUMAH HARDWARE - Supplier Detail API
- * GET /api/suppliers/[id] - Get supplier details with PO stats
- * PUT /api/suppliers/[id] - Update supplier
- * DELETE /api/suppliers/[id] - Soft delete (set isActive = false)
- */
+// GET/PUT/DELETE /api/suppliers/[id]
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';

@@ -1,8 +1,4 @@
-/**
- * MBUMAH HARDWARE - Shifts API
- * GET /api/shifts - List shifts with filtering
- * POST /api/shifts - Start a new shift (clock in)
- */
+// GET/POST /api/shifts
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -79,8 +75,7 @@ async function createShiftHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Check if user already has an ACTIVE shift
-  const existingActiveShift = await db.shift.findFirst({
+    const existingActiveShift = await db.shift.findFirst({
     where: { userId, status: 'ACTIVE' },
   });
 

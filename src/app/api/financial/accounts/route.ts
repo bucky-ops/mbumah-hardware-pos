@@ -1,8 +1,4 @@
-/**
- * MBUMAH HARDWARE - Chart of Accounts API
- * GET /api/financial/accounts - List chart of accounts with balances
- * Accepts both organizationId and storeId (derives organizationId from store)
- */
+// GET /api/financial/accounts
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -15,8 +11,7 @@ async function getAccountsHandler(...args: unknown[]): Promise<Response> {
   let organizationId = searchParams.get('organizationId');
   const storeId = searchParams.get('storeId');
 
-  // If storeId is provided but not organizationId, derive it from the store
-  if (!organizationId && storeId) {
+    if (!organizationId && storeId) {
     const store = await db.store.findUnique({
       where: { id: storeId },
       select: { organizationId: true },
@@ -26,8 +21,7 @@ async function getAccountsHandler(...args: unknown[]): Promise<Response> {
     }
   }
 
-  // If still no organizationId, try to get the first organization (for demo/development)
-  if (!organizationId) {
+    if (!organizationId) {
     const firstOrg = await db.organization.findFirst({
       select: { id: true },
     });
@@ -102,8 +96,7 @@ async function getAccountsHandler(...args: unknown[]): Promise<Response> {
     };
   });
 
-  // Group accounts by type for summary
-  const accountsByType = result.reduce(
+    const accountsByType = result.reduce(
     (acc, account) => {
       const accountType = account.type;
       if (!acc[accountType]) {
@@ -115,8 +108,7 @@ async function getAccountsHandler(...args: unknown[]): Promise<Response> {
     {} as Record<string, typeof result>
   );
 
-  // Summary totals by account type
-  const summary: Record<string, { count: number; totalBalance: number }> = {};
+    const summary: Record<string, { count: number; totalBalance: number }> = {};
   for (const [accountType, accountsOfType] of Object.entries(accountsByType)) {
     summary[accountType] = {
       count: accountsOfType.length,

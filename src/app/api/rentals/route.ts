@@ -1,8 +1,4 @@
-/**
- * MBUMAH HARDWARE - Equipment Rentals API
- * GET /api/rentals - List rentals with filtering
- * POST /api/rentals - Create a new rental
- */
+// GET/POST /api/rentals
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -68,8 +64,7 @@ async function getRentalsHandler(...args: unknown[]): Promise<Response> {
     db.equipmentRental.count({ where }),
   ]);
 
-  // Check for overdue rentals and update their status
-  const now = new Date();
+    const now = new Date();
   const overdueRentals = rentals.filter(
     (r) => r.status === RentalStatus.ACTIVE && new Date(r.expectedReturnDate) < now
   );
@@ -85,8 +80,7 @@ async function getRentalsHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Summary stats
-  const rentalSummary = await db.equipmentRental.aggregate({
+    const rentalSummary = await db.equipmentRental.aggregate({
     where: { storeId, status: { in: [RentalStatus.ACTIVE, RentalStatus.OVERDUE] } },
     _sum: { totalRentalCharge: true, securityDeposit: true, lateFeeAccumulated: true },
     _count: true,
@@ -137,8 +131,7 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Validate product exists and is a rental item
-  const product = await db.product.findUnique({ where: { id: productId } });
+    const product = await db.product.findUnique({ where: { id: productId } });
   if (!product) {
     return Response.json(
       { success: false, error: 'Product not found.' },
@@ -160,8 +153,7 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Validate customer exists
-  const customer = await db.customer.findUnique({ where: { id: customerId } });
+    const customer = await db.customer.findUnique({ where: { id: customerId } });
   if (!customer) {
     return Response.json(
       { success: false, error: 'Customer not found.' },
@@ -194,14 +186,12 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
       },
     });
 
-    // Deduct stock for the rental item
-    await tx.product.update({
+        await tx.product.update({
       where: { id: productId },
       data: { quantityInStock: { decrement: 1 } },
     });
 
-    // Create stock movement
-    await tx.stockMovement.create({
+        await tx.stockMovement.create({
       data: {
         storeId,
         productId,
@@ -213,8 +203,7 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
       },
     });
 
-    // Record security deposit in cash drawer
-    if (deposit > 0) {
+        if (deposit > 0) {
       const lastDrawerEntry = await tx.cashDrawerLog.findFirst({
         where: { storeId },
         orderBy: { createdAt: 'desc' },
@@ -232,8 +221,7 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
         },
       });
 
-      // Journal entry for security deposit
-      const jeNumber = generateJournalEntryNumber();
+            const jeNumber = generateJournalEntryNumber();
       const store = await tx.store.findUnique({ where: { id: storeId }, select: { organizationId: true } });
       const orgId = store?.organizationId || 'org_mbumah';
       const accounts = await getAccountIds(orgId, [

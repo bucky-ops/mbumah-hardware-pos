@@ -1,9 +1,4 @@
-/**
- * MBUMAH HARDWARE - Data Export API
- * GET /api/reports/export - Export data as CSV
- *
- * Supports exporting: sales, inventory, debt, rentals
- */
+// GET /api/reports/export (CSV: sales, inventory, debt, rentals)
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';

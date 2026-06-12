@@ -66,3 +66,7 @@ upload/
 screenshot*.png
 # Download directory
 download/
+# Dev artifacts
+.zscripts/
+# Screenshots directory (spec images)
+screenshots/

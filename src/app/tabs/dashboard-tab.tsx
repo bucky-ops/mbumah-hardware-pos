@@ -1,9 +1,5 @@
 'use client';
 
-/**
- * MBUMAH HARDWARE - Dashboard
- */
-
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -44,8 +40,6 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-
-// CONSTANTS & HELPERS
 
 const CHART_COLORS = [
   'hsl(var(--chart-1))',
@@ -178,7 +172,6 @@ function ChartTooltipContent({ active, payload, label, valuePrefix = '' }: {
     </div>
   );
 }
-
 
 function KpiCards({ storeId, onLowStockClick }: { storeId: string; onLowStockClick: () => void }) {
   const { data, isLoading } = useQuery({
@@ -601,7 +594,6 @@ function SalesOverview({ storeId }: { storeId: string }) {
   );
 }
 
-
 function QuickActions({ onTabSwitch }: { onTabSwitch: (tab: AppTab) => void }) {
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
   const [cashDrawerOpen, setCashDrawerOpen] = useState(false);
@@ -877,7 +869,6 @@ function QuickActions({ onTabSwitch }: { onTabSwitch: (tab: AppTab) => void }) {
     </>
   );
 }
-
 
 function RecentActivity({ storeId }: { storeId: string }) {
   const { data: dashboardData, isLoading: dashLoading } = useQuery({
@@ -1288,7 +1279,6 @@ function AlertsPanel({ storeId, onTabSwitch }: { storeId: string; onTabSwitch: (
   );
 }
 
-
 function TopProductsTable({ storeId }: { storeId: string }) {
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', storeId],
@@ -1493,7 +1483,6 @@ function DebtAgingCard({ storeId }: { storeId: string }) {
     </Card>
   );
 }
-
 
 function useShiftDuration(startedAt: string | null) {
   const [duration, setDuration] = useState(() => !startedAt ? '0h 0m 0s' : '');
@@ -1874,7 +1863,6 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
     </>
   );
 }
-
 
 export default function DashboardTab() {
   const { currentStoreId, setActiveTab } = useAppStore();

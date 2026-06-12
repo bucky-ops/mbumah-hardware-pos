@@ -1,8 +1,4 @@
-/**
- * MBUMAH HARDWARE - Customers API
- * GET /api/customers - List/search customers
- * POST /api/customers - Create a new customer
- */
+// GET/POST /api/customers
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -114,8 +110,7 @@ async function createCustomerHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Check for duplicate phone within store
-  if (phone) {
+    if (phone) {
     const existing = await db.customer.findFirst({
       where: { storeId, phone },
     });

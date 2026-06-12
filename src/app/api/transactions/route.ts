@@ -1,8 +1,4 @@
-/**
- * MBUMAH HARDWARE - Transactions API
- * GET /api/transactions - List transactions
- * POST /api/transactions - Create transaction (checkout)
- */
+// GET/POST /api/transactions
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -128,8 +124,7 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     notes,
   } = body;
 
-Validation
-  if (!storeId || !cashierId || !items || !Array.isArray(items) || items.length === 0 || !paymentMethod) {
+    if (!storeId || !cashierId || !items || !Array.isArray(items) || items.length === 0 || !paymentMethod) {
     return Response.json(
       { success: false, error: 'storeId, cashierId, items, and paymentMethod are required.' },
       { status: 400 }
@@ -171,7 +166,7 @@ Validation
     }
   }
 
-Validate all items and stock levels
+  // Validate all items and stock levels
   const productIds = items.map((item: { productId: string }) => item.productId);
   const products = await db.product.findMany({
     where: { id: { in: productIds }, storeId, isActive: true },
@@ -205,7 +200,7 @@ Validate all items and stock levels
     const quantity = parseFloat(String(item.quantity));
 
     if (product.isBundle) {
-For bundle items, auto-resolve constituent items
+      // For bundle items, auto-resolve constituent items
       if (!product.bundleItems || product.bundleItems.length === 0) {
         return Response.json(
           { success: false, error: `Bundle "${product.name}" has no constituent items configured.` },
@@ -259,8 +254,7 @@ For bundle items, auto-resolve constituent items
     }
   }
 
-Debt ceiling check
-  if (paymentMethod === PaymentMethod.DEBT && customer) {
+    if (paymentMethod === PaymentMethod.DEBT && customer) {
     let totalTransactionAmount = 0;
     for (const item of items) {
       const calc = calculateLineTotal(
@@ -285,8 +279,7 @@ Debt ceiling check
     }
   }
 
-Calculate totals
-  let subtotal = 0;
+    let subtotal = 0;
   let taxAmount = 0;
   let totalDiscount = 0;
 
@@ -321,8 +314,7 @@ Calculate totals
 
   const receiptNumber = generateReceiptNumber();
 
-  // Resolve account IDs for journal entries
-  const cashierOrg = await db.user.findUnique({ where: { id: cashierId }, select: { organizationId: true } });
+    const cashierOrg = await db.user.findUnique({ where: { id: cashierId }, select: { organizationId: true } });
   const orgId = cashierOrg?.organizationId || 'org_mbumah';
   const accounts = await getAccountIds(orgId, [
     ACCOUNT_CODES.CASH_ON_HAND,
@@ -332,10 +324,8 @@ Calculate totals
     ACCOUNT_CODES.VAT_PAYABLE,
   ]);
 
-Execute transaction
-  const result = await db.$transaction(async (tx) => {
-Create SalesTransaction with SaleItems
-    let paymentStatusValue: string = PaymentStatus.COMPLETED;
+    const result = await db.$transaction(async (tx) => {
+        let paymentStatusValue: string = PaymentStatus.COMPLETED;
 
     if (paymentMethod === PaymentMethod.MPESA) {
       paymentStatusValue = PaymentStatus.PENDING;
@@ -366,8 +356,7 @@ Create SalesTransaction with SaleItems
       },
     });
 
-Create Payment records
-    if (paymentMethod === PaymentMethod.SPLIT && paymentDetails?.splits) {
+        if (paymentMethod === PaymentMethod.SPLIT && paymentDetails?.splits) {
       for (const split of paymentDetails.splits) {
         await tx.payment.create({
           data: {
@@ -395,18 +384,15 @@ Create Payment records
       });
     }
 
-Deduct stock and create StockMovement records
-    for (const [productId, deduction] of stockDeductions) {
+        for (const [productId, deduction] of stockDeductions) {
       const { quantity, product } = deduction;
 
-      // Update product stock
-      await tx.product.update({
+            await tx.product.update({
         where: { id: productId },
         data: { quantityInStock: { decrement: quantity } },
       });
 
-      // Create stock movement record
-      await tx.stockMovement.create({
+            await tx.stockMovement.create({
         data: {
           storeId,
           productId,
@@ -419,10 +405,8 @@ Deduct stock and create StockMovement records
       });
     }
 
-CASH payment - Cash drawer + Journal entries
-    if (paymentMethod === PaymentMethod.CASH) {
-      // Get current cash drawer balance
-      const lastDrawerEntry = await tx.cashDrawerLog.findFirst({
+        if (paymentMethod === PaymentMethod.CASH) {
+            const lastDrawerEntry = await tx.cashDrawerLog.findFirst({
         where: { storeId },
         orderBy: { createdAt: 'desc' },
       });
@@ -439,8 +423,7 @@ CASH payment - Cash drawer + Journal entries
         },
       });
 
-      // Create journal entries: DR Cash, CR Sales Revenue, CR VAT Payable
-      const jeNumber = generateJournalEntryNumber();
+            const jeNumber = generateJournalEntryNumber();
       const salesRevenue = subtotal - totalDiscount - appliedDiscount;
       const vatAmount = taxAmount;
 
@@ -482,8 +465,7 @@ CASH payment - Cash drawer + Journal entries
       });
     }
 
-MPESA payment - Create pending MpesaTransaction
-    if (paymentMethod === PaymentMethod.MPESA) {
+        if (paymentMethod === PaymentMethod.MPESA) {
       const mpesaPhone = paymentDetails?.mpesaPhone || customer?.phone || '';
       if (!mpesaPhone) {
         throw new Error('M-Pesa phone number is required for M-Pesa payments.');
@@ -499,8 +481,7 @@ MPESA payment - Create pending MpesaTransaction
         },
       });
 
-      // Journal entry: DR M-Pesa Account (pending), CR Sales Revenue, CR VAT Payable
-      const jeNumber = generateJournalEntryNumber();
+            const jeNumber = generateJournalEntryNumber();
       const salesRevenue = subtotal - totalDiscount - appliedDiscount;
       const vatAmount = taxAmount;
 
@@ -541,11 +522,9 @@ MPESA payment - Create pending MpesaTransaction
       });
     }
 
-DEBT payment - DebtLedger + Journal entries
-    if (paymentMethod === PaymentMethod.DEBT && customer) {
+        if (paymentMethod === PaymentMethod.DEBT && customer) {
       const dueDate = new Date();
-      dueDate.setDate(dueDate.getDate() + 30); // 30-day payment terms
-
+      dueDate.setDate(dueDate.getDate() + 30); 
       await tx.debtLedger.create({
         data: {
           storeId,
@@ -561,14 +540,12 @@ DEBT payment - DebtLedger + Journal entries
         },
       });
 
-      // Update customer debt balance
-      await tx.customer.update({
+            await tx.customer.update({
         where: { id: customer.id },
         data: { currentDebtBalance: { increment: finalTotal } },
       });
 
-      // Journal entry: DR Accounts Receivable, CR Sales Revenue, CR VAT Payable
-      const jeNumber = generateJournalEntryNumber();
+            const jeNumber = generateJournalEntryNumber();
       const salesRevenue = subtotal - totalDiscount - appliedDiscount;
       const vatAmount = taxAmount;
 
@@ -610,8 +587,7 @@ DEBT payment - DebtLedger + Journal entries
       });
     }
 
-Create Receipt
-    await tx.receipt.create({
+        await tx.receipt.create({
       data: {
         storeId,
         transactionId: transaction.id,
@@ -623,8 +599,7 @@ Create Receipt
     return transaction;
   });
 
-For MPESA, initiate STK Push after transaction
-  if (paymentMethod === PaymentMethod.MPESA) {
+    if (paymentMethod === PaymentMethod.MPESA) {
     try {
       const mpesaPhone = paymentDetails?.mpesaPhone || customer?.phone || '';
       const stkPayload = {
@@ -634,8 +609,7 @@ For MPESA, initiate STK Push after transaction
         transactionDesc: `Payment for ${receiptNumber}`,
       };
 
-      // Call M-Pesa mock service
-      fetch('/api/payments/mpesa/stkpush?XTransformPort=3001', {
+            fetch('/api/payments/mpesa/stkpush?XTransformPort=3001', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -651,8 +625,7 @@ For MPESA, initiate STK Push after transaction
     }
   }
 
-Log the transaction
-  await systemLog({
+    await systemLog({
     action: 'TRANSACTION_CREATED',
     component: LogComponent.POS,
     severity: LogSeverity.INFO,
@@ -669,8 +642,7 @@ Log the transaction
     },
   });
 
-  // Fetch complete transaction for response
-  const fullTransaction = await db.salesTransaction.findUnique({
+    const fullTransaction = await db.salesTransaction.findUnique({
     where: { id: result.id },
     include: {
       cashier: { select: { id: true, name: true } },

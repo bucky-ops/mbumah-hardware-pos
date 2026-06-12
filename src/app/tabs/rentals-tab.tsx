@@ -32,8 +32,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 
-// Rental Timeline Visual Component - Dots and Lines
-
 function RentalTimeline({ rental }: { rental: RentalItem }) {
   const start = new Date(rental.rentalStartDate).getTime();
   const expected = new Date(rental.expectedReturnDate).getTime();

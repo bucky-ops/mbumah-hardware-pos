@@ -43,8 +43,6 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
-// System Health Indicator Component (Animation)
-
 function HealthIndicator({ label, value, max, unit, colorClass, lastUpdated }: {
   label: string; value: number; max: number; unit: string; colorClass?: string; lastUpdated?: string;
 }) {

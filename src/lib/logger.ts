@@ -1,6 +1,4 @@
-/**
- * MBUMAH HARDWARE - System Logger
- */
+// System logger & API error boundary
 
 import { db } from './db';
 import { LogSeverity, LogComponent } from './types';
@@ -41,9 +39,7 @@ export async function systemLog(entry: LogEntry): Promise<void> {
   }
 }
 
-/**
- * Map technical errors to user-friendly messages
- */
+// Map technical errors to user-friendly messages
 export function mapErrorToUserMessage(error: unknown): string {
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();

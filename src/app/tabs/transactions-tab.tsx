@@ -1,9 +1,5 @@
 'use client';
 
-/**
- * MBUMAH HARDWARE - Transactions
- */
-
 import React, { useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -28,7 +24,6 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
-
 
 function startOfDay(date: Date): Date {
   const d = new Date(date);
@@ -61,7 +56,6 @@ function toISOString(d: Date): string {
   return d.toISOString();
 }
 
-
 type DatePreset = 'today' | 'week' | 'month' | 'custom';
 
 const DATE_PRESETS: { id: DatePreset; label: string }[] = [
@@ -84,7 +78,6 @@ function getDateRange(preset: DatePreset): { from: Date; to: Date } {
       return { from: startOfDay(now), to: endOfDay(now) };
   }
 }
-
 
 type TransactionType = 'sale' | 'refund' | 'void';
 
@@ -117,7 +110,6 @@ function getTransactionTypeLabel(type: TransactionType): string {
     case 'void': return 'Void';
   }
 }
-
 
 function getPaymentMethodColor(method: string): string {
   switch (method) {
@@ -160,7 +152,6 @@ function getPaymentStatusColor(status: string): string {
     default: return 'bg-muted text-muted-foreground';
   }
 }
-
 
 function exportTransactionsCSV(transactions: TransactionItem[]): void {
   if (transactions.length === 0) return;
@@ -234,7 +225,6 @@ function MiniTrendChart({ data, height = 40 }: { data: { label: string; value: n
     </svg>
   );
 }
-
 
 function ReceiptModal({
   open,
@@ -346,7 +336,6 @@ function ReceiptModal({
     </Dialog>
   );
 }
-
 
 function ConfirmActionDialog({
   open,
@@ -521,7 +510,6 @@ function TransactionRow({
     </>
   );
 }
-
 
 export default function TransactionsTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);

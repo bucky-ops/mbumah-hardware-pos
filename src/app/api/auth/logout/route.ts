@@ -1,7 +1,4 @@
-/**
- * MBUMAH HARDWARE - Authentication: Logout
- * POST /api/auth/logout - Destroy user session
- */
+// POST /api/auth/logout
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';

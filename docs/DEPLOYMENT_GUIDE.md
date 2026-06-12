@@ -1,349 +1,266 @@
-# HSMS - Hardware Store Management System
+# MBUMAH HARDWARE POS — Vercel + Supabase Deployment Guide
 
-## Complete Full-Stack System for Hardware Store Retail Management
+Complete step-by-step guide for deploying MBUMAH HARDWARE POS to Vercel with a Supabase PostgreSQL database.
 
 ---
 
 ## Table of Contents
 
-1. [System Architecture](#system-architecture)
-2. [Technology Stack](#technology-stack)
-3. [Features Overview](#features-overview)
-4. [Quick Start (Development)](#quick-start-development)
-5. [Production Deployment](#production-deployment)
-6. [API Reference](#api-reference)
-7. [Database Schema](#database-schema)
-8. [Configuration Reference](#configuration-reference)
-9. [Security Considerations](#security-considerations)
-10. [Troubleshooting](#troubleshooting)
+1. [Architecture Overview](#architecture-overview)
+2. [Prerequisites](#prerequisites)
+3. [Step 1: Create a Supabase Project](#step-1-create-a-supabase-project)
+4. [Step 2: Get the PostgreSQL Connection String](#step-2-get-the-postgresql-connection-string)
+5. [Step 3: Switch Prisma to PostgreSQL](#step-3-switch-prisma-to-postgresql)
+6. [Step 4: Run Prisma Migrations on the Production Database](#step-4-run-prisma-migrations-on-the-production-database)
+7. [Step 5: Seed the Production Database](#step-5-seed-the-production-database)
+8. [Step 6: Push Code to GitHub](#step-6-push-code-to-github)
+9. [Step 7: Deploy to Vercel](#step-7-deploy-to-vercel)
+10. [Step 8: Configure Vercel Environment Variables](#step-8-configure-vercel-environment-variables)
+11. [Step 9: Verify the Deployment](#step-9-verify-the-deployment)
+12. [Post-Deployment: M-Pesa Webhooks](#post-deployment-mpesa-webhooks)
+13. [Troubleshooting](#troubleshooting)
+14. [Local Development Switchback](#local-development-switchback)
 
 ---
 
-## System Architecture
+## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    HSMS Architecture                     │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │              Frontend (React PWA)                │   │
-│  │  ┌─────────┐ ┌──────────┐ ┌───────────────────┐ │   │
-│  │  │POS/Cart │ │Admin     │ │Reports & Analytics│ │   │
-│  │  │Checkout │ │Dashboard │ │(Recharts)         │ │   │
-│  │  └─────────┘ └──────────┘ └───────────────────┘ │   │
-│  └────────────────────┬─────────────────────────────┘   │
-│                       │ REST API                         │
-│  ┌────────────────────┴─────────────────────────────┐   │
-│  │              Next.js API Routes                   │   │
-│  │  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌───────┐ │   │
-│  │  │Auth  │ │Sales │ │Invnt │ │CRM   │ │Reports│ │   │
-│  │  │JWT   │ │&Pay  │ │&Cat  │ │Bills │ │FastSlw│ │   │
-│  │  └──────┘ └──────┘ └──────┘ └──────┘ └───────┘ │   │
-│  │  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌───────┐ │   │
-│  │  │GiftC │ │PO/GRN│ │Deliv │ │Sync  │ │Webhook│ │   │
-│  │  │Loylty│ │Purch │ │Notes │ │Engine│ │Events │ │   │
-│  │  └──────┘ └──────┘ └──────┘ └──────┘ └───────┘ │   │
-│  └────────────────────┬─────────────────────────────┘   │
-│                       │ Prisma ORM                       │
-│  ┌────────────────────┴─────────────────────────────┐   │
-│  │              Database Layer                       │   │
-│  │  ┌──────────────────┐  ┌────────────────────┐    │   │
-│  │  │ SQLite (Dev/Local)│  │ PostgreSQL (Prod)  │    │   │
-│  │  │ SQLCipher Ready   │  │ With Migrations    │    │   │
-│  │  └──────────────────┘  └────────────────────┘    │   │
-│  └──────────────────────────────────────────────────┘   │
-│                                                          │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │              Infrastructure                       │   │
-│  │  Docker / Kubernetes / GitHub Actions CI/CD      │   │
-│  └──────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                   Production Architecture                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │           Vercel (Serverless Functions)               │   │
+│  │  ┌────────────────────────────────────────────────┐  │   │
+│  │  │  Next.js App (API Routes + Frontend)           │  │   │
+│  │  │  - Serverless functions for each API route      │  │   │
+│  │  │  - Static/ISR for frontend pages                │  │   │
+│  │  │  - Edge network for global CDN                  │  │   │
+│  │  └────────────────────┬───────────────────────────┘  │   │
+│  └───────────────────────┼──────────────────────────────┘   │
+│                          │ Prisma ORM                         │
+│  ┌───────────────────────┴──────────────────────────────┐   │
+│  │           Supabase (PostgreSQL 15)                    │   │
+│  │  - Managed database with auto-backups                 │   │
+│  │  - Connection pooling via PgBouncer                   │   │
+│  │  - Row Level Security (optional)                      │   │
+│  │  - Real-time subscriptions (optional)                 │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                                                               │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │           External Services                           │   │
+│  │  - M-Pesa Daraja API (Safaricom)                     │   │
+│  │  - Resend (Email notifications)                      │   │
+│  │  - Twilio (SMS notifications)                        │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Technology Stack
+## Prerequisites
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| **Frontend** | React 19 + TypeScript | UI with 12 tab modules |
-| **UI Framework** | shadcn/ui + Tailwind CSS 4 | Component library + styling |
-| **Charts** | Recharts | Data visualization (line, bar, pie charts) |
-| **Backend** | Next.js 16 App Router | API routes with server-side logic |
-| **Database** | Prisma ORM + SQLite (dev) | Type-safe database access |
-| **Auth** | JWT (jose) | Token-based authentication |
-| **Validation** | Zod | Runtime input validation |
-| **State** | React useState + useCallback | Client-side state management |
-| **Notifications** | Sonner | Toast notifications |
+- **GitHub account** — for code repository and Vercel integration
+- **Vercel account** — [vercel.com](https://vercel.com) (free tier works)
+- **Supabase account** — [supabase.com](https://supabase.com) (free tier works)
+- **Bun** runtime installed locally (for running migrations)
+- **Git** installed locally
 
 ---
 
-## Features Overview
+## Step 1: Create a Supabase Project
 
-### 12 Functional Modules
-
-1. **Dashboard** - KPI cards, revenue charts, payment distribution, inventory status, alerts
-2. **POS / Checkout** - Product search, cart management, 5 payment methods, VAT calculation, receipt preview
-3. **Inventory** - Full catalog, stock levels, add SKU dialog, stock adjustments with audit trail
-4. **Customers** - CRM with phone-primary identification, account types (RETAIL/TRADE), credit limits, loyalty
-5. **Bills Board** - Outstanding invoices, aging buckets (Current/1-30/31-60/61-90/90+), bulk actions, payment application
-6. **Purchase Orders** - PO lifecycle (DRAFT→RECEIVED), GRN with variance tracking, inventory auto-update
-7. **Sales History** - Complete order history with line items, payments, and invoice details
-8. **Gift Cards** - Issue/redeem, balance tracking with progress bars, transaction history
-9. **Delivery** - Status progression (PENDING→DELIVERED), proof of delivery, driver assignment
-10. **Reports** - Fast/Slow mover analysis, deadstock detection, ABC classification, velocity metrics
-11. **Sync Engine** - Offline-first sync, conflict resolution rules, pending queue management
-12. **Settings** - Authentication, user management, location info, system status
-
-### Key Business Rules
-
-- **Images are preview-only** — cannot be added as purchasable receipt line items
-- **Phone number is primary customer identifier** — unique constraint enforced
-- **Store Credit/Pay Later** creates invoice with 30-day due date
-- **Trade pricing** automatically applied for TRADE account type customers
-- **VAT 16%** applied to STANDARD tax class items (REDUCED=8%, ZERO/EXEMPT=0%)
-- **Loyalty points** earned at 1 point per 10 KES spent
-- **Offline sales** tracked via SyncLog with idempotent device UUIDs
-- **Conflict resolution**: Local-wins for payments, Server-wins for catalog, Version-vectors for inventory
+1. Go to [supabase.com](https://supabase.com) and sign in
+2. Click **"New Project"**
+3. Fill in:
+   - **Name**: `mbumah-pos`
+   - **Database Password**: Choose a strong password — **save this!**
+   - **Region**: Choose the closest region to your users (e.g., `Africa (Cape Town)` or `Europe (Frankfurt)`)
+   - **Plan**: Free tier is sufficient for development
+4. Click **"Create new project"** and wait ~2 minutes for provisioning
 
 ---
 
-## Quick Start (Development)
+## Step 2: Get the PostgreSQL Connection String
 
-### Prerequisites
+1. In your Supabase project dashboard, go to **Settings → Database**
+2. Scroll down to **"Connection string"** section
+3. Select **"URI"** tab
+4. Copy the connection string. It looks like:
+   ```
+   postgresql://postgres.[PROJECT-REF]:[YOUR-PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres
+   ```
+5. **Important**: For Prisma migrations, you need the **direct connection** (not pooled):
+   - Select **"Session mode"** or look for the **direct** connection string
+   - Direct: `postgresql://postgres.[PROJECT-REF]:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres`
+   - Pooled (for app runtime): `postgresql://postgres.[PROJECT-REF]:[YOUR-PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres`
 
-- **Node.js** 18+ or **Bun** runtime
-- **npm**, **yarn**, or **bun** package manager
-
-### Step-by-Step Setup
-
-```bash
-# 1. Clone the repository
-git clone <repository-url>
-cd hsms
-
-# 2. Install dependencies
-bun install
-# or: npm install
-
-# 3. Set up environment variables
-cp .env.example .env
-# Edit .env with your configuration
-
-# 4. Initialize the database
-bun run db:push
-# or: npx prisma db push
-
-# 5. Start the development server
-bun run dev
-# or: npm run dev
-
-# 6. Open the application
-# Navigate to http://localhost:3000
-# The system will auto-seed demo data on first load
-```
-
-### Demo Accounts
-
-| Email | Role | Password |
-|-------|------|----------|
-| owner@hsms.test | OWNER | any (demo mode) |
-| manager@hsms.test | MANAGER | any (demo mode) |
-| cashier@hsms.test | CASHIER | any (demo mode) |
-| clerk@hsms.test | STOCK_CLERK | any (demo mode) |
-
-### Demo Data Included
-
-- 12 hardware SKUs (nails, cement, paint, pipes, tools, etc.)
-- 4 customers (2 TRADE, 2 RETAIL)
-- 2 gift cards (KES 5,000 and KES 2,000)
-- 3 sales orders (1 paid, 2 credit/overdue)
-- 1 supplier with SKU pricing
-- 4 user accounts with RBAC roles
-- 1 location (Main Store, Nairobi)
+> **Tip**: Use the **pooled** connection for `DATABASE_URL` in Vercel (better for serverless), and the **direct** connection for running Prisma migrations locally.
 
 ---
 
-## Production Deployment
+## Step 3: Switch Prisma to PostgreSQL
 
-### Option 1: Docker Deployment
+1. Open `prisma/schema.prisma`
+2. Change the datasource provider:
 
-```bash
-# Build the Docker image
-docker build -t hsms:latest .
-
-# Run with Docker Compose
-docker-compose up -d
-```
-
-### Option 2: Standalone Server
-
-```bash
-# Build for production
-bun run build
-
-# Start the production server
-NODE_ENV=production PORT=3000 node .next/standalone/server.js
-```
-
-### Option 3: Vercel Deployment
-
-```bash
-# Deploy to Vercel
-npx vercel --prod
-```
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | `file:./db/custom.db` | SQLite path or PostgreSQL URL |
-| `JWT_SECRET` | `hsms-dev-secret-key-change-in-production` | JWT signing key |
-| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | Public app URL |
-| `NEXT_PUBLIC_CURRENCY` | `KES` | Currency code |
-
-### Switching to PostgreSQL (Production)
-
-1. Update `prisma/schema.prisma`:
    ```prisma
    datasource db {
-     provider = "postgresql"
+     provider = "postgresql"  // Changed from "sqlite"
      url      = env("DATABASE_URL")
    }
    ```
 
-2. Update `.env`:
-   ```
-   DATABASE_URL="postgresql://user:password@localhost:5432/hsms"
-   ```
+3. Update your local `.env` temporarily for migration:
 
-3. Run migrations:
    ```bash
-   npx prisma migrate dev --name init
-   npx prisma migrate deploy
+   # Temporarily point to Supabase for migration
+   DATABASE_URL="postgresql://postgres.[PROJECT-REF]:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres"
    ```
 
 ---
 
-## API Reference
+## Step 4: Run Prisma Migrations on the Production Database
 
-### Authentication
+Run these commands locally with the Supabase DATABASE_URL set in your `.env`:
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/auth` | POST | Login (email+password) or verify token |
+```bash
+# Generate Prisma client for PostgreSQL
+bunx prisma generate
 
-### Core Modules
+# Create the initial migration (this creates all tables in Supabase)
+bunx prisma migrate dev --name init_postgresql
 
-| Endpoint | Methods | Description |
-|----------|---------|-------------|
-| `/api/skus` | GET, POST | Product catalog |
-| `/api/inventory` | GET, PATCH | Inventory balances & adjustments |
-| `/api/customers` | GET, POST | Customer management |
-| `/api/sales` | GET, POST | Sales orders with checkout |
-| `/api/invoices` | GET, PATCH, PUT | Invoice & billing management |
-| `/api/gift-cards` | GET, POST | Gift card management |
-| `/api/purchase-orders` | GET, POST, PATCH | PO & GRN management |
-| `/api/delivery-notes` | GET, POST, PATCH | Delivery tracking |
-| `/api/sync` | GET, POST | Sync engine & conflict resolution |
+# If you already have migrations and just want to apply them:
+bunx prisma migrate deploy
+```
 
-### Reports
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/reports/dashboard` | GET | Dashboard KPIs & summaries |
-| `/api/reports/fast-slow` | GET | Fast/Slow/Deadstock analysis |
-
-### System
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/seed` | GET | Seed demo data |
-| `/api` | GET | Health check |
-
-### Query Parameters
-
-Most GET endpoints support:
-- `page` - Page number (default: 1)
-- `limit` - Items per page (default: 50)
-- `search` - Text search
-- Module-specific filters (e.g., `status`, `overdue`, `customerId`)
+**Verify**: Go to Supabase Dashboard → Table Editor. You should see all your tables (organizations, stores, users, products, etc.).
 
 ---
 
-## Database Schema
+## Step 5: Seed the Production Database
 
-### 18 Core Entities
+```bash
+# Seed with initial data (organization, store, admin user, etc.)
+bunx prisma db seed
+```
 
-| Entity | Purpose | Key Fields |
-|--------|---------|-----------|
-| `Role` | RBAC roles | name, permissions (JSON) |
-| `User` | Staff accounts | email, name, passwordHash, roleId |
-| `Location` | Store/warehouse | name, type, address |
-| `SKU` | Product catalog | sku, barcode, name, prices, taxClass |
-| `ImageAsset` | Product images | url, fingerprint (preview-only) |
-| `InventoryBalance` | Stock levels | qtyAvailable, version (for conflict detection) |
-| `Customer` | CRM | phonePrimary (unique), accountType, creditLimit |
-| `LoyaltyAccount` | Points tracking | pointsBalance, tier (BRONZE/SILVER/GOLD/PLATINUM) |
-| `GiftCard` | Prepaid cards | code (unique), balance, status |
-| `SalesOrder` | Transactions | orderNumber, totalAmount, isOffline, syncStatus |
-| `Invoice` | Billing | outstandingBalance, agingBucket, overdueFlag |
-| `Payment` | Payment records | method, amount, token (PCI-safe) |
-| `Supplier` | Vendor management | code, leadTimeDays, paymentTerms |
-| `PurchaseOrder` | Procurement | poNumber, status lifecycle |
-| `DeliveryNote` | Fulfillment | dnNumber, status, signatureUrl |
-| `SyncLog` | Offline sync | entityType, status, conflictResolution |
-| `AuditLog` | Compliance trail | entityType, action, delta (JSON) |
-| `WebhookSubscription` | Integrations | event, targetUrl, secret |
+If you have a custom seed script:
+
+```bash
+bunx tsx prisma/seed.ts
+```
+
+**Verify**: Check Supabase Table Editor for seeded data (default organization, store, admin user).
 
 ---
 
-## Configuration Reference
+## Step 6: Push Code to GitHub
 
-### RBAC Permissions
+1. **Revert the provider back to `sqlite`** in your local schema for development (optional — or keep `postgresql` if you want to develop against Supabase):
 
-| Role | Permissions |
-|------|------------|
-| OWNER | `*` (all) |
-| MANAGER | `pos:*`, `inventory:*`, `crm:*`, `reports:*`, `purchasing:*`, `delivery:*` |
-| CASHIER | `pos:sale`, `pos:return`, `pos:receipt` |
-| STOCK_CLERK | `inventory:read`, `inventory:count`, `receiving:*` |
-| ACCOUNTANT | `reports:*`, `crm:read`, `billing:read` |
-| ADMIN | `admin:*`, `sync:*`, `config:*` |
+   > The `schema.prisma` provider should match the database you're using. If you keep it as `postgresql`, your local dev also needs a PostgreSQL connection. For local SQLite development, switch it back.
 
-### Tax Classes
+2. Commit all changes:
 
-| Class | Rate | Use Case |
-|-------|------|----------|
-| STANDARD | 16% | General goods (VAT) |
-| REDUCED | 8% | Essential items |
-| ZERO | 0% | Zero-rated exports |
-| EXEMPT | 0% | Exempt items |
-
-### Conflict Resolution Rules
-
-| Data Type | Rule | Fallback |
-|-----------|------|----------|
-| Payments & Sales | Local Wins | Flagged for reconciliation |
-| Catalog / SKU | Server Wins | Review queue |
-| Inventory Counts | Version Vector | Manual adjustment queue |
-| Configuration | Server Wins (always) | Local cache refresh |
+   ```bash
+   git add .
+   git commit -m "feat: add Vercel + Supabase deployment configuration"
+   git push origin main
+   ```
 
 ---
 
-## Security Considerations
+## Step 7: Deploy to Vercel
 
-1. **Authentication**: JWT-based with 24-hour expiry. Change `JWT_SECRET` in production.
-2. **Password Hashing**: Demo uses placeholder hashes. Production must use bcrypt/argon2.
-3. **PCI Compliance**: No PAN storage. Card tokens only via payment provider.
-4. **SQLCipher**: Ready for encrypted local storage on POS terminals.
-5. **TLS 1.3**: Required in production. Use reverse proxy (Caddy/Nginx).
-6. **SMS Consent**: `consentSMS`/`consentEmail` flags must be respected.
-7. **Seed Endpoint**: Disable `/api/seed` in production or require admin auth.
-8. **Input Validation**: All endpoints use Zod schemas for validation.
-9. **Error Handling**: No internal error details exposed to clients (500 responses).
-10. **Audit Logging**: All mutations create audit trail entries.
+### Option A: Vercel CLI
+
+```bash
+# Install Vercel CLI
+bunx npm i -g vercel
+
+# Login
+vercel login
+
+# Deploy (follow the prompts)
+vercel --prod
+```
+
+### Option B: Vercel Dashboard (Recommended)
+
+1. Go to [vercel.com](https://vercel.com) and sign in
+2. Click **"Add New" → "Project"**
+3. Import your GitHub repository
+4. Configure:
+   - **Framework Preset**: Next.js (auto-detected)
+   - **Build Command**: `bun run build`
+   - **Install Command**: `bun install`
+   - **Output Directory**: `.next` (default)
+5. **Do NOT deploy yet** — click **"Environment Variables"** first
+
+---
+
+## Step 8: Configure Vercel Environment Variables
+
+Add these environment variables in the Vercel project settings (**Settings → Environment Variables**):
+
+| Variable | Value | Environment |
+|----------|-------|-------------|
+| `DATABASE_URL` | `postgresql://postgres.[REF]:[PASS]@aws-0-[REGION].pooler.supabase.com:6543/postgres` | Production |
+| `NEXTAUTH_SECRET` | A secure random string (`openssl rand -base64 32`) | Production |
+| `NEXTAUTH_URL` | `https://your-app.vercel.app` | Production |
+| `JWT_SECRET` | A secure random string (`openssl rand -base64 32`) | Production |
+| `NEXT_PUBLIC_APP_URL` | `https://your-app.vercel.app` | Production |
+| `NEXT_PUBLIC_CURRENCY` | `KES` | Production |
+| `MPESA_CONSUMER_KEY` | Your M-Pesa consumer key | Production |
+| `MPESA_CONSUMER_SECRET` | Your M-Pesa consumer secret | Production |
+| `MPESA_PASSKEY` | Your M-Pesa passkey | Production |
+| `MPESA_SHORTCODE` | `174379` (or your paybill) | Production |
+| `MPESA_ENVIRONMENT` | `production` | Production |
+| `MPESA_CALLBACK_URL` | `https://your-app.vercel.app/api/mpesa/callback` | Production |
+
+> **Important**: Use the **pooled** connection string (port 6543 via PgBouncer) for `DATABASE_URL` in Vercel. This is critical for serverless functions to avoid connection pool exhaustion.
+
+### Optional Variables
+
+| Variable | Value |
+|----------|-------|
+| `RESEND_API_KEY` | Resend API key for emails |
+| `TWILIO_ACCOUNT_SID` | Twilio SID for SMS |
+| `TWILIO_AUTH_TOKEN` | Twilio auth token |
+| `TWILIO_PHONE_NUMBER` | Twilio phone number |
+| `REDIS_URL` | Redis connection URL (for caching) |
+
+---
+
+## Step 9: Verify the Deployment
+
+1. Visit your deployment URL: `https://your-app.vercel.app`
+2. Check the health endpoint: `https://your-app.vercel.app/api`
+3. Try logging in with the seeded admin credentials
+4. Test the POS functionality
+
+### Check Vercel Function Logs
+
+```bash
+# View real-time logs
+vercel logs --follow
+```
+
+Or go to Vercel Dashboard → your project → **Deployments** → click deployment → **Function Logs**
+
+---
+
+## Post-Deployment: M-Pesa Webhooks
+
+For M-Pesa STK Push callbacks to work in production:
+
+1. Ensure `MPESA_CALLBACK_URL` points to your public Vercel URL
+2. The callback endpoint is: `https://your-app.vercel.app/api/mpesa/callback`
+3. Register this URL with Safaricom Daraja API
+4. For sandbox testing, use ngrok or similar tunneling
 
 ---
 
@@ -353,80 +270,85 @@ Most GET endpoints support:
 
 | Issue | Solution |
 |-------|---------|
-| Database locked | Stop dev server, delete `db/custom.db`, run `db:push` |
-| Turbopack cache errors | Delete `.next` directory and restart |
-| Seed fails with unique constraint | Database already has data; safe to ignore |
-| Port 3000 in use | Kill process: `fuser -k 3000/tcp` |
-| Prisma client out of sync | Run `npx prisma generate` |
+| `P1001: Can't reach database server` | Check DATABASE_URL format. Use direct connection for migrations, pooled for runtime. |
+| `Prisma Client could not be generated` | Ensure `postinstall` script runs `prisma generate`. Check Vercel build logs. |
+| `Connection pool exhausted` | Use the Supabase PgBouncer pooled connection (port 6543), not direct (port 5432). |
+| `CORS errors` | Ensure `NEXTAUTH_URL` matches your Vercel deployment URL exactly. |
+| `Migration failed` | Run migrations locally with direct connection string, then deploy. |
+| `Seed fails with unique constraint` | Database already has data; check Supabase Table Editor. |
+| `Build fails: Prisma Client not found` | Verify `postinstall: "prisma generate"` is in package.json. |
+| `Schema mismatch after deploy` | Re-run `prisma generate` and `prisma migrate deploy` locally. |
 
-### Performance Tips
+### Redeploying After Schema Changes
 
-- Enable Prisma query logging only in development
-- Add database indexes for frequently queried fields
-- Use pagination (page/limit) for large datasets
-- Consider Redis caching for dashboard aggregations in production
-- Switch to PostgreSQL for multi-user production deployments
+1. Update `prisma/schema.prisma` locally
+2. Run `bunx prisma migrate dev --name your_change_description`
+3. Push code to GitHub — Vercel auto-deploys
+4. The `postinstall` script regenerates Prisma Client on each deploy
 
----
+### Emergency: Reset Production Database
 
-## Project Structure
+```bash
+# ⚠️ DESTRUCTIVE — this deletes all data!
+DATABASE_URL="postgresql://..." bunx prisma migrate reset
 
-```
-hsms/
-├── prisma/
-│   └── schema.prisma          # Database schema (18 entities)
-├── db/
-│   └── custom.db              # SQLite database
-├── src/
-│   ├── app/
-│   │   ├── page.tsx           # Main application (12 tabs)
-│   │   ├── layout.tsx         # Root layout
-│   │   └── api/
-│   │       ├── auth/route.ts          # JWT authentication
-│   │       ├── seed/route.ts          # Demo data seeding
-│   │       ├── skus/route.ts          # Product catalog CRUD
-│   │       ├── inventory/route.ts     # Stock management
-│   │       ├── customers/route.ts     # CRM
-│   │       ├── sales/route.ts         # POS/checkout
-│   │       ├── invoices/route.ts      # Billing
-│   │       ├── gift-cards/route.ts    # Gift cards & loyalty
-│   │       ├── purchase-orders/route.ts # Procurement
-│   │       ├── delivery-notes/route.ts # Fulfillment
-│   │       ├── sync/route.ts          # Sync engine
-│   │       └── reports/
-│   │           ├── dashboard/route.ts  # Dashboard KPIs
-│   │           └── fast-slow/route.ts  # Inventory analysis
-│   ├── lib/
-│   │   ├── db.ts              # Prisma client singleton
-│   │   ├── seed.ts            # Seed data (idempotent)
-│   │   ├── validators.ts      # Zod schemas & tax rates
-│   │   └── utils.ts           # Utility functions
-│   ├── components/ui/         # shadcn/ui components
-│   └── hooks/                 # React hooks
-├── public/                    # Static assets
-├── .env                       # Environment variables
-├── package.json               # Dependencies & scripts
-├── tailwind.config.ts         # Tailwind configuration
-├── tsconfig.json              # TypeScript configuration
-└── next.config.ts             # Next.js configuration
+# Then re-seed:
+DATABASE_URL="postgresql://..." bunx prisma db seed
 ```
 
 ---
 
-## Scripts Reference
+## Local Development Switchback
 
-| Script | Command | Description |
-|--------|---------|-------------|
-| `dev` | `next dev -p 3000` | Start development server |
-| `build` | `next build` | Create production build |
-| `start` | `node .next/standalone/server.js` | Start production server |
-| `lint` | `eslint .` | Run code quality checks |
-| `db:push` | `prisma db push` | Push schema to database |
-| `db:generate` | `prisma generate` | Generate Prisma client |
-| `db:migrate` | `prisma migrate dev` | Run migrations |
-| `db:reset` | `prisma migrate reset` | Reset database |
+To switch back to local SQLite development:
+
+1. In `prisma/schema.prisma`, change:
+   ```prisma
+   datasource db {
+     provider = "sqlite"  // Switch back for local dev
+     url      = env("DATABASE_URL")
+   }
+   ```
+
+2. In `.env`, set:
+   ```
+   DATABASE_URL="file:./db/custom.db"
+   ```
+
+3. Run:
+   ```bash
+   bunx prisma generate
+   bunx prisma db push
+   bun run dev
+   ```
+
+> **Tip**: Consider using a `.env.local` for your SQLite config and `.env.production` for PostgreSQL, or use separate Git branches for dev vs. production schema.
 
 ---
 
-*HSMS v1.0.0 - Hardware Store Management System*
-*Built with Next.js 16, React 19, Prisma, TypeScript, Tailwind CSS 4, shadcn/ui*
+## Quick Reference: Vercel CLI Commands
+
+```bash
+# Deploy to preview
+vercel
+
+# Deploy to production
+vercel --prod
+
+# View logs
+vercel logs
+
+# Link local project to Vercel
+vercel link
+
+# Pull environment variables locally
+vercel env pull .env.production
+
+# Add environment variable
+vercel env add DATABASE_URL production
+```
+
+---
+
+*MBUMAH HARDWARE POS — Vercel + Supabase Deployment Guide*
+*Last updated: 2024*

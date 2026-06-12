@@ -1,8 +1,4 @@
-/**
- * MBUMAH HARDWARE - Customer Detail API
- * GET /api/customers/[id] - Get customer details with related data
- * PUT /api/customers/[id] - Update customer
- */
+// GET/PUT /api/customers/[id]
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -89,8 +85,7 @@ async function updateCustomerHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Check for duplicate phone if being updated
-  if (body.phone && body.phone !== existing.phone) {
+    if (body.phone && body.phone !== existing.phone) {
     const duplicate = await db.customer.findFirst({
       where: { storeId: existing.storeId, phone: body.phone, id: { not: id } },
     });

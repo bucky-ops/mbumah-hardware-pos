@@ -1,22 +1,27 @@
-// ============================================================================
-// MBUMAH HARDWARE - Enterprise POS & ERP System
-// Complete Prisma Schema - Multi-Tenant Discriminator Column Model
-// Designed for PostgreSQL (Supabase) with SQLite compatibility for local dev
-// ============================================================================
+// MBUMAH HARDWARE POS & ERP - Prisma Schema
+// Multi-tenant via storeId discriminator. SQLite for dev, PostgreSQL for prod.
+//
+// Switching to PostgreSQL:
+//   1. Change provider to "postgresql"
+//   2. Update DATABASE_URL in .env
+//   3. Run: npx prisma migrate dev --name init_pg
+//   4. Run: npx prisma db seed
+//
+// Notes:
+//   - IDs use cuid() for cross-DB compat
+//   - Monetary fields are Float; migrate to Decimal for production
+//   - JSON metadata stored as String; switch to Json type on PostgreSQL
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "sqlite"  // Change to "postgresql" for Vercel/Supabase
   url      = env("DATABASE_URL")
 }
 
-// ============================================================================
-// TENANCY & ORGANIZATION
-// ============================================================================
-
+// ── TENANCY & ORGANIZATION
 model Organization {
   id          String   @id @default(cuid())
   name        String
@@ -71,9 +76,7 @@ model Store {
   @@map("stores")
 }
 
-// ============================================================================
 // AUTHENTICATION & RBAC
-// ============================================================================
 
 model User {
   id              String   @id @default(cuid())
@@ -131,9 +134,7 @@ model RolePermission {
   @@map("role_permissions")
 }
 
-// ============================================================================
 // PRODUCT & INVENTORY
-// ============================================================================
 
 model ProductCategory {
   id              String   @id @default(cuid())
@@ -244,9 +245,7 @@ model StockMovement {
   @@map("stock_movements")
 }
 
-// ============================================================================
 // CUSTOMERS & CRM
-// ============================================================================
 
 model Customer {
   id                  String   @id @default(cuid())
@@ -275,9 +274,7 @@ model Customer {
   @@map("customers")
 }
 
-// ============================================================================
 // SALES & TRANSACTIONS
-// ============================================================================
 
 model SalesTransaction {
   id              String   @id @default(cuid())
@@ -336,9 +333,7 @@ model SaleItem {
   @@map("sale_items")
 }
 
-// ============================================================================
 // PAYMENTS
-// ============================================================================
 
 model Payment {
   id              String   @id @default(cuid())
@@ -384,9 +379,7 @@ model MpesaTransaction {
   @@map("mpesa_transactions")
 }
 
-// ============================================================================
 // DEBT / CREDIT MANAGEMENT
-// ============================================================================
 
 model DebtLedger {
   id              String   @id @default(cuid())
@@ -435,9 +428,7 @@ model DebtPayment {
   @@map("debt_payments")
 }
 
-// ============================================================================
 // EQUIPMENT RENTAL
-// ============================================================================
 
 model EquipmentRental {
   id                  String   @id @default(cuid())
@@ -472,9 +463,7 @@ model EquipmentRental {
   @@map("equipment_rentals")
 }
 
-// ============================================================================
 // FINANCIAL ACCOUNTING - DOUBLE-ENTRY BOOKKEEPING
-// ============================================================================
 
 model Account {
   id              String   @id @default(cuid())
@@ -540,9 +529,7 @@ model JournalEntryLine {
   @@map("journal_entry_lines")
 }
 
-// ============================================================================
 // CASH DRAWER MANAGEMENT
-// ============================================================================
 
 model CashDrawerLog {
   id              String   @id @default(cuid())
@@ -563,9 +550,7 @@ model CashDrawerLog {
   @@map("cash_drawer_logs")
 }
 
-// ============================================================================
 // RECEIPTS
-// ============================================================================
 
 model Receipt {
   id              String   @id @default(cuid())
@@ -585,9 +570,7 @@ model Receipt {
   @@map("receipts")
 }
 
-// ============================================================================
 // SUPPLIER & PURCHASE ORDERS
-// ============================================================================
 
 model Supplier {
   id            String   @id @default(cuid())
@@ -657,9 +640,7 @@ model PurchaseOrderItem {
   @@map("purchase_order_items")
 }
 
-// ============================================================================
 // EXPENSES
-// ============================================================================
 
 model Expense {
   id              String   @id @default(cuid())
@@ -683,9 +664,7 @@ model Expense {
   @@map("expenses")
 }
 
-// ============================================================================
 // SYSTEM LOGGING & AUDIT
-// ============================================================================
 
 model SystemLog {
   id              String   @id @default(cuid())
@@ -711,9 +690,7 @@ model SystemLog {
   @@map("system_logs")
 }
 
-// ============================================================================
 // SYSTEM CONFIGURATION
-// ============================================================================
 
 model SystemConfig {
   id              String   @id @default(cuid())
@@ -735,9 +712,7 @@ model InitializationLog {
   @@map("initialization_logs")
 }
 
-// ============================================================================
 // SHIFT MANAGEMENT
-// ============================================================================
 
 model Shift {
   id                String    @id @default(cuid())

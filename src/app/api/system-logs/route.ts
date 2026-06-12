@@ -1,7 +1,4 @@
-/**
- * MBUMAH HARDWARE - System Logs API
- * GET /api/system-logs - List system logs with filtering
- */
+// GET /api/system-logs
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -83,16 +80,14 @@ async function getSystemLogsHandler(...args: unknown[]): Promise<Response> {
     db.systemLog.count({ where }),
   ]);
 
-  // Parse metadata JSON
-  const parsedLogs = logs.map((log) => ({
+    const parsedLogs = logs.map((log) => ({
     ...log,
     metadata: log.metadata ? (() => {
       try { return JSON.parse(log.metadata); } catch { return log.metadata; }
     })() : null,
   }));
 
-  // Summary stats
-  const severityCounts = await db.systemLog.groupBy({
+    const severityCounts = await db.systemLog.groupBy({
     by: ['severity'],
     where: storeId ? { storeId } : {},
     _count: true,

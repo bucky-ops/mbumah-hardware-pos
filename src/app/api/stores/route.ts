@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
-/**
- * GET /api/stores - List all stores for the current organization
- * Query params:
- *   organizationId (optional) - filter by organization
- *   status (optional) - filter by status (default: ACTIVE)
- */
+// GET /api/stores - List stores (query: organizationId, status)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);

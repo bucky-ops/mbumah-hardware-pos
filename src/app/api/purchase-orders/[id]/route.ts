@@ -1,8 +1,4 @@
-/**
- * MBUMAH HARDWARE - Purchase Order Detail API
- * GET /api/purchase-orders/[id] - Get PO with items and supplier info
- * PUT /api/purchase-orders/[id] - Update PO status, receive items (update stock)
- */
+// GET/PUT /api/purchase-orders/[id]
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -66,8 +62,7 @@ async function updatePurchaseOrderHandler(...args: unknown[]): Promise<Response>
     );
   }
 
-  // Handle status update
-  if (body.status) {
+    if (body.status) {
     const validStatuses = ['DRAFT', 'SENT', 'CONFIRMED', 'RECEIVED', 'CANCELLED'];
     if (!validStatuses.includes(body.status)) {
       return Response.json(
@@ -97,8 +92,7 @@ async function updatePurchaseOrderHandler(...args: unknown[]): Promise<Response>
     return Response.json({ success: true, data: purchaseOrder });
   }
 
-  // Handle receiving items (updates warehouse stock)
-  if (body.action === 'receive' && body.receivedItems) {
+    if (body.action === 'receive' && body.receivedItems) {
     if (existing.status === 'CANCELLED') {
       return Response.json(
         { success: false, error: 'Cannot receive items for a cancelled purchase order.' },
@@ -108,10 +102,8 @@ async function updatePurchaseOrderHandler(...args: unknown[]): Promise<Response>
 
     const receivedItems: { itemId: string; receivedQty: number }[] = body.receivedItems;
 
-    // Use a transaction to update all items and stock levels
-    const result = await db.$transaction(async (tx) => {
-      // Update each received item
-      for (const recv of receivedItems) {
+        const result = await db.$transaction(async (tx) => {
+            for (const recv of receivedItems) {
         const item = existing.items.find((i) => i.id === recv.itemId);
         if (!item) continue;
 
@@ -122,14 +114,12 @@ async function updatePurchaseOrderHandler(...args: unknown[]): Promise<Response>
           data: { receivedQty: newReceivedQty },
         });
 
-        // Update product stock
-        await tx.product.update({
+                await tx.product.update({
           where: { id: item.productId },
           data: { quantityInStock: { increment: recv.receivedQty } },
         });
 
-        // Update warehouse stock
-        const warehouseStock = await tx.warehouseStock.findUnique({
+                const warehouseStock = await tx.warehouseStock.findUnique({
           where: {
             storeId_productId_warehouse: {
               storeId: existing.storeId,
@@ -155,8 +145,7 @@ async function updatePurchaseOrderHandler(...args: unknown[]): Promise<Response>
           });
         }
 
-        // Create stock movement record
-        await tx.stockMovement.create({
+                await tx.stockMovement.create({
           data: {
             storeId: existing.storeId,
             productId: item.productId,
@@ -168,8 +157,7 @@ async function updatePurchaseOrderHandler(...args: unknown[]): Promise<Response>
         });
       }
 
-      // Check if all items are fully received
-      const allItems = await tx.purchaseOrderItem.findMany({
+            const allItems = await tx.purchaseOrderItem.findMany({
         where: { purchaseOrderId: id },
       });
 

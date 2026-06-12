@@ -1,8 +1,4 @@
-/**
- * MBUMAH HARDWARE - Suppliers API
- * GET /api/suppliers - List/search suppliers
- * POST /api/suppliers - Create a new supplier
- */
+// GET/POST /api/suppliers
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';

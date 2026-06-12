@@ -1,6 +1,4 @@
-/**
- * MBUMAH HARDWARE - Receipt & Reference Generators
- */
+// Receipt & reference generators, formatting, calculations
 
 export function generateReceiptNumber(): string {
   const now = new Date();

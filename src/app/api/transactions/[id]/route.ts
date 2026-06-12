@@ -1,7 +1,4 @@
-/**
- * MBUMAH HARDWARE - Transaction Detail API
- * GET /api/transactions/[id] - Get transaction details with all related data
- */
+// GET /api/transactions/[id]
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -52,8 +49,7 @@ async function getTransactionHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Calculate profit
-  const totalCost = transaction.items.reduce((sum, item) => sum + (item.costPrice * item.quantity), 0);
+    const totalCost = transaction.items.reduce((sum, item) => sum + (item.costPrice * item.quantity), 0);
   const grossProfit = transaction.subtotal - totalCost;
   const profitMargin = transaction.subtotal > 0 ? (grossProfit / transaction.subtotal) * 100 : 0;
 

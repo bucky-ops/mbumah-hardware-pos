@@ -1,7 +1,4 @@
-/**
- * MBUMAH HARDWARE - Audit Logs API
- * GET /api/audit-logs - List system logs with filters for audit trail
- */
+// GET /api/audit-logs
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -59,8 +56,7 @@ async function getAuditLogsHandler(...args: unknown[]): Promise<Response> {
     db.systemLog.count({ where }),
   ]);
 
-  // Get summary stats
-  const [severityCounts, componentCounts, recentErrors] = await Promise.all([
+    const [severityCounts, componentCounts, recentErrors] = await Promise.all([
     db.systemLog.groupBy({
       by: ['severity'],
       where: storeId ? { storeId } : {},

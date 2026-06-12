@@ -1,69 +1,76 @@
-## 📋 Description
+# Pull Request
+
+## Description
 
 A clear and concise description of the changes in this PR.
 
-## 🔗 Related Issue
+Fixes # (issue number)
 
-Fixes #(issue number)
+## Type of Change
 
-## 🏗️ Type of Change
+- [ ] Bug fix (non-breaking change which fixes an issue)
+- [ ] New feature (non-breaking change which adds functionality)
+- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] Refactor (code restructuring without changing external behavior)
+- [ ] Documentation update
+- [ ] Database migration (Prisma schema change)
+- [ ] CI/CD change
 
-- [ ] 🐛 Bug fix (non-breaking change that fixes an issue)
-- [ ] ✨ New feature (non-breaking change that adds functionality)
-- [ ] 💥 Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] 📝 Documentation update
-- [ ] 🎨 UI/UX improvement
-- [ ] ⚡ Performance improvement
-- [ ] ♻️ Code refactoring (no functional changes)
-- [ ] ✅ Test addition or update
-- [ ] 🔧 Configuration change
+## Affected Areas
 
-## 📱 Affected Module(s)
-
-- [ ] Product & Inventory
-- [ ] Sales & POS
-- [ ] Purchase Management
-- [ ] Supplier Management
-- [ ] Customer Loyalty
-- [ ] Multi-Store
-- [ ] Quotes & Invoices
-- [ ] Tax Management (eTIMS)
-- [ ] Expense Management
-- [ ] Voucher Management
-- [ ] Accounts & Accounting
-- [ ] Banking & Reconciliation
-- [ ] User Management & Security
+- [ ] POS / Checkout
+- [ ] Inventory Management
+- [ ] Customer Management
 - [ ] M-Pesa Integration
-- [ ] Infrastructure / DevOps
-- [ ] Other: ___
+- [ ] Debt Tracking
+- [ ] Equipment Rentals
+- [ ] Financial / Double-Entry Bookkeeping
+- [ ] Reports & Exports
+- [ ] Authentication / Authorization
+- [ ] Admin / System Configuration
+- [ ] API Routes
+- [ ] Database Schema
 
-## 🧪 Testing
+## Database Changes
+
+If this PR includes Prisma schema changes:
+
+- [ ] No database changes
+- [ ] Schema change — migration included (`prisma migrate dev` ran)
+- [ ] Schema change — `prisma db push` compatible only
+- [ ] Seed data updated
+
+**Migration name**: _(if applicable)_
+
+## Testing
 
 Describe the tests you ran to verify your changes:
 
 - [ ] Manual testing in development
-- [ ] Unit tests pass
-- [ ] Integration tests pass
-- [ ] Tested with M-Pesa sandbox
-- [ ] Tested multi-tenant data isolation
-- [ ] Cross-browser testing
+- [ ] Unit tests pass (`bun test`)
+- [ ] Lint passes (`bun run lint`)
+- [ ] Build succeeds (`bun run build`)
+- [ ] API endpoint tested via curl/Postman
+- [ ] Tested with SQLite (local dev)
+- [ ] Tested with PostgreSQL (Docker/CI)
 
 ### Test Configuration
 
 - **Node.js version**:
 - **Bun version**:
 - **Database**: SQLite / PostgreSQL
-- **Browser(s)**:
+- **Browser**:
 
-## 📸 Screenshots (if applicable)
+## Kenya-Specific Validation
 
-Add screenshots to help reviewers understand the changes, especially for UI modifications.
+If this PR touches payment, tax, or regulatory features:
 
-| Before | After |
-|--------|-------|
-| | |
+- [ ] KRA tax calculations correct (VAT 16%)
+- [ ] M-Pesa STK Push flow works
+- [ ] KES currency formatting preserved
+- [ ] Receipt format compliant
 
-## ✅ Checklist
+## Checklist
 
 - [ ] My code follows the project's style guidelines
 - [ ] I have performed a self-review of my code
@@ -72,10 +79,13 @@ Add screenshots to help reviewers understand the changes, especially for UI modi
 - [ ] My changes generate no new warnings
 - [ ] I have added tests that prove my fix is effective or that my feature works
 - [ ] New and existing unit tests pass locally with my changes
-- [ ] Any dependent changes have been merged and published
-- [ ] I have verified multi-tenant data isolation is maintained
-- [ ] KES currency formatting is preserved where applicable
+- [ ] Any dependent changes have been merged and published in downstream modules
+- [ ] I have checked my code for hardcoded secrets or credentials
 
-## 📝 Additional Notes
+## Screenshots (if applicable)
 
-Add any other notes or context for reviewers here.
+Add screenshots of UI changes here.
+
+## Additional Notes
+
+Add any other context about the PR here.

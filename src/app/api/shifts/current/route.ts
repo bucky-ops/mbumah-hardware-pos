@@ -1,7 +1,4 @@
-/**
- * MBUMAH HARDWARE - Current Shift API
- * GET /api/shifts/current - Get the current active shift for a user
- */
+// GET /api/shifts/current
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';

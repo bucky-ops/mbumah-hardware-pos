@@ -1,9 +1,4 @@
-/**
- * MBUMAH HARDWARE - Receipt Detail API
- * GET /api/receipts/[id] - Get full receipt with all details for printing
- *
- * Includes store info, line items, taxes, payment method, M-Pesa receipt number
- */
+// GET /api/receipts/[id]
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -84,8 +79,7 @@ async function getReceiptDetailHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Resolve M-Pesa receipt number from payment reference or MpesaTransaction
-  let mpesaReceiptNumber: string | null = null;
+    let mpesaReceiptNumber: string | null = null;
   const mpesaPayment = receipt.transaction.payments.find(
     (p) => p.paymentMethod === 'MPESA' && p.status === 'COMPLETED'
   );
@@ -93,8 +87,7 @@ async function getReceiptDetailHandler(...args: unknown[]): Promise<Response> {
     mpesaReceiptNumber = mpesaPayment.reference;
   }
 
-  // Also try to get from MpesaTransaction table
-  if (!mpesaReceiptNumber) {
+    if (!mpesaReceiptNumber) {
     const mpesaTx = await db.mpesaTransaction.findFirst({
       where: {
         transactionId: receipt.transactionId,
@@ -106,8 +99,7 @@ async function getReceiptDetailHandler(...args: unknown[]): Promise<Response> {
     mpesaReceiptNumber = mpesaTx?.mpesaReceiptNumber || null;
   }
 
-  // Calculate totals for receipt printing
-  const lineItemsTotal = receipt.transaction.items.reduce(
+    const lineItemsTotal = receipt.transaction.items.reduce(
     (sum, item) => sum + item.lineTotal,
     0
   );
@@ -117,19 +109,16 @@ async function getReceiptDetailHandler(...args: unknown[]): Promise<Response> {
   );
 
   const receiptData = {
-    // Receipt metadata
-    id: receipt.id,
+        id: receipt.id,
     receiptNumber: receipt.receiptNumber,
     receiptType: receipt.receiptType,
     sentTo: receipt.sentTo,
     sentAt: receipt.sentAt,
     createdAt: receipt.createdAt,
 
-    // Store info
-    store: receipt.store,
+        store: receipt.store,
 
-    // Transaction details
-    transaction: {
+        transaction: {
       id: receipt.transaction.id,
       receiptNumber: receipt.transaction.receiptNumber,
       subtotal: receipt.transaction.subtotal,
@@ -143,14 +132,11 @@ async function getReceiptDetailHandler(...args: unknown[]): Promise<Response> {
       createdAt: receipt.transaction.createdAt,
     },
 
-    // Cashier info
-    cashier: receipt.transaction.cashier,
+        cashier: receipt.transaction.cashier,
 
-    // Customer info
-    customer: receipt.transaction.customer,
+        customer: receipt.transaction.customer,
 
-    // Line items with full detail
-    lineItems: receipt.transaction.items.map((item) => ({
+        lineItems: receipt.transaction.items.map((item) => ({
       id: item.id,
       productName: item.productName,
       quantity: item.quantity,
@@ -164,8 +150,7 @@ async function getReceiptDetailHandler(...args: unknown[]): Promise<Response> {
       product: item.product,
     })),
 
-    // Computed totals
-    computed: {
+        computed: {
       lineItemsTotal,
       totalItemDiscount,
       transactionDiscount: receipt.transaction.discountAmount,
@@ -173,12 +158,10 @@ async function getReceiptDetailHandler(...args: unknown[]): Promise<Response> {
       grandTotal: receipt.transaction.totalAmount,
     },
 
-    // Payment info
-    payments: receipt.transaction.payments,
+        payments: receipt.transaction.payments,
     mpesaReceiptNumber,
 
-    // Debt info (if applicable)
-    debtLedgers: receipt.transaction.debtLedgers,
+        debtLedgers: receipt.transaction.debtLedgers,
   };
 
   return Response.json({ success: true, data: receiptData });

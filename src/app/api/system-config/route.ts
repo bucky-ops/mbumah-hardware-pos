@@ -1,8 +1,4 @@
-/**
- * MBUMAH HARDWARE - System Config API
- * GET /api/system-config - List all system configs
- * PUT /api/system-config - Update a config value
- */
+// GET/PUT /api/system-config
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -18,8 +14,7 @@ async function getSystemConfigHandler(...args: unknown[]): Promise<Response> {
     orderBy: { key: 'asc' },
   });
 
-  // Group by category based on key prefix convention
-  const categorized: Record<string, typeof configs> = {
+    const categorized: Record<string, typeof configs> = {
     General: [],
     POS: [],
     Inventory: [],
@@ -45,8 +40,7 @@ async function getSystemConfigHandler(...args: unknown[]): Promise<Response> {
     }
   }
 
-  // If category filter provided, return only that category
-  const result = category && categorized[category]
+    const result = category && categorized[category]
     ? { [category]: categorized[category] }
     : categorized;
 

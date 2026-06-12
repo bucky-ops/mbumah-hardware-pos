@@ -36,8 +36,6 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-// Report Type Card Component (Glass-morphism)
-
 function ReportTypeCard({
   icon, title, description, isActive, onClick, colorClass, lastGenerated,
 }: {

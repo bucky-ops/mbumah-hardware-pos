@@ -1,8 +1,4 @@
-/**
- * MBUMAH HARDWARE - Stock Movements API
- * GET /api/stock-movements - List stock movements with filtering
- * POST /api/stock-movements - Create a stock adjustment
- */
+// GET/POST /api/stock-movements
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -158,8 +154,7 @@ async function createStockAdjustmentHandler(...args: unknown[]): Promise<Respons
     );
   }
 
-  // For negative adjustments (reductions), check stock availability
-  if (adjustmentQuantity < 0 && product.quantityInStock + adjustmentQuantity < 0) {
+    if (adjustmentQuantity < 0 && product.quantityInStock + adjustmentQuantity < 0) {
     return Response.json(
       { success: false, error: `Insufficient stock. Current: ${product.quantityInStock}, Adjustment: ${adjustmentQuantity}` },
       { status: 400 }
@@ -167,8 +162,7 @@ async function createStockAdjustmentHandler(...args: unknown[]): Promise<Respons
   }
 
   const result = await db.$transaction(async (tx) => {
-    // Create stock movement record
-    const movement = await tx.stockMovement.create({
+        const movement = await tx.stockMovement.create({
       data: {
         storeId,
         productId,
@@ -190,8 +184,7 @@ async function createStockAdjustmentHandler(...args: unknown[]): Promise<Respons
       },
     });
 
-    // Update product stock
-    if (adjustmentQuantity > 0) {
+        if (adjustmentQuantity > 0) {
       await tx.product.update({
         where: { id: productId },
         data: { quantityInStock: { increment: adjustmentQuantity } },
@@ -206,8 +199,7 @@ async function createStockAdjustmentHandler(...args: unknown[]): Promise<Respons
     return movement;
   });
 
-  // Fetch updated product
-  const updatedProduct = await db.product.findUnique({
+    const updatedProduct = await db.product.findUnique({
     where: { id: productId },
     select: { quantityInStock: true },
   });

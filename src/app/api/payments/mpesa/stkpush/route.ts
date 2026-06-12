@@ -1,10 +1,4 @@
-/**
- * MBUMAH HARDWARE POS - M-Pesa STK Push API
- * POST /api/payments/mpesa/stkpush - Initiate M-Pesa STK Push
- *
- * This route proxies to the M-Pesa mock service at localhost:3001
- * and records the STK push request in the database.
- */
+// POST /api/payments/mpesa/stkpush (proxies to mock service at :3001)
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -31,16 +25,14 @@ async function stkPushHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Format phone number to 254 format
-  let formattedPhone = phoneNumber.replace(/\s/g, '');
+    let formattedPhone = phoneNumber.replace(/\s/g, '');
   if (formattedPhone.startsWith('0')) {
     formattedPhone = '254' + formattedPhone.substring(1);
   } else if (formattedPhone.startsWith('+')) {
     formattedPhone = formattedPhone.substring(1);
   }
 
-  // Find or create the MpesaTransaction record
-  let mpesaTransaction: Awaited<ReturnType<typeof db.mpesaTransaction.findFirst>> | null = null;
+    let mpesaTransaction: Awaited<ReturnType<typeof db.mpesaTransaction.findFirst>> | null = null;
   if (storeId && transactionId) {
     mpesaTransaction = await db.mpesaTransaction.findFirst({
       where: { storeId, transactionId, status: 'PENDING' },
@@ -48,8 +40,7 @@ async function stkPushHandler(...args: unknown[]): Promise<Response> {
   }
 
   try {
-    // Call the M-Pesa mock service via XTransformPort pattern
-    const mockResponse = await fetch('http://localhost:3001/api/mpesa/stkpush', {
+        const mockResponse = await fetch('http://localhost:3001/api/mpesa/stkpush', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -98,8 +89,7 @@ async function stkPushHandler(...args: unknown[]): Promise<Response> {
       },
     });
   } catch (error) {
-    // If mock service is unavailable, simulate a successful STK push
-    const simulatedCheckoutId = `sim_ck_${Date.now()}`;
+        const simulatedCheckoutId = `sim_ck_${Date.now()}`;
     const simulatedMerchantId = `sim_mk_${Date.now()}`;
 
     if (mpesaTransaction) {

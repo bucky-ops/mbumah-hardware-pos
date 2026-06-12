@@ -34,7 +34,6 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-// Avatar gradient colors based on name
 const AVATAR_GRADIENTS = [
   'from-rose-500 to-pink-600',
   'from-violet-500 to-purple-600',

@@ -1,7 +1,4 @@
-/**
- * MBUMAH HARDWARE - Sales Report API
- * GET /api/reports/sales - Sales report with date filtering and aggregation
- */
+// GET /api/reports/sales
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -170,8 +167,7 @@ async function getSalesReportHandler(...args: unknown[]): Promise<Response> {
     grouped[key].total += tx.totalAmount;
   }
 
-  // Product-level grouping
-  const productSales: Record<string, { productName: string; sku: string; quantity: number; revenue: number; cost: number; profit: number }> = {};
+    const productSales: Record<string, { productName: string; sku: string; quantity: number; revenue: number; cost: number; profit: number }> = {};
   for (const item of transactionItems) {
     const key = item.productId;
     if (!productSales[key]) {
@@ -190,8 +186,7 @@ async function getSalesReportHandler(...args: unknown[]): Promise<Response> {
     productSales[key].profit = productSales[key].revenue - productSales[key].cost;
   }
 
-  // Category-level grouping
-  const categorySales: Record<string, { categoryName: string; quantity: number; revenue: number }> = {};
+    const categorySales: Record<string, { categoryName: string; quantity: number; revenue: number }> = {};
   for (const item of transactionItems) {
     const catId = item.product.categoryId || 'uncategorized';
     const catName = item.product.category?.name || 'Uncategorized';
@@ -205,8 +200,7 @@ async function getSalesReportHandler(...args: unknown[]): Promise<Response> {
   const totalRevenue = summary._sum.totalAmount || 0;
   const totalCost = Object.values(productSales).reduce((sum, p) => sum + p.cost, 0);
 
-  // Payment method grouping
-  const paymentMethodMap: Record<string, { method: string; count: number; amount: number }> = {};
+    const paymentMethodMap: Record<string, { method: string; count: number; amount: number }> = {};
   for (const tx of transactions) {
     const method = tx.paymentMethod || 'CASH';
     if (!paymentMethodMap[method]) {
@@ -220,8 +214,7 @@ async function getSalesReportHandler(...args: unknown[]): Promise<Response> {
   return Response.json({
     success: true,
     data: {
-      // Flat fields for frontend compatibility
-      period: `${dateFrom} to ${dateTo}`,
+            period: `${dateFrom} to ${dateTo}`,
       totalSales: totalRevenue,
       totalRevenue,
       totalTax: summary._sum.taxAmount || 0,
@@ -230,8 +223,7 @@ async function getSalesReportHandler(...args: unknown[]): Promise<Response> {
       avgTransactionValue: summary._avg.totalAmount || 0,
       byPaymentMethod,
 
-      // Nested summary for detailed views
-      summary: {
+            summary: {
         totalTransactions: summary._count,
         totalRevenue,
         totalSubtotal: summary._sum.subtotal || 0,

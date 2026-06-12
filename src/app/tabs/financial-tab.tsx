@@ -33,7 +33,6 @@ import {
 } from '@/components/ui/collapsible';
 import { Label } from '@/components/ui/label';
 
-// Recharts imports
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   PieChart, Pie, Cell, BarChart, Bar, AreaChart, Area,
@@ -44,8 +43,6 @@ import {
   ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent,
   type ChartConfig,
 } from '@/components/ui/chart';
-
-// Date Range Preset Helper
 
 function getDatePreset(preset: string): { from: string; to: string } {
   const now = new Date();

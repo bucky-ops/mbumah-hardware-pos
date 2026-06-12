@@ -1,17 +1,4 @@
-/**
- * MBUMAH HARDWARE POS - Rental Return API
- * POST /api/rentals/[id]/return - Process rental return with late fee calculation
- *
- * Flow:
- * 1. Validate rental exists and is active/overdue
- * 2. Calculate total rental charges based on actual rental duration
- * 3. Calculate late fees if returned after expected date
- * 4. Assess damage charges if applicable
- * 5. Calculate final settlement (deposit - charges + fees)
- * 6. Return stock to inventory
- * 7. Create journal entries
- * 8. Update rental status
- */
+// POST /api/rentals/[id]/return
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -65,32 +52,25 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
   const rentalStartDate = new Date(rental.rentalStartDate);
   const expectedReturnDate = new Date(rental.expectedReturnDate);
 
-  // Calculate rental duration in days
-  const rentalDurationMs = actualReturnDate.getTime() - rentalStartDate.getTime();
+    const rentalDurationMs = actualReturnDate.getTime() - rentalStartDate.getTime();
   const rentalDays = Math.max(1, Math.ceil(rentalDurationMs / (1000 * 60 * 60 * 24)));
 
-  // Calculate total rental charge
-  const totalRentalCharge = rentalDays * rental.ratePerDay;
+    const totalRentalCharge = rentalDays * rental.ratePerDay;
 
-  // Calculate late fee
-  const lateFee = calculateLateFee(rental.ratePerDay, expectedReturnDate, actualReturnDate);
+    const lateFee = calculateLateFee(rental.ratePerDay, expectedReturnDate, actualReturnDate);
 
-  // Damage charges
-  const assessedDamage = damageAssessment || 'NONE';
+    const assessedDamage = damageAssessment || 'NONE';
   const assessedDamageCharge = parseFloat(String(damageCharge || 0));
 
-  // Determine final status
-  let returnStatus: string = RentalStatus.RETURNED;
+    let returnStatus: string = RentalStatus.RETURNED;
   if (assessedDamage !== 'NONE') {
     returnStatus = assessedDamage === 'SEVERE' ? RentalStatus.LOST : RentalStatus.DAMAGED;
   }
 
-  // Calculate settlement
-  const totalCharges = totalRentalCharge + lateFee + assessedDamageCharge;
+    const totalCharges = totalRentalCharge + lateFee + assessedDamageCharge;
   const settlement = rental.securityDeposit - totalCharges;
 
-  // Resolve account IDs
-  const orgId = rental.store.organizationId;
+    const orgId = rental.store.organizationId;
   const accounts = await getAccountIds(orgId, [
     ACCOUNT_CODES.CASH_ON_HAND,
     ACCOUNT_CODES.RENTAL_DEPOSITS_HELD,
@@ -99,8 +79,7 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
   ]);
 
   const result = await db.$transaction(async (tx) => {
-    // Update the rental record
-    const updatedRental = await tx.equipmentRental.update({
+        const updatedRental = await tx.equipmentRental.update({
       where: { id },
       data: {
         status: returnStatus,
@@ -117,14 +96,12 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
       },
     });
 
-    // Return stock to inventory
-    await tx.product.update({
+        await tx.product.update({
       where: { id: rental.productId },
       data: { quantityInStock: { increment: 1 } },
     });
 
-    // Create stock movement for return
-    await tx.stockMovement.create({
+        await tx.stockMovement.create({
       data: {
         storeId: rental.storeId,
         productId: rental.productId,
@@ -136,10 +113,8 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
       },
     });
 
-    // Handle settlement through cash drawer
-    if (settlement < 0) {
-      // Customer owes additional money
-      const amountOwed = Math.abs(settlement);
+        if (settlement < 0) {
+            const amountOwed = Math.abs(settlement);
       const lastDrawerEntry = await tx.cashDrawerLog.findFirst({
         where: { storeId: rental.storeId },
         orderBy: { createdAt: 'desc' },
@@ -202,8 +177,7 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
         },
       });
     } else if (settlement > 0) {
-      // Refund excess deposit to customer
-      const lastDrawerEntry = await tx.cashDrawerLog.findFirst({
+            const lastDrawerEntry = await tx.cashDrawerLog.findFirst({
         where: { storeId: rental.storeId },
         orderBy: { createdAt: 'desc' },
       });
@@ -265,8 +239,7 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
         },
       });
     } else {
-      // Exact match - deposit equals charges
-      const jeNumber = generateJournalEntryNumber();
+            const jeNumber = generateJournalEntryNumber();
       await tx.journalEntry.create({
         data: {
           storeId: rental.storeId,

@@ -1,8 +1,4 @@
-/**
- * MBUMAH HARDWARE - Users API
- * GET /api/users - List users for a store
- * POST /api/users - Create a new user
- */
+// GET/POST /api/users
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -56,8 +52,7 @@ async function getUsersHandler(...args: unknown[]): Promise<Response> {
     db.user.count({ where }),
   ]);
 
-  // Count active sessions
-  const activeSessions = await db.session.count({
+    const activeSessions = await db.session.count({
     where: { expiresAt: { gt: new Date() } },
   });
 
@@ -87,8 +82,7 @@ async function createUserHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Check if email already exists
-  const existing = await db.user.findUnique({ where: { email } });
+    const existing = await db.user.findUnique({ where: { email } });
   if (existing) {
     return Response.json(
       { success: false, error: 'A user with this email already exists' },
@@ -96,8 +90,7 @@ async function createUserHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Hash password (simple hash for demo - use bcrypt in production)
-  const passwordHash = `hashed_${password}_${Date.now()}`;
+    const passwordHash = `hashed_${password}_${Date.now()}`;
 
   const user = await db.user.create({
     data: {

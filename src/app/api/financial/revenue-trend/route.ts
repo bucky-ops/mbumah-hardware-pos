@@ -1,11 +1,4 @@
-/**
- * MBUMAH HARDWARE - Revenue Trend API
- * GET /api/financial/revenue-trend - Returns daily revenue for the past N days
- *
- * Queries SalesTransaction table grouped by date.
- * If no real data exists for a day, returns 0 for that day.
- * Supports demo data generation when no real transactions exist at all.
- */
+// GET /api/financial/revenue-trend (daily revenue, generates demo data if empty)
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -67,19 +60,16 @@ async function getRevenueTrendHandler(...args: unknown[]): Promise<Response> {
     },
   });
 
-  // Build daily revenue map
-  const dailyRevenue: Record<string, { revenue: number; expenses: number; transactions: number; byMethod: Record<string, number> }> = {};
+    const dailyRevenue: Record<string, { revenue: number; expenses: number; transactions: number; byMethod: Record<string, number> }> = {};
 
-  // Initialize all days with zero
-  for (let i = 0; i < days; i++) {
+    for (let i = 0; i < days; i++) {
     const d = new Date(startDate);
     d.setDate(d.getDate() + i);
     const key = d.toISOString().split('T')[0];
     dailyRevenue[key] = { revenue: 0, expenses: 0, transactions: 0, byMethod: {} };
   }
 
-  // Fill in real transaction data
-  let hasRealData = false;
+    let hasRealData = false;
   for (const tx of transactions) {
     const key = new Date(tx.createdAt).toISOString().split('T')[0];
     if (dailyRevenue[key]) {
@@ -90,8 +80,7 @@ async function getRevenueTrendHandler(...args: unknown[]): Promise<Response> {
     }
   }
 
-  // Fill in real expense data
-  for (const line of expenseLines) {
+    for (const line of expenseLines) {
     const key = new Date(line.journalEntry.entryDate).toISOString().split('T')[0];
     if (dailyRevenue[key]) {
       dailyRevenue[key].expenses += line.debit;
@@ -108,20 +97,16 @@ async function getRevenueTrendHandler(...args: unknown[]): Promise<Response> {
       const key = d.toISOString().split('T')[0];
       const dayOfWeek = d.getDay();
 
-      // Weekends tend to be busier for hardware stores
       const weekendMultiplier = (dayOfWeek === 0 || dayOfWeek === 6) ? 1.4 : 1.0;
-      // Mid-week dip
       const midweekDip = dayOfWeek === 3 ? 0.7 : 1.0;
 
-      // Pseudo-random but deterministic variation
+      // Deterministic pseudo-random variation per store+day
       const pseudoRandom = Math.sin(seed * (i + 1) * 9301 + 49297) % 233280;
       const variation = 0.5 + Math.abs(pseudoRandom) / 233280;
 
-      // Base daily revenue between 8000-45000 KES
       const baseRevenue = 8000 + variation * 37000;
       const revenue = Math.round(baseRevenue * weekendMultiplier * midweekDip);
 
-      // Expenses are typically 50-80% of revenue
       const expenseRatio = 0.5 + Math.abs(Math.sin(seed * (i + 2) * 7919)) * 0.3;
       const expenses = Math.round(revenue * expenseRatio);
 
@@ -138,8 +123,7 @@ async function getRevenueTrendHandler(...args: unknown[]): Promise<Response> {
     }
   }
 
-  // Build result array
-  const result = Object.entries(dailyRevenue)
+    const result = Object.entries(dailyRevenue)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, data]) => {
       const d = new Date(date);
@@ -156,8 +140,7 @@ async function getRevenueTrendHandler(...args: unknown[]): Promise<Response> {
       };
     });
 
-  // Summary stats
-  const totalRevenue = result.reduce((s, d) => s + d.revenue, 0);
+    const totalRevenue = result.reduce((s, d) => s + d.revenue, 0);
   const totalExpenses = result.reduce((s, d) => s + d.expenses, 0);
   const totalTransactions = result.reduce((s, d) => s + d.transactions, 0);
   const avgRevenue = totalRevenue / days;

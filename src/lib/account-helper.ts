@@ -1,6 +1,4 @@
-/**
- * MBUMAH HARDWARE - Account Lookup
- */
+// Account code lookup with caching
 
 import { db } from '@/lib/db';
 

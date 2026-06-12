@@ -1,7 +1,4 @@
-/**
- * MBUMAH HARDWARE - Inventory Status Report API
- * GET /api/reports/inventory - Inventory status report with valuation
- */
+// GET /api/reports/inventory
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -72,8 +69,7 @@ async function getInventoryReportHandler(...args: unknown[]): Promise<Response> 
     db.product.count({ where }),
   ]);
 
-  // Enrich products with computed fields
-  const enrichedProducts = products.map((product) => {
+    const enrichedProducts = products.map((product) => {
     const stockValue = product.quantityInStock * product.costPrice;
     const retailValue = product.quantityInStock * product.pricePerUnit;
     const potentialProfit = retailValue - stockValue;
@@ -107,8 +103,7 @@ async function getInventoryReportHandler(...args: unknown[]): Promise<Response> 
     };
   });
 
-  // Aggregate summary
-  const allActiveProducts = await db.product.findMany({
+    const allActiveProducts = await db.product.findMany({
     where: { storeId, isActive: true },
     select: {
       quantityInStock: true,

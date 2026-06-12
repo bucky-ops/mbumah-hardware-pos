@@ -1,8 +1,4 @@
-/**
- * MBUMAH HARDWARE - Products API
- * GET /api/products - List/search products with fuzzy search
- * POST /api/products - Create a new product
- */
+// GET/POST /api/products
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -64,8 +60,7 @@ async function getProductsHandler(...args: unknown[]): Promise<Response> {
     where.quantityInStock = { lte: db.product.fields.reorderLevel };
   }
 
-  // Build orderBy
-  const validSortFields = ['name', 'sku', 'pricePerUnit', 'quantityInStock', 'createdAt', 'updatedAt'];
+    const validSortFields = ['name', 'sku', 'pricePerUnit', 'quantityInStock', 'createdAt', 'updatedAt'];
   const sortField = validSortFields.includes(sortBy) ? sortBy : 'name';
   const orderDirection = sortOrder === 'desc' ? 'desc' : 'asc';
 
@@ -133,11 +128,9 @@ async function createProductHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Generate SKU if not provided
-  const productSku = sku || generateSKU(categoryId || 'GEN');
+    const productSku = sku || generateSKU(categoryId || 'GEN');
 
-  // Check for duplicate SKU
-  const existingSku = await db.product.findUnique({ where: { sku: productSku } });
+    const existingSku = await db.product.findUnique({ where: { sku: productSku } });
   if (existingSku) {
     return Response.json(
       { success: false, error: 'A product with this SKU already exists.' },
@@ -145,8 +138,7 @@ async function createProductHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Check for duplicate barcode if provided
-  if (barcode) {
+    if (barcode) {
     const existingBarcode = await db.product.findUnique({ where: { barcode } });
     if (existingBarcode) {
       return Response.json(

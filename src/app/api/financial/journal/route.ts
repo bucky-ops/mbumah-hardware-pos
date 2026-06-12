@@ -1,8 +1,4 @@
-/**
- * MBUMAH HARDWARE - Journal Entries API
- * GET /api/financial/journal - List journal entries with filtering
- * POST /api/financial/journal - Create a manual journal entry
- */
+// GET/POST /api/financial/journal
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -74,8 +70,7 @@ async function getJournalEntriesHandler(...args: unknown[]): Promise<Response> {
     db.journalEntry.count({ where }),
   ]);
 
-  // Calculate totals
-  const summary = await db.journalEntry.aggregate({
+    const summary = await db.journalEntry.aggregate({
     where: { ...where, isPosted: true },
     _sum: { totalDebit: true, totalCredit: true },
     _count: true,
@@ -119,8 +114,7 @@ async function createJournalEntryHandler(...args: unknown[]): Promise<Response> 
     );
   }
 
-  // Validate that debits equal credits
-  const totalDebit = lines.reduce((sum: number, line: { debit: number; credit: number }) => sum + (parseFloat(String(line.debit || 0))), 0);
+    const totalDebit = lines.reduce((sum: number, line: { debit: number; credit: number }) => sum + (parseFloat(String(line.debit || 0))), 0);
   const totalCredit = lines.reduce((sum: number, line: { debit: number; credit: number }) => sum + (parseFloat(String(line.credit || 0))), 0);
 
   if (Math.abs(totalDebit - totalCredit) > 0.01) {
@@ -133,8 +127,7 @@ async function createJournalEntryHandler(...args: unknown[]): Promise<Response> 
     );
   }
 
-  // Validate all accounts exist
-  const accountIds = lines.map((line: { accountId: string }) => line.accountId);
+    const accountIds = lines.map((line: { accountId: string }) => line.accountId);
   const accounts = await db.account.findMany({
     where: { id: { in: accountIds } },
   });

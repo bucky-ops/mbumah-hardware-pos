@@ -1,7 +1,4 @@
-/**
- * MBUMAH HARDWARE - Authentication: Get Current User
- * GET /api/auth/me - Get current user session info
- */
+// GET /api/auth/me
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';

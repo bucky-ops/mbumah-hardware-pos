@@ -1,8 +1,4 @@
-/**
- * MBUMAH HARDWARE - Purchase Orders API
- * GET /api/purchase-orders - List purchase orders with filters
- * POST /api/purchase-orders - Create a new purchase order with items
- */
+// GET/POST /api/purchase-orders
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -84,8 +80,7 @@ async function createPurchaseOrderHandler(...args: unknown[]): Promise<Response>
     );
   }
 
-  // Verify supplier exists and is active
-  const supplier = await db.supplier.findFirst({
+    const supplier = await db.supplier.findFirst({
     where: { id: supplierId, storeId, isActive: true },
   });
   if (!supplier) {
@@ -95,16 +90,14 @@ async function createPurchaseOrderHandler(...args: unknown[]): Promise<Response>
     );
   }
 
-  // Generate PO number: PO-YYYYMMDD-XXXX
-  const today = new Date();
+    const today = new Date();
   const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
   const existingCount = await db.purchaseOrder.count({
     where: { storeId, poNumber: { startsWith: `PO-${dateStr}` } },
   });
   const poNumber = `PO-${dateStr}-${String(existingCount + 1).padStart(4, '0')}`;
 
-  // Calculate total
-  let totalAmount = 0;
+    let totalAmount = 0;
   const poItems = items.map((item: { productId: string; quantity: number; unitPrice: number; notes?: string }) => {
     const totalPrice = item.quantity * item.unitPrice;
     totalAmount += totalPrice;

@@ -1,13 +1,4 @@
-/**
- * MBUMAH HARDWARE POS - M-Pesa Callback API
- * POST /api/payments/mpesa/callback - Handle M-Pesa callback notification
- *
- * Processes the M-Pesa STK Push callback result:
- * - Updates MpesaTransaction status
- * - Updates SalesTransaction payment status
- * - Creates cash drawer log for M-Pesa receipt
- * - Posts journal entries
- */
+// POST /api/payments/mpesa/callback
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -43,8 +34,7 @@ interface MpesaCallbackBody {
 }
 
 function extractCallbackData(body: MpesaCallbackBody) {
-  // Handle Daraja API format
-  if (body.Body?.stkCallback) {
+    if (body.Body?.stkCallback) {
     const stk = body.Body.stkCallback;
     const metadata: Record<string, unknown> = {};
 
@@ -66,8 +56,7 @@ function extractCallbackData(body: MpesaCallbackBody) {
     };
   }
 
-  // Handle flat format from mock service
-  return {
+    return {
     checkoutRequestId: body.checkoutRequestId || '',
     merchantRequestId: body.merchantRequestId || '',
     resultCode: String(body.resultCode ?? '0'),
@@ -86,8 +75,7 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
   const data = extractCallbackData(body);
   const isSuccess = data.resultCode === '0';
 
-  // Find the MpesaTransaction by checkoutRequestId
-  const mpesaTx = await db.mpesaTransaction.findFirst({
+    const mpesaTx = await db.mpesaTransaction.findFirst({
     where: {
       checkoutRequestId: data.checkoutRequestId,
     },
@@ -106,8 +94,7 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
   }
 
   if (isSuccess) {
-    // Update MpesaTransaction as completed
-    await db.mpesaTransaction.update({
+        await db.mpesaTransaction.update({
       where: { id: mpesaTx.id },
       data: {
         status: 'COMPLETED',
@@ -118,17 +105,14 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
       },
     });
 
-    // If linked to a SalesTransaction, update its payment status
-    if (mpesaTx.transactionId) {
+        if (mpesaTx.transactionId) {
       await db.$transaction(async (tx) => {
-        // Update SalesTransaction payment status
-        await tx.salesTransaction.update({
+                await tx.salesTransaction.update({
           where: { id: mpesaTx.transactionId! },
           data: { paymentStatus: PaymentStatus.COMPLETED },
         });
 
-        // Update Payment record
-        await tx.payment.updateMany({
+                await tx.payment.updateMany({
           where: {
             transactionId: mpesaTx.transactionId!,
             paymentMethod: 'MPESA',
@@ -139,8 +123,7 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
           },
         });
 
-        // Record in cash drawer
-        const lastDrawerEntry = await tx.cashDrawerLog.findFirst({
+                const lastDrawerEntry = await tx.cashDrawerLog.findFirst({
           where: { storeId: mpesaTx.storeId },
           orderBy: { createdAt: 'desc' },
         });
@@ -157,8 +140,7 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
           },
         });
 
-        // Post the pending journal entries
-        const pendingJE = await tx.journalEntry.findFirst({
+                const pendingJE = await tx.journalEntry.findFirst({
           where: {
             referenceId: mpesaTx.transactionId!,
             referenceType: 'SALE',
@@ -176,9 +158,7 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
             },
           });
 
-          // Change DR from M-Pesa Account to Cash on Hand (now that payment is confirmed)
-          // Resolve account IDs dynamically
-          const store = await tx.store.findUnique({ where: { id: mpesaTx.storeId }, select: { organizationId: true } });
+                              const store = await tx.store.findUnique({ where: { id: mpesaTx.storeId }, select: { organizationId: true } });
           const orgId = store?.organizationId || 'org_mbumah';
           const mpesaAccountId = await getAccountId(orgId, ACCOUNT_CODES.MPESA_ACCOUNT);
           const cashAccountId = await getAccountId(orgId, ACCOUNT_CODES.CASH_ON_HAND);
@@ -211,8 +191,7 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
       },
     });
   } else {
-    // Payment failed
-    await db.mpesaTransaction.update({
+        await db.mpesaTransaction.update({
       where: { id: mpesaTx.id },
       data: {
         status: 'FAILED',

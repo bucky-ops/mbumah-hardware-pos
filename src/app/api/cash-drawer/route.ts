@@ -1,10 +1,4 @@
-/**
- * MBUMAH HARDWARE - Cash Drawer API
- * GET /api/cash-drawer - List cash drawer events with filters
- * POST /api/cash-drawer - Record a cash drawer event (OPEN, CLOSE, CASH_IN, CASH_OUT)
- *
- * POST creates: CashDrawerLog entry + JournalEntry for CASH_IN/CASH_OUT
- */
+// GET/POST /api/cash-drawer
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -69,15 +63,13 @@ async function getCashDrawerHandler(...args: unknown[]): Promise<Response> {
     db.cashDrawerLog.count({ where }),
   ]);
 
-  // Get current drawer balance
-  const latestEntry = await db.cashDrawerLog.findFirst({
+    const latestEntry = await db.cashDrawerLog.findFirst({
     where: { storeId },
     orderBy: { createdAt: 'desc' },
     select: { balance: true },
   });
 
-  // Calculate summary for the filtered period
-  const summaryData = await db.cashDrawerLog.findMany({
+    const summaryData = await db.cashDrawerLog.findMany({
     where,
     select: { action: true, amount: true },
   });
@@ -111,8 +103,7 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
 
   const { storeId, userId, eventType, amount, notes } = body;
 
-  // Validate required fields
-  if (!storeId || !userId || !eventType || amount === undefined || amount === null) {
+    if (!storeId || !userId || !eventType || amount === undefined || amount === null) {
     return Response.json(
       { success: false, error: 'storeId, userId, eventType, and amount are required.' },
       { status: 400 }
@@ -134,8 +125,7 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Verify the user exists
-  const user = await db.user.findUnique({ where: { id: userId } });
+    const user = await db.user.findUnique({ where: { id: userId } });
   if (!user || !user.isActive) {
     return Response.json(
       { success: false, error: 'Invalid or inactive user.' },
@@ -143,15 +133,13 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Get current balance
-  const lastEntry = await db.cashDrawerLog.findFirst({
+    const lastEntry = await db.cashDrawerLog.findFirst({
     where: { storeId },
     orderBy: { createdAt: 'desc' },
   });
   const currentBalance = lastEntry?.balance || 0;
 
-  // Calculate new balance based on event type
-  let newBalance = currentBalance;
+    let newBalance = currentBalance;
   switch (eventType) {
     case 'OPEN':
     case 'CASH_IN':
@@ -169,8 +157,7 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
       break;
   }
 
-  // Create the cash drawer log entry
-  const logEntry = await db.cashDrawerLog.create({
+    const logEntry = await db.cashDrawerLog.create({
     data: {
       storeId,
       userId,
@@ -185,8 +172,7 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
     },
   });
 
-  // Create journal entry for CASH_IN and CASH_OUT events
-  if ((eventType === 'CASH_IN' || eventType === 'CASH_OUT') && parsedAmount > 0) {
+    if ((eventType === 'CASH_IN' || eventType === 'CASH_OUT') && parsedAmount > 0) {
     try {
       const orgId = user.organizationId;
       const accounts = await getAccountIds(orgId, [
@@ -197,8 +183,7 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
       const jeNumber = generateJournalEntryNumber();
 
       if (eventType === 'CASH_IN') {
-        // Cash added to drawer: Debit Cash, Credit Owner's Equity
-        await db.journalEntry.create({
+                await db.journalEntry.create({
           data: {
             storeId,
             entryNumber: jeNumber,
@@ -229,8 +214,7 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
           },
         });
       } else {
-        // Cash removed from drawer: Debit Owner's Equity, Credit Cash
-        await db.journalEntry.create({
+                await db.journalEntry.create({
           data: {
             storeId,
             entryNumber: jeNumber,
@@ -262,7 +246,7 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
         });
       }
     } catch (error) {
-      // Journal entry creation failure should not block the drawer log
+      // Don't let journal entry failure block the drawer log
       console.error('Failed to create journal entry for cash drawer event:', error);
     }
   }

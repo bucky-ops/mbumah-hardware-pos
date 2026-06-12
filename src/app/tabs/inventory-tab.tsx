@@ -39,7 +39,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-// Category color map for dots
 const CATEGORY_COLORS: Record<string, string> = {
   'Cement & Building': '#6B7280',
   'Iron Sheets & Roofing': '#3B82F6',

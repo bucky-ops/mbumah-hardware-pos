@@ -1,37 +1,28 @@
-/**
- * MBUMAH HARDWARE - Authentication: Login
- * POST /api/auth/login - Authenticate user and create session
- */
+// POST /api/auth/login
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
+// Legacy hash format for seed data - use bcrypt in production
 function verifyPassword(password: string, storedHash: string): boolean {
-  // Support legacy seeded hashes (plain text like 'hashed_password123_2024')
   if (password === storedHash.replace('hashed_', '').replace('_2024', '')) {
     return true;
   }
-  // Support legacy format directly
   if (storedHash.startsWith('hashed_')) {
     const plainPart = storedHash.replace('hashed_', '').replace('_2024', '');
     if (password === plainPart) return true;
-    // Also check direct equality for seed data
     if (storedHash === `hashed_${password}_2024`) return true;
   }
-  // For production, you would use bcrypt here
   return false;
 }
 
 function generateToken(): string {
-  // Generate a random token without Node.js crypto module
   const array = new Uint8Array(32);
-  // Use crypto.getRandomValues if available (Web Crypto API)
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
     crypto.getRandomValues(array);
   } else {
-    // Fallback: Math.random based
     for (let i = 0; i < array.length; i++) {
       array[i] = Math.floor(Math.random() * 256);
     }
@@ -94,13 +85,11 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Generate session token
   const token = generateToken() + Date.now().toString(36);
 
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + 24); // 24-hour session
 
-  // Create session
   const session = await db.session.create({
     data: {
       userId: user.id,
@@ -111,7 +100,6 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
     },
   });
 
-  // Update last login timestamp
   await db.user.update({
     where: { id: user.id },
     data: { lastLoginAt: new Date() },

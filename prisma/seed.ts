@@ -1,14 +1,10 @@
-/**
- * MBUMAH HARDWARE POS - Database Seed Script
- * Automated initialization: seeds Super Admin, demo store, products, and accounts
- * Runs on first boot if no users exist
- */
+// Database seed script - runs on first boot if no users exist
 
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// Helper: generate a date N days ago
+// Generate date N days ago
 function daysAgo(n: number): Date {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -16,7 +12,7 @@ function daysAgo(n: number): Date {
   return d;
 }
 
-// Helper: generate a date N days ago at a specific hour
+// Generate date N days ago at hour
 function daysAgoAtHour(n: number, hour: number): Date {
   const d = new Date();
   d.setDate(d.getDate() - n);
@@ -25,17 +21,16 @@ function daysAgoAtHour(n: number, hour: number): Date {
 }
 
 async function main() {
-  console.log('🔄 MBUMAH HARDWARE POS - Checking initialization status...');
+  console.log('MBUMAH HARDWARE POS - Checking initialization status...');
 
-  // Check if already initialized
-  const userCount = await prisma.user.count();
+    const userCount = await prisma.user.count();
 
   if (userCount > 0) {
-    console.log('✅ Database already initialized. Skipping seed.');
+    console.log('Database already initialized. Skipping seed.');
     return;
   }
 
-  console.log('📋 First boot detected. Initializing system...');
+  console.log('First boot detected. Initializing system...');
 
   // 1. Create Organization
   const org = await prisma.organization.create({
@@ -66,10 +61,10 @@ async function main() {
     data: {
       id: 'store_thika',
       organizationId: org.id,
-      name: 'MBUMAH HARDWARE - Thika',
-      location: 'Thika Town Center, Kiambu County',
-      address: 'P.O. Box 9101-00300, Nairobi',
-      phone: '0795191909',
+      name: 'MBUMAH HARDWARE - Thika Branch',
+      location: 'Thika Town, Kiambu County',
+      address: 'Thika Town, Kiambu County',
+      phone: '0712345678',
       email: 'thika@mbumahhardware.co.ke',
       taxPin: 'P051234567A',
       status: 'ACTIVE',
@@ -80,10 +75,10 @@ async function main() {
     data: {
       id: 'store_ruiru',
       organizationId: org.id,
-      name: 'MBUMAH HARDWARE - Ruiru',
+      name: 'MBUMAH HARDWARE - Ruiru Branch',
       location: 'Ruiru Town, Kiambu County',
-      address: 'P.O. Box 9101-00300, Nairobi',
-      phone: '0795191909',
+      address: 'Ruiru Town, Kiambu County',
+      phone: '0723456789',
       email: 'ruiru@mbumahhardware.co.ke',
       taxPin: 'P051234567A',
       status: 'ACTIVE',
@@ -94,10 +89,10 @@ async function main() {
     data: {
       id: 'store_nairobi_cbd',
       organizationId: org.id,
-      name: 'MBUMAH HARDWARE - Nairobi CBD',
+      name: 'MBUMAH HARDWARE - Nairobi CBD Branch',
       location: 'Kenyatta Avenue, Nairobi',
-      address: 'P.O. Box 9101-00300, Nairobi',
-      phone: '0795191909',
+      address: 'Kenyatta Avenue, Nairobi',
+      phone: '0734567890',
       email: 'nairobi@mbumahhardware.co.ke',
       taxPin: 'P051234567A',
       status: 'ACTIVE',
@@ -108,10 +103,10 @@ async function main() {
     data: {
       id: 'store_nakuru',
       organizationId: org.id,
-      name: 'MBUMAH HARDWARE - Nakuru',
+      name: 'MBUMAH HARDWARE - Nakuru Branch',
       location: 'Nakuru Town, Nakuru County',
-      address: 'P.O. Box 9101-00300, Nairobi',
-      phone: '0795191909',
+      address: 'Nakuru Town, Nakuru County',
+      phone: '0745678901',
       email: 'nakuru@mbumahhardware.co.ke',
       taxPin: 'P051234567A',
       status: 'ACTIVE',
@@ -173,7 +168,7 @@ async function main() {
       name: 'David Njoroge',
       passwordHash: 'hashed_password123_2024',
       role: 'BRANCH_MANAGER',
-      phone: '0795191909',
+      phone: '0712345678',
       isActive: true,
     },
   });
@@ -187,7 +182,7 @@ async function main() {
       name: 'Samuel Kibet',
       passwordHash: 'hashed_password123_2024',
       role: 'BRANCH_MANAGER',
-      phone: '0795191909',
+      phone: '0723456789',
       isActive: true,
     },
   });
@@ -201,7 +196,7 @@ async function main() {
       name: 'Mary Akinyi',
       passwordHash: 'hashed_password123_2024',
       role: 'BRANCH_MANAGER',
-      phone: '0795191909',
+      phone: '0734567890',
       isActive: true,
     },
   });
@@ -215,7 +210,7 @@ async function main() {
       name: 'Peter Ruto',
       passwordHash: 'hashed_password123_2024',
       role: 'BRANCH_MANAGER',
-      phone: '0795191909',
+      phone: '0745678901',
       isActive: true,
     },
   });
@@ -376,57 +371,375 @@ async function main() {
   }
 
   // 9b. Seed Branch-Specific Product Categories, Products, and Customers
-  console.log('📋 Seeding branch-specific data...');
+  console.log('Seeding branch-specific data...');
 
-  // Helper: create categories for a branch (reuse same structure with branch-prefixed IDs)
-  const branchStores = [
-    { store: storeThika, prefix: 'thk' },
-    { store: storeRuiru, prefix: 'ruiru' },
-    { store: storeNairobiCbd, prefix: 'nbi' },
-    { store: storeNakuru, prefix: 'nkr' },
+  // ---- THIKA BRANCH ----
+  const thkCats = [
+    { id: 'cat_thk_cement', storeId: storeThika.id, name: 'Cement', description: 'All types of cement', icon: 'building', color: '#8B7355', sortOrder: 1 },
+    { id: 'cat_thk_iron_sheets', storeId: storeThika.id, name: 'Iron Sheets', description: 'Roofing iron sheets', icon: 'layout-grid', color: '#4A5568', sortOrder: 2 },
+    { id: 'cat_thk_paints', storeId: storeThika.id, name: 'Paints', description: 'Interior and exterior paints', icon: 'palette', color: '#E53E3E', sortOrder: 3 },
+    { id: 'cat_thk_iron_bars', storeId: storeThika.id, name: 'Iron Bars', description: 'Reinforcement iron bars', icon: 'minus', color: '#718096', sortOrder: 4 },
+    { id: 'cat_thk_tools', storeId: storeThika.id, name: 'Tools', description: 'Construction tools and equipment', icon: 'wrench', color: '#2D3748', sortOrder: 5 },
+    { id: 'cat_thk_plumbing', storeId: storeThika.id, name: 'Plumbing', description: 'Pipes, fittings, and plumbing supplies', icon: 'droplets', color: '#3182CE', sortOrder: 6 },
+    { id: 'cat_thk_nails_screws', storeId: storeThika.id, name: 'Nails & Screws', description: 'Fasteners, nails, and screws', icon: 'pin', color: '#38A169', sortOrder: 7 },
+    { id: 'cat_thk_timber', storeId: storeThika.id, name: 'Timber & Wood', description: 'Timber, plywood, and wood products', icon: 'tree', color: '#8B4513', sortOrder: 8 },
+  ];
+  for (const cat of thkCats) { await prisma.productCategory.create({ data: cat }); }
+
+  const thkProducts = [
+    { id: 'prod_thk_cement_bamburi', sku: 'THK-CEM-0001', name: 'Bamburi Cement 50kg', categoryId: 'cat_thk_cement', unitType: 'BAG', quantityInStock: 180, pricePerUnit: 750, costPrice: 680, reorderLevel: 50 },
+    { id: 'prod_thk_cement_simba', sku: 'THK-CEM-0002', name: 'Simba Cement 50kg', categoryId: 'cat_thk_cement', unitType: 'BAG', quantityInStock: 120, pricePerUnit: 720, costPrice: 650, reorderLevel: 50 },
+    { id: 'prod_thk_mabati_30', sku: 'THK-IRS-0001', name: 'Mabati 30-Gauge (8ft)', categoryId: 'cat_thk_iron_sheets', unitType: 'PIECE', quantityInStock: 350, pricePerUnit: 650, costPrice: 580, reorderLevel: 100 },
+    { id: 'prod_thk_mabati_28', sku: 'THK-IRS-0002', name: 'Mabati 28-Gauge (8ft)', categoryId: 'cat_thk_iron_sheets', unitType: 'PIECE', quantityInStock: 200, pricePerUnit: 800, costPrice: 720, reorderLevel: 80 },
+    { id: 'prod_thk_dulux_20l', sku: 'THK-PNT-0001', name: 'Dulux Weathershield 20L', categoryId: 'cat_thk_paints', unitType: 'PIECE', quantityInStock: 20, pricePerUnit: 8500, costPrice: 7200, reorderLevel: 10 },
+    { id: 'prod_thk_rebar_12mm', sku: 'THK-IRB-0001', name: 'Rebar 12mm x 12m', categoryId: 'cat_thk_iron_bars', unitType: 'PIECE', quantityInStock: 280, pricePerUnit: 1200, costPrice: 1050, reorderLevel: 100 },
+    { id: 'prod_thk_spade', sku: 'THK-TL-0001', name: 'Spade (Heavy Duty)', categoryId: 'cat_thk_tools', unitType: 'PIECE', quantityInStock: 40, pricePerUnit: 1200, costPrice: 900, reorderLevel: 15 },
+    { id: 'prod_thk_pvc_4inch', sku: 'THK-PLM-0001', name: 'PVC Pipe 4-inch x 3m', categoryId: 'cat_thk_plumbing', unitType: 'PIECE', quantityInStock: 90, pricePerUnit: 800, costPrice: 600, reorderLevel: 30 },
+    { id: 'prod_thk_nails_4inch', sku: 'THK-NAS-0001', name: '4-inch Nails', categoryId: 'cat_thk_nails_screws', unitType: 'KILOGRAM', quantityInStock: 350, pricePerUnit: 150, costPrice: 110, reorderLevel: 100 },
+    { id: 'prod_thk_timber_2x4', sku: 'THK-TMB-0001', name: 'Timber 2x4 x 12ft (Cypress)', categoryId: 'cat_thk_timber', unitType: 'PIECE', quantityInStock: 60, pricePerUnit: 800, costPrice: 600, reorderLevel: 20 },
+    { id: 'prod_thk_plywood_8x4', sku: 'THK-TMB-0002', name: 'Plywood 8x4ft (18mm)', categoryId: 'cat_thk_timber', unitType: 'PIECE', quantityInStock: 45, pricePerUnit: 2800, costPrice: 2200, reorderLevel: 15 },
+  ];
+  for (const product of thkProducts) { await prisma.product.create({ data: { ...product, storeId: storeThika.id } as any }); }
+
+  const thkCustomers = [
+    { id: 'cust_thk_1', storeId: storeThika.id, name: 'Francis Maina', phone: '0715123456', email: 'francis.maina@email.com', idNumber: '29104567', debtLimit: 80000, currentDebtBalance: 12000 },
+    { id: 'cust_thk_2', storeId: storeThika.id, name: 'Thika Construction Co.', phone: '0716234567', email: 'info@thikaconstruction.co.ke', idNumber: '30215678', debtLimit: 300000, currentDebtBalance: 45000 },
+    { id: 'cust_thk_3', storeId: storeThika.id, name: 'Beatrice Wairimu', phone: '0717345678', email: 'beatrice.w@email.com', idNumber: '31326789', debtLimit: 50000, currentDebtBalance: 0 },
+    { id: 'cust_thk_4', storeId: storeThika.id, name: 'Murang\'a Builders Ltd', phone: '0718456789', email: 'info@murangabuilders.co.ke', idNumber: '32437890', debtLimit: 250000, currentDebtBalance: 78000 },
+  ];
+  for (const cust of thkCustomers) { await prisma.customer.create({ data: cust }); }
+
+  // ---- RUIRU BRANCH ----
+  const ruiruCats = [
+    { id: 'cat_ruiru_cement', storeId: storeRuiru.id, name: 'Cement', description: 'All types of cement', icon: 'building', color: '#8B7355', sortOrder: 1 },
+    { id: 'cat_ruiru_iron_sheets', storeId: storeRuiru.id, name: 'Iron Sheets', description: 'Roofing iron sheets', icon: 'layout-grid', color: '#4A5568', sortOrder: 2 },
+    { id: 'cat_ruiru_paints', storeId: storeRuiru.id, name: 'Paints', description: 'Interior and exterior paints', icon: 'palette', color: '#E53E3E', sortOrder: 3 },
+    { id: 'cat_ruiru_iron_bars', storeId: storeRuiru.id, name: 'Iron Bars', description: 'Reinforcement iron bars', icon: 'minus', color: '#718096', sortOrder: 4 },
+    { id: 'cat_ruiru_tools', storeId: storeRuiru.id, name: 'Tools', description: 'Construction tools and equipment', icon: 'wrench', color: '#2D3748', sortOrder: 5 },
+    { id: 'cat_ruiru_plumbing', storeId: storeRuiru.id, name: 'Plumbing', description: 'Pipes, fittings, and plumbing supplies', icon: 'droplets', color: '#3182CE', sortOrder: 6 },
+    { id: 'cat_ruiru_nails_screws', storeId: storeRuiru.id, name: 'Nails & Screws', description: 'Fasteners, nails, and screws', icon: 'pin', color: '#38A169', sortOrder: 7 },
+    { id: 'cat_ruiru_electrical', storeId: storeRuiru.id, name: 'Electrical', description: 'Wiring, switches, and electrical supplies', icon: 'zap', color: '#ECC94B', sortOrder: 8 },
+  ];
+  for (const cat of ruiruCats) { await prisma.productCategory.create({ data: cat }); }
+
+  const ruiruProducts = [
+    { id: 'prod_ruiru_cement_bamburi', sku: 'RUR-CEM-0001', name: 'Bamburi Cement 50kg', categoryId: 'cat_ruiru_cement', unitType: 'BAG', quantityInStock: 100, pricePerUnit: 750, costPrice: 680, reorderLevel: 50 },
+    { id: 'prod_ruiru_cement_simba', sku: 'RUR-CEM-0002', name: 'Simba Cement 50kg', categoryId: 'cat_ruiru_cement', unitType: 'BAG', quantityInStock: 80, pricePerUnit: 720, costPrice: 650, reorderLevel: 50 },
+    { id: 'prod_ruiru_mabati_30', sku: 'RUR-IRS-0001', name: 'Mabati 30-Gauge (8ft)', categoryId: 'cat_ruiru_iron_sheets', unitType: 'PIECE', quantityInStock: 250, pricePerUnit: 650, costPrice: 580, reorderLevel: 100 },
+    { id: 'prod_ruiru_mabati_28', sku: 'RUR-IRS-0002', name: 'Mabati 28-Gauge (8ft)', categoryId: 'cat_ruiru_iron_sheets', unitType: 'PIECE', quantityInStock: 150, pricePerUnit: 800, costPrice: 720, reorderLevel: 80 },
+    { id: 'prod_ruiru_dulux_20l', sku: 'RUR-PNT-0001', name: 'Dulux Weathershield 20L', categoryId: 'cat_ruiru_paints', unitType: 'PIECE', quantityInStock: 15, pricePerUnit: 8500, costPrice: 7200, reorderLevel: 10 },
+    { id: 'prod_ruiru_rebar_12mm', sku: 'RUR-IRB-0001', name: 'Rebar 12mm x 12m', categoryId: 'cat_ruiru_iron_bars', unitType: 'PIECE', quantityInStock: 200, pricePerUnit: 1200, costPrice: 1050, reorderLevel: 100 },
+    { id: 'prod_ruiru_rebar_10mm', sku: 'RUR-IRB-0002', name: 'Rebar 10mm x 12m', categoryId: 'cat_ruiru_iron_bars', unitType: 'PIECE', quantityInStock: 180, pricePerUnit: 900, costPrice: 780, reorderLevel: 100 },
+    { id: 'prod_ruiru_spade', sku: 'RUR-TL-0001', name: 'Spade (Heavy Duty)', categoryId: 'cat_ruiru_tools', unitType: 'PIECE', quantityInStock: 25, pricePerUnit: 1200, costPrice: 900, reorderLevel: 15 },
+    { id: 'prod_ruiru_pvc_4inch', sku: 'RUR-PLM-0001', name: 'PVC Pipe 4-inch x 3m', categoryId: 'cat_ruiru_plumbing', unitType: 'PIECE', quantityInStock: 70, pricePerUnit: 800, costPrice: 600, reorderLevel: 30 },
+    { id: 'prod_ruiru_nails_4inch', sku: 'RUR-NAS-0001', name: '4-inch Nails', categoryId: 'cat_ruiru_nails_screws', unitType: 'KILOGRAM', quantityInStock: 280, pricePerUnit: 150, costPrice: 110, reorderLevel: 100 },
+    { id: 'prod_ruiru_cable_2_5mm', sku: 'RUR-ELC-0001', name: 'Cable 2.5mm x 100m', categoryId: 'cat_ruiru_electrical', unitType: 'PIECE', quantityInStock: 20, pricePerUnit: 8500, costPrice: 7000, reorderLevel: 10 },
+  ];
+  for (const product of ruiruProducts) { await prisma.product.create({ data: { ...product, storeId: storeRuiru.id } as any }); }
+
+  const ruiruCustomers = [
+    { id: 'cust_ruiru_1', storeId: storeRuiru.id, name: 'Esther Nyambura', phone: '0724123456', email: 'esther.n@email.com', idNumber: '40104567', debtLimit: 60000, currentDebtBalance: 8500 },
+    { id: 'cust_ruiru_2', storeId: storeRuiru.id, name: 'Ruiru Estate Developers', phone: '0725234567', email: 'info@ruirudevelopers.co.ke', idNumber: '41215678', debtLimit: 400000, currentDebtBalance: 95000 },
+    { id: 'cust_ruiru_3', storeId: storeRuiru.id, name: 'Joseph Gathua', phone: '0726345678', email: 'joseph.g@email.com', idNumber: '42326789', debtLimit: 45000, currentDebtBalance: 0 },
+    { id: 'cust_ruiru_4', storeId: storeRuiru.id, name: 'Tala Building Solutions', phone: '0727456789', email: 'info@talabuilding.co.ke', idNumber: '43437890', debtLimit: 200000, currentDebtBalance: 35000 },
+  ];
+  for (const cust of ruiruCustomers) { await prisma.customer.create({ data: cust }); }
+
+  // ---- NAIROBI CBD BRANCH ----
+  const nbiCats = [
+    { id: 'cat_nbi_cement', storeId: storeNairobiCbd.id, name: 'Cement', description: 'All types of cement', icon: 'building', color: '#8B7355', sortOrder: 1 },
+    { id: 'cat_nbi_iron_sheets', storeId: storeNairobiCbd.id, name: 'Iron Sheets', description: 'Roofing iron sheets', icon: 'layout-grid', color: '#4A5568', sortOrder: 2 },
+    { id: 'cat_nbi_paints', storeId: storeNairobiCbd.id, name: 'Paints', description: 'Interior and exterior paints', icon: 'palette', color: '#E53E3E', sortOrder: 3 },
+    { id: 'cat_nbi_iron_bars', storeId: storeNairobiCbd.id, name: 'Iron Bars', description: 'Reinforcement iron bars', icon: 'minus', color: '#718096', sortOrder: 4 },
+    { id: 'cat_nbi_tools', storeId: storeNairobiCbd.id, name: 'Tools', description: 'Construction tools and equipment', icon: 'wrench', color: '#2D3748', sortOrder: 5 },
+    { id: 'cat_nbi_plumbing', storeId: storeNairobiCbd.id, name: 'Plumbing', description: 'Pipes, fittings, and plumbing supplies', icon: 'droplets', color: '#3182CE', sortOrder: 6 },
+    { id: 'cat_nbi_nails_screws', storeId: storeNairobiCbd.id, name: 'Nails & Screws', description: 'Fasteners, nails, and screws', icon: 'pin', color: '#38A169', sortOrder: 7 },
+    { id: 'cat_nbi_safety', storeId: storeNairobiCbd.id, name: 'Safety Equipment', description: 'PPE, helmets, boots, and safety gear', icon: 'shield', color: '#E53E3E', sortOrder: 8 },
+  ];
+  for (const cat of nbiCats) { await prisma.productCategory.create({ data: cat }); }
+
+  const nbiProducts = [
+    { id: 'prod_nbi_cement_bamburi', sku: 'NBI-CEM-0001', name: 'Bamburi Cement 50kg', categoryId: 'cat_nbi_cement', unitType: 'BAG', quantityInStock: 250, pricePerUnit: 760, costPrice: 690, reorderLevel: 50 },
+    { id: 'prod_nbi_cement_simba', sku: 'NBI-CEM-0002', name: 'Simba Cement 50kg', categoryId: 'cat_nbi_cement', unitType: 'BAG', quantityInStock: 200, pricePerUnit: 730, costPrice: 660, reorderLevel: 50 },
+    { id: 'prod_nbi_mabati_30', sku: 'NBI-IRS-0001', name: 'Mabati 30-Gauge (8ft)', categoryId: 'cat_nbi_iron_sheets', unitType: 'PIECE', quantityInStock: 400, pricePerUnit: 660, costPrice: 590, reorderLevel: 100 },
+    { id: 'prod_nbi_dulux_20l', sku: 'NBI-PNT-0001', name: 'Dulux Weathershield 20L', categoryId: 'cat_nbi_paints', unitType: 'PIECE', quantityInStock: 25, pricePerUnit: 8600, costPrice: 7300, reorderLevel: 10 },
+    { id: 'prod_nbi_crown_20l', sku: 'NBI-PNT-0002', name: 'Crown Vinyl Silk 20L', categoryId: 'cat_nbi_paints', unitType: 'PIECE', quantityInStock: 20, pricePerUnit: 6600, costPrice: 5600, reorderLevel: 8 },
+    { id: 'prod_nbi_rebar_12mm', sku: 'NBI-IRB-0001', name: 'Rebar 12mm x 12m', categoryId: 'cat_nbi_iron_bars', unitType: 'PIECE', quantityInStock: 350, pricePerUnit: 1220, costPrice: 1070, reorderLevel: 100 },
+    { id: 'prod_nbi_spade', sku: 'NBI-TL-0001', name: 'Spade (Heavy Duty)', categoryId: 'cat_nbi_tools', unitType: 'PIECE', quantityInStock: 35, pricePerUnit: 1250, costPrice: 950, reorderLevel: 15 },
+    { id: 'prod_nbi_pvc_4inch', sku: 'NBI-PLM-0001', name: 'PVC Pipe 4-inch x 3m', categoryId: 'cat_nbi_plumbing', unitType: 'PIECE', quantityInStock: 100, pricePerUnit: 820, costPrice: 620, reorderLevel: 30 },
+    { id: 'prod_nbi_nails_4inch', sku: 'NBI-NAS-0001', name: '4-inch Nails', categoryId: 'cat_nbi_nails_screws', unitType: 'KILOGRAM', quantityInStock: 400, pricePerUnit: 155, costPrice: 115, reorderLevel: 100 },
+    { id: 'prod_nbi_helmet', sku: 'NBI-SFT-0001', name: 'Safety Helmet (Hard Hat)', categoryId: 'cat_nbi_safety', unitType: 'PIECE', quantityInStock: 50, pricePerUnit: 1500, costPrice: 1000, reorderLevel: 15 },
+    { id: 'prod_nbi_boots', sku: 'NBI-SFT-0002', name: 'Safety Boots (Steel Toe)', categoryId: 'cat_nbi_safety', unitType: 'PAIR', quantityInStock: 40, pricePerUnit: 3500, costPrice: 2500, reorderLevel: 10 },
+  ];
+  for (const product of nbiProducts) { await prisma.product.create({ data: { ...product, storeId: storeNairobiCbd.id } as any }); }
+
+  const nbiCustomers = [
+    { id: 'cust_nbi_1', storeId: storeNairobiCbd.id, name: 'Westlands Contractors Ltd', phone: '0735123456', email: 'info@westlandscontractors.co.ke', idNumber: '50104567', debtLimit: 500000, currentDebtBalance: 125000 },
+    { id: 'cust_nbi_2', storeId: storeNairobiCbd.id, name: 'Agnes Wanjiru', phone: '0736234567', email: 'agnes.w@email.com', idNumber: '51215678', debtLimit: 75000, currentDebtBalance: 0 },
+    { id: 'cust_nbi_3', storeId: storeNairobiCbd.id, name: 'Kenya Housing Corp.', phone: '0737345678', email: 'procurement@kenyahousing.co.ke', idNumber: '52326789', debtLimit: 1000000, currentDebtBalance: 350000 },
+    { id: 'cust_nbi_4', storeId: storeNairobiCbd.id, name: 'Hassan Ali Mohamed', phone: '0738456789', email: 'hassan.ali@email.com', idNumber: '53437890', debtLimit: 100000, currentDebtBalance: 22000 },
+  ];
+  for (const cust of nbiCustomers) { await prisma.customer.create({ data: cust }); }
+
+  // ---- NAKURU BRANCH ----
+  const nkrCats = [
+    { id: 'cat_nkr_cement', storeId: storeNakuru.id, name: 'Cement', description: 'All types of cement', icon: 'building', color: '#8B7355', sortOrder: 1 },
+    { id: 'cat_nkr_iron_sheets', storeId: storeNakuru.id, name: 'Iron Sheets', description: 'Roofing iron sheets', icon: 'layout-grid', color: '#4A5568', sortOrder: 2 },
+    { id: 'cat_nkr_paints', storeId: storeNakuru.id, name: 'Paints', description: 'Interior and exterior paints', icon: 'palette', color: '#E53E3E', sortOrder: 3 },
+    { id: 'cat_nkr_iron_bars', storeId: storeNakuru.id, name: 'Iron Bars', description: 'Reinforcement iron bars', icon: 'minus', color: '#718096', sortOrder: 4 },
+    { id: 'cat_nkr_tools', storeId: storeNakuru.id, name: 'Tools', description: 'Construction tools and equipment', icon: 'wrench', color: '#2D3748', sortOrder: 5 },
+    { id: 'cat_nkr_plumbing', storeId: storeNakuru.id, name: 'Plumbing', description: 'Pipes, fittings, and plumbing supplies', icon: 'droplets', color: '#3182CE', sortOrder: 6 },
+    { id: 'cat_nkr_nails_screws', storeId: storeNakuru.id, name: 'Nails & Screws', description: 'Fasteners, nails, and screws', icon: 'pin', color: '#38A169', sortOrder: 7 },
+    { id: 'cat_nkr_water_tanks', storeId: storeNakuru.id, name: 'Water Tanks', description: 'Water storage tanks and accessories', icon: 'container', color: '#2B6CB0', sortOrder: 8 },
+  ];
+  for (const cat of nkrCats) { await prisma.productCategory.create({ data: cat }); }
+
+  const nkrProducts = [
+    { id: 'prod_nkr_cement_bamburi', sku: 'NKR-CEM-0001', name: 'Bamburi Cement 50kg', categoryId: 'cat_nkr_cement', unitType: 'BAG', quantityInStock: 130, pricePerUnit: 740, costPrice: 670, reorderLevel: 50 },
+    { id: 'prod_nkr_cement_simba', sku: 'NKR-CEM-0002', name: 'Simba Cement 50kg', categoryId: 'cat_nkr_cement', unitType: 'BAG', quantityInStock: 90, pricePerUnit: 710, costPrice: 640, reorderLevel: 50 },
+    { id: 'prod_nkr_mabati_30', sku: 'NKR-IRS-0001', name: 'Mabati 30-Gauge (8ft)', categoryId: 'cat_nkr_iron_sheets', unitType: 'PIECE', quantityInStock: 200, pricePerUnit: 640, costPrice: 575, reorderLevel: 100 },
+    { id: 'prod_nkr_mabati_28', sku: 'NKR-IRS-0002', name: 'Mabati 28-Gauge (8ft)', categoryId: 'cat_nkr_iron_sheets', unitType: 'PIECE', quantityInStock: 120, pricePerUnit: 790, costPrice: 710, reorderLevel: 80 },
+    { id: 'prod_nkr_dulux_20l', sku: 'NKR-PNT-0001', name: 'Dulux Weathershield 20L', categoryId: 'cat_nkr_paints', unitType: 'PIECE', quantityInStock: 12, pricePerUnit: 8400, costPrice: 7100, reorderLevel: 10 },
+    { id: 'prod_nkr_rebar_12mm', sku: 'NKR-IRB-0001', name: 'Rebar 12mm x 12m', categoryId: 'cat_nkr_iron_bars', unitType: 'PIECE', quantityInStock: 160, pricePerUnit: 1180, costPrice: 1030, reorderLevel: 100 },
+    { id: 'prod_nkr_spade', sku: 'NKR-TL-0001', name: 'Spade (Heavy Duty)', categoryId: 'cat_nkr_tools', unitType: 'PIECE', quantityInStock: 30, pricePerUnit: 1180, costPrice: 880, reorderLevel: 15 },
+    { id: 'prod_nkr_pvc_4inch', sku: 'NKR-PLM-0001', name: 'PVC Pipe 4-inch x 3m', categoryId: 'cat_nkr_plumbing', unitType: 'PIECE', quantityInStock: 60, pricePerUnit: 780, costPrice: 580, reorderLevel: 30 },
+    { id: 'prod_nkr_nails_4inch', sku: 'NKR-NAS-0001', name: '4-inch Nails', categoryId: 'cat_nkr_nails_screws', unitType: 'KILOGRAM', quantityInStock: 250, pricePerUnit: 145, costPrice: 108, reorderLevel: 100 },
+    { id: 'prod_nkr_tank_1000l', sku: 'NKR-WTK-0001', name: 'Water Tank 1000L (Black)', categoryId: 'cat_nkr_water_tanks', unitType: 'PIECE', quantityInStock: 15, pricePerUnit: 8500, costPrice: 6500, reorderLevel: 5 },
+    { id: 'prod_nkr_tank_2300l', sku: 'NKR-WTK-0002', name: 'Water Tank 2300L (Green)', categoryId: 'cat_nkr_water_tanks', unitType: 'PIECE', quantityInStock: 8, pricePerUnit: 16000, costPrice: 12500, reorderLevel: 3 },
+  ];
+  for (const product of nkrProducts) { await prisma.product.create({ data: { ...product, storeId: storeNakuru.id } as any }); }
+
+  const nkrCustomers = [
+    { id: 'cust_nkr_1', storeId: storeNakuru.id, name: 'Naivasha Road Contractors', phone: '0746123456', email: 'info@naivasharoad.co.ke', idNumber: '60104567', debtLimit: 350000, currentDebtBalance: 67000 },
+    { id: 'cust_nkr_2', storeId: storeNakuru.id, name: 'Rebecca Chebet', phone: '0747234567', email: 'rebecca.c@email.com', idNumber: '61215678', debtLimit: 55000, currentDebtBalance: 0 },
+    { id: 'cust_nkr_3', storeId: storeNakuru.id, name: 'Rift Valley Hardware Distributors', phone: '0748345678', email: 'info@riftvalleyhw.co.ke', idNumber: '62326789', debtLimit: 500000, currentDebtBalance: 180000 },
+    { id: 'cust_nkr_4', storeId: storeNakuru.id, name: 'Samuel Kiprono', phone: '0749456789', email: 'samuel.k@email.com', idNumber: '63437890', debtLimit: 90000, currentDebtBalance: 15000 },
+  ];
+  for (const cust of nkrCustomers) { await prisma.customer.create({ data: cust }); }
+
+  // ==========================================================================
+  // 9c. BRANCH-SPECIFIC SALES TRANSACTIONS
+  // ==========================================================================
+  console.log('Seeding branch sales transactions...');
+
+  // Thika Branch Sales
+  const thikaSales = [
+    {
+      id: 'tx_thk_001', receiptNumber: 'THK-RCPT-001', customerId: 'cust_thk_1', cashierId: 'user_thika_manager',
+      subtotal: 15000, taxAmount: 2400, discountAmount: 0, totalAmount: 17400,
+      paymentMethod: 'CASH', paymentStatus: 'COMPLETED', transactionType: 'SALE',
+      createdAt: daysAgoAtHour(1, 10),
+      items: [
+        { productId: 'prod_thk_cement_bamburi', productName: 'Bamburi Cement 50kg', quantity: 20, unitType: 'BAG', pricePerUnit: 750, costPrice: 680, lineTotal: 15000 },
+      ],
+    },
+    {
+      id: 'tx_thk_002', receiptNumber: 'THK-RCPT-002', customerId: 'cust_thk_2', cashierId: 'user_thika_manager',
+      subtotal: 42000, taxAmount: 6720, discountAmount: 2000, totalAmount: 46720,
+      paymentMethod: 'MPESA', paymentStatus: 'COMPLETED', transactionType: 'SALE',
+      createdAt: daysAgoAtHour(2, 14),
+      items: [
+        { productId: 'prod_thk_rebar_12mm', productName: 'Rebar 12mm x 12m', quantity: 25, unitType: 'PIECE', pricePerUnit: 1200, costPrice: 1050, lineTotal: 30000 },
+        { productId: 'prod_thk_timber_2x4', productName: 'Timber 2x4 x 12ft (Cypress)', quantity: 15, unitType: 'PIECE', pricePerUnit: 800, costPrice: 600, lineTotal: 12000 },
+      ],
+    },
+    {
+      id: 'tx_thk_003', receiptNumber: 'THK-RCPT-003', customerId: null, cashierId: 'user_thika_manager',
+      subtotal: 2600, taxAmount: 416, discountAmount: 0, totalAmount: 3016,
+      paymentMethod: 'CASH', paymentStatus: 'COMPLETED', transactionType: 'SALE',
+      createdAt: daysAgoAtHour(3, 9),
+      items: [
+        { productId: 'prod_thk_spade', productName: 'Spade (Heavy Duty)', quantity: 1, unitType: 'PIECE', pricePerUnit: 1200, costPrice: 900, lineTotal: 1200 },
+        { productId: 'prod_thk_nails_4inch', productName: '4-inch Nails', quantity: 5, unitType: 'KILOGRAM', pricePerUnit: 150, costPrice: 110, lineTotal: 750 },
+        { productId: 'prod_thk_mabati_30', productName: 'Mabati 30-Gauge (8ft)', quantity: 1, unitType: 'PIECE', pricePerUnit: 650, costPrice: 580, lineTotal: 650 },
+      ],
+    },
   ];
 
-  for (const branch of branchStores) {
-    // Create categories for this branch
-    const branchCats = [
-      { id: `cat_${branch.prefix}_cement`, storeId: branch.store.id, name: 'Cement', description: 'All types of cement', icon: 'building', color: '#8B7355', sortOrder: 1 },
-      { id: `cat_${branch.prefix}_iron_sheets`, storeId: branch.store.id, name: 'Iron Sheets', description: 'Roofing iron sheets', icon: 'layout-grid', color: '#4A5568', sortOrder: 2 },
-      { id: `cat_${branch.prefix}_paints`, storeId: branch.store.id, name: 'Paints', description: 'Interior and exterior paints', icon: 'palette', color: '#E53E3E', sortOrder: 3 },
-      { id: `cat_${branch.prefix}_iron_bars`, storeId: branch.store.id, name: 'Iron Bars', description: 'Reinforcement iron bars', icon: 'minus', color: '#718096', sortOrder: 4 },
-      { id: `cat_${branch.prefix}_tools`, storeId: branch.store.id, name: 'Tools', description: 'Construction tools and equipment', icon: 'wrench', color: '#2D3748', sortOrder: 5 },
-      { id: `cat_${branch.prefix}_plumbing`, storeId: branch.store.id, name: 'Plumbing', description: 'Pipes, fittings, and plumbing supplies', icon: 'droplets', color: '#3182CE', sortOrder: 6 },
-      { id: `cat_${branch.prefix}_nails_screws`, storeId: branch.store.id, name: 'Nails & Screws', description: 'Fasteners, nails, and screws', icon: 'pin', color: '#38A169', sortOrder: 7 },
-    ];
-    for (const cat of branchCats) {
-      await prisma.productCategory.create({ data: cat });
-    }
+  for (const sale of thikaSales) {
+    await prisma.salesTransaction.create({
+      data: {
+        id: sale.id, storeId: storeThika.id, receiptNumber: sale.receiptNumber,
+        customerId: sale.customerId, cashierId: sale.cashierId,
+        subtotal: sale.subtotal, taxAmount: sale.taxAmount, discountAmount: sale.discountAmount, totalAmount: sale.totalAmount,
+        paymentMethod: sale.paymentMethod, paymentStatus: sale.paymentStatus, transactionType: sale.transactionType,
+        createdAt: sale.createdAt,
+        items: { create: sale.items },
+        payments: { create: { storeId: storeThika.id, paymentMethod: sale.paymentMethod === 'SPLIT' ? 'CASH' : sale.paymentMethod, amount: sale.paymentMethod === 'DEBT' ? 0 : sale.totalAmount, status: 'COMPLETED' } },
+      },
+    });
+  }
 
-    // Create products for this branch (subset of main store products with branch-specific IDs)
-    const branchProducts = [
-      { id: `prod_${branch.prefix}_cement_bamburi`, sku: `${branch.prefix.toUpperCase()}-CEM-0001`, name: 'Bamburi Cement 50kg', categoryId: `cat_${branch.prefix}_cement`, unitType: 'BAG', quantityInStock: Math.floor(Math.random() * 150) + 50, pricePerUnit: 750, costPrice: 680, reorderLevel: 50 },
-      { id: `prod_${branch.prefix}_cement_simba`, sku: `${branch.prefix.toUpperCase()}-CEM-0002`, name: 'Simba Cement 50kg', categoryId: `cat_${branch.prefix}_cement`, unitType: 'BAG', quantityInStock: Math.floor(Math.random() * 100) + 30, pricePerUnit: 720, costPrice: 650, reorderLevel: 50 },
-      { id: `prod_${branch.prefix}_mabati_30`, sku: `${branch.prefix.toUpperCase()}-IRS-0001`, name: 'Mabati 30-Gauge (8ft)', categoryId: `cat_${branch.prefix}_iron_sheets`, unitType: 'PIECE', quantityInStock: Math.floor(Math.random() * 300) + 100, pricePerUnit: 650, costPrice: 580, reorderLevel: 100 },
-      { id: `prod_${branch.prefix}_mabati_28`, sku: `${branch.prefix.toUpperCase()}-IRS-0002`, name: 'Mabati 28-Gauge (8ft)', categoryId: `cat_${branch.prefix}_iron_sheets`, unitType: 'PIECE', quantityInStock: Math.floor(Math.random() * 200) + 50, pricePerUnit: 800, costPrice: 720, reorderLevel: 80 },
-      { id: `prod_${branch.prefix}_dulux_20l`, sku: `${branch.prefix.toUpperCase()}-PNT-0001`, name: 'Dulux Weathershield 20L', categoryId: `cat_${branch.prefix}_paints`, unitType: 'PIECE', quantityInStock: Math.floor(Math.random() * 20) + 5, pricePerUnit: 8500, costPrice: 7200, reorderLevel: 10 },
-      { id: `prod_${branch.prefix}_rebar_12mm`, sku: `${branch.prefix.toUpperCase()}-IRB-0001`, name: 'Rebar 12mm x 12m', categoryId: `cat_${branch.prefix}_iron_bars`, unitType: 'PIECE', quantityInStock: Math.floor(Math.random() * 250) + 50, pricePerUnit: 1200, costPrice: 1050, reorderLevel: 100 },
-      { id: `prod_${branch.prefix}_rebar_10mm`, sku: `${branch.prefix.toUpperCase()}-IRB-0002`, name: 'Rebar 10mm x 12m', categoryId: `cat_${branch.prefix}_iron_bars`, unitType: 'PIECE', quantityInStock: Math.floor(Math.random() * 200) + 50, pricePerUnit: 900, costPrice: 780, reorderLevel: 100 },
-      { id: `prod_${branch.prefix}_spade`, sku: `${branch.prefix.toUpperCase()}-TL-0001`, name: 'Spade (Heavy Duty)', categoryId: `cat_${branch.prefix}_tools`, unitType: 'PIECE', quantityInStock: Math.floor(Math.random() * 30) + 10, pricePerUnit: 1200, costPrice: 900, reorderLevel: 15 },
-      { id: `prod_${branch.prefix}_pvc_4inch`, sku: `${branch.prefix.toUpperCase()}-PLM-0001`, name: 'PVC Pipe 4-inch x 3m', categoryId: `cat_${branch.prefix}_plumbing`, unitType: 'PIECE', quantityInStock: Math.floor(Math.random() * 80) + 20, pricePerUnit: 800, costPrice: 600, reorderLevel: 30 },
-      { id: `prod_${branch.prefix}_nails_4inch`, sku: `${branch.prefix.toUpperCase()}-NAS-0001`, name: '4-inch Nails', categoryId: `cat_${branch.prefix}_nails_screws`, unitType: 'KILOGRAM', quantityInStock: Math.floor(Math.random() * 300) + 100, pricePerUnit: 150, costPrice: 110, reorderLevel: 100 },
-    ];
-    for (const product of branchProducts) {
-      await prisma.product.create({ data: { ...product, storeId: branch.store.id } as any });
-    }
+  // Ruiru Branch Sales
+  const ruiruSales = [
+    {
+      id: 'tx_ruiru_001', receiptNumber: 'RUR-RCPT-001', customerId: 'cust_ruiru_2', cashierId: 'user_ruiru_manager',
+      subtotal: 32000, taxAmount: 5120, discountAmount: 1500, totalAmount: 35620,
+      paymentMethod: 'MPESA', paymentStatus: 'COMPLETED', transactionType: 'SALE',
+      createdAt: daysAgoAtHour(0, 11),
+      items: [
+        { productId: 'prod_ruiru_cement_bamburi', productName: 'Bamburi Cement 50kg', quantity: 30, unitType: 'BAG', pricePerUnit: 750, costPrice: 680, lineTotal: 22500 },
+        { productId: 'prod_ruiru_mabati_30', productName: 'Mabati 30-Gauge (8ft)', quantity: 10, unitType: 'PIECE', pricePerUnit: 650, costPrice: 580, lineTotal: 6500 },
+        { productId: 'prod_ruiru_nails_4inch', productName: '4-inch Nails', quantity: 20, unitType: 'KILOGRAM', pricePerUnit: 150, costPrice: 110, lineTotal: 3000 },
+      ],
+    },
+    {
+      id: 'tx_ruiru_002', receiptNumber: 'RUR-RCPT-002', customerId: 'cust_ruiru_1', cashierId: 'user_ruiru_manager',
+      subtotal: 9200, taxAmount: 1472, discountAmount: 0, totalAmount: 10672,
+      paymentMethod: 'CASH', paymentStatus: 'COMPLETED', transactionType: 'SALE',
+      createdAt: daysAgoAtHour(2, 10),
+      items: [
+        { productId: 'prod_ruiru_rebar_10mm', productName: 'Rebar 10mm x 12m', quantity: 8, unitType: 'PIECE', pricePerUnit: 900, costPrice: 780, lineTotal: 7200 },
+        { productId: 'prod_ruiru_pvc_4inch', productName: 'PVC Pipe 4-inch x 3m', quantity: 2, unitType: 'PIECE', pricePerUnit: 800, costPrice: 600, lineTotal: 1600 },
+        { productId: 'prod_ruiru_nails_4inch', productName: '4-inch Nails', quantity: 2, unitType: 'KILOGRAM', pricePerUnit: 150, costPrice: 110, lineTotal: 300 },
+        { productId: 'prod_ruiru_spade', productName: 'Spade (Heavy Duty)', quantity: 1, unitType: 'PIECE', pricePerUnit: 1200, costPrice: 900, lineTotal: 1200 },
+      ],
+    },
+    {
+      id: 'tx_ruiru_003', receiptNumber: 'RUR-RCPT-003', customerId: 'cust_ruiru_4', cashierId: 'user_ruiru_manager',
+      subtotal: 25500, taxAmount: 4080, discountAmount: 1000, totalAmount: 28580,
+      paymentMethod: 'DEBT', paymentStatus: 'PARTIAL', transactionType: 'SALE',
+      createdAt: daysAgoAtHour(4, 15),
+      items: [
+        { productId: 'prod_ruiru_cement_simba', productName: 'Simba Cement 50kg', quantity: 25, unitType: 'BAG', pricePerUnit: 720, costPrice: 650, lineTotal: 18000 },
+        { productId: 'prod_ruiru_mabati_28', productName: 'Mabati 28-Gauge (8ft)', quantity: 5, unitType: 'PIECE', pricePerUnit: 800, costPrice: 720, lineTotal: 4000 },
+        { productId: 'prod_ruiru_cable_2_5mm', productName: 'Cable 2.5mm x 100m', quantity: 1, unitType: 'PIECE', pricePerUnit: 8500, costPrice: 7000, lineTotal: 8500 },
+      ],
+    },
+  ];
 
-    // Create customers for this branch
-    const branchCustomers = [
-      { id: `cust_${branch.prefix}_1`, storeId: branch.store.id, name: `Local Customer 1 (${branch.store.name.split(' - ')[1]})`, phone: '0711000001', email: `cust1@${branch.prefix}.co.ke`, idNumber: `${branch.prefix}10001`, debtLimit: 50000, currentDebtBalance: 0 },
-      { id: `cust_${branch.prefix}_2`, storeId: branch.store.id, name: `Local Contractor (${branch.store.name.split(' - ')[1]})`, phone: '0722000002', email: `cust2@${branch.prefix}.co.ke`, idNumber: `${branch.prefix}10002`, debtLimit: 200000, currentDebtBalance: Math.floor(Math.random() * 50000) + 10000 },
-      { id: `cust_${branch.prefix}_3`, storeId: branch.store.id, name: `Regional Builder (${branch.store.name.split(' - ')[1]})`, phone: '0733000003', email: `cust3@${branch.prefix}.co.ke`, idNumber: `${branch.prefix}10003`, debtLimit: 100000, currentDebtBalance: 0 },
-    ];
-    for (const cust of branchCustomers) {
-      await prisma.customer.create({ data: cust });
-    }
+  for (const sale of ruiruSales) {
+    await prisma.salesTransaction.create({
+      data: {
+        id: sale.id, storeId: storeRuiru.id, receiptNumber: sale.receiptNumber,
+        customerId: sale.customerId, cashierId: sale.cashierId,
+        subtotal: sale.subtotal, taxAmount: sale.taxAmount, discountAmount: sale.discountAmount, totalAmount: sale.totalAmount,
+        paymentMethod: sale.paymentMethod, paymentStatus: sale.paymentStatus, transactionType: sale.transactionType,
+        createdAt: sale.createdAt,
+        items: { create: sale.items },
+        payments: { create: { storeId: storeRuiru.id, paymentMethod: sale.paymentMethod === 'SPLIT' ? 'CASH' : sale.paymentMethod, amount: sale.paymentMethod === 'DEBT' ? 0 : sale.totalAmount, status: 'COMPLETED' } },
+      },
+    });
+  }
+
+  // Nairobi CBD Branch Sales
+  const nairobiSales = [
+    {
+      id: 'tx_nbi_001', receiptNumber: 'NBI-RCPT-001', customerId: 'cust_nbi_3', cashierId: 'user_nairobi_manager',
+      subtotal: 96000, taxAmount: 15360, discountAmount: 5000, totalAmount: 106360,
+      paymentMethod: 'MPESA', paymentStatus: 'COMPLETED', transactionType: 'SALE',
+      createdAt: daysAgoAtHour(0, 9),
+      items: [
+        { productId: 'prod_nbi_cement_bamburi', productName: 'Bamburi Cement 50kg', quantity: 80, unitType: 'BAG', pricePerUnit: 760, costPrice: 690, lineTotal: 60800 },
+        { productId: 'prod_nbi_rebar_12mm', productName: 'Rebar 12mm x 12m', quantity: 20, unitType: 'PIECE', pricePerUnit: 1220, costPrice: 1070, lineTotal: 24400 },
+        { productId: 'prod_nbi_helmet', productName: 'Safety Helmet (Hard Hat)', quantity: 5, unitType: 'PIECE', pricePerUnit: 1500, costPrice: 1000, lineTotal: 7500 },
+        { productId: 'prod_nbi_boots', productName: 'Safety Boots (Steel Toe)', quantity: 2, unitType: 'PAIR', pricePerUnit: 3500, costPrice: 2500, lineTotal: 7000 },
+      ],
+    },
+    {
+      id: 'tx_nbi_002', receiptNumber: 'NBI-RCPT-002', customerId: 'cust_nbi_2', cashierId: 'user_nairobi_manager',
+      subtotal: 15200, taxAmount: 2432, discountAmount: 0, totalAmount: 17632,
+      paymentMethod: 'CASH', paymentStatus: 'COMPLETED', transactionType: 'SALE',
+      createdAt: daysAgoAtHour(1, 14),
+      items: [
+        { productId: 'prod_nbi_dulux_20l', productName: 'Dulux Weathershield 20L', quantity: 1, unitType: 'PIECE', pricePerUnit: 8600, costPrice: 7300, lineTotal: 8600 },
+        { productId: 'prod_nbi_crown_20l', productName: 'Crown Vinyl Silk 20L', quantity: 1, unitType: 'PIECE', pricePerUnit: 6600, costPrice: 5600, lineTotal: 6600 },
+      ],
+    },
+    {
+      id: 'tx_nbi_003', receiptNumber: 'NBI-RCPT-003', customerId: null, cashierId: 'user_nairobi_manager',
+      subtotal: 7800, taxAmount: 1248, discountAmount: 0, totalAmount: 9048,
+      paymentMethod: 'CASH', paymentStatus: 'COMPLETED', transactionType: 'SALE',
+      createdAt: daysAgoAtHour(3, 11),
+      items: [
+        { productId: 'prod_nbi_mabati_30', productName: 'Mabati 30-Gauge (8ft)', quantity: 10, unitType: 'PIECE', pricePerUnit: 660, costPrice: 590, lineTotal: 6600 },
+        { productId: 'prod_nbi_nails_4inch', productName: '4-inch Nails', quantity: 8, unitType: 'KILOGRAM', pricePerUnit: 155, costPrice: 115, lineTotal: 1240 },
+      ],
+    },
+  ];
+
+  for (const sale of nairobiSales) {
+    await prisma.salesTransaction.create({
+      data: {
+        id: sale.id, storeId: storeNairobiCbd.id, receiptNumber: sale.receiptNumber,
+        customerId: sale.customerId, cashierId: sale.cashierId,
+        subtotal: sale.subtotal, taxAmount: sale.taxAmount, discountAmount: sale.discountAmount, totalAmount: sale.totalAmount,
+        paymentMethod: sale.paymentMethod, paymentStatus: sale.paymentStatus, transactionType: sale.transactionType,
+        createdAt: sale.createdAt,
+        items: { create: sale.items },
+        payments: { create: { storeId: storeNairobiCbd.id, paymentMethod: sale.paymentMethod === 'SPLIT' ? 'CASH' : sale.paymentMethod, amount: sale.paymentMethod === 'DEBT' ? 0 : sale.totalAmount, status: 'COMPLETED' } },
+      },
+    });
+  }
+
+  // Nakuru Branch Sales
+  const nakuruSales = [
+    {
+      id: 'tx_nkr_001', receiptNumber: 'NKR-RCPT-001', customerId: 'cust_nkr_1', cashierId: 'user_nakuru_manager',
+      subtotal: 57000, taxAmount: 9120, discountAmount: 3000, totalAmount: 63120,
+      paymentMethod: 'MPESA', paymentStatus: 'COMPLETED', transactionType: 'SALE',
+      createdAt: daysAgoAtHour(0, 12),
+      items: [
+        { productId: 'prod_nkr_cement_bamburi', productName: 'Bamburi Cement 50kg', quantity: 50, unitType: 'BAG', pricePerUnit: 740, costPrice: 670, lineTotal: 37000 },
+        { productId: 'prod_nkr_mabati_28', productName: 'Mabati 28-Gauge (8ft)', quantity: 20, unitType: 'PIECE', pricePerUnit: 790, costPrice: 710, lineTotal: 15800 },
+        { productId: 'prod_nkr_tank_1000l', productName: 'Water Tank 1000L (Black)', quantity: 1, unitType: 'PIECE', pricePerUnit: 8500, costPrice: 6500, lineTotal: 8500 },
+      ],
+    },
+    {
+      id: 'tx_nkr_002', receiptNumber: 'NKR-RCPT-002', customerId: 'cust_nkr_3', cashierId: 'user_nakuru_manager',
+      subtotal: 35400, taxAmount: 5664, discountAmount: 2000, totalAmount: 39064,
+      paymentMethod: 'DEBT', paymentStatus: 'COMPLETED', transactionType: 'SALE',
+      createdAt: daysAgoAtHour(2, 10),
+      items: [
+        { productId: 'prod_nkr_rebar_12mm', productName: 'Rebar 12mm x 12m', quantity: 20, unitType: 'PIECE', pricePerUnit: 1180, costPrice: 1030, lineTotal: 23600 },
+        { productId: 'prod_nkr_cement_simba', productName: 'Simba Cement 50kg', quantity: 15, unitType: 'BAG', pricePerUnit: 710, costPrice: 640, lineTotal: 10650 },
+        { productId: 'prod_nkr_tank_2300l', productName: 'Water Tank 2300L (Green)', quantity: 1, unitType: 'PIECE', pricePerUnit: 16000, costPrice: 12500, lineTotal: 16000 },
+      ],
+    },
+    {
+      id: 'tx_nkr_003', receiptNumber: 'NKR-RCPT-003', customerId: 'cust_nkr_4', cashierId: 'user_nakuru_manager',
+      subtotal: 5100, taxAmount: 816, discountAmount: 0, totalAmount: 5916,
+      paymentMethod: 'CASH', paymentStatus: 'COMPLETED', transactionType: 'SALE',
+      createdAt: daysAgoAtHour(4, 14),
+      items: [
+        { productId: 'prod_nkr_spade', productName: 'Spade (Heavy Duty)', quantity: 2, unitType: 'PIECE', pricePerUnit: 1180, costPrice: 880, lineTotal: 2360 },
+        { productId: 'prod_nkr_pvc_4inch', productName: 'PVC Pipe 4-inch x 3m', quantity: 3, unitType: 'PIECE', pricePerUnit: 780, costPrice: 580, lineTotal: 2340 },
+        { productId: 'prod_nkr_nails_4inch', productName: '4-inch Nails', quantity: 2, unitType: 'KILOGRAM', pricePerUnit: 145, costPrice: 108, lineTotal: 290 },
+      ],
+    },
+  ];
+
+  for (const sale of nakuruSales) {
+    await prisma.salesTransaction.create({
+      data: {
+        id: sale.id, storeId: storeNakuru.id, receiptNumber: sale.receiptNumber,
+        customerId: sale.customerId, cashierId: sale.cashierId,
+        subtotal: sale.subtotal, taxAmount: sale.taxAmount, discountAmount: sale.discountAmount, totalAmount: sale.totalAmount,
+        paymentMethod: sale.paymentMethod, paymentStatus: sale.paymentStatus, transactionType: sale.transactionType,
+        createdAt: sale.createdAt,
+        items: { create: sale.items },
+        payments: { create: { storeId: storeNakuru.id, paymentMethod: sale.paymentMethod === 'SPLIT' ? 'CASH' : sale.paymentMethod, amount: sale.paymentMethod === 'DEBT' ? 0 : sale.totalAmount, status: 'COMPLETED' } },
+      },
+    });
+  }
+
+  // ==========================================================================
+  // 9d. BRANCH-SPECIFIC EXPENSES
+  // ==========================================================================
+  console.log('Seeding branch expenses...');
+
+  const branchExpenses = [
+    { storeId: storeThika.id, description: 'Thika branch rent - January', amount: 20000, category: 'RENT', paidBy: 'user_thika_manager', paymentMethod: 'MPESA', notes: 'Monthly rent for Thika shop' },
+    { storeId: storeThika.id, description: 'Thika electricity bill', amount: 3500, category: 'UTILITIES', paidBy: 'user_thika_manager', paymentMethod: 'MPESA', notes: 'Kenya Power bill' },
+    { storeId: storeRuiru.id, description: 'Ruiru branch rent - January', amount: 18000, category: 'RENT', paidBy: 'user_ruiru_manager', paymentMethod: 'MPESA', notes: 'Monthly rent for Ruiru shop' },
+    { storeId: storeRuiru.id, description: 'Ruiru water bill', amount: 2000, category: 'UTILITIES', paidBy: 'user_ruiru_manager', paymentMethod: 'CASH', notes: 'Ruiru water bill' },
+    { storeId: storeNairobiCbd.id, description: 'Nairobi CBD branch rent - January', amount: 45000, category: 'RENT', paidBy: 'user_nairobi_manager', paymentMethod: 'MPESA', notes: 'Monthly rent for CBD shop' },
+    { storeId: storeNairobiCbd.id, description: 'CBD security services', amount: 8000, category: 'SECURITY', paidBy: 'user_nairobi_manager', paymentMethod: 'MPESA', notes: 'Monthly security guard fee' },
+    { storeId: storeNakuru.id, description: 'Nakuru branch rent - January', amount: 15000, category: 'RENT', paidBy: 'user_nakuru_manager', paymentMethod: 'MPESA', notes: 'Monthly rent for Nakuru shop' },
+    { storeId: storeNakuru.id, description: 'Nakuru transport costs', amount: 5000, category: 'TRANSPORT', paidBy: 'user_nakuru_manager', paymentMethod: 'CASH', notes: 'Delivery truck fuel' },
+  ];
+  for (const expense of branchExpenses) {
+    await prisma.expense.create({ data: expense });
   }
 
   // 10. Seed Chart of Accounts
@@ -458,7 +771,7 @@ async function main() {
   // ==========================================================================
   // 11. SEED SALES TRANSACTIONS (15-20 over past 7 days)
   // ==========================================================================
-  console.log('📋 Seeding sales transactions...');
+  console.log('Seeding sales transactions...');
 
   const salesData: {
     id: string; receiptNumber: string; customerId: string | null; cashierId: string;
@@ -684,7 +997,7 @@ async function main() {
   // ==========================================================================
   // 12. SEED DEBT LEDGERS (3-4 with different aging buckets)
   // ==========================================================================
-  console.log('📋 Seeding debt ledgers...');
+  console.log('Seeding debt ledgers...');
 
   await prisma.debtLedger.createMany({
     data: [
@@ -700,7 +1013,7 @@ async function main() {
   // ==========================================================================
   // 13. SEED EQUIPMENT RENTALS (3: active, overdue, returned)
   // ==========================================================================
-  console.log('📋 Seeding equipment rentals...');
+  console.log('Seeding equipment rentals...');
 
   await prisma.equipmentRental.createMany({
     data: [
@@ -726,7 +1039,7 @@ async function main() {
   // ==========================================================================
   // 14. SEED STOCK MOVEMENTS (past week)
   // ==========================================================================
-  console.log('📋 Seeding stock movements...');
+  console.log('Seeding stock movements...');
 
   const stockMovements = [
     { storeId: store.id, productId: 'prod_cement_bamburi', movementType: 'SALE', quantity: -10, referenceId: 'tx_001', performedBy: 'user_cashier_1', createdAt: daysAgoAtHour(0, 10) },
@@ -757,7 +1070,7 @@ async function main() {
   // ==========================================================================
   // 15. SEED CASH DRAWER LOGS (opening + sales events)
   // ==========================================================================
-  console.log('📋 Seeding cash drawer logs...');
+  console.log('Seeding cash drawer logs...');
 
   const cashDrawerLogs = [
     { storeId: store.id, userId: 'user_cashier_1', action: 'OPEN', amount: 20000, balance: 20000, notes: 'Opening float', createdAt: daysAgoAtHour(0, 7) },
@@ -782,7 +1095,7 @@ async function main() {
   // ==========================================================================
   // 16. SEED EXPENSES
   // ==========================================================================
-  console.log('📋 Seeding expenses...');
+  console.log('Seeding expenses...');
 
   const expenses = [
     { storeId: store.id, description: 'Shop rent - January', amount: 25000, category: 'RENT', paidBy: 'user_super_admin', paymentMethod: 'CASH', notes: 'Monthly rent for Juja Main shop' },
@@ -799,7 +1112,7 @@ async function main() {
   // ==========================================================================
   // 17. SEED SYSTEM LOGS (for recent activity feed)
   // ==========================================================================
-  console.log('📋 Seeding system logs...');
+  console.log('Seeding system logs...');
 
   const systemLogs = [
     { storeId: store.id, userId: 'user_cashier_1', action: 'SALE_COMPLETED', component: 'POS', severity: 'INFO', message: 'Sale MBM-RCPT-001 completed: KES 8,700 (CASH)', metadata: JSON.stringify({ receiptNumber: 'MBM-RCPT-001', amount: 8700 }) },
@@ -838,18 +1151,18 @@ async function main() {
     },
   });
 
-  console.log('✅ MBUMAH HARDWARE POS - System initialized successfully!');
+  console.log('MBUMAH HARDWARE POS - System initialized successfully!');
   console.log('   📧 Super Admin: admin@mbumahhardware.co.ke');
   console.log('   🏪 Stores: 5 branches (Juja Main, Thika, Ruiru, Nairobi CBD, Nakuru)');
   console.log('   👤 Branch Managers: 4 (Thika, Ruiru, Nairobi CBD, Nakuru)');
-  console.log('   📦 Products seeded: ' + (products.length + 1));
-  console.log('   👥 Customers seeded: ' + customers.length + ' + branch-specific');
-  console.log('   📊 Accounts seeded: ' + accounts.length);
-  console.log('   💰 Sales transactions seeded: ' + salesData.length);
-  console.log('   📋 Stock movements seeded: ' + stockMovements.length);
+  console.log('   Products seeded: ' + (products.length + 1) + ' (Juja Main) + ' + (thkProducts.length + ruiruProducts.length + nbiProducts.length + nkrProducts.length) + ' (branches)');
+  console.log('   👥 Customers seeded: ' + customers.length + ' (Juja Main) + ' + (thkCustomers.length + ruiruCustomers.length + nbiCustomers.length + nkrCustomers.length) + ' (branches)');
+  console.log('   Accounts seeded: ' + accounts.length);
+  console.log('   Sales transactions seeded: ' + salesData.length + ' (Juja Main) + ' + (thikaSales.length + ruiruSales.length + nairobiSales.length + nakuruSales.length) + ' (branches)');
+  console.log('   Stock movements seeded: ' + stockMovements.length);
   console.log('   🏗️ Equipment rentals seeded: 3');
   console.log('   🗄️ Cash drawer logs seeded: ' + cashDrawerLogs.length);
-  console.log('   📝 Expenses seeded: ' + expenses.length);
+  console.log('   📝 Expenses seeded: ' + (expenses.length + branchExpenses.length));
 }
 
 main()

@@ -1,8 +1,4 @@
-/**
- * MBUMAH HARDWARE - Categories API
- * GET /api/categories - List categories for a store
- * POST /api/categories - Create a new category
- */
+// GET/POST /api/categories
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -61,8 +57,7 @@ async function createCategoryHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Check for duplicate name within store
-  const existing = await db.productCategory.findFirst({
+    const existing = await db.productCategory.findFirst({
     where: { storeId, name: { equals: name } },
   });
 
@@ -73,8 +68,7 @@ async function createCategoryHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Get the next sort order if not provided
-  let categorySortOrder = sortOrder;
+    let categorySortOrder = sortOrder;
   if (categorySortOrder === undefined || categorySortOrder === null) {
     const maxSort = await db.productCategory.findFirst({
       where: { storeId },

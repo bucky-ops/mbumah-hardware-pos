@@ -1,8 +1,4 @@
-/**
- * MBUMAH HARDWARE - Debt Management API
- * GET /api/debt - List debt ledgers with filtering
- * POST /api/debt - Record a debt payment
- */
+// GET/POST /api/debt
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -37,8 +33,7 @@ async function getDebtHandler(...args: unknown[]): Promise<Response> {
   if (status) {
     where.status = status;
   } else if (!overdue) {
-    // By default, show only non-settled debts
-    where.status = { in: ['OUTSTANDING', 'PARTIAL', 'OVERDUE'] };
+        where.status = { in: ['OUTSTANDING', 'PARTIAL', 'OVERDUE'] };
   }
 
   if (customerId) {
@@ -176,8 +171,7 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
 
     const newAgingBucket = calculateAgingBucket(debt.dueDate);
 
-    // Update the debt ledger
-    const updatedDebt = await tx.debtLedger.update({
+        const updatedDebt = await tx.debtLedger.update({
       where: { id: debtLedgerId },
       data: {
         amountPaid: newAmountPaid,
@@ -188,8 +182,7 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
       },
     });
 
-    // Create debt payment record
-    await tx.debtPayment.create({
+        await tx.debtPayment.create({
       data: {
         storeId,
         debtLedgerId,
@@ -200,8 +193,7 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
       },
     });
 
-    // Update customer debt balance
-    await tx.customer.update({
+        await tx.customer.update({
       where: { id: debt.customerId },
       data: { currentDebtBalance: { decrement: paymentAmount } },
     });
@@ -226,11 +218,9 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
       });
     }
 
-    // Create journal entries for debt payment
-    const jeNumber = generateJournalEntryNumber();
+        const jeNumber = generateJournalEntryNumber();
 
-    // Resolve account IDs dynamically
-    const store = await tx.store.findUnique({ where: { id: storeId }, select: { organizationId: true } });
+        const store = await tx.store.findUnique({ where: { id: storeId }, select: { organizationId: true } });
     const orgId = store?.organizationId || 'org_mbumah';
     const accounts = await getAccountIds(orgId, [
       ACCOUNT_CODES.CASH_ON_HAND,

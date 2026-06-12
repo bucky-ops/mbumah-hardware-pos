@@ -1,8 +1,6 @@
 'use client';
 
-/**
- * MBUMAH HARDWARE - Providers
- */
+// App-wide providers (React Query, Theme, Toast)
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';

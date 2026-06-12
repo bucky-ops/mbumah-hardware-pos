@@ -1,6 +1,4 @@
-/**
- * MBUMAH HARDWARE - API Client
- */
+// API client
 
 import type {
   AuthUser,
