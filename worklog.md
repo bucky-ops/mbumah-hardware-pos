@@ -1122,3 +1122,30 @@ Stage Summary:
 - M-Pesa payment prompt enhanced with proper Safaricom branding, better UX, and auto-checkout flow
 - All TypeScript types consistent, no new compilation errors
 - Existing lint errors are pre-existing (runner.js require imports, setMounted in effect)
+
+---
+Task ID: 10
+Agent: Main Orchestrator
+Task: Fix runtime bugs, add catalog module, add M-Pesa payment prompt, add logo, push to GitHub
+
+Work Log:
+- Fixed TypeError: salesReport.byPaymentMethod undefined by updating API route to return flat fields alongside nested structure
+- Fixed HTML nesting error: changed <p> to <div> for sidebar section headers containing Separator component
+- Fixed hydration mismatch: implemented useSyncExternalStore for client-only mount detection instead of useState/useEffect
+- Added byPaymentMethod aggregation to /api/reports/sales route
+- Created Catalog Tab (catalog-tab.tsx) with category filtering, grid/list view, search, add-to-cart
+- Added M-Pesa STK Push payment dialog in POS checkout with branded UI (Lipa na M-Pesa)
+- Generated and added MBUMAH HARDWARE logo to sidebar and login screen
+- Registered Catalog tab in TAB_CONFIG, mainNavItems, renderTab switch, and AppTab type
+- Pushed all changes to GitHub: https://github.com/bucky-ops/mbumah-hardware-pos
+- Cleared .next cache to resolve compilation issues
+- Verified all API endpoints work via curl (auth/login, dashboard, categories, products, reports/sales)
+- Agent-browser QA limited by sandbox memory constraints
+
+Stage Summary:
+- All 3 reported bugs fixed (TypeError, HTML nesting, hydration mismatch)
+- Catalog module added as new tab with full product browsing
+- M-Pesa payment prompt integrated into POS checkout
+- Logo generated and integrated into sidebar + login screen
+- Code pushed to GitHub repo: bucky-ops/mbumah-hardware-pos
+- APIs verified: login, dashboard, categories, products, reports/sales all return correct data
