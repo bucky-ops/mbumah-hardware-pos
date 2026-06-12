@@ -1,11 +1,7 @@
 /**
- * MBUMAH HARDWARE POS - Product Bundles API
- * GET /api/products/bundles - List all bundle products with their constituent items
- * POST /api/products/bundles - Create a new bundle product with constituent items
- *
- * POST supports two interfaces:
- * 1. Legacy: Explicit pricePerUnit, costPrice, items[] with childProductId + quantityRequired
- * 2. New: componentProducts[] with productId + quantity, discountPercent - auto-calculates price
+ * MBUMAH HARDWARE - Product Bundles API
+ * GET /api/products/bundles
+ * POST /api/products/bundles
  */
 
 import { NextRequest } from 'next/server';
@@ -117,7 +113,7 @@ async function createBundleHandler(...args: unknown[]): Promise<Response> {
     discountPercent,
   } = body;
 
-  // ===== Determine which interface is being used =====
+  Determine which interface is being used
   const useNewInterface = componentProducts && Array.isArray(componentProducts) && componentProducts.length > 0;
   const useLegacyInterface = items && Array.isArray(items) && items.length > 0;
 
@@ -142,7 +138,7 @@ async function createBundleHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // ===== Normalize to a unified format =====
+  Normalize to a unified format
   // bundleComponents: Array of { productId, quantity }
   let bundleComponents: Array<{ productId: string; quantity: number }>;
 
@@ -174,7 +170,7 @@ async function createBundleHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // ===== Validate all constituent products exist =====
+  Validate all constituent products exist
   const childProductIds = bundleComponents.map((c) => c.productId);
   const childProducts = await db.product.findMany({
     where: { id: { in: childProductIds }, storeId, isActive: true },
@@ -191,7 +187,7 @@ async function createBundleHandler(...args: unknown[]): Promise<Response> {
 
   const childProductMap = new Map(childProducts.map((p) => [p.id, p]));
 
-  // ===== Calculate bundle price for new interface =====
+  Calculate bundle price for new interface
   let finalPricePerUnit: number;
   let finalCostPrice: number;
 
@@ -226,7 +222,7 @@ async function createBundleHandler(...args: unknown[]): Promise<Response> {
   finalPricePerUnit = Math.round(finalPricePerUnit * 100) / 100;
   finalCostPrice = Math.round(finalCostPrice * 100) / 100;
 
-  // ===== Generate SKU if not provided =====
+  Generate SKU if not provided
   const bundleSku = sku || generateSKU('BDL');
 
   // Check for duplicate SKU
@@ -238,7 +234,7 @@ async function createBundleHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // ===== Create the bundle product and its constituent items in a transaction =====
+  Create the bundle product and its constituent items in a transaction
   const bundle = await db.$transaction(async (tx) => {
     const product = await tx.product.create({
       data: {

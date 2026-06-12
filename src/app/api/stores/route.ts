@@ -1,0 +1,44 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/db';
+
+/**
+ * GET /api/stores - List all stores for the current organization
+ * Query params:
+ *   organizationId (optional) - filter by organization
+ *   status (optional) - filter by status (default: ACTIVE)
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const organizationId = searchParams.get('organizationId') || 'org_mbumah';
+    const status = searchParams.get('status') || undefined;
+
+    const stores = await db.store.findMany({
+      where: {
+        organizationId,
+        ...(status ? { status } : {}),
+      },
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        organizationId: true,
+        name: true,
+        location: true,
+        address: true,
+        phone: true,
+        email: true,
+        taxPin: true,
+        status: true,
+        createdAt: true,
+      },
+    });
+
+    return NextResponse.json({ data: stores });
+  } catch (error) {
+    console.error('Error fetching stores:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch stores' },
+      { status: 500 }
+    );
+  }
+}

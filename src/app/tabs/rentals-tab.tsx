@@ -32,9 +32,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 
-// ============================================================================
-// Rental Timeline Visual Component - Enhanced with Dots and Lines
-// ============================================================================
+// Rental Timeline Visual Component - Dots and Lines
 
 function RentalTimeline({ rental }: { rental: RentalItem }) {
   const start = new Date(rental.rentalStartDate).getTime();
@@ -107,9 +105,7 @@ function RentalTimeline({ rental }: { rental: RentalItem }) {
   );
 }
 
-// ============================================================================
 // Rental Form Component
-// ============================================================================
 
 function RentalForm({ storeId, products, customers, onSuccess }: { storeId: string; products: ProductListItem[]; customers: CustomerItem[]; onSuccess: () => void }) {
   const [form, setForm] = useState({ productId: '', customerId: '', expectedReturnDate: '', securityDeposit: '', ratePerDay: '', notes: '' });
@@ -187,9 +183,7 @@ function RentalForm({ storeId, products, customers, onSuccess }: { storeId: stri
   );
 }
 
-// ============================================================================
-// Damage Assessment Form Component - Enhanced with Late Fee Calc & Condition
-// ============================================================================
+// Damage Assessment Form Component - Late Fee Calc & Condition
 
 function DamageAssessmentForm({
   rental,
@@ -398,9 +392,7 @@ function DamageAssessmentForm({
   );
 }
 
-// ============================================================================
 // Rental Status Badge with Animations
-// ============================================================================
 
 function RentalStatusBadge({ status }: { status: string }) {
   switch (status) {
@@ -443,9 +435,7 @@ function RentalStatusBadge({ status }: { status: string }) {
   }
 }
 
-// ============================================================================
 // Calendar View Component
-// ============================================================================
 
 function RentalCalendarView({ rentals }: { rentals: RentalItem[] }) {
   const today = new Date();
@@ -555,9 +545,7 @@ function RentalCalendarView({ rentals }: { rentals: RentalItem[] }) {
   );
 }
 
-// ============================================================================
 // Equipment Catalog Component
-// ============================================================================
 
 function EquipmentCatalog({ products, rentals }: { products: ProductListItem[]; rentals: RentalItem[] }) {
   const rentalProducts = products.filter(p => p.isRental);
@@ -675,9 +663,7 @@ function EquipmentCatalog({ products, rentals }: { products: ProductListItem[]; 
   );
 }
 
-// ============================================================================
 // Rental Card View Component
-// ============================================================================
 
 function RentalCardView({ rentals, onReturn }: { rentals: RentalItem[]; onReturn: (rental: RentalItem) => void }) {
   const statusBorder: Record<string, string> = {
@@ -766,9 +752,7 @@ function RentalCardView({ rentals, onReturn }: { rentals: RentalItem[]; onReturn
   );
 }
 
-// ============================================================================
 // Main Rentals Tab Component
-// ============================================================================
 
 export default function RentalsTab() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -1189,7 +1173,7 @@ export default function RentalsTab() {
         </TabsContent>
       </Tabs>
 
-      {/* Return Dialog with Enhanced Damage Assessment */}
+      {/* Return Dialog with Damage Assessment */}
       <Dialog open={returnDialogOpen} onOpenChange={setReturnDialogOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>

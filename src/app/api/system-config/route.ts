@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - System Config API
+ * MBUMAH HARDWARE - System Config API
  * GET /api/system-config - List all system configs
  * PUT /api/system-config - Update a config value
  */

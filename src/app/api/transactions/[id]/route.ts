@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Transaction Detail API
+ * MBUMAH HARDWARE - Transaction Detail API
  * GET /api/transactions/[id] - Get transaction details with all related data
  */
 

@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Products API
+ * MBUMAH HARDWARE - Products API
  * GET /api/products - List/search products with fuzzy search
  * POST /api/products - Create a new product
  */

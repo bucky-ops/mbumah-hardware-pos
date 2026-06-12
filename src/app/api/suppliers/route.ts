@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Suppliers API
+ * MBUMAH HARDWARE - Suppliers API
  * GET /api/suppliers - List/search suppliers
  * POST /api/suppliers - Create a new supplier
  */

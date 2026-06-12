@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Chart of Accounts API
+ * MBUMAH HARDWARE - Chart of Accounts API
  * GET /api/financial/accounts - List chart of accounts with balances
  * Accepts both organizationId and storeId (derives organizationId from store)
  */

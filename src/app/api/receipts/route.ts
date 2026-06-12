@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Receipts API
+ * MBUMAH HARDWARE - Receipts API
  * GET /api/receipts - List receipts with pagination and filtering
  */
 

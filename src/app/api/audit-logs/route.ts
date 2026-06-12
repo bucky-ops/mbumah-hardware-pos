@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Audit Logs API
+ * MBUMAH HARDWARE - Audit Logs API
  * GET /api/audit-logs - List system logs with filters for audit trail
  */
 

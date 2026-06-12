@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Stock Movements API
+ * MBUMAH HARDWARE - Stock Movements API
  * GET /api/stock-movements - List stock movements with filtering
  * POST /api/stock-movements - Create a stock adjustment
  */

@@ -1,6 +1,5 @@
 /**
- * MBUMAH HARDWARE POS & ERP - API Client
- * Complete fetch wrappers for all backend endpoints
+ * MBUMAH HARDWARE - API Client
  */
 
 import type {
@@ -19,9 +18,6 @@ import type {
   EndShiftPayload,
 } from './types';
 
-// ============================================================================
-// BASE CONFIG
-// ============================================================================
 
 const API_BASE = '/api';
 
@@ -72,9 +68,6 @@ async function request<T>(
   return response.json();
 }
 
-// ============================================================================
-// AUTH API
-// ============================================================================
 
 export const authApi = {
   login: async (email: string, password: string) => {
@@ -103,9 +96,6 @@ export const authApi = {
   },
 };
 
-// ============================================================================
-// PRODUCTS API
-// ============================================================================
 
 export interface ProductListItem {
   id: string;
@@ -196,9 +186,6 @@ export const productsApi = {
   },
 };
 
-// ============================================================================
-// CATEGORIES API
-// ============================================================================
 
 export interface CategoryItem {
   id: string;
@@ -226,9 +213,6 @@ export const categoriesApi = {
   },
 };
 
-// ============================================================================
-// CUSTOMERS API
-// ============================================================================
 
 export interface CustomerItem {
   id: string;
@@ -282,9 +266,6 @@ export const customersApi = {
   },
 };
 
-// ============================================================================
-// TRANSACTIONS API
-// ============================================================================
 
 export interface TransactionItem {
   id: string;
@@ -346,9 +327,6 @@ export const transactionsApi = {
   },
 };
 
-// ============================================================================
-// PAYMENTS API
-// ============================================================================
 
 export const paymentsApi = {
   initiateMpesa: async (data: MpesaSTKRequest) => {
@@ -359,9 +337,6 @@ export const paymentsApi = {
   },
 };
 
-// ============================================================================
-// DEBT API
-// ============================================================================
 
 export interface DebtLedgerItem {
   id: string;
@@ -400,9 +375,6 @@ export const debtApi = {
   },
 };
 
-// ============================================================================
-// RENTALS API
-// ============================================================================
 
 export interface RentalItem {
   id: string;
@@ -452,10 +424,6 @@ export const rentalsApi = {
     });
   },
 };
-
-// ============================================================================
-// FINANCIAL API
-// ============================================================================
 
 export interface JournalEntryItem {
   id: string;
@@ -533,9 +501,6 @@ export const financialApi = {
   },
 };
 
-// ============================================================================
-// DASHBOARD API
-// ============================================================================
 
 export const dashboardApi = {
   getStats: async (storeId?: string) => {
@@ -546,9 +511,6 @@ export const dashboardApi = {
   },
 };
 
-// ============================================================================
-// REPORTS API
-// ============================================================================
 
 export interface SalesReportData {
   period: string;
@@ -597,10 +559,6 @@ export const reportsApi = {
   },
 };
 
-// ============================================================================
-// SYSTEM LOGS API
-// ============================================================================
-
 export interface SystemLogItem {
   id: string;
   storeId: string | null;
@@ -627,10 +585,6 @@ export const systemLogsApi = {
     return request<SystemLogItem[]>(`/system-logs?${query.toString()}`);
   },
 };
-
-// ============================================================================
-// STOCK MOVEMENTS API
-// ============================================================================
 
 export interface StockMovementItem {
   id: string;
@@ -664,10 +618,6 @@ export const stockMovementsApi = {
   },
 };
 
-// ============================================================================
-// AUDIT LOGS API
-// ============================================================================
-
 export interface AuditLogItem {
   id: string;
   storeId: string | null;
@@ -698,10 +648,6 @@ export const auditLogsApi = {
   },
 };
 
-// ============================================================================
-// SYSTEM CONFIG API
-// ============================================================================
-
 export interface SystemConfigItem {
   id: string;
   key: string;
@@ -725,10 +671,6 @@ export const systemConfigApi = {
     });
   },
 };
-
-// ============================================================================
-// USERS API
-// ============================================================================
 
 export interface UserItem {
   id: string;
@@ -763,9 +705,6 @@ export const usersApi = {
   },
 };
 
-// ============================================================================
-// SUPPLIERS API
-// ============================================================================
 
 export interface SupplierItem {
   id: string;
@@ -917,10 +856,6 @@ export const purchaseOrdersApi = {
   },
 };
 
-// ============================================================================
-// NOTIFICATIONS API
-// ============================================================================
-
 export interface NotificationItem {
   id: string;
   type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction';
@@ -947,9 +882,6 @@ export const notificationsApi = {
   },
 };
 
-// ============================================================================
-// SHIFTS API
-// ============================================================================
 
 export const shiftsApi = {
   list: async (storeId: string, status?: string, userId?: string) => {
@@ -981,10 +913,6 @@ export const shiftsApi = {
     });
   },
 };
-
-// ============================================================================
-// HELPERS
-// ============================================================================
 
 export function formatKES(amount: number): string {
   return new Intl.NumberFormat('en-KE', {

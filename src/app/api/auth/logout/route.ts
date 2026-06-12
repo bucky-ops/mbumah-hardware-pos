@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Authentication: Logout
+ * MBUMAH HARDWARE - Authentication: Logout
  * POST /api/auth/logout - Destroy user session
  */
 

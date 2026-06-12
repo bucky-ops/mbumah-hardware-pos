@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Expenses API
+ * MBUMAH HARDWARE - Expenses API
  * GET /api/expenses - List expenses with filters
  * POST /api/expenses - Create a new expense with journal entry
  *

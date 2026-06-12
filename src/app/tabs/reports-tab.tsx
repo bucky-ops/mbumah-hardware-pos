@@ -36,9 +36,7 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-// ============================================================================
-// Report Type Card Component (Enhanced with Glass-morphism)
-// ============================================================================
+// Report Type Card Component (Glass-morphism)
 
 function ReportTypeCard({
   icon, title, description, isActive, onClick, colorClass, lastGenerated,
@@ -98,9 +96,7 @@ function ReportTypeCard({
   );
 }
 
-// ============================================================================
 // CSS Bar Component
-// ============================================================================
 
 function HorizontalBar({ value, maxValue, colorClass = 'bg-primary/70', height = 'h-4' }: {
   value: number; maxValue: number; colorClass?: string; height?: string;
@@ -113,9 +109,7 @@ function HorizontalBar({ value, maxValue, colorClass = 'bg-primary/70', height =
   );
 }
 
-// ============================================================================
 // Conic Gradient Pie Chart Component
-// ============================================================================
 
 function ConicPieChart({ segments }: {
   segments: { name: string; value: number; color: string }[];
@@ -151,9 +145,7 @@ function ConicPieChart({ segments }: {
   );
 }
 
-// ============================================================================
 // Mini Sparkline Component (CSS-based)
-// ============================================================================
 
 function MiniSparkline({ data, color = 'text-primary', height = 24 }: {
   data: number[]; color?: string; height?: number;
@@ -182,9 +174,7 @@ function MiniSparkline({ data, color = 'text-primary', height = 24 }: {
   );
 }
 
-// ============================================================================
 // Date Range Presets Component
-// ============================================================================
 
 type DatePreset = 'today' | 'this_week' | 'this_month' | 'this_quarter' | 'this_year' | 'last_month' | 'custom';
 
@@ -221,9 +211,7 @@ function getDatePresetRange(preset: DatePreset): { from: string; to: string } {
   }
 }
 
-// ============================================================================
 // SVG Bar Chart Component
-// ============================================================================
 
 function SVGBarChart({ data, height = 200 }: { data: { label: string; value: number; color?: string }[]; height?: number }) {
   if (data.length === 0) return null;
@@ -266,9 +254,7 @@ function SVGBarChart({ data, height = 200 }: { data: { label: string; value: num
   );
 }
 
-// ============================================================================
 // SVG Line Chart Component
-// ============================================================================
 
 function SVGLineChart({ data, height = 200 }: { data: { label: string; value: number }[]; height?: number }) {
   if (data.length < 2) return null;
@@ -307,9 +293,7 @@ function SVGLineChart({ data, height = 200 }: { data: { label: string; value: nu
   );
 }
 
-// ============================================================================
 // Main Reports Tab Component
-// ============================================================================
 
 export default function ReportsTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
@@ -688,7 +672,7 @@ export default function ReportsTab() {
   return (
     <div className="space-y-4">
       {/* ================================================================== */}
-      {/* Enhanced Quick Stats Cards - Glass-morphism                         */}
+      {/* Quick Stats Cards - Glass-morphism                         */}
       {/* ================================================================== */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="border-l-4 border-l-green-500 bg-gradient-to-br from-card to-green-50/30 dark:to-green-900/10 backdrop-blur-sm">
@@ -773,7 +757,7 @@ export default function ReportsTab() {
       </div>
 
       {/* ================================================================== */}
-      {/* Enhanced Report Generation Dashboard - Glass-morphism                */}
+      {/* Report Generation Dashboard - Glass-morphism                */}
       {/* ================================================================== */}
       <Card className="backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader className="pb-2">
@@ -833,7 +817,7 @@ export default function ReportsTab() {
 
           <Separator />
 
-          {/* Report Type Selection - Enhanced Grid */}
+          {/* Report Type Selection - Grid */}
           <div className="space-y-2">
             <Label className="text-xs font-medium">Report Type</Label>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

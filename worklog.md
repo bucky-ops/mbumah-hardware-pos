@@ -1149,3 +1149,154 @@ Stage Summary:
 - Logo generated and integrated into sidebar + login screen
 - Code pushed to GitHub repo: bucky-ops/mbumah-hardware-pos
 - APIs verified: login, dashboard, categories, products, reports/sales all return correct data
+
+---
+Task ID: 3
+Agent: General-Purpose Agent
+Task: Create GitHub Actions workflow for NodeJS with Webpack
+
+Work Log:
+- Read existing `.github/workflows/webpack.yml` (basic scaffold with npm + webpack)
+- Reviewed `package.json` to confirm scripts: `lint`, `db:generate`, `build`, and Bun as package manager
+- Reviewed `next.config.ts` for build configuration details
+- Created `.github/workflows/node.js.yml` — full CI workflow:
+  - Triggers on push to main and PR to main
+  - Matrix strategy: Node.js 18.x and 20.x with fail-fast disabled
+  - Steps: checkout → setup Bun (latest) → setup Node.js (matrix) → bun install → prisma generate → lint → build → upload .next/ artifacts
+  - Env var: DATABASE_URL=file:./test.db for SQLite test database
+  - Upload artifact with matrix-specific name and 7-day retention
+- Created `.github/workflows/deploy.yml` — deployment workflow:
+  - Triggers on push to main only
+  - Builds project with Node.js 20.x and Bun
+  - Prepares deployment artifact (.next/, public/, package.json, config files)
+  - Uploads deployment artifact with 5-day retention
+  - Includes commented-out Vercel deployment placeholder steps (Install Vercel CLI, Pull settings, Build, Deploy)
+  - Includes deployment summary step that outputs branch, commit, actor, and setup instructions to GITHUB_STEP_SUMMARY
+
+Stage Summary:
+- Two GitHub Actions workflow files created in `.github/workflows/`
+- CI workflow (`node.js.yml`) covers lint → build pipeline across Node 18.x/20.x with Bun
+- Deploy workflow (`deploy.yml`) handles production build + artifact preparation with Vercel placeholders
+- Both workflows use checkout@v4, setup-node@v4, setup-bun@v2, upload-artifact@v4 (latest versions)
+- Existing `webpack.yml` left untouched (not requested to modify/remove)
+
+---
+Task ID: Repo-Organization
+Agent: General Purpose Agent
+Task: Create comprehensive README.md and organize repository
+
+Work Log:
+- Created `/home/z/my-project/README.md` — comprehensive professional README with 13 sections:
+  - Badges (CI, MIT License, Next.js 16, TypeScript 5, Prisma 6)
+  - About section with key highlights
+  - All 13 modules table with descriptions
+  - Hardware Store Branches table (5 branches, Juja Main as HQ)
+  - Tech Stack table (18 technologies)
+  - Getting Started guide (clone, install, env setup, db push, dev)
+  - Demo Accounts table (admin, cashier, accountant with emails & passwords)
+  - Full API Reference table (40+ endpoints across 9 categories)
+  - Project Structure tree
+  - M-Pesa Integration section (STK Push, C2B, callback, mock service)
+  - RBAC Roles table (7 roles with permissions)
+  - Kenya-Specific Features table (KES, M-Pesa, eTIMS, KRA PIN, debt management)
+  - Contributing guidelines
+  - MIT License section
+
+- Created `/home/z/my-project/LICENSE` — standard MIT License, copyright 2024 MBUMAH HARDWARE
+
+- Created GitHub templates:
+  - `.github/ISSUE_TEMPLATE/bug_report.md` — structured bug report with module checkboxes, environment details, reproducibility
+  - `.github/ISSUE_TEMPLATE/feature_request.md` — feature request with problem statement, target module, Kenya-specific flag, beneficiary roles
+  - `.github/PULL_REQUEST_TEMPLATE.md` — PR template with type of change, affected modules, testing checklist, multi-tenant verification
+
+- Updated `/home/z/my-project/.gitignore`:
+  - Added `upload/` directory
+  - Added `screenshot*.png` for local QA artifacts
+  - Added `download/` directory
+  - (tool-results/, agent-ctx/, *.log already present from prior work)
+
+- Created `/home/z/my-project/.env.example`:
+  - DATABASE_URL (SQLite + PostgreSQL examples)
+  - JWT_SECRET
+  - M-Pesa Daraja API credentials (5 vars)
+  - NEXT_PUBLIC_APP_URL, NEXT_PUBLIC_CURRENCY
+  - Optional: RESEND_API_KEY, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER
+  - Optional: REDIS_URL
+
+Stage Summary:
+- Repository fully organized with professional documentation
+- All 5 parts of the task completed
+- README covers all 13 required sections with tables, badges, and detailed content
+- GitHub issue/PR templates tailored for this project's module structure
+- .env.example documents all required and optional environment variables
+- .gitignore updated for upload/, screenshot artifacts, and download/ directories
+
+---
+Task ID: 4
+Agent: Branch Store Agent
+Task: Add other MBUMAH HARDWARE branches to the database seed and UI
+
+Work Log:
+- Updated prisma/seed.ts with 4 new store branches: Thika, Ruiru, Nairobi CBD, Nakuru
+- Added 4 branch manager users (David Njoroge, Samuel Kibet, Mary Akinyi, Peter Ruto) with BRANCH_MANAGER role
+- Added BRANCH_MANAGER RBAC permissions to seed (products create/read/update, transactions create/read/refund, customers create/read/update, financials read/export, rentals create/read/update, admin read, reports read/export, debt read/remind)
+- Added branch-specific product categories (7 per branch), products (10 per branch), and customers (3 per branch) for each of the 4 new branches
+- Created /api/stores/route.ts - GET endpoint that returns all stores for an organization
+- Updated page.tsx store selector: replaced hardcoded "Juja Main Branch" button with a DropdownMenu that lists all 5 branches and allows switching between them using currentStoreId from useAppStore
+- Added STORE_LIST constant to page.tsx with all 5 branch details (id, shortName, location, phone)
+- Added setCurrentStoreId to AppSidebar destructuring for branch switching
+- Updated receipt header to show current branch name dynamically
+- Added Branch Manager (Thika) demo account to DEMO_ACCOUNTS array
+- Updated demo accounts grid from grid-cols-3 to grid-cols-2 sm:grid-cols-4 for better layout with 4 accounts
+- Verified types.ts already has BRANCH_MANAGER in UserRole enum
+- Re-seeded database successfully with all new branch data
+
+Stage Summary:
+- 5 store branches now available in the system (Juja Main, Thika, Ruiru, Nairobi CBD, Nakuru)
+- Dynamic branch selector in sidebar with visual checkmark for current branch
+- Branch managers can log in via demo accounts
+- Each branch has its own products, categories, and customers
+- Stores API endpoint available at GET /api/stores
+- All lint checks pass
+
+---
+Task ID: 5
+Agent: Repo Cleanup Agent
+Task: Make the repo "AI syntax free" and organize the repo structure
+
+Work Log:
+- Part 1: Cleaned AI-generated comments from 14+ source files
+  - Removed all `// ====` decorative separator lines (94 instances across 4 files)
+  - Simplified verbose file headers (e.g., "MBUMAH HARDWARE POS & ERP System" → "MBUMAH HARDWARE")
+  - Removed "Enhanced:" prefixes from all comments (tabs, page.tsx, API routes)
+  - Removed ALL-CAPS section headers (AUTH STORE, CART STORE, etc.) that just repeat interface names
+  - Cleaned `// ===== STEP X:` decorators in transactions route to plain comments
+  - Removed `// ===== NEW:` prefixes from dashboard route
+  - Removed obvious WHAT comments (e.g., "// Today's transaction count", "// Format top products")
+  - Kept WHY comments (e.g., SQLite aggregate limitation explanation)
+- Part 2: Removed AI-generated context files
+  - Deleted agent-ctx/ directory (27 agent context files)
+  - tool-results/ is root-owned and can't be deleted, but covered by .gitignore
+- Part 3: Moved uploaded documents to docs/
+  - Created /home/z/my-project/docs/ directory
+  - Moved Kenyan_Hardware_POS_PRD.docx, HSMS_Product_Requirements_Document.docx, DEPLOYMENT_GUIDE.md
+  - Also moved remaining upload files (MBUMAH HARDWARE.pdf, WhatsApp images, hardware_pos_comprehensive_prompt.md)
+- Part 4: Cleaned root directory
+  - Removed runner.js (tool artifact for spawning Next.js dev server)
+  - Removed 90+ screenshot*.png QA artifacts
+  - Removed dev.log, dev2.log
+  - Removed download/ directory (QA artifact)
+  - Removed mini-services/ directory
+  - Removed skills/ directory
+  - Removed tsconfig.tsbuildinfo, next-env.d.ts (auto-generated)
+  - Kept Caddyfile, start-server.sh (deployment configs), eslint.config.mjs, bun.lock (standard project files)
+- Part 5: Updated .gitignore
+  - Changed `.env*` to `.env` + `!.env.example` (was ignoring .env.example)
+  - Added `db/*.db` to prevent committing SQLite databases
+
+Stage Summary:
+- Repository is now "AI syntax free" - no decorative separators, no "Enhanced:" markers, no verbose AI-style headers
+- File headers follow professional convention: `/** MBUMAH HARDWARE - Module Name */`
+- Documents organized in docs/ directory
+- .gitignore now properly covers all AI artifacts and database files
+- No functional changes made - only cosmetic/comment and file organization changes

@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Debt Management API
+ * MBUMAH HARDWARE - Debt Management API
  * GET /api/debt - List debt ledgers with filtering
  * POST /api/debt - Record a debt payment
  */

@@ -102,9 +102,7 @@ function StarRating({ rating, onRate, readonly = false }: { rating: number; onRa
   );
 }
 
-// ============================================================================
 // PO Status Timeline Component
-// ============================================================================
 
 function POStatusTimeline({ status }: { status: string }) {
   const steps = ['DRAFT', 'SENT', 'CONFIRMED', 'RECEIVED'];
@@ -149,9 +147,7 @@ function POStatusTimeline({ status }: { status: string }) {
   );
 }
 
-// ============================================================================
 // PO Receiving Progress Component
-// ============================================================================
 
 function POReceivingProgress({ po }: { po: PurchaseOrderListItem }) {
   if (!po.items || po.items.length === 0) return null;
@@ -172,9 +168,7 @@ function POReceivingProgress({ po }: { po: PurchaseOrderListItem }) {
   );
 }
 
-// ============================================================================
 // Delivery Status Indicator
-// ============================================================================
 
 function DeliveryStatusIndicator({ po }: { po: PurchaseOrderListItem }) {
   const now = new Date().getTime();
@@ -220,9 +214,7 @@ function DeliveryStatusIndicator({ po }: { po: PurchaseOrderListItem }) {
   );
 }
 
-// ============================================================================
 // Supplier Performance Card
-// ============================================================================
 
 function SupplierPerformanceCard({ purchaseOrders }: { purchaseOrders: PurchaseOrderListItem[] }) {
   const receivedPOs = purchaseOrders.filter(po => po.status === 'RECEIVED');
@@ -305,9 +297,7 @@ function SupplierPerformanceCard({ purchaseOrders }: { purchaseOrders: PurchaseO
   );
 }
 
-// ============================================================================
 // ADD/EDIT SUPPLIER DIALOG
-// ============================================================================
 
 function AddSupplierDialog({
   open,
@@ -468,9 +458,6 @@ function AddSupplierDialog({
   );
 }
 
-// ============================================================================
-// CREATE PURCHASE ORDER DIALOG
-// ============================================================================
 
 function CreatePODialog({
   open,
@@ -661,9 +648,6 @@ function CreatePODialog({
   );
 }
 
-// ============================================================================
-// RECEIVE PO ITEMS DIALOG
-// ============================================================================
 
 function ReceivePODialog({
   open,
@@ -759,9 +743,6 @@ function ReceivePODialog({
   );
 }
 
-// ============================================================================
-// SUPPLIER DETAIL VIEW
-// ============================================================================
 
 function SupplierDetailView({
   supplierId,
@@ -826,7 +807,7 @@ function SupplierDetailView({
 
   return (
     <div className="space-y-4">
-      {/* Header - Enhanced with Glass-morphism */}
+      {/* Header - Glass-morphism */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={onBack}>
           <ChevronRight className="h-4 w-4 rotate-180 mr-1" />
@@ -866,7 +847,7 @@ function SupplierDetailView({
         </div>
       </div>
 
-      {/* Summary Cards - Enhanced with Glass-morphism */}
+      {/* Summary Cards - Glass-morphism */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card className="border-l-4 border-l-blue-500 backdrop-blur-sm bg-card/80">
           <CardContent className="p-4">
@@ -1109,9 +1090,6 @@ function SupplierDetailView({
   );
 }
 
-// ============================================================================
-// PO ACTIONS COMPONENT
-// ============================================================================
 
 function POActions({ po, storeId }: { po: PurchaseOrderListItem; storeId: string }) {
   const queryClient = useQueryClient();
@@ -1190,9 +1168,6 @@ function POActions({ po, storeId }: { po: PurchaseOrderListItem; storeId: string
   );
 }
 
-// ============================================================================
-// MAIN SUPPLIERS TAB
-// ============================================================================
 
 export default function SuppliersTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
@@ -1332,7 +1307,7 @@ export default function SuppliersTab() {
         </Card>
       </div>
 
-      {/* Supplier List - Enhanced Cards */}
+      {/* Supplier List - Cards */}
       <Card className="backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -1454,7 +1429,7 @@ export default function SuppliersTab() {
         </CardContent>
       </Card>
 
-      {/* Purchase Orders Section - Enhanced */}
+      {/* Purchase Orders Section - */}
       <Card className="backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">

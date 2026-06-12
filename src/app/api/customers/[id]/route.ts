@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Customer Detail API
+ * MBUMAH HARDWARE - Customer Detail API
  * GET /api/customers/[id] - Get customer details with related data
  * PUT /api/customers/[id] - Update customer
  */

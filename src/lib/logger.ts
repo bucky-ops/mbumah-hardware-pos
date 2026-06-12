@@ -1,6 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - System Logger Utility
- * Writes structured logs to the SystemLog table with error boundaries
+ * MBUMAH HARDWARE - System Logger
  */
 
 import { db } from './db';
@@ -80,9 +79,7 @@ export function mapErrorToUserMessage(error: unknown): string {
   return 'An unknown error occurred. Please contact support.';
 }
 
-/**
- * Safe wrapper for API route handlers with error boundary
- */
+// Safe wrapper for API route handlers
 export function withErrorBoundary(
   handler: (...args: unknown[]) => Promise<Response>,
   component: string

@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Purchase Orders API
+ * MBUMAH HARDWARE - Purchase Orders API
  * GET /api/purchase-orders - List purchase orders with filters
  * POST /api/purchase-orders - Create a new purchase order with items
  */

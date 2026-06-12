@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - System Logs API
+ * MBUMAH HARDWARE - System Logs API
  * GET /api/system-logs - List system logs with filtering
  */
 

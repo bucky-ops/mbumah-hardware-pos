@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Receipt Detail API
+ * MBUMAH HARDWARE - Receipt Detail API
  * GET /api/receipts/[id] - Get full receipt with all details for printing
  *
  * Includes store info, line items, taxes, payment method, M-Pesa receipt number

@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Supplier Detail API
+ * MBUMAH HARDWARE - Supplier Detail API
  * GET /api/suppliers/[id] - Get supplier details with PO stats
  * PUT /api/suppliers/[id] - Update supplier
  * DELETE /api/suppliers/[id] - Soft delete (set isActive = false)

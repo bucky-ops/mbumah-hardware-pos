@@ -1,8 +1,7 @@
 'use client';
 
 /**
- * MBUMAH HARDWARE POS & ERP - Providers
- * React Query provider + Theme provider wrapper
+ * MBUMAH HARDWARE - Providers
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

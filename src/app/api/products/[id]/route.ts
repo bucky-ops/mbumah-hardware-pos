@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Product Detail API
+ * MBUMAH HARDWARE - Product Detail API
  * GET /api/products/[id] - Get product by ID
  * PUT /api/products/[id] - Update product
  * DELETE /api/products/[id] - Delete product

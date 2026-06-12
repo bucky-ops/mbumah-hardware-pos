@@ -1,6 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Receipt Number Generator
- * Format: MBM-YYYYMMDD-XXXXX
+ * MBUMAH HARDWARE - Receipt & Reference Generators
  */
 
 export function generateReceiptNumber(): string {
@@ -12,10 +11,7 @@ export function generateReceiptNumber(): string {
   return `MBM-${dateStr}-${random}`;
 }
 
-/**
- * Generate Journal Entry Number
- * Format: JE-YYYYMMDD-XXXXX
- */
+// Format: JE-YYYYMMDD-XXXXX
 export function generateJournalEntryNumber(): string {
   const now = new Date();
   const dateStr = now.getFullYear().toString() +
@@ -25,18 +21,12 @@ export function generateJournalEntryNumber(): string {
   return `JE-${dateStr}-${random}`;
 }
 
-/**
- * Generate SKU code
- * Format: MBM-CAT-XXXX
- */
+// Format: MBM-CAT-XXXX
 export function generateSKU(categoryCode: string = 'GEN'): string {
   const random = String(Math.floor(Math.random() * 9999)).padStart(4, '0');
   return `MBM-${categoryCode.toUpperCase()}-${random}`;
 }
 
-/**
- * Format KES currency
- */
 export function formatKES(amount: number): string {
   return new Intl.NumberFormat('en-KE', {
     style: 'currency',
@@ -46,9 +36,6 @@ export function formatKES(amount: number): string {
   }).format(amount);
 }
 
-/**
- * Calculate debt aging bucket
- */
 export function calculateAgingBucket(dueDate: Date): string {
   const now = new Date();
   const due = new Date(dueDate);
@@ -61,9 +48,6 @@ export function calculateAgingBucket(dueDate: Date): string {
   return 'DAYS_90_PLUS';
 }
 
-/**
- * Calculate late rental fees
- */
 export function calculateLateFee(
   ratePerDay: number,
   expectedReturnDate: Date,
@@ -76,9 +60,6 @@ export function calculateLateFee(
   return diffDays * ratePerDay;
 }
 
-/**
- * Calculate line total for a cart item
- */
 export function calculateLineTotal(
   pricePerUnit: number,
   quantity: number,

@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Equipment Rentals API
+ * MBUMAH HARDWARE - Equipment Rentals API
  * GET /api/rentals - List rentals with filtering
  * POST /api/rentals - Create a new rental
  */

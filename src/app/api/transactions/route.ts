@@ -1,19 +1,7 @@
 /**
- * MBUMAH HARDWARE POS - Transactions API
- * GET /api/transactions - List transactions with filtering
- * POST /api/transactions - Create transaction (complete checkout flow)
- *
- * Complete checkout flow:
- * a) Validate all items and stock levels
- * b) For bundle items, auto-resolve constituent items and deduct stock
- * c) Create SalesTransaction with all SaleItems
- * d) Create Payment records
- * e) For CASH: record in cash drawer, create journal entries (DR Cash, CR Sales Revenue, CR VAT Payable)
- * f) For MPESA: create pending MpesaTransaction, initiate STK push
- * g) For DEBT: verify customer debt ceiling, create DebtLedger, create journal entries (DR AR, CR Sales Revenue)
- * h) Deduct stock quantities and create StockMovement records
- * i) Generate receipt number
- * j) Log the transaction to SystemLog
+ * MBUMAH HARDWARE - Transactions API
+ * GET /api/transactions - List transactions
+ * POST /api/transactions - Create transaction (checkout)
  */
 
 import { NextRequest } from 'next/server';
@@ -140,7 +128,7 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     notes,
   } = body;
 
-  // ===== VALIDATION =====
+Validation
   if (!storeId || !cashierId || !items || !Array.isArray(items) || items.length === 0 || !paymentMethod) {
     return Response.json(
       { success: false, error: 'storeId, cashierId, items, and paymentMethod are required.' },
@@ -183,7 +171,7 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     }
   }
 
-  // ===== STEP A: Validate all items and stock levels =====
+Validate all items and stock levels
   const productIds = items.map((item: { productId: string }) => item.productId);
   const products = await db.product.findMany({
     where: { id: { in: productIds }, storeId, isActive: true },
@@ -217,7 +205,7 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     const quantity = parseFloat(String(item.quantity));
 
     if (product.isBundle) {
-      // ===== STEP B: For bundle items, auto-resolve constituent items =====
+For bundle items, auto-resolve constituent items
       if (!product.bundleItems || product.bundleItems.length === 0) {
         return Response.json(
           { success: false, error: `Bundle "${product.name}" has no constituent items configured.` },
@@ -271,7 +259,7 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     }
   }
 
-  // ===== DEBT CEILING CHECK (STEP G - early validation) =====
+Debt ceiling check
   if (paymentMethod === PaymentMethod.DEBT && customer) {
     let totalTransactionAmount = 0;
     for (const item of items) {
@@ -297,7 +285,7 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     }
   }
 
-  // ===== CALCULATE TOTALS =====
+Calculate totals
   let subtotal = 0;
   let taxAmount = 0;
   let totalDiscount = 0;
@@ -344,9 +332,9 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     ACCOUNT_CODES.VAT_PAYABLE,
   ]);
 
-  // ===== EXECUTE TRANSACTION =====
+Execute transaction
   const result = await db.$transaction(async (tx) => {
-    // ===== STEP C: Create SalesTransaction with SaleItems =====
+Create SalesTransaction with SaleItems
     let paymentStatusValue: string = PaymentStatus.COMPLETED;
 
     if (paymentMethod === PaymentMethod.MPESA) {
@@ -378,7 +366,7 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
       },
     });
 
-    // ===== STEP D: Create Payment records =====
+Create Payment records
     if (paymentMethod === PaymentMethod.SPLIT && paymentDetails?.splits) {
       for (const split of paymentDetails.splits) {
         await tx.payment.create({
@@ -407,7 +395,7 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
       });
     }
 
-    // ===== STEP H: Deduct stock and create StockMovement records =====
+Deduct stock and create StockMovement records
     for (const [productId, deduction] of stockDeductions) {
       const { quantity, product } = deduction;
 
@@ -431,7 +419,7 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
       });
     }
 
-    // ===== STEP E: CASH payment - Cash drawer + Journal entries =====
+CASH payment - Cash drawer + Journal entries
     if (paymentMethod === PaymentMethod.CASH) {
       // Get current cash drawer balance
       const lastDrawerEntry = await tx.cashDrawerLog.findFirst({
@@ -494,7 +482,7 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
       });
     }
 
-    // ===== STEP F: MPESA payment - Create pending MpesaTransaction =====
+MPESA payment - Create pending MpesaTransaction
     if (paymentMethod === PaymentMethod.MPESA) {
       const mpesaPhone = paymentDetails?.mpesaPhone || customer?.phone || '';
       if (!mpesaPhone) {
@@ -553,7 +541,7 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
       });
     }
 
-    // ===== STEP G: DEBT payment - DebtLedger + Journal entries =====
+DEBT payment - DebtLedger + Journal entries
     if (paymentMethod === PaymentMethod.DEBT && customer) {
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 30); // 30-day payment terms
@@ -622,7 +610,7 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
       });
     }
 
-    // ===== STEP I: Create Receipt =====
+Create Receipt
     await tx.receipt.create({
       data: {
         storeId,
@@ -635,7 +623,7 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     return transaction;
   });
 
-  // ===== STEP F (cont): For MPESA, initiate STK Push after transaction =====
+For MPESA, initiate STK Push after transaction
   if (paymentMethod === PaymentMethod.MPESA) {
     try {
       const mpesaPhone = paymentDetails?.mpesaPhone || customer?.phone || '';
@@ -663,7 +651,7 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     }
   }
 
-  // ===== STEP J: Log the transaction =====
+Log the transaction
   await systemLog({
     action: 'TRANSACTION_CREATED',
     component: LogComponent.POS,

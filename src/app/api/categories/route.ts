@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Categories API
+ * MBUMAH HARDWARE - Categories API
  * GET /api/categories - List categories for a store
  * POST /api/categories - Create a new category
  */

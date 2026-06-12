@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Data Export API
+ * MBUMAH HARDWARE - Data Export API
  * GET /api/reports/export - Export data as CSV
  *
  * Supports exporting: sales, inventory, debt, rentals

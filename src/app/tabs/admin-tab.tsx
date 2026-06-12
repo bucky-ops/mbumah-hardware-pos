@@ -43,9 +43,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
-// ============================================================================
-// System Health Indicator Component (Enhanced with Animation)
-// ============================================================================
+// System Health Indicator Component (Animation)
 
 function HealthIndicator({ label, value, max, unit, colorClass, lastUpdated }: {
   label: string; value: number; max: number; unit: string; colorClass?: string; lastUpdated?: string;
@@ -97,9 +95,7 @@ function HealthIndicator({ label, value, max, unit, colorClass, lastUpdated }: {
   );
 }
 
-// ============================================================================
 // Mini Sparkline Component (CSS-based)
-// ============================================================================
 
 function MiniSparkline({ data, color = 'text-primary', height = 24 }: {
   data: number[]; color?: string; height?: number;
@@ -128,9 +124,7 @@ function MiniSparkline({ data, color = 'text-primary', height = 24 }: {
   );
 }
 
-// ============================================================================
 // Animated Counter Component
-// ============================================================================
 
 function AnimatedCounter({ value, duration = 1000 }: { value: number; duration?: number }) {
   const [display, setDisplay] = useState(0);
@@ -160,9 +154,7 @@ function AnimatedCounter({ value, duration = 1000 }: { value: number; duration?:
   return <>{display.toLocaleString()}</>;
 }
 
-// ============================================================================
-// Stock Adjustment Dialog (Enhanced)
-// ============================================================================
+// Stock Adjustment Dialog 
 
 const REASON_CATEGORIES = [
   { value: 'RESTOCK', label: 'Restock', icon: PlusCircle, color: 'text-green-600' },
@@ -416,9 +408,7 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
   );
 }
 
-// ============================================================================
-// Quick Actions Component (Enhanced with Confirm Dialogs + Toasts + Progress)
-// ============================================================================
+// Quick Actions Component (Confirm Dialogs + Toasts + Progress)
 
 function QuickActions() {
   const [loading, setLoading] = useState<string | null>(null);
@@ -509,9 +499,7 @@ function QuickActions() {
   );
 }
 
-// ============================================================================
-// Activity Feed Component (Enhanced)
-// ============================================================================
+// Activity Feed Component 
 
 function ActivityFeed({ logs }: { logs: AuditLogItem[] }) {
   const [visibleCount, setVisibleCount] = useState(8);
@@ -603,9 +591,7 @@ function ActivityFeed({ logs }: { logs: AuditLogItem[] }) {
   );
 }
 
-// ============================================================================
-// Audit Log Section (Enhanced with Filters + Export + Color Coding)
-// ============================================================================
+// Audit Log Section (Filters + Export + Color Coding)
 
 function AuditLogSection({ storeId }: { storeId: string }) {
   const [filters, setFilters] = useState({
@@ -872,9 +858,7 @@ function AuditLogSection({ storeId }: { storeId: string }) {
   );
 }
 
-// ============================================================================
-// System Configuration Editor (Enhanced with Structured Settings Forms)
-// ============================================================================
+// System Configuration Editor (Structured Settings Forms)
 
 const CONFIG_CATEGORIES = ['Store', 'Receipts', 'Notifications', 'Payments', 'Advanced'];
 
@@ -1212,9 +1196,7 @@ function ConfigEditor({ storeId }: { storeId: string }) {
   );
 }
 
-// ============================================================================
-// User Management Section (Enhanced with Role Colors + Edit/Deactivate)
-// ============================================================================
+// User Management Section (Role Colors + Edit/Deactivate)
 
 const ROLE_STYLES: Record<string, { bg: string; text: string; badge: string; border: string }> = {
   SUPER_ADMIN: { bg: 'bg-purple-500', text: 'text-white', badge: 'bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800', border: 'border-l-purple-500' },
@@ -1539,9 +1521,7 @@ function UserManagement({ storeId }: { storeId: string }) {
   );
 }
 
-// ============================================================================
 // Main Admin Tab Component
-// ============================================================================
 
 export default function AdminTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
@@ -1653,7 +1633,7 @@ export default function AdminTab() {
   return (
     <div className="space-y-4">
       {/* ================================================================== */}
-      {/* Enhanced System Health Dashboard                                    */}
+      {/* System Health Dashboard                                    */}
       {/* ================================================================== */}
       <Card className="backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader className="pb-2">
@@ -1682,7 +1662,7 @@ export default function AdminTab() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Left: Progress Bars with Enhanced Visuals */}
+            {/* Left: Progress Bars with Visuals */}
             <div className="space-y-3">
               <HealthIndicator label="CPU Usage" value={cpuUsage} max={100} unit="%" lastUpdated={lastHealthCheck} />
               <HealthIndicator label="Memory Usage" value={memoryUsed} max={100} unit="%" lastUpdated={lastHealthCheck} />
@@ -1777,7 +1757,7 @@ export default function AdminTab() {
       </div>
 
       {/* ================================================================== */}
-      {/* Activity Feed (Enhanced)                                            */}
+      {/* Activity Feed                                             */}
       {/* ================================================================== */}
       <Card className="backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader className="pb-2">
@@ -1791,12 +1771,12 @@ export default function AdminTab() {
       </Card>
 
       {/* ================================================================== */}
-      {/* Audit Log Section (Enhanced)                                        */}
+      {/* Audit Log Section                                         */}
       {/* ================================================================== */}
       <AuditLogSection storeId={currentStoreId} />
 
       {/* ================================================================== */}
-      {/* System Configuration Editor (Enhanced)                              */}
+      {/* System Configuration Editor                               */}
       {/* ================================================================== */}
       <ConfigEditor storeId={currentStoreId} />
 

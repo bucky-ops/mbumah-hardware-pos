@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Authentication: Login
+ * MBUMAH HARDWARE - Authentication: Login
  * POST /api/auth/login - Authenticate user and create session
  */
 

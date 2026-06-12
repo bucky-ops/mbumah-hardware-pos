@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Customers API
+ * MBUMAH HARDWARE - Customers API
  * GET /api/customers - List/search customers
  * POST /api/customers - Create a new customer
  */

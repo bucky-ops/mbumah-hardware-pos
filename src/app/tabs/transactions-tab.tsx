@@ -1,8 +1,7 @@
 'use client';
 
 /**
- * MBUMAH HARDWARE POS - Transactions History Tab
- * View past transactions with summary cards, filters, search, receipt modal, refund/void actions
+ * MBUMAH HARDWARE - Transactions
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
@@ -30,9 +29,6 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 
-// ============================================================================
-// DATE HELPERS
-// ============================================================================
 
 function startOfDay(date: Date): Date {
   const d = new Date(date);
@@ -65,9 +61,6 @@ function toISOString(d: Date): string {
   return d.toISOString();
 }
 
-// ============================================================================
-// DATE RANGE PRESET
-// ============================================================================
 
 type DatePreset = 'today' | 'week' | 'month' | 'custom';
 
@@ -92,9 +85,6 @@ function getDateRange(preset: DatePreset): { from: Date; to: Date } {
   }
 }
 
-// ============================================================================
-// TRANSACTION TYPE HELPERS
-// ============================================================================
 
 type TransactionType = 'sale' | 'refund' | 'void';
 
@@ -128,9 +118,6 @@ function getTransactionTypeLabel(type: TransactionType): string {
   }
 }
 
-// ============================================================================
-// PAYMENT METHOD HELPERS
-// ============================================================================
 
 function getPaymentMethodColor(method: string): string {
   switch (method) {
@@ -174,9 +161,6 @@ function getPaymentStatusColor(status: string): string {
   }
 }
 
-// ============================================================================
-// CSV EXPORT
-// ============================================================================
 
 function exportTransactionsCSV(transactions: TransactionItem[]): void {
   if (transactions.length === 0) return;
@@ -208,9 +192,7 @@ function exportTransactionsCSV(transactions: TransactionItem[]): void {
   URL.revokeObjectURL(url);
 }
 
-// ============================================================================
 // MINI TREND CHART (SVG-based)
-// ============================================================================
 
 function MiniTrendChart({ data, height = 40 }: { data: { label: string; value: number }[]; height?: number }) {
   if (data.length === 0) return null;
@@ -253,9 +235,6 @@ function MiniTrendChart({ data, height = 40 }: { data: { label: string; value: n
   );
 }
 
-// ============================================================================
-// RECEIPT MODAL COMPONENT
-// ============================================================================
 
 function ReceiptModal({
   open,
@@ -368,9 +347,6 @@ function ReceiptModal({
   );
 }
 
-// ============================================================================
-// CONFIRM ACTION DIALOG
-// ============================================================================
 
 function ConfirmActionDialog({
   open,
@@ -411,9 +387,7 @@ function ConfirmActionDialog({
   );
 }
 
-// ============================================================================
 // TRANSACTION ROW (expandable with actions)
-// ============================================================================
 
 function TransactionRow({
   transaction,
@@ -548,9 +522,6 @@ function TransactionRow({
   );
 }
 
-// ============================================================================
-// TRANSACTIONS TAB
-// ============================================================================
 
 export default function TransactionsTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
@@ -627,7 +598,7 @@ export default function TransactionsTab() {
     return result;
   }, [transactions, searchQuery, typeFilter, amountFilterMin, amountFilterMax]);
 
-  // Enhanced Summary stats
+  // Summary stats
   const summaryStats = useMemo(() => {
     const totalSales = filteredTransactions
       .filter(t => getTransactionType(t) === 'sale')
@@ -673,7 +644,7 @@ export default function TransactionsTab() {
 
   return (
     <div className="space-y-6">
-      {/* Enhanced Summary Cards - Glass-morphism */}
+      {/* Summary Cards - Glass-morphism */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Card className="border-l-4 border-l-green-500 backdrop-blur-sm bg-card/80">
           <CardContent className="p-3 flex items-center gap-3">

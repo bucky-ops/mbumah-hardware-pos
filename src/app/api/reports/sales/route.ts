@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Sales Report API
+ * MBUMAH HARDWARE - Sales Report API
  * GET /api/reports/sales - Sales report with date filtering and aggregation
  */
 

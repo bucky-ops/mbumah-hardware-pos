@@ -1,11 +1,6 @@
 /**
- * MBUMAH HARDWARE POS - TypeScript Type Definitions
- * Complete type system for the enterprise POS & ERP application
+ * MBUMAH HARDWARE - Type Definitions
  */
-
-// ============================================================================
-// ENUMS & CONSTANTS
-// ============================================================================
 
 export const UserRole = {
   SUPER_ADMIN: 'SUPER_ADMIN',
@@ -138,9 +133,6 @@ export const LogComponent = {
 
 export type LogComponent = (typeof LogComponent)[keyof typeof LogComponent];
 
-// ============================================================================
-// DTOs & INTERFACES
-// ============================================================================
 
 export interface AuthUser {
   id: string;
@@ -353,11 +345,6 @@ export function hasPermission(role: UserRole, resource: string, action: string):
   if (!resourcePermissions) return false;
   return resourcePermissions.includes(action);
 }
-
-
-// ============================================================================
-// SHIFT MANAGEMENT
-// ============================================================================
 
 export const ShiftStatus = {
   ACTIVE: 'ACTIVE',

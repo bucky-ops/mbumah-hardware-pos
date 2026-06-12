@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Revenue Trend API
+ * MBUMAH HARDWARE - Revenue Trend API
  * GET /api/financial/revenue-trend - Returns daily revenue for the past N days
  *
  * Queries SalesTransaction table grouped by date.

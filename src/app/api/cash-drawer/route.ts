@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Cash Drawer API
+ * MBUMAH HARDWARE - Cash Drawer API
  * GET /api/cash-drawer - List cash drawer events with filters
  * POST /api/cash-drawer - Record a cash drawer event (OPEN, CLOSE, CASH_IN, CASH_OUT)
  *

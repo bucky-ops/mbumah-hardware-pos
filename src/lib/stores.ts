@@ -1,15 +1,10 @@
 /**
- * MBUMAH HARDWARE POS & ERP - Zustand Stores
- * State management for auth, cart, and app-level state
+ * MBUMAH HARDWARE - State Stores
  */
 
 import { create } from 'zustand';
 import type { AuthUser, CartItem, UnitType } from './types';
 import { authApi } from './api';
-
-// ============================================================================
-// AUTH STORE
-// ============================================================================
 
 interface AuthState {
   user: AuthUser | null;
@@ -81,10 +76,6 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   setUser: (user) => set({ user, isAuthenticated: !!user }),
 }));
-
-// ============================================================================
-// CART STORE
-// ============================================================================
 
 interface CartState {
   items: CartItem[];
@@ -178,10 +169,6 @@ export const useCartStore = create<CartState>((set, get) => ({
     return get().items.reduce((sum, item) => sum + item.quantity, 0);
   },
 }));
-
-// ============================================================================
-// APP STORE
-// ============================================================================
 
 export type AppTab = 'dashboard' | 'pos' | 'catalog' | 'inventory' | 'customers' | 'rentals' | 'financial' | 'reports' | 'transactions' | 'suppliers' | 'admin';
 

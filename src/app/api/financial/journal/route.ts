@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Journal Entries API
+ * MBUMAH HARDWARE - Journal Entries API
  * GET /api/financial/journal - List journal entries with filtering
  * POST /api/financial/journal - Create a manual journal entry
  */

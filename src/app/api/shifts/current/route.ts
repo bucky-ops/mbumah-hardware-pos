@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Current Shift API
+ * MBUMAH HARDWARE - Current Shift API
  * GET /api/shifts/current - Get the current active shift for a user
  */
 

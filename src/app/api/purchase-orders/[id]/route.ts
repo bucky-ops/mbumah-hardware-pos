@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Purchase Order Detail API
+ * MBUMAH HARDWARE - Purchase Order Detail API
  * GET /api/purchase-orders/[id] - Get PO with items and supplier info
  * PUT /api/purchase-orders/[id] - Update PO status, receive items (update stock)
  */

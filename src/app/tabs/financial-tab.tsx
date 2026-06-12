@@ -45,9 +45,7 @@ import {
   type ChartConfig,
 } from '@/components/ui/chart';
 
-// ============================================================================
 // Date Range Preset Helper
-// ============================================================================
 
 function getDatePreset(preset: string): { from: string; to: string } {
   const now = new Date();
@@ -87,9 +85,7 @@ function formatRangeLabel(from: string, to: string): string {
   return `${f.toLocaleDateString('en-US', opts)} – ${t.toLocaleDateString('en-US', opts)}`;
 }
 
-// ============================================================================
 // Animated Counter
-// ============================================================================
 
 function AnimatedCounter({ value, prefix = '', suffix = '' }: { value: number; prefix?: string; suffix?: string }) {
   const [display, setDisplay] = useState(0);
@@ -120,9 +116,7 @@ function AnimatedCounter({ value, prefix = '', suffix = '' }: { value: number; p
   return <>{prefix}{display.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}{suffix}</>;
 }
 
-// ============================================================================
 // Chart Configs
-// ============================================================================
 
 const revenueChartConfig: ChartConfig = {
   revenue: { label: 'Revenue', color: '#10b981' },
@@ -153,9 +147,7 @@ const debtAgingChartConfig: ChartConfig = {
   days90Plus: { label: '90+ Days', color: '#ef4444' },
 };
 
-// ============================================================================
 // CSS Bar Chart (kept for backward compat)
-// ============================================================================
 
 function CssBarChart({ data, maxVal, labelFormatter, gradientFrom, gradientTo }: {
   data: { label: string; value: number }[];
@@ -239,9 +231,7 @@ function ContributionGrid({ data }: { data: { date: string; amount: number }[] }
   );
 }
 
-// ============================================================================
-// Account Type Color Map (Enhanced: ASSET=green, LIABILITY=red/orange, EQUITY=purple, REVENUE=blue, EXPENSE=amber)
-// ============================================================================
+// Account Type Color Map
 
 const accountTypeColors: Record<string, { bg: string; text: string; dot: string; border: string; icon: string; gradient: string; headerBg: string }> = {
   ASSET: {
@@ -299,9 +289,7 @@ const accountTypeLabels: Record<string, string> = {
   EXPENSE: 'Expenses',
 };
 
-// ============================================================================
 // Export Utilities
-// ============================================================================
 
 function exportToCSV(data: Record<string, unknown>[], filename: string) {
   if (data.length === 0) {
@@ -332,9 +320,7 @@ function printReport() {
   window.print();
 }
 
-// ============================================================================
 // Record Payment Dialog
-// ============================================================================
 
 function RecordPaymentDialog({ debt, open, onOpenChange }: {
   debt: { id: string; customer?: { name: string }; balance: number; amountOwed: number; amountPaid: number };
@@ -427,9 +413,7 @@ function RecordPaymentDialog({ debt, open, onOpenChange }: {
   );
 }
 
-// ============================================================================
 // Main Component
-// ============================================================================
 
 export default function FinancialTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
@@ -1005,7 +989,7 @@ export default function FinancialTab() {
       </div>
 
       {/* ================================================================== */}
-      {/* Profit & Loss Statement (Enhanced)                                  */}
+      {/* Profit & Loss Statement                                   */}
       {/* ================================================================== */}
       <Card className="backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader className="pb-2">
@@ -1454,7 +1438,7 @@ export default function FinancialTab() {
       </Card>
 
       {/* ================================================================== */}
-      {/* Debt Aging Analysis (Enhanced with Donut Chart + Actions)          */}
+      {/* Debt Aging Analysis (Donut Chart + Actions)          */}
       {/* ================================================================== */}
       <Card className="backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader className="pb-2">
@@ -1649,7 +1633,7 @@ export default function FinancialTab() {
       )}
 
       {/* ================================================================== */}
-      {/* Chart of Accounts (Enhanced with Balances + Trial Balance)         */}
+      {/* Chart of Accounts (Balances + Trial Balance)         */}
       {/* ================================================================== */}
       <Card className="backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader className="pb-2">

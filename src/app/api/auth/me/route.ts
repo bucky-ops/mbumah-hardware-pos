@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Authentication: Get Current User
+ * MBUMAH HARDWARE - Authentication: Get Current User
  * GET /api/auth/me - Get current user session info
  */
 

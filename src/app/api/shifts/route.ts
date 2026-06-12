@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Shifts API
+ * MBUMAH HARDWARE - Shifts API
  * GET /api/shifts - List shifts with filtering
  * POST /api/shifts - Start a new shift (clock in)
  */

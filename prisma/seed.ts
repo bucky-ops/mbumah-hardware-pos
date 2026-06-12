@@ -47,7 +47,7 @@ async function main() {
     },
   });
 
-  // 2. Create Store
+  // 2. Create Stores
   const store = await prisma.store.create({
     data: {
       id: 'store_juja_main',
@@ -57,6 +57,62 @@ async function main() {
       address: 'P.O. Box 9101-00300, Nairobi',
       phone: '0795191909',
       email: 'info@mbumahhardware.co.ke',
+      taxPin: 'P051234567A',
+      status: 'ACTIVE',
+    },
+  });
+
+  const storeThika = await prisma.store.create({
+    data: {
+      id: 'store_thika',
+      organizationId: org.id,
+      name: 'MBUMAH HARDWARE - Thika',
+      location: 'Thika Town Center, Kiambu County',
+      address: 'P.O. Box 9101-00300, Nairobi',
+      phone: '0795191909',
+      email: 'thika@mbumahhardware.co.ke',
+      taxPin: 'P051234567A',
+      status: 'ACTIVE',
+    },
+  });
+
+  const storeRuiru = await prisma.store.create({
+    data: {
+      id: 'store_ruiru',
+      organizationId: org.id,
+      name: 'MBUMAH HARDWARE - Ruiru',
+      location: 'Ruiru Town, Kiambu County',
+      address: 'P.O. Box 9101-00300, Nairobi',
+      phone: '0795191909',
+      email: 'ruiru@mbumahhardware.co.ke',
+      taxPin: 'P051234567A',
+      status: 'ACTIVE',
+    },
+  });
+
+  const storeNairobiCbd = await prisma.store.create({
+    data: {
+      id: 'store_nairobi_cbd',
+      organizationId: org.id,
+      name: 'MBUMAH HARDWARE - Nairobi CBD',
+      location: 'Kenyatta Avenue, Nairobi',
+      address: 'P.O. Box 9101-00300, Nairobi',
+      phone: '0795191909',
+      email: 'nairobi@mbumahhardware.co.ke',
+      taxPin: 'P051234567A',
+      status: 'ACTIVE',
+    },
+  });
+
+  const storeNakuru = await prisma.store.create({
+    data: {
+      id: 'store_nakuru',
+      organizationId: org.id,
+      name: 'MBUMAH HARDWARE - Nakuru',
+      location: 'Nakuru Town, Nakuru County',
+      address: 'P.O. Box 9101-00300, Nairobi',
+      phone: '0795191909',
+      email: 'nakuru@mbumahhardware.co.ke',
       taxPin: 'P051234567A',
       status: 'ACTIVE',
     },
@@ -107,6 +163,63 @@ async function main() {
     },
   });
 
+  // 4b. Seed Branch Managers
+  const thikaManager = await prisma.user.create({
+    data: {
+      id: 'user_thika_manager',
+      organizationId: org.id,
+      storeId: storeThika.id,
+      email: 'thika.manager@mbumahhardware.co.ke',
+      name: 'David Njoroge',
+      passwordHash: 'hashed_password123_2024',
+      role: 'BRANCH_MANAGER',
+      phone: '0795191909',
+      isActive: true,
+    },
+  });
+
+  const ruiruManager = await prisma.user.create({
+    data: {
+      id: 'user_ruiru_manager',
+      organizationId: org.id,
+      storeId: storeRuiru.id,
+      email: 'ruiru.manager@mbumahhardware.co.ke',
+      name: 'Samuel Kibet',
+      passwordHash: 'hashed_password123_2024',
+      role: 'BRANCH_MANAGER',
+      phone: '0795191909',
+      isActive: true,
+    },
+  });
+
+  const nairobiManager = await prisma.user.create({
+    data: {
+      id: 'user_nairobi_manager',
+      organizationId: org.id,
+      storeId: storeNairobiCbd.id,
+      email: 'nairobi.manager@mbumahhardware.co.ke',
+      name: 'Mary Akinyi',
+      passwordHash: 'hashed_password123_2024',
+      role: 'BRANCH_MANAGER',
+      phone: '0795191909',
+      isActive: true,
+    },
+  });
+
+  const nakuruManager = await prisma.user.create({
+    data: {
+      id: 'user_nakuru_manager',
+      organizationId: org.id,
+      storeId: storeNakuru.id,
+      email: 'nakuru.manager@mbumahhardware.co.ke',
+      name: 'Peter Ruto',
+      passwordHash: 'hashed_password123_2024',
+      role: 'BRANCH_MANAGER',
+      phone: '0795191909',
+      isActive: true,
+    },
+  });
+
   // 5. Seed RBAC Permissions
   const permissions = [
     // SUPER_ADMIN has all
@@ -122,6 +235,26 @@ async function main() {
     { role: 'CASHIER', resource: 'transactions', action: 'create' },
     { role: 'CASHIER', resource: 'transactions', action: 'read' },
     { role: 'CASHIER', resource: 'customers', action: 'read' },
+    // BRANCH_MANAGER permissions
+    { role: 'BRANCH_MANAGER', resource: 'products', action: 'create' },
+    { role: 'BRANCH_MANAGER', resource: 'products', action: 'read' },
+    { role: 'BRANCH_MANAGER', resource: 'products', action: 'update' },
+    { role: 'BRANCH_MANAGER', resource: 'transactions', action: 'create' },
+    { role: 'BRANCH_MANAGER', resource: 'transactions', action: 'read' },
+    { role: 'BRANCH_MANAGER', resource: 'transactions', action: 'refund' },
+    { role: 'BRANCH_MANAGER', resource: 'customers', action: 'create' },
+    { role: 'BRANCH_MANAGER', resource: 'customers', action: 'read' },
+    { role: 'BRANCH_MANAGER', resource: 'customers', action: 'update' },
+    { role: 'BRANCH_MANAGER', resource: 'financials', action: 'read' },
+    { role: 'BRANCH_MANAGER', resource: 'financials', action: 'export' },
+    { role: 'BRANCH_MANAGER', resource: 'rentals', action: 'create' },
+    { role: 'BRANCH_MANAGER', resource: 'rentals', action: 'read' },
+    { role: 'BRANCH_MANAGER', resource: 'rentals', action: 'update' },
+    { role: 'BRANCH_MANAGER', resource: 'admin', action: 'read' },
+    { role: 'BRANCH_MANAGER', resource: 'reports', action: 'read' },
+    { role: 'BRANCH_MANAGER', resource: 'reports', action: 'export' },
+    { role: 'BRANCH_MANAGER', resource: 'debt', action: 'read' },
+    { role: 'BRANCH_MANAGER', resource: 'debt', action: 'remind' },
     // ACCOUNTANT permissions
     { role: 'ACCOUNTANT', resource: 'financials', action: 'read' },
     { role: 'ACCOUNTANT', resource: 'financials', action: 'export' },
@@ -240,6 +373,60 @@ async function main() {
 
   for (const cust of customers) {
     await prisma.customer.create({ data: cust });
+  }
+
+  // 9b. Seed Branch-Specific Product Categories, Products, and Customers
+  console.log('📋 Seeding branch-specific data...');
+
+  // Helper: create categories for a branch (reuse same structure with branch-prefixed IDs)
+  const branchStores = [
+    { store: storeThika, prefix: 'thk' },
+    { store: storeRuiru, prefix: 'ruiru' },
+    { store: storeNairobiCbd, prefix: 'nbi' },
+    { store: storeNakuru, prefix: 'nkr' },
+  ];
+
+  for (const branch of branchStores) {
+    // Create categories for this branch
+    const branchCats = [
+      { id: `cat_${branch.prefix}_cement`, storeId: branch.store.id, name: 'Cement', description: 'All types of cement', icon: 'building', color: '#8B7355', sortOrder: 1 },
+      { id: `cat_${branch.prefix}_iron_sheets`, storeId: branch.store.id, name: 'Iron Sheets', description: 'Roofing iron sheets', icon: 'layout-grid', color: '#4A5568', sortOrder: 2 },
+      { id: `cat_${branch.prefix}_paints`, storeId: branch.store.id, name: 'Paints', description: 'Interior and exterior paints', icon: 'palette', color: '#E53E3E', sortOrder: 3 },
+      { id: `cat_${branch.prefix}_iron_bars`, storeId: branch.store.id, name: 'Iron Bars', description: 'Reinforcement iron bars', icon: 'minus', color: '#718096', sortOrder: 4 },
+      { id: `cat_${branch.prefix}_tools`, storeId: branch.store.id, name: 'Tools', description: 'Construction tools and equipment', icon: 'wrench', color: '#2D3748', sortOrder: 5 },
+      { id: `cat_${branch.prefix}_plumbing`, storeId: branch.store.id, name: 'Plumbing', description: 'Pipes, fittings, and plumbing supplies', icon: 'droplets', color: '#3182CE', sortOrder: 6 },
+      { id: `cat_${branch.prefix}_nails_screws`, storeId: branch.store.id, name: 'Nails & Screws', description: 'Fasteners, nails, and screws', icon: 'pin', color: '#38A169', sortOrder: 7 },
+    ];
+    for (const cat of branchCats) {
+      await prisma.productCategory.create({ data: cat });
+    }
+
+    // Create products for this branch (subset of main store products with branch-specific IDs)
+    const branchProducts = [
+      { id: `prod_${branch.prefix}_cement_bamburi`, sku: `${branch.prefix.toUpperCase()}-CEM-0001`, name: 'Bamburi Cement 50kg', categoryId: `cat_${branch.prefix}_cement`, unitType: 'BAG', quantityInStock: Math.floor(Math.random() * 150) + 50, pricePerUnit: 750, costPrice: 680, reorderLevel: 50 },
+      { id: `prod_${branch.prefix}_cement_simba`, sku: `${branch.prefix.toUpperCase()}-CEM-0002`, name: 'Simba Cement 50kg', categoryId: `cat_${branch.prefix}_cement`, unitType: 'BAG', quantityInStock: Math.floor(Math.random() * 100) + 30, pricePerUnit: 720, costPrice: 650, reorderLevel: 50 },
+      { id: `prod_${branch.prefix}_mabati_30`, sku: `${branch.prefix.toUpperCase()}-IRS-0001`, name: 'Mabati 30-Gauge (8ft)', categoryId: `cat_${branch.prefix}_iron_sheets`, unitType: 'PIECE', quantityInStock: Math.floor(Math.random() * 300) + 100, pricePerUnit: 650, costPrice: 580, reorderLevel: 100 },
+      { id: `prod_${branch.prefix}_mabati_28`, sku: `${branch.prefix.toUpperCase()}-IRS-0002`, name: 'Mabati 28-Gauge (8ft)', categoryId: `cat_${branch.prefix}_iron_sheets`, unitType: 'PIECE', quantityInStock: Math.floor(Math.random() * 200) + 50, pricePerUnit: 800, costPrice: 720, reorderLevel: 80 },
+      { id: `prod_${branch.prefix}_dulux_20l`, sku: `${branch.prefix.toUpperCase()}-PNT-0001`, name: 'Dulux Weathershield 20L', categoryId: `cat_${branch.prefix}_paints`, unitType: 'PIECE', quantityInStock: Math.floor(Math.random() * 20) + 5, pricePerUnit: 8500, costPrice: 7200, reorderLevel: 10 },
+      { id: `prod_${branch.prefix}_rebar_12mm`, sku: `${branch.prefix.toUpperCase()}-IRB-0001`, name: 'Rebar 12mm x 12m', categoryId: `cat_${branch.prefix}_iron_bars`, unitType: 'PIECE', quantityInStock: Math.floor(Math.random() * 250) + 50, pricePerUnit: 1200, costPrice: 1050, reorderLevel: 100 },
+      { id: `prod_${branch.prefix}_rebar_10mm`, sku: `${branch.prefix.toUpperCase()}-IRB-0002`, name: 'Rebar 10mm x 12m', categoryId: `cat_${branch.prefix}_iron_bars`, unitType: 'PIECE', quantityInStock: Math.floor(Math.random() * 200) + 50, pricePerUnit: 900, costPrice: 780, reorderLevel: 100 },
+      { id: `prod_${branch.prefix}_spade`, sku: `${branch.prefix.toUpperCase()}-TL-0001`, name: 'Spade (Heavy Duty)', categoryId: `cat_${branch.prefix}_tools`, unitType: 'PIECE', quantityInStock: Math.floor(Math.random() * 30) + 10, pricePerUnit: 1200, costPrice: 900, reorderLevel: 15 },
+      { id: `prod_${branch.prefix}_pvc_4inch`, sku: `${branch.prefix.toUpperCase()}-PLM-0001`, name: 'PVC Pipe 4-inch x 3m', categoryId: `cat_${branch.prefix}_plumbing`, unitType: 'PIECE', quantityInStock: Math.floor(Math.random() * 80) + 20, pricePerUnit: 800, costPrice: 600, reorderLevel: 30 },
+      { id: `prod_${branch.prefix}_nails_4inch`, sku: `${branch.prefix.toUpperCase()}-NAS-0001`, name: '4-inch Nails', categoryId: `cat_${branch.prefix}_nails_screws`, unitType: 'KILOGRAM', quantityInStock: Math.floor(Math.random() * 300) + 100, pricePerUnit: 150, costPrice: 110, reorderLevel: 100 },
+    ];
+    for (const product of branchProducts) {
+      await prisma.product.create({ data: { ...product, storeId: branch.store.id } as any });
+    }
+
+    // Create customers for this branch
+    const branchCustomers = [
+      { id: `cust_${branch.prefix}_1`, storeId: branch.store.id, name: `Local Customer 1 (${branch.store.name.split(' - ')[1]})`, phone: '0711000001', email: `cust1@${branch.prefix}.co.ke`, idNumber: `${branch.prefix}10001`, debtLimit: 50000, currentDebtBalance: 0 },
+      { id: `cust_${branch.prefix}_2`, storeId: branch.store.id, name: `Local Contractor (${branch.store.name.split(' - ')[1]})`, phone: '0722000002', email: `cust2@${branch.prefix}.co.ke`, idNumber: `${branch.prefix}10002`, debtLimit: 200000, currentDebtBalance: Math.floor(Math.random() * 50000) + 10000 },
+      { id: `cust_${branch.prefix}_3`, storeId: branch.store.id, name: `Regional Builder (${branch.store.name.split(' - ')[1]})`, phone: '0733000003', email: `cust3@${branch.prefix}.co.ke`, idNumber: `${branch.prefix}10003`, debtLimit: 100000, currentDebtBalance: 0 },
+    ];
+    for (const cust of branchCustomers) {
+      await prisma.customer.create({ data: cust });
+    }
   }
 
   // 10. Seed Chart of Accounts
@@ -653,9 +840,10 @@ async function main() {
 
   console.log('✅ MBUMAH HARDWARE POS - System initialized successfully!');
   console.log('   📧 Super Admin: admin@mbumahhardware.co.ke');
-  console.log('   🏪 Store: MBUMAH HARDWARE - Juja Main');
-  console.log('   📦 Products seeded: ' + products.length + 1);
-  console.log('   👥 Customers seeded: ' + customers.length);
+  console.log('   🏪 Stores: 5 branches (Juja Main, Thika, Ruiru, Nairobi CBD, Nakuru)');
+  console.log('   👤 Branch Managers: 4 (Thika, Ruiru, Nairobi CBD, Nakuru)');
+  console.log('   📦 Products seeded: ' + (products.length + 1));
+  console.log('   👥 Customers seeded: ' + customers.length + ' + branch-specific');
   console.log('   📊 Accounts seeded: ' + accounts.length);
   console.log('   💰 Sales transactions seeded: ' + salesData.length);
   console.log('   📋 Stock movements seeded: ' + stockMovements.length);

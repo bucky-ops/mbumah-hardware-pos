@@ -1,5 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Inventory Status Report API
+ * MBUMAH HARDWARE - Inventory Status Report API
  * GET /api/reports/inventory - Inventory status report with valuation
  */
 

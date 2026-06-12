@@ -1,8 +1,7 @@
 'use client';
 
 /**
- * MBUMAH HARDWARE POS & ERP System - Main Application Page
- * Enhanced: Keyboard shortcuts, grid/list view, split payment, confetti, cart notes, notification dropdown, glass-morphism
+ * MBUMAH HARDWARE - Main Application
  */
 
 import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef, createContext, useContext, useSyncExternalStore } from 'react';
@@ -54,9 +53,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
 
-// ============================================================================
 // LAZY-LOADED TAB COMPONENTS
-// ============================================================================
 
 const LazyDashboardTab = lazy(() => import('./tabs/dashboard-tab'));
 const LazyInventoryTab = lazy(() => import('./tabs/inventory-tab'));
@@ -81,9 +78,6 @@ function TabLoadingFallback() {
   );
 }
 
-// ============================================================================
-// CONSTANTS
-// ============================================================================
 
 const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: Home },
@@ -101,8 +95,18 @@ const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
 
 const DEMO_ACCOUNTS = [
   { email: 'admin@mbumahhardware.co.ke', password: 'password123', role: 'Super Admin', icon: ShieldCheck, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900 hover:bg-red-100 dark:hover:bg-red-950/50' },
+  { email: 'thika.manager@mbumahhardware.co.ke', password: 'password123', role: 'Branch Mgr (Thika)', icon: Store, color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900 hover:bg-purple-100 dark:hover:bg-purple-950/50' },
   { email: 'cashier@mbumahhardware.co.ke', password: 'password123', role: 'Cashier', icon: ShoppingCart, color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900 hover:bg-green-100 dark:hover:bg-green-950/50' },
   { email: 'accountant@mbumahhardware.co.ke', password: 'password123', role: 'Accountant', icon: BarChart3, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900 hover:bg-amber-100 dark:hover:bg-amber-950/50' },
+];
+
+// Store list for branch selector
+const STORE_LIST = [
+  { id: 'store_juja_main', shortName: 'Juja Main', location: 'Salama M-Store, Juja', phone: '0795191909' },
+  { id: 'store_thika', shortName: 'Thika', location: 'Thika Town Center, Kiambu County', phone: '0795191909' },
+  { id: 'store_ruiru', shortName: 'Ruiru', location: 'Ruiru Town, Kiambu County', phone: '0795191909' },
+  { id: 'store_nairobi_cbd', shortName: 'Nairobi CBD', location: 'Kenyatta Avenue, Nairobi', phone: '0795191909' },
+  { id: 'store_nakuru', shortName: 'Nakuru', location: 'Nakuru Town, Nakuru County', phone: '0795191909' },
 ];
 
 // Category image mapping
@@ -124,9 +128,6 @@ function getCategoryImage(categoryId: string | null | undefined): string | null 
   return CATEGORY_IMAGES[categoryId] || null;
 }
 
-// ============================================================================
-// LIVE CLOCK HOOK
-// ============================================================================
 
 function useLiveClock() {
   const [now, setNow] = useState(new Date());
@@ -139,9 +140,6 @@ function useLiveClock() {
   return now;
 }
 
-// ============================================================================
-// KEYBOARD SHORTCUTS CONTEXT
-// ============================================================================
 
 interface ShortcutCallbacks {
   onSearch?: () => void;
@@ -154,9 +152,6 @@ interface ShortcutCallbacks {
 
 const ShortcutCallbacksContext = createContext<ShortcutCallbacks>({});
 
-// ============================================================================
-// CONFETTI COMPONENT
-// ============================================================================
 
 function ConfettiOverlay({ active }: { active: boolean }) {
   const [particles, setParticles] = useState<Array<{ id: number; x: number; color: string; delay: number; duration: number; size: number }>>([]);
@@ -204,9 +199,6 @@ function ConfettiOverlay({ active }: { active: boolean }) {
   );
 }
 
-// ============================================================================
-// KEYBOARD SHORTCUTS HELP DIALOG
-// ============================================================================
 
 function KeyboardShortcutsHelp({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const shortcuts = [
@@ -255,9 +247,6 @@ function KeyboardShortcutsHelp({ open, onOpenChange }: { open: boolean; onOpenCh
   );
 }
 
-// ============================================================================
-// QUICK ADD POPUP
-// ============================================================================
 
 function QuickAddPopup({
   product,
@@ -309,9 +298,6 @@ function QuickAddPopup({
   );
 }
 
-// ============================================================================
-// LOGIN SCREEN
-// ============================================================================
 
 function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -427,7 +413,7 @@ function LoginScreen() {
             <div className="mt-6">
               <Separator className="mb-4" />
               <p className="text-xs text-muted-foreground text-center mb-3">Quick Demo Access</p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {DEMO_ACCOUNTS.map((acct) => {
                   const Icon = acct.icon;
                   return (
@@ -465,9 +451,6 @@ function LoginScreen() {
   );
 }
 
-// ============================================================================
-// NOTIFICATION CENTER
-// ============================================================================
 
 // Hook to provide notification count globally
 function useNotificationCount(storeId: string) {
@@ -746,9 +729,6 @@ function NotificationCenter({
   );
 }
 
-// ============================================================================
-// LOW STOCK ALERT DIALOG
-// ============================================================================
 
 function LowStockAlertDialog({
   open,
@@ -917,12 +897,9 @@ function LowStockAlertDialog({
   );
 }
 
-// ============================================================================
-// SIDEBAR
-// ============================================================================
 
 function AppSidebar() {
-  const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen, currentStoreId } = useAppStore();
+  const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen, currentStoreId, setCurrentStoreId } = useAppStore();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { theme, setTheme } = useTheme();
@@ -1018,11 +995,33 @@ function AppSidebar() {
 
           {/* Store Selector */}
           <div className="px-3 pt-3 pb-1">
-            <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-sidebar-border bg-sidebar-accent/50 text-xs text-sidebar-foreground/80 hover:bg-sidebar-accent transition-colors">
-              <Store className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate font-medium">Juja Main Branch</span>
-              <ChevronDown className="h-3 w-3 ml-auto shrink-0" />
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-sidebar-border bg-sidebar-accent/50 text-xs text-sidebar-foreground/80 hover:bg-sidebar-accent transition-colors">
+                  <Store className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate font-medium">{STORE_LIST.find(s => s.id === currentStoreId)?.shortName || 'Select Branch'}</span>
+                  <ChevronDown className="h-3 w-3 ml-auto shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="right" align="start" className="w-64">
+                <DropdownMenuLabel className="text-xs text-muted-foreground">Switch Branch</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {STORE_LIST.map((s) => (
+                  <DropdownMenuItem
+                    key={s.id}
+                    onClick={() => setCurrentStoreId(s.id)}
+                    className={currentStoreId === s.id ? 'bg-primary/10 text-primary font-medium' : ''}
+                  >
+                    <Store className="h-3.5 w-3.5 mr-2 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate">{s.shortName}</div>
+                      <div className="text-[10px] text-muted-foreground truncate">{s.location}</div>
+                    </div>
+                    {currentStoreId === s.id && <CheckCircle className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           {/* Navigation */}
@@ -1102,9 +1101,7 @@ function AppSidebar() {
   );
 }
 
-// ============================================================================
 // TOP BAR (with live Date/Time)
-// ============================================================================
 
 function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonElement | null> }) {
   const { activeTab, toggleSidebar, setActiveTab } = useAppStore();
@@ -1334,9 +1331,6 @@ function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonEle
   );
 }
 
-// ============================================================================
-// DASHBOARD STATS ROW
-// ============================================================================
 
 // Animated counter hook
 function useAnimatedCounter(target: number, duration = 800) {
@@ -1536,9 +1530,6 @@ function DashboardStats({ storeId, onLowStockClick }: { storeId: string; onLowSt
   );
 }
 
-// ============================================================================
-// CATEGORY FILTER CHIPS
-// ============================================================================
 
 function CategoryChips({
   categories,
@@ -1638,9 +1629,6 @@ function CategoryChips({
   );
 }
 
-// ============================================================================
-// PRODUCT CARD
-// ============================================================================
 
 function ProductCard({
   product,
@@ -1763,7 +1751,7 @@ function ProductCard({
             {product.unitType}
           </span>
         </div>
-        {/* Enhanced stock progress bar */}
+        {/* stock progress bar */}
         <div className="flex items-center gap-1.5 mt-auto pt-1.5">
           <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
             <div
@@ -1782,9 +1770,7 @@ function ProductCard({
   );
 }
 
-// ============================================================================
 // CART ITEM ROW (enhanced)
-// ============================================================================
 
 function CartItemRow({
   item,
@@ -1885,14 +1871,11 @@ function CartItemRow({
   );
 }
 
-// ============================================================================
-// EMPTY STATE COMPONENTS
-// ============================================================================
 
 function EmptyCartState() {
   return (
     <div className="p-8 text-center">
-      {/* Enhanced empty cart illustration */}
+      {/* empty cart illustration */}
       <div className="relative mx-auto w-32 h-32 mb-5">
         {/* Cart body */}
         <div className="absolute bottom-6 left-4 right-4 h-16 border-2 border-muted-foreground/12 rounded-b-xl bg-muted/15 backdrop-blur-sm">
@@ -1951,9 +1934,7 @@ function EmptyProductsState({ searchQuery }: { searchQuery: string }) {
   );
 }
 
-// ============================================================================
 // POS TAB (kept inline - core feature)
-// ============================================================================
 
 function POSTab() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -1972,18 +1953,18 @@ function POSTab() {
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const currentStoreId = useAppStore((s) => s.currentStoreId);
 
-  // Enhanced: View mode & sorting
+  // View mode & sorting
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortField, setSortField] = useState<'name' | 'price' | 'stock' | 'category'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
-  // Enhanced: Cart item notes
+  // Cart item notes
   const [cartNotes, setCartNotes] = useState<Record<string, string>>({});
 
-  // Enhanced: Confetti trigger
+  // Confetti trigger
   const [confettiActive, setConfettiActive] = useState(false);
 
-  // Enhanced: Split payment
+  // Split payment
   const [splitCashAmount, setSplitCashAmount] = useState('');
   const [splitMpesaAmount, setSplitMpesaAmount] = useState('');
 
@@ -2750,7 +2731,7 @@ function POSTab() {
               {/* Store Header */}
               <div className="text-center space-y-0.5">
                 <h2 className="text-lg font-bold">MBUMAH HARDWARE</h2>
-                <p className="text-xs text-muted-foreground">Juja Main Branch</p>
+                <p className="text-xs text-muted-foreground">{STORE_LIST.find(s => s.id === currentStoreId)?.shortName || 'Juja Main Branch'}</p>
                 <p className="text-xs text-muted-foreground">Tel: +254 700 123 456</p>
               </div>
               <Separator />
@@ -3293,9 +3274,6 @@ function POSTab() {
   );
 }
 
-// ============================================================================
-// MAIN APP
-// ============================================================================
 
 function MainApp() {
   const { activeTab, setActiveTab } = useAppStore();
@@ -3401,9 +3379,6 @@ function MainApp() {
   );
 }
 
-// ============================================================================
-// PAGE EXPORT
-// ============================================================================
 
 // Hydration-safe client-only mount detection
 const emptySubscribe = () => () => {};

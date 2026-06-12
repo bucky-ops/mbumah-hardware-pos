@@ -1,6 +1,5 @@
 /**
- * MBUMAH HARDWARE POS - Account Lookup Helper
- * Resolves account codes to database IDs for journal entries
+ * MBUMAH HARDWARE - Account Lookup
  */
 
 import { db } from '@/lib/db';

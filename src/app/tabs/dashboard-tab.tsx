@@ -1,8 +1,7 @@
 'use client';
 
 /**
- * MBUMAH HARDWARE POS & ERP - Dashboard Overview Tab
- * Comprehensive dashboard with KPIs, charts, quick actions, activity feed, alerts, and top products
+ * MBUMAH HARDWARE - Dashboard
  */
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -46,9 +45,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 
-// ============================================================================
 // CONSTANTS & HELPERS
-// ============================================================================
 
 const CHART_COLORS = [
   'hsl(var(--chart-1))',
@@ -182,9 +179,6 @@ function ChartTooltipContent({ active, payload, label, valuePrefix = '' }: {
   );
 }
 
-// ============================================================================
-// KPI CARD SECTION
-// ============================================================================
 
 function KpiCards({ storeId, onLowStockClick }: { storeId: string; onLowStockClick: () => void }) {
   const { data, isLoading } = useQuery({
@@ -344,9 +338,7 @@ function KpiCards({ storeId, onLowStockClick }: { storeId: string; onLowStockCli
   );
 }
 
-// ============================================================================
 // SALES OVERVIEW SECTION (Charts)
-// ============================================================================
 
 function SalesOverview({ storeId }: { storeId: string }) {
   const { data: revenueData, isLoading: revenueLoading } = useQuery({
@@ -609,9 +601,6 @@ function SalesOverview({ storeId }: { storeId: string }) {
   );
 }
 
-// ============================================================================
-// QUICK ACTIONS BAR
-// ============================================================================
 
 function QuickActions({ onTabSwitch }: { onTabSwitch: (tab: AppTab) => void }) {
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
@@ -889,9 +878,6 @@ function QuickActions({ onTabSwitch }: { onTabSwitch: (tab: AppTab) => void }) {
   );
 }
 
-// ============================================================================
-// RECENT ACTIVITY FEED
-// ============================================================================
 
 function RecentActivity({ storeId }: { storeId: string }) {
   const { data: dashboardData, isLoading: dashLoading } = useQuery({
@@ -1058,9 +1044,7 @@ function RecentActivity({ storeId }: { storeId: string }) {
   );
 }
 
-// ============================================================================
 // ALERTS & NOTIFICATIONS PANEL
-// ============================================================================
 
 function AlertsPanel({ storeId, onTabSwitch }: { storeId: string; onTabSwitch: (tab: AppTab) => void }) {
   const { data: notifications, isLoading: notifLoading } = useQuery({
@@ -1304,9 +1288,6 @@ function AlertsPanel({ storeId, onTabSwitch }: { storeId: string; onTabSwitch: (
   );
 }
 
-// ============================================================================
-// TOP PRODUCTS TABLE
-// ============================================================================
 
 function TopProductsTable({ storeId }: { storeId: string }) {
   const { data, isLoading } = useQuery({
@@ -1429,9 +1410,7 @@ function TopProductsTable({ storeId }: { storeId: string }) {
   );
 }
 
-// ============================================================================
 // DEBT AGING SECTION (embedded in dashboard)
-// ============================================================================
 
 function DebtAgingCard({ storeId }: { storeId: string }) {
   const { data: debtData, isLoading } = useQuery({
@@ -1515,9 +1494,6 @@ function DebtAgingCard({ storeId }: { storeId: string }) {
   );
 }
 
-// ============================================================================
-// SHIFT STATUS CARD
-// ============================================================================
 
 function useShiftDuration(startedAt: string | null) {
   const [duration, setDuration] = useState(() => !startedAt ? '0h 0m 0s' : '');
@@ -1899,9 +1875,6 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
   );
 }
 
-// ============================================================================
-// MAIN DASHBOARD TAB
-// ============================================================================
 
 export default function DashboardTab() {
   const { currentStoreId, setActiveTab } = useAppStore();
