@@ -205,10 +205,32 @@ async function getSalesReportHandler(...args: unknown[]): Promise<Response> {
   const totalRevenue = summary._sum.totalAmount || 0;
   const totalCost = Object.values(productSales).reduce((sum, p) => sum + p.cost, 0);
 
+  // Payment method grouping
+  const paymentMethodMap: Record<string, { method: string; count: number; amount: number }> = {};
+  for (const tx of transactions) {
+    const method = tx.paymentMethod || 'CASH';
+    if (!paymentMethodMap[method]) {
+      paymentMethodMap[method] = { method, count: 0, amount: 0 };
+    }
+    paymentMethodMap[method].count += 1;
+    paymentMethodMap[method].amount += tx.totalAmount;
+  }
+  const byPaymentMethod = Object.values(paymentMethodMap);
+
   return Response.json({
     success: true,
     data: {
-      period: { from: dateFrom, to: dateTo },
+      // Flat fields for frontend compatibility
+      period: `${dateFrom} to ${dateTo}`,
+      totalSales: totalRevenue,
+      totalRevenue,
+      totalTax: summary._sum.taxAmount || 0,
+      totalDiscount: summary._sum.discountAmount || 0,
+      transactionCount: summary._count,
+      avgTransactionValue: summary._avg.totalAmount || 0,
+      byPaymentMethod,
+
+      // Nested summary for detailed views
       summary: {
         totalTransactions: summary._count,
         totalRevenue,

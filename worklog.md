@@ -1065,3 +1065,60 @@ Priority Recommendations for Next Phase:
 5. Add barcode scanning support for POS
 6. Add thermal printer receipt printing
 7. Performance optimization for large datasets
+
+---
+Task ID: 8
+Agent: Bug Fix Sub-Agent
+Task: Fix bugs in page.tsx
+
+Work Log:
+- Bug 1: Fixed HTML nesting error — changed `<p>` tags containing `<Separator>` (which renders as `<div>`) to `<div>` tags in two locations:
+  - Line 1029: "Main" section header `<p>` → `<div>`
+  - Line 1036: "Management" section header `<p>` → `<div>`
+  - This eliminates invalid HTML nesting where `<div>` was a descendant of `<p>`
+- Bug 2: Fixed hydration mismatch in `HomePage` component — added `mounted` state with `useState`/`useEffect` to delay rendering of auth-dependent content until after client-side hydration completes. Shows a loading spinner (Loader2) during SSR/mount phase.
+  - Verified `Loader2`, `useState`, and `useEffect` were already imported at the top of the file
+
+Stage Summary:
+- Two HTML nesting violations fixed (p→div for section headers with Separator)
+- Hydration mismatch resolved with mounted state guard in HomePage export
+
+---
+Task ID: 5
+Agent: Feature Development Agent
+Task: Add Catalog Module Tab and M-Pesa Payment Prompt at Cart
+
+Work Log:
+- Added 'catalog' to AppTab type in /src/lib/stores.ts (line 186)
+- Created /src/app/tabs/catalog-tab.tsx — a full customer-facing product catalog browser with:
+  - Category sidebar/horizontal quick-filter buttons with color-coded dots
+  - Product cards in grid/list view with category images, name, price, category badge, stock status
+  - Search bar with clear button
+  - Grid/List view toggle
+  - "Add to Cart" button with +/- quantity selector on each product card
+  - Advanced filter panel (category, stock status, price range, sort by)
+  - Active filter count badge and clear-all-filters button
+  - Responsive design (1-4 column grid)
+  - Cart summary in results bar showing item count and total
+  - In-cart quantity badges on product cards
+- Registered Catalog tab in /src/app/page.tsx:
+  - Added Tag import from lucide-react
+  - Added LazyCatalogTab lazy import
+  - Added { id: 'catalog', label: 'Catalog', icon: Tag } to TAB_CONFIG (after POS)
+  - Added 'catalog' to mainNavItems filter (after POS)
+  - Added case 'catalog' to renderTab switch
+- Enhanced M-Pesa STK Push Dialog in POS checkout:
+  - Replaced basic dialog with polished M-Pesa branded dialog
+  - Added green gradient header with "Lipa na M-Pesa" branding and amount display
+  - Improved phone number input with +254 prefix and monospace font
+  - Added phone number formatting (digits-only filter) and validation (min 9 digits)
+  - Enhanced processing state with pulsing ring animation and phone number display
+  - Added "Complete Sale" button on success that auto-proceeds to checkout
+  - Added Cancel/Try Again buttons on failure state
+  - Prevented dialog closing during processing state
+
+Stage Summary:
+- Catalog tab fully functional with grid/list view, search, filtering, sorting, and add-to-cart
+- M-Pesa payment prompt enhanced with proper Safaricom branding, better UX, and auto-checkout flow
+- All TypeScript types consistent, no new compilation errors
+- Existing lint errors are pre-existing (runner.js require imports, setMounted in effect)

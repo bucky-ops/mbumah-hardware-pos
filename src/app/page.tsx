@@ -5,7 +5,7 @@
  * Enhanced: Keyboard shortcuts, grid/list view, split payment, confetti, cart notes, notification dropdown, glass-morphism
  */
 
-import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef, createContext, useContext, useSyncExternalStore } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
@@ -20,7 +20,7 @@ import {
   TrendingUp, ArrowDownRight, AlertTriangle, DollarSign, Wrench, Hammer,
   CalendarDays, Printer, Bell, ChevronDown,
   BellRing, PackageX, AlertOctagon, CircleDollarSign, CheckCheck,
-  Truck, UserPlus, Receipt, Filter, Info,
+  Truck, UserPlus, Receipt, Filter, Info, Tag,
   LayoutGrid, List, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Pause, MessageSquare, PartyPopper, Sparkles, Zap,
 } from 'lucide-react';
 
@@ -67,6 +67,7 @@ const LazyReportsTab = lazy(() => import('./tabs/reports-tab'));
 const LazyAdminTab = lazy(() => import('./tabs/admin-tab'));
 const LazyTransactionsTab = lazy(() => import('./tabs/transactions-tab'));
 const LazySuppliersTab = lazy(() => import('./tabs/suppliers-tab'));
+const LazyCatalogTab = lazy(() => import('./tabs/catalog-tab'));
 
 function TabLoadingFallback() {
   return (
@@ -87,6 +88,7 @@ function TabLoadingFallback() {
 const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: Home },
   { id: 'pos', label: 'POS', icon: ShoppingCart },
+  { id: 'catalog', label: 'Catalog', icon: Tag },
   { id: 'inventory', label: 'Inventory', icon: Package },
   { id: 'customers', label: 'Customers', icon: Users },
   { id: 'rentals', label: 'Rentals', icon: KeyRound },
@@ -355,8 +357,8 @@ function LoginScreen() {
         <Card className="shadow-2xl border border-white/10 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl">
           <CardHeader className="text-center pb-2">
             {/* Animated logo */}
-            <div className="mx-auto w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center mb-4 shadow-lg animate-pulse-slow">
-              <Store className="h-10 w-10 text-primary-foreground" />
+            <div className="mx-auto w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center mb-4 shadow-lg animate-pulse-slow">
+              <img src="/logo.png" alt="Mbumah Hardware" className="w-full h-full object-cover" />
             </div>
             <CardTitle className="text-2xl font-bold tracking-tight">MBUMAH HARDWARE</CardTitle>
             <CardDescription className="text-base">POS & ERP System</CardDescription>
@@ -938,7 +940,7 @@ function AppSidebar() {
   };
 
   // Navigation groups
-  const mainNavItems = TAB_CONFIG.filter(t => ['pos', 'inventory', 'customers', 'transactions'].includes(t.id));
+  const mainNavItems = TAB_CONFIG.filter(t => ['pos', 'catalog', 'inventory', 'customers', 'transactions'].includes(t.id));
   const managementNavItems = TAB_CONFIG.filter(t => ['rentals', 'suppliers', 'financial', 'reports', 'admin'].includes(t.id));
 
   const renderNavItem = ({ id, label, icon: Icon }: { id: AppTab; label: string; icon: React.ElementType }) => (
@@ -984,8 +986,8 @@ function AppSidebar() {
         <div className="flex flex-col h-full">
           {/* Logo + Notification Bell */}
           <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
-            <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center">
-              <Store className="h-5 w-5 text-sidebar-primary-foreground" />
+            <div className="w-9 h-9 rounded-lg overflow-hidden bg-sidebar-primary flex items-center justify-center shrink-0">
+              <img src="/logo.png" alt="MH" className="w-full h-full object-cover" />
             </div>
             <div className="flex-1 min-w-0">
               <h1 className="font-bold text-sm leading-tight">MBUMAH HARDWARE</h1>
@@ -1026,17 +1028,17 @@ function AppSidebar() {
           {/* Navigation */}
           <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto custom-scrollbar">
             {/* Main Section */}
-            <p className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 flex items-center gap-1.5">
+            <div className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 flex items-center gap-1.5">
               <span>Main</span>
               <Separator className="flex-1 bg-sidebar-border/50" />
-            </p>
+            </div>
             {mainNavItems.map(renderNavItem)}
 
             {/* Management Section */}
-            <p className="px-4 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 flex items-center gap-1.5">
+            <div className="px-4 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 flex items-center gap-1.5">
               <span>Management</span>
               <Separator className="flex-1 bg-sidebar-border/50" />
-            </p>
+            </div>
             {managementNavItems.map(renderNavItem)}
           </nav>
 
@@ -2889,72 +2891,154 @@ function POSTab() {
       </Dialog>
 
       {/* M-Pesa STK Push Dialog */}
-      <Dialog open={mpesaDialogOpen} onOpenChange={setMpesaDialogOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Smartphone className="h-5 w-5 text-green-600" />
-              M-Pesa Payment
-            </DialogTitle>
-            <DialogDescription>
-              Amount: <span className="font-bold">{formatKES(total)}</span>
-            </DialogDescription>
-          </DialogHeader>
-          {mpesaStatus === 'idle' && (
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="mpesaPhoneDialog">Phone Number</Label>
-                <Input
-                  id="mpesaPhoneDialog"
-                  type="tel"
-                  placeholder="0712 345 678"
-                  value={mpesaPhone}
-                  onChange={(e) => setMpesaPhone(e.target.value)}
-                />
+      <Dialog open={mpesaDialogOpen} onOpenChange={(open) => {
+        if (!open && mpesaStatus === 'processing') return; // prevent closing while processing
+        setMpesaDialogOpen(open);
+        if (!open) setMpesaStatus('idle');
+      }}>
+        <DialogContent className="sm:max-w-md overflow-hidden p-0">
+          {/* M-Pesa Brand Header */}
+          <div className="bg-gradient-to-br from-green-600 to-green-700 px-6 pt-6 pb-4 text-white">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="bg-white/20 rounded-full p-2.5">
+                <Smartphone className="h-6 w-6" />
               </div>
-              <Button
-                className="w-full bg-green-600 hover:bg-green-700 text-white"
-                onClick={handleMpesaPay}
-                disabled={mpesaMutation.isPending}
-              >
-                {mpesaMutation.isPending ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending STK Push...</>
-                ) : (
-                  'Send STK Push'
-                )}
-              </Button>
+              <div>
+                <DialogTitle className="text-xl font-bold tracking-tight">Lipa na M-Pesa</DialogTitle>
+                <DialogDescription className="text-green-100 text-sm">
+                  Online STK Push Payment
+                </DialogDescription>
+              </div>
             </div>
-          )}
-          {mpesaStatus === 'processing' && (
-            <div className="text-center py-8 space-y-4">
-              <div className="animate-pulse">
-                <Smartphone className="h-16 w-16 mx-auto text-green-600" />
+            <div className="mt-4 bg-white/15 rounded-lg p-3 flex items-center justify-between">
+              <span className="text-sm text-green-100">Amount to Pay</span>
+              <span className="text-2xl font-bold">{formatKES(total)}</span>
+            </div>
+          </div>
+
+          <div className="px-6 pb-6">
+            {mpesaStatus === 'idle' && (
+              <div className="space-y-5 pt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="mpesaPhoneDialog" className="text-sm font-medium">
+                    M-Pesa Phone Number
+                  </Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">+254</span>
+                    <Input
+                      id="mpesaPhoneDialog"
+                      type="tel"
+                      placeholder="7XX XXX XXX"
+                      className="pl-14 text-lg font-mono tracking-wider h-12"
+                      value={mpesaPhone.startsWith('254') ? mpesaPhone.slice(3) : mpesaPhone.startsWith('0') ? mpesaPhone.slice(1) : mpesaPhone}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '');
+                        setMpesaPhone(val);
+                      }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Enter the Safaricom number registered with M-Pesa. An STK push will be sent to this phone.
+                  </p>
+                </div>
+                <Button
+                  className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-base font-semibold"
+                  onClick={handleMpesaPay}
+                  disabled={mpesaMutation.isPending || !mpesaPhone || mpesaPhone.length < 9}
+                >
+                  {mpesaMutation.isPending ? (
+                    <><Loader2 className="mr-2 h-5 w-5 animate-spin" />Sending STK Push...</>
+                  ) : (
+                    <><Smartphone className="mr-2 h-5 w-5" />Send STK Push</>
+                  )}
+                </Button>
               </div>
-              <div>
-                <p className="font-semibold">Waiting for M-Pesa Confirmation</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Please enter your M-Pesa PIN on your phone
+            )}
+
+            {mpesaStatus === 'processing' && (
+              <div className="text-center py-8 space-y-5">
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-24 h-24 rounded-full bg-green-100 dark:bg-green-950/30 animate-ping opacity-20" />
+                  </div>
+                  <div className="relative flex items-center justify-center">
+                    <div className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-950/30 flex items-center justify-center">
+                      <Smartphone className="h-10 w-10 text-green-600" />
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-lg font-semibold">Waiting for M-Pesa PIN</p>
+                  <p className="text-sm text-muted-foreground mt-1 max-w-xs mx-auto">
+                    Please check your phone <span className="font-mono font-medium">+254{mpesaPhone.startsWith('254') ? mpesaPhone.slice(3) : mpesaPhone.startsWith('0') ? mpesaPhone.slice(1) : mpesaPhone}</span> and enter your M-Pesa PIN to authorize payment.
+                  </p>
+                </div>
+                <div className="flex items-center justify-center gap-2 text-green-600">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="text-sm font-medium">Processing...</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  This will auto-close when payment is confirmed
                 </p>
               </div>
-              <Loader2 className="h-6 w-6 animate-spin mx-auto text-green-600" />
-            </div>
-          )}
-          {mpesaStatus === 'success' && (
-            <div className="text-center py-8 space-y-4">
-              <CheckCircle className="h-16 w-16 mx-auto text-green-600" />
-              <p className="font-semibold text-green-600">Payment Successful!</p>
-              <Button onClick={() => { setMpesaDialogOpen(false); setMpesaStatus('idle'); }}>
-                Close
-              </Button>
-            </div>
-          )}
-          {mpesaStatus === 'failed' && (
-            <div className="text-center py-8 space-y-4">
-              <AlertCircle className="h-16 w-16 mx-auto text-destructive" />
-              <p className="font-semibold text-destructive">Payment Failed</p>
-              <Button variant="outline" onClick={() => setMpesaStatus('idle')}>Try Again</Button>
-            </div>
-          )}
+            )}
+
+            {mpesaStatus === 'success' && (
+              <div className="text-center py-8 space-y-5">
+                <div className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-950/30 flex items-center justify-center mx-auto">
+                  <CheckCircle className="h-10 w-10 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-lg font-semibold text-green-600">Payment Successful!</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    M-Pesa payment of {formatKES(total)} confirmed
+                  </p>
+                </div>
+                <Button
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => {
+                    setMpesaDialogOpen(false);
+                    setMpesaStatus('idle');
+                    // Proceed to complete the checkout after M-Pesa success
+                    checkoutMutation.mutate({
+                      storeId: currentStoreId,
+                      customerId: selectedCustomer || undefined,
+                      cashierId: useAuthStore.getState().user?.id || '',
+                      items: cart.items,
+                      paymentMethod: 'MPESA',
+                      paymentDetails: {
+                        mpesaPhone,
+                      },
+                    });
+                  }}
+                >
+                  Complete Sale
+                </Button>
+              </div>
+            )}
+
+            {mpesaStatus === 'failed' && (
+              <div className="text-center py-8 space-y-5">
+                <div className="w-20 h-20 rounded-full bg-red-100 dark:bg-red-950/30 flex items-center justify-center mx-auto">
+                  <AlertCircle className="h-10 w-10 text-destructive" />
+                </div>
+                <div>
+                  <p className="text-lg font-semibold text-destructive">Payment Failed</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    The M-Pesa transaction could not be completed. Please try again or choose a different payment method.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <Button variant="outline" className="flex-1" onClick={() => setMpesaDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={() => setMpesaStatus('idle')}>
+                    Try Again
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -3264,6 +3348,7 @@ function MainApp() {
     switch (activeTab) {
       case 'dashboard': return <Suspense fallback={<TabLoadingFallback />}><LazyDashboardTab /></Suspense>;
       case 'pos': return <POSTab />;
+      case 'catalog': return <Suspense fallback={<TabLoadingFallback />}><LazyCatalogTab /></Suspense>;
       case 'inventory': return <Suspense fallback={<TabLoadingFallback />}><LazyInventoryTab /></Suspense>;
       case 'customers': return <Suspense fallback={<TabLoadingFallback />}><LazyCustomersTab /></Suspense>;
       case 'rentals': return <Suspense fallback={<TabLoadingFallback />}><LazyRentalsTab /></Suspense>;
@@ -3320,8 +3405,30 @@ function MainApp() {
 // PAGE EXPORT
 // ============================================================================
 
+// Hydration-safe client-only mount detection
+const emptySubscribe = () => () => {};
+function useHasMounted() {
+  return useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false,
+  );
+}
+
 export default function HomePage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const hasMounted = useHasMounted();
+
+  if (!hasMounted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return isAuthenticated ? <MainApp /> : <LoginScreen />;
 }
