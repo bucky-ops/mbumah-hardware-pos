@@ -2102,7 +2102,7 @@ Environment Configuration:
 
 ## END OF PROMPT
 
-**FINAL INSTRUCTION TO Z.AI**:
+**FINAL INSTRUCTION TO **:
 Create a complete, production-ready Hardware Store POS System following all specifications above. Prioritize robustness, user experience, and maintainability. Use the latest versions of specified frameworks. Implement proper error handling, logging, and security throughout. Provide detailed comments in code. Generate comprehensive documentation and setup instructions.
 
 Start with the database schema and core services, then build the frontend and integrations. Deploy to both cloud (Vercel) and local (Docker) environments. Ensure all features are fully functional and tested before marking complete.
