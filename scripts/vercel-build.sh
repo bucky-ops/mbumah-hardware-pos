@@ -21,14 +21,19 @@ if [ -z "${DIRECT_URL:-}" ]; then
   export DIRECT_URL="postgresql://build:build@localhost/build"
 fi
 
+# Strip channel_binding=require from URLs - Prisma doesn't support it
+# This parameter is sometimes added by Neon's connection string generator
+export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/&channel_binding=require//' | sed 's/?channel_binding=require&/?/' | sed 's/?channel_binding=require$//')
+export DIRECT_URL=$(echo "$DIRECT_URL" | sed 's/&channel_binding=require//' | sed 's/?channel_binding=require&/?/' | sed 's/?channel_binding=require$//')
+
 echo "✅ DATABASE_URL is set (starts with: ${DATABASE_URL:0:30}...)"
 
 # Generate Prisma client
 echo "🔧 Running prisma generate..."
 npx prisma generate
 
-# Run migrations if we have a real Neon database URL
-if [[ "$DATABASE_URL" == *"neon.tech"* ]] || [[ "$DATABASE_URL" == *"postgresql"* ]]; then
+# Run migrations if we have a real PostgreSQL database URL
+if [[ "$DATABASE_URL" == *"neon.tech"* ]] || [[ "$DATABASE_URL" == *"postgresql://"* ]]; then
   echo "🗄️  Running prisma migrate deploy..."
   npx prisma migrate deploy || {
     echo "⚠️  Migration deploy failed, trying prisma db push..."
@@ -37,7 +42,7 @@ if [[ "$DATABASE_URL" == *"neon.tech"* ]] || [[ "$DATABASE_URL" == *"postgresql"
     }
   }
 else
-  echo "ℹ️  Skipping migrations (not a PostgreSQL database URL)"
+  echo "ℹ️  Skipping migrations (not a real PostgreSQL database URL)"
 fi
 
 # Build the Next.js app
