@@ -15,7 +15,7 @@ import {
   MessageSquare, Mail, Smartphone, Store,
 } from 'lucide-react';
 
-import { useAppStore } from '@/lib/stores';
+import { useAuthStore, useAppStore } from '@/lib/stores';
 import {
   systemLogsApi, stockMovementsApi, productsApi,
   auditLogsApi, systemConfigApi, usersApi,
@@ -23,6 +23,7 @@ import {
   type SystemLogItem, type StockMovementItem,
   type AuditLogItem, type SystemConfigItem, type UserItem,
 } from '@/lib/api';
+import { canCreateUsers } from '@/lib/types';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -1303,6 +1304,7 @@ function UserManagement({ storeId }: { storeId: string }) {
             {activeSessions} online
           </Badge>
         </div>
+        {canCreateUsers(useAuthStore.getState().user?.role as Parameters<typeof canCreateUsers>[0]) && (
         <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
           <DialogTrigger asChild>
             <Button size="sm" className="h-7 text-xs">
@@ -1378,6 +1380,7 @@ function UserManagement({ storeId }: { storeId: string }) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {/* User list */}

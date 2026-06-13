@@ -70,6 +70,11 @@ const LazyDeliveryNotesTab = lazy(() => import('./tabs/delivery-notes-tab'));
 const LazyGiftCardsTab = lazy(() => import('./tabs/gift-cards-tab'));
 const LazyInvoicesTab = lazy(() => import('./tabs/invoices-tab'));
 const LazyCreditsTab = lazy(() => import('./tabs/credits-tab'));
+const LazyVouchersTab = lazy(() => import('./tabs/vouchers-tab'));
+const LazyLoyaltyTab = lazy(() => import('./tabs/loyalty-tab'));
+const LazyBankingTab = lazy(() => import('./tabs/banking-tab'));
+const LazyTaxTab = lazy(() => import('./tabs/tax-tab'));
+const LazyTransfersTab = lazy(() => import('./tabs/transfers-tab'));
 
 function TabLoadingFallback() {
   return (
@@ -88,18 +93,23 @@ const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: Home },
   { id: 'pos', label: 'POS', icon: ShoppingCart },
   { id: 'catalog', label: 'Catalog', icon: Tag },
-  { id: 'inventory', label: 'Inventory', icon: Package },
   { id: 'customers', label: 'Customers', icon: Users },
   { id: 'rentals', label: 'Rentals', icon: KeyRound },
   { id: 'invoices', label: 'Invoices', icon: Receipt },
   { id: 'delivery-notes', label: 'Delivery', icon: Navigation },
   { id: 'gift-cards', label: 'Gift Cards', icon: PartyPopper },
+  { id: 'vouchers', label: 'Vouchers', icon: Tag },
   { id: 'credits', label: 'Credits', icon: CircleDollarSign },
+  { id: 'loyalty', label: 'Loyalty', icon: Sparkles },
   { id: 'financial', label: 'Financial', icon: BarChart3 },
+  { id: 'banking', label: 'Banking', icon: Wallet },
+  { id: 'tax', label: 'Tax/eTIMS', icon: FileText },
   { id: 'reports', label: 'Reports', icon: FileText },
   { id: 'transactions', label: 'Transactions', icon: ShoppingBag },
   { id: 'suppliers', label: 'Suppliers', icon: Truck },
   { id: 'admin', label: 'Admin', icon: Settings },
+  { id: 'inventory', label: 'Inventory', icon: Package },
+  { id: 'transfers', label: 'Transfers', icon: ArrowUpDown },
 ];
 
 const DEMO_ACCOUNTS = [
@@ -3401,6 +3411,11 @@ function MainApp() {
       case 'transactions': return <Suspense fallback={<TabLoadingFallback />}><LazyTransactionsTab /></Suspense>;
       case 'admin': return <Suspense fallback={<TabLoadingFallback />}><LazyAdminTab /></Suspense>;
       case 'suppliers': return <Suspense fallback={<TabLoadingFallback />}><LazySuppliersTab /></Suspense>;
+      case 'vouchers': return <Suspense fallback={<TabLoadingFallback />}><LazyVouchersTab /></Suspense>;
+      case 'loyalty': return <Suspense fallback={<TabLoadingFallback />}><LazyLoyaltyTab /></Suspense>;
+      case 'banking': return <Suspense fallback={<TabLoadingFallback />}><LazyBankingTab /></Suspense>;
+      case 'tax': return <Suspense fallback={<TabLoadingFallback />}><LazyTaxTab /></Suspense>;
+      case 'transfers': return <Suspense fallback={<TabLoadingFallback />}><LazyTransfersTab /></Suspense>;
       default: return <POSTab />;
     }
   };

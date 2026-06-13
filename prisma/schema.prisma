@@ -76,6 +76,19 @@ model Store {
   deliveryNotes   DeliveryNote[]
   invoices        Invoice[]
   customerCredits CustomerCredit[]
+  vouchers        Voucher[]
+  voucherCampaigns VoucherCampaign[]
+  bankAccounts    BankAccount[]
+  mpesaReconciliations MpesaReconciliation[]
+  loyaltyTiers    LoyaltyTier[]
+  loyaltyTransactions LoyaltyTransaction[]
+  loyaltyCampaigns LoyaltyCampaign[]
+  taxCategories   TaxCategory[]
+  taxFilings      TaxFiling[]
+  expenseBudgets  ExpenseBudget[]
+  customerInteractions CustomerInteraction[]
+  transfersFrom   StoreTransfer[]   @relation("TransferFrom")
+  transfersTo     StoreTransfer[]   @relation("TransferTo")
 
   @@index([organizationId])
   @@map("stores")
@@ -213,6 +226,7 @@ model Product {
   rentals           EquipmentRental[]
   purchaseOrderItems PurchaseOrderItem[]
   invoiceItems      InvoiceItem[]
+  transferItems     StoreTransferItem[]
 
   @@index([storeId])
   @@index([sku])
@@ -301,6 +315,9 @@ model Customer {
   rentals             EquipmentRental[]
   giftCards           GiftCard[]
   customerCredits     CustomerCredit[]
+  loyaltyProfile      CustomerLoyalty[]
+  loyaltyTransactions LoyaltyTransaction[]
+  interactions        CustomerInteraction[]
 
   @@index([storeId])
   @@index([phone])
@@ -927,4 +944,465 @@ model CustomerCredit {
   @@index([creditType])
   @@index([createdAt])
   @@map("customer_credits")
+}
+
+// ============================================================
+// VOUCHER MANAGEMENT
+// ============================================================
+
+model Voucher {
+  id              String   @id @default(cuid())
+  storeId         String
+  code            String   @unique
+  voucherType     String   @default("FIXED") // FIXED, PERCENTAGE, FREE_PRODUCT, BUNDLE
+  name            String
+  description     String?
+  value           Float    // Fixed amount or percentage value
+  minimumPurchase Float    @default(0)
+  maxDiscount     Float?   // Cap for percentage discounts
+  freeProductId   String?  // For FREE_PRODUCT type
+  maxUses         Int      @default(1) // Total allowed uses
+  currentUses     Int      @default(0)
+  maxUsesPerUser  Int      @default(1)
+  startDate       DateTime
+  endDate         DateTime?
+  status          String   @default("ACTIVE") // ACTIVE, PAUSED, EXPIRED, CANCELLED
+  campaignId      String?  // Link to campaign
+  createdBy       String?  // User ID
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  redemptions     VoucherRedemption[]
+  campaign        VoucherCampaign?  @relation(fields: [campaignId], references: [id])
+
+  @@index([storeId])
+  @@index([code])
+  @@index([status])
+  @@index([voucherType])
+  @@map("vouchers")
+}
+
+model VoucherCampaign {
+  id              String   @id @default(cuid())
+  storeId         String
+  name            String
+  description     String?
+  campaignType    String   @default("PROMOTION") // PROMOTION, SEASONAL, LOYALTY, REFERRAL, FLASH_SALE
+  startDate       DateTime
+  endDate         DateTime?
+  budget          Float    @default(0)
+  spentAmount     Float    @default(0)
+  targetAudience  String?  // ALL, NEW_CUSTOMERS, RETURNING, LOYALTY_TIER
+  status          String   @default("DRAFT") // DRAFT, ACTIVE, COMPLETED, CANCELLED
+  totalRedemptions Int     @default(0)
+  totalRevenue    Float    @default(0)
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  vouchers        Voucher[]
+
+  @@index([storeId])
+  @@index([status])
+  @@map("voucher_campaigns")
+}
+
+model VoucherRedemption {
+  id              String   @id @default(cuid())
+  voucherId       String
+  transactionId   String?
+  customerId      String?
+  redeemedBy      String?  // User ID who processed
+  discountAmount  Float
+  originalTotal   Float
+  finalTotal      Float
+  createdAt       DateTime @default(now())
+
+  voucher         Voucher  @relation(fields: [voucherId], references: [id])
+
+  @@index([voucherId])
+  @@index([customerId])
+  @@index([createdAt])
+  @@map("voucher_redemptions")
+}
+
+// ============================================================
+// BANKING & RECONCILIATION
+// ============================================================
+
+model BankAccount {
+  id              String   @id @default(cuid())
+  storeId         String
+  bankName        String
+  accountName     String
+  accountNumber   String
+  branch          String?
+  swiftCode       String?
+  currency        String   @default("KES")
+  openingBalance  Float    @default(0)
+  currentBalance  Float    @default(0)
+  accountType     String   @default("CHECKING") // CHECKING, SAVINGS, MPESA, PETTY_CASH
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  transactions    BankTransaction[]
+  reconciliations BankReconciliation[]
+
+  @@index([storeId])
+  @@index([accountType])
+  @@map("bank_accounts")
+}
+
+model BankTransaction {
+  id              String   @id @default(cuid())
+  bankAccountId   String
+  transactionType String   @default("DEPOSIT") // DEPOSIT, WITHDRAWAL, TRANSFER, FEE, INTEREST
+  amount          Float
+  balanceAfter    Float    // Running balance after transaction
+  reference       String?  // Cheque number, transfer reference, M-Pesa ref
+  description     String?
+  transactionDate DateTime @default(now())
+  isReconciled    Boolean  @default(false)
+  reconciliationId String? // Link to reconciliation
+  journalEntryId  String?  // Link to journal entry
+  createdAt       DateTime @default(now())
+
+  bankAccount     BankAccount        @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  reconciliation  BankReconciliation? @relation(fields: [reconciliationId], references: [id])
+
+  @@index([bankAccountId])
+  @@index([transactionDate])
+  @@index([isReconciled])
+  @@map("bank_transactions")
+}
+
+model BankReconciliation {
+  id              String   @id @default(cuid())
+  bankAccountId   String
+  statementDate   DateTime
+  statementBalance Float
+  bookBalance     Float
+  difference      Float
+  status          String   @default("DRAFT") // DRAFT, IN_PROGRESS, COMPLETED, APPROVED
+  notes           String?
+  approvedBy      String?
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  bankAccount     BankAccount       @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  transactions    BankTransaction[]
+
+  @@index([bankAccountId])
+  @@index([status])
+  @@map("bank_reconciliations")
+}
+
+model MpesaReconciliation {
+  id              String   @id @default(cuid())
+  storeId         String
+  mpesaReceipt    String?
+  phoneNumber     String?
+  amount          Float
+  transactionDate DateTime
+  status          String   @default("PENDING") // PENDING, MATCHED, UNMATCHED, DISPUTED
+  matchedTransactionId String? // Link to SalesTransaction payment
+  matchedAt       DateTime?
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([status])
+  @@index([mpesaReceipt])
+  @@map("mpesa_reconciliations")
+}
+
+// ============================================================
+// LOYALTY PROGRAM - TIER STRUCTURE
+// ============================================================
+
+model LoyaltyTier {
+  id              String   @id @default(cuid())
+  storeId         String
+  name            String   // Bronze, Silver, Gold, Platinum
+  minPoints       Int      @default(0)
+  maxPoints       Int?     // null = no upper limit
+  discountPercent Float    @default(0) // Tier discount percentage
+  pointsMultiplier Float   @default(1) // Points earning multiplier
+  benefits        String?  // JSON string of benefits
+  color           String   @default("#6B7280") // Tier color
+  icon            String?
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customerTiers   CustomerLoyalty[]
+
+  @@index([storeId])
+  @@index([sortOrder])
+  @@map("loyalty_tiers")
+}
+
+model CustomerLoyalty {
+  id              String   @id @default(cuid())
+  customerId      String
+  tierId          String
+  pointsBalance   Int      @default(0)
+  lifetimePoints  Int      @default(0)
+  totalRedeemed   Int      @default(0)
+  tierAchievedAt  DateTime @default(now())
+  lastActivityAt  DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  customer        Customer     @relation(fields: [customerId], references: [id])
+  tier            LoyaltyTier  @relation(fields: [tierId], references: [id])
+
+  @@index([customerId])
+  @@index([tierId])
+  @@map("customer_loyalty")
+}
+
+model LoyaltyTransaction {
+  id              String   @id @default(cuid())
+  storeId         String
+  customerId      String
+  points          Int      // Positive = earned, Negative = redeemed
+  transactionType String   @default("EARN") // EARN, REDEEM, BONUS, EXPIRE, ADJUST
+  reference       String?  // Transaction ID, manual reference, etc.
+  description     String?
+  createdBy       String?
+  createdAt       DateTime @default(now())
+
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer        Customer @relation(fields: [customerId], references: [id])
+
+  @@index([storeId])
+  @@index([customerId])
+  @@index([transactionType])
+  @@index([createdAt])
+  @@map("loyalty_transactions")
+}
+
+model LoyaltyCampaign {
+  id              String   @id @default(cuid())
+  storeId         String
+  name            String
+  description     String?
+  campaignType    String   @default("BONUS_POINTS") // BONUS_POINTS, DOUBLE_POINTS, TIER_UPGRADE, SPECIAL_EVENT
+  bonusPoints     Int      @default(0)
+  multiplier      Float    @default(1)
+  startDate       DateTime
+  endDate         DateTime?
+  targetTierId    String?  // Target specific tier
+  status          String   @default("DRAFT") // DRAFT, ACTIVE, COMPLETED, CANCELLED
+  totalPointsAwarded Int   @default(0)
+  totalParticipants  Int   @default(0)
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([status])
+  @@map("loyalty_campaigns")
+}
+
+// ============================================================
+// TAX MANAGEMENT / eTIMS
+// ============================================================
+
+model TaxCategory {
+  id              String   @id @default(cuid())
+  storeId         String
+  name            String   // VAT, WHT, SERVICE_CHARGE, EXCISE
+  rate            Float    // Percentage rate
+  description     String?
+  etimsCode       String?  // eTIMS tax category code
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  taxRates        TaxRate[]
+
+  @@index([storeId])
+  @@index([etimsCode])
+  @@map("tax_categories")
+}
+
+model TaxRate {
+  id              String   @id @default(cuid())
+  taxCategoryId   String
+  name            String   // Standard VAT 16%, Reduced Rate 8%, Zero Rate, Exempt
+  rate            Float
+  effectiveFrom   DateTime @default(now())
+  effectiveTo     DateTime?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  taxCategory     TaxCategory @relation(fields: [taxCategoryId], references: [id], onDelete: Cascade)
+
+  @@index([taxCategoryId])
+  @@index([isActive])
+  @@map("tax_rates")
+}
+
+model TaxFiling {
+  id              String   @id @default(cuid())
+  storeId         String
+  filingPeriod    String   // "2024-01", "2024-Q1"
+  filingType      String   @default("VAT") // VAT, WHT, INCOME_TAX, TURNOVER_TAX
+  totalSales      Float    @default(0)
+  totalTax        Float    @default(0)
+  totalWht        Float    @default(0)
+  status          String   @default("DRAFT") // DRAFT, FILED, APPROVED, PAID, LATE
+  filingDate      DateTime?
+  dueDate         DateTime?
+  etimsReference  String?
+  notes           String?
+  filedBy         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([filingType])
+  @@index([status])
+  @@index([filingPeriod])
+  @@map("tax_filings")
+}
+
+// ============================================================
+// STORE TRANSFERS (Inter-Store)
+// ============================================================
+
+model StoreTransfer {
+  id              String   @id @default(cuid())
+  transferNumber  String   @unique
+  fromStoreId     String
+  toStoreId       String
+  status          String   @default("PENDING") // PENDING, IN_TRANSIT, RECEIVED, CANCELLED, PARTIAL
+  requestedBy     String?  // User ID
+  approvedBy      String?  // User ID
+  receivedBy      String?  // User ID
+  shippedAt       DateTime?
+  receivedAt      DateTime?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  fromStore       Store              @relation("TransferFrom", fields: [fromStoreId], references: [id])
+  toStore         Store              @relation("TransferTo", fields: [toStoreId], references: [id])
+  items           StoreTransferItem[]
+
+  @@index([fromStoreId])
+  @@index([toStoreId])
+  @@index([status])
+  @@map("store_transfers")
+}
+
+model StoreTransferItem {
+  id              String   @id @default(cuid())
+  transferId      String
+  productId       String
+  quantity        Float
+  receivedQty     Float    @default(0)
+  unitType        String   @default("PIECE")
+  notes           String?
+
+  transfer        StoreTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  product         Product       @relation(fields: [productId], references: [id])
+
+  @@index([transferId])
+  @@index([productId])
+  @@map("store_transfer_items")
+}
+
+// ============================================================
+// EXPENSE BUDGETS & APPROVALS
+// ============================================================
+
+model ExpenseBudget {
+  id              String   @id @default(cuid())
+  storeId         String
+  category        String   // RENT, SALARIES, UTILITIES, TRANSPORT, MAINTENANCE, MARKETING, OTHER
+  period          String   // "2024-01", "2024-Q1", "2024"
+  budgetAmount    Float
+  spentAmount     Float    @default(0)
+  remainingAmount Float    @default(0)
+  status          String   @default("ACTIVE") // ACTIVE, CLOSED, EXCEEDED
+  approvedBy      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  approvals       ExpenseApproval[]
+
+  @@index([storeId])
+  @@index([category])
+  @@index([period])
+  @@map("expense_budgets")
+}
+
+model ExpenseApproval {
+  id              String   @id @default(cuid())
+  expenseId       String?  // Link to Expense
+  budgetId        String?  // Link to ExpenseBudget
+  approvalType    String   @default("EXPENSE") // EXPENSE, BUDGET, TRANSFER, WRITE_OFF
+  amount          Float
+  requestedBy     String   // User ID
+  approvedBy      String?  // User ID
+  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED, CANCELLED
+  approvalLevel   Int      @default(1) // 1 = first level, 2 = second level
+  notes           String?
+  requestedAt     DateTime @default(now())
+  approvedAt      DateTime?
+
+  budget          ExpenseBudget? @relation(fields: [budgetId], references: [id])
+
+  @@index([expenseId])
+  @@index([status])
+  @@index([requestedBy])
+  @@map("expense_approvals")
+}
+
+// ============================================================
+// CUSTOMER INTERACTIONS (CRM)
+// ============================================================
+
+model CustomerInteraction {
+  id              String   @id @default(cuid())
+  storeId         String
+  customerId      String
+  interactionType String   @default("NOTE") // NOTE, CALL, EMAIL, VISIT, WHATSAPP, COMPLAINT, FEEDBACK
+  subject         String?
+  content         String
+  followUpDate    DateTime?
+  status          String   @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+  priority        String   @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  assignedTo      String?  // User ID
+  createdBy       String?  // User ID
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer        Customer @relation(fields: [customerId], references: [id])
+
+  @@index([storeId])
+  @@index([customerId])
+  @@index([interactionType])
+  @@index([status])
+  @@index([createdAt])
+  @@map("customer_interactions")
 }

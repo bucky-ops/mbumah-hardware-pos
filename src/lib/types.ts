@@ -293,6 +293,13 @@ export const PERMISSION_MATRIX: Record<UserRole, Record<string, string[]>> = {
     admin: ['read', 'update', 'manage_users', 'manage_stores', 'system_config'],
     reports: ['read', 'export'],
     debt: ['create', 'read', 'update', 'write_off', 'remind'],
+    users: ['create', 'read', 'update', 'delete', 'manage_users'],
+    vouchers: ['create', 'read', 'update', 'delete'],
+    banking: ['create', 'read', 'update', 'delete', 'reconcile', 'approve'],
+    loyalty: ['create', 'read', 'update', 'delete'],
+    tax: ['create', 'read', 'update', 'delete', 'file', 'approve'],
+    transfers: ['create', 'read', 'update', 'approve', 'receive'],
+    crm: ['create', 'read', 'update', 'delete'],
   },
   STORE_OWNER: {
     products: ['create', 'read', 'update', 'delete'],
@@ -303,6 +310,13 @@ export const PERMISSION_MATRIX: Record<UserRole, Record<string, string[]>> = {
     admin: ['read', 'manage_users'],
     reports: ['read', 'export'],
     debt: ['create', 'read', 'update', 'write_off', 'remind'],
+    users: ['create', 'read', 'update'],
+    vouchers: ['create', 'read', 'update', 'delete'],
+    banking: ['create', 'read', 'update', 'reconcile', 'approve'],
+    loyalty: ['create', 'read', 'update'],
+    tax: ['create', 'read', 'update', 'file'],
+    transfers: ['create', 'read', 'update', 'approve', 'receive'],
+    crm: ['create', 'read', 'update', 'delete'],
   },
   BRANCH_MANAGER: {
     products: ['create', 'read', 'update'],
@@ -313,6 +327,13 @@ export const PERMISSION_MATRIX: Record<UserRole, Record<string, string[]>> = {
     admin: ['read'],
     reports: ['read', 'export'],
     debt: ['read', 'remind'],
+    users: ['create', 'read'],
+    vouchers: ['create', 'read', 'update'],
+    banking: ['read', 'reconcile'],
+    loyalty: ['read', 'update'],
+    tax: ['read'],
+    transfers: ['create', 'read', 'receive'],
+    crm: ['create', 'read', 'update'],
   },
   CASHIER: {
     products: ['read'],
@@ -323,6 +344,13 @@ export const PERMISSION_MATRIX: Record<UserRole, Record<string, string[]>> = {
     admin: [],
     reports: [],
     debt: [],
+    users: [],
+    vouchers: ['read'],
+    banking: [],
+    loyalty: ['read'],
+    tax: [],
+    transfers: [],
+    crm: ['create', 'read'],
   },
   ACCOUNTANT: {
     products: ['read'],
@@ -333,6 +361,13 @@ export const PERMISSION_MATRIX: Record<UserRole, Record<string, string[]>> = {
     admin: ['read'],
     reports: ['read', 'export'],
     debt: ['read', 'update', 'remind'],
+    users: [],
+    vouchers: ['read'],
+    banking: ['read', 'reconcile', 'approve'],
+    loyalty: ['read'],
+    tax: ['read', 'file', 'approve'],
+    transfers: ['read'],
+    crm: ['read'],
   },
 };
 
@@ -342,6 +377,15 @@ export function hasPermission(role: UserRole, resource: string, action: string):
   const resourcePermissions = rolePermissions[resource];
   if (!resourcePermissions) return false;
   return resourcePermissions.includes(action);
+}
+
+/**
+ * Returns true only for roles that can create users:
+ * SUPER_ADMIN, STORE_OWNER, and BRANCH_MANAGER.
+ * CASHIER and ACCOUNTANT cannot create users.
+ */
+export function canCreateUsers(role: UserRole): boolean {
+  return role === 'SUPER_ADMIN' || role === 'STORE_OWNER' || role === 'BRANCH_MANAGER';
 }
 
 export const ShiftStatus = {
@@ -508,4 +552,360 @@ export interface FastMovingProduct {
   saleCount: number;
   category: string | null;
   currentStock: number;
+}
+
+// ============================================================
+// VOUCHERS & CAMPAIGNS
+// ============================================================
+
+// Voucher
+export interface VoucherItem {
+  id: string;
+  storeId: string;
+  code: string;
+  voucherType: 'FIXED' | 'PERCENTAGE' | 'FREE_PRODUCT' | 'BUNDLE';
+  name: string;
+  description: string | null;
+  value: number;
+  minimumPurchase: number;
+  maxDiscount: number | null;
+  freeProductId: string | null;
+  maxUses: number;
+  currentUses: number;
+  maxUsesPerUser: number;
+  startDate: string;
+  endDate: string | null;
+  status: 'ACTIVE' | 'PAUSED' | 'EXPIRED' | 'CANCELLED';
+  campaignId: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  redemptions?: VoucherRedemptionItem[];
+  campaign?: VoucherCampaignItem;
+}
+
+// Voucher Campaign
+export interface VoucherCampaignItem {
+  id: string;
+  storeId: string;
+  name: string;
+  description: string | null;
+  campaignType: 'PROMOTION' | 'SEASONAL' | 'LOYALTY' | 'REFERRAL' | 'FLASH_SALE';
+  startDate: string;
+  endDate: string | null;
+  budget: number;
+  spentAmount: number;
+  targetAudience: string | null;
+  status: 'DRAFT' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  totalRedemptions: number;
+  totalRevenue: number;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  vouchers?: VoucherItem[];
+}
+
+// Voucher Redemption
+export interface VoucherRedemptionItem {
+  id: string;
+  voucherId: string;
+  transactionId: string | null;
+  customerId: string | null;
+  redeemedBy: string | null;
+  discountAmount: number;
+  originalTotal: number;
+  finalTotal: number;
+  createdAt: string;
+  voucher?: VoucherItem;
+}
+
+// ============================================================
+// BANKING & RECONCILIATION
+// ============================================================
+
+// Bank Account
+export interface BankAccountItem {
+  id: string;
+  storeId: string;
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  branch: string | null;
+  swiftCode: string | null;
+  currency: string;
+  openingBalance: number;
+  currentBalance: number;
+  accountType: 'CHECKING' | 'SAVINGS' | 'MPESA' | 'PETTY_CASH';
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  transactions?: BankTransactionItem[];
+  reconciliations?: BankReconciliationItem[];
+}
+
+// Bank Transaction
+export interface BankTransactionItem {
+  id: string;
+  bankAccountId: string;
+  transactionType: 'DEPOSIT' | 'WITHDRAWAL' | 'TRANSFER' | 'FEE' | 'INTEREST';
+  amount: number;
+  balanceAfter: number;
+  reference: string | null;
+  description: string | null;
+  transactionDate: string;
+  isReconciled: boolean;
+  reconciliationId: string | null;
+  journalEntryId: string | null;
+  createdAt: string;
+  bankAccount?: BankAccountItem;
+  reconciliation?: BankReconciliationItem;
+}
+
+// Bank Reconciliation
+export interface BankReconciliationItem {
+  id: string;
+  bankAccountId: string;
+  statementDate: string;
+  statementBalance: number;
+  bookBalance: number;
+  difference: number;
+  status: 'DRAFT' | 'IN_PROGRESS' | 'COMPLETED' | 'APPROVED';
+  notes: string | null;
+  approvedBy: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  bankAccount?: BankAccountItem;
+  transactions?: BankTransactionItem[];
+}
+
+// M-Pesa Reconciliation
+export interface MpesaReconciliationItem {
+  id: string;
+  storeId: string;
+  mpesaReceipt: string | null;
+  phoneNumber: string | null;
+  amount: number;
+  transactionDate: string;
+  status: 'PENDING' | 'MATCHED' | 'UNMATCHED' | 'DISPUTED';
+  matchedTransactionId: string | null;
+  matchedAt: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+// ============================================================
+// LOYALTY PROGRAM
+// ============================================================
+
+// Loyalty Tier
+export interface LoyaltyTierItem {
+  id: string;
+  storeId: string;
+  name: string;
+  minPoints: number;
+  maxPoints: number | null;
+  discountPercent: number;
+  pointsMultiplier: number;
+  benefits: string | null;
+  color: string;
+  icon: string | null;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  customerTiers?: CustomerLoyaltyItem[];
+}
+
+// Customer Loyalty
+export interface CustomerLoyaltyItem {
+  id: string;
+  customerId: string;
+  tierId: string;
+  pointsBalance: number;
+  lifetimePoints: number;
+  totalRedeemed: number;
+  tierAchievedAt: string;
+  lastActivityAt: string;
+  createdAt: string;
+  updatedAt: string;
+  tier?: LoyaltyTierItem;
+}
+
+// Loyalty Transaction
+export interface LoyaltyTransactionItem {
+  id: string;
+  storeId: string;
+  customerId: string;
+  points: number;
+  transactionType: 'EARN' | 'REDEEM' | 'BONUS' | 'EXPIRE' | 'ADJUST';
+  reference: string | null;
+  description: string | null;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+// Loyalty Campaign
+export interface LoyaltyCampaignItem {
+  id: string;
+  storeId: string;
+  name: string;
+  description: string | null;
+  campaignType: 'BONUS_POINTS' | 'DOUBLE_POINTS' | 'TIER_UPGRADE' | 'SPECIAL_EVENT';
+  bonusPoints: number;
+  multiplier: number;
+  startDate: string;
+  endDate: string | null;
+  targetTierId: string | null;
+  status: 'DRAFT' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  totalPointsAwarded: number;
+  totalParticipants: number;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================================
+// TAX MANAGEMENT / eTIMS
+// ============================================================
+
+// Tax Category
+export interface TaxCategoryItem {
+  id: string;
+  storeId: string;
+  name: string;
+  rate: number;
+  description: string | null;
+  etimsCode: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  taxRates?: TaxRateItem[];
+}
+
+// Tax Rate
+export interface TaxRateItem {
+  id: string;
+  taxCategoryId: string;
+  name: string;
+  rate: number;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  isActive: boolean;
+  createdAt: string;
+  taxCategory?: TaxCategoryItem;
+}
+
+// Tax Filing
+export interface TaxFilingItem {
+  id: string;
+  storeId: string;
+  filingPeriod: string;
+  filingType: 'VAT' | 'WHT' | 'INCOME_TAX' | 'TURNOVER_TAX';
+  totalSales: number;
+  totalTax: number;
+  totalWht: number;
+  status: 'DRAFT' | 'FILED' | 'APPROVED' | 'PAID' | 'LATE';
+  filingDate: string | null;
+  dueDate: string | null;
+  etimsReference: string | null;
+  notes: string | null;
+  filedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================================
+// STORE TRANSFERS (Inter-Store)
+// ============================================================
+
+// Store Transfer (header)
+export interface StoreTransferItem {
+  id: string;
+  transferNumber: string;
+  fromStoreId: string;
+  toStoreId: string;
+  status: 'PENDING' | 'IN_TRANSIT' | 'RECEIVED' | 'CANCELLED' | 'PARTIAL';
+  requestedBy: string | null;
+  approvedBy: string | null;
+  receivedBy: string | null;
+  shippedAt: string | null;
+  receivedAt: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items?: StoreTransferItemDetail[];
+  fromStore?: { id: string; name: string };
+  toStore?: { id: string; name: string };
+}
+
+// Store Transfer Item (line)
+export interface StoreTransferItemDetail {
+  id: string;
+  transferId: string;
+  productId: string;
+  quantity: number;
+  receivedQty: number;
+  unitType: string;
+  notes: string | null;
+  product?: { id: string; name: string; sku: string };
+}
+
+// ============================================================
+// EXPENSE BUDGETS & APPROVALS
+// ============================================================
+
+// Expense Budget
+export interface ExpenseBudgetItem {
+  id: string;
+  storeId: string;
+  category: 'RENT' | 'SALARIES' | 'UTILITIES' | 'TRANSPORT' | 'MAINTENANCE' | 'MARKETING' | 'OTHER';
+  period: string;
+  budgetAmount: number;
+  spentAmount: number;
+  remainingAmount: number;
+  status: 'ACTIVE' | 'CLOSED' | 'EXCEEDED';
+  approvedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  approvals?: ExpenseApprovalItem[];
+}
+
+// Expense Approval
+export interface ExpenseApprovalItem {
+  id: string;
+  expenseId: string | null;
+  budgetId: string | null;
+  approvalType: 'EXPENSE' | 'BUDGET' | 'TRANSFER' | 'WRITE_OFF';
+  amount: number;
+  requestedBy: string;
+  approvedBy: string | null;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+  approvalLevel: number;
+  notes: string | null;
+  requestedAt: string;
+  approvedAt: string | null;
+  budget?: ExpenseBudgetItem;
+}
+
+// ============================================================
+// CUSTOMER INTERACTIONS (CRM)
+// ============================================================
+
+// Customer Interaction
+export interface CustomerInteractionItem {
+  id: string;
+  storeId: string;
+  customerId: string;
+  interactionType: 'NOTE' | 'CALL' | 'EMAIL' | 'VISIT' | 'WHATSAPP' | 'COMPLAINT' | 'FEEDBACK';
+  subject: string | null;
+  content: string;
+  followUpDate: string | null;
+  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  assignedTo: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  customer?: { id: string; name: string; phone: string | null };
 }

@@ -1130,12 +1130,595 @@ async function main() {
   }
 
   // ==========================================================================
-  // 18. Log the initialization event
+  // 18. SEED MORE PRODUCTS - Expanded catalog (30+ products)
+  // ==========================================================================
+  console.log('Seeding expanded product catalog...');
+
+  const productCount = await prisma.product.count({ where: { storeId: store.id } });
+  if (productCount <= 30) {
+    // New categories needed for expanded catalog
+    const newCategories = [
+      { id: 'cat_safety', storeId: store.id, name: 'Safety Equipment', description: 'PPE, helmets, boots, and safety gear', icon: 'shield', color: '#E53E3E', sortOrder: 11 },
+      { id: 'cat_roofing', storeId: store.id, name: 'Roofing Materials', description: 'Gutters, ridges, flashings, and accessories', icon: 'home', color: '#805AD5', sortOrder: 12 },
+      { id: 'cat_timber', storeId: store.id, name: 'Timber & Boards', description: 'Timber, plywood, and wood products', icon: 'tree', color: '#8B4513', sortOrder: 13 },
+    ];
+    for (const cat of newCategories) { await prisma.productCategory.create({ data: cat }); }
+
+    const moreProducts = [
+      // More Cement products (Dangote, Savanna, Ndovu)
+      { id: 'prod_cement_dangote', sku: 'MBM-CEM-0004', name: 'Dangote Cement 50kg', categoryId: 'cat_cement', unitType: 'BAG', quantityInStock: 120, pricePerUnit: 690, costPrice: 610, reorderLevel: 40 },
+      { id: 'prod_cement_ndovu', sku: 'MBM-CEM-0005', name: 'Ndovu Cement 50kg', categoryId: 'cat_cement', unitType: 'BAG', quantityInStock: 80, pricePerUnit: 680, costPrice: 600, reorderLevel: 30 },
+      { id: 'prod_cement_bamburi_25kg', sku: 'MBM-CEM-0006', name: 'Bamburi Cement 25kg', categoryId: 'cat_cement', unitType: 'BAG', quantityInStock: 160, pricePerUnit: 420, costPrice: 360, reorderLevel: 50 },
+      { id: 'prod_cement_simba_25kg', sku: 'MBM-CEM-0007', name: 'Simba Cement 25kg', categoryId: 'cat_cement', unitType: 'BAG', quantityInStock: 140, pricePerUnit: 400, costPrice: 340, reorderLevel: 40 },
+
+      // More Iron Sheets (various gauges and lengths)
+      { id: 'prod_mabati_32', sku: 'MBM-IRS-0004', name: 'Mabati 32-Gauge (8ft)', categoryId: 'cat_iron_sheets', unitType: 'PIECE', quantityInStock: 600, pricePerUnit: 550, costPrice: 480, reorderLevel: 150 },
+      { id: 'prod_mabati_30_10ft', sku: 'MBM-IRS-0005', name: 'Mabati 30-Gauge (10ft)', categoryId: 'cat_iron_sheets', unitType: 'PIECE', quantityInStock: 250, pricePerUnit: 820, costPrice: 730, reorderLevel: 60 },
+      { id: 'prod_mabati_28_10ft', sku: 'MBM-IRS-0006', name: 'Mabati 28-Gauge (10ft)', categoryId: 'cat_iron_sheets', unitType: 'PIECE', quantityInStock: 180, pricePerUnit: 980, costPrice: 880, reorderLevel: 40 },
+      { id: 'prod_mabati_26_10ft', sku: 'MBM-IRS-0007', name: 'Mabati 26-Gauge (10ft)', categoryId: 'cat_iron_sheets', unitType: 'PIECE', quantityInStock: 100, pricePerUnit: 1150, costPrice: 1040, reorderLevel: 30 },
+      { id: 'prod_mabati_colorblue', sku: 'MBM-IRS-0008', name: 'Coloured Mabati Blue (8ft)', categoryId: 'cat_iron_sheets', unitType: 'PIECE', quantityInStock: 150, pricePerUnit: 950, costPrice: 820, reorderLevel: 40 },
+      { id: 'prod_mabati_colorred', sku: 'MBM-IRS-0009', name: 'Coloured Mabati Red (8ft)', categoryId: 'cat_iron_sheets', unitType: 'PIECE', quantityInStock: 130, pricePerUnit: 950, costPrice: 820, reorderLevel: 40 },
+
+      // Paints (Dulux, Crown, Sadolin - various sizes)
+      { id: 'prod_sadolin_20l', sku: 'MBM-PNT-0004', name: 'Sadolin Superdec 20L', categoryId: 'cat_paints', unitType: 'PIECE', quantityInStock: 20, pricePerUnit: 9200, costPrice: 7800, reorderLevel: 8 },
+      { id: 'prod_dulux_1l', sku: 'MBM-PNT-0005', name: 'Dulux Weathershield 1L', categoryId: 'cat_paints', unitType: 'PIECE', quantityInStock: 100, pricePerUnit: 850, costPrice: 680, reorderLevel: 30 },
+      { id: 'prod_crown_4l', sku: 'MBM-PNT-0006', name: 'Crown Vinyl Silk 4L', categoryId: 'cat_paints', unitType: 'PIECE', quantityInStock: 50, pricePerUnit: 2100, costPrice: 1750, reorderLevel: 20 },
+      { id: 'prod_crown_1l', sku: 'MBM-PNT-0007', name: 'Crown Vinyl Silk 1L', categoryId: 'cat_paints', unitType: 'PIECE', quantityInStock: 80, pricePerUnit: 720, costPrice: 580, reorderLevel: 25 },
+      { id: 'prod_sadolin_4l', sku: 'MBM-PNT-0008', name: 'Sadolin Superdec 4L', categoryId: 'cat_paints', unitType: 'PIECE', quantityInStock: 35, pricePerUnit: 2600, costPrice: 2150, reorderLevel: 12 },
+      { id: 'prod_undercoat_20l', sku: 'MBM-PNT-0009', name: 'Crown Undercoat 20L', categoryId: 'cat_paints', unitType: 'PIECE', quantityInStock: 15, pricePerUnit: 5500, costPrice: 4500, reorderLevel: 5 },
+      { id: 'prod_primer_20l', sku: 'MBM-PNT-0010', name: 'Dulux Primer 20L', categoryId: 'cat_paints', unitType: 'PIECE', quantityInStock: 12, pricePerUnit: 6000, costPrice: 4900, reorderLevel: 5 },
+
+      // Plumbing items (PVC pipes, fittings, taps)
+      { id: 'prod_pvc_1inch', sku: 'MBM-PLM-0003', name: 'PVC Pipe 1-inch x 3m', categoryId: 'cat_plumbing', unitType: 'PIECE', quantityInStock: 200, pricePerUnit: 200, costPrice: 150, reorderLevel: 50 },
+      { id: 'prod_pvc_3inch', sku: 'MBM-PLM-0004', name: 'PVC Pipe 3-inch x 3m', categoryId: 'cat_plumbing', unitType: 'PIECE', quantityInStock: 120, pricePerUnit: 580, costPrice: 430, reorderLevel: 35 },
+      { id: 'prod_pvc_elbow_4inch', sku: 'MBM-PLM-0005', name: 'PVC Elbow 4-inch (90°)', categoryId: 'cat_plumbing', unitType: 'PIECE', quantityInStock: 150, pricePerUnit: 120, costPrice: 80, reorderLevel: 40 },
+      { id: 'prod_pvc_tee_2inch', sku: 'MBM-PLM-0006', name: 'PVC Tee 2-inch', categoryId: 'cat_plumbing', unitType: 'PIECE', quantityInStock: 180, pricePerUnit: 90, costPrice: 60, reorderLevel: 50 },
+      { id: 'prod_tap_basin', sku: 'MBM-PLM-0007', name: 'Basin Tap (Chrome)', categoryId: 'cat_plumbing', unitType: 'PIECE', quantityInStock: 60, pricePerUnit: 1800, costPrice: 1300, reorderLevel: 20 },
+      { id: 'prod_tap_garden', sku: 'MBM-PLM-0008', name: 'Garden Tap (Brass)', categoryId: 'cat_plumbing', unitType: 'PIECE', quantityInStock: 40, pricePerUnit: 2500, costPrice: 1800, reorderLevel: 15 },
+      { id: 'prod_gi_pipe_half', sku: 'MBM-PLM-0009', name: 'GI Pipe 1/2-inch x 3m', categoryId: 'cat_plumbing', unitType: 'PIECE', quantityInStock: 80, pricePerUnit: 650, costPrice: 480, reorderLevel: 25 },
+
+      // Electrical items (cables, switches, sockets)
+      { id: 'prod_cable_1_5mm', sku: 'MBM-ELC-0002', name: 'Cable 1.5mm x 100m', categoryId: 'cat_electrical', unitType: 'PIECE', quantityInStock: 40, pricePerUnit: 5500, costPrice: 4200, reorderLevel: 15 },
+      { id: 'prod_cable_4mm', sku: 'MBM-ELC-0003', name: 'Cable 4mm x 100m', categoryId: 'cat_electrical', unitType: 'PIECE', quantityInStock: 20, pricePerUnit: 12000, costPrice: 9500, reorderLevel: 8 },
+      { id: 'prod_switch_1gang', sku: 'MBM-ELC-0004', name: 'Switch 1-Gang (White)', categoryId: 'cat_electrical', unitType: 'PIECE', quantityInStock: 200, pricePerUnit: 250, costPrice: 170, reorderLevel: 60 },
+      { id: 'prod_switch_2gang', sku: 'MBM-ELC-0005', name: 'Switch 2-Gang (White)', categoryId: 'cat_electrical', unitType: 'PIECE', quantityInStock: 150, pricePerUnit: 380, costPrice: 260, reorderLevel: 45 },
+      { id: 'prod_socket_13a', sku: 'MBM-ELC-0006', name: 'Socket 13A (White)', categoryId: 'cat_electrical', unitType: 'PIECE', quantityInStock: 180, pricePerUnit: 320, costPrice: 220, reorderLevel: 50 },
+      { id: 'prod_db_box', sku: 'MBM-ELC-0007', name: 'Distribution Board 8-Way', categoryId: 'cat_electrical', unitType: 'PIECE', quantityInStock: 25, pricePerUnit: 4500, costPrice: 3200, reorderLevel: 8 },
+      { id: 'prod_mcb_32a', sku: 'MBM-ELC-0008', name: 'MCB 32A Single Pole', categoryId: 'cat_electrical', unitType: 'PIECE', quantityInStock: 60, pricePerUnit: 800, costPrice: 550, reorderLevel: 20 },
+
+      // Tools (hammers, saws, drills, measuring tapes)
+      { id: 'prod_hammer_club', sku: 'MBM-TL-0006', name: 'Club Hammer (2.5kg)', categoryId: 'cat_tools', unitType: 'PIECE', quantityInStock: 35, pricePerUnit: 1500, costPrice: 1050, reorderLevel: 10 },
+      { id: 'prod_hammer_ballpein', sku: 'MBM-TL-0007', name: 'Ball Pein Hammer', categoryId: 'cat_tools', unitType: 'PIECE', quantityInStock: 30, pricePerUnit: 900, costPrice: 650, reorderLevel: 10 },
+      { id: 'prod_hacksaw', sku: 'MBM-TL-0008', name: 'Hacksaw Frame + 3 Blades', categoryId: 'cat_tools', unitType: 'PIECE', quantityInStock: 40, pricePerUnit: 1200, costPrice: 800, reorderLevel: 12 },
+      { id: 'prod_handsaw', sku: 'MBM-TL-0009', name: 'Hand Saw (Wood)', categoryId: 'cat_tools', unitType: 'PIECE', quantityInStock: 25, pricePerUnit: 1800, costPrice: 1300, reorderLevel: 8 },
+      { id: 'prod_drill_impact', sku: 'MBM-TL-0010', name: 'Impact Drill (Bosch)', categoryId: 'cat_tools', unitType: 'PIECE', quantityInStock: 10, pricePerUnit: 12000, costPrice: 9000, reorderLevel: 3 },
+      { id: 'prod_tape_5m', sku: 'MBM-TL-0011', name: 'Measuring Tape 5m', categoryId: 'cat_tools', unitType: 'PIECE', quantityInStock: 80, pricePerUnit: 450, costPrice: 300, reorderLevel: 25 },
+      { id: 'prod_tape_30m', sku: 'MBM-TL-0012', name: 'Measuring Tape 30m', categoryId: 'cat_tools', unitType: 'PIECE', quantityInStock: 20, pricePerUnit: 2800, costPrice: 2000, reorderLevel: 8 },
+      { id: 'prod_level_600mm', sku: 'MBM-TL-0013', name: 'Spirit Level 600mm', categoryId: 'cat_tools', unitType: 'PIECE', quantityInStock: 30, pricePerUnit: 2200, costPrice: 1600, reorderLevel: 10 },
+      { id: 'prod_trowel', sku: 'MBM-TL-0014', name: 'Plastering Trowel', categoryId: 'cat_tools', unitType: 'PIECE', quantityInStock: 45, pricePerUnit: 800, costPrice: 550, reorderLevel: 15 },
+      { id: 'prod_mason_hammer', sku: 'MBM-TL-0015', name: 'Masonry Hammer', categoryId: 'cat_tools', unitType: 'PIECE', quantityInStock: 35, pricePerUnit: 1100, costPrice: 780, reorderLevel: 12 },
+
+      // Nails and screws (various sizes)
+      { id: 'prod_nails_6inch', sku: 'MBM-NAS-0005', name: '6-inch Nails', categoryId: 'cat_nails_screws', unitType: 'KILOGRAM', quantityInStock: 300, pricePerUnit: 170, costPrice: 125, reorderLevel: 80 },
+      { id: 'prod_nails_1inch', sku: 'MBM-NAS-0006', name: '1-inch Nails (Panel Pins)', categoryId: 'cat_nails_screws', unitType: 'KILOGRAM', quantityInStock: 200, pricePerUnit: 200, costPrice: 150, reorderLevel: 60 },
+      { id: 'prod_nails_concrete', sku: 'MBM-NAS-0007', name: 'Concrete Nails 2-inch', categoryId: 'cat_nails_screws', unitType: 'KILOGRAM', quantityInStock: 250, pricePerUnit: 180, costPrice: 130, reorderLevel: 70 },
+      { id: 'prod_screws_drywall', sku: 'MBM-NAS-0008', name: 'Drywall Screws (Box of 200)', categoryId: 'cat_nails_screws', unitType: 'BOX', quantityInStock: 60, pricePerUnit: 650, costPrice: 470, reorderLevel: 20 },
+      { id: 'prod_bolts_nuts_12mm', sku: 'MBM-NAS-0009', name: 'Bolts & Nuts 12mm x 100mm (Set)', categoryId: 'cat_nails_screws', unitType: 'PIECE', quantityInStock: 100, pricePerUnit: 85, costPrice: 55, reorderLevel: 30 },
+      { id: 'prod_washers_12mm', sku: 'MBM-NAS-0010', name: 'Flat Washers 12mm (Pack of 10)', categoryId: 'cat_nails_screws', unitType: 'PIECE', quantityInStock: 120, pricePerUnit: 50, costPrice: 30, reorderLevel: 40 },
+
+      // Safety equipment (helmets, gloves, goggles)
+      { id: 'prod_helmet_white', sku: 'MBM-SFT-0001', name: 'Safety Helmet (White)', categoryId: 'cat_safety', unitType: 'PIECE', quantityInStock: 50, pricePerUnit: 1500, costPrice: 1000, reorderLevel: 15 },
+      { id: 'prod_helmet_yellow', sku: 'MBM-SFT-0002', name: 'Safety Helmet (Yellow)', categoryId: 'cat_safety', unitType: 'PIECE', quantityInStock: 40, pricePerUnit: 1500, costPrice: 1000, reorderLevel: 15 },
+      { id: 'prod_gloves_leather', sku: 'MBM-SFT-0003', name: 'Leather Work Gloves (Pair)', categoryId: 'cat_safety', unitType: 'PIECE', quantityInStock: 80, pricePerUnit: 600, costPrice: 380, reorderLevel: 25 },
+      { id: 'prod_gloves_rubber', sku: 'MBM-SFT-0004', name: 'Rubber Gloves (Pair)', categoryId: 'cat_safety', unitType: 'PIECE', quantityInStock: 60, pricePerUnit: 350, costPrice: 220, reorderLevel: 20 },
+      { id: 'prod_goggles', sku: 'MBM-SFT-0005', name: 'Safety Goggles (Clear)', categoryId: 'cat_safety', unitType: 'PIECE', quantityInStock: 45, pricePerUnit: 800, costPrice: 520, reorderLevel: 15 },
+      { id: 'prod_mask_n95', sku: 'MBM-SFT-0006', name: 'N95 Dust Mask (Pack of 5)', categoryId: 'cat_safety', unitType: 'PIECE', quantityInStock: 100, pricePerUnit: 500, costPrice: 320, reorderLevel: 30 },
+      { id: 'prod_safety_boots', sku: 'MBM-SFT-0007', name: 'Safety Boots (Steel Toe)', categoryId: 'cat_safety', unitType: 'PAIR', quantityInStock: 30, pricePerUnit: 3500, costPrice: 2500, reorderLevel: 10 },
+      { id: 'prod_reflector_jacket', sku: 'MBM-SFT-0008', name: 'Reflector Jacket (Orange)', categoryId: 'cat_safety', unitType: 'PIECE', quantityInStock: 40, pricePerUnit: 1200, costPrice: 780, reorderLevel: 15 },
+      { id: 'prod_harness', sku: 'MBM-SFT-0009', name: 'Full Body Safety Harness', categoryId: 'cat_safety', unitType: 'PIECE', quantityInStock: 15, pricePerUnit: 6500, costPrice: 4500, reorderLevel: 5 },
+
+      // Roofing materials (gutters, ridges, flashings)
+      { id: 'prod_gutter_half', sku: 'MBM-RFG-0001', name: 'Half-Round Gutter 3m (Galvanized)', categoryId: 'cat_roofing', unitType: 'PIECE', quantityInStock: 80, pricePerUnit: 1200, costPrice: 880, reorderLevel: 25 },
+      { id: 'prod_gutter_downpipe', sku: 'MBM-RFG-0002', name: 'Downpipe 3m (Galvanized)', categoryId: 'cat_roofing', unitType: 'PIECE', quantityInStock: 60, pricePerUnit: 900, costPrice: 650, reorderLevel: 20 },
+      { id: 'prod_ridge_cap', sku: 'MBM-RFG-0003', name: 'Ridge Cap 2m (Galvanized)', categoryId: 'cat_roofing', unitType: 'PIECE', quantityInStock: 100, pricePerUnit: 600, costPrice: 420, reorderLevel: 30 },
+      { id: 'prod_flashing_roll', sku: 'MBM-RFG-0004', name: 'Flashing Roll 30m (Aluminum)', categoryId: 'cat_roofing', unitType: 'PIECE', quantityInStock: 25, pricePerUnit: 3500, costPrice: 2500, reorderLevel: 8 },
+      { id: 'prod_valley_gutter', sku: 'MBM-RFG-0005', name: 'Valley Gutter 2m (Galvanized)', categoryId: 'cat_roofing', unitType: 'PIECE', quantityInStock: 50, pricePerUnit: 800, costPrice: 560, reorderLevel: 15 },
+      { id: 'prod_gutter_bracket', sku: 'MBM-RFG-0006', name: 'Gutter Bracket (Pack of 10)', categoryId: 'cat_roofing', unitType: 'PIECE', quantityInStock: 120, pricePerUnit: 450, costPrice: 300, reorderLevel: 40 },
+
+      // Timber and boards
+      { id: 'prod_timber_2x6', sku: 'MBM-TMB-0001', name: 'Timber 2x6 x 12ft (Cypress)', categoryId: 'cat_timber', unitType: 'PIECE', quantityInStock: 50, pricePerUnit: 1200, costPrice: 900, reorderLevel: 15 },
+      { id: 'prod_timber_2x2', sku: 'MBM-TMB-0002', name: 'Timber 2x2 x 12ft (Cypress)', categoryId: 'cat_timber', unitType: 'PIECE', quantityInStock: 80, pricePerUnit: 450, costPrice: 330, reorderLevel: 25 },
+      { id: 'prod_timber_1x6', sku: 'MBM-TMB-0003', name: 'Timber 1x6 x 12ft (Cypress)', categoryId: 'cat_timber', unitType: 'PIECE', quantityInStock: 60, pricePerUnit: 700, costPrice: 520, reorderLevel: 20 },
+      { id: 'prod_plywood_8x4_9mm', sku: 'MBM-TMB-0004', name: 'Plywood 8x4ft (9mm)', categoryId: 'cat_timber', unitType: 'PIECE', quantityInStock: 55, pricePerUnit: 1800, costPrice: 1350, reorderLevel: 18 },
+      { id: 'prod_plywood_8x4_12mm', sku: 'MBM-TMB-0005', name: 'Plywood 8x4ft (12mm)', categoryId: 'cat_timber', unitType: 'PIECE', quantityInStock: 40, pricePerUnit: 2200, costPrice: 1650, reorderLevel: 15 },
+      { id: 'prod_hardboard_8x4', sku: 'MBM-TMB-0006', name: 'Hardboard 8x4ft (3mm)', categoryId: 'cat_timber', unitType: 'PIECE', quantityInStock: 70, pricePerUnit: 1100, costPrice: 800, reorderLevel: 20 },
+      { id: 'prod_gypsum_8x4', sku: 'MBM-TMB-0007', name: 'Gypsum Board 8x4ft (9mm)', categoryId: 'cat_timber', unitType: 'PIECE', quantityInStock: 45, pricePerUnit: 1500, costPrice: 1100, reorderLevel: 15 },
+
+      // Additional Iron Bars
+      { id: 'prod_rebar_16mm', sku: 'MBM-IRB-0004', name: 'Rebar 16mm x 12m', categoryId: 'cat_iron_bars', unitType: 'PIECE', quantityInStock: 200, pricePerUnit: 1800, costPrice: 1580, reorderLevel: 60 },
+      { id: 'prod_rebar_20mm', sku: 'MBM-IRB-0005', name: 'Rebar 20mm x 12m', categoryId: 'cat_iron_bars', unitType: 'PIECE', quantityInStock: 120, pricePerUnit: 2800, costPrice: 2450, reorderLevel: 40 },
+      { id: 'prod_deformed_12mm', sku: 'MBM-IRB-0006', name: 'Deformed Bar 12mm x 12m', categoryId: 'cat_iron_bars', unitType: 'PIECE', quantityInStock: 300, pricePerUnit: 1350, costPrice: 1180, reorderLevel: 80 },
+
+      // Water tanks (popular in Kenya)
+      { id: 'prod_tank_1000l', sku: 'MBM-PLM-0010', name: 'Water Tank 1000L (Black)', categoryId: 'cat_plumbing', unitType: 'PIECE', quantityInStock: 15, pricePerUnit: 8500, costPrice: 6500, reorderLevel: 5 },
+      { id: 'prod_tank_2300l', sku: 'MBM-PLM-0011', name: 'Water Tank 2300L (Green)', categoryId: 'cat_plumbing', unitType: 'PIECE', quantityInStock: 10, pricePerUnit: 16000, costPrice: 12500, reorderLevel: 3 },
+      { id: 'prod_tank_5000l', sku: 'MBM-PLM-0012', name: 'Water Tank 5000L (Blue)', categoryId: 'cat_plumbing', unitType: 'PIECE', quantityInStock: 8, pricePerUnit: 28000, costPrice: 22000, reorderLevel: 3 },
+    ];
+
+    for (const product of moreProducts) {
+      await prisma.product.create({ data: { ...product, storeId: store.id } as any });
+    }
+    console.log(`   Added ${moreProducts.length} more products to expanded catalog`);
+  } else {
+    console.log('   Expanded product catalog already exists, skipping...');
+  }
+
+  // ==========================================================================
+  // 19. SEED LOYALTY TIERS
+  // ==========================================================================
+  console.log('Seeding loyalty tiers...');
+
+  const loyaltyTierCount = await prisma.loyaltyTier.count();
+  if (loyaltyTierCount === 0) {
+    await prisma.loyaltyTier.createMany({
+      data: [
+        {
+          storeId: store.id,
+          name: 'Bronze',
+          minPoints: 0,
+          maxPoints: 499,
+          discountPercent: 0,
+          pointsMultiplier: 1,
+          benefits: JSON.stringify({ freeDelivery: false, prioritySupport: false, birthdayBonus: false }),
+          color: '#CD7F32',
+          icon: '🥉',
+          sortOrder: 1,
+          isActive: true,
+        },
+        {
+          storeId: store.id,
+          name: 'Silver',
+          minPoints: 500,
+          maxPoints: 1499,
+          discountPercent: 5,
+          pointsMultiplier: 1.5,
+          benefits: JSON.stringify({ freeDelivery: false, prioritySupport: true, birthdayBonus: true }),
+          color: '#C0C0C0',
+          icon: '🥈',
+          sortOrder: 2,
+          isActive: true,
+        },
+        {
+          storeId: store.id,
+          name: 'Gold',
+          minPoints: 1500,
+          maxPoints: 4999,
+          discountPercent: 10,
+          pointsMultiplier: 2,
+          benefits: JSON.stringify({ freeDelivery: true, prioritySupport: true, birthdayBonus: true, exclusiveOffers: true }),
+          color: '#FFD700',
+          icon: '🥇',
+          sortOrder: 3,
+          isActive: true,
+        },
+        {
+          storeId: store.id,
+          name: 'Platinum',
+          minPoints: 5000,
+          maxPoints: null,
+          discountPercent: 15,
+          pointsMultiplier: 3,
+          benefits: JSON.stringify({ freeDelivery: true, prioritySupport: true, birthdayBonus: true, exclusiveOffers: true, personalManager: true, creditLimitBoost: true }),
+          color: '#E5E4E2',
+          icon: '💎',
+          sortOrder: 4,
+          isActive: true,
+        },
+      ],
+    });
+    console.log('   Added 4 loyalty tiers (Bronze, Silver, Gold, Platinum)');
+  } else {
+    console.log('   Loyalty tiers already exist, skipping...');
+  }
+
+  // ==========================================================================
+  // 20. SEED TAX CATEGORIES
+  // ==========================================================================
+  console.log('Seeding tax categories...');
+
+  const taxCategoryCount = await prisma.taxCategory.count();
+  if (taxCategoryCount === 0) {
+    const taxCatVat = await prisma.taxCategory.create({
+      data: {
+        storeId: store.id,
+        name: 'VAT',
+        rate: 16,
+        description: 'Value Added Tax - Standard rate for goods and services in Kenya',
+        etimsCode: '01',
+        isActive: true,
+      },
+    });
+    const taxCatWht = await prisma.taxCategory.create({
+      data: {
+        storeId: store.id,
+        name: 'WHT',
+        rate: 5,
+        description: 'Withholding Tax - Deducted at source on certain payments',
+        etimsCode: '02',
+        isActive: true,
+      },
+    });
+    const taxCatService = await prisma.taxCategory.create({
+      data: {
+        storeId: store.id,
+        name: 'Service Charge',
+        rate: 2,
+        description: 'Service Charge - Applicable on certain services',
+        etimsCode: '03',
+        isActive: true,
+      },
+    });
+    const taxCatExcise = await prisma.taxCategory.create({
+      data: {
+        storeId: store.id,
+        name: 'Excise Duty',
+        rate: 15,
+        description: 'Excise Duty - Applied on specific manufactured goods',
+        etimsCode: '04',
+        isActive: true,
+      },
+    });
+
+    // Seed Tax Rates for each category
+    await prisma.taxRate.createMany({
+      data: [
+        { taxCategoryId: taxCatVat.id, name: 'Standard Rate 16%', rate: 16, isActive: true },
+        { taxCategoryId: taxCatVat.id, name: 'Zero Rate 0%', rate: 0, isActive: true },
+        { taxCategoryId: taxCatVat.id, name: 'Exempt', rate: 0, isActive: true },
+        { taxCategoryId: taxCatWht.id, name: 'Standard WHT 5%', rate: 5, isActive: true },
+        { taxCategoryId: taxCatWht.id, name: 'Contractor WHT 3%', rate: 3, isActive: true },
+        { taxCategoryId: taxCatService.id, name: 'Standard Service Charge 2%', rate: 2, isActive: true },
+        { taxCategoryId: taxCatExcise.id, name: 'Standard Excise 15%', rate: 15, isActive: true },
+        { taxCategoryId: taxCatExcise.id, name: 'Reduced Excise 10%', rate: 10, isActive: true },
+      ],
+    });
+    console.log('   Added 4 tax categories with 8 tax rates');
+  } else {
+    console.log('   Tax categories already exist, skipping...');
+  }
+
+  // ==========================================================================
+  // 21. SEED BANK ACCOUNTS
+  // ==========================================================================
+  console.log('Seeding bank accounts...');
+
+  const bankAccountCount = await prisma.bankAccount.count();
+  if (bankAccountCount === 0) {
+    await prisma.bankAccount.createMany({
+      data: [
+        {
+          storeId: store.id,
+          bankName: 'Kenya Commercial Bank',
+          accountName: 'MBUMAH HARDWARE - Business Account',
+          accountNumber: '1102345678',
+          branch: 'Juja Branch',
+          swiftCode: 'KCABKENX',
+          currency: 'KES',
+          openingBalance: 500000,
+          currentBalance: 485000,
+          accountType: 'CHECKING',
+          isActive: true,
+        },
+        {
+          storeId: store.id,
+          bankName: 'Equity Bank',
+          accountName: 'MBUMAH HARDWARE - Savings Account',
+          accountNumber: '0670123456789',
+          branch: 'Thika Branch',
+          swiftCode: 'EABOROBB',
+          currency: 'KES',
+          openingBalance: 200000,
+          currentBalance: 218500,
+          accountType: 'SAVINGS',
+          isActive: true,
+        },
+        {
+          storeId: store.id,
+          bankName: 'Safaricom',
+          accountName: 'MBUMAH HARDWARE - M-Pesa Paybill',
+          accountNumber: '542542',
+          branch: 'M-Pesa',
+          currency: 'KES',
+          openingBalance: 0,
+          currentBalance: 34500,
+          accountType: 'MPESA',
+          isActive: true,
+        },
+      ],
+    });
+    console.log('   Added 3 bank accounts (KCB, Equity, M-Pesa)');
+  } else {
+    console.log('   Bank accounts already exist, skipping...');
+  }
+
+  // ==========================================================================
+  // 22. SEED VOUCHER CAMPAIGNS
+  // ==========================================================================
+  console.log('Seeding voucher campaigns...');
+
+  const campaignCount = await prisma.voucherCampaign.count();
+  if (campaignCount === 0) {
+    const newYearCampaign = await prisma.voucherCampaign.create({
+      data: {
+        storeId: store.id,
+        name: 'New Year Sale 2025',
+        description: 'Special discounts to start the new year. Valid on all cement and iron sheets.',
+        campaignType: 'SEASONAL',
+        startDate: new Date('2025-01-01'),
+        endDate: new Date('2025-01-31'),
+        budget: 200000,
+        spentAmount: 45000,
+        targetAudience: 'ALL',
+        status: 'ACTIVE',
+        totalRedemptions: 87,
+        totalRevenue: 1250000,
+        createdBy: 'user_super_admin',
+      },
+    });
+
+    const loyaltyCampaign = await prisma.voucherCampaign.create({
+      data: {
+        storeId: store.id,
+        name: 'Loyalty Rewards',
+        description: 'Exclusive vouchers for our loyal customers. Earn double points on every purchase.',
+        campaignType: 'LOYALTY',
+        startDate: new Date('2025-01-15'),
+        endDate: null,
+        budget: 100000,
+        spentAmount: 12000,
+        targetAudience: 'RETURNING',
+        status: 'ACTIVE',
+        totalRedemptions: 34,
+        totalRevenue: 680000,
+        createdBy: 'user_super_admin',
+      },
+    });
+
+    // ==========================================================================
+    // 23. SEED VOUCHERS (5 sample vouchers)
+    // ==========================================================================
+    console.log('Seeding vouchers...');
+
+    const voucherCount = await prisma.voucher.count();
+    if (voucherCount === 0) {
+      await prisma.voucher.createMany({
+        data: [
+          {
+            storeId: store.id,
+            code: 'MH-VC-NY2025OFF',
+            voucherType: 'PERCENTAGE',
+            name: 'New Year 10% Off',
+            description: 'Get 10% off on all cement products this New Year!',
+            value: 10,
+            minimumPurchase: 5000,
+            maxDiscount: 5000,
+            maxUses: 200,
+            currentUses: 45,
+            maxUsesPerUser: 2,
+            startDate: new Date('2025-01-01'),
+            endDate: new Date('2025-01-31'),
+            status: 'ACTIVE',
+            campaignId: newYearCampaign.id,
+            createdBy: 'user_super_admin',
+          },
+          {
+            storeId: store.id,
+            code: 'MH-VC-FLAT2K',
+            voucherType: 'FIXED',
+            name: 'KES 2,000 Off Iron Sheets',
+            description: 'Flat KES 2,000 discount on iron sheet orders above KES 15,000',
+            value: 2000,
+            minimumPurchase: 15000,
+            maxUses: 100,
+            currentUses: 28,
+            maxUsesPerUser: 1,
+            startDate: new Date('2025-01-01'),
+            endDate: new Date('2025-02-28'),
+            status: 'ACTIVE',
+            campaignId: newYearCampaign.id,
+            createdBy: 'user_super_admin',
+          },
+          {
+            storeId: store.id,
+            code: 'MH-VC-LOYAL15',
+            voucherType: 'PERCENTAGE',
+            name: 'Loyalty 15% Discount',
+            description: 'Exclusive 15% discount for our most loyal customers',
+            value: 15,
+            minimumPurchase: 10000,
+            maxDiscount: 7500,
+            maxUses: 50,
+            currentUses: 12,
+            maxUsesPerUser: 1,
+            startDate: new Date('2025-01-15'),
+            endDate: new Date('2025-06-30'),
+            status: 'ACTIVE',
+            campaignId: loyaltyCampaign.id,
+            createdBy: 'user_super_admin',
+          },
+          {
+            storeId: store.id,
+            code: 'MH-VC-FREETAPE',
+            voucherType: 'FREE_PRODUCT',
+            name: 'Free Measuring Tape',
+            description: 'Free 5m measuring tape with any purchase above KES 3,000',
+            value: 450,
+            freeProductId: 'prod_tape_5m',
+            minimumPurchase: 3000,
+            maxUses: 150,
+            currentUses: 67,
+            maxUsesPerUser: 1,
+            startDate: new Date('2025-01-01'),
+            endDate: new Date('2025-03-31'),
+            status: 'ACTIVE',
+            campaignId: newYearCampaign.id,
+            createdBy: 'user_super_admin',
+          },
+          {
+            storeId: store.id,
+            code: 'MH-VC-BUNDLE01',
+            voucherType: 'BUNDLE',
+            name: 'Build & Save Bundle',
+            description: 'Special bundle pricing: Buy 10 bags cement + 10 mabati and save KES 3,500',
+            value: 3500,
+            minimumPurchase: 12000,
+            maxUses: 50,
+            currentUses: 8,
+            maxUsesPerUser: 2,
+            startDate: new Date('2025-02-01'),
+            endDate: new Date('2025-04-30'),
+            status: 'ACTIVE',
+            campaignId: loyaltyCampaign.id,
+            createdBy: 'user_super_admin',
+          },
+        ],
+      });
+      console.log('   Added 5 vouchers across different types');
+    } else {
+      console.log('   Vouchers already exist, skipping...');
+    }
+  } else {
+    console.log('   Voucher campaigns already exist, skipping...');
+  }
+
+  // ==========================================================================
+  // 24. SEED CUSTOMER INTERACTIONS (5 sample interactions)
+  // ==========================================================================
+  console.log('Seeding customer interactions...');
+
+  const interactionCount = await prisma.customerInteraction.count();
+  if (interactionCount === 0) {
+    await prisma.customerInteraction.createMany({
+      data: [
+        {
+          storeId: store.id,
+          customerId: 'cust_4',
+          interactionType: 'COMPLAINT',
+          subject: 'Late delivery of cement order',
+          content: 'Customer reported that their cement delivery was 3 days late. They needed the materials urgently for a construction project. Apologized and offered a discount on next order.',
+          followUpDate: daysAgo(-3),
+          status: 'IN_PROGRESS',
+          priority: 'HIGH',
+          assignedTo: 'user_super_admin',
+          createdBy: 'user_cashier_1',
+        },
+        {
+          storeId: store.id,
+          customerId: 'cust_3',
+          interactionType: 'CALL',
+          subject: 'Follow-up on outstanding debt',
+          content: 'Called Peter Odhiambo regarding outstanding balance of KES 40,000. He committed to paying KES 20,000 by end of week and the remainder by month end.',
+          followUpDate: daysAgo(-7),
+          status: 'OPEN',
+          priority: 'MEDIUM',
+          assignedTo: 'user_accountant_1',
+          createdBy: 'user_accountant_1',
+        },
+        {
+          storeId: store.id,
+          customerId: 'cust_1',
+          interactionType: 'VISIT',
+          subject: 'New project inquiry - apartment block',
+          content: 'John Kamau visited the store to inquire about bulk pricing for an upcoming 24-unit apartment project. He will need approximately 500 bags of cement, 2000 iron sheets, and rebar. Quotation to be prepared.',
+          followUpDate: daysAgo(-5),
+          status: 'OPEN',
+          priority: 'HIGH',
+          assignedTo: 'user_super_admin',
+          createdBy: 'user_super_admin',
+        },
+        {
+          storeId: store.id,
+          customerId: 'cust_6',
+          interactionType: 'WHATSAPP',
+          subject: 'Product availability inquiry',
+          content: 'Samuel Mwangi sent a WhatsApp message asking if we have Dangote Cement in stock and the current price. Confirmed availability at KES 690 per bag.',
+          status: 'RESOLVED',
+          priority: 'LOW',
+          assignedTo: 'user_cashier_1',
+          createdBy: 'user_cashier_1',
+        },
+        {
+          storeId: store.id,
+          customerId: 'cust_8',
+          interactionType: 'FEEDBACK',
+          subject: 'Positive feedback on service quality',
+          content: 'Nairobi Contractors Co. sent feedback praising the quality of our rebar and the efficiency of our delivery service. They want to establish a long-term supply agreement. Proposed a meeting next week to discuss terms.',
+          followUpDate: daysAgo(-4),
+          status: 'IN_PROGRESS',
+          priority: 'MEDIUM',
+          assignedTo: 'user_super_admin',
+          createdBy: 'user_super_admin',
+        },
+      ],
+    });
+    console.log('   Added 5 customer interactions');
+  } else {
+    console.log('   Customer interactions already exist, skipping...');
+  }
+
+  // ==========================================================================
+  // 25. SEED EXPENSE BUDGETS
+  // ==========================================================================
+  console.log('Seeding expense budgets...');
+
+  const budgetCount = await prisma.expenseBudget.count();
+  if (budgetCount === 0) {
+    await prisma.expenseBudget.createMany({
+      data: [
+        {
+          storeId: store.id,
+          category: 'RENT',
+          period: '2025-01',
+          budgetAmount: 25000,
+          spentAmount: 25000,
+          remainingAmount: 0,
+          status: 'ACTIVE',
+          approvedBy: 'user_super_admin',
+        },
+        {
+          storeId: store.id,
+          category: 'SALARIES',
+          period: '2025-01',
+          budgetAmount: 120000,
+          spentAmount: 18000,
+          remainingAmount: 102000,
+          status: 'ACTIVE',
+          approvedBy: 'user_super_admin',
+        },
+        {
+          storeId: store.id,
+          category: 'UTILITIES',
+          period: '2025-01',
+          budgetAmount: 15000,
+          spentAmount: 4500,
+          remainingAmount: 10500,
+          status: 'ACTIVE',
+          approvedBy: 'user_super_admin',
+        },
+      ],
+    });
+    console.log('   Added 3 expense budgets (RENT, SALARIES, UTILITIES)');
+  } else {
+    console.log('   Expense budgets already exist, skipping...');
+  }
+
+  // ==========================================================================
+  // 26. Log the initialization event
   // ==========================================================================
   await prisma.initializationLog.create({
     data: {
       event: 'SYSTEM_INITIALIZED',
-      details: 'MBUMAH HARDWARE POS system initialized with default Super Admin, demo store, products, sales transactions, and accounts.',
+      details: 'MBUMAH HARDWARE POS system initialized with default Super Admin, demo store, products, sales transactions, accounts, loyalty tiers, tax categories, bank accounts, voucher campaigns, vouchers, customer interactions, and expense budgets.',
     },
   });
 
@@ -1163,6 +1746,13 @@ async function main() {
   console.log('   🏗️ Equipment rentals seeded: 3');
   console.log('   🗄️ Cash drawer logs seeded: ' + cashDrawerLogs.length);
   console.log('   📝 Expenses seeded: ' + (expenses.length + branchExpenses.length));
+  console.log('   🏆 Loyalty tiers seeded: 4 (Bronze, Silver, Gold, Platinum)');
+  console.log('   🧾 Tax categories seeded: 4 (VAT, WHT, Service Charge, Excise Duty)');
+  console.log('   🏦 Bank accounts seeded: 3 (KCB, Equity, M-Pesa)');
+  console.log('   🎟️ Voucher campaigns seeded: 2');
+  console.log('   🎫 Vouchers seeded: 5');
+  console.log('   💬 Customer interactions seeded: 5');
+  console.log('   💰 Expense budgets seeded: 3');
 }
 
 main()

@@ -20,6 +20,34 @@ import type {
   InvoiceItem,
   CustomerCreditItem,
   FastMovingProduct,
+  VoucherItem,
+  VoucherCampaignItem,
+  BankAccountItem,
+  BankTransactionItem,
+  BankReconciliationItem,
+  LoyaltyTierItem,
+  LoyaltyTransactionItem,
+  LoyaltyCampaignItem,
+  TaxCategoryItem,
+  TaxFilingItem,
+  StoreTransferItem as StoreTransferHeaderItem,
+  CustomerInteractionItem,
+} from './types';
+
+export type {
+  canCreateUsers,
+  VoucherItem,
+  VoucherCampaignItem,
+  BankAccountItem,
+  BankTransactionItem,
+  BankReconciliationItem,
+  LoyaltyTierItem,
+  LoyaltyTransactionItem,
+  LoyaltyCampaignItem,
+  TaxCategoryItem,
+  TaxFilingItem,
+  StoreTransferItem as StoreTransferHeaderItem,
+  CustomerInteractionItem,
 } from './types';
 
 
@@ -1035,6 +1063,432 @@ export const whatsappApi = {
     });
   },
 };
+
+
+// ============================================================
+// VOUCHERS API
+// ============================================================
+
+export const vouchersApi = {
+  list: async (params?: { storeId?: string; status?: string; voucherType?: string; campaignId?: string; search?: string; page?: number; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.storeId) query.set('storeId', params.storeId);
+    if (params?.status) query.set('status', params.status);
+    if (params?.voucherType) query.set('voucherType', params.voucherType);
+    if (params?.campaignId) query.set('campaignId', params.campaignId);
+    if (params?.search) query.set('search', params.search);
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    return request<VoucherItem[]>(`/vouchers${qs ? `?${qs}` : ''}`);
+  },
+
+  get: async (id: string) => {
+    return request<VoucherItem>(`/vouchers/${id}`);
+  },
+
+  create: async (data: {
+    storeId: string;
+    voucherType: string;
+    name: string;
+    description?: string;
+    value: number;
+    minimumPurchase?: number;
+    maxDiscount?: number;
+    freeProductId?: string;
+    maxUses?: number;
+    maxUsesPerUser?: number;
+    startDate: string;
+    endDate?: string;
+    campaignId?: string;
+    createdBy?: string;
+  }) => {
+    return request<VoucherItem>('/vouchers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: async (id: string, data: Record<string, unknown>) => {
+    return request<VoucherItem>(`/vouchers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: string) => {
+    return request<void>(`/vouchers/${id}`, { method: 'DELETE' });
+  },
+};
+
+export const voucherCampaignsApi = {
+  list: async (params?: { storeId?: string; campaignType?: string; status?: string; page?: number; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.storeId) query.set('storeId', params.storeId);
+    if (params?.campaignType) query.set('campaignType', params.campaignType);
+    if (params?.status) query.set('status', params.status);
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    return request<VoucherCampaignItem[]>(`/voucher-campaigns${qs ? `?${qs}` : ''}`);
+  },
+
+  create: async (data: {
+    storeId: string;
+    name: string;
+    description?: string;
+    campaignType: string;
+    startDate: string;
+    endDate?: string;
+    budget?: number;
+    targetAudience?: string;
+    createdBy?: string;
+  }) => {
+    return request<VoucherCampaignItem>('/voucher-campaigns', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+
+// ============================================================
+// BANKING API
+// ============================================================
+
+export const bankingApi = {
+  accounts: {
+    list: async (params?: { storeId?: string; accountType?: string; isActive?: boolean; page?: number; limit?: number }) => {
+      const query = new URLSearchParams();
+      if (params?.storeId) query.set('storeId', params.storeId);
+      if (params?.accountType) query.set('accountType', params.accountType);
+      if (params?.isActive !== undefined) query.set('isActive', String(params.isActive));
+      if (params?.page) query.set('page', String(params.page));
+      if (params?.limit) query.set('limit', String(params.limit));
+      const qs = query.toString();
+      return request<BankAccountItem[]>(`/banking/accounts${qs ? `?${qs}` : ''}`);
+    },
+
+    create: async (data: {
+      storeId: string;
+      bankName: string;
+      accountName: string;
+      accountNumber: string;
+      branch?: string;
+      swiftCode?: string;
+      currency?: string;
+      openingBalance: number;
+      accountType: string;
+    }) => {
+      return request<BankAccountItem>('/banking/accounts', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+  },
+
+  transactions: {
+    list: async (params?: { bankAccountId?: string; transactionType?: string; isReconciled?: string; dateFrom?: string; dateTo?: string; page?: number; limit?: number }) => {
+      const query = new URLSearchParams();
+      if (params?.bankAccountId) query.set('bankAccountId', params.bankAccountId);
+      if (params?.transactionType) query.set('transactionType', params.transactionType);
+      if (params?.isReconciled) query.set('isReconciled', params.isReconciled);
+      if (params?.dateFrom) query.set('dateFrom', params.dateFrom);
+      if (params?.dateTo) query.set('dateTo', params.dateTo);
+      if (params?.page) query.set('page', String(params.page));
+      if (params?.limit) query.set('limit', String(params.limit));
+      const qs = query.toString();
+      return request<BankTransactionItem[]>(`/banking/transactions${qs ? `?${qs}` : ''}`);
+    },
+
+    create: async (data: {
+      bankAccountId: string;
+      transactionType: string;
+      amount: number;
+      reference?: string;
+      description?: string;
+      transactionDate: string;
+      journalEntryId?: string;
+    }) => {
+      return request<BankTransactionItem>('/banking/transactions', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+  },
+
+  reconciliations: {
+    list: async (params?: { bankAccountId?: string; status?: string; dateFrom?: string; dateTo?: string; page?: number; limit?: number }) => {
+      const query = new URLSearchParams();
+      if (params?.bankAccountId) query.set('bankAccountId', params.bankAccountId);
+      if (params?.status) query.set('status', params.status);
+      if (params?.dateFrom) query.set('dateFrom', params.dateFrom);
+      if (params?.dateTo) query.set('dateTo', params.dateTo);
+      if (params?.page) query.set('page', String(params.page));
+      if (params?.limit) query.set('limit', String(params.limit));
+      const qs = query.toString();
+      return request<BankReconciliationItem[]>(`/banking/reconciliations${qs ? `?${qs}` : ''}`);
+    },
+
+    create: async (data: {
+      bankAccountId: string;
+      statementDate: string;
+      statementBalance: number;
+      bookBalance: number;
+      notes?: string;
+      createdBy?: string;
+    }) => {
+      return request<BankReconciliationItem>('/banking/reconciliations', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+  },
+};
+
+
+// ============================================================
+// LOYALTY API
+// ============================================================
+
+export const loyaltyApi = {
+  tiers: {
+    list: async (params?: { storeId?: string; isActive?: boolean; page?: number; limit?: number }) => {
+      const query = new URLSearchParams();
+      if (params?.storeId) query.set('storeId', params.storeId);
+      if (params?.isActive !== undefined) query.set('isActive', String(params.isActive));
+      if (params?.page) query.set('page', String(params.page));
+      if (params?.limit) query.set('limit', String(params.limit));
+      const qs = query.toString();
+      return request<LoyaltyTierItem[]>(`/loyalty/tiers${qs ? `?${qs}` : ''}`);
+    },
+
+    create: async (data: {
+      storeId: string;
+      name: string;
+      minPoints: number;
+      maxPoints?: number;
+      discountPercent: number;
+      pointsMultiplier?: number;
+      benefits?: string;
+      color?: string;
+      icon?: string;
+      sortOrder?: number;
+    }) => {
+      return request<LoyaltyTierItem>('/loyalty/tiers', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+  },
+
+  transactions: {
+    list: async (params?: { storeId?: string; customerId?: string; transactionType?: string; dateFrom?: string; dateTo?: string; page?: number; limit?: number }) => {
+      const query = new URLSearchParams();
+      if (params?.storeId) query.set('storeId', params.storeId);
+      if (params?.customerId) query.set('customerId', params.customerId);
+      if (params?.transactionType) query.set('transactionType', params.transactionType);
+      if (params?.dateFrom) query.set('dateFrom', params.dateFrom);
+      if (params?.dateTo) query.set('dateTo', params.dateTo);
+      if (params?.page) query.set('page', String(params.page));
+      if (params?.limit) query.set('limit', String(params.limit));
+      const qs = query.toString();
+      return request<LoyaltyTransactionItem[]>(`/loyalty/transactions${qs ? `?${qs}` : ''}`);
+    },
+
+    create: async (data: {
+      storeId: string;
+      customerId: string;
+      points: number;
+      transactionType: string;
+      reference?: string;
+      description?: string;
+      createdBy?: string;
+    }) => {
+      return request<LoyaltyTransactionItem>('/loyalty/transactions', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+  },
+
+  campaigns: {
+    list: async (params?: { storeId?: string; campaignType?: string; status?: string; page?: number; limit?: number }) => {
+      const query = new URLSearchParams();
+      if (params?.storeId) query.set('storeId', params.storeId);
+      if (params?.campaignType) query.set('campaignType', params.campaignType);
+      if (params?.status) query.set('status', params.status);
+      if (params?.page) query.set('page', String(params.page));
+      if (params?.limit) query.set('limit', String(params.limit));
+      const qs = query.toString();
+      return request<LoyaltyCampaignItem[]>(`/loyalty/campaigns${qs ? `?${qs}` : ''}`);
+    },
+
+    create: async (data: {
+      storeId: string;
+      name: string;
+      description?: string;
+      campaignType: string;
+      bonusPoints?: number;
+      multiplier?: number;
+      startDate: string;
+      endDate?: string;
+      targetTierId?: string;
+      createdBy?: string;
+    }) => {
+      return request<LoyaltyCampaignItem>('/loyalty/campaigns', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+  },
+};
+
+
+// ============================================================
+// TAX API
+// ============================================================
+
+export const taxApi = {
+  categories: {
+    list: async (params?: { storeId?: string; isActive?: boolean; search?: string; page?: number; limit?: number }) => {
+      const query = new URLSearchParams();
+      if (params?.storeId) query.set('storeId', params.storeId);
+      if (params?.isActive !== undefined) query.set('isActive', String(params.isActive));
+      if (params?.search) query.set('search', params.search);
+      if (params?.page) query.set('page', String(params.page));
+      if (params?.limit) query.set('limit', String(params.limit));
+      const qs = query.toString();
+      return request<TaxCategoryItem[]>(`/tax/categories${qs ? `?${qs}` : ''}`);
+    },
+
+    create: async (data: {
+      storeId: string;
+      name: string;
+      rate: number;
+      description?: string;
+      etimsCode?: string;
+      isActive?: boolean;
+    }) => {
+      return request<TaxCategoryItem>('/tax/categories', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+  },
+
+  filings: {
+    list: async (params?: { storeId?: string; filingType?: string; status?: string; period?: string; page?: number; limit?: number }) => {
+      const query = new URLSearchParams();
+      if (params?.storeId) query.set('storeId', params.storeId);
+      if (params?.filingType) query.set('filingType', params.filingType);
+      if (params?.status) query.set('status', params.status);
+      if (params?.period) query.set('period', params.period);
+      if (params?.page) query.set('page', String(params.page));
+      if (params?.limit) query.set('limit', String(params.limit));
+      const qs = query.toString();
+      return request<TaxFilingItem[]>(`/tax/filings${qs ? `?${qs}` : ''}`);
+    },
+
+    create: async (data: {
+      storeId: string;
+      filingPeriod: string;
+      filingType: string;
+      totalSales: number;
+      totalTax: number;
+      totalWht?: number;
+      dueDate?: string;
+      notes?: string;
+      filedBy?: string;
+    }) => {
+      return request<TaxFilingItem>('/tax/filings', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+  },
+};
+
+
+// ============================================================
+// STORE TRANSFERS API
+// ============================================================
+
+export const storeTransfersApi = {
+  list: async (params?: { storeId?: string; fromStoreId?: string; toStoreId?: string; status?: string; page?: number; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.storeId) query.set('storeId', params.storeId);
+    if (params?.fromStoreId) query.set('fromStoreId', params.fromStoreId);
+    if (params?.toStoreId) query.set('toStoreId', params.toStoreId);
+    if (params?.status) query.set('status', params.status);
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    return request<StoreTransferHeaderItem[]>(`/store-transfers${qs ? `?${qs}` : ''}`);
+  },
+
+  get: async (id: string) => {
+    return request<StoreTransferHeaderItem>(`/store-transfers/${id}`);
+  },
+
+  create: async (data: {
+    fromStoreId: string;
+    toStoreId: string;
+    items: { productId: string; quantity: number; unitType?: string; notes?: string }[];
+    notes?: string;
+    requestedBy?: string;
+  }) => {
+    return request<StoreTransferHeaderItem>('/store-transfers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: async (id: string, data: Record<string, unknown>) => {
+    return request<StoreTransferHeaderItem>(`/store-transfers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+
+// ============================================================
+// CUSTOMER INTERACTIONS API (CRM)
+// ============================================================
+
+export const customerInteractionsApi = {
+  list: async (params?: { storeId?: string; customerId?: string; interactionType?: string; status?: string; priority?: string; page?: number; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.storeId) query.set('storeId', params.storeId);
+    if (params?.customerId) query.set('customerId', params.customerId);
+    if (params?.interactionType) query.set('interactionType', params.interactionType);
+    if (params?.status) query.set('status', params.status);
+    if (params?.priority) query.set('priority', params.priority);
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    return request<CustomerInteractionItem[]>(`/customer-interactions${qs ? `?${qs}` : ''}`);
+  },
+
+  create: async (data: {
+    storeId: string;
+    customerId: string;
+    interactionType: string;
+    subject?: string;
+    content: string;
+    followUpDate?: string;
+    priority?: string;
+    assignedTo?: string;
+    createdBy?: string;
+  }) => {
+    return request<CustomerInteractionItem>('/customer-interactions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
 
 export function formatKES(amount: number): string {
   return new Intl.NumberFormat('en-KE', {
