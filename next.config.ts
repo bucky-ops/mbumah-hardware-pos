@@ -6,8 +6,11 @@ const nextConfig: NextConfig = {
   },
   reactStrictMode: false,
 
-  // Ensure Prisma Client is bundled correctly for serverless (Vercel)
-  serverExternalPackages: ["@prisma/client", "prisma"],
+  // NOTE: Do NOT add @prisma/client to serverExternalPackages on Vercel.
+  // Next.js file tracing must include the Prisma engine binary (.prisma/client)
+  // for the serverless functions to work. Using serverExternalPackages prevents
+  // Next.js from tracing these files, causing 500 errors at runtime.
+  serverExternalPackages: [],
 
   // Image optimization config - works with Vercel's Image Optimization API
   images: {
