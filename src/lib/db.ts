@@ -19,28 +19,27 @@ function createPrismaClient() {
 
   if (!url) {
     console.error('❌ DATABASE_URL environment variable is not set!')
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('DATABASE_URL environment variable is required in production')
-    }
+    // Create client anyway - it will fail on actual queries with a clear error
+    // but won't crash the entire server on module load
   }
 
-  return new PrismaClient({
-    log: process.env.NODE_ENV === 'production' ? ['error'] : ['error', 'warn'],
-    datasources: {
-      db: {
-        url,
+  console.log(`🔧 Creating PrismaClient with URL: ${url ? url.substring(0, 30) + '...' : 'NOT SET'}`)
+
+  try {
+    return new PrismaClient({
+      log: ['error'],
+      datasources: {
+        db: {
+          url,
+        },
       },
-    },
-  })
+    })
+  } catch (error) {
+    console.error('❌ Failed to create PrismaClient:', error)
+    throw error
+  }
 }
 
 export const db = globalForPrisma.prisma ?? createPrismaClient()
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
-
-// Graceful shutdown for serverless
-if (process.env.NODE_ENV === 'production') {
-  process.on('beforeExit', async () => {
-    await db.$disconnect()
-  })
-}
