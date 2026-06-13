@@ -426,7 +426,7 @@ export const ROLE_TABS: Record<UserRole, string[]> = {
   SUPER_ADMIN: ['dashboard', 'pos', 'catalog', 'inventory', 'customers', 'transactions', 'invoices', 'delivery-notes', 'gift-cards', 'vouchers', 'credits', 'loyalty', 'rentals', 'suppliers', 'financial', 'banking', 'tax', 'reports', 'transfers', 'messaging', 'admin'],
   STORE_OWNER: ['dashboard', 'pos', 'catalog', 'inventory', 'customers', 'transactions', 'invoices', 'delivery-notes', 'gift-cards', 'vouchers', 'credits', 'loyalty', 'rentals', 'suppliers', 'financial', 'banking', 'tax', 'reports', 'transfers', 'messaging', 'admin'],
   BRANCH_MANAGER: ['dashboard', 'pos', 'catalog', 'inventory', 'customers', 'transactions', 'invoices', 'delivery-notes', 'gift-cards', 'vouchers', 'credits', 'loyalty', 'rentals', 'suppliers', 'financial', 'banking', 'tax', 'reports', 'transfers', 'messaging', 'admin'],
-  SALES_PERSON: ['pos', 'catalog', 'customers', 'transactions', 'invoices', 'delivery-notes', 'vouchers', 'credits', 'loyalty', 'messaging'],
+  SALES_PERSON: ['dashboard', 'pos', 'catalog', 'customers', 'transactions', 'invoices', 'delivery-notes', 'gift-cards', 'vouchers', 'credits', 'loyalty', 'messaging'],
   ACCOUNTANT: ['dashboard', 'financial', 'banking', 'tax', 'reports', 'transactions', 'credits', 'invoices', 'suppliers', 'messaging'],
 };
 
@@ -559,7 +559,7 @@ export interface GiftCardItem {
   initialBalance: number;
   currentBalance: number;
   status: 'ACTIVE' | 'REDEEMED' | 'EXPIRED' | 'CANCELLED';
-  issuedReason: 'LOYALTY' | 'PROMOTION' | 'PURCHASE' | 'GIFT' | 'REFERRAL';
+  issuedReason: string;
   minimumPurchase: number;
   expiresAt: string | null;
   createdAt: string;

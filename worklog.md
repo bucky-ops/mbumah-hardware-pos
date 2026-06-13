@@ -374,3 +374,142 @@ Stage Summary:
 - Messaging module added (WhatsApp/SMS for debt reminders)
 - All changes pushed to GitHub on main branch
 - Dev server occasionally OOM-killed in sandbox (not a code issue)
+
+---
+Task ID: 2
+Agent: Error Boundary & State Persistence Agent
+Task: Implement global error boundary system and state persistence
+
+Work Log:
+- Created `/src/lib/state-persistence.ts` with:
+  - `STORAGE_KEYS` constants for localStorage keys (mbt_app_state, mbt_user, mbt_token, mbt_current_route)
+  - `PersistedAppState` interface (activeTab, cartItems, storeId, savedAt, currentRoute)
+  - `saveAppState()`: Saves current tab, cart, storeId to localStorage
+  - `restoreAppState()`: Restores saved state on app load (expires after 24h)
+  - `clearSavedAppState()`: Clears saved state after successful restoration
+  - `isSuperAdmin()`: Checks user role from localStorage
+  - `startIdleTimer()`: Starts 30-minute idle timer that saves state but does NOT logout
+  - `resetIdleTimer()`: Resets idle timer on user activity
+  - `clearIdleTimer()`: Cleanup function for unmount
+  - `saveCurrentRoute()`: Saves current URL to localStorage
+- Created `/src/components/error-boundary.tsx` with:
+  - Class-based React ErrorBoundary component (required for error catching)
+  - On error: saves current app state and route to localStorage
+  - For regular users: shows dismissible error toast with "Something went wrong. Returning to previous page." and auto-navigates back via `window.history.back()` after 3 seconds
+  - For super admins: shows dedicated error overlay with error message, "Return to Dashboard" button, and "Retry" button
+  - Properly typed with TypeScript, uses 'use client' directive
+  - Accepts props: getActiveTab, getCartItems, getStoreId, onRestoreState
+- Updated `/src/app/page.tsx` with minimal changes:
+  - Added imports for ErrorBoundary and state-persistence functions
+  - Modified LoginScreen handleSubmit: checks for saved state on login, restores previous session if found, otherwise uses role-based default tab
+  - Added MainApp state persistence hooks:
+    - Restore state on mount effect
+    - Idle timer effect (30 min) with activity listeners (mousemove, keydown, click, scroll)
+    - Save state on tab/cart/store change effect
+  - Wrapped MainApp return content in ErrorBoundary component with proper props
+  - Did NOT modify stores.ts
+
+Stage Summary:
+- Global error boundary catches rendering errors with role-appropriate UI
+- State persistence saves/restore works across page reloads and power loss
+- Idle timer saves state after 30 min but does NOT logout
+- On login, previously saved state is restored automatically
+- ESLint passes with no errors
+- Dev server compiles and runs successfully
+
+---
+Task ID: 4
+Agent: Reports Tab Agent
+Task: Add "Sales by Salesperson" report type to the Reports tab
+
+Work Log:
+- Read full reports-tab.tsx (2463 lines) and worklog.md to understand existing implementation
+- Identified existing report types: sales, inventory, valuation, daily, top_products, customer_analysis, rental_performance, fast_moving
+- Identified TransactionItem type with salesPersonId and salesPerson fields
+- Identified existing helper components: HorizontalBar, MiniSparkline, ReportTypeCard
+- Identified existing utilities: formatKES, paymentMethodIcons
+- Identified role-based visibility: hasPermission from @/lib/types, useAuthStore from @/lib/stores
+
+Changes made to /src/app/tabs/reports-tab.tsx:
+1. Added imports: useAuthStore from @/lib/stores, TransactionItem from @/lib/api, hasPermission from @/lib/types
+2. Added 'sales_by_person' to reportType state union type
+3. Added authUser from useAuthStore, selectedSalespersonId state, canViewReports computed flag
+4. Added new useQuery for sales-person-tx data fetching (enabled only for sales_by_person)
+5. Added salesPersonAnalysis useMemo: groups transactions by salesPersonId, computes revenue, tx count, payment method breakdown, daily revenue per person
+6. Added salesPersonChartData useMemo for Recharts
+7. Added ReportTypeCard for "Sales by Salesperson" (conditionally rendered based on canViewReports)
+8. Added sales_by_person to chart type toggle condition
+9. Added CSV export handling for sales_by_person with per-person and per-payment-method breakdowns
+10. Added sales_by_person to server-side export fallback mapping
+11. Added sales_by_person to PDF export title mapping
+12. Added full report content section with:
+    - 4 summary stats cards: Total Salespersons, Total Revenue, Avg per Salesperson, Top Performer
+    - Revenue by Salesperson chart (bar/line/area/pie via Recharts)
+    - Salesperson Performance Table with rank, name, revenue bar, tx count, avg tx, payment method badges
+    - Click-to-expand per-salesperson detail cards with:
+      - Payment Method Breakdown (Cash/M-Pesa/Debt/Split) with percentage bars
+      - Daily Performance Sparkline (MiniSparkline component)
+      - Key metrics: Total Revenue, Transactions, Avg Transaction
+    - Empty state with fallback to Sales Report
+
+Stage Summary:
+- New "Sales by Salesperson" report type fully implemented
+- Role-based visibility: card only shown if user has reports → read permission
+- SALES_PERSON role cannot see this report (their ROLE_TABS doesn't include 'reports')
+- Data filtered by current storeId
+- Uses existing API (transactionsApi.list) — no new endpoints needed
+- Uses existing components (HorizontalBar, MiniSparkline, ReportTypeCard, Recharts)
+- CSV and PDF export support included
+- ESLint passes with no errors
+
+---
+Task ID: 3
+Agent: Gift Cards Enhancer
+Task: Enhance Gift Cards module with full CRUD, reasons management, and auto-adjusting visibility based on role
+
+Work Log:
+- Read existing gift-cards-tab.tsx (1166 lines) to understand current implementation
+- Read api.ts giftCardsApi (had only list and create methods)
+- Read types.ts PERMISSION_MATRIX for crm permissions per role
+- Read stores.ts for useAuthStore structure
+- Read prisma schema for GiftCard model
+- Created /api/gift-cards/[id]/route.ts with PUT and DELETE handlers
+  - PUT: Updates status (REDEEMED zeros balance), issuedReason, minimumPurchase, expiresAt, logs notes
+  - DELETE: Only allows deletion of CANCELLED or EXPIRED cards (hard delete)
+  - Used Next.js 16 pattern: `interface RouteContext { params: Promise<{ id: string }> }`
+- Updated api.ts giftCardsApi with 3 new methods:
+  - `update(id, data)` - PUT /api/gift-cards/[id]
+  - `delete(id)` - DELETE /api/gift-cards/[id]
+  - `redeem(id)` - PUT /api/gift-cards/[id] with status=REDEEMED
+- Updated GiftCardItem type: changed issuedReason from union type to string to support custom reasons
+- Completely enhanced gift-cards-tab.tsx with:
+  1. **Edit Dialog**: Admin/Manager can edit reason, minimum purchase, expiry date, and add notes (only for ACTIVE cards)
+  2. **Delete Button**: Only on CANCELLED or EXPIRED cards, admin/manager only
+  3. **Cancel Button**: Changes ACTIVE card status to CANCELLED, admin/manager only
+  4. **Redeem Button**: Changes ACTIVE card status to REDEEMED (zeros balance), for users with crm create/update permission
+  5. **Confirm Dialog**: Before delete/cancel/redeem actions, shows card details and asks for confirmation
+  6. **Manage Reasons Panel**: Collapsible panel under filters (admin/manager only)
+     - Default reasons (LOYALTY, PROMOTION, PURCHASE, GIFT, REFERRAL) cannot be deleted
+     - Custom reasons stored in localStorage (key: mbt_custom_gc_reasons)
+     - Add/delete custom reasons with input validation (uppercase, no duplicates)
+     - Custom reasons appear in filter dropdown and create/edit forms
+  7. **Role-based Visibility**:
+     - Create Gift Card button: visible only if hasPermission(role, 'crm', 'create')
+     - Delete/Cancel/Edit buttons: visible only if hasPermission(role, 'crm', 'delete')
+     - Redeem button: visible if hasPermission(role, 'crm', 'create') || hasPermission(role, 'crm', 'update')
+     - Manage Reasons panel: visible only if canCreateUsers(role) (SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER)
+     - Issue Gift Card button on Top Clients: visible only if canCreate
+     - Stats cards and Top Clients section: visible to all users
+  8. **Action buttons on both desktop table (hover-reveal) and mobile cards (always visible)**
+- Fixed lucide-react import: `Redeem` doesn't exist, replaced with `HandCoins` icon
+- Cleaned up unused imports: `useCallback`, `ArrowUpDown`
+- Tested all API endpoints: PUT (update, redeem, cancel), DELETE all return 200 with correct data
+
+Stage Summary:
+- Full CRUD for gift cards implemented (Create, Read, Update, Delete)
+- Custom reasons management with localStorage persistence
+- Comprehensive role-based visibility using hasPermission and canCreateUsers
+- Confirm dialogs before destructive actions
+- API endpoints verified working with PostgreSQL (Neon)
+- All lint checks pass
+- File: gift-cards-tab.tsx grew from 1166 to 1757 lines

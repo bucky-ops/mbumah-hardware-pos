@@ -986,6 +986,23 @@ export const giftCardsApi = {
       body: JSON.stringify(data),
     });
   },
+  update: async (id: string, data: { status?: string; notes?: string; expiresAt?: string; issuedReason?: string; minimumPurchase?: number }) => {
+    return request<GiftCardItem>(`/gift-cards/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+  delete: async (id: string) => {
+    return request<void>(`/gift-cards/${id}`, {
+      method: 'DELETE',
+    });
+  },
+  redeem: async (id: string) => {
+    return request<GiftCardItem>(`/gift-cards/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: 'REDEEMED' }),
+    });
+  },
 };
 
 export const deliveryNotesApi = {

@@ -1,16 +1,18 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Gift, Search, Plus, CreditCard, Loader2,
-  Award, ArrowUpDown, Filter, TrendingUp, Clock,
+  Award, Filter, TrendingUp, Clock,
   AlertTriangle, Star, Users, Wallet, CalendarDays,
   Crown, Medal, Shield, ChevronDown, Copy, CheckCircle2,
+  Pencil, Trash2, Ban, HandCoins, X, Settings2, ChevronUp,
 } from 'lucide-react';
 
-import { useAppStore } from '@/lib/stores';
+import { useAppStore, useAuthStore } from '@/lib/stores';
+import { hasPermission, canCreateUsers } from '@/lib/types';
 import {
   giftCardsApi, customersApi,
   formatKES, formatDate, formatDateTime,
@@ -41,6 +43,12 @@ import { Progress } from '@/components/ui/progress';
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip';
+
+// ─── Constants ──────────────────────────────────────────────────────────────────
+
+const DEFAULT_REASONS = ['LOYALTY', 'PROMOTION', 'PURCHASE', 'GIFT', 'REFERRAL'] as const;
+
+const CUSTOM_REASONS_STORAGE_KEY = 'mbt_custom_gc_reasons';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -154,7 +162,7 @@ function getStatusBadge(status: GiftCardItem['status']) {
   }
 }
 
-function getIssuedReasonBadge(reason: GiftCardItem['issuedReason']) {
+function getIssuedReasonBadge(reason: string) {
   switch (reason) {
     case 'LOYALTY':
       return <Badge className="bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/30 border-violet-200 dark:border-violet-800">Loyalty</Badge>;
@@ -167,7 +175,7 @@ function getIssuedReasonBadge(reason: GiftCardItem['issuedReason']) {
     case 'REFERRAL':
       return <Badge className="bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/30 border-teal-200 dark:border-teal-800">Referral</Badge>;
     default:
-      return <Badge variant="outline">{reason}</Badge>;
+      return <Badge className="bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900/30 border-slate-200 dark:border-slate-800">{reason}</Badge>;
   }
 }
 
@@ -188,7 +196,17 @@ function isExpired(expiresAt: string | null): boolean {
 
 export default function GiftCardsTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
+  const { user } = useAuthStore();
   const queryClient = useQueryClient();
+
+  const userRole = (user?.role || 'SALES_PERSON') as 'SUPER_ADMIN' | 'STORE_OWNER' | 'BRANCH_MANAGER' | 'SALES_PERSON' | 'ACCOUNTANT';
+
+  // Permission checks
+  const canCreate = hasPermission(userRole, 'crm', 'create');
+  const canDelete = hasPermission(userRole, 'crm', 'delete');
+  const canUpdate = hasPermission(userRole, 'crm', 'update');
+  const canRedeem = canCreate || canUpdate;
+  const isAdmin = canCreateUsers(userRole);
 
   // Local state
   const [searchQuery, setSearchQuery] = useState('');
@@ -197,10 +215,50 @@ export default function GiftCardsTab() {
   const [showFilters, setShowFilters] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
+  // Edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingCard, setEditingCard] = useState<GiftCardItem | null>(null);
+  const [editExpiry, setEditExpiry] = useState('');
+  const [editReason, setEditReason] = useState('');
+  const [editMinPurchase, setEditMinPurchase] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+
+  // Confirm dialog state
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'delete' | 'cancel' | 'redeem' | null>(null);
+  const [confirmCard, setConfirmCard] = useState<GiftCardItem | null>(null);
+
+  // Manage Reasons state
+  const [showReasonsPanel, setShowReasonsPanel] = useState(false);
+  const [newReason, setNewReason] = useState('');
+  const [customReasons, setCustomReasons] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const stored = localStorage.getItem(CUSTOM_REASONS_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // All reasons (default + custom)
+  const allReasons = useMemo(() => {
+    return [...DEFAULT_REASONS, ...customReasons];
+  }, [customReasons]);
+
+  // Persist custom reasons to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(CUSTOM_REASONS_STORAGE_KEY, JSON.stringify(customReasons));
+    } catch {
+      // ignore
+    }
+  }, [customReasons]);
+
   // Create form state
   const [formCustomerId, setFormCustomerId] = useState('');
   const [formAmount, setFormAmount] = useState('');
-  const [formReason, setFormReason] = useState<GiftCardItem['issuedReason']>('LOYALTY');
+  const [formReason, setFormReason] = useState<string>('LOYALTY');
   const [formMinPurchase, setFormMinPurchase] = useState('');
   const [formExpiry, setFormExpiry] = useState('');
   const [formNotes, setFormNotes] = useState('');
@@ -233,6 +291,54 @@ export default function GiftCardsTab() {
       queryClient.invalidateQueries({ queryKey: ['gift-cards', currentStoreId] });
     },
     onError: (err: Error) => toast.error(err.message || 'Failed to create gift card'),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof giftCardsApi.update>[1] }) =>
+      giftCardsApi.update(id, data),
+    onSuccess: (res) => {
+      toast.success('Gift card updated successfully');
+      setEditDialogOpen(false);
+      setEditingCard(null);
+      queryClient.invalidateQueries({ queryKey: ['gift-cards', currentStoreId] });
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to update gift card'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: giftCardsApi.delete,
+    onSuccess: () => {
+      toast.success('Gift card deleted successfully');
+      setConfirmDialogOpen(false);
+      setConfirmCard(null);
+      setConfirmAction(null);
+      queryClient.invalidateQueries({ queryKey: ['gift-cards', currentStoreId] });
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to delete gift card'),
+  });
+
+  const redeemMutation = useMutation({
+    mutationFn: giftCardsApi.redeem,
+    onSuccess: () => {
+      toast.success('Gift card redeemed successfully');
+      setConfirmDialogOpen(false);
+      setConfirmCard(null);
+      setConfirmAction(null);
+      queryClient.invalidateQueries({ queryKey: ['gift-cards', currentStoreId] });
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to redeem gift card'),
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: (id: string) => giftCardsApi.update(id, { status: 'CANCELLED' }),
+    onSuccess: () => {
+      toast.success('Gift card cancelled successfully');
+      setConfirmDialogOpen(false);
+      setConfirmCard(null);
+      setConfirmAction(null);
+      queryClient.invalidateQueries({ queryKey: ['gift-cards', currentStoreId] });
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to cancel gift card'),
   });
 
   // ─── Derived data ──────────────────────────────────────────────────────────
@@ -347,6 +453,76 @@ export default function GiftCardsTab() {
     });
   }
 
+  function handleEditCard(gc: GiftCardItem) {
+    setEditingCard(gc);
+    setEditExpiry(gc.expiresAt ? gc.expiresAt.split('T')[0] : '');
+    setEditReason(gc.issuedReason);
+    setEditMinPurchase(String(gc.minimumPurchase || ''));
+    setEditNotes('');
+    setEditDialogOpen(true);
+  }
+
+  function handleSaveEdit() {
+    if (!editingCard) return;
+    updateMutation.mutate({
+      id: editingCard.id,
+      data: {
+        expiresAt: editExpiry || undefined,
+        issuedReason: editReason,
+        minimumPurchase: editMinPurchase ? parseFloat(editMinPurchase) : 0,
+        notes: editNotes || undefined,
+      },
+    });
+  }
+
+  function handleConfirmAction() {
+    if (!confirmCard || !confirmAction) return;
+
+    switch (confirmAction) {
+      case 'delete':
+        deleteMutation.mutate(confirmCard.id);
+        break;
+      case 'cancel':
+        cancelMutation.mutate(confirmCard.id);
+        break;
+      case 'redeem':
+        redeemMutation.mutate(confirmCard.id);
+        break;
+    }
+  }
+
+  function openConfirmDialog(action: 'delete' | 'cancel' | 'redeem', gc: GiftCardItem) {
+    setConfirmAction(action);
+    setConfirmCard(gc);
+    setConfirmDialogOpen(true);
+  }
+
+  function handleAddCustomReason() {
+    const trimmed = newReason.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+    if (!trimmed) {
+      toast.error('Please enter a valid reason name.');
+      return;
+    }
+    if (allReasons.includes(trimmed)) {
+      toast.error('This reason already exists.');
+      return;
+    }
+    setCustomReasons((prev) => [...prev, trimmed]);
+    setNewReason('');
+    toast.success(`Added custom reason: ${trimmed}`);
+  }
+
+  function handleDeleteCustomReason(reason: string) {
+    if (DEFAULT_REASONS.includes(reason as typeof DEFAULT_REASONS[number])) {
+      toast.error('Cannot delete default reasons.');
+      return;
+    }
+    setCustomReasons((prev) => prev.filter((r) => r !== reason));
+    toast.success(`Removed custom reason: ${reason}`);
+  }
+
+  const isConfirmLoading = deleteMutation.isPending || cancelMutation.isPending || redeemMutation.isPending;
+
   // ─── Loading state ─────────────────────────────────────────────────────────
 
   if (giftCardsLoading || customersLoading) {
@@ -388,16 +564,18 @@ export default function GiftCardsTab() {
               Manage gift cards, track loyalty, and reward your best customers
             </p>
           </div>
-          <Button
-            onClick={() => {
-              resetForm();
-              setCreateDialogOpen(true);
-            }}
-            className="bg-pink-600 hover:bg-pink-700 text-white shadow-md"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Gift Card
-          </Button>
+          {canCreate && (
+            <Button
+              onClick={() => {
+                resetForm();
+                setCreateDialogOpen(true);
+              }}
+              className="bg-pink-600 hover:bg-pink-700 text-white shadow-md"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Gift Card
+            </Button>
+          )}
         </div>
 
         {/* ─── Stats Cards ─────────────────────────────────────────────────── */}
@@ -512,38 +690,115 @@ export default function GiftCardsTab() {
 
                 {/* Filter Row */}
                 {showFilters && (
-                  <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t">
-                    <div className="flex items-center gap-2">
-                      <Label className="text-xs text-muted-foreground whitespace-nowrap">Status:</Label>
-                      <Select value={statusFilter} onValueChange={setStatusFilter}>
-                        <SelectTrigger className="w-[140px] h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Statuses</SelectItem>
-                          <SelectItem value="ACTIVE">Active</SelectItem>
-                          <SelectItem value="REDEEMED">Redeemed</SelectItem>
-                          <SelectItem value="EXPIRED">Expired</SelectItem>
-                          <SelectItem value="CANCELLED">Cancelled</SelectItem>
-                        </SelectContent>
-                      </Select>
+                  <div className="space-y-3 mt-3 pt-3 border-t">
+                    <div className="flex flex-wrap gap-3">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs text-muted-foreground whitespace-nowrap">Status:</Label>
+                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                          <SelectTrigger className="w-[140px] h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Statuses</SelectItem>
+                            <SelectItem value="ACTIVE">Active</SelectItem>
+                            <SelectItem value="REDEEMED">Redeemed</SelectItem>
+                            <SelectItem value="EXPIRED">Expired</SelectItem>
+                            <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs text-muted-foreground whitespace-nowrap">Reason:</Label>
+                        <Select value={reasonFilter} onValueChange={setReasonFilter}>
+                          <SelectTrigger className="w-[140px] h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Reasons</SelectItem>
+                            {allReasons.map((reason) => (
+                              <SelectItem key={reason} value={reason}>
+                                {reason.charAt(0) + reason.slice(1).toLowerCase().replace(/_/g, ' ')}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Label className="text-xs text-muted-foreground whitespace-nowrap">Reason:</Label>
-                      <Select value={reasonFilter} onValueChange={setReasonFilter}>
-                        <SelectTrigger className="w-[140px] h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Reasons</SelectItem>
-                          <SelectItem value="LOYALTY">Loyalty</SelectItem>
-                          <SelectItem value="PROMOTION">Promotion</SelectItem>
-                          <SelectItem value="PURCHASE">Purchase</SelectItem>
-                          <SelectItem value="GIFT">Gift</SelectItem>
-                          <SelectItem value="REFERRAL">Referral</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+
+                    {/* Manage Reasons Panel - Admin only */}
+                    {isAdmin && (
+                      <div className="border-t pt-3">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs text-muted-foreground w-full justify-between"
+                          onClick={() => setShowReasonsPanel(!showReasonsPanel)}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <Settings2 className="h-3.5 w-3.5" />
+                            Manage Reasons
+                          </span>
+                          {showReasonsPanel ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                        </Button>
+
+                        {showReasonsPanel && (
+                          <div className="mt-2 p-3 rounded-lg border bg-muted/30 space-y-3">
+                            <div className="flex flex-wrap gap-1.5">
+                              {allReasons.map((reason) => {
+                                const isDefault = DEFAULT_REASONS.includes(reason as typeof DEFAULT_REASONS[number]);
+                                return (
+                                  <div
+                                    key={reason}
+                                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border ${
+                                      isDefault
+                                        ? 'bg-muted text-muted-foreground border-border'
+                                        : 'bg-pink-50 dark:bg-pink-900/20 text-pink-700 dark:text-pink-300 border-pink-200 dark:border-pink-800'
+                                    }`}
+                                  >
+                                    {reason.charAt(0) + reason.slice(1).toLowerCase().replace(/_/g, ' ')}
+                                    {isDefault ? (
+                                      <span className="text-[9px] text-muted-foreground/60 ml-0.5">default</span>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleDeleteCustomReason(reason)}
+                                        className="ml-0.5 hover:text-red-600 transition-colors"
+                                        title="Remove custom reason"
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="New reason name..."
+                                value={newReason}
+                                onChange={(e) => setNewReason(e.target.value)}
+                                className="h-8 text-xs flex-1"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleAddCustomReason();
+                                }}
+                              />
+                              <Button
+                                size="sm"
+                                className="h-8 text-xs bg-pink-600 hover:bg-pink-700 text-white"
+                                onClick={handleAddCustomReason}
+                                disabled={!newReason.trim()}
+                              >
+                                <Plus className="h-3 w-3 mr-1" />
+                                Add
+                              </Button>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground">
+                              Custom reasons appear in filters and create forms. Default reasons cannot be removed.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </CardHeader>
@@ -558,7 +813,7 @@ export default function GiftCardsTab() {
                         ? 'Try adjusting your filters'
                         : 'Create your first gift card to get started'}
                     </p>
-                    {!searchQuery && statusFilter === 'all' && reasonFilter === 'all' && (
+                    {canCreate && !searchQuery && statusFilter === 'all' && reasonFilter === 'all' && (
                       <Button
                         className="mt-4 bg-pink-600 hover:bg-pink-700 text-white"
                         onClick={() => setCreateDialogOpen(true)}
@@ -581,6 +836,7 @@ export default function GiftCardsTab() {
                             <TableHead>Status</TableHead>
                             <TableHead>Reason</TableHead>
                             <TableHead>Expiry</TableHead>
+                            {(canDelete || canRedeem) && <TableHead className="text-right pr-6">Actions</TableHead>}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -680,6 +936,72 @@ export default function GiftCardsTab() {
                                     <span className="text-xs text-muted-foreground">No expiry</span>
                                   )}
                                 </TableCell>
+                                {(canDelete || canRedeem) && (
+                                  <TableCell className="text-right pr-6">
+                                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      {canDelete && gc.status === 'ACTIVE' && (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-7 w-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                                              onClick={() => handleEditCard(gc)}
+                                            >
+                                              <Pencil className="h-3.5 w-3.5" />
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent>Edit gift card</TooltipContent>
+                                        </Tooltip>
+                                      )}
+                                      {canRedeem && gc.status === 'ACTIVE' && (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
+                                              onClick={() => openConfirmDialog('redeem', gc)}
+                                            >
+                                              <HandCoins className="h-3.5 w-3.5" />
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent>Redeem gift card</TooltipContent>
+                                        </Tooltip>
+                                      )}
+                                      {canDelete && gc.status === 'ACTIVE' && (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-7 w-7 text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                                              onClick={() => openConfirmDialog('cancel', gc)}
+                                            >
+                                              <Ban className="h-3.5 w-3.5" />
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent>Cancel gift card</TooltipContent>
+                                        </Tooltip>
+                                      )}
+                                      {canDelete && (gc.status === 'CANCELLED' || gc.status === 'EXPIRED') && (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                              onClick={() => openConfirmDialog('delete', gc)}
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent>Delete gift card</TooltipContent>
+                                        </Tooltip>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                )}
                               </TableRow>
                             );
                           })}
@@ -759,6 +1081,56 @@ export default function GiftCardsTab() {
                                   )}
                                 </div>
                               </div>
+
+                              {/* Mobile Action Buttons */}
+                              {(canDelete || canRedeem) && (
+                                <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t">
+                                  {canDelete && gc.status === 'ACTIVE' && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 text-xs"
+                                      onClick={() => handleEditCard(gc)}
+                                    >
+                                      <Pencil className="h-3 w-3 mr-1" />
+                                      Edit
+                                    </Button>
+                                  )}
+                                  {canRedeem && gc.status === 'ACTIVE' && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 text-xs text-green-700 border-green-300 hover:bg-green-50 dark:text-green-400 dark:border-green-800 dark:hover:bg-green-900/20"
+                                      onClick={() => openConfirmDialog('redeem', gc)}
+                                    >
+                                      <HandCoins className="h-3 w-3 mr-1" />
+                                      Redeem
+                                    </Button>
+                                  )}
+                                  {canDelete && gc.status === 'ACTIVE' && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 text-xs text-orange-700 border-orange-300 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-800 dark:hover:bg-orange-900/20"
+                                      onClick={() => openConfirmDialog('cancel', gc)}
+                                    >
+                                      <Ban className="h-3 w-3 mr-1" />
+                                      Cancel
+                                    </Button>
+                                  )}
+                                  {canDelete && (gc.status === 'CANCELLED' || gc.status === 'EXPIRED') && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 text-xs text-red-700 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/20"
+                                      onClick={() => openConfirmDialog('delete', gc)}
+                                    >
+                                      <Trash2 className="h-3 w-3 mr-1" />
+                                      Delete
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
                             </CardContent>
                           </Card>
                         );
@@ -880,15 +1252,17 @@ export default function GiftCardsTab() {
                                 )}
                               </div>
 
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="mt-2 h-7 text-xs w-full"
-                                onClick={() => handleIssueToCustomer(customer.id, customer.name)}
-                              >
-                                <Gift className="h-3 w-3 mr-1" />
-                                Issue Gift Card
-                              </Button>
+                              {canCreate && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="mt-2 h-7 text-xs w-full"
+                                  onClick={() => handleIssueToCustomer(customer.id, customer.name)}
+                                >
+                                  <Gift className="h-3 w-3 mr-1" />
+                                  Issue Gift Card
+                                </Button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1033,17 +1407,17 @@ export default function GiftCardsTab() {
                 </Label>
                 <Select
                   value={formReason}
-                  onValueChange={(v) => setFormReason(v as GiftCardItem['issuedReason'])}
+                  onValueChange={setFormReason}
                 >
                   <SelectTrigger id="gc-reason">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="LOYALTY">Loyalty Reward</SelectItem>
-                    <SelectItem value="PROMOTION">Promotion</SelectItem>
-                    <SelectItem value="PURCHASE">Customer Purchase</SelectItem>
-                    <SelectItem value="GIFT">Gift</SelectItem>
-                    <SelectItem value="REFERRAL">Referral Bonus</SelectItem>
+                    {allReasons.map((reason) => (
+                      <SelectItem key={reason} value={reason}>
+                        {reason.charAt(0) + reason.slice(1).toLowerCase().replace(/_/g, ' ')}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1153,6 +1527,225 @@ export default function GiftCardsTab() {
                   <>
                     <CheckCircle2 className="h-4 w-4 mr-2" />
                     Create Gift Card
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ─── Edit Gift Card Dialog ─────────────────────────────────────── */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent className="sm:max-w-[480px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Pencil className="h-5 w-5 text-amber-500" />
+                Edit Gift Card
+              </DialogTitle>
+              <DialogDescription>
+                Update gift card details for <code className="font-mono font-semibold">{editingCard?.code}</code>
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              {/* Current Info (read-only) */}
+              <div className="grid grid-cols-2 gap-3 p-3 rounded-lg bg-muted/50 border">
+                <div>
+                  <p className="text-xs text-muted-foreground">Current Balance</p>
+                  <p className="text-sm font-semibold">{formatKES(editingCard?.currentBalance ?? 0)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Initial Balance</p>
+                  <p className="text-sm font-semibold">{formatKES(editingCard?.initialBalance ?? 0)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Status</p>
+                  <div className="mt-0.5">{editingCard && getStatusBadge(editingCard.status)}</div>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Customer</p>
+                  <p className="text-sm font-semibold">{editingCard?.customer?.name || 'Unassigned'}</p>
+                </div>
+              </div>
+
+              {/* Issued Reason */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-reason" className="text-sm font-medium">
+                  Issued Reason
+                </Label>
+                <Select value={editReason} onValueChange={setEditReason}>
+                  <SelectTrigger id="edit-reason">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allReasons.map((reason) => (
+                      <SelectItem key={reason} value={reason}>
+                        {reason.charAt(0) + reason.slice(1).toLowerCase().replace(/_/g, ' ')}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Minimum Purchase */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-min-purchase" className="text-sm font-medium">
+                  Minimum Purchase (KES)
+                </Label>
+                <Input
+                  id="edit-min-purchase"
+                  type="number"
+                  min="0"
+                  step="100"
+                  value={editMinPurchase}
+                  onChange={(e) => setEditMinPurchase(e.target.value)}
+                />
+              </div>
+
+              {/* Expiry Date */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-expiry" className="text-sm font-medium">
+                  Expiry Date
+                </Label>
+                <Input
+                  id="edit-expiry"
+                  type="date"
+                  value={editExpiry}
+                  onChange={(e) => setEditExpiry(e.target.value)}
+                />
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-notes" className="text-sm font-medium">
+                  Notes <span className="text-muted-foreground">(will be logged)</span>
+                </Label>
+                <Textarea
+                  id="edit-notes"
+                  placeholder="Reason for update..."
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  rows={2}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setEditDialogOpen(false)}
+                disabled={updateMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveEdit}
+                disabled={updateMutation.isPending}
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+              >
+                {updateMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Save Changes
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ─── Confirm Action Dialog ─────────────────────────────────────── */}
+        <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+          <DialogContent className="sm:max-w-[420px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {confirmAction === 'delete' && <Trash2 className="h-5 w-5 text-red-500" />}
+                {confirmAction === 'cancel' && <Ban className="h-5 w-5 text-orange-500" />}
+                {confirmAction === 'redeem' && <HandCoins className="h-5 w-5 text-green-500" />}
+                {confirmAction === 'delete' && 'Delete Gift Card'}
+                {confirmAction === 'cancel' && 'Cancel Gift Card'}
+                {confirmAction === 'redeem' && 'Redeem Gift Card'}
+              </DialogTitle>
+              <DialogDescription>
+                {confirmAction === 'delete' && (
+                  <>
+                    Are you sure you want to permanently delete gift card{' '}
+                    <code className="font-mono font-semibold">{confirmCard?.code}</code>?
+                    This action cannot be undone.
+                  </>
+                )}
+                {confirmAction === 'cancel' && (
+                  <>
+                    Are you sure you want to cancel gift card{' '}
+                    <code className="font-mono font-semibold">{confirmCard?.code}</code>?
+                    The remaining balance of {confirmCard && formatKES(confirmCard.currentBalance)} will be voided.
+                  </>
+                )}
+                {confirmAction === 'redeem' && (
+                  <>
+                    Are you sure you want to redeem gift card{' '}
+                    <code className="font-mono font-semibold">{confirmCard?.code}</code>?
+                    The full balance of {confirmCard && formatKES(confirmCard.currentBalance)} will be marked as used.
+                  </>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+
+            {confirmCard && (
+              <div className="p-3 rounded-lg bg-muted/50 border space-y-1.5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Code</span>
+                  <code className="font-mono font-semibold">{confirmCard.code}</code>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Customer</span>
+                  <span className="font-medium">{confirmCard.customer?.name || 'Unassigned'}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Balance</span>
+                  <span className="font-semibold">{formatKES(confirmCard.currentBalance)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Status</span>
+                  {getStatusBadge(confirmCard.status)}
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setConfirmDialogOpen(false)}
+                disabled={isConfirmLoading}
+              >
+                No, Keep It
+              </Button>
+              <Button
+                onClick={handleConfirmAction}
+                disabled={isConfirmLoading}
+                className={
+                  confirmAction === 'delete'
+                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                    : confirmAction === 'cancel'
+                    ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                    : 'bg-green-600 hover:bg-green-700 text-white'
+                }
+              >
+                {isConfirmLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    {confirmAction === 'delete' && 'Yes, Delete'}
+                    {confirmAction === 'cancel' && 'Yes, Cancel'}
+                    {confirmAction === 'redeem' && 'Yes, Redeem'}
                   </>
                 )}
               </Button>

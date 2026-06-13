@@ -17,15 +17,17 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 
-import { useAppStore } from '@/lib/stores';
+import { useAppStore, useAuthStore } from '@/lib/stores';
 import {
   reportsApi, dashboardApi, fastMovingApi,
   customersApi, rentalsApi, transactionsApi,
   formatKES,
   type CustomerItem,
   type RentalItem,
+  type TransactionItem,
 } from '@/lib/api';
 
+import { hasPermission } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -297,9 +299,13 @@ function SVGLineChart({ data, height = 200 }: { data: { label: string; value: nu
 
 export default function ReportsTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
-  const [reportType, setReportType] = useState<'sales' | 'inventory' | 'valuation' | 'daily' | 'top_products' | 'customer_analysis' | 'rental_performance' | 'fast_moving'>('sales');
+  const authUser = useAuthStore((s) => s.user);
+  const [reportType, setReportType] = useState<'sales' | 'inventory' | 'valuation' | 'daily' | 'top_products' | 'customer_analysis' | 'rental_performance' | 'fast_moving' | 'sales_by_person'>('sales');
   const [chartType, setChartType] = useState<'bar' | 'line' | 'area' | 'pie'>('bar');
   const [datePreset, setDatePreset] = useState<DatePreset>('this_month');
+  const [selectedSalespersonId, setSelectedSalespersonId] = useState<string | null>(null);
+
+  const canViewReports = authUser ? hasPermission(authUser.role, 'reports', 'read') : false;
 
   // Initialize from preset
   const presetRange = useMemo(() => getDatePresetRange(datePreset), [datePreset]);
@@ -357,6 +363,13 @@ export default function ReportsTab() {
     queryKey: ['fast-moving', currentStoreId, dateFrom, dateTo],
     queryFn: () => fastMovingApi.list({ storeId: currentStoreId, days: 30, limit: 20 }),
     enabled: reportType === 'fast_moving',
+  });
+
+  // Transactions data for sales by salesperson report
+  const { data: salesPersonTxData, isLoading: salesPersonTxLoading } = useQuery({
+    queryKey: ['sales-person-tx', currentStoreId, dateFrom, dateTo],
+    queryFn: () => transactionsApi.list({ storeId: currentStoreId, dateFrom, dateTo, limit: 500 }),
+    enabled: reportType === 'sales_by_person',
   });
 
   const fastMovingProducts = fastMovingData?.data || [];
@@ -550,6 +563,64 @@ export default function ReportsTab() {
     }));
   }, [rentalPerformance]);
 
+  // Sales by Salesperson Analysis
+  const salesPersonAnalysis = useMemo(() => {
+    const transactions: TransactionItem[] = salesPersonTxData?.data || [];
+    if (transactions.length === 0) return { salespersons: [], totalCount: 0, totalRevenue: 0, avgPerPerson: 0, topPerformer: null };
+
+    // Group by salesPerson (from salesPerson field or salesPersonId)
+    const personMap = new Map<string, { id: string; name: string; totalRevenue: number; transactionCount: number; paymentMethods: Map<string, { count: number; amount: number }>; dailyRevenue: Map<string, number> }>();
+
+    for (const t of transactions) {
+      const personId = t.salesPersonId || 'unknown';
+      const personName = t.salesPerson?.name || t.salesPersonId || 'Unknown';
+      if (!personMap.has(personId)) {
+        personMap.set(personId, { id: personId, name: personName, totalRevenue: 0, transactionCount: 0, paymentMethods: new Map(), dailyRevenue: new Map() });
+      }
+      const entry = personMap.get(personId)!;
+      entry.totalRevenue += t.totalAmount;
+      entry.transactionCount += 1;
+
+      // Payment method breakdown
+      const pm = t.paymentMethod || 'UNKNOWN';
+      const existing = entry.paymentMethods.get(pm) || { count: 0, amount: 0 };
+      existing.count += 1;
+      existing.amount += t.totalAmount;
+      entry.paymentMethods.set(pm, existing);
+
+      // Daily revenue
+      const day = t.createdAt ? t.createdAt.split('T')[0] : 'unknown';
+      entry.dailyRevenue.set(day, (entry.dailyRevenue.get(day) || 0) + t.totalAmount);
+    }
+
+    const salespersons = Array.from(personMap.values())
+      .sort((a, b) => b.totalRevenue - a.totalRevenue)
+      .map(sp => ({
+        ...sp,
+        avgTransaction: sp.transactionCount > 0 ? sp.totalRevenue / sp.transactionCount : 0,
+        paymentMethodBreakdown: Array.from(sp.paymentMethods.entries()).map(([method, data]) => ({ method, ...data })),
+        dailyRevenueList: Array.from(sp.dailyRevenue.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([, rev]) => rev),
+      }));
+
+    const totalRevenue = salespersons.reduce((s, sp) => s + sp.totalRevenue, 0);
+    const totalCount = salespersons.reduce((s, sp) => s + sp.transactionCount, 0);
+    const avgPerPerson = salespersons.length > 0 ? totalRevenue / salespersons.length : 0;
+    const topPerformer = salespersons.length > 0 ? salespersons[0] : null;
+
+    return { salespersons, totalCount, totalRevenue, avgPerPerson, topPerformer };
+  }, [salesPersonTxData]);
+
+  // Salesperson chart data for Recharts
+  const salesPersonChartData = useMemo(() => {
+    return salesPersonAnalysis.salespersons.slice(0, 10).map(sp => ({
+      name: sp.name.length > 12 ? sp.name.slice(0, 12) + '…' : sp.name,
+      revenue: sp.totalRevenue,
+      transactions: sp.transactionCount,
+    }));
+  }, [salesPersonAnalysis]);
+
   // CSV Export function
   const handleCSVExport = useCallback(() => {
     let csvContent = '';
@@ -590,6 +661,17 @@ export default function ReportsTab() {
       for (const r of rentalPerformance.topRented) {
         csvContent += `${r.id},${r.status},${r.totalRentalCharge},${r.securityDeposit},${r.lateFeeAccumulated}\n`;
       }
+    } else if (reportType === 'sales_by_person' && salesPersonAnalysis.salespersons.length > 0) {
+      csvContent = 'Rank,Salesperson,Transactions,Total Revenue,Avg Transaction\n';
+      salesPersonAnalysis.salespersons.forEach((sp, i) => {
+        csvContent += `${i + 1},"${sp.name}",${sp.transactionCount},${sp.totalRevenue},${sp.avgTransaction.toFixed(2)}\n`;
+      });
+      csvContent += '\nSalesperson,Payment Method,Count,Amount\n';
+      for (const sp of salesPersonAnalysis.salespersons) {
+        for (const pm of sp.paymentMethodBreakdown) {
+          csvContent += `"${sp.name}",${pm.method},${pm.count},${pm.amount}\n`;
+        }
+      }
     } else {
       csvContent = 'No data available for export\n';
     }
@@ -609,7 +691,7 @@ export default function ReportsTab() {
   const handleExport = async () => {
     // Try server-side export first, fall back to client-side CSV
     try {
-      const res = await reportsApi.exportCSV({ storeId: currentStoreId, type: reportType === 'valuation' ? 'inventory' : reportType === 'daily' || reportType === 'top_products' || reportType === 'customer_analysis' || reportType === 'rental_performance' ? 'sales' : reportType, dateFrom, dateTo });
+      const res = await reportsApi.exportCSV({ storeId: currentStoreId, type: reportType === 'valuation' ? 'inventory' : reportType === 'daily' || reportType === 'top_products' || reportType === 'customer_analysis' || reportType === 'rental_performance' || reportType === 'sales_by_person' ? 'sales' : reportType, dateFrom, dateTo });
       if (res.data?.url) {
         window.open(res.data.url, '_blank');
         toast.success('Report exported');
@@ -646,7 +728,7 @@ export default function ReportsTab() {
         <body>
           <div class="header">
             <h1>MBUMAH HARDWARE</h1>
-            <h2>${reportType === 'sales' ? 'Sales' : reportType === 'inventory' ? 'Inventory' : reportType === 'valuation' ? 'Inventory Valuation' : reportType === 'daily' ? 'Daily Sales Summary' : reportType === 'top_products' ? 'Top Products' : reportType === 'customer_analysis' ? 'Customer Analysis' : 'Rental Performance'} Report</h2>
+            <h2>${reportType === 'sales' ? 'Sales' : reportType === 'inventory' ? 'Inventory' : reportType === 'valuation' ? 'Inventory Valuation' : reportType === 'daily' ? 'Daily Sales Summary' : reportType === 'top_products' ? 'Top Products' : reportType === 'customer_analysis' ? 'Customer Analysis' : reportType === 'rental_performance' ? 'Rental Performance' : reportType === 'sales_by_person' ? 'Sales by Salesperson' : 'Fast Moving Products'} Report</h2>
             <p style="color:#94a3b8;font-size:12px">Period: ${dateFrom} to ${dateTo}</p>
           </div>
           ${content.innerHTML}
@@ -882,18 +964,28 @@ export default function ReportsTab() {
                 colorClass="text-primary"
               />
               <ReportTypeCard
-                icon={Sparkles}
+                icon={<Sparkles className="h-5 w-5" />}
                 title="Fast Moving Products"
                 description="Identify top-selling products by frequency and velocity"
                 isActive={reportType === 'fast_moving'}
                 onClick={() => setReportType('fast_moving')}
                 colorClass="text-amber-500"
               />
+              {canViewReports && (
+                <ReportTypeCard
+                  icon={<Users className="h-5 w-5" />}
+                  title="Sales by Salesperson"
+                  description="View sales performance grouped by each sales person with transaction counts and revenue"
+                  isActive={reportType === 'sales_by_person'}
+                  onClick={() => setReportType('sales_by_person')}
+                  colorClass="text-primary"
+                />
+              )}
             </div>
           </div>
 
           {/* Chart Type Toggle */}
-          {(reportType === 'valuation' || reportType === 'top_products' || reportType === 'daily' || reportType === 'customer_analysis' || reportType === 'rental_performance') && (
+          {(reportType === 'valuation' || reportType === 'top_products' || reportType === 'daily' || reportType === 'customer_analysis' || reportType === 'rental_performance' || reportType === 'sales_by_person') && (
             <div className="flex items-center gap-2">
               <Label className="text-xs font-medium">Chart Type:</Label>
               <div className="flex items-center gap-1">
@@ -2096,6 +2188,272 @@ export default function ReportsTab() {
                 )}
               </CardContent>
             </Card>
+          </>
+        )}
+
+        {/* Sales by Salesperson Report */}
+        {reportType === 'sales_by_person' && (
+          <>
+            {salesPersonTxLoading ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+                </div>
+                <Skeleton className="h-64" />
+              </div>
+            ) : salesPersonAnalysis.salespersons.length > 0 ? (
+              <>
+                {/* Summary Stats Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <Card className="border-l-4 border-l-primary backdrop-blur-sm bg-card/80">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Users className="h-4 w-4 text-primary" />
+                        <p className="text-sm text-muted-foreground">Total Salespersons</p>
+                      </div>
+                      <p className="text-2xl font-bold">{salesPersonAnalysis.salespersons.length}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-green-500 backdrop-blur-sm bg-card/80">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <DollarSign className="h-4 w-4 text-green-500" />
+                        <p className="text-sm text-muted-foreground">Total Revenue</p>
+                      </div>
+                      <p className="text-2xl font-bold whitespace-nowrap">{formatKES(salesPersonAnalysis.totalRevenue)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-amber-500 backdrop-blur-sm bg-card/80">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <TrendingUp className="h-4 w-4 text-amber-500" />
+                        <p className="text-sm text-muted-foreground">Avg. per Salesperson</p>
+                      </div>
+                      <p className="text-2xl font-bold">{formatKES(salesPersonAnalysis.avgPerPerson)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-emerald-500 backdrop-blur-sm bg-card/80">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Sparkles className="h-4 w-4 text-emerald-500" />
+                        <p className="text-sm text-muted-foreground">Top Performer</p>
+                      </div>
+                      <p className="text-lg font-bold truncate">{salesPersonAnalysis.topPerformer?.name || 'N/A'}</p>
+                      <p className="text-xs text-muted-foreground">{salesPersonAnalysis.topPerformer ? formatKES(salesPersonAnalysis.topPerformer.totalRevenue) : ''}</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Revenue by Salesperson Chart */}
+                {salesPersonChartData.length > 0 && (
+                  <Card className="backdrop-blur-sm bg-card/80">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <BarChart3 className="h-4 w-4" /> Revenue by Salesperson
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-72">
+                        <ResponsiveContainer width="100%" height="100%">
+                          {chartType === 'bar' ? (
+                            <BarChart data={salesPersonChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `KES ${(v / 1000).toFixed(0)}k`} />
+                              <Tooltip formatter={(value: number) => formatKES(value)} />
+                              <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Revenue" />
+                            </BarChart>
+                          ) : chartType === 'line' ? (
+                            <LineChart data={salesPersonChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `KES ${(v / 1000).toFixed(0)}k`} />
+                              <Tooltip formatter={(value: number) => formatKES(value)} />
+                              <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 4 }} name="Revenue" />
+                            </LineChart>
+                          ) : chartType === 'area' ? (
+                            <AreaChart data={salesPersonChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `KES ${(v / 1000).toFixed(0)}k`} />
+                              <Tooltip formatter={(value: number) => formatKES(value)} />
+                              <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" fill="hsl(var(--primary) / 0.2)" name="Revenue" />
+                            </AreaChart>
+                          ) : (
+                            <BarChart data={salesPersonChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `KES ${(v / 1000).toFixed(0)}k`} />
+                              <Tooltip formatter={(value: number) => formatKES(value)} />
+                              <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Revenue" />
+                            </BarChart>
+                          )}
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Salesperson Performance Table */}
+                <Card className="backdrop-blur-sm bg-card/80">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Users className="h-4 w-4" /> Salesperson Performance
+                      </CardTitle>
+                      <Badge variant="outline" className="text-[9px]">{salesPersonAnalysis.salespersons.length} salespersons</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar pr-1">
+                      {salesPersonAnalysis.salespersons.map((sp, i) => {
+                        const maxRevenue = salesPersonAnalysis.salespersons[0]?.totalRevenue || 1;
+                        const pct = (sp.totalRevenue / maxRevenue) * 100;
+                        const rankColors = ['bg-yellow-500 text-white', 'bg-gray-400 text-white', 'bg-amber-600 text-white'];
+                        const isSelected = selectedSalespersonId === sp.id;
+
+                        return (
+                          <div key={sp.id}>
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => setSelectedSalespersonId(isSelected ? null : sp.id)}
+                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedSalespersonId(isSelected ? null : sp.id); } }}
+                              className={`flex items-center gap-3 p-3 rounded-lg transition-all border cursor-pointer ${
+                                isSelected
+                                  ? 'bg-primary/5 border-primary/30 hover:bg-primary/10'
+                                  : 'hover:bg-muted/30 border-transparent hover:border-border/30'
+                              }`}
+                            >
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${i < 3 ? rankColors[i] : 'bg-muted text-muted-foreground'}`}>
+                                {i + 1}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between mb-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium truncate">{sp.name}</span>
+                                    {i === 0 && (
+                                      <Badge className="text-[9px] bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800">
+                                        <Sparkles className="h-2.5 w-2.5 mr-0.5" /> Top
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <span className="text-sm font-bold ml-2">{formatKES(sp.totalRevenue)}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <div className="flex-1">
+                                    <HorizontalBar value={sp.totalRevenue} maxValue={maxRevenue} colorClass={i === 0 ? 'bg-emerald-500' : 'bg-primary/70'} height="h-2.5" />
+                                  </div>
+                                  <span className="text-[10px] text-muted-foreground whitespace-nowrap min-w-[80px] text-right">{sp.transactionCount} txns · {formatKES(sp.avgTransaction)} avg</span>
+                                </div>
+                                {/* Payment method mini badges */}
+                                <div className="flex items-center gap-1.5 mt-1.5">
+                                  {sp.paymentMethodBreakdown.map((pm, j) => {
+                                    const pmColors: Record<string, string> = { CASH: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800', MPESA: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800', DEBT: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-400 dark:border-orange-800', SPLIT: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800' };
+                                    return (
+                                      <Badge key={j} variant="outline" className={`text-[9px] ${pmColors[pm.method] || 'bg-muted text-muted-foreground'}`}>
+                                        {pm.method}: {pm.count} · {formatKES(pm.amount)}
+                                      </Badge>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Expanded Salesperson Detail Card */}
+                            {isSelected && (
+                              <div className="ml-11 mt-2 mb-2 p-4 rounded-lg bg-muted/20 border border-border/30 space-y-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                  {/* Payment Method Breakdown */}
+                                  <div>
+                                    <p className="text-xs font-medium text-muted-foreground mb-2">Payment Method Breakdown</p>
+                                    <div className="space-y-2">
+                                      {sp.paymentMethodBreakdown.map((pm, j) => {
+                                        const totalPM = sp.paymentMethodBreakdown.reduce((s, p) => s + p.amount, 0) || 1;
+                                        const pmPct = (pm.amount / totalPM) * 100;
+                                        const pmColors: Record<string, string> = { CASH: 'bg-green-500', MPESA: 'bg-blue-500', DEBT: 'bg-orange-500', SPLIT: 'bg-purple-500' };
+                                        return (
+                                          <div key={j} className="space-y-1">
+                                            <div className="flex items-center justify-between text-xs">
+                                              <div className="flex items-center gap-1.5">
+                                                <div className={`w-4 h-4 rounded flex items-center justify-center ${pmColors[pm.method] || 'bg-gray-400'} text-white`}>
+                                                  {paymentMethodIcons[pm.method] || <CreditCard className="h-2.5 w-2.5" />}
+                                                </div>
+                                                <span className="font-medium">{pm.method}</span>
+                                                <span className="text-muted-foreground">({pm.count} txns)</span>
+                                              </div>
+                                              <span className="font-medium">{formatKES(pm.amount)} ({pmPct.toFixed(0)}%)</span>
+                                            </div>
+                                            <div className="h-1.5 bg-muted/30 rounded-full overflow-hidden">
+                                              <div className={`h-full rounded-full transition-all duration-500 ${pmColors[pm.method] || 'bg-gray-400'}`} style={{ width: `${pmPct}%` }} />
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+
+                                  {/* Daily Performance Sparkline */}
+                                  <div>
+                                    <p className="text-xs font-medium text-muted-foreground mb-2">Daily Performance Trend</p>
+                                    {sp.dailyRevenueList.length > 1 ? (
+                                      <div className="space-y-2">
+                                        <MiniSparkline data={sp.dailyRevenueList} color="text-primary" height={40} />
+                                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                          <span>Min: {formatKES(Math.min(...sp.dailyRevenueList))}</span>
+                                          <span>Max: {formatKES(Math.max(...sp.dailyRevenueList))}</span>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          Days active: {sp.dailyRevenueList.length}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs text-muted-foreground">Not enough daily data for trend</p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Key Metrics */}
+                                <div className="grid grid-cols-3 gap-3">
+                                  <div className="p-2 rounded-md bg-background/50">
+                                    <p className="text-[10px] text-muted-foreground">Total Revenue</p>
+                                    <p className="text-sm font-bold">{formatKES(sp.totalRevenue)}</p>
+                                  </div>
+                                  <div className="p-2 rounded-md bg-background/50">
+                                    <p className="text-[10px] text-muted-foreground">Transactions</p>
+                                    <p className="text-sm font-bold">{sp.transactionCount}</p>
+                                  </div>
+                                  <div className="p-2 rounded-md bg-background/50">
+                                    <p className="text-[10px] text-muted-foreground">Avg. Transaction</p>
+                                    <p className="text-sm font-bold">{formatKES(sp.avgTransaction)}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              <Card className="backdrop-blur-sm bg-card/80">
+                <CardContent className="p-12 text-center">
+                  <div className="mx-auto w-24 h-24 rounded-full bg-muted/30 flex items-center justify-center mb-4">
+                    <Users className="h-10 w-10 text-muted-foreground/50" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">No Salesperson Data</h3>
+                  <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                    Sales by salesperson analysis will appear once you have transactions with salesperson assignments recorded.
+                    Complete some sales to see performance breakdown.
+                  </p>
+                  <Button variant="outline" className="mt-4" onClick={() => setReportType('sales')}>
+                    <ShoppingCart className="h-4 w-4 mr-2" /> View Sales Report Instead
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
       </div>

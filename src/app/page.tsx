@@ -25,6 +25,8 @@ import {
 } from 'lucide-react';
 
 import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
+import { ErrorBoundary } from '@/components/error-boundary';
+import { saveAppState, restoreAppState, clearSavedAppState, startIdleTimer, resetIdleTimer, clearIdleTimer, saveCurrentRoute } from '@/lib/state-persistence';
 import {
   productsApi, categoriesApi, customersApi, transactionsApi,
   paymentsApi, dashboardApi,
@@ -37,6 +39,7 @@ import {
 } from '@/lib/api';
 import type { PaymentMethod, CartItem, UnitType, DashboardStats } from '@/lib/types';
 import { hasPermission, canCreateUsers, requiresShift, ROLE_LABELS, ROLE_DEFAULT_TAB, ROLE_TABS } from '@/lib/types';
+import { usePermissions } from '@/hooks/use-permissions';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -332,13 +335,25 @@ function LoginScreen() {
     e.preventDefault();
     try {
       await login(email, password);
-      // Redirect sales persons directly to POS interface
-      const user = useAuthStore.getState().user;
-      if (user?.role === 'SALES_PERSON') {
-        const defaultTab = (ROLE_DEFAULT_TAB[user.role] || 'pos') as AppTab;
-        useAppStore.getState().setActiveTab(defaultTab);
+      // Check for saved state from previous session (error/power loss recovery)
+      const savedState = restoreAppState();
+      if (savedState) {
+        // Restore previous tab and store
+        useAppStore.getState().setActiveTab(savedState.activeTab);
+        if (savedState.storeId) {
+          useAppStore.getState().setCurrentStoreId(savedState.storeId);
+        }
+        clearSavedAppState();
+        toast.success('Welcome back! Previous session restored.');
+      } else {
+        // Redirect sales persons directly to POS interface
+        const user = useAuthStore.getState().user;
+        if (user?.role === 'SALES_PERSON') {
+          const defaultTab = (ROLE_DEFAULT_TAB[user.role] || 'pos') as AppTab;
+          useAppStore.getState().setActiveTab(defaultTab);
+        }
+        toast.success('Welcome to MBUMAH HARDWARE POS!');
       }
-      toast.success('Welcome to MBUMAH HARDWARE POS!');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed';
       toast.error(message);
@@ -2145,6 +2160,7 @@ function POSShiftIndicator({ storeId }: { storeId: string }) {
 }
 
 function POSTab() {
+  const perms = usePermissions();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -2463,7 +2479,7 @@ function POSTab() {
       {/* Product Grid */}
       <div className="flex-1 min-w-0 space-y-4">
         {/* Shift Status for Sales Persons */}
-        {user?.role === 'SALES_PERSON' && <POSShiftIndicator storeId={currentStoreId} />}
+        {perms.requiresShift && <POSShiftIndicator storeId={currentStoreId} />}
 
         {/* Dashboard Stats */}
         <DashboardStats storeId={currentStoreId} onLowStockClick={() => setLowStockAlertOpen(true)} />
@@ -2697,7 +2713,8 @@ function POSTab() {
             <>
               <Separator />
               <div className="p-4 space-y-3">
-                {/* Discount Code */}
+                {/* Discount Code - only for users who can update transactions */}
+                {perms.transactions.update && (
                 <div className="flex gap-1.5">
                   <Input
                     placeholder="Discount code"
@@ -2710,6 +2727,7 @@ function POSTab() {
                     Apply
                   </Button>
                 </div>
+                )}
 
                 {/* Customer Selection */}
                 <Select value={selectedCustomer} onValueChange={(val) => {
@@ -3340,6 +3358,7 @@ function POSTab() {
           {cart.items.length > 0 && (
             <>
               <div className="p-4 space-y-3 border-t shrink-0">
+                {perms.transactions.update && (
                 <div className="flex gap-1.5">
                   <Input
                     placeholder="Discount code"
@@ -3352,6 +3371,7 @@ function POSTab() {
                     Apply
                   </Button>
                 </div>
+                )}
                 <Select value={selectedCustomer} onValueChange={(val) => {
                   setSelectedCustomer(val === 'walk-in' ? '' : val);
                   if (val !== 'walk-in') {
@@ -3537,9 +3557,61 @@ function POSTab() {
 
 
 function MainApp() {
-  const { activeTab, setActiveTab } = useAppStore();
+  const { activeTab, setActiveTab, currentStoreId } = useAppStore();
+  const cartItems = useCartStore((s) => s.items);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const searchBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  // State persistence: save state on idle, restore on mount
+  useEffect(() => {
+    // Restore state on mount (after error/power loss recovery)
+    const savedState = restoreAppState();
+    if (savedState) {
+      setActiveTab(savedState.activeTab);
+      if (savedState.storeId) {
+        useAppStore.getState().setCurrentStoreId(savedState.storeId);
+      }
+      clearSavedAppState();
+    }
+  }, [setActiveTab]);
+
+  // Idle timer: save state after 30 min of inactivity (no logout)
+  useEffect(() => {
+    const getActiveTab = () => useAppStore.getState().activeTab;
+    const getCartItems = () => useCartStore.getState().items;
+    const getStoreId = () => useAppStore.getState().currentStoreId;
+
+    // Start idle timer on mount
+    startIdleTimer(getActiveTab, getCartItems, getStoreId);
+
+    // Reset idle timer on user activity
+    const handleActivity = () => {
+      resetIdleTimer(getActiveTab, getCartItems, getStoreId);
+    };
+
+    const events = ['mousemove', 'keydown', 'click', 'scroll'] as const;
+    events.forEach((event) => {
+      window.addEventListener(event, handleActivity, { passive: true });
+    });
+
+    return () => {
+      clearIdleTimer();
+      events.forEach((event) => {
+        window.removeEventListener(event, handleActivity);
+      });
+    };
+  }, []);
+
+  // Save state on tab change
+  useEffect(() => {
+    saveAppState(activeTab, cartItems, currentStoreId);
+    saveCurrentRoute();
+  }, [activeTab, cartItems, currentStoreId]);
+
+  // Error boundary state restoration callback
+  const handleRestoreState = (state: { activeTab: AppTab }) => {
+    setActiveTab(state.activeTab);
+  };
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -3611,42 +3683,49 @@ function MainApp() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <AppSidebar />
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
-        <TopBar searchBtnRef={searchBtnRef} />
-        <main className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-          <div className="animate-tab-enter" key={activeTab}>
-            {renderTab()}
-          </div>
-        </main>
-        <footer className="border-t bg-background/95 backdrop-blur-sm px-4 py-2 text-center shrink-0 mt-auto">
-          <div className="flex items-center justify-between max-w-7xl mx-auto">
-            <div className="flex items-center gap-3">
-              <p className="text-xs text-muted-foreground">
-                MBUMAH HARDWARE POS & ERP &copy; {new Date().getFullYear()}
-              </p>
-              <span className="text-[10px] text-muted-foreground/50 hidden sm:inline">v1.0.0</span>
+    <ErrorBoundary
+      getActiveTab={() => useAppStore.getState().activeTab}
+      getCartItems={() => useCartStore.getState().items}
+      getStoreId={() => useAppStore.getState().currentStoreId}
+      onRestoreState={handleRestoreState}
+    >
+      <div className="flex h-screen overflow-hidden">
+        <AppSidebar />
+        <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+          <TopBar searchBtnRef={searchBtnRef} />
+          <main className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+            <div className="animate-tab-enter" key={activeTab}>
+              {renderTab()}
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60">
-                <div className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-[0_0_4px] shadow-green-500/50" />
-                <span className="hidden sm:inline">Connected</span>
+          </main>
+          <footer className="border-t bg-background/95 backdrop-blur-sm px-4 py-2 text-center shrink-0 mt-auto">
+            <div className="flex items-center justify-between max-w-7xl mx-auto">
+              <div className="flex items-center gap-3">
+                <p className="text-xs text-muted-foreground">
+                  MBUMAH HARDWARE POS & ERP &copy; {new Date().getFullYear()}
+                </p>
+                <span className="text-[10px] text-muted-foreground/50 hidden sm:inline">v1.0.0</span>
               </div>
-              <button
-                type="button"
-                onClick={() => setShortcutsOpen(true)}
-                className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors flex items-center gap-1"
-              >
-                <Keyboard className="h-3 w-3" />
-                <span className="hidden sm:inline">Shortcuts</span>
-              </button>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60">
+                  <div className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-[0_0_4px] shadow-green-500/50" />
+                  <span className="hidden sm:inline">Connected</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShortcutsOpen(true)}
+                  className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors flex items-center gap-1"
+                >
+                  <Keyboard className="h-3 w-3" />
+                  <span className="hidden sm:inline">Shortcuts</span>
+                </button>
+              </div>
             </div>
-          </div>
-        </footer>
+          </footer>
+        </div>
+        <KeyboardShortcutsHelp open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       </div>
-      <KeyboardShortcutsHelp open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-    </div>
+    </ErrorBoundary>
   );
 }
 
