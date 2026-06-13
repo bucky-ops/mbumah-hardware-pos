@@ -70,3 +70,4 @@ download/
 .zscripts/
 # Screenshots directory (spec images)
 screenshots/
+.env.backup
