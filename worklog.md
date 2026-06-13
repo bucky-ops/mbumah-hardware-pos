@@ -22,3 +22,27 @@ Stage Summary:
 - Critical issue: Vercel Deployment Protection is enabled - requires auth to access
 - Critical issue: Main domain not properly configured - DEPLOYMENT_NOT_FOUND
 - User needs to: (1) Disable Deployment Protection, (2) Fix domain configuration
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Fix persistent 500 error on Vercel deployment
+
+Work Log:
+- Discovered ALL routes return 500 on Vercel (not just /api/auth/login)
+- Added /api/debug endpoint for step-by-step diagnostics
+- Identified that serverExternalPackages:["@prisma/client"] was preventing Next.js from tracing Prisma engine files → removed it
+- Added outputFileTracingIncludes for .prisma/client in next.config.ts
+- Added Prisma binary targets for Vercel serverless runtimes
+- Switched to @prisma/adapter-neon + @neondatabase/serverless on Vercel
+  - Uses WebSocket connection instead of native Prisma engine binary
+  - Completely eliminates binary compatibility issues
+  - This is the recommended approach by both Prisma and Neon for Vercel
+- Local dev works perfectly with both standard and adapter approaches
+
+Stage Summary:
+- Commit cbb255b pushed with Neon serverless adapter approach
+- This should definitively fix the 500 error on Vercel
+- User needs to redeploy on Vercel with this commit
+- If /api/debug also returns 500, the Neon adapter approach is the nuclear option
+- Login works locally: admin@mbumahhardware.co.ke / Admin@2024
