@@ -12,8 +12,7 @@
 //   - JSON metadata stored as String; switch to Json type on PostgreSQL
 
 generator client {
-  provider        = "prisma-client-js"
-  binaryTargets   = ["native", "rhel-openssl-3.0.x"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
