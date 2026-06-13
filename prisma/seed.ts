@@ -138,7 +138,7 @@ async function main() {
       email: 'cashier@mbumahhardware.co.ke',
       name: 'Grace Wanjiku',
       passwordHash: 'hashed_Cashier@2024_2024',
-      role: 'CASHIER',
+      role: 'SALES_PERSON',
       phone: '0759963601',
       isActive: true,
     },
@@ -225,11 +225,11 @@ async function main() {
         action,
       }))
     ),
-    // CASHIER basic permissions
-    { role: 'CASHIER', resource: 'products', action: 'read' },
-    { role: 'CASHIER', resource: 'transactions', action: 'create' },
-    { role: 'CASHIER', resource: 'transactions', action: 'read' },
-    { role: 'CASHIER', resource: 'customers', action: 'read' },
+    // SALES_PERSON basic permissions
+    { role: 'SALES_PERSON', resource: 'products', action: 'read' },
+    { role: 'SALES_PERSON', resource: 'transactions', action: 'create' },
+    { role: 'SALES_PERSON', resource: 'transactions', action: 'read' },
+    { role: 'SALES_PERSON', resource: 'customers', action: 'read' },
     // BRANCH_MANAGER permissions
     { role: 'BRANCH_MANAGER', resource: 'products', action: 'create' },
     { role: 'BRANCH_MANAGER', resource: 'products', action: 'read' },

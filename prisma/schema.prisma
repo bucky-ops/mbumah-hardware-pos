@@ -89,6 +89,7 @@ model Store {
   customerInteractions CustomerInteraction[]
   transfersFrom   StoreTransfer[]   @relation("TransferFrom")
   transfersTo     StoreTransfer[]   @relation("TransferTo")
+  messages        Message[]
 
   @@index([organizationId])
   @@map("stores")
@@ -103,7 +104,7 @@ model User {
   email           String   @unique
   name            String
   passwordHash    String
-  role            String   @default("CASHIER") // SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER, CASHIER, ACCOUNTANT
+  role            String   @default("SALES_PERSON") // SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER, SALES_PERSON, ACCOUNTANT
   phone           String?
   avatarUrl       String?
   isActive        Boolean  @default(true)
@@ -143,7 +144,7 @@ model Session {
 
 model RolePermission {
   id           String   @id @default(cuid())
-  role         String   // SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER, CASHIER, ACCOUNTANT
+  role         String   // SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER, SALES_PERSON, ACCOUNTANT
   resource     String   // products, transactions, customers, financials, rentals, admin, reports
   action       String   // create, read, update, delete, approve, refund, export
   createdAt    DateTime @default(now())
@@ -1405,4 +1406,37 @@ model CustomerInteraction {
   @@index([status])
   @@index([createdAt])
   @@map("customer_interactions")
+}
+
+// ============================================================
+// MESSAGING MODULE (SMS & WhatsApp)
+// ============================================================
+
+model Message {
+  id              String   @id @default(cuid())
+  storeId         String
+  customerId      String?
+  channel         String   @default("WHATSAPP") // SMS, WHATSAPP, BOTH
+  messageType     String   @default("CUSTOM") // DEBT_REMINDER, PAYMENT_CONFIRMATION, BALANCE_UPDATE, PROMOTION, CUSTOM
+  subject         String?
+  content         String
+  status          String   @default("PENDING") // PENDING, SENT, DELIVERED, FAILED, READ
+  waLink          String?
+  errorMessage     String?
+  sentAt          DateTime?
+  deliveredAt     DateTime?
+  readAt          DateTime?
+  createdBy       String?  // User ID
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([customerId])
+  @@index([channel])
+  @@index([messageType])
+  @@index([status])
+  @@index([createdAt])
+  @@map("messages")
 }

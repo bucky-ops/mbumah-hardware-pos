@@ -32,6 +32,10 @@ import type {
   TaxFilingItem,
   StoreTransferItem as StoreTransferHeaderItem,
   CustomerInteractionItem,
+  BranchItem,
+  CreateBranchPayload,
+  MessageItem,
+  SendMessagePayload,
 } from './types';
 
 export type {
@@ -48,6 +52,10 @@ export type {
   TaxFilingItem,
   StoreTransferItem as StoreTransferHeaderItem,
   CustomerInteractionItem,
+  BranchItem,
+  CreateBranchPayload,
+  MessageItem,
+  SendMessagePayload,
 } from './types';
 
 
@@ -307,7 +315,7 @@ export interface TransactionItem {
   storeId: string;
   receiptNumber: string;
   customerId: string | null;
-  cashierId: string;
+  salesPersonId: string;
   subtotal: number;
   taxAmount: number;
   discountAmount: number;
@@ -321,7 +329,7 @@ export interface TransactionItem {
   updatedAt: string;
   items?: SaleItemDetail[];
   customer?: CustomerItem;
-  cashier?: { id: string; name: string };
+  salesPerson?: { id: string; name: string };
 }
 
 export interface SaleItemDetail {
@@ -1485,6 +1493,89 @@ export const customerInteractionsApi = {
     return request<CustomerInteractionItem>('/customer-interactions', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  },
+};
+
+
+// ============================================================
+// BRANCHES API
+// ============================================================
+
+export const branchesApi = {
+  list: async (params?: { organizationId?: string; status?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.organizationId) query.set('organizationId', params.organizationId);
+    if (params?.status) query.set('status', params.status);
+    return request<BranchItem[]>(`/branches?${query.toString()}`);
+  },
+  create: async (data: CreateBranchPayload) => {
+    return request<BranchItem>('/branches', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+
+// ============================================================
+// MESSAGES API
+// ============================================================
+
+export const messagesApi = {
+  list: async (params?: { storeId?: string; customerId?: string; channel?: string; messageType?: string; status?: string; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.storeId) query.set('storeId', params.storeId);
+    if (params?.customerId) query.set('customerId', params.customerId);
+    if (params?.channel) query.set('channel', params.channel);
+    if (params?.messageType) query.set('messageType', params.messageType);
+    if (params?.status) query.set('status', params.status);
+    if (params?.limit) query.set('limit', String(params.limit));
+    return request<MessageItem[]>(`/messages?${query.toString()}`);
+  },
+  send: async (data: SendMessagePayload) => {
+    return request<MessageItem>('/messages', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  sendDebtReminder: async (customerId: string, phone: string, storeId: string, debtAmount: number) => {
+    return request<MessageItem>('/messages', {
+      method: 'POST',
+      body: JSON.stringify({
+        customerId,
+        phone,
+        channel: 'WHATSAPP',
+        messageType: 'DEBT_REMINDER',
+        content: `Hello, this is a friendly reminder from MBUMAH HARDWARE that you have an outstanding balance of KES ${debtAmount.toLocaleString()}. Please settle your account at your earliest convenience. Thank you!`,
+        storeId,
+      }),
+    });
+  },
+  sendPaymentConfirmation: async (customerId: string, phone: string, storeId: string, amount: number) => {
+    return request<MessageItem>('/messages', {
+      method: 'POST',
+      body: JSON.stringify({
+        customerId,
+        phone,
+        channel: 'WHATSAPP',
+        messageType: 'PAYMENT_CONFIRMATION',
+        content: `Thank you! We have received your payment of KES ${amount.toLocaleString()} at MBUMAH HARDWARE. Your account has been updated.`,
+        storeId,
+      }),
+    });
+  },
+  sendBalanceUpdate: async (customerId: string, phone: string, storeId: string, balance: number) => {
+    return request<MessageItem>('/messages', {
+      method: 'POST',
+      body: JSON.stringify({
+        customerId,
+        phone,
+        channel: 'WHATSAPP',
+        messageType: 'BALANCE_UPDATE',
+        content: `Your current account balance at MBUMAH HARDWARE is KES ${balance.toLocaleString()}. Thank you for your continued business!`,
+        storeId,
+      }),
     });
   },
 };

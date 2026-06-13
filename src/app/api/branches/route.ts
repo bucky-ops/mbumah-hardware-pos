@@ -1,10 +1,10 @@
-// GET/POST /api/stores
+// GET/POST /api/branches
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 
-async function getStoresHandler(...args: unknown[]): Promise<Response> {
+async function getBranchesHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const { searchParams } = new URL(request.url);
 
@@ -17,7 +17,7 @@ async function getStoresHandler(...args: unknown[]): Promise<Response> {
     where.status = status;
   }
 
-  const stores = await db.store.findMany({
+  const branches = await db.store.findMany({
     where,
     orderBy: { name: 'asc' },
     select: {
@@ -36,11 +36,11 @@ async function getStoresHandler(...args: unknown[]): Promise<Response> {
 
   return Response.json({
     success: true,
-    data: stores,
+    data: branches,
   });
 }
 
-async function createStoreHandler(...args: unknown[]): Promise<Response> {
+async function createBranchHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
 
   // ── 1. Authenticate the requesting user ──────────────────────────
@@ -83,22 +83,22 @@ async function createStoreHandler(...args: unknown[]): Promise<Response> {
 
   const requestingUser = session.user;
 
-  // ── 2. Authorise: only SUPER_ADMIN and STORE_OWNER may create stores ─
-  const allowedRoles = ['SUPER_ADMIN', 'STORE_OWNER'];
+  // ── 2. Authorise: only admin roles may create branches ───────────
+  const allowedRoles = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'];
 
   if (!allowedRoles.includes(requestingUser.role)) {
     await systemLog({
-      action: 'STORE_CREATE_DENIED',
+      action: 'BRANCH_CREATE_DENIED',
       component: 'AUTH',
       severity: 'WARN',
-      message: `User "${requestingUser.name}" (${requestingUser.role}) attempted to create a store — denied`,
+      message: `User "${requestingUser.name}" (${requestingUser.role}) attempted to create a branch — denied`,
       userId: requestingUser.id,
       storeId: requestingUser.storeId || undefined,
       metadata: { requestingRole: requestingUser.role },
     });
 
     return Response.json(
-      { success: false, error: 'Only SUPER_ADMIN and STORE_OWNER can create new stores.' },
+      { success: false, error: 'Only administrators and branch managers can create branches.' },
       { status: 403 }
     );
   }
@@ -114,20 +114,20 @@ async function createStoreHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // ── 4. Check for duplicate store name in organization ────────────
+  // ── 4. Check for duplicate branch name in organization ───────────
   const existing = await db.store.findFirst({
     where: { organizationId, name },
   });
 
   if (existing) {
     return Response.json(
-      { success: false, error: 'A store with this name already exists in this organization.' },
+      { success: false, error: 'A branch with this name already exists in this organization.' },
       { status: 409 }
     );
   }
 
-  // ── 5. Create the store ──────────────────────────────────────────
-  const store = await db.store.create({
+  // ── 5. Create the branch ─────────────────────────────────────────
+  const branch = await db.store.create({
     data: {
       organizationId,
       name,
@@ -153,20 +153,20 @@ async function createStoreHandler(...args: unknown[]): Promise<Response> {
   });
 
   await systemLog({
-    action: 'STORE_CREATED',
+    action: 'BRANCH_CREATED',
     component: 'AUTH',
     severity: 'INFO',
-    message: `Store "${name}" created by "${requestingUser.name}" (${requestingUser.role})`,
+    message: `Branch "${name}" created by "${requestingUser.name}" (${requestingUser.role})`,
     userId: requestingUser.id,
     storeId: requestingUser.storeId || undefined,
-    metadata: { storeId: store.id, storeName: name, createdByRole: requestingUser.role },
+    metadata: { branchId: branch.id, branchName: name, createdByRole: requestingUser.role },
   });
 
   return Response.json({
     success: true,
-    data: store,
+    data: branch,
   }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getStoresHandler, 'STORES_LIST');
-export const POST = withErrorBoundary(createStoreHandler, 'STORES_CREATE');
+export const GET = withErrorBoundary(getBranchesHandler, 'BRANCHES_LIST');
+export const POST = withErrorBoundary(createBranchHandler, 'BRANCHES_CREATE');

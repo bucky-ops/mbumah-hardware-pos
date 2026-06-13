@@ -21,14 +21,14 @@ import {
   BellRing, PackageX, AlertOctagon, CircleDollarSign, CheckCheck,
   Truck, UserPlus, Receipt, Filter, Info, Tag,
   LayoutGrid, List, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Pause, MessageSquare, PartyPopper, Sparkles, Zap,
-  Navigation,
+  Navigation, Play, Square as SquareIcon,
 } from 'lucide-react';
 
 import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
 import {
   productsApi, categoriesApi, customersApi, transactionsApi,
   paymentsApi, dashboardApi,
-  rentalsApi, debtApi, notificationsApi,
+  rentalsApi, debtApi, notificationsApi, shiftsApi,
   formatKES, formatDate, formatDateTime, formatRelativeTime,
   type ProductListItem, type CustomerItem,
   type CategoryItem, type TransactionItem,
@@ -36,6 +36,7 @@ import {
   type NotificationItem,
 } from '@/lib/api';
 import type { PaymentMethod, CartItem, UnitType, DashboardStats } from '@/lib/types';
+import { hasPermission, canCreateUsers, requiresShift, ROLE_LABELS, ROLE_DEFAULT_TAB, ROLE_TABS } from '@/lib/types';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -75,6 +76,7 @@ const LazyLoyaltyTab = lazy(() => import('./tabs/loyalty-tab'));
 const LazyBankingTab = lazy(() => import('./tabs/banking-tab'));
 const LazyTaxTab = lazy(() => import('./tabs/tax-tab'));
 const LazyTransfersTab = lazy(() => import('./tabs/transfers-tab'));
+const LazyMessagingTab = lazy(() => import('./tabs/messaging-tab'));
 
 function TabLoadingFallback() {
   return (
@@ -110,12 +112,13 @@ const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
   { id: 'admin', label: 'Admin', icon: Settings },
   { id: 'inventory', label: 'Inventory', icon: Package },
   { id: 'transfers', label: 'Transfers', icon: ArrowUpDown },
+  { id: 'messaging', label: 'Messaging', icon: MessageSquare },
 ];
 
 const DEMO_ACCOUNTS = [
   { email: 'admin@mbumahhardware.co.ke', password: 'Admin@2024', role: 'Super Admin', icon: ShieldCheck, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900 hover:bg-red-100 dark:hover:bg-red-950/50' },
   { email: 'thika.manager@mbumahhardware.co.ke', password: 'Manager@2024', role: 'Branch Mgr (Thika)', icon: Store, color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900 hover:bg-purple-100 dark:hover:bg-purple-950/50' },
-  { email: 'cashier@mbumahhardware.co.ke', password: 'Cashier@2024', role: 'Cashier', icon: ShoppingCart, color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900 hover:bg-green-100 dark:hover:bg-green-950/50' },
+  { email: 'cashier@mbumahhardware.co.ke', password: 'Cashier@2024', role: 'Sales Person', icon: ShoppingCart, color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900 hover:bg-green-100 dark:hover:bg-green-950/50' },
   { email: 'accountant@mbumahhardware.co.ke', password: 'Accountant@2024', role: 'Accountant', icon: BarChart3, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900 hover:bg-amber-100 dark:hover:bg-amber-950/50' },
 ];
 
@@ -329,10 +332,11 @@ function LoginScreen() {
     e.preventDefault();
     try {
       await login(email, password);
-      // Redirect cashiers/sales persons directly to POS interface
+      // Redirect sales persons directly to POS interface
       const user = useAuthStore.getState().user;
-      if (user?.role === 'CASHIER') {
-        useAppStore.getState().setActiveTab('pos');
+      if (user?.role === 'SALES_PERSON') {
+        const defaultTab = (ROLE_DEFAULT_TAB[user.role] || 'pos') as AppTab;
+        useAppStore.getState().setActiveTab(defaultTab);
       }
       toast.success('Welcome to MBUMAH HARDWARE POS!');
     } catch (err: unknown) {
@@ -382,7 +386,7 @@ function LoginScreen() {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="cashier@mbumahhardware.co.ke"
+                    placeholder="sales@mbumahhardware.co.ke"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10"
@@ -940,9 +944,10 @@ function AppSidebar() {
     toast.success('Logged out successfully');
   };
 
-  // Navigation groups
-  const mainNavItems = TAB_CONFIG.filter(t => ['pos', 'catalog', 'inventory', 'customers', 'transactions', 'invoices', 'delivery-notes', 'gift-cards', 'credits'].includes(t.id));
-  const managementNavItems = TAB_CONFIG.filter(t => ['rentals', 'suppliers', 'financial', 'reports', 'admin'].includes(t.id));
+  // Navigation groups - filtered by role
+  const allowedTabs = user?.role ? (ROLE_TABS[user.role as keyof typeof ROLE_TABS] || []) : [];
+  const mainNavItems = TAB_CONFIG.filter(t => ['pos', 'catalog', 'inventory', 'customers', 'transactions', 'invoices', 'delivery-notes', 'gift-cards', 'credits'].includes(t.id) && allowedTabs.includes(t.id));
+  const managementNavItems = TAB_CONFIG.filter(t => ['rentals', 'suppliers', 'financial', 'reports', 'admin', 'vouchers', 'loyalty', 'banking', 'tax', 'transfers', 'messaging'].includes(t.id) && allowedTabs.includes(t.id));
 
   const renderNavItem = ({ id, label, icon: Icon }: { id: AppTab; label: string; icon: React.ElementType }) => (
     <button
@@ -987,13 +992,22 @@ function AppSidebar() {
         <div className="flex flex-col h-full">
           {/* Logo + Notification Bell */}
           <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
-            <div className="w-9 h-9 rounded-lg overflow-hidden bg-sidebar-primary flex items-center justify-center shrink-0">
+            <button
+              type="button"
+              onClick={() => handleNav('dashboard')}
+              className="w-9 h-9 rounded-lg overflow-hidden bg-sidebar-primary flex items-center justify-center shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+              title="Go to Dashboard"
+            >
               <img src="/logo.png" alt="MH" className="w-full h-full object-cover" />
-            </div>
-            <div className="flex-1 min-w-0">
+            </button>
+            <button
+              type="button"
+              onClick={() => handleNav('dashboard')}
+              className="flex-1 min-w-0 text-left hover:opacity-80 transition-opacity cursor-pointer"
+            >
               <h1 className="font-bold text-sm leading-tight">MBUMAH HARDWARE</h1>
               <p className="text-xs text-sidebar-foreground/60">POS & ERP</p>
-            </div>
+            </button>
             <Button
               variant="ghost"
               size="icon"
@@ -1081,7 +1095,7 @@ function AppSidebar() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
-                    <p className="text-xs text-sidebar-foreground/60 truncate">{user?.role === 'SUPER_ADMIN' ? 'Super Admin' : user?.role === 'CASHIER' ? 'Cashier' : user?.role || 'User'}</p>
+                    <p className="text-xs text-sidebar-foreground/60 truncate">{ROLE_LABELS[user?.role as keyof typeof ROLE_LABELS] || user?.role || 'User'}</p>
                   </div>
                   <ChevronDown className="h-3.5 w-3.5 text-sidebar-foreground/40 shrink-0" />
                 </div>
@@ -1960,6 +1974,176 @@ function EmptyProductsState({ searchQuery }: { searchQuery: string }) {
 
 // POS TAB (kept inline - core feature)
 
+// Shift indicator for POS - shows shift status for sales persons
+function POSShiftIndicator({ storeId }: { storeId: string }) {
+  const { user } = useAuthStore();
+  const [startingCash, setStartingCash] = useState('');
+  const [shiftDialogOpen, setShiftDialogOpen] = useState(false);
+  const [endDialogOpen, setEndDialogOpen] = useState(false);
+  const [countedCash, setCountedCash] = useState('');
+  const [endingCash, setEndingCash] = useState('');
+  const [endNotes, setEndNotes] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const userId = user?.id || '';
+
+  const { data: activeShift, refetch } = useQuery({
+    queryKey: ['pos-shift', storeId, userId],
+    queryFn: async () => {
+      const res = await shiftsApi.getCurrent(storeId, userId);
+      return res.data;
+    },
+    refetchInterval: 30000,
+  });
+
+  const [elapsed, setElapsed] = useState('0h 0m');
+  useEffect(() => {
+    if (!activeShift?.startedAt) return;
+    const update = () => {
+      const diff = Date.now() - new Date(activeShift.startedAt!).getTime();
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      setElapsed(`${h}h ${m}m`);
+    };
+    update();
+    const interval = setInterval(update, 60000);
+    return () => clearInterval(interval);
+  }, [activeShift?.startedAt]);
+
+  const handleStartShift = async () => {
+    const cash = parseFloat(startingCash);
+    if (isNaN(cash) || cash < 0) {
+      toast.error('Enter a valid starting cash amount');
+      return;
+    }
+    setIsProcessing(true);
+    try {
+      const res = await shiftsApi.start({ storeId, userId, startingCash: cash });
+      if (res.success) {
+        toast.success('Shift started!');
+        setShiftDialogOpen(false);
+        setStartingCash('');
+        refetch();
+      } else {
+        toast.error(res.error || 'Failed to start shift');
+      }
+    } catch {
+      toast.error('Failed to start shift');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleEndShift = async () => {
+    if (!activeShift) return;
+    const counted = parseFloat(countedCash);
+    const ending = parseFloat(endingCash);
+    if (isNaN(counted) || isNaN(ending)) {
+      toast.error('Enter valid cash amounts');
+      return;
+    }
+    setIsProcessing(true);
+    try {
+      const res = await shiftsApi.end(activeShift.id, { endingCash: ending, countedCash: counted, notes: endNotes || undefined });
+      if (res.success) {
+        toast.success('Shift ended successfully');
+        setEndDialogOpen(false);
+        refetch();
+      } else {
+        toast.error(res.error || 'Failed to end shift');
+      }
+    } catch {
+      toast.error('Failed to end shift');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <>
+      <div className={`flex items-center gap-3 px-4 py-2 rounded-lg border ${activeShift ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800' : 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800'}`}>
+        <div className={`h-2.5 w-2.5 rounded-full ${activeShift ? 'bg-green-500 animate-pulse' : 'bg-amber-500'}`} />
+        {activeShift ? (
+          <>
+            <span className="text-sm font-medium text-green-700 dark:text-green-400">Shift Active</span>
+            <span className="text-xs text-muted-foreground">Duration: {elapsed}</span>
+            <span className="text-xs text-muted-foreground">Starting: {formatKES(activeShift.startingCash)}</span>
+            <Button variant="outline" size="sm" className="ml-auto h-7 text-xs" onClick={() => setEndDialogOpen(true)}>
+              <SquareIcon className="h-3 w-3 mr-1" /> End Shift
+            </Button>
+          </>
+        ) : (
+          <>
+            <span className="text-sm font-medium text-amber-700 dark:text-amber-400">No Active Shift</span>
+            <span className="text-xs text-muted-foreground">Start a shift to begin selling</span>
+            <Button size="sm" className="ml-auto h-7 text-xs bg-green-600 hover:bg-green-700 text-white" onClick={() => setShiftDialogOpen(true)}>
+              <Play className="h-3 w-3 mr-1" /> Start Shift
+            </Button>
+          </>
+        )}
+      </div>
+
+      {/* Start Shift Dialog */}
+      <Dialog open={shiftDialogOpen} onOpenChange={setShiftDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Play className="h-5 w-5 text-green-600" /> Start Shift</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Starting Cash (KES)</Label>
+              <Input type="number" placeholder="0" value={startingCash} onChange={(e) => setStartingCash(e.target.value)} className="text-lg font-semibold mt-1" />
+              <p className="text-xs text-muted-foreground mt-1">Count the cash in the drawer before starting</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShiftDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleStartShift} disabled={isProcessing} className="bg-green-600 hover:bg-green-700 text-white">
+              {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+              Start Shift
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* End Shift Dialog */}
+      <Dialog open={endDialogOpen} onOpenChange={setEndDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><SquareIcon className="h-5 w-5 text-red-600" /> End Shift</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-3 bg-muted/30 rounded-lg text-sm space-y-1">
+              <div className="flex justify-between"><span className="text-muted-foreground">Started:</span><span>{formatDateTime(activeShift?.startedAt || '')}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Starting Cash:</span><span>{formatKES(activeShift?.startingCash || 0)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Duration:</span><span>{elapsed}</span></div>
+            </div>
+            <div>
+              <Label>Counted Cash (KES)</Label>
+              <Input type="number" placeholder="0" value={countedCash} onChange={(e) => setCountedCash(e.target.value)} className="mt-1" />
+            </div>
+            <div>
+              <Label>Ending Cash (KES)</Label>
+              <Input type="number" placeholder="0" value={endingCash} onChange={(e) => setEndingCash(e.target.value)} className="mt-1" />
+            </div>
+            <div>
+              <Label>Notes (optional)</Label>
+              <Input placeholder="Any notes..." value={endNotes} onChange={(e) => setEndNotes(e.target.value)} className="mt-1" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEndDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleEndShift} disabled={isProcessing} className="bg-red-600 hover:bg-red-700 text-white">
+              {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SquareIcon className="mr-2 h-4 w-4" />}
+              End Shift
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function POSTab() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -2223,7 +2407,7 @@ function POSTab() {
       storeId: currentStoreId,
       customerId: selectedCustomer || undefined,
       customerPhone: customerPhone || undefined,
-      cashierId: useAuthStore.getState().user?.id || '',
+      salesPersonId: useAuthStore.getState().user?.id || '',
       items: cart.items,
       paymentMethod,
       paymentDetails: {
@@ -2269,6 +2453,8 @@ function POSTab() {
     setCartNotes(prev => ({ ...prev, [productId]: note }));
   };
 
+  const user = useAuthStore((s) => s.user);
+
   return (
     <div className="flex flex-col lg:flex-row gap-4 h-full relative">
       {/* Confetti Overlay */}
@@ -2276,6 +2462,9 @@ function POSTab() {
 
       {/* Product Grid */}
       <div className="flex-1 min-w-0 space-y-4">
+        {/* Shift Status for Sales Persons */}
+        {user?.role === 'SALES_PERSON' && <POSShiftIndicator storeId={currentStoreId} />}
+
         {/* Dashboard Stats */}
         <DashboardStats storeId={currentStoreId} onLowStockClick={() => setLowStockAlertOpen(true)} />
 
@@ -2798,8 +2987,8 @@ function POSTab() {
                   <span>{formatDateTime(lastTransaction.createdAt)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Cashier:</span>
-                  <span>{lastTransaction.cashier?.name || useAuthStore.getState().user?.name || 'N/A'}</span>
+                  <span className="text-muted-foreground">Sales:</span>
+                  <span>{lastTransaction.salesPerson?.name || useAuthStore.getState().user?.name || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Customer:</span>
@@ -3036,7 +3225,7 @@ function POSTab() {
                     checkoutMutation.mutate({
                       storeId: currentStoreId,
                       customerId: selectedCustomer || undefined,
-                      cashierId: useAuthStore.getState().user?.id || '',
+                      salesPersonId: useAuthStore.getState().user?.id || '',
                       items: cart.items,
                       paymentMethod: 'MPESA',
                       paymentDetails: {
@@ -3416,6 +3605,7 @@ function MainApp() {
       case 'banking': return <Suspense fallback={<TabLoadingFallback />}><LazyBankingTab /></Suspense>;
       case 'tax': return <Suspense fallback={<TabLoadingFallback />}><LazyTaxTab /></Suspense>;
       case 'transfers': return <Suspense fallback={<TabLoadingFallback />}><LazyTransfersTab /></Suspense>;
+      case 'messaging': return <Suspense fallback={<TabLoadingFallback />}><LazyMessagingTab /></Suspense>;
       default: return <POSTab />;
     }
   };

@@ -322,7 +322,7 @@ function ReceiptModal({
           <div className="text-xs text-center text-muted-foreground space-y-0.5">
             <p>Paid via {transaction.paymentMethod}</p>
             <p>Status: {getPaymentStatusLabel(transaction.paymentStatus)}</p>
-            {transaction.cashier && <p>Cashier: {transaction.cashier.name}</p>}
+            {transaction.salesPerson && <p>Sales: {transaction.salesPerson.name}</p>}
           </div>
           <div className="text-center text-[10px] text-muted-foreground pt-2">Thank you for your business!</div>
         </div>
@@ -481,8 +481,8 @@ function TransactionRow({
                 )}
                 <div className="flex gap-2"><span className="text-muted-foreground font-semibold">Total:</span><span className="font-bold">{formatKES(transaction.totalAmount)}</span></div>
               </div>
-              {transaction.cashier && (
-                <p className="text-[10px] text-muted-foreground">Cashier: {transaction.cashier.name}</p>
+              {transaction.salesPerson && (
+                <p className="text-[10px] text-muted-foreground">Sales: {transaction.salesPerson.name}</p>
               )}
               {/* Action Buttons */}
               <div className="flex items-center gap-2 pt-1 border-t">

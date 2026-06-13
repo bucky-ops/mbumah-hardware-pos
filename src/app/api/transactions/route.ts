@@ -97,9 +97,15 @@ async function getTransactionsHandler(...args: unknown[]): Promise<Response> {
     db.salesTransaction.count({ where }),
   ]);
 
+  // Map cashier to salesPerson for frontend compatibility
+  const mappedTransactions = transactions.map((tx: Record<string, unknown>) => {
+    const { cashier, ...rest } = tx;
+    return { ...rest, salesPerson: cashier };
+  });
+
   return Response.json({
     success: true,
-    data: transactions,
+    data: mappedTransactions,
     pagination: {
       page,
       limit,
@@ -116,7 +122,8 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
   const {
     storeId,
     customerId,
-    cashierId,
+    cashierId: bodyCashierId,
+    salesPersonId,
     items,
     paymentMethod,
     paymentDetails,
@@ -124,9 +131,12 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     notes,
   } = body;
 
+  // Accept both cashierId and salesPersonId for backward compatibility
+  const cashierId = bodyCashierId || salesPersonId;
+
     if (!storeId || !cashierId || !items || !Array.isArray(items) || items.length === 0 || !paymentMethod) {
     return Response.json(
-      { success: false, error: 'storeId, cashierId, items, and paymentMethod are required.' },
+      { success: false, error: 'storeId, salesPersonId, items, and paymentMethod are required.' },
       { status: 400 }
     );
   }
@@ -145,11 +155,11 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Verify cashier exists
+  // Verify sales person exists
   const cashier = await db.user.findUnique({ where: { id: cashierId } });
   if (!cashier || !cashier.isActive) {
     return Response.json(
-      { success: false, error: 'Invalid or inactive cashier.' },
+      { success: false, error: 'Invalid or inactive sales person.' },
       { status: 400 }
     );
   }

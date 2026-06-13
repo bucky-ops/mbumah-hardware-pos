@@ -19,9 +19,10 @@ import { useAuthStore, useAppStore } from '@/lib/stores';
 import {
   systemLogsApi, stockMovementsApi, productsApi,
   auditLogsApi, systemConfigApi, usersApi,
-  formatDateTime, formatKES,
+  branchesApi, formatDateTime, formatKES,
   type SystemLogItem, type StockMovementItem,
   type AuditLogItem, type SystemConfigItem, type UserItem,
+  type BranchItem,
 } from '@/lib/api';
 import { canCreateUsers } from '@/lib/types';
 
@@ -1201,7 +1202,7 @@ const ROLE_STYLES: Record<string, { bg: string; text: string; badge: string; bor
   SUPER_ADMIN: { bg: 'bg-purple-500', text: 'text-white', badge: 'bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800', border: 'border-l-purple-500' },
   STORE_OWNER: { bg: 'bg-blue-500', text: 'text-white', badge: 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800', border: 'border-l-blue-500' },
   BRANCH_MANAGER: { bg: 'bg-green-500', text: 'text-white', badge: 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800', border: 'border-l-green-500' },
-  CASHIER: { bg: 'bg-amber-500', text: 'text-white', badge: 'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800', border: 'border-l-amber-500' },
+  SALES_PERSON: { bg: 'bg-amber-500', text: 'text-white', badge: 'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800', border: 'border-l-amber-500' },
   ACCOUNTANT: { bg: 'bg-cyan-500', text: 'text-white', badge: 'bg-cyan-100 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800', border: 'border-l-cyan-500' },
 };
 
@@ -1209,7 +1210,7 @@ const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: 'Super Admin',
   STORE_OWNER: 'Shop Owner',
   BRANCH_MANAGER: 'Store Manager',
-  CASHIER: 'Cashier',
+  SALES_PERSON: 'Sales Person',
   ACCOUNTANT: 'Accountant',
 };
 
@@ -1217,7 +1218,7 @@ function UserManagement({ storeId }: { storeId: string }) {
   const queryClient = useQueryClient();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editUser, setEditUser] = useState<UserItem | null>(null);
-  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'CASHIER', password: '', phone: '' });
+  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'SALES_PERSON', password: '', phone: '' });
   const [editForm, setEditForm] = useState({ name: '', email: '', role: '', phone: '' });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
@@ -1236,7 +1237,7 @@ function UserManagement({ storeId }: { storeId: string }) {
       toast.success('User created successfully');
       queryClient.invalidateQueries({ queryKey: ['users', storeId] });
       setAddDialogOpen(false);
-      setNewUser({ name: '', email: '', role: 'CASHIER', password: '', phone: '' });
+      setNewUser({ name: '', email: '', role: 'SALES_PERSON', password: '', phone: '' });
       setFormErrors({});
     },
     onError: (err: Error) => toast.error(err.message),
@@ -1346,7 +1347,7 @@ function UserManagement({ storeId }: { storeId: string }) {
                     <SelectItem value="SUPER_ADMIN">Super Admin</SelectItem>
                     <SelectItem value="STORE_OWNER">Shop Owner</SelectItem>
                     <SelectItem value="BRANCH_MANAGER">Store Manager</SelectItem>
-                    <SelectItem value="CASHIER">Cashier</SelectItem>
+                    <SelectItem value="SALES_PERSON">Sales Person</SelectItem>
                     <SelectItem value="ACCOUNTANT">Accountant</SelectItem>
                   </SelectContent>
                 </Select>
@@ -1395,7 +1396,7 @@ function UserManagement({ storeId }: { storeId: string }) {
       ) : (
         <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
           {users.map((user) => {
-            const style = ROLE_STYLES[user.role] || ROLE_STYLES.CASHIER;
+            const style = ROLE_STYLES[user.role] || ROLE_STYLES.SALES_PERSON;
             const isOnline = user.lastLoginAt && (Date.now() - new Date(user.lastLoginAt).getTime()) < 30 * 60 * 1000;
             return (
               <div key={user.id} className={`flex items-center gap-3 p-2.5 rounded-lg border-l-3 ${style.border} hover:bg-muted/30 transition-colors group`}>
@@ -1497,7 +1498,7 @@ function UserManagement({ storeId }: { storeId: string }) {
                   <SelectItem value="SUPER_ADMIN">Super Admin</SelectItem>
                   <SelectItem value="STORE_OWNER">Shop Owner</SelectItem>
                   <SelectItem value="BRANCH_MANAGER">Store Manager</SelectItem>
-                  <SelectItem value="CASHIER">Cashier</SelectItem>
+                  <SelectItem value="SALES_PERSON">Sales Person</SelectItem>
                   <SelectItem value="ACCOUNTANT">Accountant</SelectItem>
                 </SelectContent>
               </Select>
@@ -1516,6 +1517,285 @@ function UserManagement({ storeId }: { storeId: string }) {
               <Save className="mr-2 h-4 w-4" /> Save Changes
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// Branch Management Section
+
+const BRANCH_STATUS_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
+  ACTIVE: { bg: 'bg-green-100 dark:bg-green-900/20', text: 'text-green-700 dark:text-green-400', dot: 'bg-green-500' },
+  CLOSED: { bg: 'bg-red-100 dark:bg-red-900/20', text: 'text-red-700 dark:text-red-400', dot: 'bg-red-500' },
+  RENOVATING: { bg: 'bg-amber-100 dark:bg-amber-900/20', text: 'text-amber-700 dark:text-amber-400', dot: 'bg-amber-500' },
+};
+
+function BranchManagement() {
+  const queryClient = useQueryClient();
+  const user = useAuthStore((s) => s.user);
+  const canManage = canCreateUsers(user?.role as Parameters<typeof canCreateUsers>[0]);
+
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [selectedBranch, setSelectedBranch] = useState<BranchItem | null>(null);
+  const [newBranch, setNewBranch] = useState({
+    name: '',
+    location: '',
+    address: '',
+    phone: '',
+    email: '',
+  });
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  const { data: branchesData, isLoading } = useQuery({
+    queryKey: ['branches'],
+    queryFn: () => branchesApi.list({ organizationId: 'org_mbumah' }),
+  });
+
+  const branches = branchesData?.data || [];
+
+  const createMutation = useMutation({
+    mutationFn: branchesApi.create,
+    onSuccess: () => {
+      toast.success('Branch created successfully');
+      queryClient.invalidateQueries({ queryKey: ['branches'] });
+      setAddDialogOpen(false);
+      setNewBranch({ name: '', location: '', address: '', phone: '', email: '' });
+      setFormErrors({});
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to create branch'),
+  });
+
+  const validate = (): boolean => {
+    const errs: Record<string, string> = {};
+    if (!newBranch.name.trim()) errs.name = 'Branch name is required';
+    setFormErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleCreate = () => {
+    if (validate()) {
+      createMutation.mutate({
+        ...newBranch,
+        organizationId: 'org_mbumah',
+      });
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-xs">{branches.length} branches</Badge>
+          <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1" />
+            {branches.filter((b: BranchItem) => b.status === 'ACTIVE').length} active
+          </Badge>
+        </div>
+        {canManage && (
+          <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="h-7 text-xs">
+                <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Branch
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Add New Branch</DialogTitle>
+                <DialogDescription>Create a new store branch location</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Branch Name *</Label>
+                  <Input
+                    value={newBranch.name}
+                    onChange={(e) => setNewBranch({ ...newBranch, name: e.target.value })}
+                    placeholder="e.g. Mbumah Hardware - Thika Road"
+                    className={formErrors.name ? 'border-red-500' : ''}
+                  />
+                  {formErrors.name && <p className="text-xs text-red-500">{formErrors.name}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label>Location</Label>
+                  <Input
+                    value={newBranch.location}
+                    onChange={(e) => setNewBranch({ ...newBranch, location: e.target.value })}
+                    placeholder="e.g. Thika Road, Nairobi"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Address</Label>
+                  <Input
+                    value={newBranch.address}
+                    onChange={(e) => setNewBranch({ ...newBranch, address: e.target.value })}
+                    placeholder="e.g. 123 Thika Road, Nairobi"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone</Label>
+                  <Input
+                    value={newBranch.phone}
+                    onChange={(e) => setNewBranch({ ...newBranch, phone: e.target.value })}
+                    placeholder="+254 7XX XXX XXX"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input
+                    type="email"
+                    value={newBranch.email}
+                    onChange={(e) => setNewBranch({ ...newBranch, email: e.target.value })}
+                    placeholder="branch@mbumah.co.ke"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" size="sm" onClick={() => setAddDialogOpen(false)}>Cancel</Button>
+                <Button size="sm" onClick={handleCreate} disabled={createMutation.isPending}>
+                  {createMutation.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                  Create Branch
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
+
+      {/* Branch List */}
+      {isLoading ? (
+        <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div>
+      ) : branches.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          <Store className="h-8 w-8 mx-auto mb-2 opacity-30" />
+          <p className="text-sm">No branches found</p>
+          <p className="text-xs mt-1">Create a branch to get started</p>
+        </div>
+      ) : (
+        <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+          {branches.map((branch: BranchItem) => {
+            const statusStyle = BRANCH_STATUS_STYLES[branch.status] || BRANCH_STATUS_STYLES.ACTIVE;
+            return (
+              <div
+                key={branch.id}
+                className="flex items-center gap-3 p-2.5 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors cursor-pointer group"
+                onClick={() => setSelectedBranch(branch)}
+              >
+                <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-orange-50 to-white dark:from-orange-900/20 dark:to-card border border-orange-100 dark:border-orange-900/40 flex items-center justify-center flex-shrink-0">
+                  <Store className="h-4 w-4 text-orange-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium truncate">{branch.name}</p>
+                    <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${statusStyle.bg} ${statusStyle.text} border-0`}>
+                      <div className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot} mr-1`} />
+                      {branch.status}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                    {branch.location && (
+                      <span className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />{branch.location}
+                      </span>
+                    )}
+                    {branch.phone && (
+                      <span className="flex items-center gap-1">
+                        <Phone className="h-3 w-3" />{branch.phone}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => { e.stopPropagation(); setSelectedBranch(branch); }}
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Branch Detail Dialog */}
+      <Dialog open={!!selectedBranch} onOpenChange={(open) => { if (!open) setSelectedBranch(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Store className="h-4 w-4" /> Branch Details
+            </DialogTitle>
+          </DialogHeader>
+          {selectedBranch && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-orange-50 to-white dark:from-orange-900/20 dark:to-card border border-orange-100 dark:border-orange-900/40 flex items-center justify-center">
+                  <Store className="h-6 w-6 text-orange-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">{selectedBranch.name}</h3>
+                  <Badge variant="outline" className={`text-[10px] mt-1 ${BRANCH_STATUS_STYLES[selectedBranch.status]?.bg || ''} ${BRANCH_STATUS_STYLES[selectedBranch.status]?.text || ''} border-0`}>
+                    <div className={`w-1.5 h-1.5 rounded-full ${BRANCH_STATUS_STYLES[selectedBranch.status]?.dot || 'bg-gray-500'} mr-1`} />
+                    {selectedBranch.status}
+                  </Badge>
+                </div>
+              </div>
+              <Separator />
+              <div className="grid gap-3">
+                {selectedBranch.location && (
+                  <div className="flex items-start gap-2">
+                    <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Location</p>
+                      <p className="text-sm">{selectedBranch.location}</p>
+                    </div>
+                  </div>
+                )}
+                {selectedBranch.address && (
+                  <div className="flex items-start gap-2">
+                    <Globe className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Address</p>
+                      <p className="text-sm">{selectedBranch.address}</p>
+                    </div>
+                  </div>
+                )}
+                {selectedBranch.phone && (
+                  <div className="flex items-start gap-2">
+                    <Phone className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Phone</p>
+                      <p className="text-sm">{selectedBranch.phone}</p>
+                    </div>
+                  </div>
+                )}
+                {selectedBranch.email && (
+                  <div className="flex items-start gap-2">
+                    <Mail className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Email</p>
+                      <p className="text-sm">{selectedBranch.email}</p>
+                    </div>
+                  </div>
+                )}
+                {selectedBranch.managerName && (
+                  <div className="flex items-start gap-2">
+                    <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Branch Manager</p>
+                      <p className="text-sm">{selectedBranch.managerName}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Created: {formatDateTime(selectedBranch.createdAt)}</span>
+                <span>Updated: {formatDateTime(selectedBranch.updatedAt)}</span>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
@@ -1752,6 +2032,19 @@ export default function AdminTab() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Branch Management */}
+      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Store className="h-4 w-4" /> Branch Management
+          </CardTitle>
+          <CardDescription className="text-xs">Manage store branches and locations</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BranchManagement />
+        </CardContent>
+      </Card>
 
       {/* Activity Feed */}
       <Card className="backdrop-blur-sm bg-card/80 border-border/50">

@@ -171,3 +171,143 @@ Stage Summary:
 - Dev server occasionally crashes due to sandbox memory constraints
 - System DATABASE_URL points to SQLite (workaround: db.ts falls back to DIRECT_URL)
 - Some tab components are basic and could use more polish
+
+---
+Task ID: 2-b
+Agent: API Client Updater
+Task: Update api.ts client for new modules
+
+Work Log:
+- Replaced `cashierId` → `salesPersonId` and `cashier?` → `salesPerson?` in TransactionItem interface (lines 310, 324)
+- Added `BranchItem`, `CreateBranchPayload`, `MessageItem`, `SendMessagePayload` to type imports from './types'
+- Added `BranchItem`, `CreateBranchPayload`, `MessageItem`, `SendMessagePayload` to type re-exports from './types'
+- Added `branchesApi` with `list` and `create` methods for branch management
+- Added `messagesApi` with `list`, `send`, `sendDebtReminder`, `sendPaymentConfirmation`, and `sendBalanceUpdate` methods for messaging
+- Verified no remaining CASHIER/cashier references in file
+- TypeScript compilation passed with no errors
+
+Stage Summary:
+- All CASHIER references replaced with SALES_PERSON equivalents
+- Two new API modules added: branchesApi and messagesApi
+- New types imported and re-exported for branch management and messaging
+- File compiles cleanly with TypeScript
+
+---
+Task ID: 2-a
+Agent: API Routes Updater
+Task: Update API routes for RBAC and new modules
+
+Work Log:
+- Searched all 11 listed API route files for "CASHIER" role references
+- Found CASHIER only in /api/users/route.ts (ROLE_CREATION_PERMISSIONS map and comment)
+- Updated ROLE_CREATION_PERMISSIONS: replaced all "CASHIER" with "SALES_PERSON" across SUPER_ADMIN, STORE_OWNER, and BRANCH_MANAGER entries
+- Updated comment from "CASHIER and ACCOUNTANT" to "SALES_PERSON and ACCOUNTANT"
+- Confirmed other 10 files (transactions, receipts, dashboard, reports, shifts) have no uppercase "CASHIER" role strings — they use Prisma field names (cashierId, cashier) which are database model fields, not role references
+- Created /api/branches/route.ts: GET lists branches (stores) with organizationId/status filters; POST creates branches with RBAC (SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER only), session auth, duplicate name check, systemLog audit
+- Created /api/messages/route.ts: GET lists messages with filters (storeId, customerId, channel, messageType, status, limit); POST sends messages — creates Message record, generates wa.me links for WhatsApp/BOTH channels (same normalization logic as /api/whatsapp/send), logs SMS as placeholder, includes systemLog audit
+- Updated /api/stores/route.ts: refactored from inline try/catch to withErrorBoundary pattern; added POST handler with RBAC (SUPER_ADMIN and STORE_OWNER only), session auth, duplicate name check, systemLog audit; updated GET to use consistent Response.json with success field
+
+Stage Summary:
+- CASHIER → SALES_PERSON role rename applied to ROLE_CREATION_PERMISSIONS in users/route.ts
+- New /api/branches endpoint: GET (list) + POST (create with RBAC for SUPER_ADMIN/STORE_OWNER/BRANCH_MANAGER)
+- New /api/messages endpoint: GET (list with filters) + POST (send with wa.me link generation for WhatsApp, placeholder for SMS)
+- Updated /api/stores endpoint: added POST handler (RBAC: SUPER_ADMIN/STORE_OWNER only), refactored GET to use withErrorBoundary
+- All new routes follow existing project patterns: withErrorBoundary, systemLog, session-based auth, proper RBAC
+
+---
+Task ID: 3-b
+Agent: Admin Tab Updater
+Task: Update admin-tab.tsx with branch management and CASHIER→SALES_PERSON role rename
+
+Work Log:
+- Replaced all 7 occurrences of "CASHIER" with "SALES_PERSON" in admin-tab.tsx:
+  - ROLE_STYLES key: CASHIER → SALES_PERSON
+  - ROLE_LABELS key/value: CASHIER:'Cashier' → SALES_PERSON:'Sales Person'
+  - Default new user role: role:'CASHIER' → role:'SALES_PERSON' (2 occurrences)
+  - SelectItem value/label: CASHIER/Cashier → SALES_PERSON/Sales Person (2 occurrences in add + edit forms)
+  - Fallback style: ROLE_STYLES.CASHIER → ROLE_STYLES.SALES_PERSON
+- Added branchesApi and BranchItem type to imports from '@/lib/api'
+- Added canCreateUsers import from '@/lib/types' (was already present)
+- Created BRANCH_STATUS_STYLES constant for ACTIVE/CLOSED/RENOVATING status indicators
+- Created BranchManagement component with:
+  - Branch list fetched from branchesApi.list() with organizationId filter
+  - Active branch count badge
+  - "Add Branch" button visible only to admin/branch manager (using canCreateUsers)
+  - Create branch dialog with fields: name (required), location, address, phone, email
+  - Branch creation via branchesApi.create() with form validation
+  - Status badges (ACTIVE=green, CLOSED=red, RENOVATING=amber) on each branch
+  - Click-to-view branch detail dialog with all fields (location, address, phone, email, manager)
+  - Loading skeletons and empty state
+- Added Branch Management card section in AdminTab layout between User Management/Quick Actions row and Activity Feed
+
+Stage Summary:
+- All CASHIER role references replaced with SALES_PERSON across the entire admin-tab.tsx
+- All "Cashier" UI labels updated to "Sales Person" in ROLE_LABELS, ROLE_STYLES, and SelectItem components
+- Full Branch Management section added with CRUD, status indicators, and RBAC-restricted creation
+- ESLint passes with no errors
+
+---
+Task ID: 3-a
+Agent: Messaging Tab Creator
+Task: Create messaging-tab.tsx UI component
+
+Work Log:
+- Created /src/app/tabs/messaging-tab.tsx with comprehensive Messaging module UI
+- Analyzed existing tab components (banking-tab, loyalty-tab) for consistent styling patterns
+- Verified API types: MessageItem, SendMessagePayload, DebtLedgerItem, CustomerItem
+- Verified API endpoints: messagesApi.list/send/sendDebtReminder/sendBalanceUpdate, customersApi.list, debtApi.list
+- Used currentStoreId (not activeStoreId) from useAppStore per existing codebase convention
+- Replaced WhatsAppIcon (not in lucide-react) with Phone icon with green styling
+
+Component features implemented:
+1. **Message Dashboard** - 4 stats cards (total sent, WhatsApp sent, pending, failed) with icon indicators
+   - Messages by Channel breakdown with progress bars (WhatsApp/SMS/Both)
+   - Messages by Type breakdown with progress bars (all 5 types)
+   - Recent Messages list with channel badges, status badges, and wa.me link display
+2. **Quick Send Tab** - Full compose form with:
+   - Customer selector dropdown (auto-fills phone from customer data)
+   - Phone number input (manual entry supported)
+   - Channel select (WhatsApp/SMS/Both)
+   - Message type select (5 types)
+   - Subject input (optional)
+   - Quick template buttons (4 templates with placeholder replacement)
+   - Message content textarea with character count
+   - WhatsApp link display after sending (with copy-to-clipboard and open-in-new-tab)
+3. **Quick Send Actions** - Two action cards:
+   - "Send Debt Reminders" - red-themed card, opens dialog to select overdue customers from debtApi
+   - "Send Balance Updates" - amber-themed card, opens dialog to select customers with outstanding balances
+   - Both dialogs have Select All/Deselect All, per-customer selection, amount display, and batch sending
+4. **Message History Tab** - Full table with:
+   - Search by name/phone/content
+   - Filter by channel, type, status
+   - Paginated table (10 per page) with Previous/Next navigation
+   - Channel badge (WhatsApp green, SMS blue, Both purple)
+   - Message type badge (color-coded)
+   - Content preview (truncated)
+   - Status badge with icons (Pending/Sent/Delivered/Failed/Read)
+   - Sent date column
+   - wa.me link action column
+5. **Message Templates Tab** - 4 pre-defined template cards:
+   - Debt Reminder, Payment Confirmation, Balance Update, Promotional
+   - Each shows content with placeholders highlighted
+   - "Use Template" button navigates to Quick Send with template applied
+6. **Send Message Dialog** - Full dialog accessible from header "Send Message" button
+   - Same form fields as Quick Compose
+   - WhatsApp link display after successful send
+
+Badge configuration maps for consistent styling:
+- CHANNEL_BADGE: WhatsApp (green), SMS (blue), Both (purple)
+- MESSAGE_TYPE_BADGE: Debt Reminder (red), Payment Confirmation (emerald), Balance Update (amber), Promotion (violet), Custom (slate)
+- STATUS_BADGE: Pending (amber), Sent (blue), Delivered (emerald), Failed (red), Read (green)
+
+- ESLint passes with no errors
+- Total file size: ~1600 lines of well-structured React component code
+
+Stage Summary:
+- Complete messaging-tab.tsx created with all 5 required sections
+- Consistent styling with existing tab components (card layouts, badge patterns, color scheme)
+- Full API integration with messagesApi, customersApi, and debtApi
+- WhatsApp link generation and display working
+- Debt reminder and balance update batch sending with customer selection dialogs
+- Responsive design with mobile-first approach
+- All 4 message templates with placeholder substitution

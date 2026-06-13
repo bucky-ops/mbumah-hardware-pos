@@ -71,10 +71,10 @@ async function getUsersHandler(...args: unknown[]): Promise<Response> {
 
 // RBAC: defines which roles each creator role is allowed to create
 const ROLE_CREATION_PERMISSIONS: Record<string, string[]> = {
-  SUPER_ADMIN: ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'CASHIER', 'ACCOUNTANT'],
-  STORE_OWNER: ['STORE_OWNER', 'BRANCH_MANAGER', 'CASHIER', 'ACCOUNTANT'],
-  BRANCH_MANAGER: ['CASHIER', 'ACCOUNTANT'],
-  // CASHIER and ACCOUNTANT cannot create users at all
+  SUPER_ADMIN: ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'SALES_PERSON', 'ACCOUNTANT'],
+  STORE_OWNER: ['STORE_OWNER', 'BRANCH_MANAGER', 'SALES_PERSON', 'ACCOUNTANT'],
+  BRANCH_MANAGER: ['SALES_PERSON', 'ACCOUNTANT'],
+  // SALES_PERSON and ACCOUNTANT cannot create users at all
 };
 
 async function createUserHandler(...args: unknown[]): Promise<Response> {

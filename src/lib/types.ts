@@ -4,7 +4,7 @@ export const UserRole = {
   SUPER_ADMIN: 'SUPER_ADMIN',
   STORE_OWNER: 'STORE_OWNER',
   BRANCH_MANAGER: 'BRANCH_MANAGER',
-  CASHIER: 'CASHIER',
+  SALES_PERSON: 'SALES_PERSON',
   ACCOUNTANT: 'ACCOUNTANT',
 } as const;
 
@@ -335,10 +335,10 @@ export const PERMISSION_MATRIX: Record<UserRole, Record<string, string[]>> = {
     transfers: ['create', 'read', 'receive'],
     crm: ['create', 'read', 'update'],
   },
-  CASHIER: {
+  SALES_PERSON: {
     products: ['read'],
     transactions: ['create', 'read'],
-    customers: ['read'],
+    customers: ['read', 'create'],
     financials: [],
     rentals: ['read'],
     admin: [],
@@ -351,6 +351,8 @@ export const PERMISSION_MATRIX: Record<UserRole, Record<string, string[]>> = {
     tax: [],
     transfers: [],
     crm: ['create', 'read'],
+    shifts: ['create', 'read', 'update'],
+    messaging: ['create', 'read'],
   },
   ACCOUNTANT: {
     products: ['read'],
@@ -388,6 +390,46 @@ export function canCreateUsers(role: UserRole): boolean {
   return role === 'SUPER_ADMIN' || role === 'STORE_OWNER' || role === 'BRANCH_MANAGER';
 }
 
+/**
+ * Returns true for roles that require shift management (start/end shift).
+ */
+export function requiresShift(role: UserRole): boolean {
+  return role === 'SALES_PERSON';
+}
+
+/**
+ * Role display labels
+ */
+export const ROLE_LABELS: Record<UserRole, string> = {
+  SUPER_ADMIN: 'Super Admin',
+  STORE_OWNER: 'Shop Owner',
+  BRANCH_MANAGER: 'Branch Manager',
+  SALES_PERSON: 'Sales Person',
+  ACCOUNTANT: 'Accountant',
+};
+
+/**
+ * Role-specific default landing tab
+ */
+export const ROLE_DEFAULT_TAB: Record<UserRole, string> = {
+  SUPER_ADMIN: 'dashboard',
+  STORE_OWNER: 'dashboard',
+  BRANCH_MANAGER: 'dashboard',
+  SALES_PERSON: 'pos',
+  ACCOUNTANT: 'financial',
+};
+
+/**
+ * Navigation tabs accessible by each role
+ */
+export const ROLE_TABS: Record<UserRole, string[]> = {
+  SUPER_ADMIN: ['dashboard', 'pos', 'catalog', 'inventory', 'customers', 'transactions', 'invoices', 'delivery-notes', 'gift-cards', 'vouchers', 'credits', 'loyalty', 'rentals', 'suppliers', 'financial', 'banking', 'tax', 'reports', 'transfers', 'messaging', 'admin'],
+  STORE_OWNER: ['dashboard', 'pos', 'catalog', 'inventory', 'customers', 'transactions', 'invoices', 'delivery-notes', 'gift-cards', 'vouchers', 'credits', 'loyalty', 'rentals', 'suppliers', 'financial', 'banking', 'tax', 'reports', 'transfers', 'messaging', 'admin'],
+  BRANCH_MANAGER: ['dashboard', 'pos', 'catalog', 'inventory', 'customers', 'transactions', 'invoices', 'delivery-notes', 'gift-cards', 'vouchers', 'credits', 'loyalty', 'rentals', 'suppliers', 'financial', 'banking', 'tax', 'reports', 'transfers', 'messaging', 'admin'],
+  SALES_PERSON: ['pos', 'catalog', 'customers', 'transactions', 'invoices', 'delivery-notes', 'vouchers', 'credits', 'loyalty', 'messaging'],
+  ACCOUNTANT: ['dashboard', 'financial', 'banking', 'tax', 'reports', 'transactions', 'credits', 'invoices', 'suppliers', 'messaging'],
+};
+
 export const ShiftStatus = {
   ACTIVE: 'ACTIVE',
   ENDED: 'ENDED',
@@ -412,6 +454,74 @@ export interface ShiftData {
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// ============================================================
+// BRANCH MANAGEMENT
+// ============================================================
+
+export interface BranchItem {
+  id: string;
+  name: string;
+  location: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  status: 'ACTIVE' | 'CLOSED' | 'RENOVATING';
+  managerName?: string | null;
+  managerId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateBranchPayload {
+  name: string;
+  location?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  organizationId?: string;
+}
+
+// ============================================================
+// MESSAGING MODULE
+// ============================================================
+
+export interface MessageItem {
+  id: string;
+  storeId: string;
+  customerId: string | null;
+  customerName?: string | null;
+  customerPhone: string | null;
+  channel: 'SMS' | 'WHATSAPP' | 'BOTH';
+  messageType: 'DEBT_REMINDER' | 'PAYMENT_CONFIRMATION' | 'BALANCE_UPDATE' | 'PROMOTION' | 'CUSTOM';
+  subject: string | null;
+  content: string;
+  status: 'PENDING' | 'SENT' | 'DELIVERED' | 'FAILED' | 'READ';
+  sentAt: string | null;
+  deliveredAt: string | null;
+  readAt: string | null;
+  waLink?: string | null;
+  errorMessage?: string | null;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export interface SendMessagePayload {
+  customerId?: string;
+  phone: string;
+  channel: 'SMS' | 'WHATSAPP' | 'BOTH';
+  messageType: 'DEBT_REMINDER' | 'PAYMENT_CONFIRMATION' | 'BALANCE_UPDATE' | 'PROMOTION' | 'CUSTOM';
+  subject?: string;
+  content: string;
+  storeId?: string;
+}
+
+export interface MessageTemplate {
+  id: string;
+  type: string;
+  label: string;
+  content: string;
 }
 
 export interface CreateShiftPayload {
