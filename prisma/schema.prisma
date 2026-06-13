@@ -72,6 +72,10 @@ model Store {
   purchaseOrders  PurchaseOrder[]
   expenses        Expense[]
   shifts          Shift[]
+  giftCards       GiftCard[]
+  deliveryNotes   DeliveryNote[]
+  invoices        Invoice[]
+  customerCredits CustomerCredit[]
 
   @@index([organizationId])
   @@map("stores")
@@ -149,17 +153,38 @@ model ProductCategory {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store           Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
   products        Product[]
+  subCategories   SubCategory[]
 
   @@index([storeId])
   @@map("product_categories")
+}
+
+model SubCategory {
+  id              String   @id @default(cuid())
+  categoryId      String
+  name            String
+  description     String?
+  icon            String?
+  color           String?
+  sortOrder       Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  category        ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  products        Product[]
+
+  @@index([categoryId])
+  @@map("sub_categories")
 }
 
 model Product {
   id                String   @id @default(cuid())
   storeId           String
   categoryId        String?
+  subCategoryId     String?
   sku               String   @unique
   barcode           String?  @unique
   name              String
@@ -179,6 +204,7 @@ model Product {
 
   store             Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
   category          ProductCategory? @relation(fields: [categoryId], references: [id])
+  subCategory       SubCategory?     @relation(fields: [subCategoryId], references: [id])
   bundleItems       ProductBundle[]  @relation("BundleParent")
   parentBundles     ProductBundle[]  @relation("BundleChild")
   saleItems         SaleItem[]
@@ -186,12 +212,14 @@ model Product {
   warehouseStocks   WarehouseStock[]
   rentals           EquipmentRental[]
   purchaseOrderItems PurchaseOrderItem[]
+  invoiceItems      InvoiceItem[]
 
   @@index([storeId])
   @@index([sku])
   @@index([barcode])
   @@index([name])
   @@index([categoryId])
+  @@index([subCategoryId])
   @@index([isActive])
   @@map("products")
 }
@@ -259,6 +287,9 @@ model Customer {
   currentDebtBalance  Float    @default(0)
   debtLimit           Float    @default(50000) // KES default limit
   loyaltyPoints       Int      @default(0)
+  totalPurchases      Float    @default(0) // Total amount purchased - for gift card tracking
+  totalSpent          Float    @default(0) // Total amount actually paid
+  purchaseCount       Int      @default(0) // Number of purchases
   preferredChannel    String   @default("SMS") // SMS, EMAIL, WHATSAPP, PRINT
   isActive            Boolean  @default(true)
   createdAt           DateTime @default(now())
@@ -268,6 +299,8 @@ model Customer {
   debtLedgers         DebtLedger[]
   transactions        SalesTransaction[]
   rentals             EquipmentRental[]
+  giftCards           GiftCard[]
+  customerCredits     CustomerCredit[]
 
   @@index([storeId])
   @@index([phone])
@@ -282,6 +315,7 @@ model SalesTransaction {
   storeId         String
   receiptNumber   String   @unique
   customerId      String?
+  customerPhone   String?  // Customer phone for quick checkout
   cashierId       String
   subtotal        Float
   taxAmount       Float
@@ -303,6 +337,7 @@ model SalesTransaction {
   payments        Payment[]
   debtLedgers     DebtLedger[]
   receipt         Receipt?
+  deliveryNote    DeliveryNote?
 
   @@index([storeId])
   @@index([cashierId])
@@ -738,4 +773,158 @@ model Shift {
   @@index([userId])
   @@index([status])
   @@map("shifts")
+}
+
+// GIFT CARDS & LOYALTY
+
+model GiftCard {
+  id              String   @id @default(cuid())
+  storeId         String
+  customerId      String?
+  code            String   @unique // Gift card code
+  initialBalance  Float    // Starting balance
+  currentBalance  Float    // Remaining balance
+  status          String   @default("ACTIVE") // ACTIVE, REDEEMED, EXPIRED, CANCELLED
+  issuedReason    String   @default("LOYALTY") // LOYALTY, PROMOTION, PURCHASE, GIFT, REFERRAL
+  minimumPurchase Float    @default(0) // Min purchase amount to qualify
+  expiresAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer        Customer? @relation(fields: [customerId], references: [id])
+
+  @@index([storeId])
+  @@index([customerId])
+  @@index([code])
+  @@index([status])
+  @@map("gift_cards")
+}
+
+// DELIVERY NOTES
+
+model DeliveryNote {
+  id                String   @id @default(cuid())
+  storeId           String
+  transactionId     String?  @unique // Link to sales transaction
+  deliveryNumber    String   @unique
+  customerId        String?
+  customerName      String
+  customerPhone     String?
+  deliveryAddress   String?
+  driverName        String?
+  vehicleNumber     String?
+  status            String   @default("PENDING") // PENDING, IN_TRANSIT, DELIVERED, CANCELLED
+  scheduledDate     DateTime?
+  deliveredAt       DateTime?
+  notes             String?
+  createdBy         String?  // User ID
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  store             Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  transaction       SalesTransaction? @relation(fields: [transactionId], references: [id])
+  items             DeliveryNoteItem[]
+
+  @@index([storeId])
+  @@index([customerId])
+  @@index([status])
+  @@index([deliveryNumber])
+  @@map("delivery_notes")
+}
+
+model DeliveryNoteItem {
+  id              String   @id @default(cuid())
+  deliveryNoteId  String
+  productId       String?
+  productName     String
+  quantity        Float
+  unitType        String   @default("PIECE")
+  notes           String?
+
+  deliveryNote    DeliveryNote @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
+
+  @@index([deliveryNoteId])
+  @@map("delivery_note_items")
+}
+
+// INVOICES & QUOTATIONS
+
+model Invoice {
+  id              String   @id @default(cuid())
+  storeId         String
+  invoiceNumber   String   @unique
+  invoiceType     String   @default("INVOICE") // INVOICE, QUOTATION, PROFORMA, CREDIT_NOTE, DEBIT_NOTE
+  customerId      String?
+  customerName    String
+  customerPhone   String?
+  customerEmail   String?
+  customerAddress String?
+  issueDate       DateTime @default(now())
+  dueDate         DateTime?
+  subtotal        Float    @default(0)
+  taxAmount       Float    @default(0)
+  discountAmount  Float    @default(0)
+  totalAmount     Float    @default(0)
+  status          String   @default("DRAFT") // DRAFT, SENT, ACCEPTED, INVOICED, PAID, CANCELLED, EXPIRED
+  transactionId   String?  // Link to sales transaction if converted
+  notes           String?
+  terms           String?
+  createdBy       String?  // User ID
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  items           InvoiceItem[]
+
+  @@index([storeId])
+  @@index([customerId])
+  @@index([invoiceType])
+  @@index([status])
+  @@index([invoiceNumber])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id              String   @id @default(cuid())
+  invoiceId       String
+  productId       String?
+  productName     String
+  description     String?
+  quantity        Float
+  unitType        String   @default("PIECE")
+  pricePerUnit    Float
+  discountPercent Float    @default(0)
+  taxRate         Float    @default(16)
+  lineTotal       Float
+
+  invoice         Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product         Product? @relation(fields: [productId], references: [id])
+
+  @@index([invoiceId])
+  @@map("invoice_items")
+}
+
+// CUSTOMER CREDITS
+
+model CustomerCredit {
+  id              String   @id @default(cuid())
+  storeId         String
+  customerId      String
+  amount          Float
+  creditType      String   @default("CREDIT") // CREDIT, DEBIT, ADJUSTMENT, REFUND
+  reference       String?  // Invoice number, transaction ID, etc.
+  description     String?
+  balance         Float    // Running balance after this entry
+  createdBy       String?  // User ID
+  createdAt       DateTime @default(now())
+
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer        Customer @relation(fields: [customerId], references: [id])
+
+  @@index([storeId])
+  @@index([customerId])
+  @@index([creditType])
+  @@index([createdAt])
+  @@map("customer_credits")
 }

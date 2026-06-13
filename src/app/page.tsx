@@ -21,6 +21,7 @@ import {
   BellRing, PackageX, AlertOctagon, CircleDollarSign, CheckCheck,
   Truck, UserPlus, Receipt, Filter, Info, Tag,
   LayoutGrid, List, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Pause, MessageSquare, PartyPopper, Sparkles, Zap,
+  Navigation,
 } from 'lucide-react';
 
 import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
@@ -65,6 +66,10 @@ const LazyAdminTab = lazy(() => import('./tabs/admin-tab'));
 const LazyTransactionsTab = lazy(() => import('./tabs/transactions-tab'));
 const LazySuppliersTab = lazy(() => import('./tabs/suppliers-tab'));
 const LazyCatalogTab = lazy(() => import('./tabs/catalog-tab'));
+const LazyDeliveryNotesTab = lazy(() => import('./tabs/delivery-notes-tab'));
+const LazyGiftCardsTab = lazy(() => import('./tabs/gift-cards-tab'));
+const LazyInvoicesTab = lazy(() => import('./tabs/invoices-tab'));
+const LazyCreditsTab = lazy(() => import('./tabs/credits-tab'));
 
 function TabLoadingFallback() {
   return (
@@ -86,6 +91,10 @@ const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
   { id: 'inventory', label: 'Inventory', icon: Package },
   { id: 'customers', label: 'Customers', icon: Users },
   { id: 'rentals', label: 'Rentals', icon: KeyRound },
+  { id: 'invoices', label: 'Invoices', icon: Receipt },
+  { id: 'delivery-notes', label: 'Delivery', icon: Navigation },
+  { id: 'gift-cards', label: 'Gift Cards', icon: PartyPopper },
+  { id: 'credits', label: 'Credits', icon: CircleDollarSign },
   { id: 'financial', label: 'Financial', icon: BarChart3 },
   { id: 'reports', label: 'Reports', icon: FileText },
   { id: 'transactions', label: 'Transactions', icon: ShoppingBag },
@@ -310,6 +319,11 @@ function LoginScreen() {
     e.preventDefault();
     try {
       await login(email, password);
+      // Redirect cashiers/sales persons directly to POS interface
+      const user = useAuthStore.getState().user;
+      if (user?.role === 'CASHIER') {
+        useAppStore.getState().setActiveTab('pos');
+      }
       toast.success('Welcome to MBUMAH HARDWARE POS!');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed';
@@ -917,7 +931,7 @@ function AppSidebar() {
   };
 
   // Navigation groups
-  const mainNavItems = TAB_CONFIG.filter(t => ['pos', 'catalog', 'inventory', 'customers', 'transactions'].includes(t.id));
+  const mainNavItems = TAB_CONFIG.filter(t => ['pos', 'catalog', 'inventory', 'customers', 'transactions', 'invoices', 'delivery-notes', 'gift-cards', 'credits'].includes(t.id));
   const managementNavItems = TAB_CONFIG.filter(t => ['rentals', 'suppliers', 'financial', 'reports', 'admin'].includes(t.id));
 
   const renderNavItem = ({ id, label, icon: Icon }: { id: AppTab; label: string; icon: React.ElementType }) => (
@@ -1946,6 +1960,7 @@ function POSTab() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
   const [cashReceived, setCashReceived] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<string>('');
+  const [customerPhone, setCustomerPhone] = useState('');
   const [lowStockAlertOpen, setLowStockAlertOpen] = useState(false);
   const [discountCode, setDiscountCode] = useState('');
   const [cartBadgeShake, setCartBadgeShake] = useState(false);
@@ -2197,6 +2212,7 @@ function POSTab() {
     checkoutMutation.mutate({
       storeId: currentStoreId,
       customerId: selectedCustomer || undefined,
+      customerPhone: customerPhone || undefined,
       cashierId: useAuthStore.getState().user?.id || '',
       items: cart.items,
       paymentMethod,
@@ -2497,7 +2513,16 @@ function POSTab() {
                 </div>
 
                 {/* Customer Selection */}
-                <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+                <Select value={selectedCustomer} onValueChange={(val) => {
+                  setSelectedCustomer(val === 'walk-in' ? '' : val);
+                  // Auto-fill phone when customer selected
+                  if (val !== 'walk-in') {
+                    const cust = customers?.find(c => c.id === val);
+                    setCustomerPhone(cust?.phone || '');
+                  } else {
+                    setCustomerPhone('');
+                  }
+                }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Walk-in Customer" />
                   </SelectTrigger>
@@ -2508,6 +2533,20 @@ function POSTab() {
                     ))}
                   </SelectContent>
                 </Select>
+
+                {/* Customer Phone */}
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Customer Phone</Label>
+                  <div className="relative">
+                    <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      placeholder="07XX XXX XXX"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      className="h-8 text-xs pl-9"
+                    />
+                  </div>
+                </div>
 
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
@@ -2730,9 +2769,12 @@ function POSTab() {
             <div className="receipt-content receipt-printable space-y-4 text-sm" id="receipt-content">
               {/* Store Header */}
               <div className="text-center space-y-0.5">
+                <div className="flex justify-center mb-1">
+                  <img src="/logo.png" alt="MBUMAH" className="h-12 w-12 object-contain" />
+                </div>
                 <h2 className="text-lg font-bold">MBUMAH HARDWARE</h2>
                 <p className="text-xs text-muted-foreground">{STORE_LIST.find(s => s.id === currentStoreId)?.shortName || 'Juja Main Branch'}</p>
-                <p className="text-xs text-muted-foreground">Tel: +254 700 123 456</p>
+                <p className="text-xs text-muted-foreground">Tel: {STORE_LIST.find(s => s.id === currentStoreId)?.phone || '+254 795 191 909'}</p>
               </div>
               <Separator />
               {/* Receipt Meta */}
@@ -3111,7 +3153,15 @@ function POSTab() {
                     Apply
                   </Button>
                 </div>
-                <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+                <Select value={selectedCustomer} onValueChange={(val) => {
+                  setSelectedCustomer(val === 'walk-in' ? '' : val);
+                  if (val !== 'walk-in') {
+                    const cust = customers?.find(c => c.id === val);
+                    setCustomerPhone(cust?.phone || '');
+                  } else {
+                    setCustomerPhone('');
+                  }
+                }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Walk-in Customer" />
                   </SelectTrigger>
@@ -3122,6 +3172,18 @@ function POSTab() {
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Customer Phone</Label>
+                  <div className="relative">
+                    <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      placeholder="07XX XXX XXX"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      className="h-8 text-xs pl-9"
+                    />
+                  </div>
+                </div>
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Subtotal</span>
@@ -3330,6 +3392,10 @@ function MainApp() {
       case 'inventory': return <Suspense fallback={<TabLoadingFallback />}><LazyInventoryTab /></Suspense>;
       case 'customers': return <Suspense fallback={<TabLoadingFallback />}><LazyCustomersTab /></Suspense>;
       case 'rentals': return <Suspense fallback={<TabLoadingFallback />}><LazyRentalsTab /></Suspense>;
+      case 'invoices': return <Suspense fallback={<TabLoadingFallback />}><LazyInvoicesTab /></Suspense>;
+      case 'delivery-notes': return <Suspense fallback={<TabLoadingFallback />}><LazyDeliveryNotesTab /></Suspense>;
+      case 'gift-cards': return <Suspense fallback={<TabLoadingFallback />}><LazyGiftCardsTab /></Suspense>;
+      case 'credits': return <Suspense fallback={<TabLoadingFallback />}><LazyCreditsTab /></Suspense>;
       case 'financial': return <Suspense fallback={<TabLoadingFallback />}><LazyFinancialTab /></Suspense>;
       case 'reports': return <Suspense fallback={<TabLoadingFallback />}><LazyReportsTab /></Suspense>;
       case 'transactions': return <Suspense fallback={<TabLoadingFallback />}><LazyTransactionsTab /></Suspense>;

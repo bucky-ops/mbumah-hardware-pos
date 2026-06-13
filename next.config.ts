@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+  allowedDevOrigins: ['localhost:81', 'http://localhost:81'],
 
   // Do NOT add @prisma/client here - Next.js must trace it for the serverless bundle
   // The Neon serverless adapter uses WebSocket which needs to be external
