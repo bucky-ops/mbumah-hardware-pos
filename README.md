@@ -10,6 +10,20 @@
 
 ---
 
+## 📸 Screenshots
+
+| Login Screen | Dashboard |
+|:---:|:---:|
+| ![Login](/public/logo.png) | ![Dashboard](/public/categories/cat_cement.png) |
+
+| Product Catalog | Inventory Management |
+|:---:|:---:|
+| ![Catalog](/public/categories/cat_tools.png) | ![Inventory](/public/categories/cat_rebar.png) |
+
+> Screenshots above are placeholders. Run the app locally to see the full interface.
+
+---
+
 ## 📋 About
 
 **MBUMAH HARDWARE POS & ERP** is a modern, web-based business management system designed from the ground up for the unique needs of Kenyan hardware stores. Built with Next.js 16, TypeScript, and Prisma, it provides a comprehensive suite of 13 integrated modules covering everything from point-of-sale operations to financial accounting, all with deep integration into Kenya-specific systems like M-Pesa and KRA eTIMS.
@@ -91,7 +105,7 @@ MBUMAH HARDWARE operates across multiple locations in Kenya:
 - **Git** for version control
 - **Docker** (optional, for PostgreSQL + Redis + M-Pesa mock)
 
-### Installation
+### Installation (Linux / macOS)
 
 ```bash
 # 1. Clone the repository
@@ -100,20 +114,50 @@ cd mbumah-hardware-pos
 
 # 2. Install dependencies
 bun install
+# or: npm install
 
 # 3. Set up environment variables
 cp .env.example .env
 # Edit .env with your configuration
 
-# 4. Push database schema
+# 4. Push database schema and generate client
 bun run db:push
-
-# 5. Seed the database (auto-runs on first boot if no users exist)
 bun run db:generate
+
+# 5. Seed the database
+npx tsx prisma/seed.ts
 
 # 6. Start the development server
 bun run dev
+# or: npm run dev
 ```
+
+### Installation (Windows)
+
+```powershell
+# 1. Clone the repository
+git clone https://github.com/bucky-ops/mbumah-hardware-pos.git
+cd mbumah-hardware-pos
+
+# 2. Install dependencies
+npm install
+
+# 3. Set up environment variables
+copy .env.example .env
+# Edit .env with your configuration
+
+# 4. Push database schema and generate client
+npx prisma db push
+npx prisma generate
+
+# 5. Seed the database
+npx tsx prisma/seed.ts
+
+# 6. Start the development server
+npm run dev
+```
+
+> **Windows users**: If you don't have Bun installed, use `npm` instead. Install [Bun for Windows](https://bun.sh/) with `powershell -c "irm bun.sh/install.ps1 | iex"` if preferred.
 
 The app will be available at [http://localhost:3000](http://localhost:3000).
 
@@ -141,6 +185,10 @@ The seed script creates demo accounts for testing different roles:
 | **Super Admin** | `admin@mbumahhardware.co.ke` | `Admin@2024` | Full system access — all modules, settings, user management |
 | **Cashier** | `cashier@mbumahhardware.co.ke` | `Cashier@2024` | POS operations, product lookup, basic transactions |
 | **Accountant** | `accountant@mbumahhardware.co.ke` | `Accountant@2024` | Financial reports, debt management, journal entries, exports |
+| **Branch Manager** | `thika.manager@mbumahhardware.co.ke` | `Manager@2024` | Store-level management for Thika branch |
+| **Branch Manager** | `ruiru.manager@mbumahhardware.co.ke` | `Manager@2024` | Store-level management for Ruiru branch |
+| **Branch Manager** | `nairobi.manager@mbumahhardware.co.ke` | `Manager@2024` | Store-level management for Nairobi CBD branch |
+| **Branch Manager** | `nakuru.manager@mbumahhardware.co.ke` | `Manager@2024` | Store-level management for Nakuru branch |
 
 > ⚠️ **Important**: Change these passwords immediately in production environments.
 

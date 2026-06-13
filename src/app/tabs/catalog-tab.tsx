@@ -24,8 +24,6 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
 
 type SortKey = 'name' | 'price_asc' | 'price_desc' | 'stock';
 type StockFilter = 'all' | 'in_stock' | 'low_stock' | 'out_of_stock';
@@ -68,9 +66,6 @@ function getStockStatus(qty: number, reorder: number) {
   return { label: 'In Stock', color: 'bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400' };
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export default function CatalogTab() {
   const { currentStoreId } = useAppStore();
@@ -95,23 +90,29 @@ export default function CatalogTab() {
     setQuantities((prev) => ({ ...prev, [productId]: qty }));
   };
 
-  // ---------------------------------------------------------------------------
   // Data fetching
-  // ---------------------------------------------------------------------------
 
   const { data: categories = [], isLoading: categoriesLoading } = useQuery<CategoryItem[]>({
     queryKey: ['categories', currentStoreId],
-    queryFn: () => categoriesApi.list(currentStoreId).then((r) => r.data ?? []),
+    queryFn: async () => {
+      if (!currentStoreId) return [];
+      const res = await categoriesApi.list(currentStoreId);
+      const data = res.data;
+      return Array.isArray(data) ? data : [];
+    },
   });
 
   const { data: products = [], isLoading: productsLoading } = useQuery<ProductListItem[]>({
     queryKey: ['catalog-products', currentStoreId],
-    queryFn: () => productsApi.list({ storeId: currentStoreId, limit: 500 }).then((r) => r.data ?? []),
+    queryFn: async () => {
+      if (!currentStoreId) return [];
+      const res = await productsApi.list({ storeId: currentStoreId, limit: 500 });
+      const data = res.data;
+      return Array.isArray(data) ? data : [];
+    },
   });
 
-  // ---------------------------------------------------------------------------
   // Filtering & sorting
-  // ---------------------------------------------------------------------------
 
   const filteredProducts = useMemo(() => {
     let result = products.filter((p) => p.isActive);
@@ -161,9 +162,7 @@ export default function CatalogTab() {
     return result;
   }, [products, search, selectedCategory, stockFilter, priceMin, priceMax, sortKey]);
 
-  // ---------------------------------------------------------------------------
   // Add to cart handler
-  // ---------------------------------------------------------------------------
 
   const handleAddToCart = (product: ProductListItem) => {
     const qty = getQty(product.id);
@@ -185,9 +184,7 @@ export default function CatalogTab() {
     });
   };
 
-  // ---------------------------------------------------------------------------
   // Clear all filters
-  // ---------------------------------------------------------------------------
 
   const clearFilters = () => {
     setSearch('');
@@ -206,9 +203,7 @@ export default function CatalogTab() {
     priceMax && 1,
   ].filter(Boolean).length;
 
-  // ---------------------------------------------------------------------------
   // Render helpers
-  // ---------------------------------------------------------------------------
 
   const renderProductCard = (product: ProductListItem) => {
     const stock = getStockStatus(product.quantityInStock, product.reorderLevel);
@@ -399,9 +394,7 @@ export default function CatalogTab() {
     );
   };
 
-  // ---------------------------------------------------------------------------
   // Loading skeleton
-  // ---------------------------------------------------------------------------
 
   const renderSkeletons = () =>
     Array.from({ length: 8 }).map((_, i) => (
@@ -415,9 +408,7 @@ export default function CatalogTab() {
       </Card>
     ));
 
-  // ---------------------------------------------------------------------------
   // Render
-  // ---------------------------------------------------------------------------
 
   return (
     <div className="flex flex-col h-full gap-4">

@@ -53,7 +53,9 @@ async function request<T>(
     if (typeof window !== 'undefined') {
       localStorage.removeItem('mbt_token');
       localStorage.removeItem('mbt_user');
-      window.location.reload();
+      if (!window.location.pathname.includes('login')) {
+        window.location.href = '/';
+      }
     }
     throw new Error('Session expired. Please login again.');
   }

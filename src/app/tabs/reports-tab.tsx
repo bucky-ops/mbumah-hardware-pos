@@ -49,10 +49,12 @@ function ReportTypeCard({
   previewThumbnail?: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className={`text-left p-4 rounded-xl border-2 transition-all duration-200 hover:shadow-md backdrop-blur-sm ${
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+      className={`text-left p-4 rounded-xl border-2 transition-all duration-200 hover:shadow-md backdrop-blur-sm cursor-pointer ${
         isActive
           ? `border-primary bg-primary/5 ${colorClass} shadow-sm`
           : 'border-transparent bg-muted/30 hover:bg-muted/50'
@@ -90,7 +92,7 @@ function ReportTypeCard({
           <Play className="mr-1 h-3 w-3" /> Generate
         </Button>
       </div>
-    </button>
+    </div>
   );
 }
 

@@ -7,14 +7,11 @@ import { LogSeverity, LogComponent } from '@/lib/types';
 
 // Legacy hash format for seed data - use bcrypt in production
 function verifyPassword(password: string, storedHash: string): boolean {
-  if (password === storedHash.replace('hashed_', '').replace('_2024', '')) {
-    return true;
-  }
-  if (storedHash.startsWith('hashed_')) {
-    const plainPart = storedHash.replace('hashed_', '').replace('_2024', '');
+  if (storedHash.startsWith('hashed_') && storedHash.endsWith('_2024')) {
+    const plainPart = storedHash.slice(7, storedHash.length - 5);
     if (password === plainPart) return true;
-    if (storedHash === `hashed_${password}_2024`) return true;
   }
+  if (storedHash === `hashed_${password}_2024`) return true;
   return false;
 }
 
@@ -88,7 +85,7 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
   const token = generateToken() + Date.now().toString(36);
 
   const expiresAt = new Date();
-  expiresAt.setHours(expiresAt.getHours() + 24); // 24-hour session
+  expiresAt.setDate(expiresAt.getDate() + 7); // 7-day session
 
   const session = await db.session.create({
     data: {

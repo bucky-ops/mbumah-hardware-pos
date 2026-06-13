@@ -21,7 +21,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ── TENANCY & ORGANIZATION
+// TENANCY & ORGANIZATION
 model Organization {
   id          String   @id @default(cuid())
   name        String

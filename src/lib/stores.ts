@@ -35,6 +35,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const res = await authApi.login(email, password);
       if (res.data) {
+        localStorage.setItem('mbt_token', res.data.token);
+        localStorage.setItem('mbt_user', JSON.stringify(res.data.user));
         set({
           user: res.data.user,
           token: res.data.token,
@@ -54,6 +56,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       await authApi.logout();
     } finally {
+      localStorage.removeItem('mbt_token');
+      localStorage.removeItem('mbt_user');
       set({ user: null, token: null, isAuthenticated: false });
     }
   },

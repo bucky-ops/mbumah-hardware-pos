@@ -114,7 +114,7 @@ async function main() {
   });
 
   // 3. Seed Super Admin
-  const adminPasswordHash = 'hashed_password123_2024'; // In production, use bcrypt
+  const adminPasswordHash = 'hashed_Admin@2024_2024'; // In production, use bcrypt
   const superAdmin = await prisma.user.create({
     data: {
       id: 'user_super_admin',
@@ -137,7 +137,7 @@ async function main() {
       storeId: store.id,
       email: 'cashier@mbumahhardware.co.ke',
       name: 'Grace Wanjiku',
-      passwordHash: 'hashed_password123_2024',
+      passwordHash: 'hashed_Cashier@2024_2024',
       role: 'CASHIER',
       phone: '0759963601',
       isActive: true,
@@ -151,7 +151,7 @@ async function main() {
       storeId: store.id,
       email: 'accountant@mbumahhardware.co.ke',
       name: 'James Otieno',
-      passwordHash: 'hashed_password123_2024',
+      passwordHash: 'hashed_Accountant@2024_2024',
       role: 'ACCOUNTANT',
       phone: '0787485104',
       isActive: true,
@@ -166,7 +166,7 @@ async function main() {
       storeId: storeThika.id,
       email: 'thika.manager@mbumahhardware.co.ke',
       name: 'David Njoroge',
-      passwordHash: 'hashed_password123_2024',
+      passwordHash: 'hashed_Manager@2024_2024',
       role: 'BRANCH_MANAGER',
       phone: '0712345678',
       isActive: true,
@@ -180,7 +180,7 @@ async function main() {
       storeId: storeRuiru.id,
       email: 'ruiru.manager@mbumahhardware.co.ke',
       name: 'Samuel Kibet',
-      passwordHash: 'hashed_password123_2024',
+      passwordHash: 'hashed_Manager@2024_2024',
       role: 'BRANCH_MANAGER',
       phone: '0723456789',
       isActive: true,
@@ -194,7 +194,7 @@ async function main() {
       storeId: storeNairobiCbd.id,
       email: 'nairobi.manager@mbumahhardware.co.ke',
       name: 'Mary Akinyi',
-      passwordHash: 'hashed_password123_2024',
+      passwordHash: 'hashed_Manager@2024_2024',
       role: 'BRANCH_MANAGER',
       phone: '0734567890',
       isActive: true,
@@ -208,7 +208,7 @@ async function main() {
       storeId: storeNakuru.id,
       email: 'nakuru.manager@mbumahhardware.co.ke',
       name: 'Peter Ruto',
-      passwordHash: 'hashed_password123_2024',
+      passwordHash: 'hashed_Manager@2024_2024',
       role: 'BRANCH_MANAGER',
       phone: '0745678901',
       isActive: true,
