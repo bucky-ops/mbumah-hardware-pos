@@ -1,10 +1,10 @@
 // MBUMAH HARDWARE POS & ERP - Prisma Schema
 // Multi-tenant via storeId discriminator. PostgreSQL for production (Vercel + Neon).
 //
-// For local development with SQLite:
-//   1. Change provider to "sqlite"
-//   2. Set DATABASE_URL="file:./db/custom.db" in .env
-//   3. Run: npx prisma db push && npx prisma db seed
+// This schema uses PostgreSQL as the default provider.
+// For local development:
+//   1. Set DATABASE_URL and DIRECT_URL in .env to your local or Neon database
+//   2. Run: npx prisma db push && npx prisma db seed
 //
 // Notes:
 //   - IDs use cuid() for cross-DB compat
@@ -16,8 +16,9 @@ generator client {
 }
 
 datasource db {
-  provider  = "sqlite"
+  provider  = "postgresql"
   url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // TENANCY & ORGANIZATION
