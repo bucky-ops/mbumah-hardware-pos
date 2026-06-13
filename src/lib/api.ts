@@ -14,6 +14,12 @@ import type {
   ShiftData,
   CreateShiftPayload,
   EndShiftPayload,
+  SubCategoryItem,
+  GiftCardItem,
+  DeliveryNoteItem,
+  InvoiceItem,
+  CustomerCreditItem,
+  FastMovingProduct,
 } from './types';
 
 
@@ -225,6 +231,7 @@ export interface CustomerItem {
   currentDebtBalance: number;
   debtLimit: number;
   loyaltyPoints: number;
+  totalPurchases?: number;
   preferredChannel: string;
   isActive: boolean;
   createdAt: string;
@@ -910,6 +917,121 @@ export const shiftsApi = {
     return request<ShiftData>(`/shifts/${shiftId}/end`, {
       method: 'POST',
       body: JSON.stringify(payload),
+    });
+  },
+};
+
+export const subCategoriesApi = {
+  list: async (params?: { categoryId?: string; storeId?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.categoryId) query.set('categoryId', params.categoryId);
+    if (params?.storeId) query.set('storeId', params.storeId);
+    return request<SubCategoryItem[]>(`/subcategories?${query.toString()}`);
+  },
+  create: async (data: { categoryId: string; name: string; description?: string; icon?: string; color?: string }) => {
+    return request<SubCategoryItem>('/subcategories', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+export const giftCardsApi = {
+  list: async (params?: { storeId?: string; customerId?: string; status?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.storeId) query.set('storeId', params.storeId);
+    if (params?.customerId) query.set('customerId', params.customerId);
+    if (params?.status) query.set('status', params.status);
+    return request<GiftCardItem[]>(`/gift-cards?${query.toString()}`);
+  },
+  create: async (data: { storeId: string; customerId?: string; initialBalance: number; issuedReason?: string; minimumPurchase?: number; expiresAt?: string }) => {
+    return request<GiftCardItem>('/gift-cards', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+export const deliveryNotesApi = {
+  list: async (params?: { storeId?: string; status?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.storeId) query.set('storeId', params.storeId);
+    if (params?.status) query.set('status', params.status);
+    return request<DeliveryNoteItem[]>(`/delivery-notes?${query.toString()}`);
+  },
+  get: async (id: string) => {
+    return request<DeliveryNoteItem>(`/delivery-notes/${id}`);
+  },
+  create: async (data: any) => {
+    return request<DeliveryNoteItem>('/delivery-notes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  update: async (id: string, data: any) => {
+    return request<DeliveryNoteItem>(`/delivery-notes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+export const invoicesApi = {
+  list: async (params?: { storeId?: string; invoiceType?: string; status?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.storeId) query.set('storeId', params.storeId);
+    if (params?.invoiceType) query.set('invoiceType', params.invoiceType);
+    if (params?.status) query.set('status', params.status);
+    return request<InvoiceItem[]>(`/invoices?${query.toString()}`);
+  },
+  get: async (id: string) => {
+    return request<InvoiceItem>(`/invoices/${id}`);
+  },
+  create: async (data: any) => {
+    return request<InvoiceItem>('/invoices', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  update: async (id: string, data: any) => {
+    return request<InvoiceItem>(`/invoices/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+export const customerCreditsApi = {
+  list: async (params?: { storeId?: string; customerId?: string; creditType?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.storeId) query.set('storeId', params.storeId);
+    if (params?.customerId) query.set('customerId', params.customerId);
+    if (params?.creditType) query.set('creditType', params.creditType);
+    return request<CustomerCreditItem[]>(`/customer-credits?${query.toString()}`);
+  },
+  create: async (data: { storeId: string; customerId: string; amount: number; creditType: string; reference?: string; description?: string }) => {
+    return request<CustomerCreditItem>('/customer-credits', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+export const fastMovingApi = {
+  list: async (params?: { storeId?: string; days?: number; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.storeId) query.set('storeId', params.storeId);
+    if (params?.days) query.set('days', String(params.days));
+    if (params?.limit) query.set('limit', String(params.limit));
+    return request<FastMovingProduct[]>(`/reports/fast-moving?${query.toString()}`);
+  },
+};
+
+export const whatsappApi = {
+  send: async (data: { phone: string; message: string }) => {
+    return request<{ url: string }>('/whatsapp/send', {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
   },
 };

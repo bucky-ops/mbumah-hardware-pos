@@ -172,7 +172,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
 }));
 
-export type AppTab = 'dashboard' | 'pos' | 'catalog' | 'inventory' | 'customers' | 'rentals' | 'financial' | 'reports' | 'transactions' | 'suppliers' | 'admin';
+export type AppTab = 'dashboard' | 'pos' | 'catalog' | 'inventory' | 'customers' | 'rentals' | 'financial' | 'reports' | 'transactions' | 'suppliers' | 'admin' | 'gift-cards' | 'invoices' | 'delivery-notes' | 'credits';
 
 interface AppState {
   activeTab: AppTab;

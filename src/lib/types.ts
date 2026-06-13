@@ -381,3 +381,131 @@ export interface EndShiftPayload {
   countedCash: number;
   notes?: string;
 }
+
+// Sub-category
+export interface SubCategoryItem {
+  id: string;
+  categoryId: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  color: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Gift Card
+export interface GiftCardItem {
+  id: string;
+  storeId: string;
+  customerId: string | null;
+  code: string;
+  initialBalance: number;
+  currentBalance: number;
+  status: 'ACTIVE' | 'REDEEMED' | 'EXPIRED' | 'CANCELLED';
+  issuedReason: 'LOYALTY' | 'PROMOTION' | 'PURCHASE' | 'GIFT' | 'REFERRAL';
+  minimumPurchase: number;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  customer?: { id: string; name: string; phone: string | null };
+}
+
+// Delivery Note
+export interface DeliveryNoteItem {
+  id: string;
+  storeId: string;
+  transactionId: string | null;
+  deliveryNumber: string;
+  customerId: string | null;
+  customerName: string;
+  customerPhone: string | null;
+  deliveryAddress: string | null;
+  driverName: string | null;
+  vehicleNumber: string | null;
+  status: 'PENDING' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
+  scheduledDate: string | null;
+  deliveredAt: string | null;
+  notes: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items?: DeliveryNoteItemDetail[];
+}
+
+export interface DeliveryNoteItemDetail {
+  id: string;
+  productId: string | null;
+  productName: string;
+  quantity: number;
+  unitType: string;
+  notes: string | null;
+}
+
+// Invoice / Quotation
+export interface InvoiceItem {
+  id: string;
+  storeId: string;
+  invoiceNumber: string;
+  invoiceType: 'INVOICE' | 'QUOTATION' | 'PROFORMA' | 'CREDIT_NOTE' | 'DEBIT_NOTE';
+  customerId: string | null;
+  customerName: string;
+  customerPhone: string | null;
+  customerEmail: string | null;
+  customerAddress: string | null;
+  issueDate: string;
+  dueDate: string | null;
+  subtotal: number;
+  taxAmount: number;
+  discountAmount: number;
+  totalAmount: number;
+  status: 'DRAFT' | 'SENT' | 'ACCEPTED' | 'INVOICED' | 'PAID' | 'CANCELLED' | 'EXPIRED';
+  transactionId: string | null;
+  notes: string | null;
+  terms: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items?: InvoiceItemDetail[];
+}
+
+export interface InvoiceItemDetail {
+  id: string;
+  productId: string | null;
+  productName: string;
+  description: string | null;
+  quantity: number;
+  unitType: string;
+  pricePerUnit: number;
+  discountPercent: number;
+  taxRate: number;
+  lineTotal: number;
+}
+
+// Customer Credit
+export interface CustomerCreditItem {
+  id: string;
+  storeId: string;
+  customerId: string;
+  amount: number;
+  creditType: 'CREDIT' | 'DEBIT' | 'ADJUSTMENT' | 'REFUND';
+  reference: string | null;
+  description: string | null;
+  balance: number;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+// Fast Moving Product
+export interface FastMovingProduct {
+  productId: string;
+  productName: string;
+  sku: string;
+  totalQuantitySold: number;
+  totalRevenue: number;
+  saleCount: number;
+  category: string | null;
+  currentStock: number;
+}

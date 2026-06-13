@@ -7,12 +7,12 @@ import {
   Users, Search, Plus, CircleDollarSign, AlertTriangle,
   Eye, Loader2, HandCoins, Banknote, Smartphone,
   MessageSquare, ShoppingBag, Award, Phone, Mail, MapPin, CreditCard, Clock,
-  ArrowUpDown, Filter, UserPlus, TrendingUp, Calendar, FileText, Bell
+  ArrowUpDown, Filter, UserPlus, TrendingUp, Calendar, FileText, Bell, Send
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
-  customersApi, debtApi, transactionsApi,
+  customersApi, debtApi, transactionsApi, whatsappApi,
   formatKES, formatDate, formatDateTime,
   type CustomerItem,
   type TransactionItem,
@@ -997,6 +997,19 @@ export default function CustomersTab() {
                       onClick={() => toast.info(`SMS reminder would be sent to ${selectedCustomer.phone || 'N/A'}`)}
                     >
                       <Bell className="mr-2 h-4 w-4" /> Send Reminder
+                    </Button>
+                  )}
+                  {selectedCustomer.phone && (
+                    <Button
+                      variant="outline"
+                      className="w-full text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/30"
+                      onClick={() => {
+                        const phone = selectedCustomer.phone?.startsWith('0') ? `254${selectedCustomer.phone.slice(1)}` : selectedCustomer.phone?.replace('+', '') || '';
+                        const message = `Hello ${selectedCustomer.name}, this is MBUMAH HARDWARE. Thank you for being our valued customer!${hasOverdueDebt ? ` You have an outstanding balance of ${formatKES(selectedCustomer.currentDebtBalance)}. Please settle at your earliest convenience.` : ''}`;
+                        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+                      }}
+                    >
+                      <Send className="mr-2 h-4 w-4" /> WhatsApp
                     </Button>
                   )}
                   <Button

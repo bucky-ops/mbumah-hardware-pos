@@ -338,6 +338,7 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
         storeId,
         receiptNumber,
         customerId: customerId || null,
+        customerPhone: data.customerPhone || null,
         cashierId,
         subtotal,
         taxAmount,

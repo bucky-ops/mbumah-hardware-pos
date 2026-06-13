@@ -19,7 +19,7 @@ import {
 
 import { useAppStore } from '@/lib/stores';
 import {
-  reportsApi, dashboardApi,
+  reportsApi, dashboardApi, fastMovingApi,
   customersApi, rentalsApi, transactionsApi,
   formatKES,
   type CustomerItem,
@@ -297,7 +297,7 @@ function SVGLineChart({ data, height = 200 }: { data: { label: string; value: nu
 
 export default function ReportsTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
-  const [reportType, setReportType] = useState<'sales' | 'inventory' | 'valuation' | 'daily' | 'top_products' | 'customer_analysis' | 'rental_performance'>('sales');
+  const [reportType, setReportType] = useState<'sales' | 'inventory' | 'valuation' | 'daily' | 'top_products' | 'customer_analysis' | 'rental_performance' | 'fast_moving'>('sales');
   const [chartType, setChartType] = useState<'bar' | 'line' | 'area' | 'pie'>('bar');
   const [datePreset, setDatePreset] = useState<DatePreset>('this_month');
 
@@ -352,6 +352,14 @@ export default function ReportsTab() {
     queryFn: () => rentalsApi.list({ storeId: currentStoreId, limit: 100 }),
     enabled: reportType === 'rental_performance',
   });
+
+  const { data: fastMovingData, isLoading: fastMovingLoading } = useQuery({
+    queryKey: ['fast-moving', currentStoreId, dateFrom, dateTo],
+    queryFn: () => fastMovingApi.list({ storeId: currentStoreId, days: 30, limit: 20 }),
+    enabled: reportType === 'fast_moving',
+  });
+
+  const fastMovingProducts = fastMovingData?.data || [];
 
   const salesReport = salesData?.data;
   const inventoryReport = inventoryData?.data;
@@ -872,6 +880,14 @@ export default function ReportsTab() {
                 isActive={reportType === 'rental_performance'}
                 onClick={() => setReportType('rental_performance')}
                 colorClass="text-primary"
+              />
+              <ReportTypeCard
+                icon={Sparkles}
+                title="Fast Moving Products"
+                description="Identify top-selling products by frequency and velocity"
+                isActive={reportType === 'fast_moving'}
+                onClick={() => setReportType('fast_moving')}
+                colorClass="text-amber-500"
               />
             </div>
           </div>
@@ -1961,6 +1977,125 @@ export default function ReportsTab() {
                 </CardContent>
               </Card>
             )}
+          </>
+        )}
+
+        {/* Fast Moving Products Report */}
+        {reportType === 'fast_moving' && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="border-l-4 border-l-amber-500">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30">
+                      <Sparkles className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Fast Moving Items</p>
+                      <p className="text-xl font-bold">{fastMovingProducts.length}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-l-4 border-l-emerald-500">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+                      <ShoppingCart className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Total Units Sold</p>
+                      <p className="text-xl font-bold">{fastMovingProducts.reduce((sum, p) => sum + p.totalQuantitySold, 0).toLocaleString()}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-l-4 border-l-blue-500">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                      <DollarSign className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Revenue from Fast Movers</p>
+                      <p className="text-xl font-bold">{formatKES(fastMovingProducts.reduce((sum, p) => sum + p.totalRevenue, 0))}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-amber-500" />
+                  Fast Moving Products (Last 30 Days)
+                </CardTitle>
+                <CardDescription>
+                  Products with the highest sales frequency and velocity
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {fastMovingLoading ? (
+                  <div className="space-y-3">
+                    {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+                  </div>
+                ) : fastMovingProducts.length === 0 ? (
+                  <div className="p-12 text-center">
+                    <div className="mx-auto w-24 h-24 rounded-full bg-muted/30 flex items-center justify-center mb-4">
+                      <Sparkles className="h-10 w-10 text-muted-foreground/50" />
+                    </div>
+                    <h3 className="text-lg font-semibold mb-2">No Fast Moving Data</h3>
+                    <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                      Fast moving product analysis will appear once you have sales data. Products with the highest sales frequency will be shown here.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {fastMovingProducts.map((product, index) => {
+                      const maxQty = fastMovingProducts[0]?.totalQuantitySold || 1;
+                      const percentage = (product.totalQuantitySold / maxQty) * 100;
+                      return (
+                        <div key={product.productId} className="flex items-center gap-4 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                          <div className={`flex items-center justify-center h-8 w-8 rounded-full text-sm font-bold shrink-0 ${
+                            index === 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                            index === 1 ? 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300' :
+                            index === 2 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                            'bg-muted text-muted-foreground'
+                          }`}>
+                            {index + 1}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-sm truncate">{product.productName}</p>
+                              <Badge variant="outline" className="text-[10px] shrink-0">{product.sku}</Badge>
+                            </div>
+                            <div className="flex items-center gap-3 mt-1">
+                              <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-gradient-to-r from-amber-400 to-amber-600 rounded-full transition-all duration-500"
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-muted-foreground shrink-0">{product.totalQuantitySold} sold</span>
+                            </div>
+                            <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1"><ShoppingCart className="h-3 w-3" /> {product.saleCount} sales</span>
+                              <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" /> {formatKES(product.totalRevenue)}</span>
+                              <span className="flex items-center gap-1"><Package className="h-3 w-3" /> {product.currentStock} in stock</span>
+                              {product.category && <span>{product.category}</span>}
+                            </div>
+                          </div>
+                          {product.currentStock < 10 && (
+                            <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </>
         )}
       </div>
