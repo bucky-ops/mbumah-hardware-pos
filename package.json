@@ -13,7 +13,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset",
-    "vercel-build": "prisma generate && next build"
+    "vercel-build": "bash scripts/vercel-build.sh"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
