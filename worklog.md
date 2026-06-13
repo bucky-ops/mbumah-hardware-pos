@@ -1627,3 +1627,25 @@ Unresolved Issues:
   - Production deployment works fine (pre-compiled, no Turbopack)
 - Tab navigation cannot be fully verified in sandbox due to OOM
 - All code-level bugs are fixed; remaining issues are environment-only
+
+---
+Task ID: 9
+Agent: Main Orchestrator
+Task: Fix all GitHub Actions CI/CD workflow issues
+
+Work Log:
+- Fixed Prisma provider mismatch: added `sed` step to switch provider from "sqlite" to "postgresql" before any prisma commands in CI
+- Added `prisma.seed` config to package.json: `"prisma": { "seed": "bun run prisma/seed.ts" }`
+- Fixed SQL table name in integration test verify step: changed `"Organization"` to `organizations` (matches @@map)
+- Removed Node 18 from build matrix (Next.js 16 requires 18.18+, kept Node 20 only)
+- Moved DATABASE_URL to job-level env vars for cleaner config instead of repeating per-step
+- Removed redundant `bun test` step that always fell back to echo
+- Removed decorative AI-style separator comments (====, ----) from workflow YAML
+- Removed excessive hashFiles in cache keys that slowed down CI cache lookups
+- Added NEXT_TELEMETRY_DISABLED to top-level env
+- Lint passes, commit 345260a pushed to GitHub
+
+Stage Summary:
+- All 6 CI/CD issues fixed and pushed
+- Workflow now properly: lint -> build (Node 20 + PostgreSQL) -> integration (seed + verify)
+- Prisma provider switching ensures SQLite for local dev, PostgreSQL for CI/prod
