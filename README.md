@@ -718,6 +718,84 @@ This system is purpose-built for the Kenyan business environment:
 
 ## Deployment
 
+### One-Click Deploy to Vercel
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/bucky-ops/mbumah-hardware-pos&env=DATABASE_URL,DIRECT_URL,NEXTAUTH_SECRET,NEXTAUTH_URL,JWT_SECRET,NEXT_PUBLIC_APP_URL,NEXT_PUBLIC_CURRENCY&envDescription=Required%20environment%20variables%20for%20MBUMAH%20HARDWARE%20POS&envLink=https://github.com/bucky-ops/mbumah-hardware-pos/blob/main/.env.example&project-name=mbumah-hardware-pos&repository-name=mbumah-hardware-pos)
+
+Click the button above to deploy your own instance of MBUMAH HARDWARE POS to Vercel. You will need:
+
+1. A [Vercel account](https://vercel.com/signup) (free)
+2. A [Neon PostgreSQL database](https://console.neon.tech) (free tier works)
+
+During deployment, you will be prompted to set these environment variables:
+
+| Variable | Example Value | Description |
+|----------|---------------|-------------|
+| `DATABASE_URL` | `postgresql://neondb_owner:pass@ep-xxx.us-east-1.aws.neon.tech/neondb?sslmode=require` | Neon pooled connection string |
+| `DIRECT_URL` | `postgresql://neondb_owner:pass@ep-xxx.us-east-1.aws.neon.tech/neondb?sslmode=require` | Neon direct connection string (for migrations) |
+| `NEXTAUTH_SECRET` | (auto-generated) | Session encryption key |
+| `NEXTAUTH_URL` | `https://your-app.vercel.app` | Your app's public URL |
+| `JWT_SECRET` | (auto-generated) | JWT signing key |
+| `NEXT_PUBLIC_APP_URL` | `https://your-app.vercel.app` | Public app URL for client-side |
+| `NEXT_PUBLIC_CURRENCY` | `KES` | Currency code (KES for Kenya) |
+
+### Step-by-Step Vercel Deployment
+
+If you prefer manual deployment:
+
+1. **Create a Neon PostgreSQL database**
+   - Go to [console.neon.tech](https://console.neon.tech) and create a free project
+   - Name it `mbumah-hardware-pos`
+   - Choose the region closest to your users
+   - Copy both the pooled and direct connection strings
+
+2. **Import the project on Vercel**
+   - Go to [vercel.com/new](https://vercel.com/new)
+   - Import the `bucky-ops/mbumah-hardware-pos` repository
+   - The framework will be auto-detected as Next.js
+
+3. **Configure environment variables**
+   - Add all the variables from the table above
+   - Use the Neon pooled connection string for `DATABASE_URL`
+   - Use the Neon direct connection string for `DIRECT_URL`
+
+4. **Deploy**
+   - Click "Deploy" and wait for the build to complete
+   - The build script will automatically:
+     - Switch Prisma from SQLite to PostgreSQL
+     - Run database migrations
+     - Build the Next.js application
+
+5. **Seed the database** (after first deploy)
+   - Run this command locally with your Neon connection string:
+     ```bash
+     DATABASE_URL="postgresql://..." DIRECT_URL="postgresql://..." npx prisma db seed
+     ```
+   - Or use the Vercel CLI:
+     ```bash
+     vercel env pull .env.production
+     npx prisma db seed
+     ```
+
+### Automated Deployment with GitHub Actions
+
+The repository includes GitHub Actions workflows for automatic deployments:
+
+- **Production**: Deploys on push to `main` branch
+- **Preview**: Deploys on pull requests and other branches
+
+To set up:
+1. Add these secrets to your GitHub repository settings:
+   - `VERCEL_TOKEN` - Your Vercel API token
+   - `VERCEL_ORG_ID` - Your Vercel organization ID
+   - `VERCEL_PROJECT_ID` - Your Vercel project ID
+
+2. Find your org and project IDs:
+   ```bash
+   vercel link  # Creates .vercel/project.json with both IDs
+   cat .vercel/project.json
+   ```
+
 ### Production Checklist
 
 Before deploying to production:
@@ -740,17 +818,6 @@ docker build -t mbumah-pos .
 docker-compose -f docker-compose.prod.yml up -d
 ```
 
-### Deploying to Vercel
-
-This project is a Next.js application and can be deployed to Vercel:
-
-1. Push your repository to GitHub
-2. Import the project in [Vercel](https://vercel.com)
-3. Configure environment variables in the Vercel dashboard
-4. Deploy
-
-Note: When deploying to Vercel, use PostgreSQL (e.g., Supabase, Neon, or Railway) instead of SQLite, as Vercel's serverless functions do not have persistent file storage.
-
 ### Deploying with Caddy
 
 A `Caddyfile` is included for deployment with [Caddy](https://caddyserver.com/) as a reverse proxy:
@@ -767,7 +834,15 @@ Caddy will automatically provision TLS certificates via Let's Encrypt.
 
 ### Production Database
 
-For production, use PostgreSQL instead of SQLite. Update your `DATABASE_URL`:
+For production, use PostgreSQL instead of SQLite. The recommended providers:
+
+| Provider | Free Tier | Region | Notes |
+|----------|-----------|--------|-------|
+| [Neon](https://neon.tech) | 0.5 GB, 100 compute hours/month | Multiple | Best for Vercel; serverless, auto-suspend |
+| [Supabase](https://supabase.com) | 500 MB, 2 projects | Multiple | Includes auth and storage |
+| [Railway](https://railway.app) | $5 credit/month | Multiple | Simple setup, good for small projects |
+
+Update your `DATABASE_URL`:
 
 ```env
 DATABASE_URL="postgresql://user:password@host:5432/mbumah_pos?schema=public"
