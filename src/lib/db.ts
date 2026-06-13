@@ -1,3 +1,7 @@
+// Prisma Client for MBUMAH HARDWARE POS
+// Uses Neon serverless driver on Vercel (no native binary needed)
+// Falls back to standard Prisma client for local development
+
 import { PrismaClient } from '@prisma/client'
 
 const globalForPrisma = globalThis as unknown as {
@@ -5,7 +9,6 @@ const globalForPrisma = globalThis as unknown as {
 }
 
 // Strip channel_binding=require from DATABASE_URL - Prisma doesn't support it
-// This parameter is sometimes added by Neon's connection string generator
 function sanitizeDbUrl(url: string | undefined): string | undefined {
   if (!url) return url
   return url
@@ -16,18 +19,40 @@ function sanitizeDbUrl(url: string | undefined): string | undefined {
 
 function createPrismaClient() {
   const url = sanitizeDbUrl(process.env.DATABASE_URL)
+  const directUrl = sanitizeDbUrl(process.env.DIRECT_URL)
 
   if (!url) {
     console.error('❌ DATABASE_URL environment variable is not set!')
-    // Create client anyway - it will fail on actual queries with a clear error
-    // but won't crash the entire server on module load
   }
 
   console.log(`🔧 Creating PrismaClient with URL: ${url ? url.substring(0, 30) + '...' : 'NOT SET'}`)
 
+  // Check if we should use the Neon serverless driver (for Vercel)
+  const isVercel = !!process.env.VERCEL
+  
+  if (isVercel) {
+    console.log('🚀 Vercel detected - using Neon serverless adapter')
+    try {
+      // Dynamic import to avoid bundling issues on non-Vercel environments
+      const { Pool } = require('@neondatabase/serverless')
+      const { PrismaNeon } = require('@prisma/adapter-neon')
+      
+      const pool = new Pool({ connectionString: directUrl || url })
+      const adapter = new PrismaNeon(pool)
+      
+      return new PrismaClient({
+        adapter,
+        log: ['error'],
+      })
+    } catch (err) {
+      console.error('⚠️  Failed to create Neon adapter, falling back to standard client:', err)
+    }
+  }
+
+  // Standard Prisma client (local dev or fallback)
   try {
     return new PrismaClient({
-      log: ['error'],
+      log: process.env.NODE_ENV === 'production' ? ['error'] : ['error', 'warn'],
       datasources: {
         db: {
           url,

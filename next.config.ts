@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import path from "path";
 
 const nextConfig: NextConfig = {
   typescript: {
@@ -7,11 +6,9 @@ const nextConfig: NextConfig = {
   },
   reactStrictMode: false,
 
-  // NOTE: Do NOT add @prisma/client to serverExternalPackages on Vercel.
-  // Next.js file tracing must include the Prisma engine binary (.prisma/client)
-  // for the serverless functions to work. Using serverExternalPackages prevents
-  // Next.js from tracing these files, causing 500 errors at runtime.
-  serverExternalPackages: [],
+  // Do NOT add @prisma/client here - Next.js must trace it for the serverless bundle
+  // The Neon serverless adapter uses WebSocket which needs to be external
+  serverExternalPackages: ["@neondatabase/serverless"],
 
   // CRITICAL: Explicitly include Prisma engine files in the serverless bundle
   // Vercel's file tracer may miss the .prisma/client directory
@@ -22,6 +19,8 @@ const nextConfig: NextConfig = {
       "./node_modules/.prisma/client/*.d.ts",
       "./node_modules/.prisma/client/schema.prisma",
       "./node_modules/@prisma/client/**/*",
+      "./node_modules/@neondatabase/serverless/**/*",
+      "./node_modules/@prisma/adapter-neon/**/*",
     ],
   },
 
