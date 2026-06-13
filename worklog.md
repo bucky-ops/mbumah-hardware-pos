@@ -1518,3 +1518,51 @@ Stage Summary:
 - Session expires after 7 days instead of 24 hours
 - README updated for cross-platform setup
 - Code is AI-dash-free
+
+---
+Task ID: 5
+Agent: AI Dashes Cleanup
+Task: Remove AI dashes and decorative separators from codebase
+
+Work Log:
+- /home/z/my-project/src/app/tabs/financial-tab.tsx - Removed 7 triple-line decorative separator blocks ({/* ====... */}) and cleaned trailing whitespace in section comments
+- /home/z/my-project/src/app/tabs/catalog-tab.tsx - Cleaned 5 dashed comment patterns ({/* ---- Section Name ---- */} → {/* Section Name */})
+- /home/z/my-project/src/app/tabs/reports-tab.tsx - Removed 9 triple-line decorative separator blocks ({/* ====... */}) and cleaned trailing whitespace in section comments
+- /home/z/my-project/src/app/tabs/admin-tab.tsx - Removed 6 triple-line decorative separator blocks ({/* ====... */}) and cleaned trailing whitespace in section comments
+- Scanned /home/z/my-project/src/app/api/, /home/z/my-project/src/lib/, /home/z/my-project/src/components/ - no AI dashes or decorative patterns found
+- No emoji in code comments found across entire scanned codebase
+
+Stage Summary:
+- 4 files cleaned, 27 decorative separator patterns removed
+- No emoji-in-comments patterns found
+- No changes needed in api/, lib/, or components/ directories
+
+---
+Task ID: 6
+Agent: README Update
+Task: Update README with Windows/macOS setup instructions
+
+Work Log:
+- Read existing README.md (545 lines) to understand current structure and content
+- Removed all AI-style decorative elements: 13 `---` horizontal rule separators, all emoji from section headers and table cells
+- Replaced emoji section headers (e.g., "## Screenshots" instead of "## Screenshots")
+- Replaced emoji table cell content (e.g., "HEADQUARTERS" instead of "HEADQUARTERS")
+- Replaced em-dash style decorative separators with plain double-dash text
+- Replaced "Important" note prefix (removed warning emoji)
+- Added comprehensive Windows setup section with Option A (Native PowerShell) and Option B (WSL2)
+- Added Windows-specific troubleshooting: long path names, line endings, PowerShell execution policy, Bun PATH issues, SQLite native modules, port conflicts
+- Added comprehensive macOS setup section with Homebrew installation instructions
+- Added macOS-specific troubleshooting: Bun PATH, Homebrew linking, permissions, Xcode CLT, Rosetta, port conflicts
+- Added dedicated Environment Variables section with table of all config vars
+- Added Docker setup note about updating DATABASE_URL for PostgreSQL
+- Added full Deployment section covering: production checklist, Docker deployment, Vercel deployment, Caddy deployment, production database migration
+- Verified all demo accounts present with correct passwords
+- Verified all required sections: project description, features/modules, demo accounts, tech stack, API reference, deployment guide
+
+Stage Summary:
+- README.md fully rewritten with clean, emoji-free, dash-separator-free formatting
+- Comprehensive platform-specific setup instructions for Windows (PowerShell + WSL2) and macOS (Homebrew)
+- Environment variables documented in a structured table
+- Deployment guide added covering Docker, Vercel, Caddy, and production database migration
+- All 7 demo accounts confirmed with correct passwords
+- All AI-style decorative elements removed

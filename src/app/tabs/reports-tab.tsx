@@ -671,9 +671,7 @@ export default function ReportsTab() {
 
   return (
     <div className="space-y-4">
-      {/* ================================================================== */}
-      {/* Quick Stats Cards - Glass-morphism                         */}
-      {/* ================================================================== */}
+      {/* Quick Stats Cards - Glass-morphism */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="border-l-4 border-l-green-500 bg-gradient-to-br from-card to-green-50/30 dark:to-green-900/10 backdrop-blur-sm">
           <CardContent className="p-4">
@@ -756,9 +754,7 @@ export default function ReportsTab() {
         </Card>
       </div>
 
-      {/* ================================================================== */}
-      {/* Report Generation Dashboard - Glass-morphism                */}
-      {/* ================================================================== */}
+      {/* Report Generation Dashboard - Glass-morphism */}
       <Card className="backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -907,9 +903,7 @@ export default function ReportsTab() {
 
       {/* Report Content Area */}
       <div id="report-print-area">
-        {/* ================================================================== */}
-        {/* Sales Report                                                        */}
-        {/* ================================================================== */}
+        {/* Sales Report */}
         {reportType === 'sales' && (
           <>
             {salesLoading ? (
@@ -1098,9 +1092,7 @@ export default function ReportsTab() {
           </>
         )}
 
-        {/* ================================================================== */}
-        {/* Inventory Report                                                    */}
-        {/* ================================================================== */}
+        {/* Inventory Report */}
         {reportType === 'inventory' && (
           <>
             {inventoryLoading ? (
@@ -1280,9 +1272,7 @@ export default function ReportsTab() {
           </>
         )}
 
-        {/* ================================================================== */}
-        {/* Inventory Valuation Report                                          */}
-        {/* ================================================================== */}
+        {/* Inventory Valuation Report */}
         {reportType === 'valuation' && (
           <>
             {inventoryLoading ? (
@@ -1378,9 +1368,7 @@ export default function ReportsTab() {
           </>
         )}
 
-        {/* ================================================================== */}
-        {/* Daily Sales Summary                                                 */}
-        {/* ================================================================== */}
+        {/* Daily Sales Summary */}
         {reportType === 'daily' && (
           <>
             {salesLoading ? (
@@ -1478,9 +1466,7 @@ export default function ReportsTab() {
           </>
         )}
 
-        {/* ================================================================== */}
-        {/* Top Products Report                                                 */}
-        {/* ================================================================== */}
+        {/* Top Products Report */}
         {reportType === 'top_products' && (
           <>
             {(salesLoading || inventoryLoading) ? (
@@ -1564,9 +1550,7 @@ export default function ReportsTab() {
           </>
         )}
 
-        {/* ================================================================== */}
-        {/* Customer Analysis Report                                            */}
-        {/* ================================================================== */}
+        {/* Customer Analysis Report */}
         {reportType === 'customer_analysis' && (
           <>
             {(customersLoading || transactionsLoading) ? (
@@ -1772,9 +1756,7 @@ export default function ReportsTab() {
           </>
         )}
 
-        {/* ================================================================== */}
-        {/* Rental Performance Report                                           */}
-        {/* ================================================================== */}
+        {/* Rental Performance Report */}
         {reportType === 'rental_performance' && (
           <>
             {rentalsLoading ? (

@@ -6,11 +6,9 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)](https://www.typescriptlang.org/)
 [![Prisma](https://img.shields.io/badge/Prisma-6-indigo)](https://www.prisma.io/)
 
-> A full-featured, multi-tenant Point of Sale & Enterprise Resource Planning system built specifically for Kenyan hardware stores. Developed for **MBUMAH HARDWARE** with branches across Kenya.
+A full-featured, multi-tenant Point of Sale & Enterprise Resource Planning system built specifically for Kenyan hardware stores. Developed for **MBUMAH HARDWARE** with branches across Kenya.
 
----
-
-## 📸 Screenshots
+## Screenshots
 
 | Login Screen | Dashboard |
 |:---:|:---:|
@@ -20,25 +18,21 @@
 |:---:|:---:|
 | ![Catalog](/public/categories/cat_tools.png) | ![Inventory](/public/categories/cat_rebar.png) |
 
-> Screenshots above are placeholders. Run the app locally to see the full interface.
+Screenshots above are placeholders. Run the app locally to see the full interface.
 
----
-
-## 📋 About
+## About
 
 **MBUMAH HARDWARE POS & ERP** is a modern, web-based business management system designed from the ground up for the unique needs of Kenyan hardware stores. Built with Next.js 16, TypeScript, and Prisma, it provides a comprehensive suite of 13 integrated modules covering everything from point-of-sale operations to financial accounting, all with deep integration into Kenya-specific systems like M-Pesa and KRA eTIMS.
 
 ### Key Highlights
 
-- **Multi-tenant architecture** — One system, multiple stores, complete data isolation
-- **Kenya-first design** — KES currency, M-Pesa payments, KRA PIN tracking, eTIMS compliance
-- **Real-time POS** — Fast, offline-capable point of sale with barcode support
-- **Complete ERP** — Inventory, accounting, HR, and business intelligence in one platform
-- **Role-based access control** — Granular permissions for every role in your organization
+- **Multi-tenant architecture** -- One system, multiple stores, complete data isolation
+- **Kenya-first design** -- KES currency, M-Pesa payments, KRA PIN tracking, eTIMS compliance
+- **Real-time POS** -- Fast, offline-capable point of sale with barcode support
+- **Complete ERP** -- Inventory, accounting, HR, and business intelligence in one platform
+- **Role-based access control** -- Granular permissions for every role in your organization
 
----
-
-## 🏗️ Modules
+## Modules
 
 The system is organized into 13 integrated modules covering every aspect of hardware store operations:
 
@@ -58,23 +52,19 @@ The system is organized into 13 integrated modules covering every aspect of hard
 | 12 | **Banking & Reconciliation** | Bank account management, transaction matching, M-Pesa reconciliation, cash drawer management |
 | 13 | **User Management & Security** | Role-based access control (RBAC), user profiles, audit logging, session management, activity tracking |
 
----
-
-## 🏪 Hardware Store Branches
+## Hardware Store Branches
 
 MBUMAH HARDWARE operates across multiple locations in Kenya:
 
 | Branch | Location | Status |
 |--------|----------|--------|
-| **Juja Main Branch** | Salama M-Store, Juja | 🏢 **HEADQUARTERS** |
-| **Thika Branch** | Thika Town, Kiambu County | 🟢 Active |
-| **Ruiru Branch** | Ruiru Town, Kiambu County | 🟢 Active |
-| **Nairobi CBD Branch** | Kenyatta Avenue, Nairobi | 🟢 Active |
-| **Nakuru Branch** | Nakuru Town, Nakuru County | 🟢 Active |
+| **Juja Main Branch** | Salama M-Store, Juja | HEADQUARTERS |
+| **Thika Branch** | Thika Town, Kiambu County | Active |
+| **Ruiru Branch** | Ruiru Town, Kiambu County | Active |
+| **Nairobi CBD Branch** | Kenyatta Avenue, Nairobi | Active |
+| **Nakuru Branch** | Nakuru Town, Nakuru County | Active |
 
----
-
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Technology | Version | Purpose |
 |------------|---------|---------|
@@ -91,75 +81,330 @@ MBUMAH HARDWARE operates across multiple locations in Kenya:
 | [React Hook Form](https://react-hook-form.com/) | 7 | Form management |
 | [SQLite](https://www.sqlite.org/) | 3 | Local development database |
 | [PostgreSQL](https://www.postgresql.org/) | 15+ | Production database (Supabase) |
-| [Docker](https://www.docker.com/) | — | Containerization & local services |
+| [Docker](https://www.docker.com/) | -- | Containerization & local services |
 | [Redis](https://redis.io/) | 7 | Caching & session storage |
 | [Bun](https://bun.sh/) | Latest | JavaScript runtime & package manager |
 
----
-
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
-- **Node.js** ≥ 18 or **Bun** ≥ 1.0
-- **Git** for version control
-- **Docker** (optional, for PostgreSQL + Redis + M-Pesa mock)
+The following software is required regardless of your operating system:
 
-### Installation (Linux / macOS)
+- **Node.js** 18 or later (LTS recommended)
+- **Bun** 1.0 or later (optional, but recommended for faster installs)
+- **Git** 2.30 or later
+- **Docker** (optional, for PostgreSQL + Redis + M-Pesa mock services)
 
-```bash
-# 1. Clone the repository
-git clone https://github.com/bucky-ops/mbumah-hardware-pos.git
-cd mbumah-hardware-pos
+### Setup on Windows
 
-# 2. Install dependencies
-bun install
-# or: npm install
+#### Option A: Native Windows (PowerShell)
 
-# 3. Set up environment variables
-cp .env.example .env
-# Edit .env with your configuration
+1. **Install prerequisites**
 
-# 4. Push database schema and generate client
-bun run db:push
-bun run db:generate
+   Install Node.js 18+ from [nodejs.org](https://nodejs.org/) or via [winget](https://learn.microsoft.com/en-us/windows/package-manager/winget/):
 
-# 5. Seed the database
-npx tsx prisma/seed.ts
+   ```powershell
+   winget install OpenJS.NodeJS.LTS
+   ```
 
-# 6. Start the development server
-bun run dev
-# or: npm run dev
-```
+   Install Git:
 
-### Installation (Windows)
+   ```powershell
+   winget install Git.Git
+   ```
 
-```powershell
-# 1. Clone the repository
-git clone https://github.com/bucky-ops/mbumah-hardware-pos.git
-cd mbumah-hardware-pos
+   Install Bun (optional but recommended):
 
-# 2. Install dependencies
-npm install
+   ```powershell
+   powershell -c "irm bun.sh/install.ps1 | iex"
+   ```
 
-# 3. Set up environment variables
-copy .env.example .env
-# Edit .env with your configuration
+   Install Docker Desktop from [docker.com](https://www.docker.com/products/docker-desktop/) if you need PostgreSQL, Redis, or the mock M-Pesa service.
 
-# 4. Push database schema and generate client
-npx prisma db push
-npx prisma generate
+2. **Clone the repository**
 
-# 5. Seed the database
-npx tsx prisma/seed.ts
+   ```powershell
+   git clone https://github.com/bucky-ops/mbumah-hardware-pos.git
+   cd mbumah-hardware-pos
+   ```
 
-# 6. Start the development server
-npm run dev
-```
+3. **Install dependencies**
 
-> **Windows users**: If you don't have Bun installed, use `npm` instead. Install [Bun for Windows](https://bun.sh/) with `powershell -c "irm bun.sh/install.ps1 | iex"` if preferred.
+   With Bun:
+   ```powershell
+   bun install
+   ```
 
-The app will be available at [http://localhost:3000](http://localhost:3000).
+   With npm:
+   ```powershell
+   npm install
+   ```
+
+4. **Set up environment variables**
+
+   ```powershell
+   copy .env.example .env
+   ```
+
+   Edit `.env` with your configuration. At minimum, set the `DATABASE_URL` and `NEXTAUTH_SECRET` values. See the [Environment Variables](#environment-variables) section below for details.
+
+5. **Set up the database**
+
+   With Bun:
+   ```powershell
+   bun run db:push
+   bun run db:generate
+   ```
+
+   With npm:
+   ```powershell
+   npx prisma db push
+   npx prisma generate
+   ```
+
+6. **Seed the database**
+
+   With Bun:
+   ```powershell
+   npx tsx prisma/seed.ts
+   ```
+
+   With npm:
+   ```powershell
+   npx tsx prisma/seed.ts
+   ```
+
+   If `npx tsx` is not found, install it first:
+   ```powershell
+   npm install -g tsx
+   ```
+
+7. **Start the development server**
+
+   With Bun:
+   ```powershell
+   bun run dev
+   ```
+
+   With npm:
+   ```powershell
+   npm run dev
+   ```
+
+   The app will be available at [http://localhost:3000](http://localhost:3000).
+
+#### Option B: Windows Subsystem for Linux (WSL2)
+
+WSL2 provides a full Linux environment on Windows and avoids most Windows-specific compatibility issues.
+
+1. **Install WSL2**
+
+   ```powershell
+   wsl --install
+   ```
+
+   Restart your computer, then open a WSL terminal (Ubuntu by default).
+
+2. **Install prerequisites inside WSL2**
+
+   ```bash
+   # Update packages
+   sudo apt update && sudo apt upgrade -y
+
+   # Install Node.js 18+ via NodeSource
+   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+   sudo apt install -y nodejs
+
+   # Install Bun
+   curl -fsSL https://bun.sh/install | bash
+
+   # Install Git (usually pre-installed on WSL Ubuntu)
+   sudo apt install -y git
+   ```
+
+3. **Follow the Linux/macOS instructions below** from the "Clone the repository" step onward.
+
+   Note: If you want Docker services, install Docker Desktop on Windows and enable WSL integration in Docker Desktop settings. The WSL2 environment will then have access to Docker.
+
+#### Common Windows Issues
+
+- **Long path names**: Windows has a 260-character path limit by default. If you encounter errors during `npm install`, enable long paths:
+  ```powershell
+  # Run PowerShell as Administrator
+  New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+  ```
+  Then restart your terminal.
+
+- **Line ending issues**: Git may convert LF to CRLF on Windows, which can cause issues with shell scripts. Configure Git to keep LF:
+  ```powershell
+  git config --global core.autocrlf input
+  ```
+
+- **PowerShell execution policy**: If scripts are blocked, run PowerShell as Administrator and execute:
+  ```powershell
+  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+  ```
+
+- **Bun not found after install**: Restart your terminal or run `refreshenv` (if using Chocolatey) to reload the PATH.
+
+- **SQLite native module errors**: If Prisma throws native module errors on Windows, ensure you have the latest Visual C++ Redistributable installed. Download it from [Microsoft](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist).
+
+- **Port 3000 already in use**: Find and kill the process using port 3000:
+  ```powershell
+  netstat -ano | findstr :3000
+  taskkill /PID <PID> /F
+  ```
+
+### Setup on macOS
+
+1. **Install prerequisites**
+
+   The recommended approach on macOS is to use [Homebrew](https://brew.sh/). If you don't have Homebrew installed, install it first:
+
+   ```bash
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+   ```
+
+   After Homebrew is installed, add it to your PATH (Apple Silicon Macs only):
+
+   ```bash
+   # For Apple Silicon (M1/M2/M3/M4) Macs
+   echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+   eval "$(/opt/homebrew/bin/brew shellenv)"
+   ```
+
+   Now install the prerequisites:
+
+   ```bash
+   # Install Node.js 18+ (LTS)
+   brew install node@20
+   brew link node@20
+
+   # Install Git
+   brew install git
+
+   # Install Bun
+   curl -fsSL https://bun.sh/install | bash
+
+   # Install Docker Desktop (optional, for PostgreSQL/Redis/M-Pesa mock)
+   brew install --cask docker
+   ```
+
+   Alternatively, if you use [nvm](https://github.com/nvm-sh/nvm) to manage Node.js versions:
+
+   ```bash
+   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+   nvm install 20
+   nvm use 20
+   ```
+
+2. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/bucky-ops/mbumah-hardware-pos.git
+   cd mbumah-hardware-pos
+   ```
+
+3. **Install dependencies**
+
+   With Bun:
+   ```bash
+   bun install
+   ```
+
+   With npm:
+   ```bash
+   npm install
+   ```
+
+4. **Set up environment variables**
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Edit `.env` with your configuration. At minimum, set the `DATABASE_URL` and `NEXTAUTH_SECRET` values. See the [Environment Variables](#environment-variables) section below for details.
+
+5. **Set up the database**
+
+   With Bun:
+   ```bash
+   bun run db:push
+   bun run db:generate
+   ```
+
+   With npm:
+   ```bash
+   npx prisma db push
+   npx prisma generate
+   ```
+
+6. **Seed the database**
+
+   ```bash
+   npx tsx prisma/seed.ts
+   ```
+
+7. **Start the development server**
+
+   With Bun:
+   ```bash
+   bun run dev
+   ```
+
+   With npm:
+   ```bash
+   npm run dev
+   ```
+
+   The app will be available at [http://localhost:3000](http://localhost:3000).
+
+#### Common macOS Issues
+
+- **`bun: command not found` after install**: The Bun installer adds itself to `~/.bashrc` or `~/.zshrc`. Restart your terminal or run `source ~/.zshrc` (or `source ~/.bashrc` if using Bash).
+
+- **`node@20` not linked after Homebrew install**: If `node` is not found after `brew install node@20`, run:
+  ```bash
+  brew link --overwrite node@20
+  ```
+
+- **Permission denied on `node_modules`**: If you previously ran installs with `sudo`, you may need to fix ownership:
+  ```bash
+  sudo chown -R $(whoami) ~/.npm
+  sudo chown -R $(whoami) /usr/local/lib/node_modules
+  ```
+
+- **Xcode Command Line Tools required**: Some native modules require the Xcode CLT. Install them with:
+  ```bash
+  xcode-select --install
+  ```
+
+- **Rosetta required on Apple Silicon**: If you encounter architecture mismatch errors with native modules, some packages may need Rosetta:
+  ```bash
+  softwareupdate --install-rosetta --agree-to-license
+  ```
+
+- **Port 3000 already in use**: Find and kill the process using port 3000:
+  ```bash
+   lsof -ti:3000 | xargs kill -9
+  ```
+
+### Environment Variables
+
+Copy `.env.example` to `.env` and configure the following variables:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | Database connection string. Use `file:./dev.db` for SQLite or a PostgreSQL URL for production |
+| `NEXTAUTH_SECRET` | Yes | Secret key for NextAuth.js session encryption. Generate with `openssl rand -base64 32` |
+| `NEXTAUTH_URL` | Yes | Base URL of the application (e.g., `http://localhost:3000`) |
+| `MPESA_CONSUMER_KEY` | No | Safaricom Daraja API consumer key (for M-Pesa payments) |
+| `MPESA_CONSUMER_SECRET` | No | Safaricom Daraja API consumer secret |
+| `MPESA_PASSKEY` | No | Lipa Na M-Pesa online passkey |
+| `MPESA_SHORTCODE` | No | Business shortcode (use `174379` for sandbox) |
+| `MPESA_ENVIRONMENT` | No | `sandbox` or `production` (default: `sandbox`) |
+| `REDIS_URL` | No | Redis connection URL (default: `redis://localhost:6379`) |
 
 ### Docker Setup (Optional)
 
@@ -174,15 +419,19 @@ This starts:
 - **Redis 7** on port `6379`
 - **Mock M-Pesa Daraja API** on port `9000`
 
----
+If you are using Docker with the PostgreSQL container instead of SQLite, update your `DATABASE_URL` in `.env`:
 
-## 🔑 Demo Accounts
+```env
+DATABASE_URL="postgresql://mbumah:mbumah_secret@localhost:5432/mbumah_pos?schema=public"
+```
+
+## Demo Accounts
 
 The seed script creates demo accounts for testing different roles:
 
 | Role | Email | Password | Access Level |
 |------|-------|----------|-------------|
-| **Super Admin** | `admin@mbumahhardware.co.ke` | `Admin@2024` | Full system access — all modules, settings, user management |
+| **Super Admin** | `admin@mbumahhardware.co.ke` | `Admin@2024` | Full system access -- all modules, settings, user management |
 | **Cashier** | `cashier@mbumahhardware.co.ke` | `Cashier@2024` | POS operations, product lookup, basic transactions |
 | **Accountant** | `accountant@mbumahhardware.co.ke` | `Accountant@2024` | Financial reports, debt management, journal entries, exports |
 | **Branch Manager** | `thika.manager@mbumahhardware.co.ke` | `Manager@2024` | Store-level management for Thika branch |
@@ -190,11 +439,9 @@ The seed script creates demo accounts for testing different roles:
 | **Branch Manager** | `nairobi.manager@mbumahhardware.co.ke` | `Manager@2024` | Store-level management for Nairobi CBD branch |
 | **Branch Manager** | `nakuru.manager@mbumahhardware.co.ke` | `Manager@2024` | Store-level management for Nakuru branch |
 
-> ⚠️ **Important**: Change these passwords immediately in production environments.
+**Important**: Change these passwords immediately in production environments.
 
----
-
-## 📡 API Reference
+## API Reference
 
 All API endpoints are prefixed with `/api/`. Authentication is handled via JWT tokens in the `Authorization` header.
 
@@ -315,9 +562,7 @@ All API endpoints are prefixed with `/api/`. Authentication is handled via JWT t
 | `POST` | `/api/system-config` | Update configuration |
 | `GET` | `/api/notifications` | User notifications |
 
----
-
-## 📁 Project Structure
+## Project Structure
 
 ```
 mbumah-hardware-pos/
@@ -403,18 +648,16 @@ mbumah-hardware-pos/
 └── tsconfig.json
 ```
 
----
-
-## 💳 M-Pesa Integration
+## M-Pesa Integration
 
 The system integrates with **Safaricom's Daraja API** for M-Pesa payments, supporting both sandbox (development) and production environments.
 
 ### Features
 
-- **STK Push (Lipa Na M-Pesa Online)** — Initiate payment from the POS; customer receives a prompt on their phone
-- **C2B (Customer to Business)** — Receive payments directly to your paybill/till number
-- **Callback Handling** — Automatic payment confirmation and reconciliation
-- **Transaction Matching** — Match M-Pesa receipts with system transactions
+- **STK Push (Lipa Na M-Pesa Online)** -- Initiate payment from the POS; customer receives a prompt on their phone
+- **C2B (Customer to Business)** -- Receive payments directly to your paybill/till number
+- **Callback Handling** -- Automatic payment confirmation and reconciliation
+- **Transaction Matching** -- Match M-Pesa receipts with system transactions
 
 ### Configuration
 
@@ -437,9 +680,7 @@ For local development, a mock M-Pesa service is included via Docker Compose. It 
 - **Callback Handler**: Configurable callback URL
 - **Debug Endpoint**: `GET /mpesa/debug/transactions`
 
----
-
-## 🔐 RBAC Roles
+## RBAC Roles
 
 The system uses Role-Based Access Control with granular permissions:
 
@@ -460,9 +701,7 @@ Permissions can be granted per resource and action:
 - **Resources**: `products`, `transactions`, `customers`, `financials`, `rentals`, `admin`, `reports`, `debt`
 - **Actions**: `create`, `read`, `update`, `delete`, `approve`, `refund`, `export`, `void`, `manage_users`, `manage_stores`, `system_config`, `write_off`, `remind`, `adjust`
 
----
-
-## 🇰🇪 Kenya-Specific Features
+## Kenya-Specific Features
 
 This system is purpose-built for the Kenyan business environment:
 
@@ -472,25 +711,86 @@ This system is purpose-built for the Kenyan business environment:
 | **M-Pesa Integration** | STK Push payments, C2B callbacks, and automatic reconciliation via Safaricom Daraja API |
 | **eTIMS/TIMS Compliance** | Electronic Tax Invoice Management System integration for KRA-compliant invoicing |
 | **KRA PIN Tracking** | Organization and store-level KRA PIN management for tax reporting |
-| **Debt/Credit Management** | Comprehensive credit sales tracking, debt ledger, payment reminders, and write-off capabilities — essential for Kenyan hardware store operations |
+| **Debt/Credit Management** | Comprehensive credit sales tracking, debt ledger, payment reminders, and write-off capabilities -- essential for Kenyan hardware store operations |
 | **Kenyan Product Catalog** | Pre-configured categories for cement (Bamburi, Simba, Savanna), mabati, rebar, and other local products |
 | **Local Phone Numbers** | Support for Kenyan phone number formats (07xx, 01xx, +254) |
 | **Multi-Branch Support** | Designed for hardware stores operating across multiple counties in Kenya |
 
----
+## Deployment
 
-## 🤝 Contributing
+### Production Checklist
 
-We welcome contributions from the community! Here's how you can help:
+Before deploying to production:
+
+1. Change all demo account passwords
+2. Set a strong `NEXTAUTH_SECRET` (minimum 32 characters)
+3. Switch `DATABASE_URL` from SQLite to PostgreSQL
+4. Set `MPESA_ENVIRONMENT=production` and configure real Daraja API credentials
+5. Configure `REDIS_URL` for session storage and caching
+6. Enable HTTPS (use a reverse proxy like Caddy or Nginx)
+7. Review and restrict CORS origins
+
+### Deploying with Docker
+
+```bash
+# Build the Docker image
+docker build -t mbumah-pos .
+
+# Run with Docker Compose (includes PostgreSQL, Redis)
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+### Deploying to Vercel
+
+This project is a Next.js application and can be deployed to Vercel:
+
+1. Push your repository to GitHub
+2. Import the project in [Vercel](https://vercel.com)
+3. Configure environment variables in the Vercel dashboard
+4. Deploy
+
+Note: When deploying to Vercel, use PostgreSQL (e.g., Supabase, Neon, or Railway) instead of SQLite, as Vercel's serverless functions do not have persistent file storage.
+
+### Deploying with Caddy
+
+A `Caddyfile` is included for deployment with [Caddy](https://caddyserver.com/) as a reverse proxy:
+
+```bash
+# Build the Next.js application
+npm run build
+
+# Start the production server
+./start-server.sh
+```
+
+Caddy will automatically provision TLS certificates via Let's Encrypt.
+
+### Production Database
+
+For production, use PostgreSQL instead of SQLite. Update your `DATABASE_URL`:
+
+```env
+DATABASE_URL="postgresql://user:password@host:5432/mbumah_pos?schema=public"
+```
+
+Run migrations against the production database:
+
+```bash
+npx prisma migrate deploy
+```
+
+## Contributing
+
+We welcome contributions from the community. Here is how you can help:
 
 ### Getting Started
 
-1. **Fork** the repository
-2. **Clone** your fork: `git clone https://github.com/YOUR_USERNAME/mbumah-hardware-pos.git`
-3. **Create a branch**: `git checkout -b feature/your-feature-name`
-4. **Make your changes** and commit: `git commit -m "Add your feature"`
-5. **Push** to your fork: `git push origin feature/your-feature-name`
-6. **Open a Pull Request** against the `main` branch
+1. Fork the repository
+2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/mbumah-hardware-pos.git`
+3. Create a branch: `git checkout -b feature/your-feature-name`
+4. Make your changes and commit: `git commit -m "Add your feature"`
+5. Push to your fork: `git push origin feature/your-feature-name`
+6. Open a Pull Request against the `main` branch
 
 ### Guidelines
 
@@ -498,7 +798,7 @@ We welcome contributions from the community! Here's how you can help:
 - Write clear, descriptive commit messages
 - Add tests for new features when applicable
 - Update documentation for any changed behavior
-- Keep PRs focused — one feature or fix per PR
+- Keep PRs focused -- one feature or fix per PR
 - Ensure all existing tests pass before submitting
 
 ### Reporting Issues
@@ -507,11 +807,9 @@ We welcome contributions from the community! Here's how you can help:
 - Use the [Feature Request](.github/ISSUE_TEMPLATE/feature_request.md) template for new features
 - Search existing issues before creating a new one
 
----
+## License
 
-## 📄 License
-
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License** -- see the [LICENSE](LICENSE) file for details.
 
 ```
 MIT License
@@ -536,9 +834,3 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
-
----
-
-<p align="center">
-  Built with ❤️ for Kenyan hardware stores
-</p>

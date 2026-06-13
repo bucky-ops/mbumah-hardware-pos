@@ -94,10 +94,10 @@ const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
 ];
 
 const DEMO_ACCOUNTS = [
-  { email: 'admin@mbumahhardware.co.ke', password: 'password123', role: 'Super Admin', icon: ShieldCheck, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900 hover:bg-red-100 dark:hover:bg-red-950/50' },
-  { email: 'thika.manager@mbumahhardware.co.ke', password: 'password123', role: 'Branch Mgr (Thika)', icon: Store, color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900 hover:bg-purple-100 dark:hover:bg-purple-950/50' },
-  { email: 'cashier@mbumahhardware.co.ke', password: 'password123', role: 'Cashier', icon: ShoppingCart, color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900 hover:bg-green-100 dark:hover:bg-green-950/50' },
-  { email: 'accountant@mbumahhardware.co.ke', password: 'password123', role: 'Accountant', icon: BarChart3, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900 hover:bg-amber-100 dark:hover:bg-amber-950/50' },
+  { email: 'admin@mbumahhardware.co.ke', password: 'Admin@2024', role: 'Super Admin', icon: ShieldCheck, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900 hover:bg-red-100 dark:hover:bg-red-950/50' },
+  { email: 'thika.manager@mbumahhardware.co.ke', password: 'Manager@2024', role: 'Branch Mgr (Thika)', icon: Store, color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900 hover:bg-purple-100 dark:hover:bg-purple-950/50' },
+  { email: 'cashier@mbumahhardware.co.ke', password: 'Cashier@2024', role: 'Cashier', icon: ShoppingCart, color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900 hover:bg-green-100 dark:hover:bg-green-950/50' },
+  { email: 'accountant@mbumahhardware.co.ke', password: 'Accountant@2024', role: 'Accountant', icon: BarChart3, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900 hover:bg-amber-100 dark:hover:bg-amber-950/50' },
 ];
 
 // Store list for branch selector

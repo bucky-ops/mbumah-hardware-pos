@@ -1630,9 +1630,7 @@ export default function AdminTab() {
 
   return (
     <div className="space-y-4">
-      {/* ================================================================== */}
-      {/* System Health Dashboard                                    */}
-      {/* ================================================================== */}
+      {/* System Health Dashboard */}
       <Card className="backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -1723,9 +1721,7 @@ export default function AdminTab() {
         </CardContent>
       </Card>
 
-      {/* ================================================================== */}
-      {/* User Management & Quick Actions Row                                 */}
-      {/* ================================================================== */}
+      {/* User Management & Quick Actions Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* User Management */}
         <Card className="backdrop-blur-sm bg-card/80 border-border/50">
@@ -1754,9 +1750,7 @@ export default function AdminTab() {
         </Card>
       </div>
 
-      {/* ================================================================== */}
-      {/* Activity Feed                                             */}
-      {/* ================================================================== */}
+      {/* Activity Feed */}
       <Card className="backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
@@ -1768,19 +1762,13 @@ export default function AdminTab() {
         </CardContent>
       </Card>
 
-      {/* ================================================================== */}
-      {/* Audit Log Section                                         */}
-      {/* ================================================================== */}
+      {/* Audit Log Section */}
       <AuditLogSection storeId={currentStoreId} />
 
-      {/* ================================================================== */}
-      {/* System Configuration Editor                               */}
-      {/* ================================================================== */}
+      {/* System Configuration Editor */}
       <ConfigEditor storeId={currentStoreId} />
 
-      {/* ================================================================== */}
-      {/* System Logs & Stock Movements Tabs                                  */}
-      {/* ================================================================== */}
+      {/* System Logs & Stock Movements Tabs */}
       <Tabs defaultValue="logs">
         <TabsList>
           <TabsTrigger value="logs"><Activity className="mr-2 h-4 w-4" />System Logs</TabsTrigger>

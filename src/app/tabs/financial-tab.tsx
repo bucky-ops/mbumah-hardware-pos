@@ -772,9 +772,7 @@ export default function FinancialTab() {
 
   return (
     <div className="space-y-4">
-      {/* ================================================================== */}
-      {/* Gradient Accent Banner - Key Financial Metrics                     */}
-      {/* ================================================================== */}
+      {/* Gradient Accent Banner - Key Financial Metrics */}
       <div className="rounded-xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 p-4 text-white shadow-lg backdrop-blur-sm border border-white/5">
         <div className="flex items-center gap-2 mb-3">
           <Landmark className="h-5 w-5 text-amber-400" />
@@ -985,9 +983,7 @@ export default function FinancialTab() {
         </Card>
       </div>
 
-      {/* ================================================================== */}
-      {/* Profit & Loss Statement                                   */}
-      {/* ================================================================== */}
+      {/* Profit & Loss Statement */}
       <Card className="backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -1116,9 +1112,7 @@ export default function FinancialTab() {
         </CardContent>
       </Card>
 
-      {/* ================================================================== */}
-      {/* Charts Row: Revenue Trend + Payment Methods                        */}
-      {/* ================================================================== */}
+      {/* Charts Row: Revenue Trend + Payment Methods */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Revenue Trend with Period Selector + Moving Average */}
         <Card className="backdrop-blur-sm bg-card/80 border-border/50">
@@ -1293,9 +1287,7 @@ export default function FinancialTab() {
         </Card>
       </div>
 
-      {/* ================================================================== */}
-      {/* Charts Row: Expense Categories + Profit Margin                     */}
-      {/* ================================================================== */}
+      {/* Charts Row: Expense Categories + Profit Margin */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Expense Categories Bar Chart */}
         <Card className="backdrop-blur-sm bg-card/80 border-border/50">
@@ -1434,9 +1426,7 @@ export default function FinancialTab() {
         </CardContent>
       </Card>
 
-      {/* ================================================================== */}
-      {/* Debt Aging Analysis (Donut Chart + Actions)          */}
-      {/* ================================================================== */}
+      {/* Debt Aging Analysis (Donut Chart + Actions) */}
       <Card className="backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -1629,9 +1619,7 @@ export default function FinancialTab() {
         </Card>
       )}
 
-      {/* ================================================================== */}
-      {/* Chart of Accounts (Balances + Trial Balance)         */}
-      {/* ================================================================== */}
+      {/* Chart of Accounts (Balances + Trial Balance) */}
       <Card className="backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -1920,9 +1908,7 @@ export default function FinancialTab() {
         </CardContent>
       </Card>
 
-      {/* ================================================================== */}
-      {/* Drill-down Dialogs                                                  */}
-      {/* ================================================================== */}
+      {/* Drill-down Dialogs */}
 
       {/* Revenue Drill-down Dialog */}
       <Dialog open={drilldownDialog === 'revenue'} onOpenChange={() => setDrilldownDialog(null)}>

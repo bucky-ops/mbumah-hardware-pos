@@ -94,21 +94,29 @@ export default function CatalogTab() {
 
   const { data: categories = [], isLoading: categoriesLoading } = useQuery<CategoryItem[]>({
     queryKey: ['categories', currentStoreId],
+    enabled: !!currentStoreId,
     queryFn: async () => {
-      if (!currentStoreId) return [];
-      const res = await categoriesApi.list(currentStoreId);
-      const data = res.data;
-      return Array.isArray(data) ? data : [];
+      try {
+        const res = await categoriesApi.list(currentStoreId);
+        const data = res?.data;
+        return Array.isArray(data) ? data : [];
+      } catch {
+        return [];
+      }
     },
   });
 
   const { data: products = [], isLoading: productsLoading } = useQuery<ProductListItem[]>({
     queryKey: ['catalog-products', currentStoreId],
+    enabled: !!currentStoreId,
     queryFn: async () => {
-      if (!currentStoreId) return [];
-      const res = await productsApi.list({ storeId: currentStoreId, limit: 500 });
-      const data = res.data;
-      return Array.isArray(data) ? data : [];
+      try {
+        const res = await productsApi.list({ storeId: currentStoreId!, limit: 500 });
+        const data = res?.data;
+        return Array.isArray(data) ? data : [];
+      } catch {
+        return [];
+      }
     },
   });
 
@@ -412,7 +420,7 @@ export default function CatalogTab() {
 
   return (
     <div className="flex flex-col h-full gap-4">
-      {/* ---- Header bar ---- */}
+      {/* Header bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -471,7 +479,7 @@ export default function CatalogTab() {
         </div>
       </div>
 
-      {/* ---- Filters panel ---- */}
+      {/* Filters panel */}
       {showFilters && (
         <Card className="p-4">
           <div className="flex flex-wrap items-end gap-4">
@@ -560,7 +568,7 @@ export default function CatalogTab() {
         </Card>
       )}
 
-      {/* ---- Category quick filters (horizontal scroll) ---- */}
+      {/* Category quick filters (horizontal scroll) */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
         <Button
           variant={selectedCategory === 'all' ? 'default' : 'outline'}
@@ -588,7 +596,7 @@ export default function CatalogTab() {
         ))}
       </div>
 
-      {/* ---- Results count ---- */}
+      {/* Results count */}
       <div className="flex items-center justify-between text-sm text-muted-foreground">
         <span>
           {filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''} found
@@ -604,7 +612,7 @@ export default function CatalogTab() {
 
       <Separator />
 
-      {/* ---- Product grid / list ---- */}
+      {/* Product grid / list */}
       <div className="flex-1 overflow-y-auto">
         {productsLoading ? (
           <div
