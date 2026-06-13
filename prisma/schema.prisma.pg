@@ -1,23 +1,20 @@
-// MBUMAH HARDWARE POS & ERP - Prisma Schema
-// Multi-tenant via storeId discriminator. PostgreSQL for production (Vercel + Neon).
+// MBUMAH HARDWARE POS & ERP - Prisma Schema (PostgreSQL / Neon)
+// ──────────────────────────────────────────────────────────────
+// This is the PRODUCTION schema for PostgreSQL (Neon).
+// To use: copy this file over prisma/schema.prisma
+//   cp prisma/schema.prisma.pg prisma/schema.prisma
 //
-// For local development with SQLite:
-//   1. Change provider to "sqlite"
-//   2. Set DATABASE_URL="file:./db/custom.db" in .env
-//   3. Run: npx prisma db push && npx prisma db seed
-//
-// Notes:
-//   - IDs use cuid() for cross-DB compat
-//   - Monetary fields are Float; migrate to Decimal for production
-//   - JSON metadata stored as String; switch to Json type on PostgreSQL
+// Or run: ./scripts/setup-neon-db.sh (automated setup)
+// ──────────────────────────────────────────────────────────────
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider  = "sqlite"
+  provider  = "postgresql"
   url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // TENANCY & ORGANIZATION
