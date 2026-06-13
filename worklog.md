@@ -311,3 +311,66 @@ Stage Summary:
 - Debt reminder and balance update batch sending with customer selection dialogs
 - Responsive design with mobile-first approach
 - All 4 message templates with placeholder substitution
+
+---
+Task ID: 15
+Agent: Main Agent
+Task: Implement RBAC, shift management, messaging, branch management, cashier→sales rename
+
+Work Log:
+- Explored full codebase: types.ts, stores.ts, api.ts, page.tsx, admin-tab.tsx, all API routes
+- Identified React error #31 as likely caused by object-as-child rendering
+- Renamed CASHIER → SALES_PERSON throughout:
+  - types.ts: UserRole constant, PERMISSION_MATRIX, ROLE_STYLES, ROLE_LABELS
+  - prisma/schema.prisma: User model default role, RolePermission comment
+  - prisma/seed.ts: User role and permissions
+  - api/users/route.ts: ROLE_CREATION_PERMISSIONS
+  - api/transactions/route.ts: Accept salesPersonId, map cashier→salesPerson
+  - page.tsx: DEMO_ACCOUNTS, login redirect, sidebar role display, checkout payloads
+  - admin-tab.tsx: ROLE_STYLES, ROLE_LABELS, default new user role, select items
+  - transactions-tab.tsx: cashier→salesPerson references
+  - Database: Updated all CASHIER roles to SALES_PERSON via SQL
+- Implemented logo click → dashboard navigation:
+  - Wrapped logo and title in clickable buttons with handleNav('dashboard')
+  - Added title tooltip and hover opacity transition
+- Implemented role-based navigation filtering:
+  - Added ROLE_TABS to types.ts (defines accessible tabs per role)
+  - Added ROLE_DEFAULT_TAB (landing tab per role)
+  - Added ROLE_LABELS (display names per role)
+  - Updated AppSidebar to filter TAB_CONFIG by allowedTabs
+  - Sales persons see: POS, Catalog, Customers, Transactions, Invoices, Delivery, Vouchers, Credits, Loyalty, Messaging
+  - Accountants see: Dashboard, Financial, Banking, Tax, Reports, Transactions, Credits, Invoices, Suppliers, Messaging
+- Implemented shift start/end UI for sales persons:
+  - Created POSShiftIndicator component with green/amber status bar
+  - Start Shift dialog with starting cash input
+  - End Shift dialog with counted cash, ending cash, notes
+  - Duration display, starting cash display
+  - Only visible for SALES_PERSON role in POS view
+- Added Branch Management in Admin tab:
+  - Created /api/branches/route.ts (GET + POST with RBAC)
+  - Added BranchManagement component in admin-tab.tsx
+  - Branch list with status indicators
+  - Create branch dialog with name, location, address, phone, email
+  - Only admin/manager can add branches
+- Added Messaging module:
+  - Created /api/messages/route.ts (GET + POST with WhatsApp link generation)
+  - Created messaging-tab.tsx (1598 lines)
+  - Dashboard, Quick Send, History, Templates sub-tabs
+  - Debt reminders and balance updates via WhatsApp
+  - Customer selection for batch messaging
+  - Message history with search, filter, pagination
+- Updated Prisma schema with Message model
+- Pushed schema to Neon PostgreSQL
+- Added messaging tab to AppTab type, TAB_CONFIG, lazy imports
+- All lint checks pass
+- Pushed to GitHub: branch feature/rbac-shifts-messaging, merged to main
+
+Stage Summary:
+- CASHIER fully renamed to SALES_PERSON across entire codebase
+- Logo click navigates to dashboard
+- RBAC navigation filtering working (roles see only permitted tabs)
+- Shift start/end UI implemented for sales persons
+- Branch management module added (admin create/manage)
+- Messaging module added (WhatsApp/SMS for debt reminders)
+- All changes pushed to GitHub on main branch
+- Dev server occasionally OOM-killed in sandbox (not a code issue)
