@@ -58,6 +58,22 @@ export function calculateLateFee(
   return diffDays * ratePerDay;
 }
 
+// Format: GC-XXXX-XXXX-XXXX
+export function generateGiftCardCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude ambiguous chars: I, O, 0, 1
+  const segments = 3;
+  const segmentLength = 4;
+  const parts: string[] = [];
+  for (let s = 0; s < segments; s++) {
+    let seg = '';
+    for (let i = 0; i < segmentLength; i++) {
+      seg += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    parts.push(seg);
+  }
+  return `GC-${parts.join('-')}`;
+}
+
 export function calculateLineTotal(
   pricePerUnit: number,
   quantity: number,

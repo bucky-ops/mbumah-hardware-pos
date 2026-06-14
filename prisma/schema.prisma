@@ -71,6 +71,7 @@ model Store {
   purchaseOrders  PurchaseOrder[]
   expenses        Expense[]
   shifts          Shift[]
+  giftCards       GiftCard[]
 
   @@index([organizationId])
   @@map("stores")
@@ -95,11 +96,12 @@ model User {
 
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   store           Store?       @relation(fields: [storeId], references: [id])
-  sessions        Session[]
-  systemLogs      SystemLog[]
-  transactions    SalesTransaction[]
-  cashDrawerLogs  CashDrawerLog[]
-  shifts          Shift[]
+  sessions           Session[]
+  systemLogs         SystemLog[]
+  transactions       SalesTransaction[]
+  cashDrawerLogs     CashDrawerLog[]
+  shifts             Shift[]
+  issuedGiftCards    GiftCard[]         @relation("IssuedByUser")
 
   @@index([organizationId])
   @@index([storeId])
@@ -267,6 +269,7 @@ model Customer {
   debtLedgers         DebtLedger[]
   transactions        SalesTransaction[]
   rentals             EquipmentRental[]
+  giftCards           GiftCard[]         @relation("IssuedToCustomer")
 
   @@index([storeId])
   @@index([phone])
@@ -299,9 +302,10 @@ model SalesTransaction {
   customer        Customer?   @relation(fields: [customerId], references: [id])
   cashier         User        @relation(fields: [cashierId], references: [id])
   items           SaleItem[]
-  payments        Payment[]
-  debtLedgers     DebtLedger[]
-  receipt         Receipt?
+  payments             Payment[]
+  debtLedgers          DebtLedger[]
+  receipt              Receipt?
+  giftCardRedemptions  GiftCardRedemption[]
 
   @@index([storeId])
   @@index([cashierId])
@@ -710,6 +714,59 @@ model InitializationLog {
   executedAt      DateTime @default(now())
 
   @@map("initialization_logs")
+}
+
+// GIFT CARDS & VOUCHERS
+
+model GiftCard {
+  id              String   @id @default(cuid())
+  storeId         String
+  code            String   @unique
+  reason          String   // CUSTOMER_LOYALTY, PROMOTION, REFUND_CREDIT, STORE_CREDIT, GIFT, EMPLOYEE_AWARD, COMPLAINT_RESOLUTION, OTHER
+  initialBalance  Float
+  currentBalance  Float
+  currency        String   @default("KES")
+  status          String   @default("ACTIVE") // ACTIVE, REDEEMED, EXPIRED, CANCELLED, PARTIALLY_REDEEMED
+  recipientName   String?
+  recipientPhone  String?
+  recipientEmail  String?
+  notes           String?
+  issuedBy        String?  // User ID who issued the card
+  issuedTo        String?  // Customer ID if linked
+  expiresAt       DateTime?
+  lastRedeemedAt  DateTime?
+  autoAdjustItems Boolean  @default(false) // When true, items visibility auto-adjusts based on balance
+  isVisible       Boolean  @default(true) // Visibility toggle - auto-adjusts when balance reaches 0
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  issuedByUser    User?     @relation("IssuedByUser", fields: [issuedBy], references: [id])
+  issuedToCustomer Customer? @relation("IssuedToCustomer", fields: [issuedTo], references: [id])
+  redemptions     GiftCardRedemption[]
+
+  @@index([storeId])
+  @@index([code])
+  @@index([status])
+  @@index([reason])
+  @@map("gift_cards")
+}
+
+model GiftCardRedemption {
+  id              String   @id @default(cuid())
+  giftCardId      String
+  transactionId   String?  // Link to sales transaction if redeemed against a sale
+  amount          Float
+  redeemedBy      String?  // User ID who processed the redemption
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  giftCard        GiftCard          @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
+  transaction     SalesTransaction? @relation(fields: [transactionId], references: [id])
+
+  @@index([giftCardId])
+  @@index([transactionId])
+  @@map("gift_card_redemptions")
 }
 
 // SHIFT MANAGEMENT

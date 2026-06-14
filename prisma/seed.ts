@@ -12,6 +12,14 @@ function daysAgo(n: number): Date {
   return d;
 }
 
+// Generate date N days from now
+function daysFromNow(n: number): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
 // Generate date N days ago at hour
 function daysAgoAtHour(n: number, hour: number): Date {
   const d = new Date();
@@ -215,6 +223,78 @@ async function main() {
     },
   });
 
+  // 4c. Seed Branch Cashiers
+  const thikaCashier = await prisma.user.create({
+    data: {
+      id: 'user_thika_cashier',
+      organizationId: org.id,
+      storeId: storeThika.id,
+      email: 'thika.cashier@mbumahhardware.co.ke',
+      name: 'Lucy Wambui',
+      passwordHash: 'hashed_password123_2024',
+      role: 'CASHIER',
+      phone: '0719111222',
+      isActive: true,
+    },
+  });
+
+  const ruiruCashier = await prisma.user.create({
+    data: {
+      id: 'user_ruiru_cashier',
+      organizationId: org.id,
+      storeId: storeRuiru.id,
+      email: 'ruiru.cashier@mbumahhardware.co.ke',
+      name: 'Diana Muthoni',
+      passwordHash: 'hashed_password123_2024',
+      role: 'CASHIER',
+      phone: '0728222333',
+      isActive: true,
+    },
+  });
+
+  const nairobiCashier = await prisma.user.create({
+    data: {
+      id: 'user_nairobi_cashier',
+      organizationId: org.id,
+      storeId: storeNairobiCbd.id,
+      email: 'nairobi.cashier@mbumahhardware.co.ke',
+      name: 'Vincent Ochieng',
+      passwordHash: 'hashed_password123_2024',
+      role: 'CASHIER',
+      phone: '0739333444',
+      isActive: true,
+    },
+  });
+
+  const nakuruCashier = await prisma.user.create({
+    data: {
+      id: 'user_nakuru_cashier',
+      organizationId: org.id,
+      storeId: storeNakuru.id,
+      email: 'nakuru.cashier@mbumahhardware.co.ke',
+      name: 'Eunice Jeptoo',
+      passwordHash: 'hashed_password123_2024',
+      role: 'CASHIER',
+      phone: '0740444555',
+      isActive: true,
+    },
+  });
+
+  // 4d. Seed Store Owner
+  const storeOwner = await prisma.user.create({
+    data: {
+      id: 'user_store_owner',
+      organizationId: org.id,
+      storeId: store.id,
+      email: 'owner@mbumahhardware.co.ke',
+      name: 'Mbumah Hardware Owner',
+      passwordHash: 'hashed_password123_2024',
+      role: 'STORE_OWNER',
+      phone: '0795191910',
+      isActive: true,
+    },
+  });
+
   // 5. Seed RBAC Permissions
   const permissions = [
     // SUPER_ADMIN has all
@@ -250,6 +330,14 @@ async function main() {
     { role: 'BRANCH_MANAGER', resource: 'reports', action: 'export' },
     { role: 'BRANCH_MANAGER', resource: 'debt', action: 'read' },
     { role: 'BRANCH_MANAGER', resource: 'debt', action: 'remind' },
+    // STORE_OWNER permissions (full access like SUPER_ADMIN but scoped to store)
+    ...['products', 'transactions', 'customers', 'financials', 'rentals', 'admin', 'reports', 'debt'].flatMap(resource =>
+      ['create', 'read', 'update', 'delete', 'approve', 'refund', 'export', 'void', 'manage_users', 'write_off', 'remind', 'adjust'].map(action => ({
+        role: 'STORE_OWNER' as string,
+        resource,
+        action,
+      }))
+    ),
     // ACCOUNTANT permissions
     { role: 'ACCOUNTANT', resource: 'financials', action: 'read' },
     { role: 'ACCOUNTANT', resource: 'financials', action: 'export' },
@@ -1130,7 +1218,341 @@ async function main() {
   }
 
   // ==========================================================================
-  // 18. Log the initialization event
+  // 18. SEED SUPPLIERS FOR EACH BRANCH
+  // ==========================================================================
+  console.log('Seeding suppliers...');
+
+  const suppliers = [
+    // Juja Main suppliers
+    { id: 'sup_juja_bamburi', storeId: store.id, name: 'Bamburi Cement Ltd', email: 'orders@bamburi.co.ke', phone: '0207654321', address: 'Mombasa Road, Nairobi', city: 'Nairobi', contactPerson: 'James Mwangi', taxPin: 'P058765432B', paymentTerms: 'NET_30', rating: 5, notes: 'Primary cement supplier' },
+    { id: 'sup_juja_mabati', storeId: store.id, name: 'Mabati Rolling Mills', email: 'sales@mabati.co.ke', phone: '0207654322', address: 'Industrial Area, Nairobi', city: 'Nairobi', contactPerson: 'Ahmed Yusuf', taxPin: 'P058765433C', paymentTerms: 'NET_30', rating: 4, notes: 'Iron sheets and roofing supplier' },
+    { id: 'sup_juja_dulux', storeId: store.id, name: 'AkzoNobel Kenya (Dulux)', email: 'orders@akzonobel.co.ke', phone: '0207654323', address: 'Likoni Road, Nairobi', city: 'Nairobi', contactPerson: 'Priti Sharma', taxPin: 'P058765434D', paymentTerms: 'NET_15', rating: 4 },
+    // Thika suppliers
+    { id: 'sup_thk_cement', storeId: storeThika.id, name: 'Simba Cement (National)', email: 'supply@simbacement.co.ke', phone: '0207654324', address: 'Thika Road, Nairobi', city: 'Nairobi', contactPerson: 'Francis Karanja', taxPin: 'P058765435E', paymentTerms: 'NET_30', rating: 4 },
+    { id: 'sup_thk_timber', storeId: storeThika.id, name: 'Mount Kenya Timber', email: 'sales@mtkenyatimber.co.ke', phone: '0207654325', address: 'Thika Town', city: 'Thika', contactPerson: 'Ndirangu Gicheha', taxPin: 'P058765436F', paymentTerms: 'IMMEDIATE', rating: 3, notes: 'Local timber supplier' },
+    // Ruiru suppliers
+    { id: 'sup_ruiru_hardware', storeId: storeRuiru.id, name: 'Ruiru Hardware Wholesalers', email: 'wholesale@ruiruhw.co.ke', phone: '0207654326', address: 'Ruiru Town', city: 'Ruiru', contactPerson: 'Muthoni Kamau', taxPin: 'P058765437G', paymentTerms: 'NET_15', rating: 3 },
+    { id: 'sup_ruiru_rebar', storeId: storeRuiru.id, name: 'Devki Steel Mills', email: 'orders@devki.co.ke', phone: '0207654327', address: 'Ruiru Industrial Area', city: 'Ruiru', contactPerson: 'Narendra Raval', taxPin: 'P058765438H', paymentTerms: 'NET_30', rating: 5, notes: 'Steel and rebar supplier' },
+    // Nairobi CBD suppliers
+    { id: 'sup_nbi_crown', storeId: storeNairobiCbd.id, name: 'Crown Paints Kenya', email: 'orders@crownpaints.co.ke', phone: '0207654328', address: 'Industrial Area, Nairobi', city: 'Nairobi', contactPerson: 'Wangari Ndirangu', taxPin: 'P058765439I', paymentTerms: 'NET_30', rating: 4 },
+    { id: 'sup_nbi_safety', storeId: storeNairobiCbd.id, name: 'Safety Kenya Ltd', email: 'supply@safetykenya.co.ke', phone: '0207654329', address: 'Enterprise Road, Nairobi', city: 'Nairobi', contactPerson: 'Thomas Ochieng', taxPin: 'P058765430J', paymentTerms: 'NET_15', rating: 4, notes: 'PPE and safety equipment' },
+    // Nakuru suppliers
+    { id: 'sup_nkr_cement', storeId: storeNakuru.id, name: 'Bamburi Cement (Nakuru Depot)', email: 'nakuru@bamburi.co.ke', phone: '0207654330', address: 'Nakuru Industrial Area', city: 'Nakuru', contactPerson: 'Kiprono Bett', taxPin: 'P058765431K', paymentTerms: 'NET_30', rating: 5 },
+    { id: 'sup_nkr_tanks', storeId: storeNakuru.id, name: 'Kentank Nakuru', email: 'sales@kentank.co.ke', phone: '0207654331', address: 'Nakuru Town', city: 'Nakuru', contactPerson: 'Rachel Tanui', taxPin: 'P058765432L', paymentTerms: 'NET_30', rating: 4, notes: 'Water tanks supplier' },
+  ];
+
+  for (const supplier of suppliers) {
+    await prisma.supplier.create({ data: supplier });
+  }
+
+  // ==========================================================================
+  // 19. SEED SUPPLIER ACCOUNTS (Accounts Payable per branch)
+  // ==========================================================================
+  console.log('Seeding supplier accounts...');
+
+  const supplierAccounts = [
+    { organizationId: org.id, code: '2300', name: 'Bamburi Cement - Payable', type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
+    { organizationId: org.id, code: '2310', name: 'Mabati Rolling Mills - Payable', type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
+    { organizationId: org.id, code: '2320', name: 'AkzoNobel (Dulux) - Payable', type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
+    { organizationId: org.id, code: '2330', name: 'Simba Cement - Payable', type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
+    { organizationId: org.id, code: '2340', name: 'Devki Steel Mills - Payable', type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
+    { organizationId: org.id, code: '2350', name: 'Crown Paints - Payable', type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
+    { organizationId: org.id, code: '2360', name: 'General Supplier Payable', type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
+    { organizationId: org.id, code: '2400', name: 'Gift Cards Outstanding', type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
+  ];
+
+  for (const acct of supplierAccounts) {
+    await prisma.account.create({ data: acct });
+  }
+
+  // ==========================================================================
+  // 20. SEED GIFT CARDS
+  // ==========================================================================
+  console.log('Seeding gift cards...');
+
+  // -- Juja Main --
+  const gc1 = await prisma.giftCard.create({
+    data: {
+      id: 'gc_active_0001',
+      storeId: store.id,
+      code: 'GC-ACTIVE-0001',
+      reason: 'CUSTOMER_LOYALTY',
+      initialBalance: 5000,
+      currentBalance: 3500,
+      status: 'PARTIALLY_REDEEMED',
+      recipientName: 'John Kamau',
+      recipientPhone: '0722123456',
+      issuedTo: 'cust_1',
+      issuedBy: 'user_super_admin',
+      autoAdjustItems: true,
+      createdAt: daysAgo(30),
+    },
+  });
+
+  const gc2 = await prisma.giftCard.create({
+    data: {
+      id: 'gc_active_0002',
+      storeId: store.id,
+      code: 'GC-ACTIVE-0002',
+      reason: 'PROMOTION',
+      initialBalance: 2000,
+      currentBalance: 2000,
+      status: 'ACTIVE',
+      recipientName: 'Walk-in Customer',
+      issuedBy: 'user_cashier_1',
+      autoAdjustItems: true,
+      createdAt: daysAgo(14),
+    },
+  });
+
+  const gc3 = await prisma.giftCard.create({
+    data: {
+      id: 'gc_redeemed_0001',
+      storeId: store.id,
+      code: 'GC-REDEEMED-0001',
+      reason: 'REFUND_CREDIT',
+      initialBalance: 10000,
+      currentBalance: 0,
+      status: 'REDEEMED',
+      recipientName: 'Mary Njeri',
+      recipientPhone: '0733234567',
+      issuedTo: 'cust_2',
+      issuedBy: 'user_super_admin',
+      lastRedeemedAt: daysAgo(1),
+      autoAdjustItems: false,
+      isVisible: false,
+      createdAt: daysAgo(60),
+    },
+  });
+
+  const gc4 = await prisma.giftCard.create({
+    data: {
+      id: 'gc_gift_0001',
+      storeId: store.id,
+      code: 'GC-GIFT-0001',
+      reason: 'GIFT',
+      initialBalance: 15000,
+      currentBalance: 15000,
+      status: 'ACTIVE',
+      recipientName: 'Peter Odhiambo',
+      recipientPhone: '0745345678',
+      issuedTo: 'cust_3',
+      issuedBy: 'user_super_admin',
+      expiresAt: daysFromNow(90),
+      autoAdjustItems: true,
+      createdAt: daysAgo(7),
+    },
+  });
+
+  // -- Thika --
+  const gc5 = await prisma.giftCard.create({
+    data: {
+      id: 'gc_thk_0001',
+      storeId: storeThika.id,
+      code: 'GC-THK-0001',
+      reason: 'STORE_CREDIT',
+      initialBalance: 8000,
+      currentBalance: 4500,
+      status: 'PARTIALLY_REDEEMED',
+      recipientName: 'Francis Maina',
+      recipientPhone: '0715123456',
+      issuedTo: 'cust_thk_1',
+      issuedBy: 'user_thika_manager',
+      autoAdjustItems: true,
+      createdAt: daysAgo(20),
+    },
+  });
+
+  const gc6 = await prisma.giftCard.create({
+    data: {
+      id: 'gc_thk_0002',
+      storeId: storeThika.id,
+      code: 'GC-THK-0002',
+      reason: 'EMPLOYEE_AWARD',
+      initialBalance: 3000,
+      currentBalance: 3000,
+      status: 'ACTIVE',
+      recipientName: 'Staff Reward',
+      issuedBy: 'user_thika_manager',
+      autoAdjustItems: false,
+      createdAt: daysAgo(5),
+    },
+  });
+
+  // -- Ruiru --
+  const gc7 = await prisma.giftCard.create({
+    data: {
+      id: 'gc_rur_0001',
+      storeId: storeRuiru.id,
+      code: 'GC-RUR-0001',
+      reason: 'CUSTOMER_LOYALTY',
+      initialBalance: 7500,
+      currentBalance: 7500,
+      status: 'ACTIVE',
+      recipientName: 'Esther Nyambura',
+      recipientPhone: '0724123456',
+      issuedTo: 'cust_ruiru_1',
+      issuedBy: 'user_ruiru_manager',
+      autoAdjustItems: true,
+      createdAt: daysAgo(10),
+    },
+  });
+
+  const gc8 = await prisma.giftCard.create({
+    data: {
+      id: 'gc_rur_0002',
+      storeId: storeRuiru.id,
+      code: 'GC-RUR-0002',
+      reason: 'COMPLAINT_RESOLUTION',
+      initialBalance: 5000,
+      currentBalance: 0,
+      status: 'CANCELLED',
+      recipientName: 'Joseph Gathua',
+      issuedBy: 'user_ruiru_manager',
+      autoAdjustItems: true,
+      isVisible: false,
+      createdAt: daysAgo(45),
+    },
+  });
+
+  // -- Nairobi CBD --
+  const gc9 = await prisma.giftCard.create({
+    data: {
+      id: 'gc_nbi_0001',
+      storeId: storeNairobiCbd.id,
+      code: 'GC-NBI-0001',
+      reason: 'PROMOTION',
+      initialBalance: 20000,
+      currentBalance: 12500,
+      status: 'PARTIALLY_REDEEMED',
+      recipientName: 'Westlands Contractors Ltd',
+      issuedTo: 'cust_nbi_1',
+      issuedBy: 'user_nairobi_manager',
+      autoAdjustItems: true,
+      createdAt: daysAgo(25),
+    },
+  });
+
+  const gc10 = await prisma.giftCard.create({
+    data: {
+      id: 'gc_nbi_0002',
+      storeId: storeNairobiCbd.id,
+      code: 'GC-NBI-0002',
+      reason: 'GIFT',
+      initialBalance: 5000,
+      currentBalance: 5000,
+      status: 'ACTIVE',
+      recipientName: 'Agnes Wanjiru',
+      issuedTo: 'cust_nbi_2',
+      issuedBy: 'user_nairobi_manager',
+      expiresAt: daysFromNow(60),
+      autoAdjustItems: false,
+      createdAt: daysAgo(3),
+    },
+  });
+
+  const gc11 = await prisma.giftCard.create({
+    data: {
+      id: 'gc_nbi_0003',
+      storeId: storeNairobiCbd.id,
+      code: 'GC-NBI-0003',
+      reason: 'REFUND_CREDIT',
+      initialBalance: 3500,
+      currentBalance: 0,
+      status: 'REDEEMED',
+      recipientName: 'Hassan Ali Mohamed',
+      issuedTo: 'cust_nbi_4',
+      issuedBy: 'user_nairobi_manager',
+      lastRedeemedAt: daysAgo(2),
+      autoAdjustItems: false,
+      isVisible: false,
+      createdAt: daysAgo(15),
+    },
+  });
+
+  // -- Nakuru --
+  const gc12 = await prisma.giftCard.create({
+    data: {
+      id: 'gc_nkr_0001',
+      storeId: storeNakuru.id,
+      code: 'GC-NKR-0001',
+      reason: 'CUSTOMER_LOYALTY',
+      initialBalance: 10000,
+      currentBalance: 6700,
+      status: 'PARTIALLY_REDEEMED',
+      recipientName: 'Naivasha Road Contractors',
+      issuedTo: 'cust_nkr_1',
+      issuedBy: 'user_nakuru_manager',
+      autoAdjustItems: true,
+      createdAt: daysAgo(35),
+    },
+  });
+
+  const gc13 = await prisma.giftCard.create({
+    data: {
+      id: 'gc_nkr_0002',
+      storeId: storeNakuru.id,
+      code: 'GC-NKR-0002',
+      reason: 'STORE_CREDIT',
+      initialBalance: 2500,
+      currentBalance: 2500,
+      status: 'ACTIVE',
+      recipientName: 'Rebecca Chebet',
+      issuedTo: 'cust_nkr_2',
+      issuedBy: 'user_nakuru_manager',
+      autoAdjustItems: false,
+      createdAt: daysAgo(8),
+    },
+  });
+
+  const gc14 = await prisma.giftCard.create({
+    data: {
+      id: 'gc_nkr_0003',
+      storeId: storeNakuru.id,
+      code: 'GC-NKR-0003',
+      reason: 'OTHER',
+      initialBalance: 4000,
+      currentBalance: 4000,
+      status: 'ACTIVE',
+      recipientName: 'General Customer',
+      issuedBy: 'user_nakuru_manager',
+      expiresAt: daysFromNow(120),
+      autoAdjustItems: false,
+      createdAt: daysAgo(2),
+    },
+  });
+
+  // ==========================================================================
+  // 21. SEED GIFT CARD REDEMPTIONS (for PARTIALLY_REDEEMED cards)
+  // ==========================================================================
+  console.log('Seeding gift card redemptions...');
+
+  const giftCardRedemptions = [
+    // GC-ACTIVE-0001: 5000 - 3500 = 1500 redeemed
+    { giftCardId: gc1.id, amount: 1000, redeemedBy: 'user_cashier_1', notes: 'Partial redemption - cement purchase', createdAt: daysAgoAtHour(15, 11) },
+    { giftCardId: gc1.id, amount: 500, redeemedBy: 'user_cashier_1', notes: 'Partial redemption - nails purchase', createdAt: daysAgoAtHour(10, 14) },
+    // GC-THK-0001: 8000 - 4500 = 3500 redeemed
+    { giftCardId: gc5.id, amount: 2000, redeemedBy: 'user_thika_cashier', notes: 'Redemption - cement purchase', createdAt: daysAgoAtHour(12, 10) },
+    { giftCardId: gc5.id, amount: 1500, redeemedBy: 'user_thika_cashier', notes: 'Redemption - iron sheets purchase', createdAt: daysAgoAtHour(8, 15) },
+    // GC-NBI-0001: 20000 - 12500 = 7500 redeemed
+    { giftCardId: gc9.id, amount: 5000, redeemedBy: 'user_nairobi_cashier', notes: 'Redemption - bulk cement order', createdAt: daysAgoAtHour(20, 9) },
+    { giftCardId: gc9.id, amount: 2500, redeemedBy: 'user_nairobi_cashier', notes: 'Redemption - paint supplies', createdAt: daysAgoAtHour(10, 13) },
+    // GC-NKR-0001: 10000 - 6700 = 3300 redeemed
+    { giftCardId: gc12.id, amount: 2000, redeemedBy: 'user_nakuru_cashier', notes: 'Redemption - plumbing supplies', createdAt: daysAgoAtHour(25, 10) },
+    { giftCardId: gc12.id, amount: 1300, redeemedBy: 'user_nakuru_cashier', notes: 'Redemption - nails and screws', createdAt: daysAgoAtHour(15, 16) },
+    // GC-REDEEMED-0001: fully redeemed
+    { giftCardId: gc3.id, amount: 5000, redeemedBy: 'user_cashier_1', notes: 'Redemption - building materials', createdAt: daysAgoAtHour(5, 9) },
+    { giftCardId: gc3.id, amount: 5000, redeemedBy: 'user_cashier_1', notes: 'Final redemption - remaining balance', createdAt: daysAgo(1) },
+    // GC-NBI-0003: fully redeemed
+    { giftCardId: gc11.id, amount: 3500, redeemedBy: 'user_nairobi_cashier', notes: 'Full redemption - refund credit', createdAt: daysAgo(2) },
+  ];
+
+  for (const redemption of giftCardRedemptions) {
+    await prisma.giftCardRedemption.create({ data: redemption });
+  }
+
+  // ==========================================================================
+  // 22. Log the initialization event
   // ==========================================================================
   await prisma.initializationLog.create({
     data: {
@@ -1153,16 +1575,21 @@ async function main() {
 
   console.log('MBUMAH HARDWARE POS - System initialized successfully!');
   console.log('   📧 Super Admin: admin@mbumahhardware.co.ke');
+  console.log('   👑 Store Owner: owner@mbumahhardware.co.ke');
   console.log('   🏪 Stores: 5 branches (Juja Main, Thika, Ruiru, Nairobi CBD, Nakuru)');
   console.log('   👤 Branch Managers: 4 (Thika, Ruiru, Nairobi CBD, Nakuru)');
+  console.log('   💰 Branch Cashiers: 5 (Juja Main, Thika, Ruiru, Nairobi CBD, Nakuru)');
   console.log('   Products seeded: ' + (products.length + 1) + ' (Juja Main) + ' + (thkProducts.length + ruiruProducts.length + nbiProducts.length + nkrProducts.length) + ' (branches)');
   console.log('   👥 Customers seeded: ' + customers.length + ' (Juja Main) + ' + (thkCustomers.length + ruiruCustomers.length + nbiCustomers.length + nkrCustomers.length) + ' (branches)');
-  console.log('   Accounts seeded: ' + accounts.length);
+  console.log('   Accounts seeded: ' + (accounts.length + supplierAccounts.length));
   console.log('   Sales transactions seeded: ' + salesData.length + ' (Juja Main) + ' + (thikaSales.length + ruiruSales.length + nairobiSales.length + nakuruSales.length) + ' (branches)');
   console.log('   Stock movements seeded: ' + stockMovements.length);
   console.log('   🏗️ Equipment rentals seeded: 3');
   console.log('   🗄️ Cash drawer logs seeded: ' + cashDrawerLogs.length);
   console.log('   📝 Expenses seeded: ' + (expenses.length + branchExpenses.length));
+  console.log('   🏭 Suppliers seeded: ' + suppliers.length);
+  console.log('   🎁 Gift cards seeded: 14');
+  console.log('   🎁 Gift card redemptions seeded: ' + giftCardRedemptions.length);
 }
 
 main()

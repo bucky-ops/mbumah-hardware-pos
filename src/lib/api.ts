@@ -14,6 +14,12 @@ import type {
   ShiftData,
   CreateShiftPayload,
   EndShiftPayload,
+  GiftCardItem,
+  GiftCardRedemptionItem,
+  CreateGiftCardPayload,
+  UpdateGiftCardPayload,
+  RedeemGiftCardPayload,
+  AdjustGiftCardBalancePayload,
 } from './types';
 
 
@@ -911,6 +917,68 @@ export const shiftsApi = {
     });
   },
 };
+
+export const giftCardsApi = {
+  list: async (params?: { storeId?: string; status?: string; reason?: string; search?: string; page?: number; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.storeId) query.set('storeId', params.storeId);
+    if (params?.status) query.set('status', params.status);
+    if (params?.reason) query.set('reason', params.reason);
+    if (params?.search) query.set('search', params.search);
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    return request<GiftCardItem[]>(`/gift-cards${qs ? `?${qs}` : ''}`);
+  },
+
+  get: async (id: string) => {
+    return request<GiftCardItem>(`/gift-cards/${id}`);
+  },
+
+  create: async (data: CreateGiftCardPayload) => {
+    return request<GiftCardItem>('/gift-cards', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: async (id: string, data: UpdateGiftCardPayload) => {
+    return request<GiftCardItem>(`/gift-cards/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: string) => {
+    return request<GiftCardItem>(`/gift-cards/${id}`, { method: 'DELETE' });
+  },
+
+  redeem: async (id: string, data: RedeemGiftCardPayload) => {
+    return request<{ giftCard: GiftCardItem; redemption: GiftCardRedemptionItem }>(`/gift-cards/${id}/redeem`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  adjust: async (id: string, data: AdjustGiftCardBalancePayload) => {
+    return request<GiftCardItem>(`/gift-cards/${id}/adjust`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  cancel: async (id: string) => {
+    return request<GiftCardItem>(`/gift-cards/${id}`, { method: 'DELETE' });
+  },
+
+  toggleVisibility: async (id: string) => {
+    return request<GiftCardItem>(`/gift-cards/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ toggleVisibility: true }),
+    });
+  },
+};
+
 
 export function formatKES(amount: number): string {
   return new Intl.NumberFormat('en-KE', {

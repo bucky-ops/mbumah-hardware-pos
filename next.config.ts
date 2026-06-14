@@ -11,6 +11,9 @@ const nextConfig: NextConfig = {
   // Ensure Prisma Client is bundled correctly for serverless (Vercel)
   serverExternalPackages: ["@prisma/client"],
 
+  // Allow dev requests from gateway proxy
+  allowedDevOrigins: ["http://0.0.0.0:81", "http://0.0.0.0:3000", "http://21.0.8.40:81", "http://21.0.8.40:3000"],
+
   // Image optimization config — works with Vercel's Image Optimization API
   images: {
     remotePatterns: [

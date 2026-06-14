@@ -344,6 +344,104 @@ export function hasPermission(role: UserRole, resource: string, action: string):
   return resourcePermissions.includes(action);
 }
 
+// GIFT CARD TYPES
+
+export const GiftCardReason = {
+  CUSTOMER_LOYALTY: 'CUSTOMER_LOYALTY',
+  PROMOTION: 'PROMOTION',
+  REFUND_CREDIT: 'REFUND_CREDIT',
+  STORE_CREDIT: 'STORE_CREDIT',
+  GIFT: 'GIFT',
+  EMPLOYEE_AWARD: 'EMPLOYEE_AWARD',
+  COMPLAINT_RESOLUTION: 'COMPLAINT_RESOLUTION',
+  OTHER: 'OTHER',
+} as const;
+
+export type GiftCardReason = (typeof GiftCardReason)[keyof typeof GiftCardReason];
+
+export const GiftCardStatus = {
+  ACTIVE: 'ACTIVE',
+  REDEEMED: 'REDEEMED',
+  EXPIRED: 'EXPIRED',
+  CANCELLED: 'CANCELLED',
+  PARTIALLY_REDEEMED: 'PARTIALLY_REDEEMED',
+} as const;
+
+export type GiftCardStatus = (typeof GiftCardStatus)[keyof typeof GiftCardStatus];
+
+export interface GiftCardItem {
+  id: string;
+  storeId: string;
+  code: string;
+  reason: GiftCardReason;
+  status: GiftCardStatus;
+  initialBalance: number;
+  currentBalance: number;
+  recipientName: string | null;
+  recipientPhone: string | null;
+  recipientEmail: string | null;
+  customerId: string | null;
+  expiryDate: string | null;
+  autoAdjustItems: boolean;
+  isVisible: boolean;
+  notes: string | null;
+  createdById: string | null;
+  createdAt: string;
+  updatedAt: string;
+  customer?: { id: string; name: string; phone: string | null; email: string | null } | null;
+  createdBy?: { id: string; name: string } | null;
+  redemptions?: GiftCardRedemption[];
+}
+
+export interface GiftCardRedemption {
+  id: string;
+  giftCardId: string;
+  amount: number;
+  transactionId: string | null;
+  processedById: string | null;
+  notes: string | null;
+  createdAt: string;
+  processedBy?: { id: string; name: string } | null;
+  transaction?: { id: string; receiptNumber: string } | null;
+}
+
+export interface CreateGiftCardPayload {
+  storeId: string;
+  code?: string;
+  reason: GiftCardReason;
+  initialBalance: number;
+  recipientName?: string;
+  recipientPhone?: string;
+  recipientEmail?: string;
+  customerId?: string;
+  expiryDate?: string;
+  autoAdjustItems?: boolean;
+  notes?: string;
+}
+
+export interface UpdateGiftCardPayload {
+  reason?: GiftCardReason;
+  recipientName?: string;
+  recipientPhone?: string;
+  recipientEmail?: string;
+  expiryDate?: string;
+  autoAdjustItems?: boolean;
+  isVisible?: boolean;
+  notes?: string;
+}
+
+export interface RedeemGiftCardPayload {
+  amount: number;
+  transactionId?: string;
+  notes?: string;
+}
+
+export interface AdjustGiftCardBalancePayload {
+  amount: number;
+  reason: string;
+  notes?: string;
+}
+
 export const ShiftStatus = {
   ACTIVE: 'ACTIVE',
   ENDED: 'ENDED',

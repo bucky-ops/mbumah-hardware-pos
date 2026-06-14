@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 
 import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
+import { ErrorBoundary } from '@/components/error-boundary';
 import {
   productsApi, categoriesApi, customersApi, transactionsApi,
   paymentsApi, dashboardApi,
@@ -65,6 +66,7 @@ const LazyAdminTab = lazy(() => import('./tabs/admin-tab'));
 const LazyTransactionsTab = lazy(() => import('./tabs/transactions-tab'));
 const LazySuppliersTab = lazy(() => import('./tabs/suppliers-tab'));
 const LazyCatalogTab = lazy(() => import('./tabs/catalog-tab'));
+const LazyGiftCardsTab = lazy(() => import('./tabs/gift-cards-tab'));
 
 function TabLoadingFallback() {
   return (
@@ -90,6 +92,7 @@ const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
   { id: 'reports', label: 'Reports', icon: FileText },
   { id: 'transactions', label: 'Transactions', icon: ShoppingBag },
   { id: 'suppliers', label: 'Suppliers', icon: Truck },
+  { id: 'gift-cards', label: 'Gift Cards', icon: CreditCard },
   { id: 'admin', label: 'Admin', icon: Settings },
 ];
 
@@ -3276,7 +3279,8 @@ function POSTab() {
 
 
 function MainApp() {
-  const { activeTab, setActiveTab } = useAppStore();
+  const { activeTab, setActiveTab, currentStoreId } = useAppStore();
+  const user = useAuthStore((s) => s.user);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const searchBtnRef = useRef<HTMLButtonElement | null>(null);
 
@@ -3335,47 +3339,50 @@ function MainApp() {
       case 'transactions': return <Suspense fallback={<TabLoadingFallback />}><LazyTransactionsTab /></Suspense>;
       case 'admin': return <Suspense fallback={<TabLoadingFallback />}><LazyAdminTab /></Suspense>;
       case 'suppliers': return <Suspense fallback={<TabLoadingFallback />}><LazySuppliersTab /></Suspense>;
+      case 'gift-cards': return <Suspense fallback={<TabLoadingFallback />}><LazyGiftCardsTab storeId={currentStoreId} userRole={user?.role || 'CASHIER'} userId={user?.id || ''} /></Suspense>;
       default: return <POSTab />;
     }
   };
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <AppSidebar />
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
-        <TopBar searchBtnRef={searchBtnRef} />
-        <main className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-          <div className="animate-tab-enter" key={activeTab}>
-            {renderTab()}
-          </div>
-        </main>
-        <footer className="border-t bg-background/95 backdrop-blur-sm px-4 py-2 text-center shrink-0 mt-auto">
-          <div className="flex items-center justify-between max-w-7xl mx-auto">
-            <div className="flex items-center gap-3">
-              <p className="text-xs text-muted-foreground">
-                MBUMAH HARDWARE POS & ERP &copy; {new Date().getFullYear()}
-              </p>
-              <span className="text-[10px] text-muted-foreground/50 hidden sm:inline">v1.0.0</span>
+    <ErrorBoundary>
+      <div className="flex h-screen overflow-hidden">
+        <AppSidebar />
+        <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+          <TopBar searchBtnRef={searchBtnRef} />
+          <main className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+            <div className="animate-tab-enter" key={activeTab}>
+              {renderTab()}
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60">
-                <div className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-[0_0_4px] shadow-green-500/50" />
-                <span className="hidden sm:inline">Connected</span>
+          </main>
+          <footer className="border-t bg-background/95 backdrop-blur-sm px-4 py-2 text-center shrink-0 mt-auto">
+            <div className="flex items-center justify-between max-w-7xl mx-auto">
+              <div className="flex items-center gap-3">
+                <p className="text-xs text-muted-foreground">
+                  MBUMAH HARDWARE POS & ERP &copy; {new Date().getFullYear()}
+                </p>
+                <span className="text-[10px] text-muted-foreground/50 hidden sm:inline">v1.0.0</span>
               </div>
-              <button
-                type="button"
-                onClick={() => setShortcutsOpen(true)}
-                className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors flex items-center gap-1"
-              >
-                <Keyboard className="h-3 w-3" />
-                <span className="hidden sm:inline">Shortcuts</span>
-              </button>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60">
+                  <div className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-[0_0_4px] shadow-green-500/50" />
+                  <span className="hidden sm:inline">Connected</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShortcutsOpen(true)}
+                  className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors flex items-center gap-1"
+                >
+                  <Keyboard className="h-3 w-3" />
+                  <span className="hidden sm:inline">Shortcuts</span>
+                </button>
+              </div>
             </div>
-          </div>
-        </footer>
+          </footer>
+        </div>
+        <KeyboardShortcutsHelp open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       </div>
-      <KeyboardShortcutsHelp open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-    </div>
+    </ErrorBoundary>
   );
 }
 
