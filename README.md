@@ -1,16 +1,19 @@
 <div align="center">
 
-# 🔧 MBUMAH HARDWARE POS & ERP
+<img src="public/logo.svg" alt="Mbumah Hardware Logo" width="120" height="120" />
 
-**Modern Point of Sale & Enterprise Resource Planning System for Kenyan Hardware Stores**
+# 🔧 MBUMAH HARDWARE — POS & ERP
+
+### Modern Point-of-Sale & Enterprise Resource Planning System for Kenyan Hardware Stores
 
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js&logoColor=white)](https://nextjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Prisma](https://img.shields.io/badge/Prisma-6-2D3748?logo=prisma&logoColor=white)](https://www.prisma.io/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License](https://img.shields.io/badge/License-MIT-green)](https://opensource.org/licenses/MIT)
+[![Vercel](https://img.shields.io/badge/Vercel-Ready-black?logo=vercel&logoColor=white)](https://vercel.com/)
 
-[🌐 Live Demo](#-quick-start) · [📖 Documentation](#-table-of-contents) · [🐛 Report Bug](../../issues) · [✨ Request Feature](../../issues)
+[🌐 Live Demo](#-getting-started) · [📖 Documentation](#-table-of-contents) · [🐛 Report Bug](https://github.com/bucky-ops/mbumah-hardware-pos/issues) · [✨ Request Feature](https://github.com/bucky-ops/mbumah-hardware-pos/issues)
 
 </div>
 
@@ -18,444 +21,328 @@
 
 ## 📑 Table of Contents
 
-- [📋 Description](#-description)
+- [✨ Feature Highlights](#-feature-highlights)
 - [🏗️ Architecture Overview](#️-architecture-overview)
-- [✨ Features](#-features)
 - [🛠️ Tech Stack](#️-tech-stack)
-- [🚀 Quick Start](#-quick-start)
-- [🔑 Demo Accounts](#-demo-accounts)
+- [🚀 Getting Started](#-getting-started)
+- [📁 Project Structure](#-project-structure)
 - [📡 API Endpoints](#-api-endpoints)
+- [🔐 Authentication & RBAC](#-authentication--rbac)
 - [🗄️ Database Schema](#️-database-schema)
-- [🔐 RBAC Permission Matrix](#-rbac-permission-matrix)
-- [🛡️ Error Handling](#️-error-handling)
-- [🏪 Branch Architecture](#-branch-architecture)
-- [📸 Screenshots](#-screenshots)
+- [🏪 Multi-Tenant Architecture](#-multi-tenant-architecture)
+- [⚙️ Configuration](#️-configuration)
+- [🚢 Deployment](#-deployment)
 - [🤝 Contributing](#-contributing)
 - [📄 License](#-license)
 
 ---
 
-## 📋 Description
+## ✨ Feature Highlights
 
-**MBUMAH HARDWARE POS & ERP** is a full-featured, multi-tenant business management system built from the ground up for Kenyan hardware stores. Developed for **MBUMAH HARDWARE** — a multi-branch hardware retailer operating across five locations in Kenya — the system handles everything from point-of-sale checkout with M-Pesa integration to double-entry bookkeeping, inventory management, customer CRM, equipment rentals, and comprehensive financial reporting.
+| # | Module | Description |
+|---|--------|-------------|
+| 🏪 | **Multi-Branch POS** | 5 stores — Juja Main, Thika, Ruiru, Nairobi CBD, Nakuru |
+| 🔐 | **Role-Based Access Control** | 5 roles: SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER, CASHIER, ACCOUNTANT |
+| 📦 | **Product & Inventory** | Categories, bundles, stock movements, low-stock alerts |
+| 💰 | **Sales & POS** | Fast checkout with M-Pesa integration via Daraja API (STK Push) |
+| 👥 | **Customer CRM** | Debt management, loyalty points, aging buckets, statements |
+| 🔧 | **Equipment Rentals** | Rent-out tracking, return processing, overdue alerts |
+| 🎁 | **Gift Cards** | Full CRUD, reasons, auto-adjusting visibility, redemptions |
+| 📊 | **Financial Management** | Double-entry bookkeeping, journal entries, chart of accounts |
+| ⏱️ | **Shift Management** | Start/end shifts, cash drawer reconciliation |
+| 🚚 | **Supplier Management** | Supplier profiles, purchase orders, fulfillment tracking |
+| 💸 | **Expense Tracking** | Categorised expenses with approval workflows |
+| 📈 | **Reports & Analytics** | Sales, inventory, and financial reports with CSV/PDF export |
+| 🏛️ | **eTIMS/TIMS Ready** | Kenya Revenue Authority tax compliance integration |
 
-### Key Highlights
-
-- 🏪 **Multi-tenant architecture** — Complete data isolation per branch via `storeId` discriminator
-- 🇰🇪 **Kenya-first design** — KES currency, M-Pesa STK Push payments, KRA PIN tracking, 16% VAT
-- ⚡ **Real-time POS** — Fast checkout with Cash, M-Pesa, and credit/debt payment methods
-- 📊 **Double-entry accounting** — Every transaction auto-generates journal entries for audit-ready books
-- 🎫 **Gift Card & Voucher system** — Create, redeem, adjust, and auto-manage gift cards with balance tracking
-- 🔐 **Granular RBAC** — Role-based access control with per-resource, per-action permissions
-- 🏗️ **Equipment rentals** — Full rental lifecycle with late fees, damage assessment, and revenue tracking
-- 📱 **Responsive design** — Mobile-first UI with dark mode support across all tabs
+> **Plus:** Multi-tenant data isolation · Error boundary with SUPER_ADMIN overlay · State persistence (localStorage) · 30-min idle timeout · Vercel Analytics · Dark/Light theme
 
 ---
 
 ## 🏗️ Architecture Overview
 
+```mermaid
+graph TB
+    subgraph Client ["🖥️ Frontend (React)"]
+        UI[shadcn/ui Components]
+        ZS[Zustand Store]
+        RQ[React Query]
+        PM[Persistence Manager]
+    end
+
+    subgraph Server ["⚙️ Next.js 16 App Router"]
+        API[REST API Routes]
+        MW[Auth Middleware]
+        EB[Error Boundary]
+    end
+
+    subgraph Services ["🔌 External Services"]
+        MP[M-Pesa Daraja API]
+        EM[Email / SMS]
+        VA[Vercel Analytics]
+    end
+
+    subgraph Data ["💾 Data Layer"]
+        PC[Prisma Client]
+        DB[(SQLite / PostgreSQL)]
+    end
+
+    UI --> ZS
+    UI --> RQ
+    ZS --> PM
+    RQ --> API
+    API --> MW
+    MW --> PC
+    PC --> DB
+    API --> MP
+    API --> EM
+    UI --> VA
+    API --> EB
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        CLIENT (Next.js App Router)                  │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │
-│  │ POS Tab  │ │Inventory │ │Customers │ │Financial │ │  Admin   │ │
-│  │          │ │   Tab    │ │   Tab    │ │   Tab    │ │   Tab    │ │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ │
-│       │             │             │             │             │       │
-│  ┌────┴─────────────┴─────────────┴─────────────┴─────────────┴──┐  │
-│  │              Zustand Stores + TanStack Query                   │  │
-│  │    (Auth Store │ Cart Store │ App Store + Query Cache)        │  │
-│  └────────────────────────┬───────────────────────────────────────┘  │
-│                           │ API Calls (fetch)                        │
-└───────────────────────────┼─────────────────────────────────────────┘
-                            │
-┌───────────────────────────┼─────────────────────────────────────────┐
-│                    API LAYER (Next.js API Routes)                   │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │
-│  │  /auth   │ │/products │ │/transact.│ │/financial│ │ /rentals │ │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ │
-│       │             │             │             │             │       │
-│  ┌────┴─────────────┴─────────────┴─────────────┴─────────────┴──┐  │
-│  │              API Error Boundary + Validation                   │  │
-│  │    (withErrorBoundary wrapper │ Zod schemas │ JWT auth)       │  │
-│  └────────────────────────┬───────────────────────────────────────┘  │
-└───────────────────────────┼─────────────────────────────────────────┘
-                            │
-┌───────────────────────────┼─────────────────────────────────────────┐
-│                    DATA LAYER (Prisma ORM)                          │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │
-│  │Organization│ │  Store   │ │  User    │ │ Product  │ │Customer  │ │
-│  │  Model    │ │  Model   │ │  Model   │ │  Model   │ │  Model   │ │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘ │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │
-│  │GiftCard  │ │  Debt    │ │ Rental   │ │ Account  │ │  Shift   │ │
-│  │  Model   │ │  Ledger  │ │  Model   │ │  Model   │ │  Model   │ │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘ │
-│                              │                                      │
-│              storeId discriminator on ALL tenant-scoped tables       │
-└──────────────────────────────┼──────────────────────────────────────┘
-                               │
-              ┌────────────────┴────────────────┐
-              │         SQLite (dev)            │
-              │      PostgreSQL (prod)          │
-              └─────────────────────────────────┘
-```
-
-### Design Principles
-
-| Principle | Implementation |
-|-----------|---------------|
-| **Multi-tenancy** | `storeId` discriminator column on all tenant-scoped tables |
-| **API-first** | All business logic behind REST API routes; frontend is a pure consumer |
-| **Double-entry bookkeeping** | Every financial transaction auto-generates balanced journal entries |
-| **Branch isolation** | Each branch sees only its own data; SUPER_ADMIN sees all |
-| **Error resilience** | Global ErrorBoundary with auto-recovery + API error boundary wrapper |
-
----
-
-## ✨ Features
-
-### 💰 Point of Sale (POS)
-- Fast product search with category filter chips and image thumbnails
-- Cart management with quantity presets (+1, +2, +5, +10)
-- Multi-payment checkout: **Cash**, **M-Pesa STK Push**, **Credit/Debt**
-- Discount codes (SAVE10, SAVE20, MBUMAH, HARDWARE)
-- Hold & recall cart functionality
-- Auto receipt generation with print support (80mm thermal printers)
-- VAT calculation (16% Kenya standard rate)
-- Live dashboard stats with animated counters and sparklines
-
-### 🏬 Multi-Branch Management
-- **Juja Main** (Headquarters), **Thika**, **Ruiru**, **Nairobi CBD**, **Nakuru**
-- Complete data isolation per branch via `storeId`
-- Cross-branch visibility for SUPER_ADMIN role
-- Branch-specific products, customers, and transactions
-- Branch-based login redirects
-
-### 📦 Inventory Management
-- Product catalog with categories, SKU/barcode, and fractional quantities (kg, meters)
-- Product bundles (e.g., Construction Starter Kit)
-- Stock level tracking with reorder alerts
-- Low stock notification panel with color-coded urgency
-- Stock adjustment with ADD/SUBTRACT and reason tracking
-- AI-generated category images for visual browsing
-
-### 👥 Customer CRM
-- Customer profiles with loyalty tiers (Bronze, Silver, Gold)
-- Debt/credit management with payment recording
-- Debt aging analysis with visual bars
-- Quick-amount payment buttons (Full, Half, KES 5K, KES 10K)
-- Transaction history per customer
-- Outstanding debt notifications (>KES 50,000 alerts)
-
-### 🎫 Gift Card & Voucher System
-- Create gift cards with auto-generated codes (GC-XXXX-XXXX-XXXX)
-- 8 reason types: Customer Loyalty, Promotion, Refund Credit, Store Credit, Gift, Employee Award, Complaint Resolution, Other
-- Redeem with balance validation and remaining balance preview
-- Balance adjustment (increase/decrease) with reason logging
-- Auto-adjust visibility: cards automatically hide when fully redeemed
-- Expiry date tracking and status management (Active, Partially Redeemed, Redeemed, Expired, Cancelled)
-
-### 🔨 Equipment Rental Management
-- Full rental lifecycle: Create → Active → Returned
-- Visual dot-and-line timeline (Start → Expected → Actual return)
-- Late fee calculation with automatic overdue detection
-- Damage assessment form (None/Minor/Moderate/Severe)
-- Rental revenue tracking with per-day metrics
-- Overdue highlighting with animated status badges
-
-### 📊 Double-Entry Accounting & Financial Reports
-- Chart of accounts with 18 pre-configured accounts
-- Auto-generated journal entries for every sale (Dr Cash/M-Pesa, Cr Revenue, Cr VAT)
-- Revenue trend visualization with CSS bar charts
-- Profit & Loss summary
-- Debt aging analysis with stacked horizontal bars
-- Account balance tree with color-coded groups
-- Expandable journal entries with Dr/Cr color coding
-- Date range presets (Today, This Week, This Month, This Quarter, This Year)
-
-### 🔐 Role-Based Access Control (RBAC)
-- 7 role types with granular per-resource, per-action permissions
-- Permission resources: products, transactions, customers, financials, rentals, admin, reports, debt
-- Permission actions: create, read, update, delete, approve, refund, export, void, manage_users, manage_stores, system_config, write_off, remind, adjust
-
-### ⏱️ Shift Management
-- Start/end shift with cash counting
-- Live duration timer during active shift
-- Cash difference calculation (expected vs. actual)
-- Shift history with sales summary
-
-### 📈 Reporting & Analytics
-- Sales reports with period comparison (↑ 12.5% vs last period)
-- Inventory valuation with category breakdown
-- Top 5 products by revenue with rank indicators
-- Payment method breakdown with visual bars
-- CSV export with file size estimation
-- Conic-gradient pie charts and SVG ring indicators
-- Mini sparkline trend charts
-
-### 🛡️ Error Boundary & State Persistence
-- React ErrorBoundary with overlay UI, auto-recovery (3s), and action buttons
-- API error boundary wrapper (`withErrorBoundary`) on all routes
-- Custom error classes: `AppError`, `ValidationError`, `NotFoundError`, `UnauthorizedError`, `ForbiddenError`, `ConflictError`
-- `use-state-persistence` hook for crash recovery via localStorage
-- 30-minute idle timeout with configurable duration
-
-### 🔔 Real-Time Notifications
-- Notification center (Sheet panel) with severity-based styling
-- Low stock alerts (out-of-stock: red, low-stock: amber)
-- Overdue rental alerts
-- Large outstanding debt alerts (>KES 50,000)
-- Unread badge counter with mark-all-read
-
-### 🔍 Global Search
-- Keyboard shortcut **Ctrl+K** / **⌘K** to open search
-- Real-time search across products and customers
-- Click results navigate to relevant tabs
 
 ---
 
 ## 🛠️ Tech Stack
 
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| [Next.js](https://nextjs.org/) | 16 | Full-stack React framework (App Router) |
-| [TypeScript](https://www.typescriptlang.org/) | 5 | Type-safe JavaScript |
-| [Prisma](https://www.prisma.io/) | 6 | ORM & database migrations |
-| [Tailwind CSS](https://tailwindcss.com/) | 4 | Utility-first CSS framework |
-| [shadcn/ui](https://ui.shadcn.com/) | Latest | 50+ reusable UI components (New York style) |
-| [React](https://react.dev/) | 19 | UI library |
-| [Zustand](https://zustand-demo.pmnd.rs/) | 5 | Client state management |
-| [TanStack Query](https://tanstack.com/query/) | 5 | Server state & caching |
-| [TanStack Table](https://tanstack.com/table) | 8 | Advanced data tables |
-| [Recharts](https://recharts.org/) | 2 | Data visualization & charts |
-| [Zod](https://zod.dev/) | 4 | Schema validation |
-| [Lucide](https://lucide.dev/) | Latest | Icon library |
-| [Framer Motion](https://www.framer.com/motion/) | 12 | Animations & transitions |
-| [next-themes](https://github.com/pacocoursey/next-themes) | 0.4 | Dark mode support |
-| [date-fns](https://date-fns.org/) | 4 | Date manipulation |
-| [SQLite](https://www.sqlite.org/) | 3 | Local development database |
-| [PostgreSQL](https://www.postgresql.org/) | 15+ | Production database (Supabase) |
-| [Docker](https://www.docker.com/) | — | Containerization (Postgres, Redis, M-Pesa mock) |
-| [Redis](https://redis.io/) | 7 | Caching & session storage (production) |
-| [Bun](https://bun.sh/) | Latest | JavaScript runtime & package manager |
-| Custom JWT | — | Session-based authentication |
-| M-Pesa Daraja API | v2 | Payments (mock for dev) |
+| Category | Technology | Version |
+|----------|-----------|---------|
+| **Framework** | [Next.js](https://nextjs.org/) (App Router) | 16 |
+| **Language** | [TypeScript](https://www.typescriptlang.org/) | 5 |
+| **Styling** | [Tailwind CSS](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) | 4 |
+| **Database** | [Prisma ORM](https://www.prisma.io/) — SQLite (dev) / PostgreSQL (prod) | 6 |
+| **State Management** | [Zustand](https://zustand.docs.pmnd.rs/) (client) + [TanStack Query](https://tanstack.com/query) (server) | 5 |
+| **Forms** | [React Hook Form](https://react-hook-form.com/) + [Zod](https://zod.dev/) | 7 / 4 |
+| **Authentication** | [NextAuth.js](https://next-auth.js.org/) | 4 |
+| **Payments** | [M-Pesa Daraja API](https://developer.safaricom.co.ke/) | — |
+| **Charts** | [Recharts](https://recharts.org/) | 2 |
+| **Animations** | [Framer Motion](https://motion.dev/) | 12 |
+| **Icons** | [Lucide React](https://lucide.dev/) | — |
+| **Analytics** | [Vercel Analytics](https://vercel.com/analytics) | 2 |
+| **Theming** | [next-themes](https://github.com/pacocoursey/next-themes) | — |
+| **Tables** | [TanStack Table](https://tanstack.com/table) | 8 |
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- **Node.js** ≥ 18 or **Bun** ≥ 1.0
+- **Node.js** ≥ 18 · **Bun** ≥ 1.0 (or npm/pnpm)
 - **Git** for version control
-- **Docker** (optional, for PostgreSQL + Redis + M-Pesa mock)
+- M-Pesa Daraja credentials _(optional — mock mode available)_
 
 ### Installation
 
 ```bash
-# 1. Clone the repository
+# Clone the repository
 git clone https://github.com/bucky-ops/mbumah-hardware-pos.git
 cd mbumah-hardware-pos
 
-# 2. Install dependencies
+# Install dependencies
 bun install
 
-# 3. Set up environment variables
+# Set up environment variables
 cp .env.example .env
-# Edit .env with your configuration (see below)
-
-# 4. Push database schema
-bun run db:push
-
-# 5. Generate Prisma client
-bun run db:generate
-
-# 6. Start the development server
-bun run dev
-```
-
-The app will be available at `http://localhost:3000`.
-
-### Environment Variables
-
-Create a `.env` file from the template:
-
-```bash
-cp .env.example .env
-```
-
-Key variables:
-
-```env
-# Database (SQLite for dev, PostgreSQL for prod)
-DATABASE_URL="file:./db/custom.db"
-
-# Authentication
-NEXTAUTH_SECRET="change-this-to-a-secure-random-string"
-NEXTAUTH_URL="http://localhost:3000"
-JWT_SECRET="change-this-in-production"
-
-# App
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
-NEXT_PUBLIC_CURRENCY="KES"
-
-# M-Pesa Daraja API (Safaricom)
-MPESA_CONSUMER_KEY=""
-MPESA_CONSUMER_SECRET=""
-MPESA_PASSKEY=""
-MPESA_SHORTCODE="174379"
-MPESA_ENVIRONMENT="sandbox"
-MPESA_CALLBACK_URL="https://your-app.vercel.app/api/mpesa/callback"
+# Edit .env with your configuration (see ⚙️ Configuration section)
 ```
 
 ### Database Setup
 
 ```bash
-# Push schema changes to the database
-bun run db:push
-
 # Generate Prisma client
 bun run db:generate
 
-# Seed the database (auto-runs on first boot if no users exist)
-bun run db:seed
+# Push schema to the database (creates tables)
+bun run db:push
 
-# Reset the database (destructive!)
-bun run db:reset
+# Seed with demo data (5 stores, sample products, users)
+bun run db:seed
 ```
 
-### Docker Setup (Optional)
-
-For PostgreSQL, Redis, and the Mock M-Pesa service:
+### Run the Development Server
 
 ```bash
-docker-compose up -d
+bun run dev
 ```
 
-This starts:
+Open [http://localhost:3000](http://localhost:3000) and log in with a demo account:
 
-| Service | Port | Purpose |
-|---------|------|---------|
-| **PostgreSQL 15** | `5432` | Production-grade database with pg_trgm extension |
-| **Redis 7** | `6379` | Caching & session storage |
-| **Mock M-Pesa API** | `9000` | Simulates Safaricom Daraja API for local dev |
+| Role | Email | Password |
+|------|-------|----------|
+| SUPER_ADMIN | admin@mbumah.co.ke | admin123 |
+| STORE_OWNER | owner@mbumah.co.ke | owner123 |
+| BRANCH_MANAGER | manager@mbumah.co.ke | manager123 |
+| CASHIER | cashier@mbumah.co.ke | cashier123 |
+| ACCOUNTANT | accountant@mbumah.co.ke | accountant123 |
 
 ---
 
-## 🔑 Demo Accounts
+## 📁 Project Structure
 
-The seed script creates demo accounts for testing different roles and branches. All accounts use the password `password123`.
-
-| Email | Password | Role | Branch |
-|-------|----------|------|--------|
-| `admin@mbumahhardware.co.ke` | `password123` | Super Admin | Juja Main |
-| `owner@mbumahhardware.co.ke` | `password123` | Store Owner | Juja Main |
-| `cashier@mbumahhardware.co.ke` | `password123` | Cashier | Juja Main |
-| `accountant@mbumahhardware.co.ke` | `password123` | Accountant | Juja Main |
-| `thika.manager@mbumahhardware.co.ke` | `password123` | Branch Manager | Thika |
-| `thika.cashier@mbumahhardware.co.ke` | `password123` | Cashier | Thika |
-| `ruiru.manager@mbumahhardware.co.ke` | `password123` | Branch Manager | Ruiru |
-| `nairobi.manager@mbumahhardware.co.ke` | `password123` | Branch Manager | Nairobi CBD |
-| `nakuru.manager@mbumahhardware.co.ke` | `password123` | Branch Manager | Nakuru |
-
-> ⚠️ **Important**: Change these passwords immediately in production environments.
+```
+mbumah-hardware-pos/
+├── 📂 prisma/
+│   ├── schema.prisma          # Database schema (25+ models)
+│   └── seed.ts                # Demo data seeder
+├── 📂 public/
+│   ├── logo.svg               # Brand logo
+│   └── categories/            # Category images
+├── 📂 src/
+│   ├── 📂 app/
+│   │   ├── layout.tsx         # Root layout with providers
+│   │   ├── page.tsx           # Main SPA entry
+│   │   ├── globals.css        # Global styles & theme
+│   │   ├── 📂 tabs/           # Feature tab components
+│   │   │   ├── dashboard-tab.tsx
+│   │   │   ├── inventory-tab.tsx
+│   │   │   ├── transactions-tab.tsx
+│   │   │   ├── customers-tab.tsx
+│   │   │   ├── suppliers-tab.tsx
+│   │   │   ├── rentals-tab.tsx
+│   │   │   ├── reports-tab.tsx
+│   │   │   ├── financial-tab.tsx
+│   │   │   ├── catalog-tab.tsx
+│   │   │   ├── gift-cards-tab.tsx
+│   │   │   └── admin-tab.tsx
+│   │   └── 📂 api/            # REST API routes
+│   │       ├── 📂 auth/       # Authentication
+│   │       ├── 📂 products/   # Products & bundles
+│   │       ├── 📂 categories/ # Categories
+│   │       ├── 📂 customers/  # Customer CRM
+│   │       ├── 📂 transactions/ # Sales transactions
+│   │       ├── 📂 payments/   # M-Pesa payments
+│   │       ├── 📂 gift-cards/ # Gift card management
+│   │       ├── 📂 financial/  # Accounts & journal
+│   │       ├── 📂 shifts/     # Shift management
+│   │       ├── 📂 debt/       # Debt tracking
+│   │       ├── 📂 rentals/    # Equipment rentals
+│   │       ├── 📂 suppliers/  # Supplier management
+│   │       ├── 📂 expenses/   # Expense tracking
+│   │       ├── 📂 reports/    # Reports & analytics
+│   │       ├── 📂 dashboard/  # Dashboard data
+│   │       ├── 📂 users/      # User management
+│   │       ├── 📂 stores/     # Store management
+│   │       ├── 📂 purchase-orders/ # Purchase orders
+│   │       ├── 📂 stock-movements/ # Stock movements
+│   │       ├── 📂 cash-drawer/ # Cash drawer
+│   │       ├── 📂 receipts/   # Receipts
+│   │       ├── 📂 notifications/ # Notifications
+│   │       ├── 📂 audit-logs/ # Audit trail
+│   │       ├── 📂 system-logs/ # System logs
+│   │       └── 📂 system-config/ # System configuration
+│   ├── 📂 components/
+│   │   ├── 📂 ui/             # shadcn/ui components (40+)
+│   │   └── error-boundary.tsx # Error boundary with admin overlay
+│   ├── 📂 hooks/
+│   │   ├── use-idle-timeout.ts    # 30-min idle timeout
+│   │   ├── use-state-persistence.ts # LocalStorage persistence
+│   │   └── use-mobile.ts         # Mobile detection
+│   └── 📂 lib/
+│       ├── db.ts              # Prisma client singleton
+│       ├── api.ts             # API helper utilities
+│       ├── stores.ts          # Zustand store definitions
+│       ├── types.ts           # TypeScript type definitions
+│       ├── utils.ts           # Utility functions
+│       ├── helpers.ts         # Business logic helpers
+│       ├── account-helper.ts  # Double-entry accounting helper
+│       ├── logger.ts          # Structured logging
+│       └── providers.tsx      # App providers (QueryClient, Theme, etc.)
+├── 📂 docker/
+│   ├── postgres-init.sql      # PostgreSQL init script
+│   └── 📂 mpesa-mock/        # M-Pesa mock server
+├── 📂 docs/                   # Documentation
+├── .env.example               # Environment template
+├── docker-compose.yml         # Docker Compose for prod
+├── vercel.json                # Vercel deployment config
+├── Caddyfile                  # Reverse proxy config
+└── package.json               # Dependencies & scripts
+```
 
 ---
 
 ## 📡 API Endpoints
 
-All API endpoints are prefixed with `/api/`. Authentication is via JWT token in the `Authorization: Bearer <token>` header.
-
-### 🔐 Authentication
+### 🔑 Authentication
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/auth/login` | User login, returns JWT token + session |
+| `POST` | `/api/auth/login` | Authenticate user & create session |
+| `POST` | `/api/auth/logout` | End user session |
 | `GET` | `/api/auth/me` | Get current authenticated user |
-| `POST` | `/api/auth/logout` | Logout and invalidate session |
 
-### 📦 Products & Categories
+### 📦 Products
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/products` | List products (search, filter by category/store) |
+| `GET` | `/api/products` | List all products (filtered by store) |
 | `POST` | `/api/products` | Create a new product |
 | `GET` | `/api/products/[id]` | Get product by ID |
 | `PUT` | `/api/products/[id]` | Update product |
 | `DELETE` | `/api/products/[id]` | Delete product |
 | `GET` | `/api/products/bundles` | List product bundles |
-| `POST` | `/api/products/bundles` | Create product bundle |
+
+### 🏷️ Categories
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | `GET` | `/api/categories` | List all categories |
-| `POST` | `/api/categories` | Create category |
-| `GET` | `/api/stock-movements` | Stock movement history |
-| `POST` | `/api/stock-movements` | Record stock movement |
+| `POST` | `/api/categories` | Create a new category |
 
 ### 👥 Customers
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/customers` | List customers (search, filter) |
-| `POST` | `/api/customers` | Create customer |
+| `GET` | `/api/customers` | List customers (with debt & loyalty info) |
+| `POST` | `/api/customers` | Create a new customer |
 | `GET` | `/api/customers/[id]` | Get customer details |
 | `PUT` | `/api/customers/[id]` | Update customer |
+| `DELETE` | `/api/customers/[id]` | Delete customer |
 
-### 💳 Transactions & Payments
+### 💳 Transactions
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/transactions` | List all transactions |
-| `POST` | `/api/transactions` | Create a new sale / checkout |
+| `GET` | `/api/transactions` | List transactions (filtered by store/date) |
+| `POST` | `/api/transactions` | Create a new sale transaction |
 | `GET` | `/api/transactions/[id]` | Get transaction details |
-| `PUT` | `/api/transactions/[id]` | Update transaction |
+
+### 📱 M-Pesa Payments
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | `POST` | `/api/payments/mpesa/stkpush` | Initiate M-Pesa STK Push |
-| `POST` | `/api/payments/mpesa/callback` | M-Pesa callback handler |
+| `POST` | `/api/payments/mpesa/callback` | M-Pesa Daraja callback webhook |
 
-### 🎫 Gift Cards
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/gift-cards` | List gift cards (filter by status, reason, search) |
-| `POST` | `/api/gift-cards` | Create gift card (auto-generates code) |
-| `GET` | `/api/gift-cards/[id]` | Get gift card details with redemptions |
-| `PUT` | `/api/gift-cards/[id]` | Update gift card fields |
-| `DELETE` | `/api/gift-cards/[id]` | Cancel gift card |
-| `POST` | `/api/gift-cards/[id]/redeem` | Redeem gift card with balance validation |
-| `POST` | `/api/gift-cards/[id]/adjust` | Adjust gift card balance (increase/decrease) |
-
-### 💰 Debt & Credit
+### 🎁 Gift Cards
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/debt` | List debt/credit records |
-| `POST` | `/api/debt` | Record a debt payment |
+| `GET` | `/api/gift-cards` | List gift cards |
+| `POST` | `/api/gift-cards` | Create a gift card |
+| `GET` | `/api/gift-cards/[id]` | Get gift card details |
+| `PUT` | `/api/gift-cards/[id]` | Update gift card |
+| `DELETE` | `/api/gift-cards/[id]` | Delete gift card |
+| `POST` | `/api/gift-cards/[id]/redeem` | Redeem a gift card |
+| `POST` | `/api/gift-cards/[id]/adjust` | Adjust gift card balance |
 
-### 🔨 Equipment Rentals
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/rentals` | List equipment rentals |
-| `POST` | `/api/rentals` | Create rental record |
-| `POST` | `/api/rentals/[id]/return` | Process rental return (with late fees) |
-
-### 📊 Financial & Accounting
+### 📊 Dashboard & Reports
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/financial/accounts` | Chart of accounts |
-| `GET` | `/api/financial/journal` | Journal entries |
-| `POST` | `/api/financial/journal` | Create journal entry |
+| `GET` | `/api/dashboard` | Dashboard summary metrics |
+| `GET` | `/api/reports/sales` | Sales report data |
+| `GET` | `/api/reports/inventory` | Inventory report data |
+| `GET` | `/api/reports/export` | Export reports (CSV/PDF) |
+
+### 🏦 Financial
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/financial/accounts` | List chart of accounts |
+| `POST` | `/api/financial/accounts` | Create an account |
+| `GET` | `/api/financial/journal` | List journal entries |
+| `POST` | `/api/financial/journal` | Create a journal entry |
 | `GET` | `/api/financial/revenue-trend` | Revenue trend data |
-
-### 📈 Reports & Dashboard
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/dashboard` | Dashboard summary stats |
-| `GET` | `/api/reports/sales` | Sales reports |
-| `GET` | `/api/reports/inventory` | Inventory reports |
-| `GET` | `/api/reports/export` | Export reports (CSV) |
 
 ### ⏱️ Shifts
 
@@ -464,385 +351,340 @@ All API endpoints are prefixed with `/api/`. Authentication is via JWT token in 
 | `GET` | `/api/shifts` | List shifts |
 | `POST` | `/api/shifts` | Start a new shift |
 | `GET` | `/api/shifts/current` | Get current active shift |
-| `POST` | `/api/shifts/[id]/end` | End a shift (with cash counting) |
+| `PUT` | `/api/shifts/[id]/end` | End a shift |
 
-### 🏪 Suppliers & Purchase Orders
+### 💰 Debt Management
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/suppliers` | List suppliers (search, filter) |
-| `POST` | `/api/suppliers` | Create supplier |
-| `GET` | `/api/suppliers/[id]` | Get supplier details with PO stats |
-| `PUT` | `/api/suppliers/[id]` | Update supplier |
-| `DELETE` | `/api/suppliers/[id]` | Soft-delete supplier |
-| `GET` | `/api/purchase-orders` | List purchase orders |
-| `POST` | `/api/purchase-orders` | Create purchase order (auto PO number) |
-| `GET` | `/api/purchase-orders/[id]` | Get PO details |
-| `PUT` | `/api/purchase-orders/[id]` | Update PO status / receive items |
+| `GET` | `/api/debt` | List customer debts |
+| `POST` | `/api/debt` | Record a debt / payment |
 
-### 🏦 Expenses & Cash Drawer
+### 🔧 Equipment Rentals
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/rentals` | List rentals |
+| `POST` | `/api/rentals` | Create a rental |
+| `POST` | `/api/rentals/[id]/return` | Process equipment return |
+
+### 🚚 Suppliers
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/suppliers` | List suppliers |
+| `POST` | `/api/suppliers` | Create a supplier |
+| `GET` | `/api/suppliers/[id]` | Get supplier details |
+| `PUT` | `/api/suppliers/[id]` | Update supplier |
+| `DELETE` | `/api/suppliers/[id]` | Delete supplier |
+
+### 💸 Expenses
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/expenses` | List expenses |
-| `POST` | `/api/expenses` | Record expense |
-| `GET` | `/api/cash-drawer` | Cash drawer status & logs |
-| `GET` | `/api/receipts` | List receipts |
-| `POST` | `/api/receipts` | Generate receipt |
-| `GET` | `/api/receipts/[id]` | Get receipt by ID |
+| `POST` | `/api/expenses` | Record an expense |
 
-### 🏬 Stores & System
+### 👤 Users & Stores
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/stores` | List organization stores |
-| `GET` | `/api/system-logs` | Application logs |
-| `GET` | `/api/audit-logs` | Audit trail |
-| `GET` | `/api/system-config` | System configuration |
-| `POST` | `/api/system-config` | Update configuration |
 | `GET` | `/api/users` | List users |
-| `GET` | `/api/notifications` | User notifications |
+| `POST` | `/api/users` | Create a user |
+| `GET` | `/api/stores` | List stores |
+| `POST` | `/api/stores` | Create a store |
+
+### 📋 System & Admin
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/system-config` | Get system configuration |
+| `PUT` | `/api/system-config` | Update system configuration |
+| `GET` | `/api/system-logs` | List system logs |
+| `GET` | `/api/audit-logs` | List audit trail entries |
+| `GET` | `/api/notifications` | List notifications |
+| `POST` | `/api/notifications` | Create a notification |
+| `GET` | `/api/stock-movements` | List stock movements |
+| `POST` | `/api/stock-movements` | Record a stock movement |
+| `GET` | `/api/purchase-orders` | List purchase orders |
+| `POST` | `/api/purchase-orders` | Create a purchase order |
+| `GET` | `/api/purchase-orders/[id]` | Get purchase order details |
+| `PUT` | `/api/purchase-orders/[id]` | Update purchase order |
+| `GET` | `/api/cash-drawer` | Get cash drawer status |
+| `POST` | `/api/cash-drawer` | Record cash drawer action |
+| `GET` | `/api/receipts` | List receipts |
+| `POST` | `/api/receipts` | Generate a receipt |
+| `GET` | `/api/receipts/[id]` | Get receipt details |
+
+---
+
+## 🔐 Authentication & RBAC
+
+The system enforces strict **Role-Based Access Control** across all endpoints and UI components.
+
+### Roles
+
+| Role | Scope | Description |
+|------|-------|-------------|
+| 🔴 `SUPER_ADMIN` | Organization-wide | Full system access, all stores, user management, system config |
+| 🟠 `STORE_OWNER` | Organization-wide | Multi-store access, financial reports, supplier management |
+| 🟡 `BRANCH_MANAGER` | Single store | Store operations, inventory, staff shifts, reports |
+| 🟢 `CASHIER` | Single store | POS transactions, customer lookup, shift start/end |
+| 🔵 `ACCOUNTANT` | Organization-wide | Financial reports, journal entries, expense approval |
+
+### Permission Matrix
+
+| Feature | SUPER_ADMIN | STORE_OWNER | BRANCH_MANAGER | CASHIER | ACCOUNTANT |
+|---------|:-----------:|:-----------:|:--------------:|:-------:|:----------:|
+| Dashboard | ✅ All stores | ✅ All stores | ✅ Own store | ✅ Own store | ✅ All stores |
+| POS / Transactions | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Product Management | ✅ | ✅ | ✅ | 🔍 Read-only | ❌ |
+| Inventory / Stock | ✅ | ✅ | ✅ | 🔍 Read-only | ❌ |
+| Customer CRM | ✅ | ✅ | ✅ | ✅ | 🔍 Read-only |
+| Gift Cards | ✅ | ✅ | ✅ | 🔍 Read-only | 🔍 Read-only |
+| Equipment Rentals | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Financial Reports | ✅ | ✅ | ❌ | ❌ | ✅ |
+| Journal Entries | ✅ | ✅ | ❌ | ❌ | ✅ |
+| Expense Approval | ✅ | ✅ | ❌ | ❌ | ✅ |
+| Shift Management | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Supplier Management | ✅ | ✅ | 🔍 Read-only | ❌ | 🔍 Read-only |
+| Purchase Orders | ✅ | ✅ | ✅ | ❌ | ❌ |
+| User Management | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Store Management | ✅ | ✅ | ❌ | ❌ | ❌ |
+| System Configuration | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Audit Logs | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Error Details | ✅ | ❌ | ❌ | ❌ | ❌ |
 
 ---
 
 ## 🗄️ Database Schema
 
-The system uses **25+ Prisma models** organized into logical domains. All tenant-scoped tables include a `storeId` discriminator for multi-tenancy.
+The system uses **25+ Prisma models** with full relational integrity. Below are the key models:
 
-### Multi-Tenancy
+```mermaid
+erDiagram
+    Organization ||--o{ Store : "has many"
+    Organization ||--o{ User : "has many"
+    Organization ||--o{ Account : "has many"
+    Store ||--o{ User : "employs"
+    Store ||--o{ Product : "stocks"
+    Store ||--o{ Transaction : "processes"
+    Store ||--o{ Customer : "serves"
+    Store ||--o{ Shift : "opens"
+    Store ||--o{ GiftCard : "issues"
+    Store ||--o{ Rental : "rents"
+    Store ||--o{ Expense : "incurs"
+    Product }o--|| Category : "belongs to"
+    Transaction ||--o{ TransactionItem : "contains"
+    Transaction }o--|| Customer : "made by"
+    Transaction }o--|| User : "processed by"
+    Transaction }o--|| Shift : "during"
+    Customer ||--o{ Debt : "owes"
+    Customer ||--o{ GiftCard : "holds"
+    Supplier ||--o{ PurchaseOrder : "receives"
+    PurchaseOrder ||--o{ PurchaseOrderItem : "contains"
+    Account ||--o{ JournalEntry : "posted to"
+    JournalEntry ||--o{ JournalEntryLine : "has lines"
+    GiftCard ||--o{ GiftCardAdjustment : "adjusted by"
+    GiftCard ||--o{ GiftCardRedemption : "redeemed in"
+    Rental }o--|| Customer : "rented by"
+    Rental }o--|| Product : "for product"
+    Shift }o--|| User : "operated by"
+```
 
-| Model | Description |
-|-------|-------------|
-| **Organization** | Top-level entity (MBUMAH HARDWARE) with KRA PIN |
-| **Store** | Branch/store with location, phone, email, tax PIN |
+### Key Models at a Glance
 
-### Authentication & Authorization
-
-| Model | Description |
-|-------|-------------|
-| **User** | User accounts with role, branch assignment, phone, KRA PIN |
-| **Session** | JWT session management with 24-hour expiry |
-| **RolePermission** | Granular per-resource, per-action permissions per role |
-
-### Inventory
-
-| Model | Description |
-|-------|-------------|
-| **ProductCategory** | Categories with color coding and icons |
-| **Product** | Products with SKU, unit type (PIECE/KILOGRAM/METER/etc.), cost/sell prices, rental flag |
-| **ProductBundle** | Bundle composition linking products to parent bundles |
-| **WarehouseStock** | Per-warehouse stock levels |
-| **StockMovement** | Stock movement audit trail (IN/OUT/ADJUSTMENT/TRANSFER) |
-
-### Customer CRM
-
-| Model | Description |
-|-------|-------------|
-| **Customer** | Customer profiles with phone, email, loyalty tier, credit limit, KRA PIN |
-
-### Sales
-
-| Model | Description |
-|-------|-------------|
-| **SalesTransaction** | Sales with receipt number, payment method, VAT, discount, totals |
-| **SaleItem** | Line items linking products to transactions |
-| **Payment** | Payment records with method (CASH/MPESA/CREDIT_CARD/MIXED), reference |
-| **MpesaTransaction** | M-Pesa STK Push tracking with phone, amount, status |
-
-### Gift Cards & Vouchers
-
-| Model | Description |
-|-------|-------------|
-| **GiftCard** | Gift cards with code, balance, reason, auto-adjust, expiry, visibility |
-| **GiftCardRedemption** | Redemption history with amounts, transaction links |
-
-### Debt & Credit
-
-| Model | Description |
-|-------|-------------|
-| **DebtLedger** | Outstanding debts with 30-day payment terms |
-| **DebtPayment** | Payment records against debts |
-
-### Equipment Rentals
-
-| Model | Description |
-|-------|-------------|
-| **EquipmentRental** | Rental records with daily rate, deposit, expected/actual return, damage assessment |
-
-### Accounting
-
-| Model | Description |
-|-------|-------------|
-| **Account** | Chart of accounts (ASSET/LIABILITY/EQUITY/REVENUE/EXPENSE) with code, type, balance |
-| **JournalEntry** | Journal entries with date, description, reference type |
-| **JournalEntryLine** | Debit/credit lines linked to accounts and journal entries |
-
-### Cash Management
-
-| Model | Description |
-|-------|-------------|
-| **Shift** | Cashier shifts with start/end time, opening/closing cash, sales summary |
-| **CashDrawerLog** | Cash drawer activity log (OPENING/CLOSING/CASH_IN/CASH_OUT) |
-
-### Supporting Models
-
-| Model | Description |
-|-------|-------------|
-| **Receipt** | Transaction receipts with receipt number |
-| **SystemLog** | Application-level logging (INFO/WARN/ERROR) |
-| **SystemConfig** | Key-value configuration store |
-| **InitializationLog** | First-boot detection and seed tracking |
-| **Supplier** | Supplier profiles with contact, rating, KRA PIN |
-| **PurchaseOrder** | Purchase orders with auto-generated PO numbers |
-| **PurchaseOrderItem** | Line items for purchase orders |
+| Model | Purpose | Key Fields |
+|-------|---------|------------|
+| `Organization` | Top-level tenant | name, taxPin, status |
+| `Store` | Branch / location | name, location, address, phone, taxPin |
+| `User` | System user | email, name, role, storeId |
+| `Product` | Inventory item | name, sku, price, costPrice, quantity, categoryId |
+| `Category` | Product grouping | name, description, imageUrl |
+| `Transaction` | Sale record | total, subtotal, tax, paymentMethod, status |
+| `TransactionItem` | Line item | productId, quantity, unitPrice, totalPrice |
+| `Customer` | CRM profile | name, phone, email, loyaltyPoints, creditLimit |
+| `Debt` | Customer debt | amount, dueDate, status, agingBucket |
+| `GiftCard` | Prepaid card | code, balance, initialBalance, status, reason |
+| `Shift` | Cashier shift | startedAt, endedAt, openingCash, closingCash |
+| `Account` | Chart of accounts | code, name, type, balance |
+| `JournalEntry` | Double-entry record | date, description, status |
+| `JournalEntryLine` | Journal line | accountId, debit, credit |
+| `Supplier` | Vendor profile | name, phone, email, paymentTerms |
+| `PurchaseOrder` | PO to supplier | status, totalAmount, expectedDate |
+| `Rental` | Equipment rental | startDate, endDate, dailyRate, status |
+| `Expense` | Cost record | amount, category, status, approvedBy |
 
 ---
 
-## 🔐 RBAC Permission Matrix
+## 🏪 Multi-Tenant Architecture
 
-### Roles Overview
+All data is isolated per store using a **`storeId` discriminator column** on every tenant-scoped model.
 
-| Role | Scope | Description |
-|------|-------|-------------|
-| **SUPER_ADMIN** | Organization-wide | Full system access across all branches |
-| **STORE_OWNER** | Single store | Full access within assigned store |
-| **BRANCH_MANAGER** | Single branch | Manage operations within their branch |
-| **CASHIER** | Single branch | POS operations and basic transactions |
-| **ACCOUNTANT** | Single branch | Financial reports, debt management, exports |
-| **STORE_KEEPER** | Single branch | Inventory management and stock movements |
-| **SALES_REP** | Single branch | Sales and customer interactions |
+```mermaid
+graph LR
+    subgraph Organization ["🏢 Mbumah Hardware"]
+        S1["🏪 Juja Main"]
+        S2["🏪 Thika"]
+        S3["🏪 Ruiru"]
+        S4["🏪 Nairobi CBD"]
+        S5["🏪 Nakuru"]
+    end
 
-### Permission Matrix
+    subgraph Shared ["🔒 Shared Services"]
+        Auth["🔐 Auth Service"]
+        MP["📱 M-Pesa"]
+        FIN["🏦 Financial Engine"]
+    end
 
-| Permission | SUPER_ADMIN | STORE_OWNER | BRANCH_MANAGER | CASHIER | ACCOUNTANT | STORE_KEEPER | SALES_REP |
-|------------|:-----------:|:-----------:|:--------------:|:-------:|:----------:|:------------:|:---------:|
-| **Products** |
-| `products.create` | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
-| `products.read` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `products.update` | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
-| `products.delete` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Transactions** |
-| `transactions.create` | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ |
-| `transactions.read` | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ |
-| `transactions.update` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| `transactions.void` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| `transactions.refund` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **Customers** |
-| `customers.create` | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ |
-| `customers.read` | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ |
-| `customers.update` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **Financials** |
-| `financials.read` | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
-| `financials.export` | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
-| **Rentals** |
-| `rentals.create` | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
-| `rentals.read` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `rentals.update` | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
-| **Debt** |
-| `debt.read` | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ |
-| `debt.update` | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
-| `debt.write_off` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| `debt.remind` | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
-| **Reports** |
-| `reports.read` | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
-| `reports.export` | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
-| **Admin** |
-| `admin.manage_users` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| `admin.manage_stores` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| `admin.system_config` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Gift Cards** |
-| `gift_cards.create` | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| `gift_cards.read` | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
-| `gift_cards.redeem` | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| `gift_cards.adjust` | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
-
----
-
-## 🛡️ Error Handling
-
-The system implements a comprehensive, multi-layer error handling strategy:
-
-### Global ErrorBoundary
-
-```
-┌─────────────────────────────────────────┐
-│           React ErrorBoundary           │
-│  ┌─────────────────────────────────────┐│
-│  │  • Catches render errors            ││
-│  │  • Auto-navigate back after 3s      ││
-│  │  • Action buttons:                  ││
-│  │    - Dismiss  - Retry               ││
-│  │    - Go Back  - Dashboard           ││
-│  │  • Dev mode: shows error stack      ││
-│  │  • Persists error state to          ││
-│  │    localStorage for recovery        ││
-│  └─────────────────────────────────────┘│
-└─────────────────────────────────────────┘
-```
-
-### API Error Boundary
-
-All API routes are wrapped with `withErrorBoundary` from `@/lib/logger`:
-
-- Catches unhandled exceptions in route handlers
-- Returns structured error responses with appropriate HTTP status codes
-- Logs errors to the SystemLog model for audit trail
-
-### Custom Error Classes
-
-| Error Class | HTTP Status | Usage |
-|-------------|:-----------:|-------|
-| `AppError` | 500 | Base application error |
-| `ValidationError` | 400 | Invalid input data |
-| `NotFoundError` | 404 | Resource not found |
-| `UnauthorizedError` | 401 | Missing or invalid authentication |
-| `ForbiddenError` | 403 | Insufficient permissions |
-| `ConflictError` | 409 | Duplicate or conflicting state |
-
-### State Persistence
-
-- `use-state-persistence` hook saves critical state to localStorage with timestamps
-- `saveBeforeError()` captures state before crash for recovery
-- `recoverState()` restores previous state on remount
-- Automatic corruption handling for invalid localStorage data
-
-### Idle Timeout
-
-- `use-idle-timeout` hook with 30-minute configurable duration
-- Activity detection on `mousedown`, `keydown`, `scroll`, `touchstart`, `click`
-- localStorage persistence of last activity and session state
-- Automatic session state recovery on remount
-
----
-
-## 🏪 Branch Architecture
-
-The system uses a **discriminator-column multi-tenancy** pattern where every tenant-scoped table includes a `storeId` column. This provides complete data isolation between branches while keeping the schema simple and performant.
-
-### Branch Isolation Model
-
-```
-┌──────────────────────────────────────────────────────────┐
-│                  MBUMAH HARDWARE (Organization)           │
-│                                                          │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │
-│  │ Juja Main   │  │   Thika     │  │   Ruiru     │     │
-│  │ (HQ)        │  │   Branch    │  │   Branch    │     │
-│  │             │  │             │  │             │     │
-│  │ • Products  │  │ • Products  │  │ • Products  │     │
-│  │ • Customers │  │ • Customers │  │ • Customers │     │
-│  │ • Transact. │  │ • Transact. │  │ • Transact. │     │
-│  │ • Accounts  │  │ • Accounts  │  │ • Accounts  │     │
-│  └─────────────┘  └─────────────┘  └─────────────┘     │
-│                                                          │
-│  ┌─────────────┐  ┌─────────────┐                       │
-│  │ Nairobi CBD │  │   Nakuru    │                       │
-│  │   Branch    │  │   Branch    │                       │
-│  │             │  │             │                       │
-│  │ • Products  │  │ • Products  │                       │
-│  │ • Customers │  │ • Customers │                       │
-│  │ • Transact. │  │ • Transact. │                       │
-│  │ • Accounts  │  │ • Accounts  │                       │
-│  └─────────────┘  └─────────────┘                       │
-│                                                          │
-│  SUPER_ADMIN sees all branches; others see only their own│
-└──────────────────────────────────────────────────────────┘
+    S1 & S2 & S3 & S4 & S5 --> Auth
+    S1 & S2 & S3 & S4 & S5 --> MP
+    S1 & S2 & S3 & S4 & S5 --> FIN
 ```
 
 ### How It Works
 
-| Aspect | Implementation |
-|--------|---------------|
-| **Data isolation** | Every query includes `where: { storeId }` — enforced at API layer |
-| **Branch-specific products** | Each branch has its own product catalog with local pricing |
-| **Branch-specific customers** | Customers belong to the branch where they registered |
-| **Cross-branch visibility** | SUPER_ADMIN role can query across all branches |
-| **Login redirect** | Users are redirected to their assigned branch dashboard |
-| **Receipt numbering** | Branch prefix on receipts (JJA-RCPT, THK-RCPT, RUR-RCPT, NBI-RCPT, NKR-RCPT) |
-| **Financial isolation** | Each branch has its own chart of accounts and journal entries |
+1. **Every request** includes the authenticated user's `storeId`
+2. **All queries** are scoped with `where: { storeId }` — no cross-store data leakage
+3. **SUPER_ADMIN** and **STORE_OWNER** can optionally query across stores
+4. **Organization-level** entities (accounts, suppliers) are shared; **store-level** entities (products, transactions, customers) are isolated
+5. **API middleware** validates the user's role + storeId before executing any operation
 
-### Branch Details
+### Store Seeding
 
-| Branch | Code | Location | Specialty Categories |
-|--------|------|----------|---------------------|
-| **Juja Main** | JJA | Salama M-Store, Juja | Full catalog (29 products, 10 categories) |
-| **Thika** | THK | Thika Town, Kiambu County | Timber & Wood |
-| **Ruiru** | RUR | Ruiru Town, Kiambu County | Electrical |
-| **Nairobi CBD** | NBI | Kenyatta Avenue, Nairobi | Safety Equipment |
-| **Nakuru** | NKR | Nakuru Town, Nakuru County | Water Tanks |
+The seed script creates **5 pre-configured stores**:
+
+```typescript
+const stores = [
+  { name: "Juja Main",    location: "Juja, Kiambu" },
+  { name: "Thika",        location: "Thika, Kiambu" },
+  { name: "Ruiru",        location: "Ruiru, Kiambu" },
+  { name: "Nairobi CBD",  location: "Nairobi" },
+  { name: "Nakuru",       location: "Nakuru" },
+];
+```
 
 ---
 
-## 📸 Screenshots
+## ⚙️ Configuration
 
-> 🖼️ Screenshots coming soon! The system features a polished dark/light mode UI with:
+All configuration is managed through environment variables. Copy `.env.example` to `.env`:
 
-| View | Description |
-|------|-------------|
-| 🏠 **Login** | Animated gradient background, frosted glass card, Kenyan flag accent, role-colored demo buttons |
-| 💰 **POS** | Product grid with category images, animated cart, checkout with receipt preview |
-| 📦 **Inventory** | Product management with search/filter, profit margin indicators, stock progress bars |
-| 👥 **Customers** | Customer list with debt status, loyalty tier badges, payment recording |
-| 🎫 **Gift Cards** | Card grid with balance progress, create/redeem/adjust dialogs |
-| 🔨 **Rentals** | Rental timeline visualization, damage assessment, overdue alerts |
-| 📊 **Financial** | Revenue trend charts, P&L summary, expandable journal entries |
-| 📈 **Reports** | Sales comparison, top products, inventory valuation, CSV export |
-| ⚙️ **Admin** | System health dashboard, user management, stock adjustments, activity feed |
-| 🔍 **Global Search** | Ctrl+K search across products and customers |
+```bash
+cp .env.example .env
+```
+
+### Core Variables
+
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `DATABASE_URL` | ✅ | `file:./db/custom.db` | Prisma connection string (SQLite or PostgreSQL) |
+| `NEXTAUTH_SECRET` | ✅ | — | NextAuth.js secret (`openssl rand -base64 32`) |
+| `NEXTAUTH_URL` | ✅ | `http://localhost:3000` | Full URL of your deployed app |
+| `JWT_SECRET` | ✅ | — | Legacy JWT secret |
+| `NEXT_PUBLIC_APP_URL` | ✅ | `http://localhost:3000` | Public app URL |
+| `NEXT_PUBLIC_CURRENCY` | ❌ | `KES` | Currency code for display |
+
+### M-Pesa Daraja API
+
+| Variable | Required | Description |
+|----------|:--------:|-------------|
+| `MPESA_CONSUMER_KEY` | ✅ | Daraja app consumer key |
+| `MPESA_CONSUMER_SECRET` | ✅ | Daraja app consumer secret |
+| `MPESA_PASSKEY` | ✅ | Lipa Na M-Pesa passkey |
+| `MPESA_SHORTCODE` | ❌ | Business shortcode (default: `174379`) |
+| `MPESA_ENVIRONMENT` | ❌ | `sandbox` or `production` |
+| `MPESA_CALLBACK_URL` | ✅ | Public callback URL for STK Push |
+
+### Optional Services
+
+| Variable | Description |
+|----------|-------------|
+| `RESEND_API_KEY` | Resend email API key |
+| `TWILIO_ACCOUNT_SID` | Twilio SMS account SID |
+| `TWILIO_AUTH_TOKEN` | Twilio auth token |
+| `TWILIO_PHONE_NUMBER` | Twilio phone number |
+| `REDIS_URL` | Redis URL for production caching |
+
+---
+
+## 🚢 Deployment
+
+### ▲ Vercel (Recommended)
+
+The project is optimized for Vercel deployment:
+
+1. **Fork** the repository to your GitHub account
+2. **Import** the project on [Vercel](https://vercel.com/new)
+3. **Configure** environment variables in the Vercel dashboard
+4. **Set** `DATABASE_URL` to a PostgreSQL connection string (e.g., [Supabase](https://supabase.com/), [Neon](https://neon.tech/))
+5. **Update** `prisma/schema.prisma` — change `provider` from `"sqlite"` to `"postgresql"`
+6. **Deploy!** Vercel will run `prisma generate && next build` automatically
+
+> **Note:** The `vercel-build` script in `package.json` handles Prisma generation automatically.
+
+### 🐳 Docker Compose
+
+For self-hosted production deployment:
+
+```bash
+# Build and start all services
+docker-compose up -d
+
+# Run database migrations
+docker-compose exec app npx prisma migrate deploy
+
+# Seed the database
+docker-compose exec app npx prisma db seed
+```
+
+The `docker-compose.yml` includes:
+- **App** — Next.js production server
+- **PostgreSQL** — Production database
+- **M-Pesa Mock** — Local development payment simulator
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions from the community! Here's how you can help:
+We love contributions! Here's how you can help:
 
 ### Getting Started
 
 1. **Fork** the repository
-2. **Clone** your fork: `git clone https://github.com/YOUR_USERNAME/mbumah-hardware-pos.git`
-3. **Create a branch**: `git checkout -b feature/your-feature-name`
-4. **Make your changes** and commit: `git commit -m "feat: add your feature"`
-5. **Push** to your fork: `git push origin feature/your-feature-name`
-6. **Open a Pull Request** against the `main` branch
+2. **Create** a feature branch: `git checkout -b feature/amazing-feature`
+3. **Commit** your changes: `git commit -m 'feat: add amazing feature'`
+4. **Push** to your branch: `git push origin feature/amazing-feature`
+5. **Open** a Pull Request
 
 ### Commit Convention
 
-We use [Conventional Commits](https://www.conventionalcommits.org/):
+We follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
-feat: add gift card bulk import
-fix: resolve M-Pesa callback race condition
-docs: update API reference for rentals
-chore: upgrade Next.js to 16.1
-refactor: extract checkout logic to service layer
+feat:     New feature
+fix:      Bug fix
+docs:     Documentation changes
+style:    Code style (formatting, semicolons, etc.)
+refactor: Code refactoring
+test:     Adding or updating tests
+chore:    Build process, tooling, etc.
 ```
-
-### Guidelines
-
-- Follow the existing **TypeScript** code style and ESLint configuration
-- Write **clear, descriptive** commit messages
-- Add **types** for all new interfaces and API payloads
-- Update **documentation** for any changed behavior
-- Keep PRs **focused** — one feature or fix per PR
-- Ensure `bun run lint` passes before submitting
-- Test across **light and dark** modes
-- Verify **mobile responsiveness** for new UI components
 
 ### Code Style
 
-- TypeScript throughout with strict typing
-- ES6+ import/export syntax
-- shadcn/ui components preferred over custom implementations
-- Use `'use client'` for client components, `'use server'` for server code
-- Prisma schema primitive types only (no lists)
-- Business logic in API routes, not in client components
+- **TypeScript** strict mode — no `any` types
+- **ESLint** — run `bun run lint` before committing
+- **Prettier** — consistent formatting
+- **shadcn/ui** — use existing components, don't reinvent the wheel
 
-### Reporting Issues
+### Areas We Need Help
 
-- Use the **Bug Report** template for bugs
-- Use the **Feature Request** template for new features
-- Search existing issues before creating a new one
-- Include steps to reproduce, expected behavior, and actual behavior
+- 🌍 Internationalization (Swahili, French)
+- 🧪 Test coverage (unit + integration)
+- 📱 PWA / offline support
+- 🏛️ eTIMS full integration
+- 📊 More report types
 
 ---
 
@@ -853,7 +695,7 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 ```
 MIT License
 
-Copyright (c) 2024-2025 MBUMAH HARDWARE
+Copyright (c) 2025 Mbumah Hardware
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -878,8 +720,8 @@ SOFTWARE.
 
 <div align="center">
 
-**Built with ❤️ for Kenyan hardware stores**
+**Built with ❤️ for Kenyan Hardware Stores**
 
-🇰🇪 *Asante sana!*
+[⬆ Back to Top](#-mbumah-hardware--pos--erp)
 
 </div>

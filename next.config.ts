@@ -12,7 +12,16 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@prisma/client"],
 
   // Allow dev requests from gateway proxy
-  allowedDevOrigins: ["http://0.0.0.0:81", "http://0.0.0.0:3000", "http://21.0.8.40:81", "http://21.0.8.40:3000"],
+  allowedDevOrigins: [
+    "http://0.0.0.0:81",
+    "http://0.0.0.0:3000",
+    "http://21.0.8.40:81",
+    "http://21.0.8.40:3000",
+    "http://localhost:81",
+    "http://localhost:3000",
+    "http://127.0.0.1:81",
+    "http://127.0.0.1:3000",
+  ],
 
   // Image optimization config — works with Vercel's Image Optimization API
   images: {
