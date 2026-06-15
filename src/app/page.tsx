@@ -461,7 +461,7 @@ function useNotificationCount(storeId: string) {
     queryKey: ['notification-count', storeId],
     queryFn: async () => {
       const res = await notificationsApi.list(storeId);
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
     refetchInterval: 60000, // Refresh every minute
     select: (notifications) => {
@@ -534,7 +534,7 @@ function NotificationCenter({
     queryKey: ['notifications', storeId],
     queryFn: async () => {
       const res = await notificationsApi.list(storeId);
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
     enabled: open,
   });
@@ -1140,8 +1140,8 @@ function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonEle
         customersApi.list({ storeId: currentStoreId, search: searchQuery, limit: 5 }),
       ]);
       return {
-        products: prodRes.data || [],
-        customers: custRes.data || [],
+        products: Array.isArray(prodRes.data) ? prodRes.data : [],
+        customers: Array.isArray(custRes.data) ? custRes.data : [],
       };
     },
     enabled: searchQuery.length >= 2,
@@ -1394,7 +1394,20 @@ function DashboardStats({ storeId, onLowStockClick }: { storeId: string; onLowSt
     queryKey: ['dashboard', storeId],
     queryFn: async () => {
       const res = await dashboardApi.getStats(storeId);
-      return res.data;
+      const d = res.data;
+      // Defensive: ensure all array fields are actually arrays
+      if (d && typeof d === 'object') {
+        return {
+          ...d,
+          salesByHour: Array.isArray(d.salesByHour) ? d.salesByHour : [],
+          paymentMethodBreakdown: Array.isArray(d.paymentMethodBreakdown) ? d.paymentMethodBreakdown : [],
+          recentTransactions: Array.isArray(d.recentTransactions) ? d.recentTransactions : [],
+          topProducts: Array.isArray(d.topProducts) ? d.topProducts : [],
+          topSellingCategories: Array.isArray(d.topSellingCategories) ? d.topSellingCategories : [],
+          recentActivities: Array.isArray(d.recentActivities) ? d.recentActivities : [],
+        };
+      }
+      return d ?? null;
     },
     refetchInterval: 30000, // More frequent refresh
   });
@@ -1996,22 +2009,31 @@ function POSTab() {
 
   const { data: productsData, isLoading: productsLoading } = useQuery({
     queryKey: ['products', currentStoreId, searchQuery, selectedCategory],
-    queryFn: () => productsApi.list({
-      storeId: currentStoreId,
-      search: searchQuery || undefined,
-      limit: 100,
-      ...(selectedCategory !== 'all' ? { categoryId: selectedCategory } : {}),
-    }),
+    queryFn: async () => {
+      const res = await productsApi.list({
+        storeId: currentStoreId,
+        search: searchQuery || undefined,
+        limit: 100,
+        ...(selectedCategory !== 'all' ? { categoryId: selectedCategory } : {}),
+      });
+      return Array.isArray(res.data) ? res : { ...res, data: [] };
+    },
   });
 
   const { data: categoriesData } = useQuery({
     queryKey: ['categories', currentStoreId],
-    queryFn: () => categoriesApi.list(currentStoreId),
+    queryFn: async () => {
+      const res = await categoriesApi.list(currentStoreId);
+      return Array.isArray(res.data) ? res : { ...res, data: [] };
+    },
   });
 
   const { data: customersData } = useQuery({
     queryKey: ['customers', currentStoreId],
-    queryFn: () => customersApi.list({ storeId: currentStoreId, limit: 100 }),
+    queryFn: async () => {
+      const res = await customersApi.list({ storeId: currentStoreId, limit: 100 });
+      return Array.isArray(res.data) ? res : { ...res, data: [] };
+    },
   });
 
   const [receiptOpen, setReceiptOpen] = useState(false);

@@ -279,9 +279,9 @@ export default function TransfersTab() {
     enabled: productSearch.length >= 2,
   });
 
-  const transfers: StoreTransferItem[] = transfersData?.data || [];
+  const transfers: StoreTransferItem[] = Array.isArray(transfersData?.data) ? transfersData.data : [];
   const stores: StoreInfo[] = storesData || [];
-  const searchResults = productSearchData?.data || [];
+  const searchResults = Array.isArray(productSearchData?.data) ? productSearchData.data : [];
 
   // Stats
   const pendingCount = useMemo(() => transfers.filter(t => t.status === 'PENDING').length, [transfers]);

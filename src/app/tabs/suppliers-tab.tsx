@@ -481,7 +481,7 @@ function CreatePODialog({
     enabled: open,
   });
 
-  const products: ProductListItem[] = productsData?.data || [];
+  const products: ProductListItem[] = Array.isArray(productsData?.data) ? productsData.data : [];
 
   const addItem = () => {
     setPoItems([...poItems, { productId: '', quantity: '1', unitPrice: '0' }]);
@@ -768,7 +768,7 @@ function SupplierDetailView({
     enabled: !!supplierId,
   });
 
-  const purchaseOrders = poData?.data || [];
+  const purchaseOrders = Array.isArray(poData?.data) ? poData.data : [];
 
   const deleteMutation = useMutation({
     mutationFn: () => suppliersApi.delete(supplierId),
@@ -1195,8 +1195,8 @@ export default function SuppliersTab() {
     enabled: !!currentStoreId,
   });
 
-  const suppliers: SupplierItem[] = suppliersData?.data || [];
-  const purchaseOrders: PurchaseOrderListItem[] = poData?.data || [];
+  const suppliers: SupplierItem[] = Array.isArray(suppliersData?.data) ? suppliersData.data : [];
+  const purchaseOrders: PurchaseOrderListItem[] = Array.isArray(poData?.data) ? poData.data : [];
 
   const activeSuppliers = suppliers.filter((s) => s.isActive).length;
   const pendingPOs = purchaseOrders.filter((po) => ['DRAFT', 'SENT', 'CONFIRMED'].includes(po.status)).length;

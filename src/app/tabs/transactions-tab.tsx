@@ -557,7 +557,7 @@ export default function TransactionsTab() {
         params.paymentMethod = paymentFilter;
       }
       const res = await transactionsApi.list(params);
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 

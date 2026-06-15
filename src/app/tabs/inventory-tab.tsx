@@ -365,7 +365,7 @@ export default function InventoryTab() {
   });
 
   // Filtered and sorted products
-  const allProducts = productsData?.data || [];
+  const allProducts = Array.isArray(productsData?.data) ? productsData.data : [];
   const filteredProducts = useMemo(() => {
     let result = allProducts.filter((p) => {
       if (stockFilter === 'low') return p.quantityInStock <= p.reorderLevel && p.quantityInStock > 0;
@@ -398,9 +398,9 @@ export default function InventoryTab() {
     return result;
   }, [allProducts, stockFilter, sortField, sortDirection]);
 
-  const categories = categoriesData?.data || [];
-  const stockMovements = stockMovementsData?.data || [];
-  const productMovements = productMovementsData?.data || [];
+  const categories = Array.isArray(categoriesData?.data) ? categoriesData.data : [];
+  const stockMovements = Array.isArray(stockMovementsData?.data) ? stockMovementsData.data : [];
+  const productMovements = Array.isArray(productMovementsData?.data) ? productMovementsData.data : [];
 
   // Filter stock movements by date range
   const filteredStockMovements = useMemo(() => {

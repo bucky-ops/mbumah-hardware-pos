@@ -101,12 +101,12 @@ export default function CatalogTab() {
 
   const { data: categories = [], isLoading: categoriesLoading } = useQuery<CategoryItem[]>({
     queryKey: ['categories', currentStoreId],
-    queryFn: () => categoriesApi.list(currentStoreId).then((r) => r.data ?? []),
+    queryFn: () => categoriesApi.list(currentStoreId).then((r) => Array.isArray(r.data) ? r.data : []),
   });
 
   const { data: products = [], isLoading: productsLoading } = useQuery<ProductListItem[]>({
     queryKey: ['catalog-products', currentStoreId],
-    queryFn: () => productsApi.list({ storeId: currentStoreId, limit: 500 }).then((r) => r.data ?? []),
+    queryFn: () => productsApi.list({ storeId: currentStoreId, limit: 500 }).then((r) => Array.isArray(r.data) ? r.data : []),
   });
 
   // ---------------------------------------------------------------------------

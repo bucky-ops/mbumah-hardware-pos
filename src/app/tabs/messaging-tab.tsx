@@ -211,10 +211,10 @@ export default function MessagingTab() {
 
   // ── Computed Data ───────────────────────────────────────
 
-  const messages = messagesQuery.data?.data ?? [];
-  const customers = customersQuery.data?.data ?? [];
-  const overdueDebts = debtQuery.data?.data ?? [];
-  const outstandingDebts = debtOutstandingQuery.data?.data ?? [];
+  const messages = Array.isArray(messagesQuery.data?.data) ? messagesQuery.data.data : [];
+  const customers = Array.isArray(customersQuery.data?.data) ? customersQuery.data.data : [];
+  const overdueDebts = Array.isArray(debtQuery.data?.data) ? debtQuery.data.data : [];
+  const outstandingDebts = Array.isArray(debtOutstandingQuery.data?.data) ? debtOutstandingQuery.data.data : [];
 
   // Stats
   const stats = useMemo(() => {

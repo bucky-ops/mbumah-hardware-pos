@@ -180,9 +180,9 @@ export default function CustomersTab() {
     onError: (err: Error) => toast.error(err.message || 'Failed to record payment'),
   });
 
-  const rawCustomers = customersData?.data || [];
-  const debts = debtData?.data || [];
-  const customerTransactions: TransactionItem[] = (customerTransactionsData?.data || []).slice(0, 10);
+  const rawCustomers = Array.isArray(customersData?.data) ? customersData.data : [];
+  const debts = Array.isArray(debtData?.data) ? debtData.data : [];
+  const customerTransactions: TransactionItem[] = (Array.isArray(customerTransactionsData?.data) ? customerTransactionsData.data : []).slice(0, 10);
 
   // Filter customers
   const customers = useMemo(() => {

@@ -446,12 +446,12 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
         reason: reasonFilter !== 'ALL' ? reasonFilter : undefined,
         search: searchQuery || undefined,
       });
-      return result.data ?? [];
+      return Array.isArray(result.data) ? result.data : [];
     },
     enabled: !!storeId,
   });
 
-  const giftCards = useMemo(() => giftCardsData ?? [], [giftCardsData]);
+  const giftCards = useMemo(() => Array.isArray(giftCardsData) ? giftCardsData : [], [giftCardsData]);
 
   // Customer search query
   const { data: customerSearchData } = useQuery({
@@ -459,7 +459,7 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
     queryFn: async () => {
       if (!customerSearch || customerSearch.length < 2) return [];
       const result = await customersApi.search(customerSearch, storeId);
-      return result.data ?? [];
+      return Array.isArray(result.data) ? result.data : [];
     },
     enabled: customerSearch.length >= 2,
   });

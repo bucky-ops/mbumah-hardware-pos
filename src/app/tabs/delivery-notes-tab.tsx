@@ -198,7 +198,7 @@ export default function DeliveryNotesTab() {
   // ─── Data ────────────────────────────────────────────
 
   const deliveryNotes: DeliveryNoteItem[] = useMemo(() => {
-    const raw = notesData?.data || [];
+    const raw = Array.isArray(notesData?.data) ? notesData.data : [];
     if (!searchQuery) return raw;
     const q = searchQuery.toLowerCase();
     return raw.filter(
@@ -209,13 +209,13 @@ export default function DeliveryNotesTab() {
         (dn.driverName && dn.driverName.toLowerCase().includes(q)) ||
         (dn.deliveryAddress && dn.deliveryAddress.toLowerCase().includes(q))
     );
-  }, [notesData?.data, searchQuery]);
+  }, [notesData, searchQuery]);
 
   const noteDetail = noteDetailData?.data as (DeliveryNoteItem & { items: DeliveryNoteItemDetail[]; transaction?: { id: string; receiptNumber: string; totalAmount: number; paymentStatus: string } }) | undefined;
 
   // Stats
   const stats = useMemo(() => {
-    const all = notesData?.data || [];
+    const all = Array.isArray(notesData?.data) ? notesData.data : [];
     const today = new Date().toISOString().slice(0, 10);
     return {
       pending: all.filter((d) => d.status === 'PENDING').length,
@@ -223,7 +223,7 @@ export default function DeliveryNotesTab() {
       deliveredToday: all.filter((d) => d.status === 'DELIVERED' && d.deliveredAt && d.deliveredAt.slice(0, 10) === today).length,
       total: all.length,
     };
-  }, [notesData?.data]);
+  }, [notesData]);
 
   // ─── Form helpers ────────────────────────────────────
 

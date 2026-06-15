@@ -193,7 +193,7 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const allProducts = productsData?.data || [];
+  const allProducts = Array.isArray(productsData?.data) ? productsData.data : [];
   const filteredProducts = useMemo(() => {
     if (!productSearch.trim()) return allProducts;
     const q = productSearch.toLowerCase();
@@ -614,7 +614,7 @@ function AuditLogSection({ storeId }: { storeId: string }) {
     }),
   });
 
-  const logs = data?.data || [];
+  const logs = Array.isArray(data?.data) ? data.data : [];
   const pagination = data?.pagination;
   const rawResp = data as unknown as Record<string, unknown>;
   const summary = rawResp?.summary as { bySeverity?: Record<string, number>; byComponent?: Record<string, number>; recentErrors?: number } | undefined;
@@ -1225,7 +1225,7 @@ function UserManagement({ storeId }: { storeId: string }) {
     queryFn: () => usersApi.list({ storeId, limit: 50 }),
   });
 
-  const users = usersData?.data || [];
+  const users = Array.isArray(usersData?.data) ? usersData.data : [];
   const rawUsersResp = usersData as unknown as Record<string, unknown>;
   const activeSessions = rawUsersResp?.meta ? (rawUsersResp.meta as { activeSessions?: number }).activeSessions || 0 : 0;
 
@@ -1605,9 +1605,9 @@ export default function AdminTab() {
     queryFn: () => stockMovementsApi.list({ storeId: currentStoreId, limit: 50 }),
   });
 
-  const logs = logsData?.data || [];
-  const auditLogs = auditData?.data || [];
-  const movements = movementsData?.data || [];
+  const logs = Array.isArray(logsData?.data) ? logsData.data : [];
+  const auditLogs = Array.isArray(auditData?.data) ? auditData.data : [];
+  const movements = Array.isArray(movementsData?.data) ? movementsData.data : [];
 
   // Simulated health metrics
   const memoryUsed = 67;

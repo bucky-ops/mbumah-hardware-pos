@@ -786,8 +786,8 @@ export default function RentalsTab() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const rentals = rentalsData?.data || [];
-  const products = productsData?.data || [];
+  const rentals = Array.isArray(rentalsData?.data) ? rentalsData.data : [];
+  const products = Array.isArray(productsData?.data) ? productsData.data : [];
 
   // Status counts
   const statusCounts = useMemo(() => ({
@@ -1200,8 +1200,8 @@ export default function RentalsTab() {
           </DialogHeader>
           <RentalForm
             storeId={currentStoreId}
-            products={productsData?.data || []}
-            customers={customersData?.data || []}
+            products={Array.isArray(productsData?.data) ? productsData.data : []}
+            customers={Array.isArray(customersData?.data) ? customersData.data : []}
             onSuccess={() => setNewRentalOpen(false)}
           />
         </DialogContent>

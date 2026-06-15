@@ -448,8 +448,8 @@ export default function ReportsTab() {
 
   // Customer Analysis data
   const customerAnalysis = useMemo(() => {
-    const customers = customersData?.data || [];
-    const transactions = transactionsData?.data || [];
+    const customers = Array.isArray(customersData?.data) ? customersData.data : [];
+    const transactions = Array.isArray(transactionsData?.data) ? transactionsData.data : [];
     if (customers.length === 0) return { topCustomers: [], paymentMethods: [], customerCount: 0, totalSpent: 0, avgSpend: 0, debtTotal: 0 };
 
     // Aggregate spending per customer
@@ -506,7 +506,7 @@ export default function ReportsTab() {
 
   // Rental Performance data
   const rentalPerformance = useMemo(() => {
-    const rentals = rentalsData?.data || [];
+    const rentals = Array.isArray(rentalsData?.data) ? rentalsData.data : [];
     if (rentals.length === 0) return { activeRentals: 0, returnedRentals: 0, totalRevenue: 0, avgRentalValue: 0, utilization: 0, statusBreakdown: [], topRented: [], revenueByStatus: [] };
 
     const activeRentals = rentals.filter(r => r.status === 'ACTIVE').length;

@@ -385,8 +385,8 @@ export default function TaxTab() {
     enabled: !!currentStoreId,
   });
 
-  const categories: TaxCategoryItem[] = categoriesData?.data || [];
-  const filings: TaxFilingItem[] = filingsData?.data || [];
+  const categories: TaxCategoryItem[] = Array.isArray(categoriesData?.data) ? categoriesData.data : [];
+  const filings: TaxFilingItem[] = Array.isArray(filingsData?.data) ? filingsData.data : [];
 
   // Stats
   const totalVAT = useMemo(() =>

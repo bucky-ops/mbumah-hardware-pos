@@ -69,7 +69,36 @@ async function request<T>(
     throw new Error(errorData.error || errorData.message || `Request failed: ${response.status}`);
   }
 
-  return response.json();
+  const json = await response.json();
+
+  // Defensive: ensure data field exists and matches expected type
+  // If T is array type and data is not an array, wrap or default
+  if (json && json.success && json.data === undefined) {
+    // API returned success but no data field - common with some endpoints
+    json.data = ([] as unknown) as T;
+  }
+
+  return json;
+}
+
+/**
+ * Safely extract an array from an API response.
+ * Returns the data if it's an array, otherwise returns an empty array.
+ * Use this in queryFn to prevent "D.map is not a function" errors.
+ */
+export function safeArray<T>(response: ApiResponse<T[]> | undefined | null): T[] {
+  if (!response) return [];
+  if (Array.isArray(response.data)) return response.data;
+  return [];
+}
+
+/**
+ * Safely extract data from an API response, with a fallback.
+ * Returns the data if it exists, otherwise returns the fallback.
+ */
+export function safeData<T>(response: ApiResponse<T> | undefined | null, fallback: T): T {
+  if (!response) return fallback;
+  return response.data ?? fallback;
 }
 
 

@@ -466,9 +466,9 @@ export default function FinancialTab() {
   });
 
   const stats = dashboardData?.data;
-  const journals = journalData?.data || [];
-  const accounts = accountsData?.data || [];
-  const debts = debtData?.data || [];
+  const journals = Array.isArray(journalData?.data) ? journalData.data : [];
+  const accounts = Array.isArray(accountsData?.data) ? accountsData.data : [];
+  const debts = Array.isArray(debtData?.data) ? debtData.data : [];
 
   // Debt aging summary
   const agingSummary = useMemo(() => {

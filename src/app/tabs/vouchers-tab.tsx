@@ -301,8 +301,8 @@ export default function VouchersTab() {
 
   // ─── Derived Data ────────────────────────────────────────────────────────
 
-  const vouchers: VoucherItem[] = vouchersData?.data || [];
-  const campaigns: VoucherCampaignItem[] = campaignsData?.data || [];
+  const vouchers: VoucherItem[] = Array.isArray(vouchersData?.data) ? vouchersData.data : [];
+  const campaigns: VoucherCampaignItem[] = Array.isArray(campaignsData?.data) ? campaignsData.data : [];
 
   // Filtered vouchers
   const filteredVouchers = useMemo(() => {

@@ -338,7 +338,7 @@ function SalesOverview({ storeId }: { storeId: string }) {
     queryKey: ['revenue-trend', storeId],
     queryFn: async () => {
       const res = await financialApi.getRevenueTrend({ storeId, days: 7 });
-      return res.data;
+      return res.data ?? null;
     },
     refetchInterval: 60000,
   });
@@ -347,7 +347,22 @@ function SalesOverview({ storeId }: { storeId: string }) {
     queryKey: ['dashboard', storeId],
     queryFn: async () => {
       const res = await dashboardApi.getStats(storeId);
-      return res.data;
+      const d = res.data;
+      // Defensive: ensure all array fields are actually arrays
+      if (d && typeof d === 'object') {
+        return {
+          ...d,
+          salesByHour: Array.isArray(d.salesByHour) ? d.salesByHour : [],
+          paymentMethodBreakdown: Array.isArray(d.paymentMethodBreakdown) ? d.paymentMethodBreakdown : [],
+          recentTransactions: Array.isArray(d.recentTransactions) ? d.recentTransactions : [],
+          topProducts: Array.isArray(d.topProducts) ? d.topProducts : [],
+          topSellingCategories: Array.isArray(d.topSellingCategories) ? d.topSellingCategories : [],
+          hourlySalesBreakdown: Array.isArray(d.hourlySalesBreakdown) ? d.hourlySalesBreakdown : [],
+          lowStockItems: Array.isArray(d.lowStockItems) ? d.lowStockItems : [],
+          recentActivities: Array.isArray(d.recentActivities) ? d.recentActivities : [],
+        };
+      }
+      return d ?? null;
     },
     refetchInterval: 30000,
   });
@@ -1042,7 +1057,7 @@ function AlertsPanel({ storeId, onTabSwitch }: { storeId: string; onTabSwitch: (
     queryKey: ['notifications', storeId],
     queryFn: async () => {
       const res = await notificationsApi.list(storeId);
-      return res.data;
+      return Array.isArray(res.data) ? res.data : [];
     },
     refetchInterval: 30000,
   });
@@ -1051,7 +1066,7 @@ function AlertsPanel({ storeId, onTabSwitch }: { storeId: string; onTabSwitch: (
     queryKey: ['overdue-debt', storeId],
     queryFn: async () => {
       const res = await debtApi.list({ storeId, status: 'OVERDUE', limit: 5 });
-      return res.data;
+      return Array.isArray(res.data) ? res.data : [];
     },
     refetchInterval: 60000,
   });
@@ -1060,7 +1075,7 @@ function AlertsPanel({ storeId, onTabSwitch }: { storeId: string; onTabSwitch: (
     queryKey: ['overdue-rentals-alert', storeId],
     queryFn: async () => {
       const res = await rentalsApi.list({ storeId, status: 'OVERDUE', limit: 5 });
-      return res.data;
+      return Array.isArray(res.data) ? res.data : [];
     },
     refetchInterval: 60000,
   });

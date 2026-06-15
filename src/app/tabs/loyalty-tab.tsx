@@ -237,11 +237,11 @@ export default function LoyaltyTab() {
   });
 
   // ─── Derived data ────────────────────────────────────────────────────────
-  const tiers = (tiersData as any)?.data ?? [];
-  const customers = (customersData as any)?.data ?? [];
-  const transactions = (txData as any)?.data ?? [];
-  const campaigns = (campaignsData as any)?.data ?? [];
-  const memberHistory = (memberHistoryData as any)?.data ?? [];
+  const tiers = Array.isArray((tiersData as any)?.data) ? (tiersData as any).data : [];
+  const customers = Array.isArray((customersData as any)?.data) ? (customersData as any).data : [];
+  const transactions = Array.isArray((txData as any)?.data) ? (txData as any).data : [];
+  const campaigns = Array.isArray((campaignsData as any)?.data) ? (campaignsData as any).data : [];
+  const memberHistory = Array.isArray((memberHistoryData as any)?.data) ? (memberHistoryData as any).data : [];
 
   // Stats
   const totalMembers = customers.length;

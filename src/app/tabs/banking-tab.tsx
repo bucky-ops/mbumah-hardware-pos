@@ -101,15 +101,15 @@ export default function BankingTab() {
   // M-Pesa reconciliations — we use transactions filtered by MPESA accounts
   // since there is no dedicated mpesa reconciliation API endpoint
   const mpesaAccounts = useMemo(() => {
-    const accounts = accountsQuery.data?.data ?? [];
+    const accounts = Array.isArray(accountsQuery.data?.data) ? accountsQuery.data.data : [];
     return accounts.filter((a) => a.accountType === 'MPESA');
-  }, [accountsQuery.data?.data]);
+  }, [accountsQuery.data]);
 
   // ── Computed Stats ──────────────────────────────────────
 
-  const accounts = accountsQuery.data?.data ?? [];
-  const transactions = transactionsQuery.data?.data ?? [];
-  const reconciliations = reconciliationsQuery.data?.data ?? [];
+  const accounts = Array.isArray(accountsQuery.data?.data) ? accountsQuery.data.data : [];
+  const transactions = Array.isArray(transactionsQuery.data?.data) ? transactionsQuery.data.data : [];
+  const reconciliations = Array.isArray(reconciliationsQuery.data?.data) ? reconciliationsQuery.data.data : [];
 
   const totalBalance = useMemo(
     () => accounts.reduce((sum, a) => sum + a.currentBalance, 0),

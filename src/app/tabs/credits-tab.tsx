@@ -181,8 +181,8 @@ export default function CreditsTab() {
   });
 
   // Helpers
-  const credits: CustomerCreditItem[] = creditsData?.data || [];
-  const customers: CustomerItem[] = customersData?.data || [];
+  const credits: CustomerCreditItem[] = Array.isArray(creditsData?.data) ? creditsData.data : [];
+  const customers: CustomerItem[] = Array.isArray(customersData?.data) ? customersData.data : [];
 
   const customerMap = useMemo(() => {
     const map = new Map<string, CustomerItem>();
