@@ -4,17 +4,18 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Truck, Search, Plus, Star, Eye, Loader2,
+  Truck, Search, Plus, Star, Eye, Loader2, X,
   Phone, Mail, MapPin, Building2, User, FileText,
   ChevronRight, Download, Package, CalendarDays,
   ClipboardCheck, AlertTriangle, Hash, Clock, CheckCircle2,
-  Circle, ArrowRight, TrendingUp, Award, Timer,
+  Circle, ArrowRight, TrendingUp, Award, Timer, MessageSquare,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
   suppliersApi, purchaseOrdersApi, productsApi,
   formatKES, formatDate, formatDateTime,
+  openWhatsApp, openEmail, openSMS,
   type SupplierItem,
   type PurchaseOrderListItem,
   type PurchaseOrderItemDetail,
@@ -472,34 +473,73 @@ function CreatePODialog({
   const [supplierId, setSupplierId] = useState('');
   const [expectedDate, setExpectedDate] = useState('');
   const [notes, setNotes] = useState('');
-  const [poItems, setPoItems] = useState<{ productId: string; quantity: string; unitPrice: string }[]>([]);
+  const [poItems, setPoItems] = useState<{ productId: string; name: string; sku: string; quantity: string; unitPrice: string; currentStock: number }[]>([]);
   const [productSearch, setProductSearch] = useState('');
+  const [lowStockLoading, setLowStockLoading] = useState(false);
 
-  const { data: productsData } = useQuery({
-    queryKey: ['products-for-po', storeId, productSearch],
-    queryFn: () => productsApi.list({ storeId, search: productSearch, limit: 50 }),
-    enabled: open,
+  // Product search query (debounced via query key)
+  const { data: productSearchData, isLoading: productSearchLoading } = useQuery({
+    queryKey: ['po-product-search', storeId, productSearch],
+    queryFn: () => productsApi.search(productSearch, storeId),
+    enabled: open && productSearch.length >= 2,
   });
 
-  const products: ProductListItem[] = Array.isArray(productsData?.data) ? productsData.data : [];
+  const searchResults: ProductListItem[] = Array.isArray(productSearchData?.data) ? productSearchData.data : [];
 
-  const addItem = () => {
-    setPoItems([...poItems, { productId: '', quantity: '1', unitPrice: '0' }]);
+  // Add product from search dropdown
+  const addProductFromSearch = (product: ProductListItem) => {
+    if (poItems.find(i => i.productId === product.id)) {
+      toast.error('Product already added');
+      return;
+    }
+    setPoItems([...poItems, {
+      productId: product.id,
+      name: product.name,
+      sku: product.sku,
+      quantity: '1',
+      unitPrice: String(product.costPrice),
+      currentStock: product.quantityInStock,
+    }]);
+    setProductSearch('');
+  };
+
+  // Add low stock items
+  const addLowStockItems = async () => {
+    setLowStockLoading(true);
+    try {
+      const res = await productsApi.list({ storeId, limit: 200 });
+      const allProducts: ProductListItem[] = Array.isArray(res?.data) ? res.data : [];
+      const lowStockProducts = allProducts.filter(
+        (p) => p.isActive && p.quantityInStock <= p.reorderLevel && !poItems.find(i => i.productId === p.id)
+      );
+      if (lowStockProducts.length === 0) {
+        toast.info('No low-stock products found');
+        return;
+      }
+      const newItems = lowStockProducts.map((p) => ({
+        productId: p.id,
+        name: p.name,
+        sku: p.sku,
+        quantity: String(Math.max(Math.ceil(p.reorderLevel * 2 - p.quantityInStock), 1)),
+        unitPrice: String(p.costPrice),
+        currentStock: p.quantityInStock,
+      }));
+      setPoItems([...poItems, ...newItems]);
+      toast.success(`Added ${newItems.length} low-stock item${newItems.length > 1 ? 's' : ''}`);
+    } catch (err) {
+      toast.error('Failed to load low-stock products');
+    } finally {
+      setLowStockLoading(false);
+    }
   };
 
   const removeItem = (index: number) => {
     setPoItems(poItems.filter((_, i) => i !== index));
   };
 
-  const updateItem = (index: number, field: 'productId' | 'quantity' | 'unitPrice', value: string) => {
+  const updateItem = (index: number, field: 'quantity' | 'unitPrice', value: string) => {
     const updated = [...poItems];
     updated[index] = { ...updated[index], [field]: value };
-    if (field === 'productId') {
-      const product = products.find((p) => p.id === value);
-      if (product) {
-        updated[index].unitPrice = String(product.costPrice);
-      }
-    }
     setPoItems(updated);
   };
 
@@ -562,67 +602,143 @@ function CreatePODialog({
 
           <Separator />
 
+          {/* Product Search with Dropdown */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Order Items</Label>
-              <Button type="button" variant="outline" size="sm" onClick={addItem}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Add Item
+              <Label>Add Products</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addLowStockItems}
+                disabled={lowStockLoading}
+              >
+                {lowStockLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                ) : (
+                  <AlertTriangle className="h-3.5 w-3.5 mr-1 text-amber-600" />
+                )}
+                Add Low Stock Items
               </Button>
             </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search products..."
+                className="pl-9 h-9"
+                placeholder="Search products by name or SKU..."
                 value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)}
-                className="pl-10 mb-2"
               />
             </div>
-            {poItems.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No items added yet. Click &ldquo;Add Item&rdquo; to start.</p>
+            {/* Search Results Dropdown */}
+            {productSearch.length >= 2 && (
+              <div className="border rounded-md max-h-48 overflow-y-auto bg-background shadow-sm">
+                {productSearchLoading ? (
+                  <div className="p-3 text-center">
+                    <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
+                  </div>
+                ) : searchResults.length === 0 ? (
+                  <div className="p-3 text-center text-xs text-muted-foreground">No products found</div>
+                ) : (
+                  searchResults
+                    .filter(p => !poItems.find(i => i.productId === p.id))
+                    .slice(0, 10)
+                    .map(product => (
+                      <button
+                        key={product.id}
+                        className="w-full text-left px-3 py-2 hover:bg-muted/50 transition-colors flex items-center justify-between"
+                        onClick={() => addProductFromSearch(product)}
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{product.name}</p>
+                          <p className="text-xs text-muted-foreground font-mono">{product.sku}</p>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Stock: {product.quantityInStock} &middot; {formatKES(product.costPrice)}
+                        </div>
+                      </button>
+                    ))
+                )}
               </div>
-            ) : (
-              <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+            )}
+          </div>
+
+          {/* PO Items List */}
+          {poItems.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">
+                Order Items ({poItems.length}) &middot; Total Qty: {poItems.reduce((s, i) => s + (parseFloat(i.quantity) || 0), 0)}
+              </p>
+              <div className="border rounded-md divide-y max-h-60 overflow-y-auto custom-scrollbar">
                 {poItems.map((item, index) => (
-                  <div key={index} className="grid grid-cols-12 gap-2 items-end border rounded-lg p-2">
-                    <div className="col-span-5">
-                      <Label className="text-xs">Product</Label>
-                      <Select value={item.productId} onValueChange={(v) => updateItem(index, 'productId', v)}>
-                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
-                        <SelectContent>
-                          {products.map((p) => (
-                            <SelectItem key={p.id} value={p.id}>
-                              {p.name} ({p.sku})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                  <div key={item.productId || index} className="flex items-center gap-3 px-3 py-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{item.name || 'Unknown'}</p>
+                      <p className="text-xs text-muted-foreground font-mono">
+                        {item.sku}
+                        {item.currentStock !== undefined && (
+                          <span className="ml-2 text-amber-600">
+                            <Package className="h-3 w-3 inline mr-0.5" />
+                            {item.currentStock} in stock
+                          </span>
+                        )}
+                      </p>
                     </div>
-                    <div className="col-span-2">
-                      <Label className="text-xs">Qty</Label>
-                      <Input type="number" min="1" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} className="h-9 text-xs" />
-                    </div>
-                    <div className="col-span-3">
-                      <Label className="text-xs">Unit Price</Label>
-                      <Input type="number" min="0" step="0.01" value={item.unitPrice} onChange={(e) => updateItem(index, 'unitPrice', e.target.value)} className="h-9 text-xs" />
-                    </div>
-                    <div className="col-span-2 flex items-center justify-end">
-                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700" onClick={() => removeItem(index)}>
-                        &times;
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="w-16">
+                        <Label className="text-[10px] text-muted-foreground">Qty</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => updateItem(index, 'quantity', e.target.value)}
+                          className="h-7 text-xs text-center"
+                        />
+                      </div>
+                      <div className="w-24">
+                        <Label className="text-[10px] text-muted-foreground">Unit Price</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={item.unitPrice}
+                          onChange={(e) => updateItem(index, 'unitPrice', e.target.value)}
+                          className="h-7 text-xs text-center"
+                        />
+                      </div>
+                      <div className="text-right w-20">
+                        <Label className="text-[10px] text-muted-foreground">Total</Label>
+                        <p className="text-xs font-medium">
+                          {formatKES((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0))}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0"
+                        onClick={() => removeItem(index)}
+                      >
+                        <X className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
                 ))}
               </div>
-            )}
-            {totalAmount > 0 && (
-              <div className="text-right text-sm font-medium pt-2 border-t">
-                Total: {formatKES(totalAmount)}
-              </div>
-            )}
-          </div>
+              {totalAmount > 0 && (
+                <div className="text-right text-sm font-medium pt-2 border-t">
+                  Total: {formatKES(totalAmount)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {poItems.length === 0 && productSearch.length < 2 && (
+            <div className="text-center py-6 text-muted-foreground border rounded-md border-dashed">
+              <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">Search for products above or add low-stock items</p>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>Notes</Label>
@@ -1075,6 +1191,54 @@ function SupplierDetailView({
                   <p className="text-sm">No contact information available</p>
                 </div>
               )}
+
+              {/* Send options */}
+              <Separator />
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Quick Send</p>
+                <div className="flex flex-wrap gap-2">
+                  {supplier.phone && (
+                    <>
+                      <Button
+                        size="sm"
+                        className="gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                        onClick={() => {
+                          const message = `Hello ${supplier.name}, this is Mbumah Hardware. We wanted to reach out regarding our supplier relationship.`;
+                          openWhatsApp(supplier.phone!, message);
+                        }}
+                      >
+                        <MessageSquare className="h-4 w-4" /> WhatsApp
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+                        onClick={() => {
+                          const message = `Hello ${supplier.name}, this is Mbumah Hardware. We wanted to reach out regarding our supplier relationship.`;
+                          openSMS(supplier.phone!, message);
+                        }}
+                      >
+                        <Phone className="h-4 w-4" /> SMS
+                      </Button>
+                    </>
+                  )}
+                  {supplier.email && (
+                    <Button
+                      size="sm"
+                      className="gap-1.5 bg-orange-600 hover:bg-orange-700 text-white"
+                      onClick={() => {
+                        const subject = `Mbumah Hardware - Supplier Communication`;
+                        const body = `Dear ${supplier.contactPerson || supplier.name},\n\nThis is a message from Mbumah Hardware.\n\nBest regards,\nMbumah Hardware Team`;
+                        openEmail(supplier.email!, subject, body);
+                      }}
+                    >
+                      <Mail className="h-4 w-4" /> Email
+                    </Button>
+                  )}
+                  {!supplier.phone && !supplier.email && (
+                    <p className="text-xs text-muted-foreground">No phone or email available for sending.</p>
+                  )}
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

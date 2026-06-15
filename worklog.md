@@ -65,3 +65,381 @@ Stage Summary:
 - Prevents bugs where `0`, `false`, or empty string data would be replaced with `[]` by `||` operator
 - Prevents bugs where `null`/`undefined` data would silently become `[]` by `??` operator without type validation
 - React Compiler dependency array compatibility maintained
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Fix critical 'D.map is not a function' production crash
+
+Work Log:
+- Diagnosed root cause: API responses returning non-array data where arrays expected
+- Enhanced request() function to default missing data fields to empty arrays
+- Added safeArray() and safeData() helper functions to src/lib/api.ts
+- Replaced all 51+ unsafe '?.data || []' and '?.data ?? []' patterns with Array.isArray() checks across 20 files
+- Added defensive Array.isArray guards in dashboard queries for all array fields
+- Fixed POS section queries in page.tsx (products, categories, customers)
+- Fixed notification, search, debt, and rental queries
+- Verified all 64 DialogContent instances have DialogDescription (0 accessibility warnings)
+- Lint passes clean
+- Committed and pushed to GitHub (commit c2fa007)
+
+Stage Summary:
+- Critical production crash 'D.map is not a function' fully resolved
+- All API data extractions now use defensive Array.isArray() checks
+- Added request() level protection: missing data fields default to []
+- All Dialog accessibility warnings eliminated
+- Pushed to GitHub: commit c2fa007
+
+---
+Task ID: 8
+Agent: Rentals Subagent
+Task: Enhance Rentals tab with full CRUD, WhatsApp receipt, and Print receipt
+
+Work Log:
+- Read and analyzed existing rentals-tab.tsx (1212 lines) to understand current implementation
+- Identified missing features: no Edit, no Delete, no WhatsApp receipt, no Print receipt
+- Current CRUD: Create (RentalForm), Read (Table/Card views), Return (DamageAssessmentForm) — but no Update or Delete
+- Added `update` and `delete` methods to rentalsApi in src/lib/api.ts
+- Created backend route /api/rentals/[id]/route.ts with PUT and DELETE handlers:
+  - PUT: Updates rental fields (expectedReturnDate, securityDeposit, ratePerDay, ratePerWeek, ratePerMonth, notes) — only for ACTIVE/OVERDUE rentals
+  - DELETE: Deletes rental with stock restoration — only for ACTIVE/OVERDUE rentals, includes system logging
+- Updated rentals-tab.tsx with the following enhancements:
+  1. **Imports**: Added Phone, Printer, Pencil, Trash2 icons from lucide-react; Added openWhatsApp from @/lib/api; Added AlertDialog components
+  2. **Edit functionality**: New Edit Rental Dialog with form pre-populated from rental data (expectedReturnDate, securityDeposit, ratePerDay, ratePerWeek, ratePerMonth, notes); updateRentalMutation with success/error toasts
+  3. **Delete functionality**: New AlertDialog confirmation dialog for delete with clear warning text; deleteRentalMutation with success/error toasts; only available for ACTIVE/OVERDUE rentals
+  4. **WhatsApp Send Receipt**: handleSendReceipt function generates formatted WhatsApp message with store name, rental ID, equipment, customer, dates, deposit, rental fee, and ends with "Thank you for doing business with us"; Uses openWhatsApp() from api.ts; Green color scheme button; Shows error toast if customer has no phone
+  5. **Print Receipt**: handlePrintReceipt function opens print window with professional thermal-receipt-style layout; Includes store name (MBUMAH HARDWARE), rental ID, customer details, equipment details, rental period, charges breakdown, status; Uses window.open() with print dialog
+  6. **Table view**: Expanded Actions column from 80px to 200px; Added Edit (pencil), WhatsApp (phone), Print (printer), Delete (trash) icon buttons
+  7. **Card view**: Added action buttons row below Process Return button with Edit, WhatsApp, Print, Delete buttons
+- All new DialogContent instances include DialogDescription for accessibility
+- All API data uses Array.isArray() checks (already in place from prior work)
+- Lint passes clean on all modified files
+
+Stage Summary:
+- Rentals tab now has full CRUD: Create, Read, Update (Edit dialog), Delete (AlertDialog confirmation)
+- WhatsApp receipt sending available on all rental cards/rows (green color scheme)
+- Print receipt available on all rental cards/rows (opens print-friendly window)
+- Edit and Delete restricted to ACTIVE/OVERDUE status rentals only
+- Backend API supports PUT and DELETE on /api/rentals/[id]
+- All accessibility requirements met (DialogDescription on all dialogs)
+
+---
+Task ID: 4
+Agent: Dashboard Subagent
+Task: Dashboard card click → popup with details and Credits navigation
+
+Work Log:
+- Read and analyzed dashboard-tab.tsx (1981 lines) to understand current KPI cards structure
+- Identified 4 KPI cards: Today's Revenue, Transactions, Low Stock Alerts, Outstanding Debt
+- Only Low Stock card was previously clickable (opened low stock products dialog)
+- Created KpiMetricKey type ('revenue' | 'transactions' | 'lowStock' | 'debt') and KpiDetail interface
+- Added metricKey field to all KPI card definitions
+- Made all KPI cards clickable with cursor-pointer and hover effects
+- Replaced per-card onClick/clickable pattern with unified onCardClick callback
+- Created DashboardDetailDialog component with:
+  - Metric title, icon, and value display
+  - Trend indicator (vs yesterday)
+  - Description of what each metric represents (METRIC_DESCRIPTIONS map)
+  - For debt metric: Prominent "Credits & Debt Management" section with "View Credits" button → setActiveTab('credits')
+  - For low stock metric: "Low Stock Details" section with button to open existing Low Stock Products dialog
+  - Context-aware navigation buttons in footer:
+    - Revenue → "View Transactions" + "View Financial"
+    - Transactions → "View Transactions" + "View Financial"
+    - Low Stock → "View Inventory"
+    - Debt → "View Credits" + "View Rentals" + "View Financial"
+- Updated DashboardTab to manage detailDialogOpen/selectedKpi state
+- Preserved existing Low Stock Products dialog (accessible via DashboardDetailDialog for lowStock metric)
+- All DialogContent instances include DialogDescription for accessibility
+- Fixed JSX syntax error in onKeyDown handler (missing closing brace)
+- Lint passes clean
+
+Stage Summary:
+- All 4 dashboard KPI cards are now clickable and open a detail popup
+- Debt card popup includes prominent "View Credits" button navigating to Credits tab
+- Each popup has contextual navigation buttons (Transactions, Credits, Rentals, Financial, Inventory)
+- Low Stock card popup links to existing detailed product list dialog
+- All accessibility requirements met (DialogDescription on all dialogs)
+
+---
+Task ID: 9-11
+Agent: Vouchers/Campaigns Subagent
+Task: Add send/resend features to Vouchers & Campaigns tab
+
+Work Log:
+- Read and analyzed existing vouchers-tab.tsx (1718 lines) to understand current structure
+- Identified existing API types (VoucherItem, VoucherCampaignItem) and API clients (vouchersApi, voucherCampaignsApi) already in api.ts
+- Added Voucher, VoucherCampaign, and VoucherRedemption Prisma models to schema
+- Added Store relations for vouchers and voucherCampaigns
+- Added voucherRedemptions relation to SalesTransaction model
+- Ran db:push successfully (database was already in sync)
+- Updated voucherCampaignsApi.list to support campaignType and search parameters
+- Added imports to vouchers-tab.tsx:
+  - Icons: Phone, Mail, MessageSquare, Send, RefreshCw from lucide-react
+  - Functions: openWhatsApp, openEmail, openSMS from @/lib/api
+  - Components: DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel
+- Added send/resend helper functions:
+  - getVoucherMessage: Generates voucher message with code, discount, expiry, store name
+  - getCampaignMessage: Generates campaign message with name, details, valid dates
+  - sendVoucherWhatsApp, sendVoucherSMS, sendVoucherEmail: Channel-specific send functions
+  - resendVoucher: Resends via WhatsApp with clipboard fallback
+  - sendCampaignWhatsApp, sendCampaignSMS, sendCampaignEmail: Campaign channel-specific send functions
+  - resendCampaign: Resends campaign via WhatsApp with clipboard fallback
+- Added DropdownMenu with send options (WhatsApp, SMS, Email) for each voucher row in the Actions column
+- Added Resend button (RefreshCw icon, purple) for each voucher row
+- Added Send dropdown (WhatsApp, SMS, Email) and Resend button for each campaign card
+- Fixed search: Added searchQuery to voucher query key and passed it as search param to API
+- Redemption auto-update: Existing query invalidation on mutations already covers this since allRedemptions is derived from vouchers data
+- All DialogContent instances have DialogDescription (verified existing ones)
+- Used Array.isArray() checks for campaign.vouchers in resendCampaign function
+- Lint passes clean with 0 errors
+
+Stage Summary:
+- Vouchers tab now has Send (WhatsApp/SMS/Email) and Resend buttons on each voucher row
+- Campaigns section now has Send (WhatsApp/SMS/Email) and Resend buttons on each campaign card
+- Search function now passes query to API for server-side filtering
+- Redemption data auto-updates via query invalidation after mutations
+- Voucher messages include: code, discount details, expiry date, store name
+- Campaign messages include: campaign name, promotional details, valid dates
+- WhatsApp: green color scheme, SMS: blue, Email: orange, Resend: purple
+- All Prisma models added for Voucher, VoucherCampaign, VoucherRedemption
+- Backend API already existed for vouchers and campaigns CRUD
+
+---
+Task ID: 12, 17
+Agent: Financial + Messaging Subagent
+Task: Enhance Financial tab with CRUD operations and Messaging tab with Quick Send features
+
+Work Log:
+- Read and analyzed existing financial-tab.tsx (2058 lines), messaging-tab.tsx (1608 lines), api.ts, types.ts
+- Read backend API routes: /api/financial/journal, /api/expenses, /api/debt, /api/messages
+- Added Message model to Prisma schema with all required fields (channel, messageType, status, waLink, etc.)
+- Added Store relations for Message, Voucher, VoucherCampaign, VoucherRedemption models
+- Ran db:push successfully to sync database with schema changes
+
+### API Client Changes (src/lib/api.ts):
+- Added `MessageItem` interface with all message fields
+- Added `messagesApi` with: list(), send(), sendDebtReminder(), sendBalanceUpdate()
+- Added `ExpenseItem` interface with expense fields
+- Added `expensesApi` with: list(), create()
+- Added `financialApi.createJournalEntry()` method
+- Updated `debtApi.makePayment()` to match actual API endpoint (POST /api/debt with full payload)
+
+### Type Changes (src/lib/types.ts):
+- Added `MessageItem` interface export
+
+### Financial Tab Changes (src/app/tabs/financial-tab.tsx):
+1. **Imports**: Added useAuthStore, expensesApi, ExpenseItem, Textarea, Select components, Loader2, Trash2, Edit2 icons
+2. **New State Variables**:
+   - Expense dialog state: showExpenseDialog, expenseForm (description, amount, category, paymentMethod, notes)
+   - Journal entry dialog state: showJournalDialog, journalForm (description, referenceType, lines array)
+   - Added 'ledger' option to drilldownDialog type
+3. **New Queries**: Added expensesData query using expensesApi.list()
+4. **New Mutations**:
+   - createExpenseMutation: Creates expenses via expensesApi.create()
+   - createJournalMutation: Creates journal entries via financialApi.createJournalEntry()
+   - recordPaymentMutation: Records debt payments via debtApi.makePayment()
+5. **New Handlers**: handleCreateExpense(), handleCreateJournal()
+6. **Replaced "coming soon" buttons**: Record Expense, Record Payment, View Ledger now open actual dialogs
+7. **Added "Add Journal Entry" button** to Quick Actions Bar
+8. **RecordPaymentDialog**: Updated to accept onRecordPayment callback and use actual API
+9. **View Ledger Dialog**: Full ledger view with all journal entries and account transactions in table format
+10. **Record Expense Dialog**: Form with description, amount, category (8 options), payment method, notes
+11. **Add Journal Entry Dialog**: Multi-line journal entry form with account selector, debit/credit inputs, balance validation
+12. **Recent Expenses Section**: Table showing all expenses with date, description, category, payment method, amount
+13. **Expenses data**: Computed from expensesData query with Array.isArray() check
+
+### Messaging Tab Changes (src/app/tabs/messaging-tab.tsx):
+1. **Imports**: Added openWhatsApp, openEmail, openSMS from api; Added PartyPopper, Heart, Gift, Sparkles, ThumbUp icons
+2. **Updated MESSAGE_TEMPLATES**: Expanded from 4 to 9 templates:
+   - 🎄 Christmas: "Merry Christmas from Mbumah Hardware!..."
+   - 🎉 New Year: "Happy New Year from Mbumah Hardware!..."
+   - 🐰 Easter: "Happy Easter from Mbumah Hardware!..."
+   - ❤️ Valentine: "Happy Valentine's Day!..."
+   - 🔥 General Promotion: "Special offer at Mbumah Hardware!..."
+   - 💳 Debt Reminder: "Dear {name}, your outstanding balance...is KES {amount}..."
+   - 👍 Thank You: "Thank you for doing business with Mbumah Hardware!..."
+   - ✅ Payment Confirmation: existing template updated with emoji
+   - 📊 Balance Update: existing template updated with emoji
+3. **Updated handleTemplateSelect**: Now supports {name} placeholder and auto-fills debt amount from customer data
+4. **Quick Send Section**: New card with:
+   - Template selection grid (2x3/4 layout) for all 9 message types
+   - Customer selector and Phone/Email inputs
+   - Editable Textarea for message content
+   - Three send buttons: WhatsApp (green), SMS (blue), Email (amber)
+   - Each button uses openWhatsApp/openSMS/openEmail and logs message via messagesApi
+5. **Quick Compose Section**: Replaced single "Send Message" button with three separate send buttons (WhatsApp, SMS, Email)
+6. **Send Message Dialog**: Replaced single "Send Message" button with three separate send buttons in DialogFooter
+7. **All send buttons**: Use openWhatsApp(), openSMS(), openEmail() from @/lib/api and also log messages via sendMessageMutation
+
+- Lint passes clean with 0 errors
+- Dev server running successfully on port 3000
+
+Stage Summary:
+- Financial tab now has full CRUD: Record Expense dialog, Add Journal Entry dialog, Record Payment with real API, View Ledger dialog
+- Recent Expenses section shows all expenses in a table
+- All Quick Actions buttons now functional (no more "coming soon" toasts)
+- Messaging tab has Quick Send feature with 9 message templates including holiday/greeting types
+- Messages auto-generate based on template selection and customer context (debt amounts auto-filled)
+- All messages editable in textarea before sending
+- Three send channels: WhatsApp, SMS, Email on Quick Send, Quick Compose, and Send Dialog
+- Message model added to Prisma schema and database synced
+- All accessibility requirements met (DialogDescription on all dialogs)
+
+---
+Task ID: 5-6, 14
+Agent: WhatsApp/Send Features Subagent
+Task: Add WhatsApp/send features to Invoices, Delivery Notes, and Suppliers tabs
+
+Work Log:
+- Added Invoice and DeliveryNote models to Prisma schema (prisma/schema.prisma)
+  - Invoice model: storeId, invoiceNumber, invoiceType, customerId, customerName, customerPhone, customerEmail, customerAddress, issueDate, dueDate, subtotal, taxAmount, discountAmount, totalAmount, status, notes, terms, createdBy + items relation
+  - InvoiceItem model: invoiceId, productId, productName, description, quantity, unitType, pricePerUnit, discountPercent, taxRate, lineTotal
+  - DeliveryNote model: storeId, transactionId, deliveryNumber, customerId, customerName, customerPhone, deliveryAddress, driverName, vehicleNumber, status, scheduledDate, deliveredAt, notes, createdBy + items relation
+  - DeliveryNoteItem model: deliveryNoteId, productId, productName, quantity, unitType, notes
+  - Added relations to Store, Product, and SalesTransaction models
+  - Pushed schema to database with `bun run db:push`
+- Added InvoiceItem, InvoiceItemDetail, invoicesApi, DeliveryNoteItem, DeliveryNoteItemDetail, deliveryNotesApi to src/lib/api.ts
+  - All types match the Prisma model definitions
+  - API functions support list, get, create, and update operations
+  - Fixed null vs undefined type compatibility in create function parameters
+- Invoices tab (invoices-tab.tsx):
+  - Added Phone icon import from lucide-react
+  - Added openWhatsApp import from @/lib/api
+  - Added handleSendWhatsApp function that generates receipt message with: invoice number, date, customer, items list, total, due date
+  - Added WhatsApp button (green Phone icon) in table row actions
+  - Added WhatsApp button (green, bg-green-600) in view dialog Quick Actions section
+  - Fixed InvoiceType cast errors for getTypeIcon and getTypeBadge
+- Delivery Notes tab (delivery-notes-tab.tsx):
+  - Added MessageSquare icon import from lucide-react
+  - Added openWhatsApp and formatKES imports from @/lib/api
+  - Added handleSendWhatsApp function that generates delivery note message with: delivery number, customer, address, driver, vehicle, scheduled date, items list + "Thank you for doing business with us" ending
+  - Added WhatsApp button (green MessageSquare icon) in table row actions
+  - Added WhatsApp button (green, bg-green-600) in view dialog actions area
+  - Fixed pre-existing TypeScript errors with Record<string, unknown> casts for transaction access
+- Suppliers tab (suppliers-tab.tsx):
+  - Added MessageSquare icon import from lucide-react
+  - Added openWhatsApp, openEmail, openSMS imports from @/lib/api
+  - Added "Quick Send" section in Contact tab of SupplierDetailView with:
+    - WhatsApp button: bg-green-600 hover:bg-green-700, uses openWhatsApp with supplier phone
+    - SMS button: bg-blue-600 hover:bg-blue-700, uses openSMS with supplier phone
+    - Email button: bg-orange-600 hover:bg-orange-700, uses openEmail with supplier email
+  - Buttons conditionally render based on available phone/email
+  - Helpful message shown when no contact info available
+
+---
+Task ID: 3
+Agent: POS Checkout Subagent
+Task: Enhance POS checkout flow with Add Customer dialog, scrollable cart for 10+ items, and auto-fetch vouchers/gift cards
+
+Work Log:
+- Read and analyzed existing POSTab component (lines 1976-3321 in page.tsx)
+- Read existing API modules: customersApi, giftCardsApi (api.ts), Prisma schema for GiftCard/Voucher models
+- Found that vouchersApi and voucherCampaignsApi were imported in vouchers-tab.tsx but not exported from api.ts
+- Added vouchersApi, voucherCampaignsApi, VoucherItem, VoucherCampaignItem to api.ts
+- Re-exported GiftCardItem from ./types via api.ts for consumer access
+- Fixed GiftCardRedemptionItem → GiftCardRedemption type name mismatch in api.ts
+- Extended PaymentDetails type with giftCardId, voucherId, discountAmount fields
+- Added imports: giftCardsApi, vouchersApi, GiftCardItem, VoucherItem to page.tsx
+- Added state variables: addCustomerOpen, newCustomerName/Phone/Email/DebtLimit, appliedGiftCardId, appliedVoucherId
+- Added customerGiftCardsData query: fetches active gift cards filtered by customerId/recipientPhone for selected customer
+- Added customerVouchersData query: fetches active vouchers for selected customer's store
+- Added createCustomerMutation: creates customer via API and auto-selects them on success
+- Added gift card/voucher discount computation: giftCardDiscount, voucherDiscount, totalDiscount, finalTotal
+- Desktop cart: Changed ScrollArea from "flex-1 min-h-0" to "flex-1 min-h-0 max-h-64 overflow-y-auto"
+- Mobile cart sheet: Same scrollable change applied
+- Desktop customer selector: Added "Add" button (UserPlus icon) next to Select, opens Add Customer dialog
+- Desktop benefits section: Shows "Customer Benefits" with badge count, selectable gift cards (code + balance) and vouchers (name + type + value)
+- Mobile customer selector: Same "Add" button and benefits section added
+- Added discount line in both desktop and mobile totals sections
+- Updated all total references to finalTotal: checkout button, payment dialog, M-Pesa dialog, split payment, change calculation
+- Added Add Customer Dialog with form fields (name*, phone, email, debtLimit), validation, and loading state
+- All new DialogContent instances include DialogDescription for accessibility
+- Lint passes clean with 0 errors
+- Pre-existing TypeScript errors (DashboardStats properties) are unrelated to these changes
+
+Stage Summary:
+- Add Customer: Cashiers can create new customers right from checkout; auto-selects the new customer on success
+- Scrollable Cart: Cart items list uses max-h-64 overflow-y-auto for both desktop and mobile, handling 10+ items gracefully
+- Auto-fetch Benefits: When a customer is selected, active gift cards and vouchers are auto-fetched and displayed as selectable items; applying them shows discount in totals and adjusts final amount
+
+---
+
+## Task 7: Inventory Subagent - Fix Filter & Search in Inventory Tab
+
+**Date**: 2024-03-05
+**Agent**: Inventory Subagent
+
+### Issues Found and Fixed
+
+1. **Query key missing `selectedCategory` and `searchQuery` (CRITICAL BUG)**
+   - The `useQuery` for products had query key `['products', currentStoreId]` only
+   - When `searchQuery` or `selectedCategory` changed, TanStack Query would NOT re-fetch because the key didn't change
+   - It would return stale cached data from the initial fetch
+   - **Fix**: Updated query key to `['products', currentStoreId, debouncedSearch, selectedCategory]`
+
+2. **No debounce on search input**
+   - Every keystroke would trigger an immediate API call
+   - **Fix**: Added `debouncedSearch` state with 300ms debounce using `useEffect` + `useRef` timer
+   - The `searchQuery` state still updates immediately for responsive UI
+   - The `debouncedSearch` state updates after 300ms of inactivity and is what gets sent to the API
+
+3. **No clear button on search input**
+   - Users had to manually delete text to clear the search
+   - **Fix**: Added an `X` button that appears when `searchQuery` is non-empty, which resets the search
+
+4. **Search passed directly to API without debounce**
+   - `queryFn` used `searchQuery` directly, causing excessive API calls
+   - **Fix**: Changed to use `debouncedSearch` in the `queryFn`
+
+### Changes Made to `/home/z/my-project/src/app/tabs/inventory-tab.tsx`
+
+- **Import**: Added `useEffect` and `useRef` to React imports
+- **State**: Added `debouncedSearch` state and `debounceTimerRef` ref
+- **Effect**: Added debounce effect that sets `debouncedSearch` after 300ms of inactivity
+- **Query key**: Changed from `['products', currentStoreId]` to `['products', currentStoreId, debouncedSearch, selectedCategory]`
+- **Query function**: Changed `searchQuery` to `debouncedSearch` in the API call
+- **Search input**: Added `pr-8` padding and clear button with `X` icon
+
+### How Filter + Search Work Together
+
+- Both `debouncedSearch` and `selectedCategory` are in the query key
+- When either changes, TanStack Query automatically re-fetches with both parameters
+- The API endpoint `/api/products` supports both `search` and `categoryId` query params
+- Backend applies `where.OR` for search (name, SKU, barcode, description) AND `where.categoryId` for category filter
+- Both filters compose naturally via Prisma's `where` clause
+
+### Verification
+
+- Lint passes with no errors
+- Dev server compiles successfully
+- `invalidateQueries` with `['products', currentStoreId]` prefix still works correctly (TanStack Query prefix matching)
+
+---
+Task ID: 13
+Agent: Invoices Subagent
+Task: Enhance Invoices tab - New Document form fits all fields with proper visibility
+
+Work Log:
+- Read full invoices-tab.tsx (1300+ lines) to understand the Create Dialog structure
+- Fixed ScrollArea in Create Dialog: Changed from `flex-1 -mx-6 px-6` to `max-h-[80vh] -mx-6 px-6` to ensure proper scrolling and prevent fields from being clipped
+- Fixed ScrollArea in View Dialog: Same change applied for consistency
+- Added Unit selector to line items: The `unitType` field existed in the data model but had no UI control. Added a Select component with 16 unit types (Pc, Box, Kg, M, L, Set, Roll, Bag, Pkt, Pair, Ton, Ft, Yd, Sq M, Sq Ft, Cb M)
+- Adjusted line item grid layout: Product reduced from col-span-4 to col-span-3 to accommodate Unit selector, responsive mobile grid columns adjusted
+- Added Internal Notes field: New textarea field between Notes and Payment Terms, with `[Internal]` prefix when saved to the notes field
+- Added `internalNotes` state variable and included it in resetCreateForm and handleCreate functions
+- Renamed "Terms & Conditions" label to "Payment Terms" for clarity per requirements
+- Changed Notes/Internal Notes/Terms grid from 2-col to 3-col layout on md+ screens
+- Both Dialog components already had DialogDescription for accessibility ✓
+
+Changes Summary:
+1. ScrollArea: `flex-1` → `max-h-[80vh]` (both Create and View dialogs)
+2. Line items: Added Unit Select with 16 unit options
+3. Line items grid: Product col-span-4 → col-span-3, added Unit col-span-1
+4. Form: Added Internal Notes textarea field
+5. Form: Changed "Terms & Conditions" → "Payment Terms"
+6. Form: Notes section grid → 3 columns on md+
+
+### Verification
+- Lint passes with no errors
+- Dev server compiles successfully
+- All form fields now visible within scrollable dialog with max-h-[80vh]

@@ -173,7 +173,21 @@ function ChartTooltipContent({ active, payload, label, valuePrefix = '' }: {
   );
 }
 
-function KpiCards({ storeId, onLowStockClick }: { storeId: string; onLowStockClick: () => void }) {
+type KpiMetricKey = 'revenue' | 'transactions' | 'lowStock' | 'debt';
+
+export interface KpiDetail {
+  metricKey: KpiMetricKey;
+  label: string;
+  value: number;
+  formattedValue: string;
+  icon: React.ElementType;
+  color: string;
+  iconBg: string;
+  trend: string;
+  trendUp: boolean;
+}
+
+function KpiCards({ storeId, onCardClick }: { storeId: string; onCardClick: (kpi: KpiDetail) => void }) {
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', storeId],
     queryFn: async () => {
@@ -209,8 +223,7 @@ function KpiCards({ storeId, onLowStockClick }: { storeId: string; onLowStockCli
       sparkColor: '#16a34a',
       trend: '+12.5%',
       trendUp: true,
-      clickable: false,
-      onClick: undefined as (() => void) | undefined,
+      metricKey: 'revenue' as KpiMetricKey,
     },
     {
       label: 'Transactions',
@@ -225,8 +238,7 @@ function KpiCards({ storeId, onLowStockClick }: { storeId: string; onLowStockCli
       sparkColor: '#059669',
       trend: '+8.2%',
       trendUp: true,
-      clickable: false,
-      onClick: undefined as (() => void) | undefined,
+      metricKey: 'transactions' as KpiMetricKey,
     },
     {
       label: 'Low Stock Alerts',
@@ -241,8 +253,7 @@ function KpiCards({ storeId, onLowStockClick }: { storeId: string; onLowStockCli
       sparkColor: '#d97706',
       trend: '-3.1%',
       trendUp: false,
-      clickable: true,
-      onClick: onLowStockClick,
+      metricKey: 'lowStock' as KpiMetricKey,
     },
     {
       label: 'Outstanding Debt',
@@ -257,8 +268,7 @@ function KpiCards({ storeId, onLowStockClick }: { storeId: string; onLowStockCli
       sparkColor: '#dc2626',
       trend: '+5.4%',
       trendUp: true,
-      clickable: false,
-      onClick: undefined as (() => void) | undefined,
+      metricKey: 'debt' as KpiMetricKey,
     },
   ];
 
@@ -289,16 +299,37 @@ function KpiCards({ storeId, onLowStockClick }: { storeId: string; onLowStockCli
         return (
           <Card
             key={kpi.label}
-            className={`border-l-4 ${kpi.borderColor} py-0 bg-gradient-to-br ${kpi.gradient} backdrop-blur-sm hover:shadow-md transition-all duration-200 animate-fade-in ${
-              kpi.clickable && kpi.onClick ? 'cursor-pointer hover:-translate-y-0.5 active:translate-y-0' : ''
-            }`}
+            className={`border-l-4 ${kpi.borderColor} py-0 bg-gradient-to-br ${kpi.gradient} backdrop-blur-sm hover:shadow-md transition-all duration-200 animate-fade-in cursor-pointer hover:-translate-y-0.5 active:translate-y-0`}
             style={{ animationDelay: `${index * 100}ms` }}
-            onClick={kpi.clickable && kpi.onClick ? kpi.onClick : undefined}
-            role={kpi.clickable ? 'button' : undefined}
-            tabIndex={kpi.clickable ? 0 : undefined}
-            onKeyDown={kpi.clickable && kpi.onClick ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); kpi.onClick!(); }
-            } : undefined}
+            onClick={() => onCardClick({
+              metricKey: kpi.metricKey,
+              label: kpi.label,
+              value: kpi.value,
+              formattedValue: kpi.format === 'kes' ? formatKES(kpi.value) : kpi.value.toLocaleString(),
+              icon: kpi.icon,
+              color: kpi.color,
+              iconBg: kpi.iconBg,
+              trend: kpi.trend,
+              trendUp: kpi.trendUp,
+            })}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onCardClick({
+                  metricKey: kpi.metricKey,
+                  label: kpi.label,
+                  value: kpi.value,
+                  formattedValue: kpi.format === 'kes' ? formatKES(kpi.value) : kpi.value.toLocaleString(),
+                  icon: kpi.icon,
+                  color: kpi.color,
+                  iconBg: kpi.iconBg,
+                  trend: kpi.trend,
+                  trendUp: kpi.trendUp,
+                });
+              }
+            }}
           >
             <CardContent className="p-4">
               <div className="flex items-start gap-3">
@@ -1880,13 +1911,180 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
   );
 }
 
+// Metric descriptions for the detail dialog
+const METRIC_DESCRIPTIONS: Record<KpiMetricKey, { description: string; navButton: { label: string; tab: AppTab; icon: React.ElementType } }> = {
+  revenue: {
+    description: 'Total revenue generated from all sales transactions today. This includes cash, M-Pesa, and split payments received.',
+    navButton: { label: 'View Transactions', tab: 'transactions', icon: Receipt },
+  },
+  transactions: {
+    description: 'Number of completed sales transactions processed today. Each transaction represents a unique customer purchase.',
+    navButton: { label: 'View Transactions', tab: 'transactions', icon: Receipt },
+  },
+  lowStock: {
+    description: 'Products that have fallen below their reorder level and need restocking soon to avoid stockouts.',
+    navButton: { label: 'View Inventory', tab: 'inventory', icon: Package },
+  },
+  debt: {
+    description: 'Total outstanding debt owed by customers from credit purchases. This includes all aging buckets — current, 30 days, 60 days, and 90+ days overdue.',
+    navButton: { label: 'View Credits', tab: 'credits', icon: CircleDollarSign },
+  },
+};
+
+function DashboardDetailDialog({
+  open,
+  onOpenChange,
+  kpi,
+  onTabSwitch,
+  onViewLowStockDetails,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  kpi: KpiDetail | null;
+  onTabSwitch: (tab: AppTab) => void;
+  onViewLowStockDetails?: () => void;
+}) {
+  if (!kpi) return null;
+
+  const Icon = kpi.icon;
+  const metricInfo = METRIC_DESCRIPTIONS[kpi.metricKey];
+  const NavIcon = metricInfo.navButton.icon;
+
+  // Additional navigation buttons based on metric type
+  const extraNavButtons: Array<{ label: string; tab: AppTab; icon: React.ElementType; variant?: 'outline' | 'default' }> = [];
+
+  if (kpi.metricKey === 'debt') {
+    // For debt, also offer view to rentals since debt often relates to rental equipment
+    extraNavButtons.push({ label: 'View Rentals', tab: 'rentals', icon: KeyRound, variant: 'outline' });
+    extraNavButtons.push({ label: 'View Financial', tab: 'financial', icon: BarChart3, variant: 'outline' });
+  } else if (kpi.metricKey === 'revenue') {
+    extraNavButtons.push({ label: 'View Financial', tab: 'financial', icon: BarChart3, variant: 'outline' });
+  } else if (kpi.metricKey === 'transactions') {
+    extraNavButtons.push({ label: 'View Financial', tab: 'financial', icon: BarChart3, variant: 'outline' });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <div className={`shrink-0 p-2 rounded-xl ${kpi.iconBg}`}>
+              <Icon className={`h-5 w-5 ${kpi.color}`} />
+            </div>
+            {kpi.label}
+          </DialogTitle>
+          <DialogDescription>
+            {metricInfo.description}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {/* Metric value display */}
+          <div className="rounded-lg border p-4 text-center bg-muted/30">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">{kpi.label}</p>
+            <p className={`text-3xl font-bold ${kpi.color}`}>
+              {kpi.formattedValue}
+            </p>
+            <div className={`flex items-center justify-center gap-1 mt-2 text-xs font-medium ${
+              kpi.trendUp ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+            }`}>
+              {kpi.trendUp ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+              {kpi.trend} vs yesterday
+            </div>
+          </div>
+
+          {/* For debt, show credits navigation prominently */}
+          {kpi.metricKey === 'debt' && (
+            <div className="rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20 p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <CircleDollarSign className="h-4 w-4 text-red-600" />
+                <span className="text-sm font-medium text-red-700 dark:text-red-400">Credits & Debt Management</span>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                Navigate to the Credits section to view all customer debts, record payments, and manage aging balances.
+              </p>
+              <Button
+                onClick={() => { onOpenChange(false); onTabSwitch('credits'); }}
+                className="w-full gap-2 bg-red-600 hover:bg-red-700 text-white"
+                size="sm"
+              >
+                <CircleDollarSign className="h-4 w-4" />
+                View Credits
+                <ArrowRight className="h-3.5 w-3.5 ml-auto" />
+              </Button>
+            </div>
+          )}
+
+          {/* For low stock, show link to detailed product list */}
+          {kpi.metricKey === 'lowStock' && onViewLowStockDetails && (
+            <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <span className="text-sm font-medium text-amber-700 dark:text-amber-400">Low Stock Details</span>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                View the full list of products that are below their reorder level and need attention.
+              </p>
+              <Button
+                onClick={() => { onOpenChange(false); onViewLowStockDetails(); }}
+                variant="outline"
+                className="w-full gap-2 border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/50"
+                size="sm"
+              >
+                <AlertTriangle className="h-4 w-4" />
+                View Low Stock Products
+                <ArrowRight className="h-3.5 w-3.5 ml-auto" />
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="w-full sm:w-auto">
+            Close
+          </Button>
+          <Button
+            onClick={() => { onOpenChange(false); onTabSwitch(metricInfo.navButton.tab); }}
+            className="w-full sm:w-auto gap-2"
+          >
+            <NavIcon className="h-4 w-4" />
+            {metricInfo.navButton.label}
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Button>
+          {extraNavButtons.map((btn) => {
+            const BtnIcon = btn.icon;
+            return (
+              <Button
+                key={btn.label}
+                variant={btn.variant || 'outline'}
+                onClick={() => { onOpenChange(false); onTabSwitch(btn.tab); }}
+                className="w-full sm:w-auto gap-2"
+              >
+                <BtnIcon className="h-4 w-4" />
+                {btn.label}
+              </Button>
+            );
+          })}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function DashboardTab() {
   const { currentStoreId, setActiveTab } = useAppStore();
   const [lowStockDialogOpen, setLowStockDialogOpen] = useState(false);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [selectedKpi, setSelectedKpi] = useState<KpiDetail | null>(null);
 
   const handleTabSwitch = useCallback((tab: AppTab) => {
     setActiveTab(tab);
   }, [setActiveTab]);
+
+  const handleKpiCardClick = useCallback((kpi: KpiDetail) => {
+    setSelectedKpi(kpi);
+    setDetailDialogOpen(true);
+  }, []);
 
   // Fetch low stock products for the dialog
   const { data: lowStockProducts } = useQuery({
@@ -1902,7 +2100,7 @@ export default function DashboardTab() {
   return (
     <div className="space-y-4 animate-fade-in">
       {/* Top KPI Cards Row */}
-      <KpiCards storeId={currentStoreId} onLowStockClick={() => setLowStockDialogOpen(true)} />
+      <KpiCards storeId={currentStoreId} onCardClick={handleKpiCardClick} />
 
       {/* Shift Status Card */}
       <ShiftStatusCard storeId={currentStoreId} />
@@ -1928,7 +2126,16 @@ export default function DashboardTab() {
         </div>
       </div>
 
-      {/* Low Stock Dialog */}
+      {/* Dashboard Detail Dialog - shows when any KPI card is clicked */}
+      <DashboardDetailDialog
+        open={detailDialogOpen}
+        onOpenChange={setDetailDialogOpen}
+        kpi={selectedKpi}
+        onTabSwitch={handleTabSwitch}
+        onViewLowStockDetails={() => { setDetailDialogOpen(false); setLowStockDialogOpen(true); }}
+      />
+
+      {/* Low Stock Details Dialog */}
       <Dialog open={lowStockDialogOpen} onOpenChange={setLowStockDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>

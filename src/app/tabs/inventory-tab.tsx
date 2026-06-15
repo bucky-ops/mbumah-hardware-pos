@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -188,7 +188,9 @@ function StockStatusBadge({ product }: { product: ProductListItem }) {
 
 export default function InventoryTab() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [addProductOpen, setAddProductOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<ProductListItem | null>(null);
   const [stockFilter, setStockFilter] = useState<string>('all');
@@ -234,11 +236,26 @@ export default function InventoryTab() {
     isRental: false, isBundle: false,
   });
 
+  // Debounce search input (300ms)
+  useEffect(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [searchQuery]);
+
   const { data: productsData, isLoading } = useQuery({
-    queryKey: ['products', currentStoreId],
+    queryKey: ['products', currentStoreId, debouncedSearch, selectedCategory],
     queryFn: () => productsApi.list({
       storeId: currentStoreId,
-      search: searchQuery || undefined,
+      search: debouncedSearch || undefined,
       limit: 200,
       ...(selectedCategory !== 'all' ? { categoryId: selectedCategory } : {}),
     }),
@@ -664,7 +681,16 @@ export default function InventoryTab() {
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search products..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
+          <Input placeholder="Search products..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 pr-8" />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Clear search"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
         <Select value={selectedCategory} onValueChange={setSelectedCategory}>
           <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="All Categories" /></SelectTrigger>

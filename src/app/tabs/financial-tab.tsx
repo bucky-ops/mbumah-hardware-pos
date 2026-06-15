@@ -10,14 +10,14 @@ import {
   FileText, FileCheck, Clock, Download, Printer,
   DollarSign, CreditCard, Receipt, Plus,
   Send, Banknote, Eye, Scale, PiggyBank,
-  AlertCircle, CheckCircle2,
+  AlertCircle, CheckCircle2, Loader2, Trash2, Edit2,
 } from 'lucide-react';
 
-import { useAppStore } from '@/lib/stores';
+import { useAppStore, useAuthStore } from '@/lib/stores';
 import {
-  dashboardApi, financialApi, debtApi,
+  dashboardApi, financialApi, debtApi, expensesApi,
   formatKES, formatDate,
-  type JournalEntryItem, type AccountItem,
+  type JournalEntryItem, type AccountItem, type ExpenseItem,
 } from '@/lib/api';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -32,6 +32,10 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -319,10 +323,11 @@ function printReport() {
 
 // Record Payment Dialog
 
-function RecordPaymentDialog({ debt, open, onOpenChange }: {
+function RecordPaymentDialog({ debt, open, onOpenChange, onRecordPayment }: {
   debt: { id: string; customer?: { name: string }; balance: number; amountOwed: number; amountPaid: number };
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onRecordPayment: (data: { debtLedgerId: string; amount: number; paymentMethod: string }) => void;
 }) {
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('CASH');
@@ -337,7 +342,7 @@ function RecordPaymentDialog({ debt, open, onOpenChange }: {
       toast.error(`Amount cannot exceed balance of ${formatKES(debt.balance)}`);
       return;
     }
-    toast.success(`Payment of ${formatKES(payAmount)} recorded for ${debt.customer?.name || 'customer'} via ${paymentMethod}`);
+    onRecordPayment({ debtLedgerId: debt.id, amount: payAmount, paymentMethod });
     setAmount('');
     onOpenChange(false);
   };
@@ -414,13 +419,36 @@ function RecordPaymentDialog({ debt, open, onOpenChange }: {
 
 export default function FinancialTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
+  const authUser = useAuthStore((s) => s.user);
+  const queryClient = useQueryClient();
   const [datePreset, setDatePreset] = useState<string>('month');
   const [dateRange, setDateRange] = useState(() => getDatePreset('month'));
   const [expandedJournals, setExpandedJournals] = useState<Set<string>>(new Set());
   const [expandedAccountGroups, setExpandedAccountGroups] = useState<Set<string>>(new Set(['ASSET', 'REVENUE']));
-  const [drilldownDialog, setDrilldownDialog] = useState<'revenue' | 'debt' | null>(null);
+  const [drilldownDialog, setDrilldownDialog] = useState<'revenue' | 'debt' | 'ledger' | null>(null);
   const [revenuePeriod, setRevenuePeriod] = useState<number>(30);
   const [paymentDebt, setPaymentDebt] = useState<{ id: string; customer?: { name: string }; balance: number; amountOwed: number; amountPaid: number } | null>(null);
+
+  // Expense dialog state
+  const [showExpenseDialog, setShowExpenseDialog] = useState(false);
+  const [expenseForm, setExpenseForm] = useState({
+    description: '',
+    amount: '',
+    category: 'OTHER',
+    paymentMethod: 'CASH',
+    notes: '',
+  });
+
+  // Journal entry dialog state
+  const [showJournalDialog, setShowJournalDialog] = useState(false);
+  const [journalForm, setJournalForm] = useState({
+    description: '',
+    referenceType: 'MANUAL',
+    lines: [
+      { accountId: '', debit: '', credit: '', description: '' },
+      { accountId: '', debit: '', credit: '', description: '' },
+    ],
+  });
 
   const toggleJournal = (id: string) => {
     setExpandedJournals((prev) => {
@@ -465,10 +493,124 @@ export default function FinancialTab() {
     queryFn: () => debtApi.list({ storeId: currentStoreId, limit: 200 }),
   });
 
+  const { data: expensesData } = useQuery({
+    queryKey: ['expenses', currentStoreId, dateRange],
+    queryFn: () => expensesApi.list({ storeId: currentStoreId, dateFrom: dateRange.from, dateTo: dateRange.to, limit: 50 }),
+  });
+
   const stats = dashboardData?.data;
   const journals = Array.isArray(journalData?.data) ? journalData.data : [];
   const accounts = Array.isArray(accountsData?.data) ? accountsData.data : [];
   const debts = Array.isArray(debtData?.data) ? debtData.data : [];
+  const expenses = Array.isArray(expensesData?.data) ? expensesData.data : [];
+
+  // Mutations
+  const createExpenseMutation = useMutation({
+    mutationFn: (data: { storeId: string; description: string; amount: number; category: string; paidBy: string; paymentMethod: string; notes?: string }) =>
+      expensesApi.create(data),
+    onSuccess: () => {
+      toast.success('Expense recorded successfully');
+      queryClient.invalidateQueries({ queryKey: ['expenses', currentStoreId] });
+      queryClient.invalidateQueries({ queryKey: ['journal-entries', currentStoreId] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', currentStoreId] });
+      setShowExpenseDialog(false);
+      setExpenseForm({ description: '', amount: '', category: 'OTHER', paymentMethod: 'CASH', notes: '' });
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to record expense: ${error.message}`);
+    },
+  });
+
+  const createJournalMutation = useMutation({
+    mutationFn: (data: { storeId: string; description: string; referenceType: string; lines: { accountId: string; debit: number; credit: number; description?: string }[]; createdBy?: string }) =>
+      financialApi.createJournalEntry(data),
+    onSuccess: () => {
+      toast.success('Journal entry created successfully');
+      queryClient.invalidateQueries({ queryKey: ['journal-entries', currentStoreId] });
+      queryClient.invalidateQueries({ queryKey: ['accounts', currentStoreId] });
+      setShowJournalDialog(false);
+      setJournalForm({
+        description: '',
+        referenceType: 'MANUAL',
+        lines: [
+          { accountId: '', debit: '', credit: '', description: '' },
+          { accountId: '', debit: '', credit: '', description: '' },
+        ],
+      });
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to create journal entry: ${error.message}`);
+    },
+  });
+
+  const recordPaymentMutation = useMutation({
+    mutationFn: (data: { storeId: string; debtLedgerId: string; amount: number; paymentMethod: string; receivedBy?: string; notes?: string }) =>
+      debtApi.makePayment(data),
+    onSuccess: () => {
+      toast.success('Payment recorded successfully');
+      queryClient.invalidateQueries({ queryKey: ['debt', currentStoreId] });
+      queryClient.invalidateQueries({ queryKey: ['journal-entries', currentStoreId] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', currentStoreId] });
+      setPaymentDebt(null);
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to record payment: ${error.message}`);
+    },
+  });
+
+  // Handlers
+  const handleCreateExpense = () => {
+    const amount = parseFloat(expenseForm.amount);
+    if (!expenseForm.description || !amount || amount <= 0) {
+      toast.error('Please fill in description and a valid amount');
+      return;
+    }
+    if (!authUser?.id) {
+      toast.error('You must be logged in to record expenses');
+      return;
+    }
+    createExpenseMutation.mutate({
+      storeId: currentStoreId,
+      description: expenseForm.description,
+      amount,
+      category: expenseForm.category,
+      paidBy: authUser.id,
+      paymentMethod: expenseForm.paymentMethod,
+      notes: expenseForm.notes || undefined,
+    });
+  };
+
+  const handleCreateJournal = () => {
+    if (!journalForm.description) {
+      toast.error('Description is required');
+      return;
+    }
+    const validLines = journalForm.lines
+      .filter(l => l.accountId && (parseFloat(l.debit || '0') > 0 || parseFloat(l.credit || '0') > 0))
+      .map(l => ({
+        accountId: l.accountId,
+        debit: parseFloat(l.debit || '0'),
+        credit: parseFloat(l.credit || '0'),
+        description: l.description || undefined,
+      }));
+    if (validLines.length < 2) {
+      toast.error('At least 2 journal lines with amounts are required');
+      return;
+    }
+    const totalDebit = validLines.reduce((s, l) => s + l.debit, 0);
+    const totalCredit = validLines.reduce((s, l) => s + l.credit, 0);
+    if (Math.abs(totalDebit - totalCredit) > 0.01) {
+      toast.error(`Journal must balance. Debit: ${formatKES(totalDebit)}, Credit: ${formatKES(totalCredit)}`);
+      return;
+    }
+    createJournalMutation.mutate({
+      storeId: currentStoreId,
+      description: journalForm.description,
+      referenceType: journalForm.referenceType,
+      lines: validLines,
+      createdBy: authUser?.id || undefined,
+    });
+  };
 
   // Debt aging summary
   const agingSummary = useMemo(() => {
@@ -837,13 +979,16 @@ export default function FinancialTab() {
 
       {/* Quick Actions Bar */}
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => toast.info('Record Expense dialog coming soon')}>
+        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowExpenseDialog(true)}>
           <Minus className="mr-1.5 h-3.5 w-3.5" /> Record Expense
         </Button>
-        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => toast.info('Record Payment dialog coming soon')}>
+        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setPaymentDebt(debts.find(d => d.balance > 0) ? { id: debts[0].id, customer: debts[0].customer, balance: debts[0].balance, amountOwed: debts[0].amountOwed, amountPaid: debts[0].amountPaid } : null)}>
           <CreditCard className="mr-1.5 h-3.5 w-3.5" /> Record Payment
         </Button>
-        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => toast.info('View Ledger coming soon')}>
+        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowJournalDialog(true)}>
+          <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Journal Entry
+        </Button>
+        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDrilldownDialog('ledger')}>
           <Receipt className="mr-1.5 h-3.5 w-3.5" /> View Ledger
         </Button>
         <div className="ml-auto flex gap-2">
@@ -2050,8 +2195,375 @@ export default function FinancialTab() {
           debt={paymentDebt}
           open={!!paymentDebt}
           onOpenChange={(open) => { if (!open) setPaymentDebt(null); }}
+          onRecordPayment={(data) => {
+            recordPaymentMutation.mutate({
+              storeId: currentStoreId,
+              debtLedgerId: data.debtLedgerId,
+              amount: data.amount,
+              paymentMethod: data.paymentMethod,
+              receivedBy: authUser?.id || undefined,
+            });
+          }}
         />
       )}
+
+      {/* View Ledger Dialog */}
+      <Dialog open={drilldownDialog === 'ledger'} onOpenChange={() => setDrilldownDialog(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5" /> General Ledger
+            </DialogTitle>
+            <DialogDescription>Complete ledger with all journal entries and account transactions</DialogDescription>
+          </DialogHeader>
+          <div className="overflow-auto flex-1">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Entry #</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Account</TableHead>
+                  <TableHead className="text-right">Debit</TableHead>
+                  <TableHead className="text-right">Credit</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {journals.length > 0 ? journals.flatMap((je) =>
+                  (je.lines || []).map((line, li) => (
+                    <TableRow key={`${je.id}-${li}`} className={li === 0 ? 'border-t-2' : ''}>
+                      {li === 0 ? (
+                        <>
+                          <TableCell rowSpan={je.lines?.length || 1} className="text-sm align-top">{formatDate(je.entryDate)}</TableCell>
+                          <TableCell rowSpan={je.lines?.length || 1} className="align-top">
+                            <Badge variant="outline" className="font-mono text-xs">{je.entryNumber}</Badge>
+                          </TableCell>
+                          <TableCell rowSpan={je.lines?.length || 1} className="text-sm max-w-[150px] truncate align-top">{je.description}</TableCell>
+                        </>
+                      ) : null}
+                      <TableCell className="text-sm">
+                        <span className="font-mono text-muted-foreground mr-1">{line.account?.code || ''}</span>
+                        {line.account?.name || '—'}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm text-blue-600 dark:text-blue-400">
+                        {line.debit > 0 ? formatKES(line.debit) : ''}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm text-green-600 dark:text-green-400">
+                        {line.credit > 0 ? formatKES(line.credit) : ''}
+                      </TableCell>
+                      {li === 0 ? (
+                        <TableCell rowSpan={je.lines?.length || 1} className="align-top">
+                          {je.isPosted ? (
+                            <Badge className="text-[9px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Posted</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[9px]">Draft</Badge>
+                          )}
+                        </TableCell>
+                      ) : null}
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      No journal entries found
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Record Expense Dialog */}
+      <Dialog open={showExpenseDialog} onOpenChange={setShowExpenseDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Minus className="h-5 w-5 text-orange-600" /> Record Expense
+            </DialogTitle>
+            <DialogDescription>Record a new expense for the store</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Input
+                placeholder="e.g. Monthly rent payment"
+                value={expenseForm.description}
+                onChange={(e) => setExpenseForm(prev => ({ ...prev, description: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Amount (KES)</Label>
+              <Input
+                type="number"
+                placeholder="Enter amount"
+                min="1"
+                value={expenseForm.amount}
+                onChange={(e) => setExpenseForm(prev => ({ ...prev, amount: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Select value={expenseForm.category} onValueChange={(val) => setExpenseForm(prev => ({ ...prev, category: val }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="RENT">Rent</SelectItem>
+                    <SelectItem value="SALARIES">Salaries</SelectItem>
+                    <SelectItem value="UTILITIES">Utilities</SelectItem>
+                    <SelectItem value="TRANSPORT">Transport</SelectItem>
+                    <SelectItem value="MAINTENANCE">Maintenance</SelectItem>
+                    <SelectItem value="SUPPLIES">Supplies</SelectItem>
+                    <SelectItem value="BAD_DEBT">Bad Debt</SelectItem>
+                    <SelectItem value="OTHER">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Payment Method</Label>
+                <Select value={expenseForm.paymentMethod} onValueChange={(val) => setExpenseForm(prev => ({ ...prev, paymentMethod: val }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CASH">💵 Cash</SelectItem>
+                    <SelectItem value="MPESA">📱 M-Pesa</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Notes (optional)</Label>
+              <Textarea
+                placeholder="Additional notes..."
+                value={expenseForm.notes}
+                onChange={(e) => setExpenseForm(prev => ({ ...prev, notes: e.target.value }))}
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowExpenseDialog(false)}>Cancel</Button>
+            <Button onClick={handleCreateExpense} disabled={createExpenseMutation.isPending} className="bg-orange-600 hover:bg-orange-700">
+              {createExpenseMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+              Record Expense
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Journal Entry Dialog */}
+      <Dialog open={showJournalDialog} onOpenChange={setShowJournalDialog}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5 text-green-600" /> Add Journal Entry
+            </DialogTitle>
+            <DialogDescription>Create a new manual journal entry. Debits must equal credits.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Description</Label>
+                <Input
+                  placeholder="e.g. Adjust inventory valuation"
+                  value={journalForm.description}
+                  onChange={(e) => setJournalForm(prev => ({ ...prev, description: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Reference Type</Label>
+                <Select value={journalForm.referenceType} onValueChange={(val) => setJournalForm(prev => ({ ...prev, referenceType: val }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MANUAL">Manual</SelectItem>
+                    <SelectItem value="ADJUSTMENT">Adjustment</SelectItem>
+                    <SelectItem value="CORRECTION">Correction</SelectItem>
+                    <SelectItem value="ACCRUAL">Accrual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Journal Lines</Label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setJournalForm(prev => ({
+                    ...prev,
+                    lines: [...prev.lines, { accountId: '', debit: '', credit: '', description: '' }],
+                  }))}
+                >
+                  <Plus className="h-3 w-3 mr-1" /> Add Line
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {journalForm.lines.map((line, i) => (
+                  <div key={i} className="grid grid-cols-12 gap-2 items-end">
+                    <div className="col-span-4">
+                      {i === 0 && <Label className="text-xs">Account</Label>}
+                      <Select value={line.accountId} onValueChange={(val) => {
+                        const newLines = [...journalForm.lines];
+                        newLines[i] = { ...newLines[i], accountId: val };
+                        setJournalForm(prev => ({ ...prev, lines: newLines }));
+                      }}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select account" /></SelectTrigger>
+                        <SelectContent>
+                          {accounts.map((a) => (
+                            <SelectItem key={a.id} value={a.id}>
+                              {a.code} - {a.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-2">
+                      {i === 0 && <Label className="text-xs">Debit</Label>}
+                      <Input
+                        type="number"
+                        placeholder="0"
+                        className="h-8 text-xs"
+                        value={line.debit}
+                        onChange={(e) => {
+                          const newLines = [...journalForm.lines];
+                          newLines[i] = { ...newLines[i], debit: e.target.value, credit: e.target.value ? '0' : newLines[i].credit };
+                          setJournalForm(prev => ({ ...prev, lines: newLines }));
+                        }}
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      {i === 0 && <Label className="text-xs">Credit</Label>}
+                      <Input
+                        type="number"
+                        placeholder="0"
+                        className="h-8 text-xs"
+                        value={line.credit}
+                        onChange={(e) => {
+                          const newLines = [...journalForm.lines];
+                          newLines[i] = { ...newLines[i], credit: e.target.value, debit: e.target.value ? '0' : newLines[i].debit };
+                          setJournalForm(prev => ({ ...prev, lines: newLines }));
+                        }}
+                      />
+                    </div>
+                    <div className="col-span-3">
+                      {i === 0 && <Label className="text-xs">Line Desc</Label>}
+                      <Input
+                        placeholder="Optional"
+                        className="h-8 text-xs"
+                        value={line.description}
+                        onChange={(e) => {
+                          const newLines = [...journalForm.lines];
+                          newLines[i] = { ...newLines[i], description: e.target.value };
+                          setJournalForm(prev => ({ ...prev, lines: newLines }));
+                        }}
+                      />
+                    </div>
+                    <div className="col-span-1">
+                      {journalForm.lines.length > 2 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-red-500"
+                          onClick={() => {
+                            const newLines = journalForm.lines.filter((_, idx) => idx !== i);
+                            setJournalForm(prev => ({ ...prev, lines: newLines }));
+                          }}
+                        >
+                          ×
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {(() => {
+                const totalD = journalForm.lines.reduce((s, l) => s + (parseFloat(l.debit || '0')), 0);
+                const totalC = journalForm.lines.reduce((s, l) => s + (parseFloat(l.credit || '0')), 0);
+                const diff = Math.abs(totalD - totalC);
+                return (
+                  <div className={`text-xs p-2 rounded ${diff < 0.01 && totalD > 0 ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : totalD > 0 || totalC > 0 ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400' : 'bg-muted text-muted-foreground'}`}>
+                    <span>Total Debit: {formatKES(totalD)}</span>
+                    <span className="mx-2">|</span>
+                    <span>Total Credit: {formatKES(totalC)}</span>
+                    <span className="mx-2">|</span>
+                    <span>Difference: {formatKES(diff)}</span>
+                    {diff < 0.01 && totalD > 0 && <span className="ml-2">✓ Balanced</span>}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowJournalDialog(false)}>Cancel</Button>
+            <Button onClick={handleCreateJournal} disabled={createJournalMutation.isPending} className="bg-green-600 hover:bg-green-700">
+              {createJournalMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+              Create Entry
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Expenses List Section */}
+      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Wallet className="h-4 w-4" /> Recent Expenses
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs">{expenses.length} records</Badge>
+              {expenses.length > 0 && (
+                <span className="text-xs font-medium text-orange-600">
+                  Total: {formatKES(expenses.reduce((s, e) => s + e.amount, 0))}
+                </span>
+              )}
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowExpenseDialog(true)}>
+                <Plus className="mr-1 h-3 w-3" /> Add
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {expenses.length === 0 ? (
+            <div className="py-8 text-center">
+              <Wallet className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-30" />
+              <p className="text-sm text-muted-foreground">No expenses recorded</p>
+              <p className="text-xs text-muted-foreground mt-1">Click "Record Expense" to add one</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Payment</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {expenses.map((exp) => (
+                    <TableRow key={exp.id}>
+                      <TableCell className="text-sm">{formatDate(exp.createdAt)}</TableCell>
+                      <TableCell className="text-sm max-w-[200px] truncate">{exp.description}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-[9px]">{exp.category}</Badge>
+                      </TableCell>
+                      <TableCell className="text-sm">{exp.paymentMethod}</TableCell>
+                      <TableCell className="text-right font-medium text-sm text-orange-600 dark:text-orange-400">
+                        {formatKES(exp.amount)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

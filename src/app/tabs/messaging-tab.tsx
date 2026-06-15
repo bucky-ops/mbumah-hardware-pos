@@ -7,11 +7,13 @@ import {
   MessageSquare, Send, Phone, Clock, CheckCircle, AlertCircle,
   Loader2, Plus, Search, Filter, Smartphone, Mail,
   FileText, Bell, ChevronDown, RefreshCw,
+  PartyPopper, Heart, Gift, Sparkles, ThumbUp,
 } from 'lucide-react';
 import { useAppStore, useAuthStore } from '@/lib/stores';
 import {
   messagesApi, customersApi, debtApi,
   formatKES, formatDateTime,
+  openWhatsApp, openEmail, openSMS,
 } from '@/lib/api';
 import type { MessageItem } from '@/lib/types';
 
@@ -109,32 +111,67 @@ const STATUS_BADGE: Record<string, { label: string; color: string; icon: React.E
 
 const MESSAGE_TEMPLATES = [
   {
+    id: 'christmas',
+    type: 'PROMOTION',
+    label: '🎄 Christmas',
+    content:
+      '🎄 Merry Christmas from Mbumah Hardware! We appreciate your business. Visit us for special holiday deals!',
+  },
+  {
+    id: 'new-year',
+    type: 'PROMOTION',
+    label: '🎉 New Year',
+    content:
+      '🎉 Happy New Year from Mbumah Hardware! Start the year right with our great deals on building materials!',
+  },
+  {
+    id: 'easter',
+    type: 'PROMOTION',
+    label: '🐰 Easter',
+    content:
+      '🐰 Happy Easter from Mbumah Hardware! Celebrate with our special Easter discounts!',
+  },
+  {
+    id: 'valentine',
+    type: 'PROMOTION',
+    label: '❤️ Valentine',
+    content:
+      '❤️ Happy Valentine\'s Day! Show your love with a gift from Mbumah Hardware!',
+  },
+  {
+    id: 'general-promotion',
+    type: 'PROMOTION',
+    label: '🔥 Promotion',
+    content:
+      '🔥 Special offer at Mbumah Hardware! Great deals on all building materials. Visit us today!',
+  },
+  {
     id: 'debt-reminder',
     type: 'DEBT_REMINDER',
-    label: 'Debt Reminder',
+    label: '💳 Debt Reminder',
     content:
-      'Hello {customer_name}, this is a friendly reminder from MBUMAH HARDWARE that you have an outstanding balance of KES {amount}. Please settle your account at your earliest convenience. Thank you!',
+      'Dear {name}, your outstanding balance at Mbumah Hardware is KES {amount}. Please settle at your earliest convenience.',
+  },
+  {
+    id: 'thank-you',
+    type: 'PAYMENT_CONFIRMATION',
+    label: '👍 Thank You',
+    content:
+      'Thank you for doing business with Mbumah Hardware! We appreciate your continued support.',
   },
   {
     id: 'payment-confirmation',
     type: 'PAYMENT_CONFIRMATION',
-    label: 'Payment Confirmation',
+    label: '✅ Payment Confirmation',
     content:
       'Thank you {customer_name}! We have received your payment of KES {amount} at MBUMAH HARDWARE. Your account has been updated.',
   },
   {
     id: 'balance-update',
     type: 'BALANCE_UPDATE',
-    label: 'Balance Update',
+    label: '📊 Balance Update',
     content:
       'Hello {customer_name}, your current account balance at MBUMAH HARDWARE is KES {balance}. Thank you for your continued business!',
-  },
-  {
-    id: 'promotion',
-    type: 'PROMOTION',
-    label: 'Promotional Message',
-    content:
-      'Hello {customer_name}! Great news from MBUMAH HARDWARE! We have exciting offers on our products. Visit us today and enjoy special discounts. Your loyalty means the world to us!',
   },
 ];
 
@@ -373,10 +410,16 @@ export default function MessagingTab() {
     const template = MESSAGE_TEMPLATES.find((t) => t.id === templateId);
     if (template) {
       const customerName = selectedCustomer?.name ?? '{customer_name}';
+      // Try to get debt amount for the selected customer
+      const customerDebt = selectedCustomer
+        ? debts.filter(d => d.customerId === selectedCustomer.id).reduce((s, d) => s + d.balance, 0)
+        : 0;
+      const debtAmount = customerDebt > 0 ? customerDebt : 0;
       const content = template.content
         .replace('{customer_name}', customerName)
-        .replace('{amount}', formatKES(0))
-        .replace('{balance}', formatKES(0));
+        .replace('{name}', customerName)
+        .replace('{amount}', formatKES(debtAmount))
+        .replace('{balance}', formatKES(debtAmount));
       setSendForm((prev) => ({
         ...prev,
         messageType: template.type as typeof prev.messageType,
@@ -722,6 +765,183 @@ export default function MessagingTab() {
             QUICK SEND TAB
         ══════════════════════════════════════════════════════ */}
         <TabsContent value="quick-send" className="space-y-6 mt-4">
+          {/* Quick Send - Holiday & Greeting Cards */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-amber-500" />
+                Quick Send
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Select a message type to auto-generate a message. The message will be editable before sending.
+              </p>
+
+              {/* Message Type Selection Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {MESSAGE_TEMPLATES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => handleTemplateSelect(t.id)}
+                    className={`p-3 rounded-lg border-2 text-sm font-medium transition-all text-left hover:shadow-md ${
+                      sendForm.content === t.content ||
+                      (sendForm.messageType === t.type && sendForm.content.includes(t.content.substring(0, 20)))
+                        ? 'border-primary bg-primary/5 shadow-sm'
+                        : 'border-transparent bg-muted/30 hover:bg-muted/50 hover:border-muted-foreground/20'
+                    }`}
+                  >
+                    <span className="block text-base mb-1">{t.label}</span>
+                    <span className="text-[10px] text-muted-foreground block truncate">{t.type.replace(/_/g, ' ')}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Customer and Phone Selection */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Customer</Label>
+                  <Select onValueChange={handleCustomerSelect} value={sendForm.customerId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a customer..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <ScrollArea className="max-h-60">
+                        {customers.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name} {c.phone ? `(${c.phone})` : ''}
+                          </SelectItem>
+                        ))}
+                      </ScrollArea>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone / Email</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Phone e.g. 0712345678"
+                      value={sendForm.phone}
+                      onChange={(e) => setSendForm((prev) => ({ ...prev, phone: e.target.value }))}
+                      className="flex-1"
+                    />
+                    <Input
+                      placeholder="Email (optional)"
+                      value={sendForm.subject}
+                      onChange={(e) => setSendForm((prev) => ({ ...prev, subject: e.target.value }))}
+                      className="flex-1"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Editable Message */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Message Content</Label>
+                  <span className="text-xs text-muted-foreground">{sendForm.content.length} chars</span>
+                </div>
+                <Textarea
+                  placeholder="Select a template above or type your message here..."
+                  value={sendForm.content}
+                  onChange={(e) => setSendForm((prev) => ({ ...prev, content: e.target.value }))}
+                  rows={4}
+                  className="resize-y"
+                />
+              </div>
+
+              {/* Send Buttons - WhatsApp, SMS, Email */}
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => {
+                    if (!sendForm.phone.trim()) {
+                      toast.error('Phone number is required for WhatsApp');
+                      return;
+                    }
+                    if (!sendForm.content.trim()) {
+                      toast.error('Message content is required');
+                      return;
+                    }
+                    openWhatsApp(sendForm.phone, sendForm.content);
+                    // Also log the message
+                    sendMessageMutation.mutate({
+                      customerId: sendForm.customerId || undefined,
+                      phone: sendForm.phone,
+                      channel: 'WHATSAPP',
+                      messageType: sendForm.messageType,
+                      subject: sendForm.subject || undefined,
+                      content: sendForm.content,
+                      storeId: currentStoreId,
+                    });
+                  }}
+                  disabled={!sendForm.phone || !sendForm.content}
+                >
+                  <Phone className="h-4 w-4 mr-2" />
+                  WhatsApp
+                </Button>
+                <Button
+                  variant="outline"
+                  className="border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                  onClick={() => {
+                    if (!sendForm.phone.trim()) {
+                      toast.error('Phone number is required for SMS');
+                      return;
+                    }
+                    if (!sendForm.content.trim()) {
+                      toast.error('Message content is required');
+                      return;
+                    }
+                    openSMS(sendForm.phone, sendForm.content);
+                    sendMessageMutation.mutate({
+                      customerId: sendForm.customerId || undefined,
+                      phone: sendForm.phone,
+                      channel: 'SMS',
+                      messageType: sendForm.messageType,
+                      subject: sendForm.subject || undefined,
+                      content: sendForm.content,
+                      storeId: currentStoreId,
+                    });
+                  }}
+                  disabled={!sendForm.phone || !sendForm.content}
+                >
+                  <Smartphone className="h-4 w-4 mr-2" />
+                  SMS
+                </Button>
+                <Button
+                  variant="outline"
+                  className="border-amber-300 text-amber-600 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-900/20"
+                  onClick={() => {
+                    const emailTo = sendForm.subject || selectedCustomer?.email || '';
+                    if (!emailTo.trim()) {
+                      toast.error('Email address is required (enter in the Email field)');
+                      return;
+                    }
+                    if (!sendForm.content.trim()) {
+                      toast.error('Message content is required');
+                      return;
+                    }
+                    openEmail(emailTo, `Mbumah Hardware - ${sendForm.messageType.replace(/_/g, ' ')}`, sendForm.content);
+                    sendMessageMutation.mutate({
+                      customerId: sendForm.customerId || undefined,
+                      phone: sendForm.phone,
+                      channel: 'WHATSAPP',
+                      messageType: sendForm.messageType,
+                      subject: sendForm.subject || undefined,
+                      content: sendForm.content,
+                      storeId: currentStoreId,
+                    });
+                  }}
+                  disabled={!sendForm.content}
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  Email
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Quick Action Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Send Debt Reminders */}
@@ -908,19 +1128,93 @@ export default function MessagingTab() {
                 </p>
               </div>
 
-              {/* Send Button */}
-              <Button
-                className="w-full sm:w-auto"
-                onClick={handleSendMessage}
-                disabled={sendMessageMutation.isPending || !sendForm.phone || !sendForm.content}
-              >
-                {sendMessageMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4 mr-2" />
-                )}
-                Send Message
-              </Button>
+              {/* Send Buttons */}
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => {
+                    if (!sendForm.phone.trim()) {
+                      toast.error('Phone number is required for WhatsApp');
+                      return;
+                    }
+                    if (!sendForm.content.trim()) {
+                      toast.error('Message content is required');
+                      return;
+                    }
+                    openWhatsApp(sendForm.phone, sendForm.content);
+                    sendMessageMutation.mutate({
+                      customerId: sendForm.customerId || undefined,
+                      phone: sendForm.phone,
+                      channel: 'WHATSAPP',
+                      messageType: sendForm.messageType,
+                      subject: sendForm.subject || undefined,
+                      content: sendForm.content,
+                      storeId: currentStoreId,
+                    });
+                  }}
+                  disabled={sendMessageMutation.isPending || !sendForm.phone || !sendForm.content}
+                >
+                  <Phone className="h-4 w-4 mr-2" />
+                  WhatsApp
+                </Button>
+                <Button
+                  variant="outline"
+                  className="border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400"
+                  onClick={() => {
+                    if (!sendForm.phone.trim()) {
+                      toast.error('Phone number is required for SMS');
+                      return;
+                    }
+                    if (!sendForm.content.trim()) {
+                      toast.error('Message content is required');
+                      return;
+                    }
+                    openSMS(sendForm.phone, sendForm.content);
+                    sendMessageMutation.mutate({
+                      customerId: sendForm.customerId || undefined,
+                      phone: sendForm.phone,
+                      channel: 'SMS',
+                      messageType: sendForm.messageType,
+                      subject: sendForm.subject || undefined,
+                      content: sendForm.content,
+                      storeId: currentStoreId,
+                    });
+                  }}
+                  disabled={sendMessageMutation.isPending || !sendForm.phone || !sendForm.content}
+                >
+                  <Smartphone className="h-4 w-4 mr-2" />
+                  SMS
+                </Button>
+                <Button
+                  variant="outline"
+                  className="border-amber-300 text-amber-600 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400"
+                  onClick={() => {
+                    const emailTo = sendForm.subject || selectedCustomer?.email || '';
+                    if (!emailTo.trim()) {
+                      toast.error('Email address is required');
+                      return;
+                    }
+                    if (!sendForm.content.trim()) {
+                      toast.error('Message content is required');
+                      return;
+                    }
+                    openEmail(emailTo, `Mbumah Hardware - ${sendForm.messageType.replace(/_/g, ' ')}`, sendForm.content);
+                    sendMessageMutation.mutate({
+                      customerId: sendForm.customerId || undefined,
+                      phone: sendForm.phone,
+                      channel: 'WHATSAPP',
+                      messageType: sendForm.messageType,
+                      subject: sendForm.subject || undefined,
+                      content: sendForm.content,
+                      storeId: currentStoreId,
+                    });
+                  }}
+                  disabled={sendMessageMutation.isPending || !sendForm.content}
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  Email
+                </Button>
+              </div>
 
               {/* WhatsApp Link Display */}
               {lastWaLink && (
@@ -1372,20 +1666,72 @@ export default function MessagingTab() {
             )}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => { setShowSendDialog(false); resetSendForm(); }}>
               Cancel
             </Button>
             <Button
-              onClick={handleSendMessage}
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => {
+                if (!sendForm.phone.trim()) { toast.error('Phone required'); return; }
+                if (!sendForm.content.trim()) { toast.error('Message required'); return; }
+                openWhatsApp(sendForm.phone, sendForm.content);
+                sendMessageMutation.mutate({
+                  customerId: sendForm.customerId || undefined,
+                  phone: sendForm.phone,
+                  channel: 'WHATSAPP',
+                  messageType: sendForm.messageType,
+                  subject: sendForm.subject || undefined,
+                  content: sendForm.content,
+                  storeId: currentStoreId,
+                });
+              }}
               disabled={sendMessageMutation.isPending || !sendForm.phone || !sendForm.content}
             >
-              {sendMessageMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4 mr-2" />
-              )}
-              Send Message
+              <Phone className="h-4 w-4 mr-2" />WhatsApp
+            </Button>
+            <Button
+              variant="outline"
+              className="border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400"
+              onClick={() => {
+                if (!sendForm.phone.trim()) { toast.error('Phone required'); return; }
+                if (!sendForm.content.trim()) { toast.error('Message required'); return; }
+                openSMS(sendForm.phone, sendForm.content);
+                sendMessageMutation.mutate({
+                  customerId: sendForm.customerId || undefined,
+                  phone: sendForm.phone,
+                  channel: 'SMS',
+                  messageType: sendForm.messageType,
+                  subject: sendForm.subject || undefined,
+                  content: sendForm.content,
+                  storeId: currentStoreId,
+                });
+              }}
+              disabled={sendMessageMutation.isPending || !sendForm.phone || !sendForm.content}
+            >
+              <Smartphone className="h-4 w-4 mr-2" />SMS
+            </Button>
+            <Button
+              variant="outline"
+              className="border-amber-300 text-amber-600 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400"
+              onClick={() => {
+                const emailTo = sendForm.subject || selectedCustomer?.email || '';
+                if (!emailTo.trim()) { toast.error('Email required'); return; }
+                if (!sendForm.content.trim()) { toast.error('Message required'); return; }
+                openEmail(emailTo, `Mbumah Hardware - ${sendForm.messageType.replace(/_/g, ' ')}`, sendForm.content);
+                sendMessageMutation.mutate({
+                  customerId: sendForm.customerId || undefined,
+                  phone: sendForm.phone,
+                  channel: 'WHATSAPP',
+                  messageType: sendForm.messageType,
+                  subject: sendForm.subject || undefined,
+                  content: sendForm.content,
+                  storeId: currentStoreId,
+                });
+              }}
+              disabled={sendMessageMutation.isPending || !sendForm.content}
+            >
+              <Mail className="h-4 w-4 mr-2" />Email
             </Button>
           </DialogFooter>
         </DialogContent>

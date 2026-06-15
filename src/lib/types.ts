@@ -172,6 +172,9 @@ export interface PaymentDetails {
   cashAmount?: number;
   mpesaPhone?: string;
   debtAccountId?: string;
+  giftCardId?: string;
+  voucherId?: string;
+  discountAmount?: number;
 }
 
 export interface SplitPayment {
@@ -479,4 +482,23 @@ export interface EndShiftPayload {
   endingCash: number;
   countedCash: number;
   notes?: string;
+}
+
+
+export interface MessageItem {
+  id: string;
+  storeId: string;
+  customerId: string | null;
+  channel: string;
+  messageType: string;
+  subject: string | null;
+  content: string;
+  status: string;
+  waLink: string | null;
+  sentAt: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  customerName?: string;
+  customerPhone?: string;
 }

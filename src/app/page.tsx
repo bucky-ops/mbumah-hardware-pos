@@ -20,7 +20,7 @@ import {
   CalendarDays, Printer, Bell, ChevronDown,
   BellRing, PackageX, AlertOctagon, CircleDollarSign, CheckCheck,
   Truck, UserPlus, Receipt, Filter, Info, Tag,
-  LayoutGrid, List, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Pause, MessageSquare, PartyPopper, Sparkles, Zap,
+  LayoutGrid, List, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Pause, MessageSquare, PartyPopper, Sparkles, Zap, Ticket, Landmark, Award, Gift,
 } from 'lucide-react';
 
 import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
@@ -29,11 +29,12 @@ import {
   productsApi, categoriesApi, customersApi, transactionsApi,
   paymentsApi, dashboardApi,
   rentalsApi, debtApi, notificationsApi,
+  giftCardsApi, vouchersApi,
   formatKES, formatDate, formatDateTime, formatRelativeTime,
   type ProductListItem, type CustomerItem,
   type CategoryItem, type TransactionItem,
   type RentalItem, type DebtLedgerItem,
-  type NotificationItem,
+  type NotificationItem, type GiftCardItem, type VoucherItem,
 } from '@/lib/api';
 import type { PaymentMethod, CartItem, UnitType, DashboardStats } from '@/lib/types';
 
@@ -67,6 +68,14 @@ const LazyTransactionsTab = lazy(() => import('./tabs/transactions-tab'));
 const LazySuppliersTab = lazy(() => import('./tabs/suppliers-tab'));
 const LazyCatalogTab = lazy(() => import('./tabs/catalog-tab'));
 const LazyGiftCardsTab = lazy(() => import('./tabs/gift-cards-tab'));
+const LazyVouchersTab = lazy(() => import('./tabs/vouchers-tab'));
+const LazyInvoicesTab = lazy(() => import('./tabs/invoices-tab'));
+const LazyDeliveryTab = lazy(() => import('./tabs/delivery-notes-tab'));
+const LazyCreditsTab = lazy(() => import('./tabs/credits-tab'));
+const LazyMessagingTab = lazy(() => import('./tabs/messaging-tab'));
+const LazyTransfersTab = lazy(() => import('./tabs/transfers-tab'));
+const LazyBankingTab = lazy(() => import('./tabs/banking-tab'));
+const LazyLoyaltyTab = lazy(() => import('./tabs/loyalty-tab'));
 
 function TabLoadingFallback() {
   return (
@@ -93,6 +102,14 @@ const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
   { id: 'transactions', label: 'Transactions', icon: ShoppingBag },
   { id: 'suppliers', label: 'Suppliers', icon: Truck },
   { id: 'gift-cards', label: 'Gift Cards', icon: CreditCard },
+  { id: 'vouchers', label: 'Vouchers', icon: Ticket },
+  { id: 'invoices', label: 'Invoices', icon: Receipt },
+  { id: 'delivery', label: 'Delivery', icon: Truck },
+  { id: 'credits', label: 'Credits', icon: CircleDollarSign },
+  { id: 'messaging', label: 'Messaging', icon: MessageSquare },
+  { id: 'transfers', label: 'Transfers', icon: ArrowUpDown },
+  { id: 'banking', label: 'Banking', icon: Landmark },
+  { id: 'loyalty', label: 'Loyalty', icon: Award },
   { id: 'admin', label: 'Admin', icon: Settings },
 ];
 
@@ -1973,6 +1990,17 @@ function POSTab() {
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const currentStoreId = useAppStore((s) => s.currentStoreId);
 
+  // Add Customer dialog state
+  const [addCustomerOpen, setAddCustomerOpen] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerPhone, setNewCustomerPhone] = useState('');
+  const [newCustomerEmail, setNewCustomerEmail] = useState('');
+  const [newCustomerDebtLimit, setNewCustomerDebtLimit] = useState('');
+
+  // Gift card / Voucher state
+  const [appliedGiftCardId, setAppliedGiftCardId] = useState<string>('');
+  const [appliedVoucherId, setAppliedVoucherId] = useState<string>('');
+
   // View mode & sorting
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortField, setSortField] = useState<'name' | 'price' | 'stock' | 'category'>('name');
@@ -2036,6 +2064,55 @@ function POSTab() {
     },
   });
 
+  // Auto-fetch active gift cards for selected customer
+  const { data: customerGiftCardsData } = useQuery({
+    queryKey: ['customer-gift-cards', currentStoreId, selectedCustomer],
+    queryFn: async () => {
+      if (!selectedCustomer || selectedCustomer === 'walk-in') return { data: [] };
+      const res = await giftCardsApi.list({ storeId: currentStoreId, status: 'ACTIVE' });
+      const allCards = Array.isArray(res.data) ? res.data : [];
+      // Filter to cards belonging to the selected customer
+      const customerCards = allCards.filter((gc: GiftCardItem) => gc.customerId === selectedCustomer || gc.recipientPhone === customers.find((c: CustomerItem) => c.id === selectedCustomer)?.phone);
+      return { data: customerCards };
+    },
+    enabled: !!selectedCustomer && selectedCustomer !== 'walk-in',
+  });
+
+  // Auto-fetch active vouchers for selected customer
+  const { data: customerVouchersData } = useQuery({
+    queryKey: ['customer-vouchers', currentStoreId, selectedCustomer],
+    queryFn: async () => {
+      if (!selectedCustomer || selectedCustomer === 'walk-in') return { data: [] };
+      const res = await vouchersApi.list({ storeId: currentStoreId, status: 'ACTIVE' });
+      const allVouchers = Array.isArray(res.data) ? res.data : [];
+      return { data: allVouchers };
+    },
+    enabled: !!selectedCustomer && selectedCustomer !== 'walk-in',
+  });
+
+  // Create customer mutation
+  const createCustomerMutation = useMutation({
+    mutationFn: (data: { storeId: string; name: string; phone?: string; email?: string; debtLimit?: number }) =>
+      customersApi.create(data),
+    onSuccess: (res) => {
+      toast.success('Customer created successfully!');
+      if (res.data) {
+        setSelectedCustomer(res.data.id);
+      }
+      setAddCustomerOpen(false);
+      setNewCustomerName('');
+      setNewCustomerPhone('');
+      setNewCustomerEmail('');
+      setNewCustomerDebtLimit('');
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Failed to create customer');
+    },
+  });
+
+  const queryClient = useQueryClient();
+
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [lastTransaction, setLastTransaction] = useState<TransactionItem | null>(null);
   const [lastCashReceived, setLastCashReceived] = useState(0);
@@ -2049,7 +2126,7 @@ function POSTab() {
       setTimeout(() => setConfettiActive(false), 4000);
       if (res.data) {
         setLastTransaction(res.data);
-        setLastCashReceived(paymentMethod === 'CASH' || paymentMethod === 'SPLIT' ? Number(splitCashAmount) || Number(cashReceived) || total : 0);
+        setLastCashReceived(paymentMethod === 'CASH' || paymentMethod === 'SPLIT' ? Number(splitCashAmount) || Number(cashReceived) || finalTotal : 0);
         setLastMpesaPhone(mpesaPhone);
         setReceiptOpen(true);
       }
@@ -2089,6 +2166,22 @@ function POSTab() {
   const products = productsData?.data || [];
   const categories = categoriesData?.data || [];
   const customers = customersData?.data || [];
+  const customerGiftCards: GiftCardItem[] = Array.isArray(customerGiftCardsData?.data) ? customerGiftCardsData.data : [];
+  const customerVouchers: VoucherItem[] = Array.isArray(customerVouchersData?.data) ? customerVouchersData.data : [];
+
+  // Gift card / voucher discount computation
+  const selectedGiftCard = appliedGiftCardId ? customerGiftCards.find(gc => gc.id === appliedGiftCardId) : null;
+  const selectedVoucher = appliedVoucherId ? customerVouchers.find(v => v.id === appliedVoucherId) : null;
+  const giftCardDiscount = selectedGiftCard ? Math.min(selectedGiftCard.currentBalance, total) : 0;
+  const voucherDiscount = selectedVoucher
+    ? selectedVoucher.voucherType === 'FIXED'
+      ? Math.min(selectedVoucher.value, total)
+      : selectedVoucher.voucherType === 'PERCENTAGE'
+        ? Math.min(total * (selectedVoucher.value / 100), selectedVoucher.maxDiscount || total)
+        : 0
+    : 0;
+  const totalDiscount = giftCardDiscount + voucherDiscount;
+  const finalTotal = Math.max(0, total - totalDiscount);
 
   const handleAddToCart = (product: ProductListItem, qty?: number) => {
     if (product.quantityInStock <= 0 && !product.isRental) {
@@ -2217,7 +2310,7 @@ function POSTab() {
     if (paymentMethod === 'SPLIT') {
       const cashAmt = Number(splitCashAmount) || 0;
       const mpesaAmt = Number(splitMpesaAmount) || 0;
-      if (cashAmt + mpesaAmt < total) {
+      if (cashAmt + mpesaAmt < finalTotal) {
         toast.error('Split amounts must equal or exceed total');
         return;
       }
@@ -2230,9 +2323,12 @@ function POSTab() {
       items: cart.items,
       paymentMethod,
       paymentDetails: {
-        cashAmount: paymentMethod === 'CASH' ? Number(cashReceived) || total : paymentMethod === 'SPLIT' ? Number(splitCashAmount) || 0 : undefined,
+        cashAmount: paymentMethod === 'CASH' ? Number(cashReceived) || finalTotal : paymentMethod === 'SPLIT' ? Number(splitCashAmount) || 0 : undefined,
         mpesaPhone: paymentMethod === 'SPLIT' ? mpesaPhone : undefined,
         debtAccountId: paymentMethod === 'DEBT' ? selectedCustomer : undefined,
+        giftCardId: appliedGiftCardId || undefined,
+        voucherId: appliedVoucherId || undefined,
+        discountAmount: totalDiscount,
       },
     });
   };
@@ -2244,13 +2340,13 @@ function POSTab() {
     }
     mpesaMutation.mutate({
       phoneNumber: mpesaPhone.startsWith('0') ? `254${mpesaPhone.slice(1)}` : mpesaPhone,
-      amount: total,
+      amount: finalTotal,
       accountReference: `MBT-${Date.now()}`,
       transactionDesc: 'MBUMAH HARDWARE Purchase',
     });
   };
 
-  const change = paymentMethod === 'CASH' && cashReceived ? Number(cashReceived) - total : 0;
+  const change = paymentMethod === 'CASH' && cashReceived ? Number(cashReceived) - finalTotal : 0;
 
   // Sorted products
   const sortedProducts = useMemo(() => {
@@ -2488,7 +2584,7 @@ function POSTab() {
             </div>
           </CardHeader>
           <Separator />
-          <ScrollArea className="flex-1 min-h-0">
+          <ScrollArea className="flex-1 min-h-0 max-h-64 overflow-y-auto">
             {cart.items.length === 0 ? (
               <EmptyCartState />
             ) : (
@@ -2526,17 +2622,95 @@ function POSTab() {
                 </div>
 
                 {/* Customer Selection */}
-                <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Walk-in Customer" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="walk-in">Walk-in Customer</SelectItem>
-                    {customers.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}{c.phone ? ` - ${c.phone}` : ''}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-1.5">
+                  <Select value={selectedCustomer} onValueChange={(v) => { setSelectedCustomer(v); setAppliedGiftCardId(''); setAppliedVoucherId(''); }}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Walk-in Customer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="walk-in">Walk-in Customer</SelectItem>
+                      {customers.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}{c.phone ? ` - ${c.phone}` : ''}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 shrink-0 text-xs"
+                    onClick={() => setAddCustomerOpen(true)}
+                    title="Add new customer"
+                  >
+                    <UserPlus className="h-3.5 w-3.5 mr-1" />
+                    Add
+                  </Button>
+                </div>
+
+                {/* Gift Cards / Vouchers for selected customer */}
+                {selectedCustomer && selectedCustomer !== 'walk-in' && (customerGiftCards.length > 0 || customerVouchers.length > 0) && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                      <Award className="h-3 w-3" />
+                      Customer Benefits
+                      <Badge variant="secondary" className="text-[9px] h-4 px-1">
+                        {customerGiftCards.length + customerVouchers.length} available
+                      </Badge>
+                    </p>
+                    {customerGiftCards.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-muted-foreground font-medium">Gift Cards</p>
+                        {customerGiftCards.map((gc) => (
+                          <button
+                            key={gc.id}
+                            type="button"
+                            onClick={() => setAppliedGiftCardId(appliedGiftCardId === gc.id ? '' : gc.id)}
+                            className={`w-full text-left p-2 rounded-md border text-xs transition-colors ${
+                              appliedGiftCardId === gc.id
+                                ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                                : 'border-border hover:border-primary/30 hover:bg-muted/30'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <Gift className="h-3 w-3 text-amber-500" />
+                                <span className="font-medium">{gc.code}</span>
+                              </div>
+                              <span className="font-semibold text-primary">{formatKES(gc.currentBalance)}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {customerVouchers.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-muted-foreground font-medium">Vouchers</p>
+                        {customerVouchers.map((v) => (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => setAppliedVoucherId(appliedVoucherId === v.id ? '' : v.id)}
+                            className={`w-full text-left p-2 rounded-md border text-xs transition-colors ${
+                              appliedVoucherId === v.id
+                                ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                                : 'border-border hover:border-primary/30 hover:bg-muted/30'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <Ticket className="h-3 w-3 text-emerald-500" />
+                                <span className="font-medium">{v.name}</span>
+                                <Badge variant="outline" className="text-[8px] h-3.5 px-1">{v.voucherType}</Badge>
+                              </div>
+                              <span className="font-semibold text-primary">
+                                {v.voucherType === 'PERCENTAGE' ? `${v.value}%` : formatKES(v.value)}
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
@@ -2547,10 +2721,19 @@ function POSTab() {
                     <span className="text-muted-foreground">VAT (16%)</span>
                     <span>{formatKES(tax)}</span>
                   </div>
+                  {totalDiscount > 0 && (
+                    <div className="flex justify-between text-green-600">
+                      <span className="flex items-center gap-1">
+                        <Tag className="h-3 w-3" />
+                        Discount
+                      </span>
+                      <span>-{formatKES(totalDiscount)}</span>
+                    </div>
+                  )}
                   <Separator />
                   <div className="flex justify-between font-bold text-base">
                     <span>Total</span>
-                    <span className="gradient-text">{formatKES(total)}</span>
+                    <span className="gradient-text">{formatKES(finalTotal)}</span>
                   </div>
                 </div>
 
@@ -2560,7 +2743,7 @@ function POSTab() {
                       <CreditCard className="mr-2 h-4 w-4" />
                       <span className="flex flex-col items-start leading-tight">
                         <span className="text-xs font-normal opacity-80">Checkout (F9)</span>
-                        <span>{formatKES(total)}</span>
+                        <span>{formatKES(finalTotal)}</span>
                       </span>
                     </Button>
                   </DialogTrigger>
@@ -2571,7 +2754,10 @@ function POSTab() {
                         Complete Payment
                       </DialogTitle>
                       <DialogDescription>
-                        Total: <span className="font-bold text-primary">{formatKES(total)}</span>
+                        Total: <span className="font-bold text-primary">{formatKES(finalTotal)}</span>
+                        {totalDiscount > 0 && (
+                          <span className="text-green-600 text-xs ml-2">(Save {formatKES(totalDiscount)})</span>
+                        )}
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
@@ -2629,11 +2815,11 @@ function POSTab() {
                               </p>
                             </div>
                           )}
-                          {cashReceived && Number(cashReceived) < total && (
+                          {cashReceived && Number(cashReceived) < finalTotal && (
                             <Alert variant="destructive">
                               <AlertCircle className="h-4 w-4" />
                               <AlertTitle>Insufficient amount</AlertTitle>
-                              <AlertDescription>Need {formatKES(total - Number(cashReceived))} more</AlertDescription>
+                              <AlertDescription>Need {formatKES(finalTotal - Number(cashReceived))} more</AlertDescription>
                             </Alert>
                           )}
                         </div>
@@ -2676,7 +2862,7 @@ function POSTab() {
                                 value={splitCashAmount}
                                 onChange={(e) => {
                                   setSplitCashAmount(e.target.value);
-                                  const remaining = total - Number(e.target.value);
+                                  const remaining = finalTotal - Number(e.target.value);
                                   if (remaining > 0) setSplitMpesaAmount(String(remaining));
                                 }}
                                 className="mt-1 text-sm font-semibold"
@@ -2693,7 +2879,7 @@ function POSTab() {
                                 value={splitMpesaAmount}
                                 onChange={(e) => {
                                   setSplitMpesaAmount(e.target.value);
-                                  const remaining = total - Number(e.target.value);
+                                  const remaining = finalTotal - Number(e.target.value);
                                   if (remaining > 0) setSplitCashAmount(String(remaining));
                                 }}
                                 className="mt-1 text-sm font-semibold"
@@ -2711,9 +2897,9 @@ function POSTab() {
                               className="mt-1 text-sm"
                             />
                           </div>
-                          {Number(splitCashAmount) + Number(splitMpesaAmount) < total && (
+                          {Number(splitCashAmount) + Number(splitMpesaAmount) < finalTotal && (
                             <p className="text-[10px] text-amber-600 font-medium">
-                              Amounts must total at least {formatKES(total)}. Remaining: {formatKES(total - Number(splitCashAmount) - Number(splitMpesaAmount))}
+                              Amounts must total at least {formatKES(finalTotal)}. Remaining: {formatKES(finalTotal - Number(splitCashAmount) - Number(splitMpesaAmount))}
                             </p>
                           )}
                         </div>
@@ -2725,9 +2911,9 @@ function POSTab() {
                         onClick={handleCheckout}
                         disabled={
                           checkoutMutation.isPending ||
-                          (paymentMethod === 'CASH' && (!cashReceived || Number(cashReceived) < total)) ||
+                          (paymentMethod === 'CASH' && (!cashReceived || Number(cashReceived) < finalTotal)) ||
                           (paymentMethod === 'DEBT' && !selectedCustomer) ||
-                          (paymentMethod === 'SPLIT' && (Number(splitCashAmount) + Number(splitMpesaAmount) < total))
+                          (paymentMethod === 'SPLIT' && (Number(splitCashAmount) + Number(splitMpesaAmount) < finalTotal))
                         }
                         className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
                       >
@@ -2923,7 +3109,7 @@ function POSTab() {
             </div>
             <div className="mt-4 bg-white/15 rounded-lg p-3 flex items-center justify-between">
               <span className="text-sm text-green-100">Amount to Pay</span>
-              <span className="text-2xl font-bold">{formatKES(total)}</span>
+              <span className="text-2xl font-bold">{formatKES(finalTotal)}</span>
             </div>
           </div>
 
@@ -3002,7 +3188,7 @@ function POSTab() {
                 <div>
                   <p className="text-lg font-semibold text-green-600">Payment Successful!</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    M-Pesa payment of {formatKES(total)} confirmed
+                    M-Pesa payment of {formatKES(finalTotal)} confirmed
                   </p>
                 </div>
                 <Button
@@ -3050,6 +3236,94 @@ function POSTab() {
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Customer Dialog */}
+      <Dialog open={addCustomerOpen} onOpenChange={setAddCustomerOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-primary" />
+              Add New Customer
+            </DialogTitle>
+            <DialogDescription>
+              Create a new customer record. They will be auto-selected for this order.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="newCustomerName">Full Name *</Label>
+              <Input
+                id="newCustomerName"
+                placeholder="e.g. John Kamau"
+                value={newCustomerName}
+                onChange={(e) => setNewCustomerName(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="newCustomerPhone">Phone</Label>
+                <Input
+                  id="newCustomerPhone"
+                  type="tel"
+                  placeholder="0712 345 678"
+                  value={newCustomerPhone}
+                  onChange={(e) => setNewCustomerPhone(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="newCustomerEmail">Email</Label>
+                <Input
+                  id="newCustomerEmail"
+                  type="email"
+                  placeholder="john@example.com"
+                  value={newCustomerEmail}
+                  onChange={(e) => setNewCustomerEmail(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="newCustomerDebtLimit">Debt Limit (KES)</Label>
+              <Input
+                id="newCustomerDebtLimit"
+                type="number"
+                placeholder="0"
+                value={newCustomerDebtLimit}
+                onChange={(e) => setNewCustomerDebtLimit(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddCustomerOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!newCustomerName.trim()) {
+                  toast.error('Customer name is required');
+                  return;
+                }
+                createCustomerMutation.mutate({
+                  storeId: currentStoreId,
+                  name: newCustomerName.trim(),
+                  phone: newCustomerPhone.trim() || undefined,
+                  email: newCustomerEmail.trim() || undefined,
+                  debtLimit: Number(newCustomerDebtLimit) || 0,
+                });
+              }}
+              disabled={createCustomerMutation.isPending || !newCustomerName.trim()}
+              className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+            >
+              {createCustomerMutation.isPending ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating...</>
+              ) : (
+                <><UserPlus className="mr-2 h-4 w-4" />Create Customer</>
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -3107,7 +3381,7 @@ function POSTab() {
               </div>
             </div>
           </SheetHeader>
-          <ScrollArea className="flex-1 min-h-0">
+          <ScrollArea className="flex-1 min-h-0 max-h-64 overflow-y-auto">
             {cart.items.length === 0 ? (
               <EmptyCartState />
             ) : (
@@ -3141,17 +3415,95 @@ function POSTab() {
                     Apply
                   </Button>
                 </div>
-                <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Walk-in Customer" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="walk-in">Walk-in Customer</SelectItem>
-                    {customers.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}{c.phone ? ` - ${c.phone}` : ''}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-1.5">
+                  <Select value={selectedCustomer} onValueChange={(v) => { setSelectedCustomer(v); setAppliedGiftCardId(''); setAppliedVoucherId(''); }}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Walk-in Customer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="walk-in">Walk-in Customer</SelectItem>
+                      {customers.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}{c.phone ? ` - ${c.phone}` : ''}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 shrink-0 text-xs"
+                    onClick={() => setAddCustomerOpen(true)}
+                    title="Add new customer"
+                  >
+                    <UserPlus className="h-3.5 w-3.5 mr-1" />
+                    Add
+                  </Button>
+                </div>
+
+                {/* Gift Cards / Vouchers for selected customer (mobile) */}
+                {selectedCustomer && selectedCustomer !== 'walk-in' && (customerGiftCards.length > 0 || customerVouchers.length > 0) && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                      <Award className="h-3 w-3" />
+                      Customer Benefits
+                      <Badge variant="secondary" className="text-[9px] h-4 px-1">
+                        {customerGiftCards.length + customerVouchers.length} available
+                      </Badge>
+                    </p>
+                    {customerGiftCards.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-muted-foreground font-medium">Gift Cards</p>
+                        {customerGiftCards.map((gc) => (
+                          <button
+                            key={gc.id}
+                            type="button"
+                            onClick={() => setAppliedGiftCardId(appliedGiftCardId === gc.id ? '' : gc.id)}
+                            className={`w-full text-left p-2 rounded-md border text-xs transition-colors ${
+                              appliedGiftCardId === gc.id
+                                ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                                : 'border-border hover:border-primary/30 hover:bg-muted/30'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <Gift className="h-3 w-3 text-amber-500" />
+                                <span className="font-medium">{gc.code}</span>
+                              </div>
+                              <span className="font-semibold text-primary">{formatKES(gc.currentBalance)}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {customerVouchers.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-muted-foreground font-medium">Vouchers</p>
+                        {customerVouchers.map((v) => (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => setAppliedVoucherId(appliedVoucherId === v.id ? '' : v.id)}
+                            className={`w-full text-left p-2 rounded-md border text-xs transition-colors ${
+                              appliedVoucherId === v.id
+                                ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                                : 'border-border hover:border-primary/30 hover:bg-muted/30'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <Ticket className="h-3 w-3 text-emerald-500" />
+                                <span className="font-medium">{v.name}</span>
+                                <Badge variant="outline" className="text-[8px] h-3.5 px-1">{v.voucherType}</Badge>
+                              </div>
+                              <span className="font-semibold text-primary">
+                                {v.voucherType === 'PERCENTAGE' ? `${v.value}%` : formatKES(v.value)}
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Subtotal</span>
@@ -3161,10 +3513,19 @@ function POSTab() {
                     <span className="text-muted-foreground">VAT (16%)</span>
                     <span>{formatKES(tax)}</span>
                   </div>
+                  {totalDiscount > 0 && (
+                    <div className="flex justify-between text-green-600">
+                      <span className="flex items-center gap-1">
+                        <Tag className="h-3 w-3" />
+                        Discount
+                      </span>
+                      <span>-{formatKES(totalDiscount)}</span>
+                    </div>
+                  )}
                   <Separator />
                   <div className="flex justify-between font-bold text-base">
                     <span>Total</span>
-                    <span className="gradient-text">{formatKES(total)}</span>
+                    <span className="gradient-text">{formatKES(finalTotal)}</span>
                   </div>
                 </div>
                 <Dialog open={checkoutOpen} onOpenChange={(v) => { setCheckoutOpen(v); if (!v) return; }}>
@@ -3173,7 +3534,7 @@ function POSTab() {
                       <CreditCard className="mr-2 h-4 w-4" />
                       <span className="flex flex-col items-start leading-tight">
                         <span className="text-xs font-normal opacity-80">Checkout (F9)</span>
-                        <span>{formatKES(total)}</span>
+                        <span>{formatKES(finalTotal)}</span>
                       </span>
                     </Button>
                   </DialogTrigger>
@@ -3184,7 +3545,10 @@ function POSTab() {
                         Complete Payment
                       </DialogTitle>
                       <DialogDescription>
-                        Total: <span className="font-bold text-primary">{formatKES(total)}</span>
+                        Total: <span className="font-bold text-primary">{formatKES(finalTotal)}</span>
+                        {totalDiscount > 0 && (
+                          <span className="text-green-600 text-xs ml-2">(Save {formatKES(totalDiscount)})</span>
+                        )}
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
@@ -3232,11 +3596,11 @@ function POSTab() {
                               <p className="text-sm font-medium text-green-700 dark:text-green-400">Change: {formatKES(change)}</p>
                             </div>
                           )}
-                          {cashReceived && Number(cashReceived) < total && (
+                          {cashReceived && Number(cashReceived) < finalTotal && (
                             <Alert variant="destructive">
                               <AlertCircle className="h-4 w-4" />
                               <AlertTitle>Insufficient amount</AlertTitle>
-                              <AlertDescription>Need {formatKES(total - Number(cashReceived))} more</AlertDescription>
+                              <AlertDescription>Need {formatKES(finalTotal - Number(cashReceived))} more</AlertDescription>
                             </Alert>
                           )}
                         </div>
@@ -3260,11 +3624,11 @@ function POSTab() {
                           <div className="grid grid-cols-2 gap-3">
                             <div>
                               <Label htmlFor="mobile-splitCash" className="text-xs flex items-center gap-1"><Banknote className="h-3 w-3" /> Cash</Label>
-                              <Input id="mobile-splitCash" type="number" placeholder="0" value={splitCashAmount} onChange={(e) => { setSplitCashAmount(e.target.value); const r = total - Number(e.target.value); if (r > 0) setSplitMpesaAmount(String(r)); }} className="mt-1 text-sm font-semibold" />
+                              <Input id="mobile-splitCash" type="number" placeholder="0" value={splitCashAmount} onChange={(e) => { setSplitCashAmount(e.target.value); const r = finalTotal - Number(e.target.value); if (r > 0) setSplitMpesaAmount(String(r)); }} className="mt-1 text-sm font-semibold" />
                             </div>
                             <div>
                               <Label htmlFor="mobile-splitMpesa" className="text-xs flex items-center gap-1"><Smartphone className="h-3 w-3" /> M-Pesa</Label>
-                              <Input id="mobile-splitMpesa" type="number" placeholder="0" value={splitMpesaAmount} onChange={(e) => { setSplitMpesaAmount(e.target.value); const r = total - Number(e.target.value); if (r > 0) setSplitCashAmount(String(r)); }} className="mt-1 text-sm font-semibold" />
+                              <Input id="mobile-splitMpesa" type="number" placeholder="0" value={splitMpesaAmount} onChange={(e) => { setSplitMpesaAmount(e.target.value); const r = finalTotal - Number(e.target.value); if (r > 0) setSplitCashAmount(String(r)); }} className="mt-1 text-sm font-semibold" />
                             </div>
                           </div>
                           <div>
@@ -3280,9 +3644,9 @@ function POSTab() {
                         onClick={handleCheckout}
                         disabled={
                           checkoutMutation.isPending ||
-                          (paymentMethod === 'CASH' && (!cashReceived || Number(cashReceived) < total)) ||
+                          (paymentMethod === 'CASH' && (!cashReceived || Number(cashReceived) < finalTotal)) ||
                           (paymentMethod === 'DEBT' && !selectedCustomer) ||
-                          (paymentMethod === 'SPLIT' && (Number(splitCashAmount) + Number(splitMpesaAmount) < total))
+                          (paymentMethod === 'SPLIT' && (Number(splitCashAmount) + Number(splitMpesaAmount) < finalTotal))
                         }
                         className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
                       >
@@ -3367,6 +3731,14 @@ function MainApp() {
       case 'admin': return <Suspense fallback={<TabLoadingFallback />}><LazyAdminTab /></Suspense>;
       case 'suppliers': return <Suspense fallback={<TabLoadingFallback />}><LazySuppliersTab /></Suspense>;
       case 'gift-cards': return <Suspense fallback={<TabLoadingFallback />}><LazyGiftCardsTab storeId={currentStoreId} userRole={user?.role || 'CASHIER'} userId={user?.id || ''} /></Suspense>;
+      case 'vouchers': return <Suspense fallback={<TabLoadingFallback />}><LazyVouchersTab /></Suspense>;
+      case 'invoices': return <Suspense fallback={<TabLoadingFallback />}><LazyInvoicesTab /></Suspense>;
+      case 'delivery': return <Suspense fallback={<TabLoadingFallback />}><LazyDeliveryTab /></Suspense>;
+      case 'credits': return <Suspense fallback={<TabLoadingFallback />}><LazyCreditsTab /></Suspense>;
+      case 'messaging': return <Suspense fallback={<TabLoadingFallback />}><LazyMessagingTab /></Suspense>;
+      case 'transfers': return <Suspense fallback={<TabLoadingFallback />}><LazyTransfersTab /></Suspense>;
+      case 'banking': return <Suspense fallback={<TabLoadingFallback />}><LazyBankingTab /></Suspense>;
+      case 'loyalty': return <Suspense fallback={<TabLoadingFallback />}><LazyLoyaltyTab /></Suspense>;
       default: return <POSTab />;
     }
   };

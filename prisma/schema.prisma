@@ -72,6 +72,11 @@ model Store {
   expenses        Expense[]
   shifts          Shift[]
   giftCards       GiftCard[]
+  vouchers        Voucher[]
+  voucherCampaigns VoucherCampaign[]
+  messages        Message[]
+  invoices        Invoice[]
+  deliveryNotes   DeliveryNote[]
 
   @@index([organizationId])
   @@map("stores")
@@ -187,6 +192,8 @@ model Product {
   warehouseStocks   WarehouseStock[]
   rentals           EquipmentRental[]
   purchaseOrderItems PurchaseOrderItem[]
+  invoiceItems       InvoiceItem[]
+  deliveryNoteItems  DeliveryNoteItem[]
 
   @@index([storeId])
   @@index([sku])
@@ -306,6 +313,8 @@ model SalesTransaction {
   debtLedgers          DebtLedger[]
   receipt              Receipt?
   giftCardRedemptions  GiftCardRedemption[]
+  voucherRedemptions   VoucherRedemption[]
+  deliveryNote         DeliveryNote?
 
   @@index([storeId])
   @@index([cashierId])
@@ -668,6 +677,34 @@ model Expense {
   @@map("expenses")
 }
 
+// MESSAGING
+
+model Message {
+  id              String    @id @default(cuid())
+  storeId         String
+  customerId      String?
+  channel         String    @default("WHATSAPP")  // WHATSAPP, SMS, EMAIL, BOTH
+  messageType     String    @default("CUSTOM")    // DEBT_REMINDER, PAYMENT_CONFIRMATION, BALANCE_UPDATE, PROMOTION, CUSTOM
+  subject         String?
+  content         String
+  status          String    @default("PENDING")   // PENDING, SENT, DELIVERED, FAILED, READ
+  waLink          String?
+  sentAt          DateTime?
+  createdBy       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([customerId])
+  @@index([channel])
+  @@index([messageType])
+  @@index([status])
+  @@index([createdAt])
+  @@map("messages")
+}
+
 // SYSTEM LOGGING & AUDIT
 
 model SystemLog {
@@ -769,6 +806,85 @@ model GiftCardRedemption {
   @@map("gift_card_redemptions")
 }
 
+// VOUCHERS & CAMPAIGNS
+
+model Voucher {
+  id              String   @id @default(cuid())
+  storeId         String
+  code            String   @unique
+  name            String
+  voucherType     String   @default("FIXED") // FIXED, PERCENTAGE, FREE_PRODUCT, BUNDLE
+  value           Float
+  description     String?
+  minimumPurchase Float    @default(0)
+  maxDiscount     Float?
+  freeProductId   String?
+  maxUses         Int      @default(1)
+  currentUses     Int      @default(0)
+  maxUsesPerUser  Int      @default(1)
+  startDate       DateTime @default(now())
+  endDate         DateTime?
+  status          String   @default("ACTIVE") // ACTIVE, PAUSED, EXPIRED, CANCELLED
+  campaignId      String?
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  campaign        VoucherCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  redemptions     VoucherRedemption[]
+
+  @@index([storeId])
+  @@index([code])
+  @@index([status])
+  @@index([campaignId])
+  @@map("vouchers")
+}
+
+model VoucherCampaign {
+  id              String   @id @default(cuid())
+  storeId         String
+  name            String
+  campaignType    String   @default("PROMOTION") // PROMOTION, SEASONAL, LOYALTY, REFERRAL, FLASH_SALE
+  description     String?
+  startDate       DateTime @default(now())
+  endDate         DateTime?
+  budget          Float    @default(0)
+  spentAmount     Float    @default(0)
+  targetAudience  String?
+  status          String   @default("DRAFT") // DRAFT, ACTIVE, COMPLETED, CANCELLED
+  totalRedemptions Int    @default(0)
+  totalRevenue    Float    @default(0)
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  vouchers        Voucher[]
+
+  @@index([storeId])
+  @@index([status])
+  @@map("voucher_campaigns")
+}
+
+model VoucherRedemption {
+  id              String   @id @default(cuid())
+  voucherId       String
+  transactionId   String?
+  redeemedBy      String?  // Customer name or ID
+  originalTotal   Float    @default(0)
+  discountAmount  Float    @default(0)
+  finalTotal      Float    @default(0)
+  createdAt       DateTime @default(now())
+
+  voucher         Voucher           @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  transaction     SalesTransaction? @relation(fields: [transactionId], references: [id])
+
+  @@index([voucherId])
+  @@index([transactionId])
+  @@map("voucher_redemptions")
+}
+
 // SHIFT MANAGEMENT
 
 model Shift {
@@ -794,4 +910,110 @@ model Shift {
   @@index([userId])
   @@index([status])
   @@map("shifts")
+}
+
+// INVOICES & QUOTATIONS
+
+model Invoice {
+  id              String   @id @default(cuid())
+  storeId         String
+  invoiceNumber   String   @unique
+  invoiceType     String   @default("INVOICE") // INVOICE, QUOTATION, PROFORMA, CREDIT_NOTE, DEBIT_NOTE
+  customerId      String?
+  customerName    String
+  customerPhone   String?
+  customerEmail   String?
+  customerAddress String?
+  issueDate       DateTime @default(now())
+  dueDate         DateTime?
+  subtotal        Float    @default(0)
+  taxAmount       Float    @default(0)
+  discountAmount  Float    @default(0)
+  totalAmount     Float    @default(0)
+  status          String   @default("DRAFT") // DRAFT, SENT, ACCEPTED, INVOICED, PAID, CANCELLED, EXPIRED
+  notes           String?
+  terms           String?
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  items           InvoiceItem[]
+
+  @@index([storeId])
+  @@index([invoiceType])
+  @@index([status])
+  @@index([customerId])
+  @@index([createdAt])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id              String   @id @default(cuid())
+  invoiceId       String
+  productId       String?
+  productName     String
+  description     String?
+  quantity        Float
+  unitType        String   @default("PIECE")
+  pricePerUnit    Float
+  discountPercent Float    @default(0)
+  taxRate         Float    @default(16)
+  lineTotal       Float    @default(0)
+
+  invoice         Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product         Product? @relation(fields: [productId], references: [id])
+
+  @@index([invoiceId])
+  @@index([productId])
+  @@map("invoice_items")
+}
+
+// DELIVERY NOTES
+
+model DeliveryNote {
+  id              String    @id @default(cuid())
+  storeId         String
+  transactionId   String?   @unique
+  deliveryNumber  String    @unique
+  customerId      String?
+  customerName    String
+  customerPhone   String?
+  deliveryAddress String?
+  driverName      String?
+  vehicleNumber   String?
+  status          String    @default("PENDING") // PENDING, IN_TRANSIT, DELIVERED, CANCELLED
+  scheduledDate   DateTime?
+  deliveredAt     DateTime?
+  notes           String?
+  createdBy       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  store           Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  transaction     SalesTransaction? @relation(fields: [transactionId], references: [id])
+  items           DeliveryNoteItem[]
+
+  @@index([storeId])
+  @@index([status])
+  @@index([customerId])
+  @@index([createdAt])
+  @@map("delivery_notes")
+}
+
+model DeliveryNoteItem {
+  id              String   @id @default(cuid())
+  deliveryNoteId  String
+  productId       String?
+  productName     String
+  quantity        Float
+  unitType        String   @default("PIECE")
+  notes           String?
+
+  deliveryNote    DeliveryNote @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
+  product         Product?     @relation(fields: [productId], references: [id])
+
+  @@index([deliveryNoteId])
+  @@index([productId])
+  @@map("delivery_note_items")
 }

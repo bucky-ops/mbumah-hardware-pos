@@ -8,13 +8,14 @@ import {
   ArrowRightLeft, XCircle, DollarSign, Clock,
   TrendingUp, AlertCircle, ShoppingCart, Receipt,
   FileCheck, FileMinus, FilePlus, ChevronDown,
-  Trash2, ArrowUpDown, Send, CheckCircle2,
+  Trash2, ArrowUpDown, Send, CheckCircle2, Phone,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
   invoicesApi, productsApi, customersApi,
   formatKES, formatDate, formatDateTime,
+  openWhatsApp,
   type InvoiceItem,
   type InvoiceItemDetail,
   type ProductListItem,
@@ -164,6 +165,7 @@ export default function InvoicesTab() {
   const [dueDate, setDueDate] = useState('');
   const [discountAmount, setDiscountAmount] = useState('0');
   const [notes, setNotes] = useState('');
+  const [internalNotes, setInternalNotes] = useState('');
   const [terms, setTerms] = useState('');
   const [lineItems, setLineItems] = useState<LineItemDraft[]>([createEmptyLineItem()]);
   const [productSearch, setProductSearch] = useState('');
@@ -297,6 +299,7 @@ export default function InvoicesTab() {
     setDueDate('');
     setDiscountAmount('0');
     setNotes('');
+    setInternalNotes('');
     setTerms('');
     setLineItems([createEmptyLineItem()]);
     setProductSearch('');
@@ -381,7 +384,7 @@ export default function InvoicesTab() {
       issueDate,
       dueDate: dueDate || null,
       discountAmount: discountNum,
-      notes: notes || null,
+      notes: [notes, internalNotes ? `[Internal] ${internalNotes}` : ''].filter(Boolean).join('\n') || null,
       terms: terms || null,
       items: lineItems.map(item => ({
         productId: item.productId,
@@ -435,6 +438,25 @@ export default function InvoicesTab() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleSendWhatsApp = (invoice: InvoiceItem) => {
+    const phone = invoice.customerPhone || '';
+    const itemsList = invoice.items
+      ? invoice.items.map((item, i) => `${i + 1}. ${item.productName} x${item.quantity} ${item.unitType} — ${formatKES(item.lineTotal)}`).join('\n')
+      : '';
+    const message = [
+      `*${invoice.invoiceType === 'QUOTATION' ? 'Quotation' : invoice.invoiceType === 'PROFORMA' ? 'Proforma' : 'Invoice'}: ${invoice.invoiceNumber}*`,
+      `Date: ${formatDate(invoice.issueDate)}`,
+      `Customer: ${invoice.customerName}`,
+      '',
+      itemsList ? `*Items:*\n${itemsList}` : '',
+      `*Total: ${formatKES(invoice.totalAmount)}*`,
+      invoice.dueDate ? `Due Date: ${formatDate(invoice.dueDate)}` : '',
+      '',
+      '— Mbumah Hardware',
+    ].filter(Boolean).join('\n');
+    openWhatsApp(phone, message);
   };
 
   // ── Product dropdown ref ──
@@ -611,11 +633,11 @@ export default function InvoicesTab() {
                     <TableRow key={inv.id} className="group cursor-pointer" onClick={() => handleView(inv)}>
                       <TableCell className="font-mono text-sm font-medium">
                         <div className="flex items-center gap-2">
-                          {getTypeIcon(inv.invoiceType)}
+                          {getTypeIcon(inv.invoiceType as InvoiceType)}
                           {inv.invoiceNumber}
                         </div>
                       </TableCell>
-                      <TableCell>{getTypeBadge(inv.invoiceType)}</TableCell>
+                      <TableCell>{getTypeBadge(inv.invoiceType as InvoiceType)}</TableCell>
                       <TableCell>
                         <div>
                           <p className="text-sm font-medium">{inv.customerName}</p>
@@ -704,6 +726,16 @@ export default function InvoicesTab() {
                           >
                             <Printer className="h-4 w-4" />
                           </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
+                            onClick={() => handleSendWhatsApp(inv)}
+                            title="Send via WhatsApp"
+                          >
+                            <Phone className="h-4 w-4" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -728,7 +760,7 @@ export default function InvoicesTab() {
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 -mx-6 px-6">
+          <ScrollArea className="max-h-[80vh] -mx-6 px-6">
             <div className="space-y-6 pb-4">
               {/* Document Type + Customer */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -848,7 +880,7 @@ export default function InvoicesTab() {
                     <Card key={item.key} className="p-4">
                       <div className="grid grid-cols-12 gap-3 items-start">
                         {/* Product name / search */}
-                        <div className="col-span-12 md:col-span-4 space-y-1 relative">
+                        <div className="col-span-12 md:col-span-3 space-y-1 relative">
                           <Label className="text-xs">Product</Label>
                           <div ref={(el) => { productDropdownRefs.current[index] = el; }}>
                             <div className="relative">
@@ -920,7 +952,7 @@ export default function InvoicesTab() {
                         </div>
 
                         {/* Qty */}
-                        <div className="col-span-4 md:col-span-1 space-y-1">
+                        <div className="col-span-3 md:col-span-1 space-y-1">
                           <Label className="text-xs">Qty</Label>
                           <Input
                             type="number"
@@ -929,6 +961,34 @@ export default function InvoicesTab() {
                             onChange={(e) => updateLineItem(index, { quantity: Math.max(1, parseInt(e.target.value) || 1) })}
                             className="text-sm text-center"
                           />
+                        </div>
+
+                        {/* Unit */}
+                        <div className="col-span-3 md:col-span-1 space-y-1">
+                          <Label className="text-xs">Unit</Label>
+                          <Select value={item.unitType} onValueChange={(v) => updateLineItem(index, { unitType: v })}>
+                            <SelectTrigger className="h-9 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="PIECE">Pc</SelectItem>
+                              <SelectItem value="BOX">Box</SelectItem>
+                              <SelectItem value="KG">Kg</SelectItem>
+                              <SelectItem value="METER">M</SelectItem>
+                              <SelectItem value="LITER">L</SelectItem>
+                              <SelectItem value="SET">Set</SelectItem>
+                              <SelectItem value="ROLL">Roll</SelectItem>
+                              <SelectItem value="BAG">Bag</SelectItem>
+                              <SelectItem value="PACKET">Pkt</SelectItem>
+                              <SelectItem value="PAIR">Pair</SelectItem>
+                              <SelectItem value="TON">Ton</SelectItem>
+                              <SelectItem value="FEET">Ft</SelectItem>
+                              <SelectItem value="YARD">Yd</SelectItem>
+                              <SelectItem value="SQ_METER">Sq M</SelectItem>
+                              <SelectItem value="SQ_FEET">Sq Ft</SelectItem>
+                              <SelectItem value="CUBIC_METER">Cb M</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
 
                         {/* Price */}
@@ -945,7 +1005,7 @@ export default function InvoicesTab() {
                         </div>
 
                         {/* Discount % */}
-                        <div className="col-span-4 md:col-span-1 space-y-1">
+                        <div className="col-span-3 md:col-span-1 space-y-1">
                           <Label className="text-xs">Disc %</Label>
                           <Input
                             type="number"
@@ -958,7 +1018,7 @@ export default function InvoicesTab() {
                         </div>
 
                         {/* Tax % */}
-                        <div className="col-span-4 md:col-span-1 space-y-1">
+                        <div className="col-span-3 md:col-span-1 space-y-1">
                           <Label className="text-xs">Tax %</Label>
                           <Input
                             type="number"
@@ -970,7 +1030,7 @@ export default function InvoicesTab() {
                         </div>
 
                         {/* Line Total + Remove */}
-                        <div className="col-span-8 md:col-span-1 flex items-end gap-1">
+                        <div className="col-span-6 md:col-span-1 flex items-end gap-1">
                           <div className="flex-1 space-y-1">
                             <Label className="text-xs">Total</Label>
                             <div className="h-9 flex items-center text-sm font-semibold">
@@ -1027,8 +1087,8 @@ export default function InvoicesTab() {
 
               <Separator />
 
-              {/* Notes & Terms */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Notes, Internal Notes & Terms */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Notes</Label>
                   <Textarea
@@ -1040,7 +1100,17 @@ export default function InvoicesTab() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Terms & Conditions</Label>
+                  <Label>Internal Notes</Label>
+                  <Textarea
+                    value={internalNotes}
+                    onChange={(e) => setInternalNotes(e.target.value)}
+                    placeholder="Internal notes (not visible to customer)"
+                    rows={3}
+                    className="text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Payment Terms</Label>
                   <Textarea
                     value={terms}
                     onChange={(e) => setTerms(e.target.value)}
@@ -1071,7 +1141,7 @@ export default function InvoicesTab() {
           <DialogHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                {getTypeIcon(viewingInvoice?.invoiceType || 'INVOICE')}
+                {getTypeIcon((viewingInvoice?.invoiceType || 'INVOICE') as InvoiceType)}
                 <div>
                   <DialogTitle className="flex items-center gap-2">
                     {viewingInvoice?.invoiceNumber}
@@ -1088,7 +1158,7 @@ export default function InvoicesTab() {
             </div>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 -mx-6 px-6">
+          <ScrollArea className="max-h-[80vh] -mx-6 px-6">
             {invoiceDetail ? (
               <div className="space-y-6 pb-4 print:p-0">
                 {/* Document Header */}
@@ -1240,6 +1310,14 @@ export default function InvoicesTab() {
                       <XCircle className="h-4 w-4" /> Cancel
                     </Button>
                   )}
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => handleSendWhatsApp(invoiceDetail)}
+                    title="Send via WhatsApp"
+                  >
+                    <Phone className="h-4 w-4" /> WhatsApp
+                  </Button>
                 </div>
 
                 {/* Metadata */}

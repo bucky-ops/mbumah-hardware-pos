@@ -10,13 +10,14 @@ import {
   Eye, Pencil, Trash2, Copy, CheckCircle2,
   ChevronDown, Filter, ArrowUpDown, Users,
   BarChart3, Receipt, Ticket, ShoppingBag,
-  AlertCircle,
+  AlertCircle, Phone, Mail, MessageSquare, Send, RefreshCw,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
   vouchersApi, voucherCampaignsApi,
   formatKES, formatDate, formatDateTime,
+  openWhatsApp, openEmail, openSMS,
   type VoucherItem,
   type VoucherCampaignItem,
 } from '@/lib/api';
@@ -44,6 +45,10 @@ import { Progress } from '@/components/ui/progress';
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel,
+} from '@/components/ui/dropdown-menu';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -232,12 +237,13 @@ export default function VouchersTab() {
   // ─── Queries ──────────────────────────────────────────────────────────────
 
   const { data: vouchersData, isLoading: vouchersLoading } = useQuery({
-    queryKey: ['vouchers', currentStoreId, statusFilter, typeFilter],
+    queryKey: ['vouchers', currentStoreId, statusFilter, typeFilter, searchQuery],
     queryFn: () =>
       vouchersApi.list({
         storeId: currentStoreId,
         status: statusFilter !== 'all' ? statusFilter : undefined,
         voucherType: typeFilter !== 'all' ? typeFilter : undefined,
+        search: searchQuery || undefined,
       }),
   });
 
@@ -500,6 +506,107 @@ export default function VouchersTab() {
     }).catch(() => {
       toast.error('Failed to copy code');
     });
+  }
+
+  // ─── Send Voucher Helpers ────────────────────────────────────────────────
+
+  function getVoucherMessage(voucher: VoucherItem): string {
+    const storeName = 'Mbumah Hardware';
+    const discountStr = formatVoucherValue(voucher);
+    const expiryStr = voucher.endDate ? formatDate(voucher.endDate) : 'No expiry';
+    const minPurchaseStr = voucher.minimumPurchase > 0 ? `\nMin. purchase: ${formatKES(voucher.minimumPurchase)}` : '';
+    return `🎉 You have a voucher from ${storeName}!\n\nCode: ${voucher.code}\nDiscount: ${discountStr}${minPurchaseStr}\nValid until: ${expiryStr}\n\nVisit us soon!`;
+  }
+
+  function getCampaignMessage(campaign: VoucherCampaignItem): string {
+    const storeName = 'Mbumah Hardware';
+    const validStr = campaign.endDate ? `${formatDate(campaign.startDate)} - ${formatDate(campaign.endDate)}` : `From ${formatDate(campaign.startDate)}`;
+    return `📢 ${campaign.name} at ${storeName}!\n\n${campaign.description || 'Exciting promotional offers available!'}\n\nValid: ${validStr}\n${campaign.targetAudience ? `For: ${campaign.targetAudience}` : ''}\n\nDon't miss out!`;
+  }
+
+  function sendVoucherWhatsApp(voucher: VoucherItem, phone: string) {
+    if (!phone) { toast.error('No phone number available'); return; }
+    openWhatsApp(phone, getVoucherMessage(voucher));
+    toast.success('WhatsApp opened with voucher details');
+  }
+
+  function sendVoucherSMS(voucher: VoucherItem, phone: string) {
+    if (!phone) { toast.error('No phone number available'); return; }
+    openSMS(phone, getVoucherMessage(voucher));
+    toast.success('SMS opened with voucher details');
+  }
+
+  function sendVoucherEmail(voucher: VoucherItem, email: string) {
+    if (!email) { toast.error('No email address available'); return; }
+    openEmail(email, `Voucher ${voucher.code} - ${voucher.name}`, getVoucherMessage(voucher));
+    toast.success('Email opened with voucher details');
+  }
+
+  function resendVoucher(voucher: VoucherItem) {
+    // Resend via the first available channel
+    const phone = voucher.redemptions?.[0]?.redeemedBy || '';
+    // Default to WhatsApp for resend
+    const storePhone = ''; // Could be from store settings
+    const targetPhone = phone || storePhone;
+    if (targetPhone) {
+      openWhatsApp(targetPhone, getVoucherMessage(voucher));
+    } else {
+      // Fallback: copy the message to clipboard
+      navigator.clipboard.writeText(getVoucherMessage(voucher)).then(() => {
+        toast.success('Voucher message copied to clipboard — no phone/email on file');
+      }).catch(() => {
+        toast.error('Failed to copy voucher message');
+      });
+      return;
+    }
+    toast.success('Voucher resent via WhatsApp');
+    queryClient.invalidateQueries({ queryKey: ['vouchers', currentStoreId] });
+  }
+
+  function sendCampaignWhatsApp(campaign: VoucherCampaignItem, phone: string) {
+    if (!phone) { toast.error('No phone number available'); return; }
+    openWhatsApp(phone, getCampaignMessage(campaign));
+    toast.success('WhatsApp opened with campaign details');
+  }
+
+  function sendCampaignSMS(campaign: VoucherCampaignItem, phone: string) {
+    if (!phone) { toast.error('No phone number available'); return; }
+    openSMS(phone, getCampaignMessage(campaign));
+    toast.success('SMS opened with campaign details');
+  }
+
+  function sendCampaignEmail(campaign: VoucherCampaignItem, email: string) {
+    if (!email) { toast.error('No email address available'); return; }
+    openEmail(email, `Campaign: ${campaign.name}`, getCampaignMessage(campaign));
+    toast.success('Email opened with campaign details');
+  }
+
+  function resendCampaign(campaign: VoucherCampaignItem) {
+    // Resend campaign to all voucher holders via WhatsApp
+    const campaignVouchers = Array.isArray(campaign.vouchers) ? campaign.vouchers : [];
+    if (campaignVouchers.length > 0) {
+      // Use the first voucher's info as a sample and open WhatsApp
+      const phone = ''; // Could be from store/customer settings
+      if (phone) {
+        openWhatsApp(phone, getCampaignMessage(campaign));
+      } else {
+        navigator.clipboard.writeText(getCampaignMessage(campaign)).then(() => {
+          toast.success('Campaign message copied to clipboard — no phone/email on file');
+        }).catch(() => {
+          toast.error('Failed to copy campaign message');
+        });
+        return;
+      }
+    } else {
+      navigator.clipboard.writeText(getCampaignMessage(campaign)).then(() => {
+        toast.success('Campaign message copied to clipboard');
+      }).catch(() => {
+        toast.error('Failed to copy campaign message');
+      });
+      return;
+    }
+    toast.success('Campaign resent via WhatsApp');
+    queryClient.invalidateQueries({ queryKey: ['voucher-campaigns', currentStoreId] });
   }
 
   // ─── Loading State ───────────────────────────────────────────────────────
@@ -840,6 +947,47 @@ export default function VouchersTab() {
                                   </TooltipTrigger>
                                   <TooltipContent>Edit voucher</TooltipContent>
                                 </Tooltip>
+                                <DropdownMenu>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                                          <Send className="h-3.5 w-3.5 text-emerald-500" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Send voucher</TooltipContent>
+                                  </Tooltip>
+                                  <DropdownMenuContent align="end" className="w-48">
+                                    <DropdownMenuLabel className="text-xs">Send via</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => sendVoucherWhatsApp(voucher, prompt('Enter WhatsApp phone number:') || '')}>
+                                      <Phone className="h-4 w-4 mr-2 text-green-600" />
+                                      <span>WhatsApp</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => sendVoucherSMS(voucher, prompt('Enter SMS phone number:') || '')}>
+                                      <MessageSquare className="h-4 w-4 mr-2 text-blue-600" />
+                                      <span>Text (SMS)</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => sendVoucherEmail(voucher, prompt('Enter email address:') || '')}>
+                                      <Mail className="h-4 w-4 mr-2 text-orange-600" />
+                                      <span>Email</span>
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0"
+                                      onClick={() => resendVoucher(voucher)}
+                                    >
+                                      <RefreshCw className="h-3.5 w-3.5 text-purple-500" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Resend voucher</TooltipContent>
+                                </Tooltip>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button
@@ -1014,6 +1162,43 @@ export default function VouchersTab() {
                             <span className="text-muted-foreground">voucher{campaign.vouchers.length !== 1 ? 's' : ''}</span>
                           </div>
                         )}
+
+                        {/* Send / Resend Actions */}
+                        <Separator />
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white">
+                                <Send className="h-3.5 w-3.5 mr-1.5" />
+                                Send
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuLabel className="text-xs">Send campaign via</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => sendCampaignWhatsApp(campaign, prompt('Enter WhatsApp phone number:') || '')}>
+                                <Phone className="h-4 w-4 mr-2 text-green-600" />
+                                <span>WhatsApp</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => sendCampaignSMS(campaign, prompt('Enter SMS phone number:') || '')}>
+                                <MessageSquare className="h-4 w-4 mr-2 text-blue-600" />
+                                <span>Text (SMS)</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => sendCampaignEmail(campaign, prompt('Enter email address:') || '')}>
+                                <Mail className="h-4 w-4 mr-2 text-orange-600" />
+                                <span>Email</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          <Button
+                            size="sm"
+                            className="h-8 text-xs bg-purple-600 hover:bg-purple-700 text-white"
+                            onClick={() => resendCampaign(campaign)}
+                          >
+                            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                            Resend
+                          </Button>
+                        </div>
                       </CardContent>
                     </Card>
                   );

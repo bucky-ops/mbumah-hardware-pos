@@ -9,12 +9,13 @@ import {
   ShieldAlert, ShieldCheck, ShieldOff, CalendarDays,
   TrendingUp, Activity, Package, Search, LayoutGrid,
   List, Eye, Camera, FileText, Settings2,
+  Phone, Printer, Pencil, Trash2,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
   rentalsApi, productsApi, customersApi,
-  formatKES, formatDate,
+  formatKES, formatDate, openWhatsApp,
   type ProductListItem, type CustomerItem, type RentalItem,
 } from '@/lib/api';
 
@@ -31,6 +32,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 function RentalTimeline({ rental }: { rental: RentalItem }) {
   const start = new Date(rental.rentalStartDate).getTime();
@@ -663,7 +668,7 @@ function EquipmentCatalog({ products, rentals }: { products: ProductListItem[]; 
 
 // Rental Card View Component
 
-function RentalCardView({ rentals, onReturn }: { rentals: RentalItem[]; onReturn: (rental: RentalItem) => void }) {
+function RentalCardView({ rentals, onReturn, onEdit, onDelete, onSendReceipt, onPrintReceipt }: { rentals: RentalItem[]; onReturn: (rental: RentalItem) => void; onEdit: (rental: RentalItem) => void; onDelete: (rental: RentalItem) => void; onSendReceipt: (rental: RentalItem) => void; onPrintReceipt: (rental: RentalItem) => void }) {
   const statusBorder: Record<string, string> = {
     ACTIVE: 'border-l-green-500',
     OVERDUE: 'border-l-red-500',
@@ -742,6 +747,24 @@ function RentalCardView({ rentals, onReturn }: { rentals: RentalItem[]; onReturn
                   <CheckCircle className="mr-1 h-3 w-3" /> Process Return
                 </Button>
               )}
+              <div className="flex flex-wrap gap-1">
+                {(rental.status === 'ACTIVE' || rental.status === 'OVERDUE') && (
+                  <Button variant="outline" size="sm" className="h-7 text-[10px] px-2" onClick={() => onEdit(rental)}>
+                    <Pencil className="h-3 w-3 mr-1" /> Edit
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/30" onClick={() => onSendReceipt(rental)}>
+                  <Phone className="h-3 w-3 mr-1" /> WhatsApp
+                </Button>
+                <Button variant="outline" size="sm" className="h-7 text-[10px] px-2" onClick={() => onPrintReceipt(rental)}>
+                  <Printer className="h-3 w-3 mr-1" /> Print
+                </Button>
+                {(rental.status === 'ACTIVE' || rental.status === 'OVERDUE') && (
+                  <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30" onClick={() => onDelete(rental)}>
+                    <Trash2 className="h-3 w-3 mr-1" /> Delete
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
         );
@@ -757,6 +780,11 @@ export default function RentalsTab() {
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
   const [selectedRental, setSelectedRental] = useState<RentalItem | null>(null);
   const [newRentalOpen, setNewRentalOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editRental, setEditRental] = useState<RentalItem | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteRental, setDeleteRental] = useState<RentalItem | null>(null);
+  const [editForm, setEditForm] = useState({ expectedReturnDate: '', securityDeposit: '', ratePerDay: '', ratePerWeek: '', ratePerMonth: '', notes: '' });
   const [viewMode, setViewMode] = useState<'table' | 'cards' | 'calendar'>('table');
   const [activeTab, setActiveTab] = useState('rentals');
   const currentStoreId = useAppStore((s) => s.currentStoreId);
@@ -782,6 +810,26 @@ export default function RentalsTab() {
       toast.success('Rental returned successfully');
       setReturnDialogOpen(false);
       setSelectedRental(null);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const updateRentalMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { expectedReturnDate?: string; securityDeposit?: number; ratePerDay?: number; ratePerWeek?: number; ratePerMonth?: number; notes?: string } }) => rentalsApi.update(id, data),
+    onSuccess: () => {
+      toast.success('Rental updated successfully');
+      setEditDialogOpen(false);
+      setEditRental(null);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const deleteRentalMutation = useMutation({
+    mutationFn: (id: string) => rentalsApi.delete(id),
+    onSuccess: () => {
+      toast.success('Rental deleted successfully');
+      setDeleteDialogOpen(false);
+      setDeleteRental(null);
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -821,6 +869,121 @@ export default function RentalsTab() {
   const handleReturn = (rental: RentalItem) => {
     setSelectedRental(rental);
     setReturnDialogOpen(true);
+  };
+
+  const handleEdit = (rental: RentalItem) => {
+    setEditRental(rental);
+    setEditForm({
+      expectedReturnDate: rental.expectedReturnDate ? new Date(rental.expectedReturnDate).toISOString().slice(0, 10) : '',
+      securityDeposit: String(rental.securityDeposit),
+      ratePerDay: String(rental.ratePerDay),
+      ratePerWeek: rental.ratePerWeek ? String(rental.ratePerWeek) : '',
+      ratePerMonth: rental.ratePerMonth ? String(rental.ratePerMonth) : '',
+      notes: rental.notes || '',
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleDelete = (rental: RentalItem) => {
+    setDeleteRental(rental);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleSendReceipt = (rental: RentalItem) => {
+    const phone = rental.customer?.phone || '';
+    if (!phone) {
+      toast.error('Customer has no phone number on file');
+      return;
+    }
+    const daysRented = Math.ceil(
+      ((rental.actualReturnDate ? new Date(rental.actualReturnDate).getTime() : Date.now()) - new Date(rental.rentalStartDate).getTime()) / 86400000
+    );
+    const message = [
+      `*Mbumah Hardware - Rental Receipt*`,
+      ``,
+      `Rental ID: ${rental.id.slice(-8).toUpperCase()}`,
+      `Equipment: ${rental.product?.name || 'N/A'}`,
+      `Customer: ${rental.customer?.name || 'N/A'}`,
+      ``,
+      `Start Date: ${formatDate(rental.rentalStartDate)}`,
+      `Expected Return: ${formatDate(rental.expectedReturnDate)}`,
+      rental.actualReturnDate ? `Actual Return: ${formatDate(rental.actualReturnDate)}` : null,
+      `Duration: ${daysRented} day(s)`,
+      ``,
+      `Rate/Day: KES ${rental.ratePerDay.toLocaleString()}`,
+      `Security Deposit: KES ${rental.securityDeposit.toLocaleString()}`,
+      `Total Rental Charge: KES ${rental.totalRentalCharge.toLocaleString()}`,
+      rental.lateFeeAccumulated > 0 ? `Late Fee: KES ${rental.lateFeeAccumulated.toLocaleString()}` : null,
+      rental.damageCharge > 0 ? `Damage Charge: KES ${rental.damageCharge.toLocaleString()}` : null,
+      `Status: ${rental.status}`,
+      ``,
+      `Thank you for doing business with us`,
+    ].filter(Boolean).join('\n');
+    openWhatsApp(phone, message);
+  };
+
+  const handlePrintReceipt = (rental: RentalItem) => {
+    const daysRented = Math.ceil(
+      ((rental.actualReturnDate ? new Date(rental.actualReturnDate).getTime() : Date.now()) - new Date(rental.rentalStartDate).getTime()) / 86400000
+    );
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head><title>Rental Receipt</title>
+      <style>
+        body { font-family: 'Courier New', monospace; max-width: 320px; margin: 0 auto; padding: 20px; font-size: 12px; }
+        .center { text-align: center; }
+        .bold { font-weight: bold; }
+        .line { border-top: 1px dashed #000; margin: 8px 0; }
+        .row { display: flex; justify-content: space-between; margin: 2px 0; }
+        .title { font-size: 16px; font-weight: bold; }
+      </style>
+      </head>
+      <body>
+        <div class="center">
+          <div class="title">MBUMAH HARDWARE</div>
+          <div>Rental Receipt</div>
+        </div>
+        <div class="line"></div>
+        <div class="row"><span>Receipt #:</span><span>${rental.id.slice(-8).toUpperCase()}</span></div>
+        <div class="row"><span>Date:</span><span>${formatDate(rental.createdAt)}</span></div>
+        <div class="line"></div>
+        <div class="bold">Customer Details</div>
+        <div class="row"><span>Name:</span><span>${rental.customer?.name || 'N/A'}</span></div>
+        <div class="row"><span>Phone:</span><span>${rental.customer?.phone || 'N/A'}</span></div>
+        <div class="line"></div>
+        <div class="bold">Equipment Details</div>
+        <div class="row"><span>Item:</span><span>${rental.product?.name || 'N/A'}</span></div>
+        <div class="row"><span>SKU:</span><span>${rental.product?.sku || 'N/A'}</span></div>
+        <div class="line"></div>
+        <div class="bold">Rental Period</div>
+        <div class="row"><span>Start:</span><span>${formatDate(rental.rentalStartDate)}</span></div>
+        <div class="row"><span>Expected Return:</span><span>${formatDate(rental.expectedReturnDate)}</span></div>
+        ${rental.actualReturnDate ? `<div class="row"><span>Actual Return:</span><span>${formatDate(rental.actualReturnDate)}</span></div>` : ''}
+        <div class="row"><span>Duration:</span><span>${daysRented} day(s)</span></div>
+        <div class="line"></div>
+        <div class="bold">Charges</div>
+        <div class="row"><span>Rate/Day:</span><span>KES ${rental.ratePerDay.toLocaleString()}</span></div>
+        <div class="row"><span>Rental Charge:</span><span>KES ${rental.totalRentalCharge.toLocaleString()}</span></div>
+        ${rental.lateFeeAccumulated > 0 ? `<div class="row"><span>Late Fee:</span><span>KES ${rental.lateFeeAccumulated.toLocaleString()}</span></div>` : ''}
+        ${rental.damageCharge > 0 ? `<div class="row"><span>Damage Charge:</span><span>KES ${rental.damageCharge.toLocaleString()}</span></div>` : ''}
+        <div class="row"><span>Security Deposit:</span><span>KES ${rental.securityDeposit.toLocaleString()}</span></div>
+        <div class="line"></div>
+        <div class="row bold"><span>Status:</span><span>${rental.status}</span></div>
+        <div class="line"></div>
+        <div class="center" style="margin-top: 12px;">
+          <div>Thank you for doing business with us</div>
+        </div>
+      </body>
+      </html>
+    `;
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+    }
   };
 
   return (
@@ -1063,7 +1226,7 @@ export default function RentalsTab() {
               <Skeleton className="h-64" />
             </div>
           ) : viewMode === 'cards' ? (
-            <RentalCardView rentals={rentals} onReturn={handleReturn} />
+            <RentalCardView rentals={rentals} onReturn={handleReturn} onEdit={handleEdit} onDelete={handleDelete} onSendReceipt={handleSendReceipt} onPrintReceipt={handlePrintReceipt} />
           ) : (
             <Card className="backdrop-blur-sm bg-card/80 border-border/50">
               <CardContent className="p-0">
@@ -1097,7 +1260,7 @@ export default function RentalsTab() {
                           <TableHead className="text-right">Rev/Day</TableHead>
                           <TableHead className="text-right">Total Charge</TableHead>
                           <TableHead className="text-right">Deposit</TableHead>
-                          <TableHead className="w-[80px]">Actions</TableHead>
+                          <TableHead className="w-[200px]">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1140,15 +1303,34 @@ export default function RentalsTab() {
                               <TableCell className="text-right font-medium text-sm">{formatKES(rental.totalRentalCharge)}</TableCell>
                               <TableCell className="text-right text-sm">{formatKES(rental.securityDeposit)}</TableCell>
                               <TableCell>
-                                {(rental.status === 'ACTIVE' || rental.status === 'OVERDUE') && (
-                                  <Button
-                                    variant={isOverdue ? 'destructive' : 'outline'}
-                                    size="sm"
-                                    onClick={() => handleReturn(rental)}
-                                  >
-                                    Return
+                                <div className="flex flex-wrap gap-1">
+                                  {(rental.status === 'ACTIVE' || rental.status === 'OVERDUE') && (
+                                    <Button
+                                      variant={isOverdue ? 'destructive' : 'outline'}
+                                      size="sm"
+                                      className="h-7 text-[10px] px-2"
+                                      onClick={() => handleReturn(rental)}
+                                    >
+                                      Return
+                                    </Button>
+                                  )}
+                                  {(rental.status === 'ACTIVE' || rental.status === 'OVERDUE') && (
+                                    <Button variant="outline" size="sm" className="h-7 text-[10px] px-2" onClick={() => handleEdit(rental)}>
+                                      <Pencil className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                  <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/30" onClick={() => handleSendReceipt(rental)}>
+                                    <Phone className="h-3 w-3" />
                                   </Button>
-                                )}
+                                  <Button variant="outline" size="sm" className="h-7 text-[10px] px-2" onClick={() => handlePrintReceipt(rental)}>
+                                    <Printer className="h-3 w-3" />
+                                  </Button>
+                                  {(rental.status === 'ACTIVE' || rental.status === 'OVERDUE') && (
+                                    <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30" onClick={() => handleDelete(rental)}>
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                </div>
                               </TableCell>
                             </TableRow>
                           );
@@ -1206,6 +1388,112 @@ export default function RentalsTab() {
           />
         </DialogContent>
       </Dialog>
+
+      {/* Edit Rental Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5 text-primary" />
+              Edit Rental
+            </DialogTitle>
+            <DialogDescription>Update rental details for {editRental?.product?.name || 'equipment'}</DialogDescription>
+          </DialogHeader>
+          {editRental && (
+            <div className="space-y-4">
+              <div className="p-3 bg-muted/50 rounded-lg border border-border/50 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Equipment:</span>
+                  <span className="font-medium">{editRental.product?.name || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between mt-1">
+                  <span className="text-muted-foreground">Customer:</span>
+                  <span className="font-medium">{editRental.customer?.name || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between mt-1">
+                  <span className="text-muted-foreground">Status:</span>
+                  <RentalStatusBadge status={editRental.status} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Expected Return Date</Label>
+                <Input type="date" value={editForm.expectedReturnDate} onChange={(e) => setEditForm({ ...editForm, expectedReturnDate: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Security Deposit (KES)</Label>
+                  <Input type="number" value={editForm.securityDeposit} onChange={(e) => setEditForm({ ...editForm, securityDeposit: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Rate Per Day (KES)</Label>
+                  <Input type="number" value={editForm.ratePerDay} onChange={(e) => setEditForm({ ...editForm, ratePerDay: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Rate Per Week (KES)</Label>
+                  <Input type="number" value={editForm.ratePerWeek} onChange={(e) => setEditForm({ ...editForm, ratePerWeek: e.target.value })} placeholder="Optional" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Rate Per Month (KES)</Label>
+                  <Input type="number" value={editForm.ratePerMonth} onChange={(e) => setEditForm({ ...editForm, ratePerMonth: e.target.value })} placeholder="Optional" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Notes</Label>
+                <Textarea value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} placeholder="Any special instructions..." />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+                <Button
+                  onClick={() => updateRentalMutation.mutate({
+                    id: editRental.id,
+                    data: {
+                      expectedReturnDate: editForm.expectedReturnDate,
+                      securityDeposit: Number(editForm.securityDeposit),
+                      ratePerDay: Number(editForm.ratePerDay),
+                      ratePerWeek: editForm.ratePerWeek ? Number(editForm.ratePerWeek) : undefined,
+                      ratePerMonth: editForm.ratePerMonth ? Number(editForm.ratePerMonth) : undefined,
+                      notes: editForm.notes || undefined,
+                    },
+                  })}
+                  disabled={updateRentalMutation.isPending || !editForm.expectedReturnDate}
+                  className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+                >
+                  {updateRentalMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+                  Update Rental
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation AlertDialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-500" />
+              Delete Rental
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this rental for <strong>{deleteRental?.product?.name || 'equipment'}</strong> rented by <strong>{deleteRental?.customer?.name || 'customer'}</strong>? This action cannot be undone. The equipment stock will be restored.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteRental && deleteRentalMutation.mutate(deleteRental.id)}
+              disabled={deleteRentalMutation.isPending}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {deleteRentalMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Delete Rental
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

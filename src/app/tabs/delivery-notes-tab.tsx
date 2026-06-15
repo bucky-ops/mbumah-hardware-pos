@@ -8,13 +8,14 @@ import {
   Phone, MapPin, User, FileText, Clock,
   Package, CheckCircle2, AlertTriangle, ArrowRight,
   Printer, CalendarDays, Hash, Navigation,
-  ChevronRight, CircleDot,
+  ChevronRight, CircleDot, MessageSquare,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
   deliveryNotesApi,
-  formatDate, formatDateTime,
+  formatDate, formatDateTime, formatKES,
+  openWhatsApp,
   type DeliveryNoteItem,
   type DeliveryNoteItemDetail,
 } from '@/lib/api';
@@ -294,6 +295,28 @@ export default function DeliveryNotesTab() {
     setViewOpen(true);
   }
 
+  function handleSendWhatsApp(note: DeliveryNoteItem) {
+    const phone = note.customerPhone || '';
+    const itemsList = note.items
+      ? note.items.map((item, i) => `${i + 1}. ${item.productName} x${item.quantity} ${item.unitType}`).join('\n')
+      : '';
+    const message = [
+      `*Delivery Note: ${note.deliveryNumber}*`,
+      `Customer: ${note.customerName}`,
+      note.deliveryAddress ? `Address: ${note.deliveryAddress}` : '',
+      note.driverName ? `Driver: ${note.driverName}` : '',
+      note.vehicleNumber ? `Vehicle: ${note.vehicleNumber}` : '',
+      note.scheduledDate ? `Scheduled: ${formatDate(note.scheduledDate)}` : '',
+      '',
+      itemsList ? `*Items:*\n${itemsList}` : '',
+      '',
+      'Thank you for doing business with us',
+      '',
+      '— Mbumah Hardware',
+    ].filter(Boolean).join('\n');
+    openWhatsApp(phone, message);
+  }
+
   function handleStatusUpdate(id: string, newStatus: string) {
     updateMutation.mutate({ id, data: { status: newStatus } });
   }
@@ -567,6 +590,15 @@ export default function DeliveryNotesTab() {
                             onClick={() => handleViewNote(dn)}
                           >
                             <Eye className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
+                            onClick={() => handleSendWhatsApp(dn)}
+                            title="Send to WhatsApp"
+                          >
+                            <MessageSquare className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       </TableCell>
@@ -914,6 +946,14 @@ export default function DeliveryNotesTab() {
                   <Button size="sm" variant="outline" className="gap-1.5" onClick={handlePrint}>
                     <Printer className="h-3.5 w-3.5" /> Print
                   </Button>
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => handleSendWhatsApp(noteDetail)}
+                    title="Send to WhatsApp"
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" /> WhatsApp
+                  </Button>
                 </div>
               </div>
 
@@ -979,7 +1019,7 @@ export default function DeliveryNotesTab() {
               </div>
 
               {/* Linked Transaction */}
-              {(noteDetail as Record<string, unknown>).transaction && (
+              {noteDetail.transaction && (
                 <>
                   <Separator />
                   <div className="space-y-2">
@@ -987,11 +1027,11 @@ export default function DeliveryNotesTab() {
                     <div className="flex items-center gap-2 text-sm bg-muted/50 rounded-lg p-3">
                       <FileText className="h-4 w-4 text-muted-foreground" />
                       <span className="font-medium">
-                        {((noteDetail as Record<string, unknown>).transaction as Record<string, unknown>)?.receiptNumber as string}
+                        {noteDetail.transaction.receiptNumber}
                       </span>
                       <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                       <span className="text-muted-foreground">
-                        KES {((noteDetail as Record<string, unknown>).transaction as Record<string, unknown>)?.totalAmount as number}
+                        KES {noteDetail.transaction.totalAmount}
                       </span>
                     </div>
                   </div>
