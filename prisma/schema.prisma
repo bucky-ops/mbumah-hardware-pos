@@ -55,6 +55,7 @@ model Store {
   users           User[]
   products        Product[]
   categories      ProductCategory[]
+  customerCredits CustomerCredit[]
   customers       Customer[]
   transactions    SalesTransaction[]
   payments        Payment[]
@@ -278,10 +279,40 @@ model Customer {
   rentals             EquipmentRental[]
   giftCards           GiftCard[]         @relation("IssuedToCustomer")
 
+  customerCredits     CustomerCredit[]
+
   @@index([storeId])
   @@index([phone])
   @@index([name])
   @@map("customers")
+}
+
+model CustomerCredit {
+  id              String   @id @default(cuid())
+  storeId         String
+  customerId      String
+  amount          Float
+  creditType      String   @default("CREDIT") // CREDIT, DEBIT, ADJUSTMENT, REFUND
+  balance         Float    @default(0)         // Running balance after this entry
+  reference       String?                      // e.g. INV-001, PAY-2024-03
+  description     String?
+  status          String   @default("ACTIVE")  // ACTIVE, VOIDED
+  voidedAt        DateTime?
+  voidedBy        String?                      // User ID who voided
+  voidReason      String?
+  createdBy       String?                      // User ID
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer        Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([customerId])
+  @@index([creditType])
+  @@index([status])
+  @@index([createdAt])
+  @@map("customer_credits")
 }
 
 // SALES & TRANSACTIONS
@@ -510,7 +541,10 @@ model JournalEntry {
   totalDebit      Float
   totalCredit     Float
   isPosted        Boolean  @default(false)
+  isVoided        Boolean  @default(false)
   postedAt        DateTime?
+  voidedAt        DateTime?
+  voidedBy        String?
   createdBy       String?  // User ID
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -663,8 +697,11 @@ model Expense {
   category        String   // RENT, SALARIES, UTILITIES, TRANSPORT, MAINTENANCE, SUPPLIES, OTHER
   paidBy          String   // User ID who paid
   paymentMethod   String   @default("CASH") // CASH, MPESA
+  status          String   @default("ACTIVE") // ACTIVE, VOIDED
   journalEntryId  String?  // Reference to the created journal entry
   notes           String?
+  voidedAt        DateTime?
+  voidedBy        String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

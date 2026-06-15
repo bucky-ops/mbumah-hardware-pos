@@ -245,6 +245,7 @@ export default function VouchersTab() {
         voucherType: typeFilter !== 'all' ? typeFilter : undefined,
         search: searchQuery || undefined,
       }),
+    refetchInterval: 60000, // Auto-refresh every minute
   });
 
   const { data: campaignsData, isLoading: campaignsLoading } = useQuery({
@@ -267,6 +268,7 @@ export default function VouchersTab() {
       setCreateVoucherOpen(false);
       resetVoucherForm();
       queryClient.invalidateQueries({ queryKey: ['vouchers', currentStoreId] });
+      queryClient.invalidateQueries({ queryKey: ['customer-vouchers'] });
     },
     onError: (err: Error) => toast.error(err.message || 'Failed to create voucher'),
   });
@@ -279,6 +281,7 @@ export default function VouchersTab() {
       setEditVoucherOpen(false);
       setEditingVoucher(null);
       queryClient.invalidateQueries({ queryKey: ['vouchers', currentStoreId] });
+      queryClient.invalidateQueries({ queryKey: ['customer-vouchers'] });
     },
     onError: (err: Error) => toast.error(err.message || 'Failed to update voucher'),
   });
@@ -290,6 +293,7 @@ export default function VouchersTab() {
       setDeleteVoucherOpen(false);
       setDeletingVoucher(null);
       queryClient.invalidateQueries({ queryKey: ['vouchers', currentStoreId] });
+      queryClient.invalidateQueries({ queryKey: ['customer-vouchers'] });
     },
     onError: (err: Error) => toast.error(err.message || 'Failed to delete voucher'),
   });

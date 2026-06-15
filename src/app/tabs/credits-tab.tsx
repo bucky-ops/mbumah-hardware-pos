@@ -7,7 +7,8 @@ import {
   CreditCard, Search, Plus, ArrowUpRight, ArrowDownRight,
   Minus, RotateCcw, Loader2, Filter, Users, Wallet,
   TrendingUp, TrendingDown, Scale, ChevronUp, ChevronDown,
-  FileText, User, CircleDollarSign, AlertCircle,
+  FileText, User, CircleDollarSign, AlertCircle, MoreHorizontal,
+  Pencil, Trash2,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
@@ -27,6 +28,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -138,6 +147,8 @@ export default function CreditsTab() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('all');
   const [creditTypeFilter, setCreditTypeFilter] = useState<string>('all');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -149,6 +160,17 @@ export default function CreditsTab() {
   const [formReference, setFormReference] = useState<string>('');
   const [formDescription, setFormDescription] = useState<string>('');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  // Edit form state
+  const [editingCredit, setEditingCredit] = useState<CustomerCreditItem | null>(null);
+  const [editCreditType, setEditCreditType] = useState<string>('CREDIT');
+  const [editAmount, setEditAmount] = useState<string>('');
+  const [editReference, setEditReference] = useState<string>('');
+  const [editDescription, setEditDescription] = useState<string>('');
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+
+  // Delete state
+  const [deletingCredit, setDeletingCredit] = useState<CustomerCreditItem | null>(null);
 
   // Queries
   const { data: creditsData, isLoading: creditsLoading } = useQuery({
@@ -178,6 +200,31 @@ export default function CreditsTab() {
       queryClient.invalidateQueries({ queryKey: ['customers', currentStoreId] });
     },
     onError: (err: Error) => toast.error(err.message || 'Failed to create entry'),
+  });
+
+  const updateCreditMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof customerCreditsApi.update>[1] }) =>
+      customerCreditsApi.update(id, data),
+    onSuccess: () => {
+      toast.success('Credit entry updated successfully');
+      setEditDialogOpen(false);
+      setEditingCredit(null);
+      queryClient.invalidateQueries({ queryKey: ['customer-credits', currentStoreId] });
+      queryClient.invalidateQueries({ queryKey: ['customers', currentStoreId] });
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to update entry'),
+  });
+
+  const deleteCreditMutation = useMutation({
+    mutationFn: (id: string) => customerCreditsApi.delete(id),
+    onSuccess: () => {
+      toast.success('Credit entry voided successfully');
+      setDeleteDialogOpen(false);
+      setDeletingCredit(null);
+      queryClient.invalidateQueries({ queryKey: ['customer-credits', currentStoreId] });
+      queryClient.invalidateQueries({ queryKey: ['customers', currentStoreId] });
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to void entry'),
   });
 
   // Helpers
@@ -242,11 +289,13 @@ export default function CreditsTab() {
 
   // Stats calculations
   const stats = useMemo(() => {
-    const totalCredits = credits
+    const activeCredits = credits.filter((c) => c.status !== 'VOIDED');
+
+    const totalCredits = activeCredits
       .filter((c) => c.creditType === 'CREDIT' || c.creditType === 'REFUND')
       .reduce((sum, c) => sum + c.amount, 0);
 
-    const totalDebits = credits
+    const totalDebits = activeCredits
       .filter((c) => c.creditType === 'DEBIT' || c.creditType === 'ADJUSTMENT')
       .reduce((sum, c) => sum + c.amount, 0);
 
@@ -254,7 +303,7 @@ export default function CreditsTab() {
 
     // Count unique customers with outstanding credit
     const activeCustomers = new Set(
-      credits.map((c) => c.customerId)
+      activeCredits.map((c) => c.customerId)
     ).size;
 
     return { totalCredits, totalDebits, netBalance, activeCustomers };
@@ -262,9 +311,10 @@ export default function CreditsTab() {
 
   // Per-customer balance summary
   const customerBalances = useMemo(() => {
+    const activeCredits = credits.filter((c) => c.status !== 'VOIDED');
     const balanceMap = new Map<string, { customer: CustomerItem; credits: number; debits: number; balance: number; entries: number }>();
 
-    credits.forEach((c) => {
+    activeCredits.forEach((c) => {
       const existing = balanceMap.get(c.customerId);
       const isCredit = c.creditType === 'CREDIT' || c.creditType === 'REFUND';
       if (existing) {
@@ -303,8 +353,9 @@ export default function CreditsTab() {
     const runningBalances = new Map<string, number>();
     const result = sortedCredits.map((c) => {
       const prev = runningBalances.get(c.customerId) || 0;
-      const isCredit = c.creditType === 'CREDIT' || c.creditType === 'REFUND';
-      const change = isCredit ? c.amount : -c.amount;
+      const isVoided = c.status === 'VOIDED';
+      const isCredit = !isVoided && (c.creditType === 'CREDIT' || c.creditType === 'REFUND');
+      const change = isVoided ? 0 : (isCredit ? c.amount : -c.amount);
       const running = prev + change;
       runningBalances.set(c.customerId, running);
       return { ...c, runningBalance: running };
@@ -342,6 +393,49 @@ export default function CreditsTab() {
       reference: formReference || undefined,
       description: formDescription || undefined,
     });
+  }
+
+  // Edit helpers
+  function openEditDialog(credit: CustomerCreditItem) {
+    setEditingCredit(credit);
+    setEditCreditType(credit.creditType);
+    setEditAmount(String(credit.amount));
+    setEditReference(credit.reference || '');
+    setEditDescription(credit.description || '');
+    setEditErrors({});
+    setEditDialogOpen(true);
+  }
+
+  function validateEditForm(): boolean {
+    const errors: Record<string, string> = {};
+    if (!editAmount || parseFloat(editAmount) <= 0) errors.amount = 'Amount must be greater than 0';
+    if (editAmount && isNaN(parseFloat(editAmount))) errors.amount = 'Please enter a valid number';
+    setEditErrors(errors);
+    return Object.keys(errors).length === 0;
+  }
+
+  function handleUpdateEntry() {
+    if (!editingCredit || !validateEditForm()) return;
+    updateCreditMutation.mutate({
+      id: editingCredit.id,
+      data: {
+        amount: parseFloat(editAmount),
+        creditType: editCreditType,
+        reference: editReference || null,
+        description: editDescription || null,
+      },
+    });
+  }
+
+  // Delete helpers
+  function openDeleteDialog(credit: CustomerCreditItem) {
+    setDeletingCredit(credit);
+    setDeleteDialogOpen(true);
+  }
+
+  function handleVoidEntry() {
+    if (!deletingCredit) return;
+    deleteCreditMutation.mutate(deletingCredit.id);
   }
 
   function handleSort(field: SortField) {
@@ -581,18 +675,20 @@ export default function CreditsTab() {
                             Balance <SortIcon field="balance" sortField={sortField} sortDirection={sortDirection} />
                           </div>
                         </TableHead>
+                        <TableHead className="w-10" />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {ledgerWithRunningBalance.map((entry) => {
                         const customer = customerMap.get(entry.customerId);
                         const badge = getCreditTypeBadge(entry.creditType);
-                        const amountColor = getAmountColor(entry.creditType);
+                        const amountColor = entry.status === 'VOIDED' ? 'text-muted-foreground line-through' : getAmountColor(entry.creditType);
                         const amountPrefix = getAmountPrefix(entry.creditType);
                         const gradient = customer ? getAvatarGradient(customer.name) : '';
+                        const isVoided = entry.status === 'VOIDED';
 
                         return (
-                          <TableRow key={entry.id} className="hover:bg-muted/30">
+                          <TableRow key={entry.id} className={`hover:bg-muted/30 ${isVoided ? 'opacity-60' : ''}`}>
                             <TableCell className="whitespace-nowrap text-sm">
                               <div className="font-medium">{formatDate(entry.createdAt)}</div>
                               <div className="text-xs text-muted-foreground">
@@ -612,10 +708,17 @@ export default function CreditsTab() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${badge.class}`}>
-                                {badge.icon}
-                                {badge.label}
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${badge.class}`}>
+                                  {badge.icon}
+                                  {badge.label}
+                                </span>
+                                {isVoided && (
+                                  <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-5">
+                                    VOIDED
+                                  </Badge>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell className={`text-right font-semibold text-sm ${amountColor}`}>
                               {amountPrefix}{formatKES(entry.amount)}
@@ -626,10 +729,46 @@ export default function CreditsTab() {
                             <TableCell className="hidden lg:table-cell text-sm text-muted-foreground max-w-[200px] truncate">
                               {entry.description || '—'}
                             </TableCell>
-                            <TableCell className={`text-right font-semibold text-sm ${entry.runningBalance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                            <TableCell className={`text-right font-semibold text-sm ${isVoided ? 'text-muted-foreground' : entry.runningBalance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                               {formatKES(Math.abs(entry.runningBalance))}
                               {entry.runningBalance < 0 && <span className="text-xs ml-0.5">DR</span>}
                               {entry.runningBalance > 0 && <span className="text-xs ml-0.5">CR</span>}
+                            </TableCell>
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                    <span className="sr-only">Open menu</span>
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  {!isVoided && (
+                                    <DropdownMenuItem onClick={() => openEditDialog(entry)} className="gap-2">
+                                      <Pencil className="h-4 w-4" />
+                                      Edit Entry
+                                    </DropdownMenuItem>
+                                  )}
+                                  {!isVoided && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        onClick={() => openDeleteDialog(entry)}
+                                        className="gap-2 text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/30"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                        Void Entry
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+                                  {isVoided && (
+                                    <DropdownMenuItem disabled className="gap-2 text-muted-foreground">
+                                      <Trash2 className="h-4 w-4" />
+                                      Already Voided
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </TableCell>
                           </TableRow>
                         );
@@ -887,6 +1026,186 @@ export default function CreditsTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Credit Entry Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={(open) => { if (!open) { setEditingCredit(null); } setEditDialogOpen(open); }}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5" />
+              Edit Credit Entry
+            </DialogTitle>
+            <DialogDescription>
+              Update the details of this credit entry. Changing the amount or type will recalculate running balances.
+            </DialogDescription>
+          </DialogHeader>
+          {editingCredit && (
+            <div className="space-y-4 py-2">
+              {/* Customer (read-only) */}
+              <div className="space-y-2">
+                <Label>Customer</Label>
+                <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-md">
+                  <Avatar className="h-6 w-6">
+                    <AvatarFallback className={`bg-gradient-to-br ${getAvatarGradient(customerMap.get(editingCredit.customerId)?.name || '')} text-white text-[9px]`}>
+                      {customerMap.get(editingCredit.customerId)?.name?.charAt(0)?.toUpperCase() || '?'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm font-medium">
+                    {customerMap.get(editingCredit.customerId)?.name || 'Unknown'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Credit Type */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-credit-type">Entry Type</Label>
+                <Select value={editCreditType} onValueChange={setEditCreditType}>
+                  <SelectTrigger id="edit-credit-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CREDIT">
+                      <div className="flex items-center gap-2">
+                        <ArrowUpRight className="h-3 w-3 text-green-600" />
+                        Credit
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="DEBIT">
+                      <div className="flex items-center gap-2">
+                        <ArrowDownRight className="h-3 w-3 text-red-600" />
+                        Debit
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="ADJUSTMENT">
+                      <div className="flex items-center gap-2">
+                        <Minus className="h-3 w-3 text-amber-600" />
+                        Adjustment
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="REFUND">
+                      <div className="flex items-center gap-2">
+                        <RotateCcw className="h-3 w-3 text-blue-600" />
+                        Refund
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Amount */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-credit-amount">Amount (KES)</Label>
+                <Input
+                  id="edit-credit-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={editAmount}
+                  onChange={(e) => setEditAmount(e.target.value)}
+                  className={editErrors.amount ? 'border-red-500' : ''}
+                />
+                {editErrors.amount && (
+                  <p className="text-xs text-red-500 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" /> {editErrors.amount}
+                  </p>
+                )}
+              </div>
+
+              {/* Reference */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-credit-reference">Reference</Label>
+                <Input
+                  id="edit-credit-reference"
+                  placeholder="e.g. INV-001, PAY-2024-03"
+                  value={editReference}
+                  onChange={(e) => setEditReference(e.target.value)}
+                />
+              </div>
+
+              {/* Description */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-credit-description">Description</Label>
+                <Textarea
+                  id="edit-credit-description"
+                  placeholder="Add notes about this entry..."
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              {/* Created date info */}
+              <div className="text-xs text-muted-foreground bg-muted/30 rounded-md p-2">
+                Created: {formatDateTime(editingCredit.createdAt)}
+                {editingCredit.reference && ` • Ref: ${editingCredit.reference}`}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setEditingCredit(null); setEditDialogOpen(false); }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpdateEntry}
+              disabled={updateCreditMutation.isPending}
+              className="gap-2"
+            >
+              {updateCreditMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <Pencil className="h-4 w-4" />
+                  Update Entry
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Void Confirmation AlertDialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={(open) => { if (!open) setDeletingCredit(null); setDeleteDialogOpen(open); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-500" />
+              Void Credit Entry
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deletingCredit && (
+                <>
+                  Are you sure you want to void this <strong>{deletingCredit.creditType}</strong> entry of{' '}
+                  <strong>{formatKES(deletingCredit.amount)}</strong> for{' '}
+                  <strong>{customerMap.get(deletingCredit.customerId)?.name || 'Unknown'}</strong>?
+                  <br /><br />
+                  This action will mark the entry as voided and recalculate running balances. This action cannot be undone.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleVoidEntry}
+              disabled={deleteCreditMutation.isPending}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {deleteCreditMutation.isPending ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Voiding...
+                </span>
+              ) : (
+                'Void Entry'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

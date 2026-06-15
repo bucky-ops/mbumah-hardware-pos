@@ -449,6 +449,7 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
       return Array.isArray(result.data) ? result.data : [];
     },
     enabled: !!storeId,
+    refetchInterval: 60000, // Auto-refresh every minute
   });
 
   const giftCards = useMemo(() => Array.isArray(giftCardsData) ? giftCardsData : [], [giftCardsData]);
@@ -559,6 +560,8 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
     onSuccess: () => {
       toast.success('Gift card redeemed successfully');
       queryClient.invalidateQueries({ queryKey: ['giftCards'] });
+      queryClient.invalidateQueries({ queryKey: ['giftCard', selectedCard?.id] });
+      queryClient.invalidateQueries({ queryKey: ['customer-gift-cards'] });
       setRedeemForm({ amount: '', transactionId: '', notes: '' });
       setRedeemDialogOpen(false);
       setDetailDialogOpen(false);
@@ -582,6 +585,8 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
     onSuccess: () => {
       toast.success('Balance adjusted successfully');
       queryClient.invalidateQueries({ queryKey: ['giftCards'] });
+      queryClient.invalidateQueries({ queryKey: ['giftCard', selectedCard?.id] });
+      queryClient.invalidateQueries({ queryKey: ['customer-gift-cards'] });
       setAdjustForm({ amount: '', reason: '', notes: '' });
       setAdjustDialogOpen(false);
     },
@@ -598,6 +603,7 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
     onSuccess: () => {
       toast.success('Gift card cancelled');
       queryClient.invalidateQueries({ queryKey: ['giftCards'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-gift-cards'] });
       setCancelDialogOpen(false);
       setDetailDialogOpen(false);
       setSelectedCard(null);

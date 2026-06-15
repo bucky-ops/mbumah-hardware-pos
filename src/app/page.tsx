@@ -765,7 +765,7 @@ function LowStockAlertDialog({
     enabled: open,
   });
 
-  const products = productsData?.data || [];
+  const products = Array.isArray(productsData?.data) ? productsData.data : [];
 
   const outOfStockProducts = useMemo(
     () => products.filter((p) => p.quantityInStock <= 0),
@@ -1828,13 +1828,24 @@ function CartItemRow({
   const [showNote, setShowNote] = useState(!!note);
 
   return (
-    <div className={`flex gap-2 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-all duration-200 ${isNew ? 'animate-slide-in' : ''}`}>
+    <div className={`group flex gap-2 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-all duration-200 ${isNew ? 'animate-slide-in' : ''}`}>
       {/* Image placeholder */}
-      <div className="shrink-0 w-10 h-10 rounded-md bg-muted flex items-center justify-center">
-        <Package className="h-4 w-4 text-muted-foreground/40" />
+      <div className="shrink-0 w-9 h-9 rounded-md bg-muted flex items-center justify-center">
+        <Package className="h-3.5 w-3.5 text-muted-foreground/40" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{item.productName}</p>
+        <div className="flex items-start justify-between gap-1">
+          <p className="text-sm font-medium truncate">{item.productName}</p>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 shrink-0 text-muted-foreground/50 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={() => onRemove(item.productId)}
+            aria-label="Remove item"
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           <span className="text-xs text-muted-foreground">{formatKES(item.pricePerUnit)}</span>
           <span className="text-[9px] px-1 py-0 rounded bg-muted text-muted-foreground font-medium">{item.unitType}</span>
@@ -1842,14 +1853,14 @@ function CartItemRow({
             <span className="text-[9px] text-green-600 font-medium">{item.discountPercent}% off</span>
           )}
         </div>
-        {/* Quick Add buttons */}
-        <div className="flex items-center gap-1 mt-1.5">
+        {/* Quick Add buttons - hidden on desktop, shown on hover; always visible on mobile */}
+        <div className="flex items-center gap-0.5 mt-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity duration-200">
           {quickAddAmounts.map((amt) => (
             <button
               key={amt}
               type="button"
               onClick={() => onUpdateQty(item.productId, item.quantity + amt)}
-              className="px-1.5 py-0 text-[9px] font-medium rounded border border-border/50 bg-background hover:bg-primary hover:text-primary-foreground transition-colors"
+              className="px-1 py-0 text-[8px] font-medium rounded border border-border/50 bg-background hover:bg-primary hover:text-primary-foreground transition-colors"
             >
               +{amt}
             </button>
@@ -1857,7 +1868,7 @@ function CartItemRow({
           <button
             type="button"
             onClick={() => setShowNote(!showNote)}
-            className={`px-1.5 py-0 text-[9px] font-medium rounded border transition-colors ${showNote ? 'border-primary bg-primary/10 text-primary' : 'border-border/50 bg-background hover:bg-muted'}`}
+            className={`px-1 py-0 text-[8px] font-medium rounded border transition-colors ${showNote ? 'border-primary bg-primary/10 text-primary' : 'border-border/50 bg-background hover:bg-muted'}`}
             title="Add note"
           >
             <MessageSquare className="h-2.5 w-2.5 inline" />
@@ -1869,26 +1880,19 @@ function CartItemRow({
             placeholder="Add a note..."
             value={note || ''}
             onChange={(e) => onNoteChange?.(item.productId, e.target.value)}
-            className="h-6 text-[10px] mt-1.5 px-2 py-0"
+            className="h-6 text-[10px] mt-1 px-2 py-0"
             onClick={(e) => e.stopPropagation()}
           />
         )}
       </div>
-      <div className="flex flex-col items-end gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-5 w-5 text-muted-foreground hover:text-destructive"
-          onClick={() => onRemove(item.productId)}
-        >
-          <X className="h-3 w-3" />
-        </Button>
+      <div className="flex flex-col items-end gap-1 shrink-0">
         <div className="flex items-center gap-0.5">
           <Button
             variant="outline"
             size="icon"
             className="h-6 w-6"
             onClick={() => onUpdateQty(item.productId, item.quantity - 1)}
+            aria-label="Decrease quantity"
           >
             <Minus className="h-2.5 w-2.5" />
           </Button>
@@ -1898,6 +1902,7 @@ function CartItemRow({
             size="icon"
             className="h-6 w-6"
             onClick={() => onUpdateQty(item.productId, item.quantity + 1)}
+            aria-label="Increase quantity"
           >
             <Plus className="h-2.5 w-2.5" />
           </Button>
@@ -2000,6 +2005,7 @@ function POSTab() {
   // Gift card / Voucher state
   const [appliedGiftCardId, setAppliedGiftCardId] = useState<string>('');
   const [appliedVoucherId, setAppliedVoucherId] = useState<string>('');
+  const [benefitsExpanded, setBenefitsExpanded] = useState<boolean>(true);
 
   // View mode & sorting
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -2076,6 +2082,7 @@ function POSTab() {
       return { data: customerCards };
     },
     enabled: !!selectedCustomer && selectedCustomer !== 'walk-in',
+    refetchInterval: 30000, // Auto-refresh every 30s to keep balances current
   });
 
   // Auto-fetch active vouchers for selected customer
@@ -2088,6 +2095,7 @@ function POSTab() {
       return { data: allVouchers };
     },
     enabled: !!selectedCustomer && selectedCustomer !== 'walk-in',
+    refetchInterval: 30000, // Auto-refresh every 30s to keep voucher status current
   });
 
   // Create customer mutation
@@ -2137,6 +2145,13 @@ function POSTab() {
       setSplitCashAmount('');
       setSplitMpesaAmount('');
       setSelectedCustomer('');
+      setAppliedGiftCardId('');
+      setAppliedVoucherId('');
+      // Invalidate gift card and voucher queries so balances/status refresh
+      queryClient.invalidateQueries({ queryKey: ['customer-gift-cards'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-vouchers'] });
+      queryClient.invalidateQueries({ queryKey: ['giftCards'] });
+      queryClient.invalidateQueries({ queryKey: ['vouchers'] });
     },
     onError: (err: Error) => {
       toast.error(err.message || 'Checkout failed');
@@ -2163,11 +2178,35 @@ function POSTab() {
     },
   });
 
-  const products = productsData?.data || [];
-  const categories = categoriesData?.data || [];
-  const customers = customersData?.data || [];
+  const products = Array.isArray(productsData?.data) ? productsData.data : [];
+  const categories = Array.isArray(categoriesData?.data) ? categoriesData.data : [];
+  const customers = Array.isArray(customersData?.data) ? customersData.data : [];
   const customerGiftCards: GiftCardItem[] = Array.isArray(customerGiftCardsData?.data) ? customerGiftCardsData.data : [];
   const customerVouchers: VoucherItem[] = Array.isArray(customerVouchersData?.data) ? customerVouchersData.data : [];
+
+  // Auto-apply highest value gift card/voucher when customer is selected
+  useEffect(() => {
+    if (!selectedCustomer || selectedCustomer === 'walk-in') {
+      setAppliedGiftCardId('');
+      setAppliedVoucherId('');
+      return;
+    }
+    // Auto-select highest value gift card
+    if (Array.isArray(customerGiftCards) && customerGiftCards.length > 0 && !appliedGiftCardId) {
+      const highestGc = customerGiftCards.reduce((best, gc) =>
+        gc.currentBalance > best.currentBalance ? gc : best, customerGiftCards[0]);
+      setAppliedGiftCardId(highestGc.id);
+    }
+    // Auto-select highest value voucher
+    if (Array.isArray(customerVouchers) && customerVouchers.length > 0 && !appliedVoucherId) {
+      const highestV = customerVouchers.reduce((best, v) => {
+        const bestVal = best.voucherType === 'PERCENTAGE' ? best.value : best.value;
+        const vVal = v.voucherType === 'PERCENTAGE' ? v.value : v.value;
+        return vVal > bestVal ? v : best;
+      }, customerVouchers[0]);
+      setAppliedVoucherId(highestV.id);
+    }
+  }, [selectedCustomer, customerGiftCards.length, customerVouchers.length]);
 
   // Gift card / voucher discount computation
   const selectedGiftCard = appliedGiftCardId ? customerGiftCards.find(gc => gc.id === appliedGiftCardId) : null;
@@ -2549,7 +2588,7 @@ function POSTab() {
 
       {/* Cart Sidebar - Desktop only */}
       <div className="hidden lg:block lg:w-96 shrink-0">
-        <Card className="sticky top-20 flex flex-col max-h-[calc(100vh-7rem)] bg-gradient-to-b from-card/95 to-card/90 backdrop-blur-sm shadow-lg border border-border/50">
+        <Card className="relative sticky top-20 flex flex-col max-h-[calc(100vh-7rem)] bg-gradient-to-b from-card/95 to-card/90 backdrop-blur-sm shadow-lg border border-border/50">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
@@ -2584,7 +2623,7 @@ function POSTab() {
             </div>
           </CardHeader>
           <Separator />
-          <ScrollArea className="flex-1 min-h-0 max-h-64 overflow-y-auto">
+          <ScrollArea className="flex-1 min-h-0 custom-scrollbar">
             {cart.items.length === 0 ? (
               <EmptyCartState />
             ) : (
@@ -2606,7 +2645,7 @@ function POSTab() {
           {cart.items.length > 0 && (
             <>
               <Separator />
-              <div className="p-4 space-y-3">
+              <div className="shrink-0 p-4 space-y-3 overflow-y-auto max-h-[50%] custom-scrollbar">
                 {/* Discount Code */}
                 <div className="flex gap-1.5">
                   <Input
@@ -2646,67 +2685,83 @@ function POSTab() {
                   </Button>
                 </div>
 
-                {/* Gift Cards / Vouchers for selected customer */}
+                {/* Gift Cards / Vouchers for selected customer - Collapsible */}
                 {selectedCustomer && selectedCustomer !== 'walk-in' && (customerGiftCards.length > 0 || customerVouchers.length > 0) && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                      <Award className="h-3 w-3" />
-                      Customer Benefits
-                      <Badge variant="secondary" className="text-[9px] h-4 px-1">
-                        {customerGiftCards.length + customerVouchers.length} available
-                      </Badge>
-                    </p>
-                    {customerGiftCards.length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-[10px] text-muted-foreground font-medium">Gift Cards</p>
-                        {customerGiftCards.map((gc) => (
-                          <button
-                            key={gc.id}
-                            type="button"
-                            onClick={() => setAppliedGiftCardId(appliedGiftCardId === gc.id ? '' : gc.id)}
-                            className={`w-full text-left p-2 rounded-md border text-xs transition-colors ${
-                              appliedGiftCardId === gc.id
-                                ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                                : 'border-border hover:border-primary/30 hover:bg-muted/30'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <Gift className="h-3 w-3 text-amber-500" />
-                                <span className="font-medium">{gc.code}</span>
-                              </div>
-                              <span className="font-semibold text-primary">{formatKES(gc.currentBalance)}</span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {customerVouchers.length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-[10px] text-muted-foreground font-medium">Vouchers</p>
-                        {customerVouchers.map((v) => (
-                          <button
-                            key={v.id}
-                            type="button"
-                            onClick={() => setAppliedVoucherId(appliedVoucherId === v.id ? '' : v.id)}
-                            className={`w-full text-left p-2 rounded-md border text-xs transition-colors ${
-                              appliedVoucherId === v.id
-                                ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                                : 'border-border hover:border-primary/30 hover:bg-muted/30'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <Ticket className="h-3 w-3 text-emerald-500" />
-                                <span className="font-medium">{v.name}</span>
-                                <Badge variant="outline" className="text-[8px] h-3.5 px-1">{v.voucherType}</Badge>
-                              </div>
-                              <span className="font-semibold text-primary">
-                                {v.voucherType === 'PERCENTAGE' ? `${v.value}%` : formatKES(v.value)}
-                              </span>
-                            </div>
-                          </button>
-                        ))}
+                  <div className="rounded-md border border-border/60">
+                    <button
+                      type="button"
+                      onClick={() => setBenefitsExpanded(!benefitsExpanded)}
+                      className="w-full flex items-center justify-between p-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Award className="h-3 w-3" />
+                        Customer Benefits
+                        <Badge variant="secondary" className="text-[9px] h-4 px-1">
+                          {customerGiftCards.length + customerVouchers.length}
+                        </Badge>
+                        {(appliedGiftCardId || appliedVoucherId) && (
+                          <Badge className="text-[9px] h-4 px-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-0">
+                            Auto-applied
+                          </Badge>
+                        )}
+                      </span>
+                      <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${benefitsExpanded ? 'rotate-180' : ''}`} />
+                    </button>
+                    {benefitsExpanded && (
+                      <div className="px-2 pb-2 space-y-1.5">
+                        {Array.isArray(customerGiftCards) && customerGiftCards.length > 0 && (
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-muted-foreground font-medium">Gift Cards</p>
+                            {customerGiftCards.map((gc) => (
+                              <button
+                                key={gc.id}
+                                type="button"
+                                onClick={() => setAppliedGiftCardId(appliedGiftCardId === gc.id ? '' : gc.id)}
+                                className={`w-full text-left p-1.5 rounded-md border text-xs transition-colors ${
+                                  appliedGiftCardId === gc.id
+                                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                                    : 'border-border hover:border-primary/30 hover:bg-muted/30'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5">
+                                    <Gift className="h-3 w-3 text-amber-500" />
+                                    <span className="font-medium">{gc.code}</span>
+                                  </div>
+                                  <span className="font-semibold text-primary">{formatKES(gc.currentBalance)}</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {Array.isArray(customerVouchers) && customerVouchers.length > 0 && (
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-muted-foreground font-medium">Vouchers</p>
+                            {customerVouchers.map((v) => (
+                              <button
+                                key={v.id}
+                                type="button"
+                                onClick={() => setAppliedVoucherId(appliedVoucherId === v.id ? '' : v.id)}
+                                className={`w-full text-left p-1.5 rounded-md border text-xs transition-colors ${
+                                  appliedVoucherId === v.id
+                                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                                    : 'border-border hover:border-primary/30 hover:bg-muted/30'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5">
+                                    <Ticket className="h-3 w-3 text-emerald-500" />
+                                    <span className="font-medium">{v.name}</span>
+                                    <Badge variant="outline" className="text-[8px] h-3.5 px-1">{v.voucherType}</Badge>
+                                  </div>
+                                  <span className="font-semibold text-primary">
+                                    {v.voucherType === 'PERCENTAGE' ? `${v.value}%` : formatKES(v.value)}
+                                  </span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2928,6 +2983,15 @@ function POSTab() {
                 </Dialog>
               </div>
             </>
+          )}
+          {/* Loading overlay during checkout */}
+          {checkoutMutation.isPending && (
+            <div className="absolute inset-0 bg-background/60 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm font-medium text-muted-foreground">Processing payment...</p>
+              </div>
+            </div>
           )}
         </Card>
       </div>
@@ -3381,7 +3445,7 @@ function POSTab() {
               </div>
             </div>
           </SheetHeader>
-          <ScrollArea className="flex-1 min-h-0 max-h-64 overflow-y-auto">
+          <ScrollArea className="flex-1 min-h-0 custom-scrollbar">
             {cart.items.length === 0 ? (
               <EmptyCartState />
             ) : (
@@ -3402,7 +3466,7 @@ function POSTab() {
           </ScrollArea>
           {cart.items.length > 0 && (
             <>
-              <div className="p-4 space-y-3 border-t shrink-0">
+              <div className="p-4 space-y-3 border-t shrink-0 overflow-y-auto max-h-[50%] custom-scrollbar">
                 <div className="flex gap-1.5">
                   <Input
                     placeholder="Discount code"
@@ -3439,67 +3503,83 @@ function POSTab() {
                   </Button>
                 </div>
 
-                {/* Gift Cards / Vouchers for selected customer (mobile) */}
+                {/* Gift Cards / Vouchers for selected customer (mobile) - Collapsible */}
                 {selectedCustomer && selectedCustomer !== 'walk-in' && (customerGiftCards.length > 0 || customerVouchers.length > 0) && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                      <Award className="h-3 w-3" />
-                      Customer Benefits
-                      <Badge variant="secondary" className="text-[9px] h-4 px-1">
-                        {customerGiftCards.length + customerVouchers.length} available
-                      </Badge>
-                    </p>
-                    {customerGiftCards.length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-[10px] text-muted-foreground font-medium">Gift Cards</p>
-                        {customerGiftCards.map((gc) => (
-                          <button
-                            key={gc.id}
-                            type="button"
-                            onClick={() => setAppliedGiftCardId(appliedGiftCardId === gc.id ? '' : gc.id)}
-                            className={`w-full text-left p-2 rounded-md border text-xs transition-colors ${
-                              appliedGiftCardId === gc.id
-                                ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                                : 'border-border hover:border-primary/30 hover:bg-muted/30'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <Gift className="h-3 w-3 text-amber-500" />
-                                <span className="font-medium">{gc.code}</span>
-                              </div>
-                              <span className="font-semibold text-primary">{formatKES(gc.currentBalance)}</span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {customerVouchers.length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-[10px] text-muted-foreground font-medium">Vouchers</p>
-                        {customerVouchers.map((v) => (
-                          <button
-                            key={v.id}
-                            type="button"
-                            onClick={() => setAppliedVoucherId(appliedVoucherId === v.id ? '' : v.id)}
-                            className={`w-full text-left p-2 rounded-md border text-xs transition-colors ${
-                              appliedVoucherId === v.id
-                                ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                                : 'border-border hover:border-primary/30 hover:bg-muted/30'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <Ticket className="h-3 w-3 text-emerald-500" />
-                                <span className="font-medium">{v.name}</span>
-                                <Badge variant="outline" className="text-[8px] h-3.5 px-1">{v.voucherType}</Badge>
-                              </div>
-                              <span className="font-semibold text-primary">
-                                {v.voucherType === 'PERCENTAGE' ? `${v.value}%` : formatKES(v.value)}
-                              </span>
-                            </div>
-                          </button>
-                        ))}
+                  <div className="rounded-md border border-border/60">
+                    <button
+                      type="button"
+                      onClick={() => setBenefitsExpanded(!benefitsExpanded)}
+                      className="w-full flex items-center justify-between p-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Award className="h-3 w-3" />
+                        Customer Benefits
+                        <Badge variant="secondary" className="text-[9px] h-4 px-1">
+                          {customerGiftCards.length + customerVouchers.length}
+                        </Badge>
+                        {(appliedGiftCardId || appliedVoucherId) && (
+                          <Badge className="text-[9px] h-4 px-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-0">
+                            Auto-applied
+                          </Badge>
+                        )}
+                      </span>
+                      <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${benefitsExpanded ? 'rotate-180' : ''}`} />
+                    </button>
+                    {benefitsExpanded && (
+                      <div className="px-2 pb-2 space-y-1.5">
+                        {Array.isArray(customerGiftCards) && customerGiftCards.length > 0 && (
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-muted-foreground font-medium">Gift Cards</p>
+                            {customerGiftCards.map((gc) => (
+                              <button
+                                key={gc.id}
+                                type="button"
+                                onClick={() => setAppliedGiftCardId(appliedGiftCardId === gc.id ? '' : gc.id)}
+                                className={`w-full text-left p-1.5 rounded-md border text-xs transition-colors ${
+                                  appliedGiftCardId === gc.id
+                                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                                    : 'border-border hover:border-primary/30 hover:bg-muted/30'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5">
+                                    <Gift className="h-3 w-3 text-amber-500" />
+                                    <span className="font-medium">{gc.code}</span>
+                                  </div>
+                                  <span className="font-semibold text-primary">{formatKES(gc.currentBalance)}</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {Array.isArray(customerVouchers) && customerVouchers.length > 0 && (
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-muted-foreground font-medium">Vouchers</p>
+                            {customerVouchers.map((v) => (
+                              <button
+                                key={v.id}
+                                type="button"
+                                onClick={() => setAppliedVoucherId(appliedVoucherId === v.id ? '' : v.id)}
+                                className={`w-full text-left p-1.5 rounded-md border text-xs transition-colors ${
+                                  appliedVoucherId === v.id
+                                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                                    : 'border-border hover:border-primary/30 hover:bg-muted/30'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5">
+                                    <Ticket className="h-3 w-3 text-emerald-500" />
+                                    <span className="font-medium">{v.name}</span>
+                                    <Badge variant="outline" className="text-[8px] h-3.5 px-1">{v.voucherType}</Badge>
+                                  </div>
+                                  <span className="font-semibold text-primary">
+                                    {v.voucherType === 'PERCENTAGE' ? `${v.value}%` : formatKES(v.value)}
+                                  </span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

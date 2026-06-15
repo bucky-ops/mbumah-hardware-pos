@@ -443,3 +443,172 @@ Changes Summary:
 - Lint passes with no errors
 - Dev server compiles successfully
 - All form fields now visible within scrollable dialog with max-h-[80vh]
+
+---
+Task ID: 4
+Agent: Financial Tab Agent
+Task: Add Update and Delete functionality to the Financial tab
+
+Work Log:
+- Updated Prisma schema: Added `status`, `voidedAt`, `voidedBy` fields to Expense model; Added `isVoided`, `voidedAt`, `voidedBy` fields to JournalEntry model
+- Ran `bun run db:push` to sync schema with database
+- Created backend API routes:
+  - PUT/DELETE `/api/expenses/[id]` - Update expense, void expense (soft delete), hard delete voided expense
+  - PUT `/api/financial/journal/[id]` - Void journal entry (also voids linked expense)
+  - PUT `/api/financial/payments/[id]` - Void payment (marks as REFUNDED)
+- Updated API client (`src/lib/api.ts`):
+  - Added `status`, `voidedAt`, `voidedBy` fields to ExpenseItem interface
+  - Added `isVoided`, `voidedAt`, `voidedBy` fields to JournalEntryItem interface
+  - Added `expensesApi.update(id, data)` method
+  - Added `expensesApi.delete(id, hardDelete?)` method
+  - Added `financialApi.voidJournalEntry(id)` method
+  - Added `financialApi.voidPayment(id)` method
+- Updated frontend (`src/app/tabs/financial-tab.tsx`):
+  - Added imports: MoreHorizontal, Ban, AlertDialog, DropdownMenu
+  - Added state: editExpense, editExpenseForm, voidExpenseTarget, deleteExpenseTarget, voidJournalTarget
+  - Added mutations: updateExpenseMutation, voidExpenseMutation, deleteExpenseMutation, voidJournalEntryMutation
+  - Added handler: handleUpdateExpense, openEditExpense
+  - Expenses table: Added Status column (Active/VOIDED badge), Actions column (DropdownMenu with Edit/Void/Delete)
+  - Journal entries table: Added VOIDED badge status, Actions column (DropdownMenu with Void Entry)
+  - Voided rows styled with opacity-50
+  - Ledger dialog: Added VOIDED badge display
+  - Added Edit Expense Dialog with full form
+  - Added Void Expense AlertDialog with confirmation
+  - Added Delete Expense AlertDialog with confirmation (only for voided expenses)
+  - Added Void Journal Entry AlertDialog with confirmation
+  - Updated expenses total to exclude voided expenses
+  - Updated colspan values for new columns
+
+Stage Summary:
+- Expenses: Full CRUD - Create, Read, Update (edit dialog), Void (soft delete), Hard Delete (voided only)
+- Journal Entries: Void functionality with linked expense cascading
+- Payments: Void API route ready (marks as REFUNDED)
+- All actions have AlertDialog confirmation dialogs
+- VOIDED badge displayed on voided entries in all tables
+- DropdownMenu with MoreHorizontal icon for row actions
+- Lint passes clean
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: Add Update and Delete functionality to Credits tab
+
+Work Log:
+- Discovered CustomerCredit model was missing from Prisma schema — the existing API route referenced `db.customerCredit` but the model didn't exist
+- Added CustomerCredit model to Prisma schema with fields: id, storeId, customerId, amount, creditType, balance, reference, description, status, voidedAt, voidedBy, voidReason, createdBy, timestamps
+- Added status field with ACTIVE/VOIDED support for soft-delete (void) pattern
+- Added CustomerCredit relation to Customer and Store models
+- Ran `bun run db:push` to sync database
+- Created `/api/customer-credits/[id]/route.ts` with:
+  - GET: Fetch single credit entry
+  - PUT: Update credit entry (amount, creditType, reference, description) with running balance recalculation for subsequent entries
+  - DELETE: Soft delete (void) with status=VOIDED, voidedAt, voidReason; recalculates running balances for all subsequent entries
+- Updated `/api/customer-credits/route.ts` to support status filter and exclude VOIDED entries from balance calculations
+- Added `CustomerCreditItem` interface and `customerCreditsApi` object to `src/lib/api.ts` with:
+  - list(), get(), create(), update(), delete() methods
+- Added `bankingApi` and related types to `src/lib/api.ts` to fix pre-existing compilation error blocking page load
+- Rewrote `credits-tab.tsx` with full update and delete UI:
+  - Added `updateCreditMutation` with dedicated Edit Dialog (edit amount, type, reference, description; customer shown as read-only)
+  - Added `deleteCreditMutation` with AlertDialog confirmation dialog for voiding entries
+  - Added DropdownMenu with MoreHorizontal icon on each table row (Edit Entry, Void Entry actions)
+  - Voided entries show "VOIDED" Badge in destructive variant, reduced opacity, strikethrough amount
+  - Voided entries are excluded from running balance calculations in the frontend
+  - Stats calculations filter out VOIDED entries
+  - Edit and Void actions are disabled/hidden for already-voided entries
+  - Form validation for edit dialog (amount > 0)
+  - Toast notifications for success/error on all mutations
+  - Query invalidation on mutation success
+- Lint passes clean
+- App loads successfully (200 response)
+
+Stage Summary:
+- Credits tab now has full CRUD: Create, Read, Update (edit dialog), Void (soft delete with AlertDialog)
+- Each entry has a DropdownMenu with Edit and Void actions
+- Voided entries display with VOIDED badge, reduced opacity, and strikethrough styling
+- Running balances are recalculated when entries are updated or voided (both backend and frontend)
+- Backend [id] route supports GET/PUT/DELETE with proper validation and error handling
+- Fixed bankingApi missing export that was blocking page compilation
+- Lint passes clean
+
+---
+Task ID: 7
+Agent: UI Refresh Fix Agent
+Task: Ensure gift card redemption and voucher redemption properly auto-update the UI after a redemption occurs
+
+Work Log:
+- Audited all mutation handlers across gift-cards-tab.tsx, page.tsx, and vouchers-tab.tsx
+- Found missing query invalidation in several places that would cause stale UI after redemptions
+
+Fixes applied:
+
+1. gift-cards-tab.tsx:
+   - Added `refetchInterval: 60000` to the gift cards list query for auto-refresh every minute
+   - redeemMutation: Added `invalidateQueries(['giftCard', selectedCard?.id])` for specific detail query and `invalidateQueries(['customer-gift-cards'])` for POS checkout freshness
+   - adjustMutation: Added same invalidation as redeem (detail + customer-gift-cards)
+   - cancelMutation: Added `invalidateQueries(['customer-gift-cards'])` so cancelled cards disappear from POS
+
+2. page.tsx (POS checkout):
+   - Added `refetchInterval: 30000` to customer-gift-cards query (auto-refresh every 30s)
+   - Added `refetchInterval: 30000` to customer-vouchers query (auto-refresh every 30s)
+   - checkoutMutation.onSuccess: Added invalidation for ['customer-gift-cards'], ['customer-vouchers'], ['giftCards'], ['vouchers'] so balances/status update after checkout
+   - checkoutMutation.onSuccess: Added `setAppliedGiftCardId('')` and `setAppliedVoucherId('')` to clear applied selections after checkout
+
+3. vouchers-tab.tsx:
+   - Added `refetchInterval: 60000` to the vouchers list query for auto-refresh every minute
+   - createVoucherMutation: Added `invalidateQueries(['customer-vouchers'])` so POS sees new vouchers
+   - updateVoucherMutation: Added `invalidateQueries(['customer-vouchers'])` so status changes (pause/activate) reflect in POS
+   - deleteVoucherMutation: Added `invalidateQueries(['customer-vouchers'])` so deleted vouchers disappear from POS
+
+- Lint passes clean
+- Dev server running without errors
+
+---
+Task ID: 6
+Agent: Main Agent
+Task: Improve POS checkout section for 10+ items with scrolling, visibility, and auto-fetch of vouchers/gift cards
+
+Work Log:
+- Analyzed full POS checkout code (~3900 lines in page.tsx), identified cart sidebar (desktop ~lines 2550-2930, mobile ~lines 3350-3660)
+- CartItemRow redesign: Made more compact with group-hover pattern
+  - Remove button now appears on hover (opacity-0 group-hover:opacity-100) to save space
+  - Quick-add buttons (+1,+2,+5,+10) hidden on desktop by default, shown on hover (lg:opacity-0 lg:group-hover:opacity-100)
+  - Always visible on mobile for touch interaction
+  - Added aria-label attributes for accessibility on quantity and remove buttons
+  - Reduced icon size from w-10 h-10 to w-9 h-9 for more compact rows
+- Desktop cart ScrollArea: Removed restrictive `max-h-64 overflow-y-auto`, replaced with `flex-1 min-h-0 custom-scrollbar`
+  - Cart items now use ALL available vertical space within the card instead of being capped at 256px
+  - Custom scrollbar styling (thin, subtle) via existing `.custom-scrollbar` CSS class
+- Desktop checkout section: Added `shrink-0 overflow-y-auto max-h-[50%] custom-scrollbar`
+  - Checkout section stays at bottom of card and doesn't get pushed off screen
+  - If checkout section content exceeds 50% of card height, it scrolls independently
+  - Added `relative` positioning to Card for loading overlay
+- Mobile cart Sheet: Same ScrollArea fix (removed max-h-64, added custom-scrollbar)
+  - Mobile checkout section also has `overflow-y-auto max-h-[50%] custom-scrollbar`
+- Collapsible Customer Benefits section:
+  - Replaced always-visible gift card/voucher lists with collapsible accordion
+  - Header shows benefit count badge and "Auto-applied" badge when one is selected
+  - ChevronDown icon rotates on expand/collapse
+  - Uses `benefitsExpanded` state (default true)
+  - Applied to both desktop and mobile cart sections
+  - Benefits list uses `Array.isArray()` guards as required
+  - Padding reduced from p-2 to p-1.5 for compactness
+- Auto-apply highest value gift card/voucher:
+  - Added `useEffect` watching `selectedCustomer`, `customerGiftCards.length`, `customerVouchers.length`
+  - When customer selected and benefits data loads, auto-selects highest-value gift card and voucher
+  - Only auto-applies when no benefit is currently selected (!appliedGiftCardId / !appliedVoucherId)
+  - Customer select change handler clears applied IDs, then useEffect auto-applies for new customer
+- Loading overlay during checkout:
+  - Added semi-transparent backdrop-blur overlay inside desktop Card
+  - Shows spinning Loader2 icon and "Processing payment..." text
+  - Appears when `checkoutMutation.isPending` is true
+- Lint passes clean
+- Dev server running without errors
+
+Stage Summary:
+- Cart items section now properly scrolls with all available vertical space (no more 256px cap)
+- Checkout summary always visible at bottom of cart (shrink-0 with independent scroll)
+- Quick-add buttons compact on desktop (hover-reveal), always visible on mobile
+- Customer benefits section collapsible to save vertical space
+- Auto-apply highest value gift card/voucher on customer selection
+- Loading overlay during checkout processing
+- All changes applied to both desktop and mobile views

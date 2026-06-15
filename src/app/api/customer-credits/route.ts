@@ -24,6 +24,8 @@ async function getCustomerCreditsHandler(...args: unknown[]): Promise<Response> 
   const sortBy = searchParams.get('sortBy') || 'createdAt';
   const sortOrder = searchParams.get('sortOrder') || 'desc';
 
+  const status = searchParams.get('status');
+
   const where: Record<string, unknown> = { storeId };
 
   if (customerId) {
@@ -33,6 +35,10 @@ async function getCustomerCreditsHandler(...args: unknown[]): Promise<Response> 
   if (creditType) {
     const types = creditType.split(',');
     where.creditType = types.length === 1 ? types[0] : { in: types };
+  }
+
+  if (status) {
+    where.status = status;
   }
 
   const validSortFields = ['amount', 'balance', 'createdAt'];
@@ -105,9 +111,9 @@ async function createCustomerCreditHandler(...args: unknown[]): Promise<Response
     );
   }
 
-  // Calculate running balance: get the latest credit entry for this customer
+  // Calculate running balance: get the latest non-voided credit entry for this customer
   const latestCredit = await db.customerCredit.findFirst({
-    where: { customerId },
+    where: { customerId, status: { not: 'VOIDED' } },
     orderBy: { createdAt: 'desc' },
     select: { balance: true },
   });

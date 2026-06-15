@@ -11,6 +11,7 @@ import {
   DollarSign, CreditCard, Receipt, Plus,
   Send, Banknote, Eye, Scale, PiggyBank,
   AlertCircle, CheckCircle2, Loader2, Trash2, Edit2,
+  MoreHorizontal, Ban,
 } from 'lucide-react';
 
 import { useAppStore, useAuthStore } from '@/lib/stores';
@@ -36,6 +37,14 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -439,6 +448,21 @@ export default function FinancialTab() {
     notes: '',
   });
 
+  // Edit expense dialog state
+  const [editExpense, setEditExpense] = useState<ExpenseItem | null>(null);
+  const [editExpenseForm, setEditExpenseForm] = useState({
+    description: '',
+    amount: '',
+    category: 'OTHER',
+    paymentMethod: 'CASH',
+    notes: '',
+  });
+
+  // Confirmation dialog state
+  const [voidExpenseTarget, setVoidExpenseTarget] = useState<ExpenseItem | null>(null);
+  const [deleteExpenseTarget, setDeleteExpenseTarget] = useState<ExpenseItem | null>(null);
+  const [voidJournalTarget, setVoidJournalTarget] = useState<JournalEntryItem | null>(null);
+
   // Journal entry dialog state
   const [showJournalDialog, setShowJournalDialog] = useState(false);
   const [journalForm, setJournalForm] = useState({
@@ -558,6 +582,59 @@ export default function FinancialTab() {
     },
   });
 
+  const updateExpenseMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { description?: string; amount?: number; category?: string; paymentMethod?: string; notes?: string } }) =>
+      expensesApi.update(id, data),
+    onSuccess: () => {
+      toast.success('Expense updated successfully');
+      queryClient.invalidateQueries({ queryKey: ['expenses', currentStoreId] });
+      setEditExpense(null);
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to update expense: ${error.message}`);
+    },
+  });
+
+  const voidExpenseMutation = useMutation({
+    mutationFn: (id: string) => expensesApi.delete(id),
+    onSuccess: () => {
+      toast.success('Expense voided successfully');
+      queryClient.invalidateQueries({ queryKey: ['expenses', currentStoreId] });
+      queryClient.invalidateQueries({ queryKey: ['journal-entries', currentStoreId] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', currentStoreId] });
+      setVoidExpenseTarget(null);
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to void expense: ${error.message}`);
+    },
+  });
+
+  const deleteExpenseMutation = useMutation({
+    mutationFn: (id: string) => expensesApi.delete(id, true),
+    onSuccess: () => {
+      toast.success('Expense permanently deleted');
+      queryClient.invalidateQueries({ queryKey: ['expenses', currentStoreId] });
+      setDeleteExpenseTarget(null);
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to delete expense: ${error.message}`);
+    },
+  });
+
+  const voidJournalEntryMutation = useMutation({
+    mutationFn: (id: string) => financialApi.voidJournalEntry(id),
+    onSuccess: () => {
+      toast.success('Journal entry voided successfully');
+      queryClient.invalidateQueries({ queryKey: ['journal-entries', currentStoreId] });
+      queryClient.invalidateQueries({ queryKey: ['expenses', currentStoreId] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', currentStoreId] });
+      setVoidJournalTarget(null);
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to void journal entry: ${error.message}`);
+    },
+  });
+
   // Handlers
   const handleCreateExpense = () => {
     const amount = parseFloat(expenseForm.amount);
@@ -612,6 +689,36 @@ export default function FinancialTab() {
     });
   };
 
+  const handleUpdateExpense = () => {
+    if (!editExpense) return;
+    const amount = parseFloat(editExpenseForm.amount);
+    if (!editExpenseForm.description || !amount || amount <= 0) {
+      toast.error('Please fill in description and a valid amount');
+      return;
+    }
+    updateExpenseMutation.mutate({
+      id: editExpense.id,
+      data: {
+        description: editExpenseForm.description,
+        amount,
+        category: editExpenseForm.category,
+        paymentMethod: editExpenseForm.paymentMethod,
+        notes: editExpenseForm.notes || undefined,
+      },
+    });
+  };
+
+  const openEditExpense = (exp: ExpenseItem) => {
+    setEditExpense(exp);
+    setEditExpenseForm({
+      description: exp.description,
+      amount: String(exp.amount),
+      category: exp.category,
+      paymentMethod: exp.paymentMethod,
+      notes: exp.notes || '',
+    });
+  };
+
   // Debt aging summary
   const agingSummary = useMemo(() => {
     const summary = { current: 0, days30: 0, days60: 0, days90Plus: 0 };
@@ -632,7 +739,7 @@ export default function FinancialTab() {
     queryFn: () => financialApi.getRevenueTrend({ storeId: currentStoreId, days: revenuePeriod }),
   });
 
-  const revenueTrendData = revenueTrendResponse?.data?.daily || [];
+  const revenueTrendData = Array.isArray(revenueTrendResponse?.data?.daily) ? revenueTrendResponse.data.daily : [];
   const revenueSummary = revenueTrendResponse?.data?.summary;
 
   // Payment breakdown
@@ -1973,13 +2080,14 @@ export default function FinancialTab() {
                     <TableHead className="text-right">Debit</TableHead>
                     <TableHead className="text-right">Credit</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="w-[40px]" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {journals.map((je) => (
                     <React.Fragment key={je.id}>
                       <TableRow
-                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        className={`cursor-pointer hover:bg-muted/50 transition-colors ${je.isVoided ? 'opacity-50' : ''}`}
                         onClick={() => toggleJournal(je.id)}
                       >
                         <TableCell>
@@ -2004,7 +2112,11 @@ export default function FinancialTab() {
                           {formatKES(je.totalCredit)}
                         </TableCell>
                         <TableCell>
-                          {je.isPosted ? (
+                          {je.isVoided ? (
+                            <Badge className="text-[10px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800 gap-1">
+                              <Ban className="h-2.5 w-2.5" /> VOIDED
+                            </Badge>
+                          ) : je.isPosted ? (
                             <Badge className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800 gap-1">
                               <FileCheck className="h-2.5 w-2.5" /> Posted
                             </Badge>
@@ -2014,10 +2126,26 @@ export default function FinancialTab() {
                             </Badge>
                           )}
                         </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              {!je.isVoided && (
+                                <DropdownMenuItem onClick={() => setVoidJournalTarget(je)} className="gap-2 cursor-pointer text-orange-600 focus:text-orange-600">
+                                  <Ban className="h-4 w-4" /> Void Entry
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
                       </TableRow>
                       {expandedJournals.has(je.id) && je.lines && je.lines.length > 0 && (
                         <TableRow>
-                          <TableCell colSpan={8} className="bg-muted/20 p-0">
+                          <TableCell colSpan={9} className="bg-muted/20 p-0">
                             <div className="px-12 py-3 space-y-1 animate-in fade-in-0 slide-in-from-top-1 duration-200">
                               <p className="text-xs font-medium text-muted-foreground mb-2">Journal Entry Lines</p>
                               {je.lines.map((line) => (
@@ -2254,7 +2382,9 @@ export default function FinancialTab() {
                       </TableCell>
                       {li === 0 ? (
                         <TableCell rowSpan={je.lines?.length || 1} className="align-top">
-                          {je.isPosted ? (
+                          {je.isVoided ? (
+                            <Badge className="text-[9px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">VOIDED</Badge>
+                          ) : je.isPosted ? (
                             <Badge className="text-[9px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Posted</Badge>
                           ) : (
                             <Badge variant="outline" className="text-[9px]">Draft</Badge>
@@ -2265,7 +2395,7 @@ export default function FinancialTab() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                       No journal entries found
                     </TableCell>
                   </TableRow>
@@ -2516,7 +2646,7 @@ export default function FinancialTab() {
               <Badge variant="outline" className="text-xs">{expenses.length} records</Badge>
               {expenses.length > 0 && (
                 <span className="text-xs font-medium text-orange-600">
-                  Total: {formatKES(expenses.reduce((s, e) => s + e.amount, 0))}
+                  Total: {formatKES(expenses.filter(e => e.status !== 'VOIDED').reduce((s, e) => s + e.amount, 0))}
                 </span>
               )}
               <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowExpenseDialog(true)}>
@@ -2542,11 +2672,13 @@ export default function FinancialTab() {
                     <TableHead>Category</TableHead>
                     <TableHead>Payment</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-[40px]" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {expenses.map((exp) => (
-                    <TableRow key={exp.id}>
+                    <TableRow key={exp.id} className={exp.status === 'VOIDED' ? 'opacity-50' : ''}>
                       <TableCell className="text-sm">{formatDate(exp.createdAt)}</TableCell>
                       <TableCell className="text-sm max-w-[200px] truncate">{exp.description}</TableCell>
                       <TableCell>
@@ -2556,6 +2688,43 @@ export default function FinancialTab() {
                       <TableCell className="text-right font-medium text-sm text-orange-600 dark:text-orange-400">
                         {formatKES(exp.amount)}
                       </TableCell>
+                      <TableCell>
+                        {exp.status === 'VOIDED' ? (
+                          <Badge className="text-[9px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800 gap-1">
+                            <Ban className="h-2.5 w-2.5" /> VOIDED
+                          </Badge>
+                        ) : (
+                          <Badge className="text-[9px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800 gap-1">
+                            <CheckCircle2 className="h-2.5 w-2.5" /> Active
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()}>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            {exp.status !== 'VOIDED' && (
+                              <DropdownMenuItem onClick={() => openEditExpense(exp)} className="gap-2 cursor-pointer">
+                                <Edit2 className="h-4 w-4" /> Edit Expense
+                              </DropdownMenuItem>
+                            )}
+                            {exp.status !== 'VOIDED' && (
+                              <DropdownMenuItem onClick={() => setVoidExpenseTarget(exp)} className="gap-2 cursor-pointer text-orange-600 focus:text-orange-600">
+                                <Ban className="h-4 w-4" /> Void Expense
+                              </DropdownMenuItem>
+                            )}
+                            {exp.status === 'VOIDED' && (
+                              <DropdownMenuItem onClick={() => setDeleteExpenseTarget(exp)} className="gap-2 cursor-pointer text-red-600 focus:text-red-600">
+                                <Trash2 className="h-4 w-4" /> Delete Permanently
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -2564,6 +2733,161 @@ export default function FinancialTab() {
           )}
         </CardContent>
       </Card>
+
+      {/* Edit Expense Dialog */}
+      <Dialog open={!!editExpense} onOpenChange={(open) => { if (!open) setEditExpense(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit2 className="h-5 w-5 text-orange-600" /> Edit Expense
+            </DialogTitle>
+            <DialogDescription>Update expense details</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Input
+                placeholder="e.g. Monthly rent payment"
+                value={editExpenseForm.description}
+                onChange={(e) => setEditExpenseForm(prev => ({ ...prev, description: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Amount (KES)</Label>
+              <Input
+                type="number"
+                placeholder="Enter amount"
+                min="1"
+                value={editExpenseForm.amount}
+                onChange={(e) => setEditExpenseForm(prev => ({ ...prev, amount: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Select value={editExpenseForm.category} onValueChange={(val) => setEditExpenseForm(prev => ({ ...prev, category: val }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="RENT">Rent</SelectItem>
+                    <SelectItem value="SALARIES">Salaries</SelectItem>
+                    <SelectItem value="UTILITIES">Utilities</SelectItem>
+                    <SelectItem value="TRANSPORT">Transport</SelectItem>
+                    <SelectItem value="MAINTENANCE">Maintenance</SelectItem>
+                    <SelectItem value="SUPPLIES">Supplies</SelectItem>
+                    <SelectItem value="BAD_DEBT">Bad Debt</SelectItem>
+                    <SelectItem value="OTHER">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Payment Method</Label>
+                <Select value={editExpenseForm.paymentMethod} onValueChange={(val) => setEditExpenseForm(prev => ({ ...prev, paymentMethod: val }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CASH">💵 Cash</SelectItem>
+                    <SelectItem value="MPESA">📱 M-Pesa</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Notes (optional)</Label>
+              <Textarea
+                placeholder="Additional notes..."
+                value={editExpenseForm.notes}
+                onChange={(e) => setEditExpenseForm(prev => ({ ...prev, notes: e.target.value }))}
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditExpense(null)}>Cancel</Button>
+            <Button onClick={handleUpdateExpense} disabled={updateExpenseMutation.isPending} className="bg-orange-600 hover:bg-orange-700">
+              {updateExpenseMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+              Update Expense
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Void Expense Confirmation */}
+      <AlertDialog open={!!voidExpenseTarget} onOpenChange={(open) => { if (!open) setVoidExpenseTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Ban className="h-5 w-5 text-orange-600" /> Void Expense
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to void the expense &ldquo;{voidExpenseTarget?.description}&rdquo; ({formatKES(voidExpenseTarget?.amount || 0)})?
+              This will also void the associated journal entry. This action can be undone by an admin but the entry will be marked as voided.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => voidExpenseTarget && voidExpenseMutation.mutate(voidExpenseTarget.id)}
+              disabled={voidExpenseMutation.isPending}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              {voidExpenseMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Void Expense
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Expense Confirmation */}
+      <AlertDialog open={!!deleteExpenseTarget} onOpenChange={(open) => { if (!open) setDeleteExpenseTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-600" /> Delete Expense Permanently
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to permanently delete the voided expense &ldquo;{deleteExpenseTarget?.description}&rdquo;?
+              This action cannot be undone. The expense record and all associated data will be removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteExpenseTarget && deleteExpenseMutation.mutate(deleteExpenseTarget.id)}
+              disabled={deleteExpenseMutation.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleteExpenseMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Delete Permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Void Journal Entry Confirmation */}
+      <AlertDialog open={!!voidJournalTarget} onOpenChange={(open) => { if (!open) setVoidJournalTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Ban className="h-5 w-5 text-orange-600" /> Void Journal Entry
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to void journal entry {voidJournalTarget?.entryNumber}?
+              {voidJournalTarget?.referenceType === 'EXPENSE' && ' This will also void the associated expense.'}
+              Voided entries remain in the ledger but are marked as voided and excluded from calculations.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => voidJournalTarget && voidJournalEntryMutation.mutate(voidJournalTarget.id)}
+              disabled={voidJournalEntryMutation.isPending}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              {voidJournalEntryMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Void Entry
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

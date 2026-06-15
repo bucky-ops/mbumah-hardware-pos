@@ -230,9 +230,9 @@ export default function InvoicesTab() {
   });
 
   // ── Derived data ──
-  const rawInvoices: InvoiceItem[] = (invoicesData?.data as InvoiceItem[]) || [];
-  const customers: CustomerItem[] = (customersData?.data as CustomerItem[]) || [];
-  const products: ProductListItem[] = (productsData?.data as ProductListItem[]) || [];
+  const rawInvoices: InvoiceItem[] = Array.isArray(invoicesData?.data) ? invoicesData.data : [];
+  const customers: CustomerItem[] = Array.isArray(customersData?.data) ? customersData.data : [];
+  const products: ProductListItem[] = Array.isArray(productsData?.data) ? productsData.data : [];
   const invoiceDetail = invoiceDetailData?.data as InvoiceItem | undefined;
 
   // Filter by search

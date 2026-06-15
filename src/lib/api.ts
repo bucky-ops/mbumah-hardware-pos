@@ -302,6 +302,62 @@ export const customersApi = {
   },
 };
 
+export interface CustomerCreditItem {
+  id: string;
+  storeId: string;
+  customerId: string;
+  amount: number;
+  creditType: string;
+  balance: number;
+  reference: string | null;
+  description: string | null;
+  status: string;
+  voidedAt: string | null;
+  voidedBy: string | null;
+  voidReason: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  customer?: { id: string; name: string; phone: string | null };
+}
+
+export const customerCreditsApi = {
+  list: async (params?: { storeId?: string; customerId?: string; creditType?: string; status?: string; page?: number; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.storeId) query.set('storeId', params.storeId);
+    if (params?.customerId) query.set('customerId', params.customerId);
+    if (params?.creditType) query.set('creditType', params.creditType);
+    if (params?.status) query.set('status', params.status);
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    return request<CustomerCreditItem[]>(`/customer-credits?${query.toString()}`);
+  },
+
+  get: async (id: string) => {
+    return request<CustomerCreditItem>(`/customer-credits/${id}`);
+  },
+
+  create: async (data: { storeId: string; customerId: string; amount: number; creditType: string; reference?: string; description?: string; createdBy?: string }) => {
+    return request<CustomerCreditItem>('/customer-credits', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: async (id: string, data: { amount?: number; creditType?: string; reference?: string | null; description?: string | null }) => {
+    return request<CustomerCreditItem>(`/customer-credits/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: string) => {
+    return request<CustomerCreditItem>(`/customer-credits/${id}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
 
 export interface TransactionItem {
   id: string;
@@ -420,8 +476,11 @@ export interface ExpenseItem {
   category: string;
   paidBy: string;
   paymentMethod: string;
+  status: string;
   journalEntryId: string | null;
   notes: string | null;
+  voidedAt: string | null;
+  voidedBy: string | null;
   createdAt: string;
   updatedAt: string;
   store?: { id: string; name: string; location: string | null };
@@ -443,6 +502,20 @@ export const expensesApi = {
     return request<ExpenseItem>('/expenses', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  },
+
+  update: async (id: string, data: { description?: string; amount?: number; category?: string; paymentMethod?: string; notes?: string }) => {
+    return request<ExpenseItem>(`/expenses/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: string, hardDelete?: boolean) => {
+    const query = hardDelete ? '?hardDelete=true' : '';
+    return request<ExpenseItem>(`/expenses/${id}${query}`, {
+      method: 'DELETE',
     });
   },
 };
@@ -588,7 +661,10 @@ export interface JournalEntryItem {
   totalDebit: number;
   totalCredit: number;
   isPosted: boolean;
+  isVoided: boolean;
   postedAt: string | null;
+  voidedAt: string | null;
+  voidedBy: string | null;
   createdBy: string | null;
   createdAt: string;
   lines?: JournalEntryLineItem[];
@@ -629,6 +705,18 @@ export const financialApi = {
     return request<JournalEntryItem>('/financial/journal', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  },
+
+  voidJournalEntry: async (id: string) => {
+    return request<JournalEntryItem>(`/financial/journal/${id}`, {
+      method: 'PUT',
+    });
+  },
+
+  voidPayment: async (id: string) => {
+    return request(`/financial/payments/${id}`, {
+      method: 'PUT',
     });
   },
 
@@ -1695,3 +1783,119 @@ export function formatRelativeTime(date: string | Date): string {
   if (diffWeek < 4) return `${diffWeek} week${diffWeek !== 1 ? 's' : ''} ago`;
   return formatDate(date);
 }
+
+// ── Banking API ────────────────────────────────────────────
+
+export interface BankAccountItem {
+  id: string;
+  storeId: string;
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  branch: string | null;
+  swiftCode: string | null;
+  currency: string;
+  openingBalance: number;
+  currentBalance: number;
+  accountType: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BankTransactionItem {
+  id: string;
+  bankAccountId: string;
+  transactionDate: string;
+  transactionType: string;
+  amount: number;
+  balanceAfter: number;
+  description: string | null;
+  reference: string | null;
+  isReconciled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BankReconciliationItem {
+  id: string;
+  bankAccountId: string;
+  statementDate: string;
+  statementBalance: number;
+  bookBalance: number;
+  difference: number;
+  status: string;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MpesaReconciliationItem {
+  id: string;
+  bankTransactionId: string;
+  mpesaTransactionId: string;
+  matchedAmount: number;
+  matchStatus: string;
+  createdAt: string;
+}
+
+export const bankingApi = {
+  accounts: {
+    list: async (params?: { storeId?: string; accountType?: string; isActive?: boolean; search?: string; page?: number; limit?: number }) => {
+      const query = new URLSearchParams();
+      if (params?.storeId) query.set('storeId', params.storeId);
+      if (params?.accountType) query.set('accountType', params.accountType);
+      if (params?.isActive !== undefined) query.set('isActive', String(params.isActive));
+      if (params?.search) query.set('search', params.search);
+      if (params?.page) query.set('page', String(params.page));
+      if (params?.limit) query.set('limit', String(params.limit));
+      return request<BankAccountItem[]>(`/banking/accounts?${query.toString()}`);
+    },
+    create: async (data: { storeId: string; bankName: string; accountName: string; accountNumber: string; branch?: string; swiftCode?: string; currency?: string; openingBalance?: number; accountType?: string }) => {
+      return request<BankAccountItem>('/banking/accounts', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+  },
+  transactions: {
+    list: async (params?: { bankAccountId?: string; storeId?: string; transactionType?: string; isReconciled?: boolean; dateFrom?: string; dateTo?: string; search?: string; page?: number; limit?: number }) => {
+      const query = new URLSearchParams();
+      if (params?.bankAccountId) query.set('bankAccountId', params.bankAccountId);
+      if (params?.storeId) query.set('storeId', params.storeId);
+      if (params?.transactionType) query.set('transactionType', params.transactionType);
+      if (params?.isReconciled !== undefined) query.set('isReconciled', String(params.isReconciled));
+      if (params?.dateFrom) query.set('dateFrom', params.dateFrom);
+      if (params?.dateTo) query.set('dateTo', params.dateTo);
+      if (params?.search) query.set('search', params.search);
+      if (params?.page) query.set('page', String(params.page));
+      if (params?.limit) query.set('limit', String(params.limit));
+      return request<BankTransactionItem[]>(`/banking/transactions?${query.toString()}`);
+    },
+    create: async (data: { bankAccountId: string; transactionDate: string; transactionType: string; amount: number; description?: string; reference?: string }) => {
+      return request<BankTransactionItem>('/banking/transactions', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+  },
+  reconciliations: {
+    list: async (params?: { bankAccountId?: string; storeId?: string; status?: string; dateFrom?: string; dateTo?: string; page?: number; limit?: number }) => {
+      const query = new URLSearchParams();
+      if (params?.bankAccountId) query.set('bankAccountId', params.bankAccountId);
+      if (params?.storeId) query.set('storeId', params.storeId);
+      if (params?.status) query.set('status', params.status);
+      if (params?.dateFrom) query.set('dateFrom', params.dateFrom);
+      if (params?.dateTo) query.set('dateTo', params.dateTo);
+      if (params?.page) query.set('page', String(params.page));
+      if (params?.limit) query.set('limit', String(params.limit));
+      return request<BankReconciliationItem[]>(`/banking/reconciliations?${query.toString()}`);
+    },
+    create: async (data: { bankAccountId: string; statementDate: string; statementBalance: number; bookBalance: number; notes?: string }) => {
+      return request<BankReconciliationItem>('/banking/reconciliations', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+  },
+};
