@@ -1252,7 +1252,7 @@ function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonEle
 
       {/* Global Search Dialog */}
       <Dialog open={searchOpen} onOpenChange={(open) => { setSearchOpen(open); if (!open) setSearchQuery(''); }}>
-        <DialogContent className="sm:max-w-lg p-0 gap-0">
+        <DialogContent className="sm:max-w-lg p-0 gap-0" aria-describedby={undefined}>
           <div className="flex items-center border-b px-4 py-3">
             <Search className="h-4 w-4 text-muted-foreground shrink-0 mr-2" />
             <Input
@@ -2728,6 +2728,7 @@ function POSTab() {
               <PartyPopper className="h-5 w-5 text-primary" />
               Receipt
             </DialogTitle>
+            <DialogDescription className="sr-only">Receipt preview</DialogDescription>
           </DialogHeader>
           {lastTransaction && (
             <div className="receipt-content receipt-printable space-y-4 text-sm" id="receipt-content">

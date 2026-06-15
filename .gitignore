@@ -70,3 +70,11 @@ download/
 .zscripts/
 # Screenshots directory (spec images)
 screenshots/
+.env.local
+
+# Database
+*.db
+*.db-journal
+
+# Runner PID
+/tmp/

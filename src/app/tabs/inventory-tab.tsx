@@ -1348,6 +1348,7 @@ export default function InventoryTab() {
                 </>
               )}
             </DialogTitle>
+            <DialogDescription className="sr-only">Product details</DialogDescription>
           </DialogHeader>
           {detailProduct && (() => {
             const profitMargin = detailProduct.pricePerUnit > 0

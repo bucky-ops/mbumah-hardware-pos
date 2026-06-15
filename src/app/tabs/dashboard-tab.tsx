@@ -1528,6 +1528,7 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
       const res = await shiftsApi.getCurrent(storeId, userId);
       return res.data;
     },
+    enabled: !!storeId && !!user?.id,
     refetchInterval: 15000,
   });
 

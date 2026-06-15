@@ -27,6 +27,28 @@ export type AccountCode = (typeof ACCOUNT_CODES)[keyof typeof ACCOUNT_CODES];
 
 const accountCache = new Map<string, string>();
 
+// Default account names for auto-creation
+const ACCOUNT_DEFAULTS: Record<string, { name: string; type: string; description: string }> = {
+  '1000': { name: 'Cash on Hand', type: 'ASSET', description: 'Physical cash in drawer' },
+  '1100': { name: 'M-Pesa Account', type: 'ASSET', description: 'M-Pesa mobile money account' },
+  '1200': { name: 'Accounts Receivable', type: 'ASSET', description: 'Money owed by customers' },
+  '1300': { name: 'Inventory', type: 'ASSET', description: 'Inventory asset' },
+  '1400': { name: 'Rental Deposits Held', type: 'LIABILITY', description: 'Security deposits held for rentals' },
+  '2000': { name: 'Accounts Payable', type: 'LIABILITY', description: 'Money owed to suppliers' },
+  '2100': { name: 'VAT Payable', type: 'LIABILITY', description: 'VAT collected and owed to KRA' },
+  '2200': { name: 'Customer Deposits', type: 'LIABILITY', description: 'Advance payments from customers' },
+  '3000': { name: 'Owner Equity', type: 'EQUITY', description: 'Owner investment in the business' },
+  '3100': { name: 'Retained Earnings', type: 'EQUITY', description: 'Accumulated profits' },
+  '4000': { name: 'Sales Revenue', type: 'REVENUE', description: 'Revenue from product sales' },
+  '4100': { name: 'Rental Revenue', type: 'REVENUE', description: 'Revenue from equipment rentals' },
+  '4200': { name: 'Late Fee Revenue', type: 'REVENUE', description: 'Revenue from late return fees' },
+  '5000': { name: 'Cost of Goods Sold', type: 'EXPENSE', description: 'Direct cost of products sold' },
+  '5100': { name: 'Rent Expense', type: 'EXPENSE', description: 'Shop rent expense' },
+  '5200': { name: 'Salaries Expense', type: 'EXPENSE', description: 'Employee salaries' },
+  '5300': { name: 'Utilities Expense', type: 'EXPENSE', description: 'Electricity, water, internet' },
+  '5400': { name: 'Bad Debt Expense', type: 'EXPENSE', description: 'Uncollectible customer debts' },
+};
+
 export async function getAccountId(organizationId: string, code: AccountCode): Promise<string> {
   const cacheKey = `${organizationId}:${code}`;
 
@@ -34,13 +56,29 @@ export async function getAccountId(organizationId: string, code: AccountCode): P
     return accountCache.get(cacheKey)!;
   }
 
-  const account = await db.account.findFirst({
+  let account = await db.account.findFirst({
     where: { organizationId, code },
     select: { id: true },
   });
 
+  // Auto-create account if missing
   if (!account) {
-    throw new Error(`Account with code ${code} not found for organization ${organizationId}`);
+    const defaults = ACCOUNT_DEFAULTS[code];
+    if (defaults) {
+      account = await db.account.create({
+        data: {
+          organizationId,
+          code,
+          name: defaults.name,
+          type: defaults.type,
+          description: defaults.description,
+          isActive: true,
+        },
+        select: { id: true },
+      });
+    } else {
+      throw new Error(`Account with code ${code} not found for organization ${organizationId}`);
+    }
   }
 
   accountCache.set(cacheKey, account.id);
@@ -74,11 +112,52 @@ export async function getAccountIds(
       select: { id: true, code: true },
     });
 
+    const foundCodes = new Set(accounts.map(a => a.code));
+
     for (const account of accounts) {
       const cacheKey = `${organizationId}:${account.code}`;
       accountCache.set(cacheKey, account.id);
       const key = codeToKey.get(account.code) || account.code;
       result[key] = account.id;
+    }
+
+    // Auto-create any missing accounts
+    const missingCodes = uncachedCodes.filter(code => !foundCodes.has(code));
+
+    for (const code of missingCodes) {
+      const defaults = ACCOUNT_DEFAULTS[code];
+      if (defaults) {
+        try {
+          const newAccount = await db.account.create({
+            data: {
+              organizationId,
+              code,
+              name: defaults.name,
+              type: defaults.type,
+              description: defaults.description,
+              isActive: true,
+            },
+            select: { id: true },
+          });
+
+          const cacheKey = `${organizationId}:${code}`;
+          accountCache.set(cacheKey, newAccount.id);
+          const key = codeToKey.get(code) || code;
+          result[key] = newAccount.id;
+        } catch {
+          // Account may have been created by another request — try to find it
+          const existing = await db.account.findFirst({
+            where: { organizationId, code },
+            select: { id: true },
+          });
+          if (existing) {
+            const cacheKey = `${organizationId}:${code}`;
+            accountCache.set(cacheKey, existing.id);
+            const key = codeToKey.get(code) || code;
+            result[key] = existing.id;
+          }
+        }
+      }
     }
   }
 
