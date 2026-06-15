@@ -6,6 +6,7 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateReceiptNumber, generateJournalEntryNumber, calculateLineTotal } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, PaymentMethod, PaymentStatus } from '@/lib/types';
+import { checkoutSchema, validateInput } from '@/lib/validations';
 
 async function getTransactionsHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
@@ -113,6 +114,10 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const body = await request.json();
 
+  const validation = validateInput(checkoutSchema, body);
+  if (!validation.success) {
+    return Response.json({ success: false, error: validation.error }, { status: 400 });
+  }
   const {
     storeId,
     customerId,
@@ -122,14 +127,7 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     paymentDetails,
     discountAmount,
     notes,
-  } = body;
-
-    if (!storeId || !cashierId || !items || !Array.isArray(items) || items.length === 0 || !paymentMethod) {
-    return Response.json(
-      { success: false, error: 'storeId, cashierId, items, and paymentMethod are required.' },
-      { status: 400 }
-    );
-  }
+  } = validation.data;
 
   if (!Object.values(PaymentMethod).includes(paymentMethod)) {
     return Response.json(

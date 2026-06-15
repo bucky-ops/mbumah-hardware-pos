@@ -1,6 +1,7 @@
 // Database seed script - runs on first boot if no users exist
 
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -122,7 +123,7 @@ async function main() {
   });
 
   // 3. Seed Super Admin
-  const adminPasswordHash = 'hashed_password123_2024'; // In production, use bcrypt
+  const adminPasswordHash = await bcrypt.hash('password123', 12);
   const superAdmin = await prisma.user.create({
     data: {
       id: 'user_super_admin',
@@ -145,7 +146,7 @@ async function main() {
       storeId: store.id,
       email: 'cashier@mbumahhardware.co.ke',
       name: 'Grace Wanjiku',
-      passwordHash: 'hashed_password123_2024',
+      passwordHash: adminPasswordHash,
       role: 'CASHIER',
       phone: '0759963601',
       isActive: true,
@@ -159,7 +160,7 @@ async function main() {
       storeId: store.id,
       email: 'accountant@mbumahhardware.co.ke',
       name: 'James Otieno',
-      passwordHash: 'hashed_password123_2024',
+      passwordHash: adminPasswordHash,
       role: 'ACCOUNTANT',
       phone: '0787485104',
       isActive: true,
@@ -174,7 +175,7 @@ async function main() {
       storeId: storeThika.id,
       email: 'thika.manager@mbumahhardware.co.ke',
       name: 'David Njoroge',
-      passwordHash: 'hashed_password123_2024',
+      passwordHash: adminPasswordHash,
       role: 'BRANCH_MANAGER',
       phone: '0712345678',
       isActive: true,
@@ -188,7 +189,7 @@ async function main() {
       storeId: storeRuiru.id,
       email: 'ruiru.manager@mbumahhardware.co.ke',
       name: 'Samuel Kibet',
-      passwordHash: 'hashed_password123_2024',
+      passwordHash: adminPasswordHash,
       role: 'BRANCH_MANAGER',
       phone: '0723456789',
       isActive: true,
@@ -202,7 +203,7 @@ async function main() {
       storeId: storeNairobiCbd.id,
       email: 'nairobi.manager@mbumahhardware.co.ke',
       name: 'Mary Akinyi',
-      passwordHash: 'hashed_password123_2024',
+      passwordHash: adminPasswordHash,
       role: 'BRANCH_MANAGER',
       phone: '0734567890',
       isActive: true,
@@ -216,7 +217,7 @@ async function main() {
       storeId: storeNakuru.id,
       email: 'nakuru.manager@mbumahhardware.co.ke',
       name: 'Peter Ruto',
-      passwordHash: 'hashed_password123_2024',
+      passwordHash: adminPasswordHash,
       role: 'BRANCH_MANAGER',
       phone: '0745678901',
       isActive: true,
@@ -231,7 +232,7 @@ async function main() {
       storeId: storeThika.id,
       email: 'thika.cashier@mbumahhardware.co.ke',
       name: 'Lucy Wambui',
-      passwordHash: 'hashed_password123_2024',
+      passwordHash: adminPasswordHash,
       role: 'CASHIER',
       phone: '0719111222',
       isActive: true,
@@ -245,7 +246,7 @@ async function main() {
       storeId: storeRuiru.id,
       email: 'ruiru.cashier@mbumahhardware.co.ke',
       name: 'Diana Muthoni',
-      passwordHash: 'hashed_password123_2024',
+      passwordHash: adminPasswordHash,
       role: 'CASHIER',
       phone: '0728222333',
       isActive: true,
@@ -259,7 +260,7 @@ async function main() {
       storeId: storeNairobiCbd.id,
       email: 'nairobi.cashier@mbumahhardware.co.ke',
       name: 'Vincent Ochieng',
-      passwordHash: 'hashed_password123_2024',
+      passwordHash: adminPasswordHash,
       role: 'CASHIER',
       phone: '0739333444',
       isActive: true,
@@ -273,7 +274,7 @@ async function main() {
       storeId: storeNakuru.id,
       email: 'nakuru.cashier@mbumahhardware.co.ke',
       name: 'Eunice Jeptoo',
-      passwordHash: 'hashed_password123_2024',
+      passwordHash: adminPasswordHash,
       role: 'CASHIER',
       phone: '0740444555',
       isActive: true,
@@ -288,7 +289,7 @@ async function main() {
       storeId: store.id,
       email: 'owner@mbumahhardware.co.ke',
       name: 'Mbumah Hardware Owner',
-      passwordHash: 'hashed_password123_2024',
+      passwordHash: adminPasswordHash,
       role: 'STORE_OWNER',
       phone: '0795191910',
       isActive: true,

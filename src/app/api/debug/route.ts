@@ -1,13 +1,18 @@
-// GET /api/debug - Minimal debug endpoint to diagnose Vercel 500 errors
-// This endpoint checks each component separately to identify the exact failure point
+// GET /api/debug - Debug endpoint for diagnosing deployment issues
+// DISABLED in production — returns 404
 
 export async function GET() {
+  // Block this endpoint entirely in production
+  if (process.env.NODE_ENV === 'production') {
+    return Response.json({ error: 'Not found' }, { status: 404 });
+  }
+
   const results: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
     nodeEnv: process.env.NODE_ENV,
   };
 
-  // 1. Check environment variables
+  // 1. Check environment variables (mask sensitive values)
   const envVars = ['DATABASE_URL', 'DIRECT_URL', 'NEXTAUTH_SECRET', 'JWT_SECRET', 'NEXTAUTH_URL'];
   const envCheck: Record<string, string> = {};
   for (const v of envVars) {
@@ -15,7 +20,7 @@ export async function GET() {
     if (val) {
       envCheck[v] = val.length > 20 ? val.substring(0, 20) + '...' : val;
     } else {
-      envCheck[v] = '❌ NOT SET';
+      envCheck[v] = 'NOT SET';
     }
   }
   results.envVars = envCheck;
@@ -23,8 +28,8 @@ export async function GET() {
   // 2. Check if Prisma Client can be imported
   try {
     const { PrismaClient } = await import('@prisma/client');
-    results.prismaImport = '✅ Success';
-    
+    results.prismaImport = 'Success';
+
     // 3. Try to create a PrismaClient instance
     let client: InstanceType<typeof PrismaClient> | null = null;
     try {
@@ -35,34 +40,31 @@ export async function GET() {
           },
         },
       });
-      results.prismaClientCreate = '✅ Success';
-      
+      results.prismaClientCreate = 'Success';
+
       // 4. Try a simple query
       try {
         const result = await client.$queryRaw`SELECT 1 as test`;
-        results.databaseQuery = { status: '✅ Success', result };
+        results.databaseQuery = { status: 'Success', result };
       } catch (queryErr: unknown) {
         results.databaseQuery = {
-          status: '❌ Failed',
+          status: 'Failed',
           error: queryErr instanceof Error ? queryErr.message : String(queryErr),
-          stack: queryErr instanceof Error ? queryErr.stack : undefined,
         };
       }
-      
+
       // Disconnect
       try { await client.$disconnect(); } catch {}
     } catch (createErr: unknown) {
       results.prismaClientCreate = {
-        status: '❌ Failed',
+        status: 'Failed',
         error: createErr instanceof Error ? createErr.message : String(createErr),
-        stack: createErr instanceof Error ? createErr.stack : undefined,
       };
     }
   } catch (importErr: unknown) {
     results.prismaImport = {
-      status: '❌ Failed',
+      status: 'Failed',
       error: importErr instanceof Error ? importErr.message : String(importErr),
-      stack: importErr instanceof Error ? importErr.stack : undefined,
     };
   }
 
@@ -70,12 +72,12 @@ export async function GET() {
   try {
     const { existsSync, readdirSync } = await import('fs');
     const path = await import('path');
-    
+
     const possiblePaths = [
       './node_modules/.prisma/client',
       './node_modules/@prisma/client',
     ];
-    
+
     const engineCheck: Record<string, unknown> = {};
     for (const p of possiblePaths) {
       try {
@@ -84,7 +86,7 @@ export async function GET() {
           exists: existsSync(resolved),
           files: existsSync(resolved) ? readdirSync(resolved).slice(0, 10) : [],
         };
-      } catch(e) {
+      } catch (e) {
         engineCheck[p] = `Error: ${e}`;
       }
     }

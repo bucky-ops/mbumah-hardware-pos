@@ -6,6 +6,7 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateJournalEntryNumber } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES, type AccountCode } from '@/lib/account-helper';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { createExpenseSchema, validateInput } from '@/lib/validations';
 
 // Expense category -> account code mapping
 const CATEGORY_ACCOUNT_MAP: Record<string, string> = {
@@ -94,6 +95,10 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const body = await request.json();
 
+  const validation = validateInput(createExpenseSchema, body);
+  if (!validation.success) {
+    return Response.json({ success: false, error: validation.error }, { status: 400 });
+  }
   const {
     storeId,
     description,
@@ -102,21 +107,7 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
     paidBy,
     paymentMethod,
     notes,
-  } = body;
-
-    if (!storeId || !description || !amount || !category || !paidBy) {
-    return Response.json(
-      { success: false, error: 'storeId, description, amount, category, and paidBy are required.' },
-      { status: 400 }
-    );
-  }
-
-  if (amount <= 0) {
-    return Response.json(
-      { success: false, error: 'Amount must be greater than zero.' },
-      { status: 400 }
-    );
-  }
+  } = validation.data;
 
   if (!VALID_CATEGORIES.includes(category)) {
     return Response.json(
@@ -125,10 +116,17 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  const expensePaymentMethod = paymentMethod || 'CASH';
-  if (!['CASH', 'MPESA'].includes(expensePaymentMethod)) {
+  if (!paidBy) {
     return Response.json(
-      { success: false, error: 'paymentMethod must be CASH or MPESA.' },
+      { success: false, error: 'paidBy is required.' },
+      { status: 400 }
+    );
+  }
+
+  const expensePaymentMethod = paymentMethod || 'CASH';
+  if (!['CASH', 'MPESA', 'BANK_TRANSFER', 'CHEQUE'].includes(expensePaymentMethod)) {
+    return Response.json(
+      { success: false, error: 'paymentMethod must be CASH, MPESA, BANK_TRANSFER, or CHEQUE.' },
       { status: 400 }
     );
   }

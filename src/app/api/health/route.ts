@@ -1,16 +1,19 @@
 // GET /api/health - Health check endpoint for deployment diagnostics
+// Public endpoint (allowed through middleware) but env values are stripped
+// to avoid leaking secrets.
+
 import { db } from '@/lib/db';
 
 export async function GET() {
   const checks: Record<string, { status: string; detail?: string }> = {};
 
-  // Check environment variables
+  // Check environment variables — only report set/missing, NOT actual values
   const requiredEnvVars = ['DATABASE_URL', 'DIRECT_URL', 'NEXTAUTH_SECRET', 'JWT_SECRET'];
   for (const varName of requiredEnvVars) {
     const value = process.env[varName];
     checks[`env_${varName}`] = {
       status: value ? 'ok' : 'missing',
-      detail: value ? `${value.substring(0, 20)}...` : 'NOT SET',
+      // Deliberately do NOT include any part of the value
     };
   }
 

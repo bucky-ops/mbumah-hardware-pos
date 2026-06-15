@@ -1,11 +1,15 @@
 // GET/PUT /api/system-config
+// Requires SUPER_ADMIN role
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
+import { requireAuth, AuthSession } from '@/lib/auth';
 
-async function getSystemConfigHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function getSystemConfigHandler(
+  request: NextRequest,
+  _session: AuthSession
+): Promise<Response> {
   const { searchParams } = new URL(request.url);
 
   const category = searchParams.get('category') || '';
@@ -14,7 +18,7 @@ async function getSystemConfigHandler(...args: unknown[]): Promise<Response> {
     orderBy: { key: 'asc' },
   });
 
-    const categorized: Record<string, typeof configs> = {
+  const categorized: Record<string, typeof configs> = {
     General: [],
     POS: [],
     Inventory: [],
@@ -40,7 +44,7 @@ async function getSystemConfigHandler(...args: unknown[]): Promise<Response> {
     }
   }
 
-    const result = category && categorized[category]
+  const result = category && categorized[category]
     ? { [category]: categorized[category] }
     : categorized;
 
@@ -51,8 +55,10 @@ async function getSystemConfigHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-async function updateSystemConfigHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function updateSystemConfigHandler(
+  request: NextRequest,
+  session: AuthSession
+): Promise<Response> {
   const body = await request.json();
 
   const { id, key, value } = body;
@@ -92,7 +98,9 @@ async function updateSystemConfigHandler(...args: unknown[]): Promise<Response> 
     component: 'SYSTEM',
     severity: 'INFO',
     message: `Config "${existing.key}" updated from "${existing.value}" to "${value}"`,
-    metadata: { key: existing.key, oldValue: existing.value, newValue: value },
+    userId: session.userId,
+    storeId: session.storeId || undefined,
+    metadata: { key: existing.key, oldValue: existing.value, newValue: value, updatedBy: session.email },
   });
 
   return Response.json({
@@ -101,5 +109,11 @@ async function updateSystemConfigHandler(...args: unknown[]): Promise<Response> 
   });
 }
 
-export const GET = withErrorBoundary(getSystemConfigHandler, 'SYSTEM_CONFIG');
-export const PUT = withErrorBoundary(updateSystemConfigHandler, 'SYSTEM_CONFIG');
+export const GET = withErrorBoundary(
+  requireAuth(getSystemConfigHandler, { roles: ['SUPER_ADMIN'] }),
+  'SYSTEM_CONFIG'
+);
+export const PUT = withErrorBoundary(
+  requireAuth(updateSystemConfigHandler, { roles: ['SUPER_ADMIN'] }),
+  'SYSTEM_CONFIG'
+);

@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateGiftCardCode } from '@/lib/helpers';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { createGiftCardSchema, validateInput } from '@/lib/validations';
 
 const VALID_STATUSES = ['ACTIVE', 'REDEEMED', 'EXPIRED', 'CANCELLED', 'PARTIALLY_REDEEMED'];
 const VALID_REASONS = [
@@ -78,41 +79,26 @@ async function createGiftCardHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const body = await request.json();
 
+  const validation = validateInput(createGiftCardSchema, body);
+  if (!validation.success) {
+    return Response.json({ success: false, error: validation.error }, { status: 400 });
+  }
   const {
     storeId,
     reason,
     initialBalance,
-    currency,
     recipientName,
     recipientPhone,
     recipientEmail,
     notes,
-    issuedBy,
-    issuedTo,
-    expiresAt,
     autoAdjustItems,
-  } = body;
+  } = validation.data;
 
-  if (!storeId) {
-    return Response.json(
-      { success: false, error: 'storeId is required.' },
-      { status: 400 }
-    );
-  }
-
-  if (!reason || !VALID_REASONS.includes(reason)) {
-    return Response.json(
-      { success: false, error: `reason is required and must be one of: ${VALID_REASONS.join(', ')}` },
-      { status: 400 }
-    );
-  }
-
-  if (initialBalance === undefined || initialBalance === null || initialBalance <= 0) {
-    return Response.json(
-      { success: false, error: 'initialBalance must be a positive number.' },
-      { status: 400 }
-    );
-  }
+  // Fields from body that are not in the schema but still used
+  const currency = (body as Record<string, unknown>).currency || 'KES';
+  const issuedBy = (body as Record<string, unknown>).issuedBy || null;
+  const issuedTo = (body as Record<string, unknown>).issuedTo || null;
+  const expiresAt = (body as Record<string, unknown>).expiresAt || validation.data.expiryDate || null;
 
   // Verify store exists
   const store = await db.store.findUnique({ where: { id: storeId } });

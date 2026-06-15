@@ -1,11 +1,15 @@
 // GET /api/system-logs
+// Requires SUPER_ADMIN or ACCOUNTANT role
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
+import { requireAuth, AuthSession } from '@/lib/auth';
 
-async function getSystemLogsHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function getSystemLogsHandler(
+  request: NextRequest,
+  session: AuthSession
+): Promise<Response> {
   const { searchParams } = new URL(request.url);
 
   const storeId = searchParams.get('storeId') || '';
@@ -23,8 +27,13 @@ async function getSystemLogsHandler(...args: unknown[]): Promise<Response> {
 
   const where: Record<string, unknown> = {};
 
-  if (storeId) {
-    where.storeId = storeId;
+  // Non-SUPER_ADMIN users can only see logs from their own store
+  if (session.role !== 'SUPER_ADMIN') {
+    where.storeId = session.storeId || '';
+  } else {
+    if (storeId) {
+      where.storeId = storeId;
+    }
   }
 
   if (component) {
@@ -80,22 +89,27 @@ async function getSystemLogsHandler(...args: unknown[]): Promise<Response> {
     db.systemLog.count({ where }),
   ]);
 
-    const parsedLogs = logs.map((log) => ({
+  const parsedLogs = logs.map((log) => ({
     ...log,
     metadata: log.metadata ? (() => {
       try { return JSON.parse(log.metadata); } catch { return log.metadata; }
     })() : null,
   }));
 
-    const severityCounts = await db.systemLog.groupBy({
+  // Use the same store-scoped where clause for aggregations
+  const summaryWhere = session.role !== 'SUPER_ADMIN'
+    ? { storeId: session.storeId || '' }
+    : storeId ? { storeId } : {};
+
+  const severityCounts = await db.systemLog.groupBy({
     by: ['severity'],
-    where: storeId ? { storeId } : {},
+    where: summaryWhere,
     _count: true,
   });
 
   const componentCounts = await db.systemLog.groupBy({
     by: ['component'],
-    where: storeId ? { storeId } : {},
+    where: summaryWhere,
     _count: true,
     orderBy: { _count: { component: 'desc' } },
   });
@@ -122,4 +136,7 @@ async function getSystemLogsHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const GET = withErrorBoundary(getSystemLogsHandler, 'SYSTEM_LOGS');
+export const GET = withErrorBoundary(
+  requireAuth(getSystemLogsHandler, { roles: ['SUPER_ADMIN', 'ACCOUNTANT'] }),
+  'SYSTEM_LOGS'
+);

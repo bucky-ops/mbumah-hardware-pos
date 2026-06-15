@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { createCustomerSchema, validateInput } from '@/lib/validations';
 
 async function getCustomersHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
@@ -91,6 +92,10 @@ async function createCustomerHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const body = await request.json();
 
+  const validation = validateInput(createCustomerSchema, body);
+  if (!validation.success) {
+    return Response.json({ success: false, error: validation.error }, { status: 400 });
+  }
   const {
     storeId,
     name,
@@ -99,16 +104,10 @@ async function createCustomerHandler(...args: unknown[]): Promise<Response> {
     address,
     idNumber,
     debtLimit,
-    preferredChannel,
-    isActive,
-  } = body;
+  } = validation.data;
 
-  if (!storeId || !name) {
-    return Response.json(
-      { success: false, error: 'storeId and name are required.' },
-      { status: 400 }
-    );
-  }
+  const preferredChannel = (body as Record<string, unknown>).preferredChannel || 'SMS';
+  const isActive = (body as Record<string, unknown>).isActive ?? true;
 
     if (phone) {
     const existing = await db.customer.findFirst({

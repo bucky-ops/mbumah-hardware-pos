@@ -1,11 +1,17 @@
 // GET/POST /api/users
+// Requires SUPER_ADMIN or STORE_OWNER role
 
 import { NextRequest } from 'next/server';
+import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
+import { requireAuth, AuthSession } from '@/lib/auth';
+import { createUserSchema, validateInput } from '@/lib/validations';
 
-async function getUsersHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function getUsersHandler(
+  request: NextRequest,
+  session: AuthSession
+): Promise<Response> {
   const { searchParams } = new URL(request.url);
 
   const storeId = searchParams.get('storeId') || '';
@@ -18,7 +24,13 @@ async function getUsersHandler(...args: unknown[]): Promise<Response> {
 
   const where: Record<string, unknown> = {};
 
-  if (storeId) where.storeId = storeId;
+  // Non-SUPER_ADMIN users can only see users from their own store
+  if (session.role !== 'SUPER_ADMIN') {
+    where.storeId = session.storeId || '';
+  } else {
+    if (storeId) where.storeId = storeId;
+  }
+
   if (organizationId) where.organizationId = organizationId;
   if (role) where.role = role;
   if (isActive !== '') where.isActive = isActive === 'true';
@@ -52,7 +64,7 @@ async function getUsersHandler(...args: unknown[]): Promise<Response> {
     db.user.count({ where }),
   ]);
 
-    const activeSessions = await db.session.count({
+  const activeSessions = await db.session.count({
     where: { expiresAt: { gt: new Date() } },
   });
 
@@ -69,20 +81,19 @@ async function getUsersHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-async function createUserHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function createUserHandler(
+  request: NextRequest,
+  session: AuthSession
+): Promise<Response> {
   const body = await request.json();
 
-  const { name, email, role, phone, storeId, organizationId, password } = body;
-
-  if (!name || !email || !role || !password) {
-    return Response.json(
-      { success: false, error: 'Name, email, role, and password are required' },
-      { status: 400 }
-    );
+  const validation = validateInput(createUserSchema, body);
+  if (!validation.success) {
+    return Response.json({ success: false, error: validation.error }, { status: 400 });
   }
+  const { name, email, role, phone, storeId, organizationId, password } = validation.data;
 
-    const existing = await db.user.findUnique({ where: { email } });
+  const existing = await db.user.findUnique({ where: { email } });
   if (existing) {
     return Response.json(
       { success: false, error: 'A user with this email already exists' },
@@ -90,7 +101,11 @@ async function createUserHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-    const passwordHash = `hashed_${password}_${Date.now()}`;
+  const passwordHash = await bcrypt.hash(password, 12);
+
+  // Non-SUPER_ADMIN users can only create users in their own store
+  const targetStoreId =
+    session.role === 'SUPER_ADMIN' ? (storeId || null) : session.storeId;
 
   const user = await db.user.create({
     data: {
@@ -98,8 +113,8 @@ async function createUserHandler(...args: unknown[]): Promise<Response> {
       email,
       role,
       phone: phone || null,
-      storeId: storeId || null,
-      organizationId: organizationId || 'org_mbumah',
+      storeId: targetStoreId,
+      organizationId: organizationId || session.organizationId,
       passwordHash,
     },
     select: {
@@ -119,15 +134,25 @@ async function createUserHandler(...args: unknown[]): Promise<Response> {
     component: 'AUTH',
     severity: 'INFO',
     message: `User "${name}" (${email}) created with role ${role}`,
-    storeId: storeId || undefined,
-    metadata: { userId: user.id, role },
+    userId: session.userId,
+    storeId: targetStoreId || undefined,
+    metadata: { newUserId: user.id, role, createdBy: session.email },
   });
 
-  return Response.json({
-    success: true,
-    data: user,
-  }, { status: 201 });
+  return Response.json(
+    {
+      success: true,
+      data: user,
+    },
+    { status: 201 }
+  );
 }
 
-export const GET = withErrorBoundary(getUsersHandler, 'USERS');
-export const POST = withErrorBoundary(createUserHandler, 'USERS');
+export const GET = withErrorBoundary(
+  requireAuth(getUsersHandler, { roles: ['SUPER_ADMIN', 'STORE_OWNER'] }),
+  'USERS'
+);
+export const POST = withErrorBoundary(
+  requireAuth(createUserHandler, { roles: ['SUPER_ADMIN', 'STORE_OWNER'] }),
+  'USERS'
+);
