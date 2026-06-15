@@ -8,7 +8,8 @@ import {
   ArrowUpDown, Filter, CreditCard, Calendar, Phone,
   Mail, User, FileText, AlertTriangle, CheckCircle2,
   XCircle, Clock, ChevronDown, Settings2, Sparkles,
-  TrendingDown, TrendingUp, Ban, RefreshCw, Wallet
+  TrendingDown, TrendingUp, Ban, RefreshCw, Wallet,
+  MoreHorizontal, Pencil, Trash2, ShieldAlert, Info,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
@@ -57,6 +58,11 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenuLabel, DropdownMenuGroup,
+} from '@/components/ui/dropdown-menu';
 
 // ─── Props ────────────────────────────────────────────────────────
 interface GiftCardsTabProps {
@@ -186,6 +192,9 @@ function canCancel(role: string): boolean {
 }
 function canAdjust(role: string): boolean {
   return ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'].includes(role);
+}
+function canHardDelete(role: string): boolean {
+  return role === 'SUPER_ADMIN';
 }
 function canViewDetails(role: string): boolean {
   return true; // All roles can view
@@ -344,8 +353,10 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
   // Dialog states
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [redeemDialogOpen, setRedeemDialogOpen] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
 
   // Selected card for detail/edit
@@ -377,7 +388,27 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
   });
 
   // Edit form state
-  const [editForm, setEditForm] = useState<Partial<GiftCardItem>>({});
+  const [editForm, setEditForm] = useState<{
+    reason: string;
+    recipientName: string;
+    recipientPhone: string;
+    recipientEmail: string;
+    expiryDate: string;
+    autoAdjustItems: boolean;
+    isVisible: boolean;
+    notes: string;
+    initialBalance: string;
+  }>({
+    reason: '',
+    recipientName: '',
+    recipientPhone: '',
+    recipientEmail: '',
+    expiryDate: '',
+    autoAdjustItems: true,
+    isVisible: true,
+    notes: '',
+    initialBalance: '',
+  });
 
   // Redeem form state
   const [redeemForm, setRedeemForm] = useState<{
@@ -478,21 +509,35 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
   const updateMutation = useMutation({
     mutationFn: async () => {
       if (!selectedCard) throw new Error('No card selected');
-      return giftCardsApi.update(selectedCard.id, {
+      const payload: Record<string, unknown> = {
         reason: editForm.reason,
         recipientName: editForm.recipientName || undefined,
         recipientPhone: editForm.recipientPhone || undefined,
         recipientEmail: editForm.recipientEmail || undefined,
-        expiresAt: editForm.expiryDate || undefined,
         autoAdjustItems: editForm.autoAdjustItems,
         isVisible: editForm.isVisible,
         notes: editForm.notes || undefined,
-      });
+      };
+      // Handle expiry date
+      if (editForm.expiryDate) {
+        payload.expiryDate = editForm.expiryDate;
+      } else {
+        payload.expiryDate = null;
+      }
+      // Handle initial balance if changed
+      if (editForm.initialBalance) {
+        const newBalance = parseFloat(editForm.initialBalance);
+        if (!isNaN(newBalance) && newBalance !== selectedCard.initialBalance) {
+          payload.initialBalance = newBalance;
+        }
+      }
+      return giftCardsApi.update(selectedCard.id, payload);
     },
     onSuccess: () => {
       toast.success('Gift card updated successfully');
       queryClient.invalidateQueries({ queryKey: ['giftCards'] });
-      setDetailDialogOpen(false);
+      setEditDialogOpen(false);
+      setSelectedCard(null);
     },
     onError: (err: Error) => {
       toast.error(err.message || 'Failed to update gift card');
@@ -562,6 +607,23 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
     },
   });
 
+  const hardDeleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedCard) throw new Error('No card selected');
+      return giftCardsApi.delete(selectedCard.id, true);
+    },
+    onSuccess: () => {
+      toast.success('Gift card permanently deleted');
+      queryClient.invalidateQueries({ queryKey: ['giftCards'] });
+      setDeleteDialogOpen(false);
+      setDetailDialogOpen(false);
+      setSelectedCard(null);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Failed to delete gift card');
+    },
+  });
+
   const toggleVisibilityMutation = useMutation({
     mutationFn: async (card: GiftCardItem) => {
       return giftCardsApi.toggleVisibility(card.id);
@@ -595,17 +657,23 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
 
   const openDetailDialog = useCallback((card: GiftCardItem) => {
     setSelectedCard(card);
+    setDetailDialogOpen(true);
+  }, []);
+
+  const openEditDialog = useCallback((card: GiftCardItem) => {
+    setSelectedCard(card);
     setEditForm({
       reason: card.reason,
-      recipientName: card.recipientName,
-      recipientPhone: card.recipientPhone,
-      recipientEmail: card.recipientEmail,
+      recipientName: card.recipientName ?? '',
+      recipientPhone: card.recipientPhone ?? '',
+      recipientEmail: card.recipientEmail ?? '',
       expiryDate: card.expiryDate ? card.expiryDate.split('T')[0] : '',
       autoAdjustItems: card.autoAdjustItems,
       isVisible: card.isVisible,
-      notes: card.notes,
+      notes: card.notes ?? '',
+      initialBalance: String(card.initialBalance),
     });
-    setDetailDialogOpen(true);
+    setEditDialogOpen(true);
   }, []);
 
   const copyCode = useCallback((code: string) => {
@@ -773,17 +841,19 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
             return (
               <Card
                 key={card.id}
-                className={`group transition-all duration-200 hover:shadow-md cursor-pointer ${
+                className={`group transition-all duration-200 hover:shadow-md ${
                   !card.isVisible ? 'opacity-60' : ''
                 } ${isCardExpired && card.status === 'ACTIVE' ? 'border-amber-300 dark:border-amber-700' : ''}`}
-                onClick={() => {
-                  if (canViewDetails(userRole)) openDetailDialog(card);
-                }}
               >
                 <CardContent className="p-4 space-y-3">
-                  {/* Top row: Code + Status */}
+                  {/* Top row: Code + Status + Actions dropdown */}
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
+                    <div
+                      className="flex items-center gap-1.5 min-w-0 cursor-pointer flex-1"
+                      onClick={() => {
+                        if (canViewDetails(userRole)) openDetailDialog(card);
+                      }}
+                    >
                       <span className="font-mono text-sm font-bold tracking-wider truncate">
                         {card.code}
                       </span>
@@ -806,17 +876,158 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
                         </Tooltip>
                       </TooltipProvider>
                     </div>
-                    <StatusBadge status={card.status as GiftCardStatus} />
+                    <div className="flex items-center gap-1 shrink-0">
+                      <StatusBadge status={card.status as GiftCardStatus} />
+                      {/* ─── Actions Dropdown ─── */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52">
+                          <DropdownMenuLabel className="text-xs text-muted-foreground">
+                            Actions
+                          </DropdownMenuLabel>
+                          <DropdownMenuGroup>
+                            {/* View Details */}
+                            <DropdownMenuItem
+                              onClick={() => openDetailDialog(card)}
+                              className="gap-2 cursor-pointer"
+                            >
+                              <Info className="h-4 w-4" />
+                              View Details
+                            </DropdownMenuItem>
+
+                            {/* Edit */}
+                            {canEdit(userRole) && (
+                              <DropdownMenuItem
+                                onClick={() => openEditDialog(card)}
+                                className="gap-2 cursor-pointer"
+                              >
+                                <Pencil className="h-4 w-4" />
+                                Edit Gift Card
+                              </DropdownMenuItem>
+                            )}
+
+                            {/* Toggle Visibility */}
+                            {canEdit(userRole) && (
+                              <DropdownMenuItem
+                                onClick={() => toggleVisibilityMutation.mutate(card)}
+                                className="gap-2 cursor-pointer"
+                              >
+                                {card.isVisible ? (
+                                  <>
+                                    <EyeOff className="h-4 w-4" />
+                                    Hide Card
+                                  </>
+                                ) : (
+                                  <>
+                                    <Eye className="h-4 w-4" />
+                                    Show Card
+                                  </>
+                                )}
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuGroup>
+
+                          {/* Active card actions */}
+                          {['ACTIVE', 'PARTIALLY_REDEEMED'].includes(card.status) && card.currentBalance > 0 && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                                Card Operations
+                              </DropdownMenuLabel>
+                              <DropdownMenuGroup>
+                                {/* Redeem */}
+                                {canRedeem(userRole) && (
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setSelectedCard(card);
+                                      setRedeemForm({ amount: '', transactionId: '', notes: '' });
+                                      setRedeemDialogOpen(true);
+                                    }}
+                                    className="gap-2 cursor-pointer"
+                                  >
+                                    <TrendingDown className="h-4 w-4 text-green-600" />
+                                    Redeem
+                                  </DropdownMenuItem>
+                                )}
+
+                                {/* Adjust Balance */}
+                                {canAdjust(userRole) && (
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setSelectedCard(card);
+                                      setAdjustForm({ amount: '', reason: '', notes: '' });
+                                      setAdjustDialogOpen(true);
+                                    }}
+                                    className="gap-2 cursor-pointer"
+                                  >
+                                    <TrendingUp className="h-4 w-4 text-cyan-600" />
+                                    Adjust Balance
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuGroup>
+                            </>
+                          )}
+
+                          {/* Cancel / Delete section */}
+                          <DropdownMenuSeparator />
+                          {canCancel(userRole) && ['ACTIVE', 'PARTIALLY_REDEEMED'].includes(card.status) && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedCard(card);
+                                setCancelDialogOpen(true);
+                              }}
+                              className="gap-2 cursor-pointer text-amber-600 dark:text-amber-400 focus:text-amber-600 focus:bg-amber-50 dark:focus:bg-amber-950/30"
+                            >
+                              <Ban className="h-4 w-4" />
+                              Cancel Card
+                            </DropdownMenuItem>
+                          )}
+                          {canHardDelete(userRole) && ['CANCELLED', 'EXPIRED', 'REDEEMED'].includes(card.status) && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedCard(card);
+                                setDeleteDialogOpen(true);
+                              }}
+                              className="gap-2 cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/30"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Delete Permanently
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
 
-                  {/* Balance progress */}
-                  <BalanceProgressBar
-                    current={card.currentBalance}
-                    initial={card.initialBalance}
-                  />
+                  {/* Balance progress - clickable */}
+                  <div
+                    className="cursor-pointer"
+                    onClick={() => {
+                      if (canViewDetails(userRole)) openDetailDialog(card);
+                    }}
+                  >
+                    <BalanceProgressBar
+                      current={card.currentBalance}
+                      initial={card.initialBalance}
+                    />
+                  </div>
 
                   {/* Reason + Auto-adjust */}
-                  <div className="flex items-center justify-between">
+                  <div
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={() => {
+                      if (canViewDetails(userRole)) openDetailDialog(card);
+                    }}
+                  >
                     <ReasonBadge reason={card.reason as GiftCardReason} />
                     <AutoAdjustIndicator
                       autoAdjust={card.autoAdjustItems}
@@ -826,7 +1037,12 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
 
                   {/* Recipient info */}
                   {card.recipientName && (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <div
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer"
+                      onClick={() => {
+                        if (canViewDetails(userRole)) openDetailDialog(card);
+                      }}
+                    >
                       <User className="h-3 w-3 shrink-0" />
                       <span className="truncate">{card.recipientName}</span>
                       {card.recipientPhone && (
@@ -837,7 +1053,12 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
 
                   {/* Expiry + Visibility */}
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1">
+                    <div
+                      className="flex items-center gap-1 cursor-pointer flex-1"
+                      onClick={() => {
+                        if (canViewDetails(userRole)) openDetailDialog(card);
+                      }}
+                    >
                       {card.expiryDate ? (
                         <>
                           <Clock className="h-3 w-3" />
@@ -882,10 +1103,79 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
 
                   {/* Customer link */}
                   {card.customer && (
-                    <div className="text-xs text-muted-foreground">
+                    <div
+                      className="text-xs text-muted-foreground cursor-pointer"
+                      onClick={() => {
+                        if (canViewDetails(userRole)) openDetailDialog(card);
+                      }}
+                    >
                       Linked: <span className="font-medium text-foreground">{card.customer.name}</span>
                     </div>
                   )}
+
+                  {/* Quick action buttons at bottom */}
+                  <div className="flex items-center gap-1.5 pt-1 border-t">
+                    {canEdit(userRole) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs gap-1 flex-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditDialog(card);
+                        }}
+                      >
+                        <Pencil className="h-3 w-3" />
+                        Edit
+                      </Button>
+                    )}
+                    {canRedeem(userRole) && ['ACTIVE', 'PARTIALLY_REDEEMED'].includes(card.status) && card.currentBalance > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs gap-1 flex-1 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedCard(card);
+                          setRedeemForm({ amount: '', transactionId: '', notes: '' });
+                          setRedeemDialogOpen(true);
+                        }}
+                      >
+                        <TrendingDown className="h-3 w-3" />
+                        Redeem
+                      </Button>
+                    )}
+                    {canCancel(userRole) && ['ACTIVE', 'PARTIALLY_REDEEMED'].includes(card.status) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs gap-1 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedCard(card);
+                          setCancelDialogOpen(true);
+                        }}
+                      >
+                        <Ban className="h-3 w-3" />
+                        Cancel
+                      </Button>
+                    )}
+                    {canHardDelete(userRole) && ['CANCELLED', 'EXPIRED', 'REDEEMED'].includes(card.status) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs gap-1 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedCard(card);
+                          setDeleteDialogOpen(true);
+                        }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        Delete
+                      </Button>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             );
@@ -1115,7 +1405,7 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
       </Dialog>
 
       {/* ═══════════════════════════════════════════════════════════ */}
-      {/* DETAIL / EDIT DIALOG                                       */}
+      {/* DETAIL / VIEW DIALOG                                       */}
       {/* ═══════════════════════════════════════════════════════════ */}
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
         <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
@@ -1155,157 +1445,64 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
                 </div>
               </div>
 
-              {/* Editable Fields */}
-              {canEdit(userRole) ? (
-                <div className="grid gap-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="grid gap-1.5">
-                      <Label className="text-xs">Reason</Label>
-                      <Select
-                        value={editForm.reason ?? selectedCard.reason}
-                        onValueChange={(v) => setEditForm(prev => ({ ...prev, reason: v as GiftCardReason }))}
-                      >
-                        <SelectTrigger className="h-9 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(REASON_CONFIG).map(([key, config]) => (
-                            <SelectItem key={key} value={key}>{config.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label className="text-xs">Expiry Date</Label>
-                      <Input
-                        type="date"
-                        value={editForm.expiryDate ?? (selectedCard.expiryDate ? selectedCard.expiryDate.split('T')[0] : '')}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, expiryDate: e.target.value }))}
-                        className="h-9 text-xs"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="grid gap-1.5">
-                      <Label className="text-xs">Recipient Name</Label>
-                      <Input
-                        value={editForm.recipientName ?? selectedCard.recipientName ?? ''}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, recipientName: e.target.value }))}
-                        className="h-9 text-xs"
-                      />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label className="text-xs">Phone</Label>
-                      <Input
-                        value={editForm.recipientPhone ?? selectedCard.recipientPhone ?? ''}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, recipientPhone: e.target.value }))}
-                        className="h-9 text-xs"
-                      />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label className="text-xs">Email</Label>
-                      <Input
-                        value={editForm.recipientEmail ?? selectedCard.recipientEmail ?? ''}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, recipientEmail: e.target.value }))}
-                        className="h-9 text-xs"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-lg border p-3">
-                    <div>
-                      <Label className="text-xs font-medium">Auto-Adjust Visibility</Label>
-                      <p className="text-[10px] text-muted-foreground">
-                        Automatically hide when balance = 0
-                      </p>
-                    </div>
-                    <Switch
-                      checked={editForm.autoAdjustItems ?? selectedCard.autoAdjustItems}
-                      onCheckedChange={(checked) => setEditForm(prev => ({ ...prev, autoAdjustItems: checked }))}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-lg border p-3">
-                    <div>
-                      <Label className="text-xs font-medium">Visible</Label>
-                      <p className="text-[10px] text-muted-foreground">
-                        {editForm.isVisible ?? selectedCard.isVisible ? 'Card is visible in listings' : 'Card is hidden from listings'}
-                      </p>
-                    </div>
-                    <Switch
-                      checked={editForm.isVisible ?? selectedCard.isVisible}
-                      onCheckedChange={(checked) => setEditForm(prev => ({ ...prev, isVisible: checked }))}
-                    />
-                  </div>
-
-                  <div className="grid gap-1.5">
-                    <Label className="text-xs">Notes</Label>
-                    <Textarea
-                      value={editForm.notes ?? selectedCard.notes ?? ''}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, notes: e.target.value }))}
-                      rows={2}
-                      className="text-xs"
-                    />
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={() => updateMutation.mutate()}
-                      disabled={updateMutation.isPending}
-                      className="flex-1"
-                    >
-                      {updateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                      Save Changes
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                /* Read-only view for ACCOUNTANT and CASHIER */
-                <div className="grid gap-2 text-sm">
-                  {selectedCard.recipientName && (
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-muted-foreground" />
-                      <span>{selectedCard.recipientName}</span>
-                      {selectedCard.recipientPhone && <span className="text-muted-foreground">({selectedCard.recipientPhone})</span>}
-                    </div>
-                  )}
-                  {selectedCard.recipientEmail && (
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      <span>{selectedCard.recipientEmail}</span>
-                    </div>
-                  )}
-                  {selectedCard.expiryDate && (
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span>Expires: {formatDate(selectedCard.expiryDate)}</span>
-                    </div>
-                  )}
-                  {selectedCard.notes && (
-                    <div className="flex items-start gap-2">
-                      <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
-                      <span>{selectedCard.notes}</span>
-                    </div>
-                  )}
+              {/* Read-only info */}
+              <div className="grid gap-2 text-sm">
+                {selectedCard.recipientName && (
                   <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">Created:</span>
-                    <span>{formatDateTime(selectedCard.createdAt)}</span>
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span>{selectedCard.recipientName}</span>
+                    {selectedCard.recipientPhone && <span className="text-muted-foreground">({selectedCard.recipientPhone})</span>}
                   </div>
-                  {selectedCard.createdBy && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground">Created by:</span>
-                      <span>{selectedCard.createdBy.name}</span>
-                    </div>
-                  )}
+                )}
+                {selectedCard.recipientEmail && (
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                    <span>{selectedCard.recipientEmail}</span>
+                  </div>
+                )}
+                {selectedCard.expiryDate && (
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span>Expires: {formatDate(selectedCard.expiryDate)}</span>
+                  </div>
+                )}
+                {selectedCard.notes && (
+                  <div className="flex items-start gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <span>{selectedCard.notes}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Created:</span>
+                  <span>{formatDateTime(selectedCard.createdAt)}</span>
                 </div>
-              )}
+                {selectedCard.createdBy && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Created by:</span>
+                    <span>{selectedCard.createdBy.name}</span>
+                  </div>
+                )}
+              </div>
 
               {/* Action Buttons */}
               <div className="flex flex-wrap gap-2">
-                {canRedeem(userRole) && ['ACTIVE', 'PARTIALLY_REDEEMED'].includes(selectedCard.status) && selectedCard.currentBalance > 0 && (
+                {canEdit(userRole) && (
                   <Button
                     variant="default"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => {
+                      setDetailDialogOpen(false);
+                      openEditDialog(selectedCard);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                )}
+                {canRedeem(userRole) && ['ACTIVE', 'PARTIALLY_REDEEMED'].includes(selectedCard.status) && selectedCard.currentBalance > 0 && (
+                  <Button
+                    variant="outline"
                     size="sm"
                     className="gap-1.5"
                     onClick={() => {
@@ -1340,6 +1537,17 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
                   >
                     <Ban className="h-3.5 w-3.5" />
                     Cancel Card
+                  </Button>
+                )}
+                {canHardDelete(userRole) && ['CANCELLED', 'EXPIRED', 'REDEEMED'].includes(selectedCard.status) && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => setDeleteDialogOpen(true)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete Permanently
                   </Button>
                 )}
               </div>
@@ -1400,6 +1608,174 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════════════════════════════════════════════════════ */}
+      {/* EDIT GIFT CARD DIALOG                                      */}
+      {/* ═══════════════════════════════════════════════════════════ */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5 text-blue-500" />
+              Edit Gift Card
+            </DialogTitle>
+            <DialogDescription>
+              Update gift card details. Changes will be saved immediately.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedCard && (
+            <div className="grid gap-4 py-4">
+              {/* Card info banner */}
+              <div className="rounded-lg border p-3 bg-muted/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm font-bold">{selectedCard.code}</span>
+                    <StatusBadge status={selectedCard.status as GiftCardStatus} />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Current Balance</span>
+                  <span className="font-semibold text-green-600 dark:text-green-400">{formatKES(selectedCard.currentBalance)}</span>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Reason */}
+              <div className="grid gap-2">
+                <Label>Reason</Label>
+                <Select
+                  value={editForm.reason}
+                  onValueChange={(v) => setEditForm(prev => ({ ...prev, reason: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(REASON_CONFIG).map(([key, config]) => (
+                      <SelectItem key={key} value={key}>
+                        <span className="flex items-center gap-2">
+                          {config.icon}
+                          {config.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Initial Balance */}
+              <div className="grid gap-2">
+                <Label htmlFor="edit-initial-balance">Initial Balance (KES)</Label>
+                <Input
+                  id="edit-initial-balance"
+                  type="number"
+                  min={selectedCard.currentBalance}
+                  step="100"
+                  value={editForm.initialBalance}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, initialBalance: e.target.value }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Must be ≥ current balance ({formatKES(selectedCard.currentBalance)}). Current: {formatKES(selectedCard.initialBalance)}
+                </p>
+              </div>
+
+              {/* Recipient Info */}
+              <div className="grid gap-3">
+                <Label className="text-sm font-semibold">Recipient Information</Label>
+                <div className="grid gap-2">
+                  <Input
+                    placeholder="Recipient name"
+                    value={editForm.recipientName}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, recipientName: e.target.value }))}
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="Phone number"
+                      value={editForm.recipientPhone}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, recipientPhone: e.target.value }))}
+                    />
+                    <Input
+                      placeholder="Email address"
+                      type="email"
+                      value={editForm.recipientEmail}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, recipientEmail: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Expiry Date */}
+              <div className="grid gap-2">
+                <Label htmlFor="edit-expiry">Expiry Date</Label>
+                <Input
+                  id="edit-expiry"
+                  type="date"
+                  value={editForm.expiryDate}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, expiryDate: e.target.value }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave empty for no expiry. Current: {selectedCard.expiryDate ? formatDate(selectedCard.expiryDate) : 'No expiry'}
+                </p>
+              </div>
+
+              {/* Auto-adjust toggle */}
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <Label className="text-sm">Auto-Adjust Visibility</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Automatically hide when balance reaches 0
+                  </p>
+                </div>
+                <Switch
+                  checked={editForm.autoAdjustItems}
+                  onCheckedChange={(checked) => setEditForm(prev => ({ ...prev, autoAdjustItems: checked }))}
+                />
+              </div>
+
+              {/* Visibility toggle */}
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <Label className="text-sm">Visible</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {editForm.isVisible ? 'Card is visible in listings' : 'Card is hidden from listings'}
+                  </p>
+                </div>
+                <Switch
+                  checked={editForm.isVisible}
+                  onCheckedChange={(checked) => setEditForm(prev => ({ ...prev, isVisible: checked }))}
+                />
+              </div>
+
+              {/* Notes */}
+              <div className="grid gap-2">
+                <Label htmlFor="edit-notes">Notes</Label>
+                <Textarea
+                  id="edit-notes"
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Optional notes..."
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => updateMutation.mutate()}
+              disabled={updateMutation.isPending}
+            >
+              {updateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -1604,15 +1980,15 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <Ban className="h-5 w-5 text-amber-500" />
               Cancel Gift Card
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. The gift card will be permanently cancelled.
+              This will cancel the gift card. The card status will be set to &quot;Cancelled&quot; and it can no longer be used for redemptions.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {selectedCard && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-2 text-sm">
+            <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20 p-4 space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Card Code</span>
                 <span className="font-mono font-bold">{selectedCard.code}</span>
@@ -1624,7 +2000,7 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
                 </span>
               </div>
               {selectedCard.currentBalance > 0 && (
-                <div className="flex items-start gap-2 text-destructive text-xs">
+                <div className="flex items-start gap-2 text-amber-700 dark:text-amber-300 text-xs mt-2">
                   <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                   <span>
                     This card still has a remaining balance of {formatKES(selectedCard.currentBalance)}.
@@ -1635,14 +2011,70 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
             </div>
           )}
           <AlertDialogFooter>
-            <AlertDialogCancel>Keep Card</AlertDialogCancel>
+            <AlertDialogCancel>Keep Card Active</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => cancelMutation.mutate()}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-amber-600 text-white hover:bg-amber-700"
               disabled={cancelMutation.isPending}
             >
               {cancelMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               CANCEL CARD
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ═══════════════════════════════════════════════════════════ */}
+      {/* HARD DELETE CONFIRMATION DIALOG                            */}
+      {/* ═══════════════════════════════════════════════════════════ */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" />
+              Permanently Delete Gift Card
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The gift card and all its redemption history will be permanently removed from the system.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {selectedCard && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Card Code</span>
+                <span className="font-mono font-bold">{selectedCard.code}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Status</span>
+                <StatusBadge status={selectedCard.status as GiftCardStatus} />
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Initial Balance</span>
+                <span className="font-semibold">{formatKES(selectedCard.initialBalance)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Current Balance</span>
+                <span className="font-semibold">{formatKES(selectedCard.currentBalance)}</span>
+              </div>
+              {selectedCard.redemptions && selectedCard.redemptions.length > 0 && (
+                <div className="flex items-start gap-2 text-destructive text-xs mt-2">
+                  <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>
+                    This card has {selectedCard.redemptions.length} redemption record(s) that will also be permanently deleted.
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Card</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => hardDeleteMutation.mutate()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={hardDeleteMutation.isPending}
+            >
+              {hardDeleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              DELETE PERMANENTLY
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

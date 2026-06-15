@@ -424,10 +424,11 @@ export interface UpdateGiftCardPayload {
   recipientName?: string;
   recipientPhone?: string;
   recipientEmail?: string;
-  expiryDate?: string;
+  expiryDate?: string | null;
   autoAdjustItems?: boolean;
   isVisible?: boolean;
   notes?: string;
+  initialBalance?: number;
 }
 
 export interface RedeemGiftCardPayload {

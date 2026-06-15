@@ -55,7 +55,7 @@ async function updateGiftCardHandler(...args: unknown[]): Promise<Response> {
   const updateData: Record<string, unknown> = {};
   const allowedFields = [
     'reason', 'notes', 'recipientName', 'recipientPhone', 'recipientEmail',
-    'expiresAt', 'autoAdjustItems', 'isVisible',
+    'expiresAt', 'autoAdjustItems', 'isVisible', 'initialBalance',
   ];
 
   for (const field of allowedFields) {
@@ -72,15 +72,32 @@ async function updateGiftCardHandler(...args: unknown[]): Promise<Response> {
   // Handle expiresAt conversion
   if (updateData.expiresAt) {
     updateData.expiresAt = new Date(updateData.expiresAt as string);
+  } else if (body.expiresAt === null || body.expiresAt === '') {
+    // Allow clearing the expiry date
+    updateData.expiresAt = null;
+  }
+
+  // Handle initialBalance update - must be >= currentBalance
+  if (updateData.initialBalance !== undefined) {
+    const newInitial = Number(updateData.initialBalance);
+    if (isNaN(newInitial) || newInitial < 0) {
+      return Response.json(
+        { success: false, error: 'Initial balance must be a valid positive number.' },
+        { status: 400 }
+      );
+    }
+    if (newInitial < existing.currentBalance) {
+      return Response.json(
+        { success: false, error: `Initial balance cannot be less than current balance (${existing.currentBalance}).` },
+        { status: 400 }
+      );
+    }
   }
 
   // If autoAdjustItems is being toggled on, adjust visibility based on current balance
   if (body.autoAdjustItems === true) {
     updateData.isVisible = existing.currentBalance > 0;
   }
-
-  // If autoAdjustItems is being toggled off, keep current visibility
-  // (no change needed)
 
   if (Object.keys(updateData).length === 0) {
     return Response.json(
@@ -112,10 +129,18 @@ async function updateGiftCardHandler(...args: unknown[]): Promise<Response> {
 }
 
 async function deleteGiftCardHandler(...args: unknown[]): Promise<Response> {
+  const request = args[0] as NextRequest;
   const context = args[1] as RouteContext;
   const { id } = await context.params;
 
-  const existing = await db.giftCard.findUnique({ where: { id } });
+  // Check for hard delete flag
+  const url = new URL(request.url);
+  const hardDelete = url.searchParams.get('hardDelete') === 'true';
+
+  const existing = await db.giftCard.findUnique({
+    where: { id },
+    include: { redemptions: true },
+  });
   if (!existing) {
     return Response.json(
       { success: false, error: 'Gift card not found.' },
@@ -123,6 +148,49 @@ async function deleteGiftCardHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
+  // Hard delete: permanently remove the gift card and all related records
+  if (hardDelete) {
+    // Only allow hard delete for cards that are already CANCELLED, EXPIRED, or REDEEMED
+    if (existing.status === 'ACTIVE' || existing.status === 'PARTIALLY_REDEEMED') {
+      return Response.json(
+        { success: false, error: 'Cannot permanently delete an active or partially redeemed gift card. Cancel it first.' },
+        { status: 400 }
+      );
+    }
+
+    // Delete redemptions first (cascade should handle this, but be explicit)
+    await db.giftCardRedemption.deleteMany({
+      where: { giftCardId: id },
+    });
+
+    // Delete the gift card
+    await db.giftCard.delete({
+      where: { id },
+    });
+
+    await systemLog({
+      action: 'GIFT_CARD_HARD_DELETED',
+      component: LogComponent.FINANCIAL,
+      severity: LogSeverity.WARN,
+      message: `Gift card ${existing.code} permanently deleted`,
+      storeId: existing.storeId,
+      metadata: {
+        giftCardId: id,
+        code: existing.code,
+        previousStatus: existing.status,
+        initialBalance: existing.initialBalance,
+        currentBalance: existing.currentBalance,
+        redemptionsCount: existing.redemptions.length,
+      },
+    });
+
+    return Response.json({
+      success: true,
+      message: 'Gift card permanently deleted.',
+    });
+  }
+
+  // Soft delete (cancel): default behavior
   if (existing.status !== 'ACTIVE' && existing.status !== 'PARTIALLY_REDEEMED') {
     return Response.json(
       { success: false, error: `Cannot cancel gift card with status "${existing.status}". Only ACTIVE or PARTIALLY_REDEEMED cards can be cancelled.` },

@@ -21,7 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -1218,6 +1218,9 @@ export default function MessagingTab() {
               <Send className="h-5 w-5" />
               Send New Message
             </DialogTitle>
+            <DialogDescription>
+              Compose and send a new message to a customer
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
@@ -1398,6 +1401,9 @@ export default function MessagingTab() {
               <AlertCircle className="h-5 w-5 text-red-600" />
               Send Debt Reminders
             </DialogTitle>
+            <DialogDescription>
+              Send overdue debt reminder notifications to customers via WhatsApp
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
@@ -1501,6 +1507,9 @@ export default function MessagingTab() {
               <FileText className="h-5 w-5 text-amber-600" />
               Send Balance Updates
             </DialogTitle>
+            <DialogDescription>
+              Send account balance update notifications to customers via WhatsApp
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">

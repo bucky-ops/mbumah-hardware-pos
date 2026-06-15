@@ -921,7 +921,7 @@ function AppSidebar() {
 
   // Navigation groups
   const mainNavItems = TAB_CONFIG.filter(t => ['pos', 'catalog', 'inventory', 'customers', 'transactions'].includes(t.id));
-  const managementNavItems = TAB_CONFIG.filter(t => ['rentals', 'suppliers', 'financial', 'reports', 'admin'].includes(t.id));
+  const managementNavItems = TAB_CONFIG.filter(t => ['rentals', 'suppliers', 'financial', 'reports', 'gift-cards', 'admin'].includes(t.id));
 
   const renderNavItem = ({ id, label, icon: Icon }: { id: AppTab; label: string; icon: React.ElementType }) => (
     <button
@@ -1252,7 +1252,11 @@ function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonEle
 
       {/* Global Search Dialog */}
       <Dialog open={searchOpen} onOpenChange={(open) => { setSearchOpen(open); if (!open) setSearchQuery(''); }}>
-        <DialogContent className="sm:max-w-lg p-0 gap-0" aria-describedby={undefined}>
+        <DialogContent className="sm:max-w-lg p-0 gap-0">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Global Search</DialogTitle>
+            <DialogDescription>Search across products, customers, and more</DialogDescription>
+          </DialogHeader>
           <div className="flex items-center border-b px-4 py-3">
             <Search className="h-4 w-4 text-muted-foreground shrink-0 mr-2" />
             <Input

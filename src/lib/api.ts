@@ -949,8 +949,8 @@ export const giftCardsApi = {
     });
   },
 
-  delete: async (id: string) => {
-    return request<GiftCardItem>(`/gift-cards/${id}`, { method: 'DELETE' });
+  delete: async (id: string, hardDelete = false) => {
+    return request<GiftCardItem>(`/gift-cards/${id}${hardDelete ? '?hardDelete=true' : ''}`, { method: 'DELETE' });
   },
 
   redeem: async (id: string, data: RedeemGiftCardPayload) => {
