@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -9,6 +9,7 @@ import {
   ChevronRight, Download, Package, CalendarDays,
   ClipboardCheck, AlertTriangle, Hash, Clock, CheckCircle2,
   Circle, ArrowRight, TrendingUp, Award, Timer, MessageSquare,
+  Send, MoreVertical,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
@@ -20,7 +21,10 @@ import {
   type PurchaseOrderListItem,
   type PurchaseOrderItemDetail,
   type ProductListItem,
+  type SupplierSendOrderResult,
 } from '@/lib/api';
+import { handleError } from '@/lib/error-handler';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,6 +41,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const AVATAR_GRADIENTS = [
   'from-rose-500 to-pink-600',
@@ -347,7 +359,10 @@ function AddSupplierDialog({
       toast.success('Supplier created successfully');
       onOpenChange(false);
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Create supplier');
+      toast.error(msg);
+    },
   });
 
   const updateMutation = useMutation({
@@ -358,7 +373,10 @@ function AddSupplierDialog({
       toast.success('Supplier updated successfully');
       onOpenChange(false);
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Update supplier');
+      toast.error(msg);
+    },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -571,7 +589,10 @@ function CreatePODialog({
       setNotes('');
       setPoItems([]);
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Create purchase order');
+      toast.error(msg);
+    },
   });
 
   return (
@@ -801,7 +822,10 @@ function ReceivePODialog({
       toast.success('Items received and stock updated');
       onOpenChange(false);
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Receive PO items');
+      toast.error(msg);
+    },
   });
 
   if (!purchaseOrder?.items) return null;
@@ -893,7 +917,10 @@ function SupplierDetailView({
       toast.success('Supplier deactivated');
       onBack();
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Deactivate supplier');
+      toast.error(msg);
+    },
   });
 
   if (isLoading) {
@@ -1268,7 +1295,10 @@ function POActions({ po, storeId }: { po: PurchaseOrderListItem; storeId: string
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
       toast.success('PO status updated');
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Update PO status');
+      toast.error(msg);
+    },
   });
 
   const nextStatusMap: Record<string, string> = {
@@ -1327,22 +1357,263 @@ function POActions({ po, storeId }: { po: PurchaseOrderListItem; storeId: string
   );
 }
 
+// ─── Send Order Dialog ─────────────────────────────────────────────────────
+//
+// Send a purchase order (or a custom message) to a supplier via WhatsApp or
+// Email. Calls suppliersApi.sendOrder(id, { channel, purchaseOrderId, message })
+// which returns { waLink, channel, recipient, message, subject } — opens the
+// waLink in a new tab on success.
+
+function SendOrderDialog({
+  open,
+  onOpenChange,
+  supplier,
+  storeId,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  supplier: SupplierItem | null;
+  storeId: string;
+}) {
+  const queryClient = useQueryClient();
+  // Lazy initialisers — when the parent remounts this dialog with a new `key`
+  // (per supplier.id), these run once with the new supplier so the form
+  // pre-fills correctly. Avoids setState-in-effect.
+  const [channel, setChannel] = useState<'WHATSAPP' | 'EMAIL'>('WHATSAPP');
+  const [purchaseOrderId, setPurchaseOrderId] = useState<string>('none');
+  const [message, setMessage] = useState(() =>
+    `Hello ${supplier?.contactPerson || supplier?.name || 'there'}, this is Mbumah Hardware. ` +
+    `We would like to place an order. Please confirm availability and pricing. Thank you!`,
+  );
+
+  // Load this supplier's POs so the user can attach one (optional).
+  const { data: poData, isLoading: poLoading } = useQuery({
+    queryKey: ['supplier-purchase-orders', storeId, supplier?.id],
+    queryFn: () => purchaseOrdersApi.list({ storeId, supplierId: supplier?.id, limit: 50 }),
+    enabled: !!supplier && open,
+  });
+  const purchaseOrders: PurchaseOrderListItem[] = Array.isArray(poData?.data) ? poData.data : [];
+
+  const sendMutation = useMutation({
+    mutationFn: async (): Promise<SupplierSendOrderResult> => {
+      if (!supplier) throw new Error('No supplier selected');
+      // Either a PO id OR a custom message must be provided.
+      const payload: {
+        purchaseOrderId?: string;
+        message?: string;
+        channel: 'WHATSAPP' | 'EMAIL';
+      } = { channel };
+      if (purchaseOrderId && purchaseOrderId !== 'none') {
+        payload.purchaseOrderId = purchaseOrderId;
+        if (message.trim()) payload.message = message.trim();
+      } else {
+        if (!message.trim()) throw new Error('Message is required when no purchase order is selected');
+        payload.message = message.trim();
+      }
+      // Preferred: typed API client (returns ApiResponse<SupplierSendOrderResult>).
+      try {
+        const res = await suppliersApi.sendOrder(supplier.id, payload);
+        if (res?.data) return res.data;
+      } catch {
+        // fall through to direct fetch
+      }
+      // Fallback: direct fetch with same-origin credentials.
+      const r = await fetch(`/api/suppliers/${supplier.id}/send-order`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json = (await r.json()) as { success?: boolean; data?: SupplierSendOrderResult; error?: string };
+      if (!json.success || !json.data) {
+        throw new Error(json.error || `Request failed: ${r.status}`);
+      }
+      return json.data;
+    },
+    onSuccess: (result) => {
+      toast.success(`Order sent to ${supplier?.name || 'supplier'} via ${result.channel}`);
+      // Open the WhatsApp / mailto link in a new tab so the user can dispatch it.
+      if (result.waLink) {
+        try {
+          window.open(result.waLink, '_blank');
+        } catch {
+          /* pop-up blocked — link is also visible in the success toast */
+        }
+      }
+      queryClient.invalidateQueries({ queryKey: ['messages', storeId] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-orders', storeId] });
+      onOpenChange(false);
+    },
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Send order to supplier');
+      toast.error(msg);
+    },
+  });
+
+  if (!supplier) return null;
+
+  // Channel-specific helper text
+  const channelMissing = channel === 'WHATSAPP' ? !supplier.phone : !supplier.email;
+
+  return (
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      size="md"
+      title={
+        <span className="flex items-center gap-2">
+          <Send className="h-5 w-5 text-primary" />
+          Send Order to {supplier.name}
+        </span>
+      }
+      description={
+        channel === 'WHATSAPP'
+          ? `Generates a WhatsApp deep link ${supplier.phone ? `to ${supplier.phone}` : '(no phone on file)'} you can open and send.`
+          : `Generates an email ${supplier.email ? `to ${supplier.email}` : '(no email on file)'} with the order details.`
+      }
+      footer={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={sendMutation.isPending}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => sendMutation.mutate()}
+            disabled={sendMutation.isPending || channelMissing || (purchaseOrderId === 'none' && !message.trim())}
+            className="bg-green-600 hover:bg-green-700 text-white gap-2"
+          >
+            {sendMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            Send via {channel === 'WHATSAPP' ? 'WhatsApp' : 'Email'}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        {channelMissing && (
+          <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3 flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-800 dark:text-amber-300">
+              This supplier has no {channel === 'WHATSAPP' ? 'phone number' : 'email address'} on file.
+              {channel === 'WHATSAPP'
+                ? ' Switch to Email or update the supplier profile first.'
+                : ' Switch to WhatsApp or update the supplier profile first.'}
+            </p>
+          </div>
+        )}
+
+        {/* Channel */}
+        <div className="space-y-2">
+          <Label>Channel</Label>
+          <Select value={channel} onValueChange={(v) => setChannel(v as 'WHATSAPP' | 'EMAIL')}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="WHATSAPP">
+                <span className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-green-600" /> WhatsApp
+                </span>
+              </SelectItem>
+              <SelectItem value="EMAIL">
+                <span className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-amber-600" /> Email
+                </span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Optional PO selector */}
+        <div className="space-y-2">
+          <Label>Purchase Order <span className="text-muted-foreground">(optional)</span></Label>
+          <Select value={purchaseOrderId} onValueChange={setPurchaseOrderId}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select a purchase order..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No PO — send custom message</SelectItem>
+              {poLoading ? (
+                <SelectItem value="__loading" disabled>Loading…</SelectItem>
+              ) : purchaseOrders.length === 0 ? (
+                <SelectItem value="__empty" disabled>No purchase orders on file</SelectItem>
+              ) : (
+                purchaseOrders.map((po) => (
+                  <SelectItem key={po.id} value={po.id}>
+                    {po.poNumber} · {formatKES(po.totalAmount)} · {po.status}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+          <p className="text-[11px] text-muted-foreground">
+            Selecting a PO attaches the full order details (items, totals, expected delivery date) to the message.
+          </p>
+        </div>
+
+        {/* Custom message (optional when a PO is selected, required otherwise) */}
+        <div className="space-y-2">
+          <Label>
+            Custom Message
+            {purchaseOrderId !== 'none' && <span className="text-muted-foreground"> (optional add-on)</span>}
+            {purchaseOrderId === 'none' && <span className="text-red-500"> *</span>}
+          </Label>
+          <Textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            rows={5}
+            placeholder="Type an optional message to accompany the order…"
+            className="resize-y"
+          />
+          <p className="text-[11px] text-muted-foreground">{message.length} characters</p>
+        </div>
+
+        {/* Recipient summary */}
+        <div className="rounded-lg border bg-muted/30 p-3 text-xs space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Recipient</span>
+            <span className="font-medium">
+              {channel === 'WHATSAPP' ? (supplier.phone || '—') : (supplier.email || '—')}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Contact person</span>
+            <span className="font-medium">{supplier.contactPerson || '—'}</span>
+          </div>
+        </div>
+      </div>
+    </ResponsiveDialog>
+  );
+}
+
 export default function SuppliersTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
   const queryClient = useQueryClient();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [addOpen, setAddOpen] = useState(false);
   const [createPOOpen, setCreatePOOpen] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
   const [poFilterStatus, setPoFilterStatus] = useState<string>('all');
+  // Send Order dialog state
+  const [sendOrderOpen, setSendOrderOpen] = useState(false);
+  const [sendOrderSupplier, setSendOrderSupplier] = useState<SupplierItem | null>(null);
+
+  // Debounce search input by 300ms so typing doesn't fire a request per keystroke.
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, [searchQuery]);
 
   const { data: suppliersData, isLoading: suppliersLoading } = useQuery({
-    queryKey: ['suppliers', currentStoreId, searchQuery, filterStatus],
+    queryKey: ['suppliers', currentStoreId, debouncedSearch, filterStatus],
     queryFn: () => suppliersApi.list({
       storeId: currentStoreId,
-      search: searchQuery || undefined,
+      search: debouncedSearch || undefined,
       isActive: filterStatus === 'all' ? undefined : filterStatus === 'active' ? 'true' : 'false',
       limit: 100,
     }),
@@ -1530,6 +1801,7 @@ export default function SuppliersTab() {
                     <TableHead>Status</TableHead>
                     <TableHead className="hidden sm:table-cell">Last Order</TableHead>
                     <TableHead className="text-right">POs</TableHead>
+                    <TableHead className="w-[60px] text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1578,6 +1850,79 @@ export default function SuppliersTab() {
                         {supplier.purchaseOrders?.[0]?.orderDate ? formatDate(supplier.purchaseOrders[0].orderDate) : '—'}
                       </TableCell>
                       <TableCell className="text-right font-medium">{supplier.purchaseOrderCount || 0}</TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-9 w-9 shrink-0"
+                              aria-label={`Actions for ${supplier.name}`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuLabel className="text-xs text-muted-foreground">
+                              {supplier.name}
+                            </DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onSelect={(e) => {
+                                e.preventDefault();
+                                setSendOrderSupplier(supplier);
+                                setSendOrderOpen(true);
+                              }}
+                              className="gap-2 cursor-pointer"
+                            >
+                              <Send className="h-4 w-4 text-green-600" />
+                              Send Order…
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={(e) => {
+                                e.preventDefault();
+                                setSelectedSupplierId(supplier.id);
+                              }}
+                              className="gap-2 cursor-pointer"
+                            >
+                              <Eye className="h-4 w-4" />
+                              View Details
+                            </DropdownMenuItem>
+                            {supplier.phone && (
+                              <DropdownMenuItem
+                                onSelect={(e) => {
+                                  e.preventDefault();
+                                  openWhatsApp(
+                                    supplier.phone!,
+                                    `Hello ${supplier.name}, this is Mbumah Hardware. We wanted to reach out regarding our supplier relationship.`,
+                                  );
+                                }}
+                                className="gap-2 cursor-pointer"
+                              >
+                                <Phone className="h-4 w-4 text-green-600" />
+                                Quick WhatsApp
+                              </DropdownMenuItem>
+                            )}
+                            {supplier.email && (
+                              <DropdownMenuItem
+                                onSelect={(e) => {
+                                  e.preventDefault();
+                                  openEmail(
+                                    supplier.email!,
+                                    `Mbumah Hardware - Supplier Communication`,
+                                    `Dear ${supplier.contactPerson || supplier.name},\n\nThis is a message from Mbumah Hardware.\n\nBest regards,\nMbumah Hardware Team`,
+                                  );
+                                }}
+                                className="gap-2 cursor-pointer"
+                              >
+                                <Mail className="h-4 w-4 text-amber-600" />
+                                Quick Email
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -1669,6 +2014,16 @@ export default function SuppliersTab() {
       {/* Dialogs */}
       <AddSupplierDialog open={addOpen} onOpenChange={setAddOpen} storeId={currentStoreId} />
       <CreatePODialog open={createPOOpen} onOpenChange={setCreatePOOpen} storeId={currentStoreId} suppliers={suppliers} />
+      <SendOrderDialog
+        key={sendOrderSupplier?.id ?? 'none'}
+        open={sendOrderOpen}
+        onOpenChange={(open) => {
+          setSendOrderOpen(open);
+          if (!open) setSendOrderSupplier(null);
+        }}
+        supplier={sendOrderSupplier}
+        storeId={currentStoreId}
+      />
     </div>
   );
 }

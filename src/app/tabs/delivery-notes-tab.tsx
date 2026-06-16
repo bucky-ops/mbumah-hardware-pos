@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -19,6 +19,8 @@ import {
   type DeliveryNoteItem,
   type DeliveryNoteItemDetail,
 } from '@/lib/api';
+import { handleError } from '@/lib/error-handler';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,6 +33,54 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+
+// ─── Reusable print helper ───────────────────────────────────────────────────
+// Opens a new window with print-friendly HTML. Falls back to window.print()
+// if popups are blocked.
+
+function printDocument(html: string, title = 'Print') {
+  const printWindow = window.open('', '_blank', 'width=820,height=920');
+  if (!printWindow) {
+    toast.error('Pop-up blocked. Showing inline print dialog instead.');
+    window.print();
+    return;
+  }
+  printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
+    <style>
+      @page { margin: 14mm; }
+      body { font-family: 'Segoe UI', Arial, Helvetica, sans-serif; color: #1f2937; margin: 0; padding: 22px; }
+      h1, h2, h3 { margin: 0; }
+      .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #047857; padding-bottom: 12px; margin-bottom: 16px; }
+      .head h1 { color: #047857; font-size: 22px; }
+      .muted { color: #6b7280; font-size: 12px; }
+      table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+      th { background: #f3f4f6; text-align: left; padding: 8px 10px; border: 1px solid #e5e7eb; font-weight: 600; font-size: 12px; }
+      td { padding: 8px 10px; border: 1px solid #e5e7eb; font-size: 12px; }
+      .text-right { text-align: right; }
+      .text-center { text-align: center; }
+      .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; font-size: 13px; }
+      .info-grid .label { font-weight: 600; color: #555; }
+      .info-grid .value { color: #1a1a1a; }
+      .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 40px; }
+      .sig-line { border-top: 1px solid #333; padding-top: 4px; text-align: center; font-size: 12px; }
+      .footer { margin-top: 24px; font-size: 11px; color: #888; text-align: center; border-top: 1px solid #eee; padding-top: 12px; }
+      .status-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    </style></head><body>${html}</body></html>`);
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => printWindow.print(), 250);
+}
+
+// Escape a string for safe inclusion in raw HTML.
+function escapeHtml(str: unknown): string {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 // ─── Helpers ─────────────────────────────────────────────
 
@@ -134,14 +184,26 @@ const EMPTY_ITEM: DeliveryFormItem = {
 export default function DeliveryNotesTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
   const queryClient = useQueryClient();
-  const printRef = useRef<HTMLDivElement>(null);
 
   // State
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [createOpen, setCreateOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [selectedNote, setSelectedNote] = useState<DeliveryNoteItem | null>(null);
+
+  // Debounce search (300ms).
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [searchQuery]);
 
   // Create form state
   const [formCustomerName, setFormCustomerName] = useState('');
@@ -157,7 +219,7 @@ export default function DeliveryNotesTab() {
   // ─── Queries ─────────────────────────────────────────
 
   const { data: notesData, isLoading } = useQuery({
-    queryKey: ['delivery-notes', currentStoreId, statusFilter, searchQuery],
+    queryKey: ['delivery-notes', currentStoreId, statusFilter],
     queryFn: () => deliveryNotesApi.list({
       storeId: currentStoreId,
       status: statusFilter !== 'all' ? statusFilter : undefined,
@@ -181,7 +243,10 @@ export default function DeliveryNotesTab() {
       setCreateOpen(false);
       queryClient.invalidateQueries({ queryKey: ['delivery-notes', currentStoreId] });
     },
-    onError: (err: Error) => toast.error(err.message || 'Failed to create delivery note'),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Create delivery note');
+      toast.error(msg);
+    },
   });
 
   const updateMutation = useMutation({
@@ -193,15 +258,18 @@ export default function DeliveryNotesTab() {
       queryClient.invalidateQueries({ queryKey: ['delivery-notes', currentStoreId] });
       queryClient.invalidateQueries({ queryKey: ['delivery-note-detail', selectedNote?.id] });
     },
-    onError: (err: Error) => toast.error(err.message || 'Failed to update delivery note'),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Update delivery note');
+      toast.error(msg);
+    },
   });
 
   // ─── Data ────────────────────────────────────────────
 
   const deliveryNotes: DeliveryNoteItem[] = useMemo(() => {
     const raw = Array.isArray(notesData?.data) ? notesData.data : [];
-    if (!searchQuery) return raw;
-    const q = searchQuery.toLowerCase();
+    if (!debouncedSearch) return raw;
+    const q = debouncedSearch.toLowerCase();
     return raw.filter(
       (dn) =>
         dn.deliveryNumber.toLowerCase().includes(q) ||
@@ -210,7 +278,7 @@ export default function DeliveryNotesTab() {
         (dn.driverName && dn.driverName.toLowerCase().includes(q)) ||
         (dn.deliveryAddress && dn.deliveryAddress.toLowerCase().includes(q))
     );
-  }, [notesData, searchQuery]);
+  }, [notesData, debouncedSearch]);
 
   const noteDetail = noteDetailData?.data as (DeliveryNoteItem & { items: DeliveryNoteItemDetail[]; transaction?: { id: string; receiptNumber: string; totalAmount: number; paymentStatus: string } }) | undefined;
 
@@ -308,8 +376,9 @@ export default function DeliveryNotesTab() {
         window.open(res.waLink, '_blank');
         toast.success(`${res.documentTitle} sent via WhatsApp`);
       }
-    }).catch((err: Error) => {
-      toast.error(err.message || 'Failed to send via WhatsApp');
+    }).catch((err: unknown) => {
+      const msg = handleError(err, 'Send delivery note via WhatsApp');
+      toast.error(msg);
     });
   }
 
@@ -317,43 +386,73 @@ export default function DeliveryNotesTab() {
     updateMutation.mutate({ id, data: { status: newStatus } });
   }
 
-  function handlePrint() {
-    if (!printRef.current) return;
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Delivery Note</title>
-          <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; color: #1a1a1a; }
-            .header { text-align: center; border-bottom: 3px double #333; padding-bottom: 12px; margin-bottom: 16px; }
-            .header h1 { font-size: 22px; margin: 0; letter-spacing: 1px; }
-            .header h2 { font-size: 14px; margin: 4px 0 0; color: #666; }
-            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; font-size: 13px; }
-            .info-grid .label { font-weight: 600; color: #555; }
-            .info-grid .value { color: #1a1a1a; }
-            table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
-            th { background: #f5f5f5; text-align: left; padding: 8px 12px; border: 1px solid #ddd; font-weight: 600; }
-            td { padding: 8px 12px; border: 1px solid #ddd; }
-            .status-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
-            .status-PENDING { background: #fef3c7; color: #92400e; }
-            .status-IN_TRANSIT { background: #dbeafe; color: #1e40af; }
-            .status-DELIVERED { background: #dcfce7; color: #166534; }
-            .status-CANCELLED { background: #fee2e2; color: #991b1b; }
-            .footer { margin-top: 24px; font-size: 12px; color: #888; text-align: center; border-top: 1px solid #eee; padding-top: 12px; }
-            .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 40px; }
-            .sig-line { border-top: 1px solid #333; padding-top: 4px; text-align: center; font-size: 12px; }
-          </style>
-        </head>
-        <body>
-          ${printRef.current.innerHTML}
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+  // Print a delivery note — fetches detail (with items) if needed, then opens a
+  // print-friendly window. Works for both the row-level print button and the
+  // view-dialog print button.
+  async function handlePrint(note: DeliveryNoteItem | NonNullable<typeof noteDetail>) {
+    try {
+      let detail = note as DeliveryNoteItem & { items?: DeliveryNoteItemDetail[] };
+      // Fetch detail if items aren't already loaded.
+      if (!detail.items || detail.items.length === 0) {
+        const res = await deliveryNotesApi.get(note.id);
+        const fetched = res?.data as DeliveryNoteItem & { items?: DeliveryNoteItemDetail[] } | undefined;
+        if (fetched) detail = fetched;
+      }
+      const items = detail.items || [];
+      const rows = items.map((item, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${escapeHtml(item.productName)}</td>
+          <td class="text-center">${item.quantity}</td>
+          <td>${escapeHtml(item.unitType)}</td>
+          <td>${escapeHtml(item.notes || '—')}</td>
+        </tr>
+      `).join('');
+      const html = `
+        <div class="head">
+          <div>
+            <h1>Mbumah Hardware</h1>
+            <p class="muted">Juja, Kiambu County · +254 700 000 000</p>
+          </div>
+          <div style="text-align:right">
+            <span class="status-badge">DELIVERY NOTE</span>
+            <p class="muted" style="margin-top:6px"><strong>${escapeHtml(detail.deliveryNumber)}</strong></p>
+            <p class="muted">Status: ${escapeHtml(getStatusLabel(detail.status))}</p>
+          </div>
+        </div>
+        <div class="info-grid">
+          <div><span class="label">Customer:</span> <span class="value">${escapeHtml(detail.customerName)}</span></div>
+          <div><span class="label">Phone:</span> <span class="value">${escapeHtml(detail.customerPhone || '—')}</span></div>
+          <div style="grid-column:1/-1"><span class="label">Delivery Address:</span> <span class="value">${escapeHtml(detail.deliveryAddress || '—')}</span></div>
+          <div><span class="label">Driver:</span> <span class="value">${escapeHtml(detail.driverName || '—')}</span></div>
+          <div><span class="label">Vehicle:</span> <span class="value">${escapeHtml(detail.vehicleNumber || '—')}</span></div>
+          <div><span class="label">Scheduled:</span> <span class="value">${detail.scheduledDate ? formatDate(detail.scheduledDate) : '—'}</span></div>
+          <div><span class="label">Created:</span> <span class="value">${formatDateTime(detail.createdAt)}</span></div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Product</th>
+              <th class="text-center">Qty</th>
+              <th>Unit</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>${rows || '<tr><td colspan="5" class="text-center muted">No items</td></tr>'}</tbody>
+        </table>
+        ${detail.notes ? `<div style="margin-top:12px;font-size:13px"><strong>Notes:</strong> ${escapeHtml(detail.notes)}</div>` : ''}
+        <div class="signatures">
+          <div><div class="sig-line">Driver Signature</div></div>
+          <div><div class="sig-line">Receiver Signature</div></div>
+        </div>
+        <div class="footer">This delivery note was generated by Mbumah Hardware POS · ${formatDateTime(new Date())}</div>
+      `;
+      printDocument(html, `DN-${detail.deliveryNumber}`);
+    } catch (err) {
+      const msg = handleError(err, 'Print delivery note');
+      toast.error(msg);
+    }
   }
 
   // ─── Loading skeleton ────────────────────────────────
@@ -590,6 +689,15 @@ export default function DeliveryNotesTab() {
                           <Button
                             size="sm"
                             variant="ghost"
+                            className="h-7 w-7 p-0"
+                            onClick={() => handlePrint(dn)}
+                            title="Print delivery note"
+                          >
+                            <Printer className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
                             className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
                             onClick={() => handleSendWhatsApp(dn)}
                             title="Send to WhatsApp"
@@ -608,18 +716,33 @@ export default function DeliveryNotesTab() {
       </Card>
 
       {/* ─── Create Dialog ─────────────────────────────── */}
-      <Dialog open={createOpen} onOpenChange={(open) => { if (!open) resetCreateForm(); setCreateOpen(open); }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Truck className="h-5 w-5" />
-              New Delivery Note
-            </DialogTitle>
-            <DialogDescription>
-              Create a new delivery note for customer orders.
-            </DialogDescription>
-          </DialogHeader>
-
+      <ResponsiveDialog
+        open={createOpen}
+        onOpenChange={(open) => { if (!open) resetCreateForm(); setCreateOpen(open); }}
+        size="xl"
+        title={
+          <span className="flex items-center gap-2">
+            <Truck className="h-5 w-5" />
+            New Delivery Note
+          </span>
+        }
+        description="Create a new delivery note for customer orders."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => { resetCreateForm(); setCreateOpen(false); }}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreate} disabled={createMutation.isPending} className="gap-2">
+              {createMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Truck className="h-4 w-4" />
+              )}
+              Create Delivery Note
+            </Button>
+          </>
+        }
+      >
           <div className="space-y-4 py-2">
             {/* Customer Info */}
             <div className="space-y-3">
@@ -796,22 +919,7 @@ export default function DeliveryNotesTab() {
               />
             </div>
           </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { resetCreateForm(); setCreateOpen(false); }}>
-              Cancel
-            </Button>
-            <Button onClick={handleCreate} disabled={createMutation.isPending} className="gap-2">
-              {createMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Truck className="h-4 w-4" />
-              )}
-              Create Delivery Note
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </ResponsiveDialog>
 
       {/* ─── View Dialog ───────────────────────────────── */}
       <Dialog open={viewOpen} onOpenChange={setViewOpen}>
@@ -836,63 +944,6 @@ export default function DeliveryNotesTab() {
             </div>
           ) : noteDetail ? (
             <div className="space-y-4 py-2">
-              {/* Hidden print area */}
-              <div ref={printRef} className="hidden">
-                {/* Print content - injected into print window */}
-                <div className="print-content">
-                  <div className="header">
-                    <h1>MBUMAH HARDWARE</h1>
-                    <h2>DELIVERY NOTE</h2>
-                  </div>
-                  <div className="info-grid">
-                    <div><span className="label">Delivery #:</span> <span className="value">{noteDetail.deliveryNumber}</span></div>
-                    <div><span className="label">Status:</span> <span className={`status-badge status-${noteDetail.status}`}>{getStatusLabel(noteDetail.status)}</span></div>
-                    <div><span className="label">Customer:</span> <span className="value">{noteDetail.customerName}</span></div>
-                    <div><span className="label">Phone:</span> <span className="value">{noteDetail.customerPhone || '—'}</span></div>
-                    <div><span className="label">Address:</span> <span className="value">{noteDetail.deliveryAddress || '—'}</span></div>
-                    <div><span className="label">Scheduled:</span> <span className="value">{noteDetail.scheduledDate ? formatDate(noteDetail.scheduledDate) : '—'}</span></div>
-                    <div><span className="label">Driver:</span> <span className="value">{noteDetail.driverName || '—'}</span></div>
-                    <div><span className="label">Vehicle:</span> <span className="value">{noteDetail.vehicleNumber || '—'}</span></div>
-                    <div><span className="label">Created:</span> <span className="value">{formatDateTime(noteDetail.createdAt)}</span></div>
-                    <div><span className="label">Delivered:</span> <span className="value">{noteDetail.deliveredAt ? formatDateTime(noteDetail.deliveredAt) : '—'}</span></div>
-                  </div>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Product</th>
-                        <th>Qty</th>
-                        <th>Unit</th>
-                        <th>Notes</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(noteDetail.items || []).map((item, i) => (
-                        <tr key={item.id}>
-                          <td>{i + 1}</td>
-                          <td>{item.productName}</td>
-                          <td>{item.quantity}</td>
-                          <td>{item.unitType}</td>
-                          <td>{item.notes || '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {noteDetail.notes && (
-                    <div style={{ marginTop: '12px', fontSize: '13px' }}>
-                      <strong>Notes:</strong> {noteDetail.notes}
-                    </div>
-                  )}
-                  <div className="signatures">
-                    <div className="sig-line">Driver Signature</div>
-                    <div className="sig-line">Customer Signature</div>
-                  </div>
-                  <div className="footer">
-                    This delivery note was generated by Mbumah Hardware POS System.
-                  </div>
-                </div>
-              </div>
-
               {/* Header */}
               <div className="flex flex-col sm:flex-row items-start justify-between gap-3">
                 <div>
@@ -939,7 +990,7 @@ export default function DeliveryNotesTab() {
                       Cancel
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" className="gap-1.5" onClick={handlePrint}>
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={() => noteDetail && handlePrint(noteDetail)}>
                     <Printer className="h-3.5 w-3.5" /> Print
                   </Button>
                   <Button

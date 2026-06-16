@@ -10,11 +10,12 @@ import {
   Calendar, Clock, Eye, Play, Sparkles, PieChart,
   HeartPulse, RotateCcw, CreditCard, Banknote, Smartphone,
   AlertTriangle, Users, Timer, Printer, Wrench,
-  Search, ClipboardList,
+  Search, ClipboardList, Sparkle, Link2, ArrowRight,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  Legend, Cell,
 } from 'recharts';
 
 import { useAppStore } from '@/lib/stores';
@@ -25,6 +26,7 @@ import {
   type CustomerItem,
   type RentalItem,
 } from '@/lib/api';
+import { handleError } from '@/lib/error-handler';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -35,6 +37,113 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
+
+// ---------------------------------------------------------------------------
+// Types & helpers for Trends & Predictions
+// ---------------------------------------------------------------------------
+
+type TrendsRange = '7d' | '30d' | '90d';
+
+interface GrowingProduct {
+  productId: string;
+  name: string;
+  sku?: string;
+  category?: string;
+  currentQty: number;
+  previousQty: number;
+  growthPct: number;
+  revenue?: number;
+}
+
+interface DecliningProduct {
+  productId: string;
+  name: string;
+  sku?: string;
+  category?: string;
+  currentQty: number;
+  previousQty: number;
+  declinePct: number;
+  remainingStock: number;
+  reorderLevel?: number;
+}
+
+interface ForecastPoint {
+  date: string;
+  label: string;
+  predicted: number;
+  lower?: number;
+  upper?: number;
+}
+
+interface CategoryTrendRow {
+  category: string;
+  current: number;
+  previous: number;
+  changePct: number;
+  share: number;
+}
+
+interface FrequentlyBoughtPair {
+  productA: { id: string; name: string; sku?: string };
+  productB: { id: string; name: string; sku?: string };
+  coOccurrence: number;
+  confidence?: number;
+}
+
+interface TrendsAnalysis {
+  growing: GrowingProduct[];
+  declining: DecliningProduct[];
+  forecast: ForecastPoint[];
+  categoryTrends: CategoryTrendRow[];
+  range: TrendsRange;
+  generatedAt?: string;
+  isDemo?: boolean;
+}
+
+interface FrequentlyBoughtResult {
+  pairs: FrequentlyBoughtPair[];
+  isDemo?: boolean;
+}
+
+/** Fetch trends analysis with graceful fallback — works whether or not BE-1
+ *  has shipped /api/trends/analysis. Returns a safe empty shape on failure. */
+async function fetchTrendsAnalysis(storeId: string, range: TrendsRange): Promise<TrendsAnalysis> {
+  const params = new URLSearchParams({ storeId, range });
+  const res = await fetch(`/api/trends/analysis?${params.toString()}`, { credentials: 'same-origin' });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(txt || `Trends API returned ${res.status}`);
+  }
+  const json = await res.json();
+  const d = json?.data ?? json;
+  return {
+    growing: Array.isArray(d?.growing) ? d.growing : [],
+    declining: Array.isArray(d?.declining) ? d.declining : [],
+    forecast: Array.isArray(d?.forecast) ? d.forecast : [],
+    categoryTrends: Array.isArray(d?.categoryTrends) ? d.categoryTrends : [],
+    range: (d?.range as TrendsRange) || range,
+    generatedAt: d?.generatedAt,
+    isDemo: !!d?.isDemo,
+  };
+}
+
+async function fetchFrequentlyBought(storeId: string, range?: TrendsRange): Promise<FrequentlyBoughtResult> {
+  const params = new URLSearchParams({ storeId });
+  if (range) params.set('range', range);
+  const res = await fetch(`/api/recommendations/frequently-bought?${params.toString()}`, { credentials: 'same-origin' });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(txt || `Recommendations API returned ${res.status}`);
+  }
+  const json = await res.json();
+  const d = json?.data ?? json;
+  const pairs = Array.isArray(d?.pairs) ? d.pairs : Array.isArray(d) ? d : [];
+  return { pairs, isDemo: !!d?.isDemo };
+}
 
 function ReportTypeCard({
   icon, title, description, isActive, onClick, colorClass, lastGenerated,
@@ -291,11 +400,596 @@ function SVGLineChart({ data, height = 200 }: { data: { label: string; value: nu
   );
 }
 
+// ---------------------------------------------------------------------------
+// Trends & Predictions Section
+// ---------------------------------------------------------------------------
+
+const TRENDS_RANGE_OPTIONS: { value: TrendsRange; label: string }[] = [
+  { value: '7d', label: 'Last 7 days' },
+  { value: '30d', label: 'Last 30 days' },
+  { value: '90d', label: 'Last 90 days' },
+];
+
+const TREND_COLORS = ['#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#8b5cf6', '#ec4899'];
+
+function TrendsTooltipContent({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number; color?: string }>; label?: string }) {
+  if (!active || !payload || payload.length === 0) return null;
+  return (
+    <div className="rounded-md border bg-background p-2 shadow-md text-xs space-y-1">
+      <div className="font-medium">{label}</div>
+      {payload.map((p, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+          <span className="text-muted-foreground">{p.name}:</span>
+          <span className="font-medium">{formatKES(Number(p.value ?? 0))}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TrendsPredictionsSection({ storeId }: { storeId: string }) {
+  const [range, setRange] = useState<TrendsRange>('7d');
+  const [drilldown, setDrilldown] = useState<{ title: string; rows: React.ReactNode } | null>(null);
+
+  // Trends analysis query — uses direct fetch with graceful fallback
+  const { data: trends, isLoading: trendsLoading, error: trendsError } = useQuery<TrendsAnalysis>({
+    queryKey: ['trends-analysis', storeId, range],
+    queryFn: () => fetchTrendsAnalysis(storeId, range),
+    retry: false,
+    staleTime: 60_000,
+  });
+
+  // Frequently bought together — uses direct fetch with graceful fallback
+  const { data: reco, isLoading: recoLoading } = useQuery<FrequentlyBoughtResult>({
+    queryKey: ['frequently-bought', storeId, range],
+    queryFn: () => fetchFrequentlyBought(storeId, range),
+    retry: false,
+    staleTime: 60_000,
+  });
+
+  // Surface trends fetch errors once
+  React.useEffect(() => {
+    if (trendsError) {
+      const msg = handleError(trendsError, 'Trends analysis');
+      // Non-blocking: the section still renders an empty-state card
+      console.warn('[Trends] analysis fetch failed:', msg);
+    }
+  }, [trendsError]);
+
+  // Chart data transforms
+  const growingChart = useMemo(() => {
+    return (trends?.growing ?? []).slice(0, 8).map((p) => ({
+      label: p.name.length > 16 ? p.name.slice(0, 16) + '…' : p.name,
+      fullName: p.name,
+      growth: Math.round(p.growthPct || 0),
+      revenue: p.revenue ?? 0,
+    }));
+  }, [trends]);
+
+  const decliningChart = useMemo(() => {
+    return (trends?.declining ?? []).slice(0, 8).map((p) => ({
+      label: p.name.length > 16 ? p.name.slice(0, 16) + '…' : p.name,
+      fullName: p.name,
+      decline: Math.round(p.declinePct || 0),
+      remaining: p.remainingStock ?? 0,
+    }));
+  }, [trends]);
+
+  const forecastChart = useMemo(() => {
+    return (trends?.forecast ?? []).map((f) => ({
+      label: f.label,
+      date: f.date,
+      predicted: Math.round(Number(f.predicted ?? 0)),
+      lower: f.lower != null ? Math.round(Number(f.lower)) : undefined,
+      upper: f.upper != null ? Math.round(Number(f.upper)) : undefined,
+    }));
+  }, [trends]);
+
+  const categoryTrendRows = trends?.categoryTrends ?? [];
+  const recoPairs = reco?.pairs ?? [];
+
+  const forecastTotal = forecastChart.reduce((s, f) => s + f.predicted, 0);
+  const forecastPeak = forecastChart.reduce((m, f) => Math.max(m, f.predicted), 0);
+
+  return (
+    <div className="space-y-4">
+      {/* Header bar with range selector */}
+      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+        <CardHeader className="pb-2">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2 flex-wrap">
+                <Sparkles className="h-4 w-4 text-primary" />
+                Trends &amp; Predictions
+                {trends?.isDemo && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30">
+                    Demo Data
+                  </Badge>
+                )}
+              </CardTitle>
+              <CardDescription className="text-xs mt-1">
+                Growing / declining products, 7-day revenue forecast, category trends &amp; frequently-bought-together insights.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs font-medium text-muted-foreground">Range:</Label>
+              <Select value={range} onValueChange={(v) => setRange(v as TrendsRange)}>
+                <SelectTrigger className="h-8 w-36 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TRENDS_RANGE_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
+
+      {/* Top KPI row: forecast total + growing/declining counts */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card className="border-l-4 border-l-green-500 backdrop-blur-sm bg-card/80">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <TrendingUp className="h-4 w-4 text-green-500" />
+              <p className="text-sm text-muted-foreground">7-Day Forecast</p>
+            </div>
+            <p className="text-2xl font-bold">{formatKES(forecastTotal)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Projected revenue</p>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-emerald-500 backdrop-blur-sm bg-card/80">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <ArrowUpRight className="h-4 w-4 text-emerald-500" />
+              <p className="text-sm text-muted-foreground">Growing</p>
+            </div>
+            <p className="text-2xl font-bold">{growingChart.length}</p>
+            <p className="text-xs text-muted-foreground mt-1">Top gainers</p>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-red-500 backdrop-blur-sm bg-card/80">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <ArrowDownRight className="h-4 w-4 text-red-500" />
+              <p className="text-sm text-muted-foreground">Declining</p>
+            </div>
+            <p className="text-2xl font-bold">{decliningChart.length}</p>
+            <p className="text-xs text-muted-foreground mt-1">Need reorder</p>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-primary backdrop-blur-sm bg-card/80">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Sparkle className="h-4 w-4 text-primary" />
+              <p className="text-sm text-muted-foreground">Pairs Found</p>
+            </div>
+            <p className="text-2xl font-bold">{recoPairs.length}</p>
+            <p className="text-xs text-muted-foreground mt-1">Frequently bought</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts grid: growing + declining side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Top Growing Products */}
+        <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <ArrowUpRight className="h-4 w-4 text-green-600" />
+                Top Growing Products
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                disabled={growingChart.length === 0}
+                onClick={() => setDrilldown({
+                  title: 'Top Growing Products — Detail',
+                  rows: (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Product</TableHead>
+                          <TableHead>Category</TableHead>
+                          <TableHead className="text-right">Current Qty</TableHead>
+                          <TableHead className="text-right">Prev Qty</TableHead>
+                          <TableHead className="text-right">Growth %</TableHead>
+                          <TableHead className="text-right">Revenue</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(trends?.growing ?? []).map((p) => (
+                          <TableRow key={p.productId}>
+                            <TableCell className="font-medium">{p.name}</TableCell>
+                            <TableCell className="text-muted-foreground">{p.category || '—'}</TableCell>
+                            <TableCell className="text-right">{p.currentQty}</TableCell>
+                            <TableCell className="text-right text-muted-foreground">{p.previousQty}</TableCell>
+                            <TableCell className="text-right">
+                              <Badge className="bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400">
+                                +{Math.round(p.growthPct || 0)}%
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">{p.revenue != null ? formatKES(p.revenue) : '—'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ),
+                })}
+              >
+                Details <ArrowRight className="h-3 w-3 ml-1" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pb-4">
+            {trendsLoading ? (
+              <Skeleton className="h-64 w-full" />
+            ) : growingChart.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center">
+                <TrendingUp className="h-10 w-10 text-muted-foreground/30 mb-2" />
+                <p className="text-sm text-muted-foreground">No growing products in this range.</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">Try a wider range or check back after more sales are recorded.</p>
+              </div>
+            ) : (
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={growingChart} layout="vertical" margin={{ top: 5, right: 16, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 11 }} className="text-muted-foreground" tickFormatter={(v: number) => `${v}%`} />
+                    <YAxis type="category" dataKey="label" tick={{ fontSize: 11 }} className="text-muted-foreground" width={120} />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(16,185,129,0.08)' }}
+                      content={({ active, payload }) => {
+                        if (!active || !payload || payload.length === 0) return null;
+                        const p = payload[0].payload as { fullName: string; growth: number; revenue: number };
+                        return (
+                          <div className="rounded-md border bg-background p-2 shadow-md text-xs space-y-1">
+                            <div className="font-medium">{p.fullName}</div>
+                            <div className="text-muted-foreground">Growth: <span className="font-medium text-green-600">+{p.growth}%</span></div>
+                            {p.revenue > 0 && <div className="text-muted-foreground">Revenue: <span className="font-medium">{formatKES(p.revenue)}</span></div>}
+                          </div>
+                        );
+                      }}
+                    />
+                    <Bar dataKey="growth" name="Growth %" fill="#10b981" radius={[0, 4, 4, 0]} maxBarSize={22} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Top Declining Products */}
+        <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <ArrowDownRight className="h-4 w-4 text-red-600" />
+                Top Declining Products
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                disabled={decliningChart.length === 0}
+                onClick={() => setDrilldown({
+                  title: 'Top Declining Products — Reorder Warnings',
+                  rows: (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Product</TableHead>
+                          <TableHead>Category</TableHead>
+                          <TableHead className="text-right">Current Qty</TableHead>
+                          <TableHead className="text-right">Prev Qty</TableHead>
+                          <TableHead className="text-right">Decline %</TableHead>
+                          <TableHead className="text-right">Remaining Stock</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(trends?.declining ?? []).map((p) => (
+                          <TableRow key={p.productId}>
+                            <TableCell className="font-medium">{p.name}</TableCell>
+                            <TableCell className="text-muted-foreground">{p.category || '—'}</TableCell>
+                            <TableCell className="text-right">{p.currentQty}</TableCell>
+                            <TableCell className="text-right text-muted-foreground">{p.previousQty}</TableCell>
+                            <TableCell className="text-right">
+                              <Badge className="bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400">
+                                -{Math.round(p.declinePct || 0)}%
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <span className={p.remainingStock <= (p.reorderLevel ?? 0) ? 'text-red-600 font-medium' : ''}>
+                                {p.remainingStock}
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ),
+                })}
+              >
+                Details <ArrowRight className="h-3 w-3 ml-1" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pb-4">
+            {trendsLoading ? (
+              <Skeleton className="h-64 w-full" />
+            ) : decliningChart.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center">
+                <TrendingDown className="h-10 w-10 text-muted-foreground/30 mb-2" />
+                <p className="text-sm text-muted-foreground">No declining products in this range.</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">All products are moving well — no reorders needed.</p>
+              </div>
+            ) : (
+              <>
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={decliningChart} layout="vertical" margin={{ top: 5, right: 16, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" horizontal={false} />
+                      <XAxis type="number" tick={{ fontSize: 11 }} className="text-muted-foreground" tickFormatter={(v: number) => `${v}%`} />
+                      <YAxis type="category" dataKey="label" tick={{ fontSize: 11 }} className="text-muted-foreground" width={120} />
+                      <Tooltip
+                        cursor={{ fill: 'rgba(239,68,68,0.08)' }}
+                        content={({ active, payload }) => {
+                          if (!active || !payload || payload.length === 0) return null;
+                          const p = payload[0].payload as { fullName: string; decline: number; remaining: number };
+                          return (
+                            <div className="rounded-md border bg-background p-2 shadow-md text-xs space-y-1">
+                              <div className="font-medium">{p.fullName}</div>
+                              <div className="text-muted-foreground">Decline: <span className="font-medium text-red-600">-{p.decline}%</span></div>
+                              <div className="text-muted-foreground">Remaining: <span className="font-medium">{p.remaining} units</span></div>
+                            </div>
+                          );
+                        }}
+                      />
+                      <Bar dataKey="decline" name="Decline %" fill="#ef4444" radius={[0, 4, 4, 0]} maxBarSize={22} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                {/* Reorder warning strip */}
+                <div className="mt-3 rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 p-2 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-800 dark:text-amber-300">
+                    {decliningChart.length} product{decliningChart.length !== 1 ? 's' : ''} showing declining sales — review reorder levels and consider promotions or restocking.
+                  </p>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 7-Day Sales Forecast (line chart) */}
+      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-primary" />
+                7-Day Sales Forecast
+              </CardTitle>
+              <CardDescription className="text-xs mt-1">
+                Linear projection of next-7-days revenue · Total: <strong>{formatKES(forecastTotal)}</strong> · Peak day: <strong>{formatKES(forecastPeak)}</strong>
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pb-4">
+          {trendsLoading ? (
+            <Skeleton className="h-72 w-full" />
+          ) : forecastChart.length === 0 ? (
+            <div className="h-72 flex flex-col items-center justify-center text-center">
+              <Sparkle className="h-10 w-10 text-muted-foreground/30 mb-2" />
+              <p className="text-sm text-muted-foreground">No forecast data available.</p>
+              <p className="text-xs text-muted-foreground/70 mt-1">Forecasts generate once enough sales history is available.</p>
+            </div>
+          ) : (
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={forecastChart} margin={{ top: 5, right: 16, left: -10, bottom: 5 }}>
+                  <defs>
+                    <linearGradient id="forecastGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                  <YAxis
+                    tick={{ fontSize: 11 }}
+                    className="text-muted-foreground"
+                    tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`}
+                    width={50}
+                  />
+                  <Tooltip content={<TrendsTooltipContent />} />
+                  {forecastChart[0]?.upper != null && (
+                    <Area
+                      type="monotone"
+                      dataKey="upper"
+                      name="Upper bound"
+                      stroke="#86efac"
+                      strokeDasharray="4 4"
+                      strokeOpacity={0.6}
+                      fill="none"
+                    />
+                  )}
+                  <Area
+                    type="monotone"
+                    dataKey="predicted"
+                    name="Predicted revenue"
+                    stroke="#10b981"
+                    strokeWidth={2.5}
+                    fill="url(#forecastGrad)"
+                  />
+                  {forecastChart[0]?.lower != null && (
+                    <Area
+                      type="monotone"
+                      dataKey="lower"
+                      name="Lower bound"
+                      stroke="#f59e0b"
+                      strokeDasharray="4 4"
+                      strokeOpacity={0.6}
+                      fill="none"
+                    />
+                  )}
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Category Trends + Frequently Bought Together */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Category Trends */}
+        <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <PieChart className="h-4 w-4 text-amber-600" />
+              Category Trends
+            </CardTitle>
+            <CardDescription className="text-xs">Revenue share &amp; growth by category</CardDescription>
+          </CardHeader>
+          <CardContent className="pb-4">
+            {trendsLoading ? (
+              <Skeleton className="h-56 w-full" />
+            ) : categoryTrendRows.length === 0 ? (
+              <div className="h-56 flex flex-col items-center justify-center text-center">
+                <PieChart className="h-10 w-10 text-muted-foreground/30 mb-2" />
+                <p className="text-sm text-muted-foreground">No category trends data.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto max-h-72 overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Category</TableHead>
+                      <TableHead className="text-right">Current</TableHead>
+                      <TableHead className="text-right">Previous</TableHead>
+                      <TableHead className="text-right">Share</TableHead>
+                      <TableHead className="text-right">Change</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {categoryTrendRows.map((row, i) => (
+                      <TableRow key={`${row.category}-${i}`}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full shrink-0"
+                              style={{ backgroundColor: TREND_COLORS[i % TREND_COLORS.length] }}
+                            />
+                            <span className="font-medium">{row.category}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">{formatKES(row.current)}</TableCell>
+                        <TableCell className="text-right text-muted-foreground">{formatKES(row.previous)}</TableCell>
+                        <TableCell className="text-right">{(row.share * 100).toFixed(1)}%</TableCell>
+                        <TableCell className="text-right">
+                          <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${
+                            row.changePct >= 0 ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            {row.changePct >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                            {Math.abs(Math.round(row.changePct))}%
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Frequently Bought Together */}
+        <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Link2 className="h-4 w-4 text-primary" />
+                  Frequently Bought Together
+                </CardTitle>
+                <CardDescription className="text-xs">Cross-sell opportunities for the sales team</CardDescription>
+              </div>
+              {reco?.isDemo && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30">
+                  Demo
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="pb-4">
+            {recoLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+              </div>
+            ) : recoPairs.length === 0 ? (
+              <div className="h-48 flex flex-col items-center justify-center text-center">
+                <Link2 className="h-10 w-10 text-muted-foreground/30 mb-2" />
+                <p className="text-sm text-muted-foreground">No associations found yet.</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">Patterns emerge once multi-item transactions are recorded.</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {recoPairs.slice(0, 10).map((pair, i) => (
+                  <div
+                    key={`${pair.productA.id}-${pair.productB.id}-${i}`}
+                    className="rounded-lg border bg-muted/20 p-2.5 hover:bg-muted/40 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 flex-wrap text-sm">
+                      <span className="font-medium">{pair.productA.name}</span>
+                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-primary/10 text-primary border-primary/20">
+                        + {pair.productB.name}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <span className="text-xs text-muted-foreground">
+                        Bought together <strong className="text-foreground">{pair.coOccurrence}×</strong>
+                        {pair.confidence != null && (
+                          <> · confidence {(pair.confidence * 100).toFixed(0)}%</>
+                        )}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {pair.productA.sku ? `SKU: ${pair.productA.sku}` : ''}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Drilldown dialog */}
+      <ResponsiveDialog
+        open={!!drilldown}
+        onOpenChange={(open) => { if (!open) setDrilldown(null); }}
+        title={drilldown?.title}
+        size="xl"
+        footer={<Button variant="outline" onClick={() => setDrilldown(null)}>Close</Button>}
+      >
+        <div className="overflow-x-auto">{drilldown?.rows}</div>
+      </ResponsiveDialog>
+    </div>
+  );
+}
+
 // Main Reports Tab Component
 
 export default function ReportsTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
-  const [reportType, setReportType] = useState<'sales' | 'inventory' | 'valuation' | 'daily' | 'top_products' | 'customer_analysis' | 'rental_performance'>('sales');
+  const [reportType, setReportType] = useState<'sales' | 'inventory' | 'valuation' | 'daily' | 'top_products' | 'customer_analysis' | 'rental_performance' | 'trends'>('sales');
   const [chartType, setChartType] = useState<'bar' | 'line' | 'area' | 'pie'>('bar');
   const [datePreset, setDatePreset] = useState<DatePreset>('this_month');
 
@@ -873,6 +1567,14 @@ export default function ReportsTab() {
                 description="Equipment utilization, revenue per rental, and status breakdown"
                 isActive={reportType === 'rental_performance'}
                 onClick={() => setReportType('rental_performance')}
+                colorClass="text-primary"
+              />
+              <ReportTypeCard
+                icon={<Sparkles className="h-5 w-5" />}
+                title="Trends & Predictions"
+                description="Growing/declining products, 7-day revenue forecast, category trends, and frequently-bought-together recommendations"
+                isActive={reportType === 'trends'}
+                onClick={() => setReportType('trends')}
                 colorClass="text-primary"
               />
             </div>
@@ -1978,6 +2680,13 @@ export default function ReportsTab() {
               </Card>
             )}
           </>
+        )}
+
+        {/* ================================================================== */}
+        {/* Trends & Predictions                                                */}
+        {/* ================================================================== */}
+        {reportType === 'trends' && (
+          <TrendsPredictionsSection storeId={currentStoreId} />
         )}
       </div>
     </div>

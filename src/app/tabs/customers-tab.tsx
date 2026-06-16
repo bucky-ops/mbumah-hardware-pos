@@ -1,22 +1,28 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Users, Search, Plus, CircleDollarSign, AlertTriangle,
   Eye, Loader2, HandCoins, Banknote, Smartphone,
   MessageSquare, ShoppingBag, Award, Phone, Mail, MapPin, CreditCard, Clock,
-  ArrowUpDown, Filter, UserPlus, TrendingUp, Calendar, FileText, Bell
+  ArrowUpDown, Filter, UserPlus, TrendingUp, Calendar, FileText, Bell,
+  History, Send, Printer, Tag, Gift, Truck, FileCheck, Receipt,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
-  customersApi, debtApi, transactionsApi,
+  customersApi, debtApi, transactionsApi, whatsappApi,
   formatKES, formatDate, formatDateTime,
   type CustomerItem,
   type TransactionItem,
+  type CustomerHistoryTimelineEntry,
+  type CustomerHistoryResult,
+  type CustomerHistorySummary,
 } from '@/lib/api';
+import { handleError } from '@/lib/error-handler';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,6 +39,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const AVATAR_GRADIENTS = [
   'from-rose-500 to-pink-600',
@@ -111,10 +118,341 @@ function formatKenyanPhone(value: string): string {
 type SortField = 'name' | 'debt' | 'loyalty' | 'created';
 type SortDirection = 'asc' | 'desc';
 
+// ─── Customer History Types ──────────────────────────────────────────────────
+
+interface HistoryEntry {
+  id: string;
+  date: string;
+  type: 'sale' | 'invoice' | 'credit' | 'gift_card' | 'voucher' | 'payment' | 'delivery_note';
+  reference: string;
+  amount: number;
+  status?: string;
+  description?: string;
+}
+
+interface CustomerHistoryData {
+  customer: CustomerItem;
+  summary: CustomerHistorySummary;
+  timeline: HistoryEntry[];
+}
+
+const TYPE_FILTERS: { id: string; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'sale', label: 'Sales' },
+  { id: 'invoice', label: 'Invoices' },
+  { id: 'credit', label: 'Credits' },
+  { id: 'payment', label: 'Payments' },
+];
+
+/**
+ * Map an API timeline entry (uppercase type, `timestamp`/`ref` fields) into
+ * the display shape this dialog expects (lowercase type, `date`/`reference`).
+ * The API returns `CustomerHistoryTimelineEntry` which has an index signature
+ * so we can read amount/discountAmount/status/etc. defensively.
+ */
+function normalizeHistoryEntry(raw: CustomerHistoryTimelineEntry): HistoryEntry {
+  const typeMap: Record<string, HistoryEntry['type']> = {
+    SALE: 'sale',
+    INVOICE: 'invoice',
+    CREDIT: 'credit',
+    GIFT_CARD_REDEMPTION: 'gift_card',
+    VOUCHER_REDEMPTION: 'voucher',
+    DEBT_PAYMENT: 'payment',
+    DELIVERY_NOTE: 'delivery_note',
+  };
+  const type = typeMap[raw.type] ?? 'sale';
+  const reference = String(raw.ref ?? raw.id ?? '');
+  const date = raw.timestamp;
+  // VOUCHER_REDEMPTION uses `discountAmount` instead of `amount`.
+  const rawAmount =
+    raw.type === 'VOUCHER_REDEMPTION'
+      ? (raw.discountAmount as unknown as number | undefined)
+      : (raw.amount as unknown as number | undefined);
+  const amount = typeof rawAmount === 'number' && !Number.isNaN(rawAmount) ? rawAmount : 0;
+  const status =
+    (raw.status as unknown as string | undefined) ??
+    (raw.paymentStatus as unknown as string | undefined) ??
+    (raw.invoiceType as unknown as string | undefined) ??
+    (raw.creditType as unknown as string | undefined);
+  const description =
+    (raw.description as unknown as string | null | undefined) ??
+    (raw.deliveryAddress as unknown as string | null | undefined) ??
+    undefined;
+  return { id: raw.id, date, type, reference, amount, status, description };
+}
+
+function getTypeMeta(type: HistoryEntry['type']): { label: string; icon: React.ElementType; color: string; bg: string } {
+  switch (type) {
+    case 'sale': return { label: 'Sale', icon: ShoppingBag, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-900/30' };
+    case 'invoice': return { label: 'Invoice', icon: FileText, color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-100 dark:bg-violet-900/30' };
+    case 'credit': return { label: 'Credit Note', icon: FileCheck, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30' };
+    case 'gift_card': return { label: 'Gift Card', icon: Gift, color: 'text-pink-600 dark:text-pink-400', bg: 'bg-pink-100 dark:bg-pink-900/30' };
+    case 'voucher': return { label: 'Voucher', icon: Tag, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-100 dark:bg-emerald-900/30' };
+    case 'payment': return { label: 'Payment', icon: HandCoins, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-100 dark:bg-blue-900/30' };
+    case 'delivery_note': return { label: 'Delivery', icon: Truck, color: 'text-cyan-600 dark:text-cyan-400', bg: 'bg-cyan-100 dark:bg-cyan-900/30' };
+    default: return { label: type, icon: Receipt, color: 'text-muted-foreground', bg: 'bg-muted' };
+  }
+}
+
+function CustomerHistoryDialog({
+  customer,
+  open,
+  onOpenChange,
+  storeId,
+}: {
+  customer: CustomerItem | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  storeId: string;
+}) {
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [sendingStatement, setSendingStatement] = useState(false);
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['customer-history', customer?.id, storeId],
+    queryFn: async (): Promise<CustomerHistoryData | null> => {
+      if (!customer) return null;
+      // Preferred path — typed API client (returns ApiResponse<CustomerHistoryResult>).
+      try {
+        const response = await customersApi.getHistory(customer.id);
+        const payload: CustomerHistoryResult | undefined = response?.data;
+        if (payload) {
+          return {
+            customer: payload.customer,
+            summary: payload.summary,
+            timeline: Array.isArray(payload.timeline)
+              ? payload.timeline.map(normalizeHistoryEntry)
+              : [],
+          };
+        }
+      } catch {
+        // fall through to direct fetch
+      }
+      // Fallback: direct fetch with same-origin credentials.
+      const res = await fetch(`/api/customers/${customer.id}/history`, {
+        credentials: 'same-origin',
+      });
+      const json = (await res.json()) as {
+        success?: boolean;
+        data?: CustomerHistoryResult;
+        error?: string;
+      };
+      if (!json.success || !json.data) {
+        throw new Error(json.error || 'Failed to load history');
+      }
+      const payload = json.data;
+      return {
+        customer: payload.customer,
+        summary: payload.summary,
+        timeline: Array.isArray(payload.timeline)
+          ? payload.timeline.map(normalizeHistoryEntry)
+          : [],
+      };
+    },
+    enabled: !!customer && open,
+  });
+
+  const summary = data?.summary;
+  const timeline: HistoryEntry[] = data?.timeline ?? [];
+  const filteredTimeline = useMemo(() => {
+    if (typeFilter === 'all') return timeline;
+    return timeline.filter((e) => e.type === typeFilter);
+  }, [timeline, typeFilter]);
+
+  async function handleSendStatement() {
+    if (!customer) return;
+    const phone = prompt('Enter WhatsApp phone number to send the statement to:', customer.phone || '') || '';
+    if (!phone) return;
+    setSendingStatement(true);
+    try {
+      const res = await whatsappApi.sendDocument({
+        type: 'statement',
+        documentId: customer.id,
+        storeId,
+        phone,
+      });
+      // whatsappApi.sendDocument returns ApiResponse<{waLink,...}> — unwrap .data
+      const waLink = res?.data?.waLink;
+      const title = res?.data?.documentTitle;
+      if (waLink) {
+        window.open(waLink, '_blank');
+        toast.success(`${title ?? 'Statement'} sent via WhatsApp`);
+      } else {
+        toast.error('No WhatsApp link returned by the server.');
+      }
+    } catch (err) {
+      const msg = handleError(err, 'Send statement via WhatsApp');
+      toast.error(msg);
+    } finally {
+      setSendingStatement(false);
+    }
+  }
+
+  if (!customer) return null;
+  const loyalty = getLoyaltyTier(customer.loyaltyPoints);
+  const gradient = getAvatarGradient(customer.name);
+
+  return (
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      size="2xl"
+      title={
+        <span className="flex items-center gap-2">
+          <History className="h-5 w-5 text-primary" />
+          Account History
+        </span>
+      }
+      description={`Full statement & activity timeline for ${customer.name}`}
+      footer={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button
+            onClick={handleSendStatement}
+            disabled={sendingStatement}
+            className="bg-green-600 hover:bg-green-700 text-white gap-2"
+          >
+            {sendingStatement ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            Send Statement via WhatsApp
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        {/* Customer Summary Card */}
+        <Card className="border-l-4 border-l-primary">
+          <CardContent className="p-4 space-y-4">
+            <div className="flex items-start gap-3">
+              <Avatar className="h-14 w-14 ring-2 ring-primary/20">
+                <AvatarFallback className={`text-lg text-white font-bold bg-gradient-to-br ${gradient}`}>
+                  {customer.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-lg truncate">{customer.name}</h3>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${loyalty.bg} ${loyalty.color}`}>
+                    {loyalty.icon} {loyalty.tier} Member
+                  </span>
+                  <DebtStatusBadge customer={customer} />
+                </div>
+                <div className="flex flex-wrap gap-3 mt-2 text-xs text-muted-foreground">
+                  {customer.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {customer.phone}</span>}
+                  {customer.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {customer.email}</span>}
+                </div>
+              </div>
+            </div>
+
+            {/* Summary stats grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              <SummaryStat label="Total Spent" value={summary ? formatKES(summary.totalSpent) : '—'} accent="text-green-600 dark:text-green-400" />
+              <SummaryStat label="Outstanding Debt" value={summary ? formatKES(summary.outstandingDebt) : formatKES(customer.currentDebtBalance)} accent={customer.currentDebtBalance > 0 ? 'text-red-600' : 'text-green-600'} />
+              <SummaryStat label="Loyalty Points" value={`${customer.loyaltyPoints} pts`} />
+              <SummaryStat label="Avg Order Value" value={summary && summary.transactionCount > 0 ? formatKES(summary.avgOrderValue) : '—'} />
+              <SummaryStat label="Last Visit" value={summary?.lastVisit ? formatDate(summary.lastVisit) : '—'} />
+              <SummaryStat label="Customer Since" value={formatDate(customer.createdAt)} />
+              <SummaryStat label="Transactions" value={summary ? String(summary.transactionCount) : '—'} />
+              <SummaryStat label="Credit Limit" value={formatKES(customer.debtLimit)} />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Timeline filter */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Filter:</span>
+          {TYPE_FILTERS.map((tf) => (
+            <Button
+              key={tf.id}
+              size="sm"
+              variant={typeFilter === tf.id ? 'default' : 'outline'}
+              className="h-7 text-xs"
+              onClick={() => setTypeFilter(tf.id)}
+            >
+              {tf.label}
+            </Button>
+          ))}
+          <span className="ml-auto text-xs text-muted-foreground">
+            {filteredTimeline.length} entr{filteredTimeline.length === 1 ? 'y' : 'ies'}
+          </span>
+        </div>
+
+        {/* Timeline */}
+        {isLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+          </div>
+        ) : isError ? (
+          <div className="text-center py-10 text-muted-foreground">
+            <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-amber-500" />
+            <p className="text-sm">Failed to load customer history.</p>
+            <p className="text-xs mt-1">The history API may still be initializing. Try again in a moment.</p>
+          </div>
+        ) : filteredTimeline.length === 0 ? (
+          <div className="text-center py-10 text-muted-foreground">
+            <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">No activity recorded yet.</p>
+          </div>
+        ) : (
+          <ScrollArea className="max-h-[50vh]">
+            <div className="space-y-2 pr-2">
+              {filteredTimeline.map((entry) => {
+                const meta = getTypeMeta(entry.type);
+                const Icon = meta.icon;
+                return (
+                  <div
+                    key={entry.id}
+                    className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-muted/40 transition-colors"
+                  >
+                    <div className={`shrink-0 p-2 rounded-lg ${meta.bg}`}>
+                      <Icon className={`h-4 w-4 ${meta.color}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <p className="text-sm font-medium">{meta.label} · {entry.reference}</p>
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDateTime(entry.date)}</span>
+                      </div>
+                      {entry.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5 break-words">{entry.description}</p>
+                      )}
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        {entry.amount !== 0 && (
+                          <span className={`text-sm font-semibold ${entry.type === 'payment' || entry.type === 'credit' ? 'text-green-600' : 'text-foreground'}`}>
+                            {entry.type === 'payment' || entry.type === 'credit' ? '+' : ''}{formatKES(entry.amount)}
+                          </span>
+                        )}
+                        {entry.status && (
+                          <Badge variant="outline" className="text-[10px]">{entry.status}</Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        )}
+      </div>
+    </ResponsiveDialog>
+  );
+}
+
+function SummaryStat({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div className="rounded-lg border bg-muted/20 p-2.5">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={`text-sm font-semibold mt-0.5 ${accent ?? ''}`}>{value}</p>
+    </div>
+  );
+}
+
 export default function CustomersTab() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [addCustomerOpen, setAddCustomerOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerItem | null>(null);
+  const [historyCustomer, setHistoryCustomer] = useState<CustomerItem | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '', address: '', idNumber: '', debtLimit: '50000', notes: '' });
   const [debtPaymentOpen, setDebtPaymentOpen] = useState(false);
   const [debtPaymentAmount, setDebtPaymentAmount] = useState('');
@@ -136,9 +474,18 @@ export default function CustomersTab() {
   // Form validation
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
+  // Debounce search input by 300ms so typing doesn't fire a request per keystroke.
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, [searchQuery]);
+
   const { data: customersData, isLoading } = useQuery({
-    queryKey: ['customers', currentStoreId, searchQuery],
-    queryFn: () => customersApi.list({ storeId: currentStoreId, search: searchQuery || undefined, limit: 200 }),
+    queryKey: ['customers', currentStoreId, debouncedSearch],
+    queryFn: () => customersApi.list({ storeId: currentStoreId, search: debouncedSearch || undefined, limit: 200 }),
   });
 
   const { data: debtData } = useQuery({
@@ -161,7 +508,10 @@ export default function CustomersTab() {
       setNewCustomer({ name: '', phone: '', email: '', address: '', idNumber: '', debtLimit: '50000', notes: '' });
       setFormErrors({});
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Create customer');
+      toast.error(msg);
+    },
   });
 
   const debtPaymentMutation = useMutation({
@@ -177,7 +527,10 @@ export default function CustomersTab() {
       setDebtPaymentReference('');
       setSelectedDebtLedgerId('');
     },
-    onError: (err: Error) => toast.error(err.message || 'Failed to record payment'),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Record debt payment');
+      toast.error(msg);
+    },
   });
 
   const rawCustomers = Array.isArray(customersData?.data) ? customersData.data : [];
@@ -616,7 +969,7 @@ export default function CustomersTab() {
                         Loyalty {sortField === 'loyalty' && (sortDirection === 'asc' ? <ArrowUpDown className="h-3 w-3" /> : <ArrowUpDown className="h-3 w-3 rotate-180" />)}
                       </button>
                     </TableHead>
-                    <TableHead className="w-[60px]">View</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -687,9 +1040,42 @@ export default function CustomersTab() {
                           </span>
                         </TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 focus-visible:opacity-100 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                                    onClick={(e) => { e.stopPropagation(); setSelectedCustomer(customer); }}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>View Profile</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 focus-visible:opacity-100 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-primary hover:text-primary"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setHistoryCustomer(customer);
+                                      setHistoryOpen(true);
+                                    }}
+                                  >
+                                    <History className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>View Account / History</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -1009,6 +1395,19 @@ export default function CustomersTab() {
                   >
                     <ShoppingBag className="mr-2 h-4 w-4" /> View Transactions
                   </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2"
+                    onClick={() => {
+                      if (selectedCustomer) {
+                        setHistoryCustomer(selectedCustomer);
+                        setHistoryOpen(true);
+                        setSelectedCustomer(null);
+                      }
+                    }}
+                  >
+                    <History className="h-4 w-4" /> View Account / History
+                  </Button>
                 </div>
 
                 <Separator />
@@ -1096,6 +1495,17 @@ export default function CustomersTab() {
           })()}
         </SheetContent>
       </Sheet>
+
+      {/* Customer History Dialog */}
+      <CustomerHistoryDialog
+        customer={historyCustomer}
+        open={historyOpen}
+        onOpenChange={(open) => {
+          setHistoryOpen(open);
+          if (!open) setHistoryCustomer(null);
+        }}
+        storeId={currentStoreId}
+      />
     </div>
   );
 }

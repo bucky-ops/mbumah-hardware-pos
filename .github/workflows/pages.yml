@@ -1,0 +1,104 @@
+# ============================================================================
+# GitHub Pages — Project landing page featuring the Mbumah Hardware logo
+# Publishes a static HTML page (with public/logo.png) to GitHub Pages
+# ============================================================================
+
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main, update]
+    paths:
+      - 'public/logo.png'
+      - 'public/logo.svg'
+      - '.github/workflows/pages.yml'
+      - 'docs/landing.html'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build landing page
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Pages artifact
+        run: |
+          mkdir -p _site
+          # Copy logo assets
+          cp public/logo.png _site/logo.png 2>/dev/null || true
+          cp public/logo.svg _site/logo.svg 2>/dev/null || true
+          cp public/robots.txt _site/robots.txt 2>/dev/null || true
+          # If a custom landing page exists, use it; otherwise generate one
+          if [ -f docs/landing.html ]; then
+            cp docs/landing.html _site/index.html
+          else
+            cat > _site/index.html <<'HTML'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Mbumah Hardware — POS &amp; ERP</title>
+            <meta name="description" content="Modern Point-of-Sale & Enterprise Resource Planning System for Kenyan Hardware Stores." />
+            <style>
+              * { box-sizing: border-box; }
+              body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #0b1220; color: #e2e8f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+              .card { text-align: center; padding: 3rem 1.5rem; max-width: 720px; }
+              img.logo { width: 180px; height: 180px; border-radius: 28px; box-shadow: 0 20px 60px rgba(0,0,0,.45); margin-bottom: 1.75rem; }
+              h1 { font-size: 2.5rem; margin: .25rem 0; letter-spacing: -.02em; }
+              .tag { color: #94a3b8; font-size: 1.1rem; margin-bottom: 2rem; }
+              .badges { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; margin-bottom: 2rem; }
+              .badge { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); padding: .35rem .75rem; border-radius: 999px; font-size: .8rem; }
+              a.btn { display: inline-block; background: #16a34a; color: #fff; text-decoration: none; padding: .85rem 1.75rem; border-radius: 12px; font-weight: 600; }
+              a.btn:hover { background: #15803d; }
+              .links { margin-top: 2rem; color: #64748b; font-size: .85rem; }
+              a.subtle { color: #38bdf8; text-decoration: none; }
+            </style>
+          </head>
+          <body>
+            <main class="card">
+              <img class="logo" src="logo.png" alt="Mbumah Hardware Logo" />
+              <h1>Mbumah Hardware</h1>
+              <p class="tag">POS &amp; ERP System for Kenyan Hardware Stores</p>
+              <div class="badges">
+                <span class="badge">Next.js 16</span>
+                <span class="badge">TypeScript 5</span>
+                <span class="badge">Prisma</span>
+                <span class="badge">Tailwind CSS 4</span>
+                <span class="badge">M-Pesa Daraja</span>
+              </div>
+              <a class="btn" href="https://github.com/bucky-ops/mbumah-hardware-pos">View on GitHub</a>
+              <p class="links">Multi-tenant &middot; RBAC &middot; Inventory &middot; Invoicing &middot; WhatsApp &middot; Analytics</p>
+            </main>
+          </body>
+          </html>
+          HTML
+          fi
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

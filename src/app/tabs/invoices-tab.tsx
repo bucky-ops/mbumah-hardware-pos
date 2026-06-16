@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -21,6 +21,8 @@ import {
   type ProductListItem,
   type CustomerItem,
 } from '@/lib/api';
+import { handleError } from '@/lib/error-handler';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -123,6 +125,56 @@ function computeLineTax(item: LineItemDraft): number {
   return (base - discount) * (item.taxRate / 100);
 }
 
+// ─── Reusable print helper ───────────────────────────────────────────────────
+// Opens a new window with print-friendly HTML. Falls back to window.print()
+// if popups are blocked.
+
+function printDocument(html: string, title = 'Print') {
+  const printWindow = window.open('', '_blank', 'width=820,height=920');
+  if (!printWindow) {
+    toast.error('Pop-up blocked. Showing inline print dialog instead.');
+    window.print();
+    return;
+  }
+  printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
+    <style>
+      @page { margin: 14mm; }
+      body { font-family: 'Segoe UI', Arial, Helvetica, sans-serif; color: #1f2937; margin: 0; padding: 22px; }
+      h1, h2, h3, h4 { margin: 0; }
+      .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #047857; padding-bottom: 12px; margin-bottom: 16px; }
+      .head h1 { color: #047857; font-size: 22px; }
+      .muted { color: #6b7280; font-size: 12px; }
+      table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+      th { background: #f3f4f6; text-align: left; padding: 8px 10px; border: 1px solid #e5e7eb; font-weight: 600; font-size: 12px; }
+      td { padding: 8px 10px; border: 1px solid #e5e7eb; font-size: 12px; }
+      .text-right { text-align: right; }
+      .text-center { text-align: center; }
+      .totals { display: flex; justify-content: flex-end; margin-top: 12px; }
+      .totals table { width: 280px; }
+      .totals td { border: none; padding: 4px 8px; }
+      .totals .grand { border-top: 2px solid #1f2937; font-weight: 700; font-size: 14px; }
+      .sign { margin-top: 48px; display: flex; justify-content: space-between; }
+      .sign div { width: 45%; }
+      .sign .line { border-top: 1px solid #9ca3af; margin-top: 28px; padding-top: 4px; font-size: 11px; color: #6b7280; }
+      .badge { display: inline-block; padding: 3px 10px; border-radius: 9999px; background: #fef3c7; color: #92400e; font-size: 11px; font-weight: 700; }
+      .footer { margin-top: 28px; text-align: center; font-size: 11px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+    </style></head><body>${html}</body></html>`);
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => printWindow.print(), 250);
+}
+
+// Escape a string for safe inclusion in raw HTML (prevents breaking the print document).
+function escapeHtml(str: unknown): string {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 let lineItemCounter = 0;
 function newLineItemKey(): string {
   return `line-${Date.now()}-${++lineItemCounter}`;
@@ -151,7 +203,20 @@ export default function InvoicesTab() {
   // ── State ──
   const [typeFilter, setTypeFilter] = useState<TypeFilterTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  // Debounce search input (300ms) so the client-side filter doesn't run on every keystroke.
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [searchQuery]);
 
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
@@ -214,7 +279,10 @@ export default function InvoicesTab() {
       resetCreateForm();
       setCreateOpen(false);
     },
-    onError: (err: Error) => toast.error(err.message || 'Failed to create document'),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Create invoice document');
+      toast.error(msg);
+    },
   });
 
   const updateMutation = useMutation({
@@ -226,7 +294,10 @@ export default function InvoicesTab() {
         queryClient.invalidateQueries({ queryKey: ['invoice-detail', variables.id] });
       }
     },
-    onError: (err: Error) => toast.error(err.message || 'Failed to update document'),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Update invoice document');
+      toast.error(msg);
+    },
   });
 
   // ── Derived data ──
@@ -238,8 +309,8 @@ export default function InvoicesTab() {
   // Filter by search
   const invoices = useMemo(() => {
     let result = rawInvoices;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase();
       result = result.filter(inv =>
         inv.invoiceNumber.toLowerCase().includes(q) ||
         inv.customerName.toLowerCase().includes(q) ||
@@ -262,7 +333,7 @@ export default function InvoicesTab() {
       return 0;
     });
     return result;
-  }, [rawInvoices, searchQuery, sortField, sortDirection]);
+  }, [rawInvoices, debouncedSearch, sortField, sortDirection]);
 
   // Stats
   const stats = useMemo(() => {
@@ -436,9 +507,86 @@ export default function InvoicesTab() {
     updateMutation.mutate({ id: invoice.id, data: { status } });
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const handlePrint = useCallback(async (invoice: InvoiceItem) => {
+    try {
+      // Fetch full detail (with line items) if not already loaded.
+      let detail: InvoiceItem = invoice;
+      if (!invoice.items || invoice.items.length === 0) {
+        const res = await invoicesApi.get(invoice.id);
+        detail = (res?.data as InvoiceItem) || invoice;
+      }
+      const items = detail.items || [];
+      const rows = items.map((item, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>
+            <div><strong>${escapeHtml(item.productName)}</strong></div>
+            ${item.description ? `<div class="muted">${escapeHtml(item.description)}</div>` : ''}
+          </td>
+          <td class="text-center">${item.quantity} ${escapeHtml(item.unitType)}</td>
+          <td class="text-right">${formatKES(item.pricePerUnit)}</td>
+          <td class="text-center">${item.discountPercent}%</td>
+          <td class="text-center">${item.taxRate}%</td>
+          <td class="text-right">${formatKES(item.lineTotal)}</td>
+        </tr>
+      `).join('');
+      const html = `
+        <div class="head">
+          <div>
+            <h1>Mbumah Hardware</h1>
+            <p class="muted">Juja, Kiambu County · +254 700 000 000</p>
+          </div>
+          <div style="text-align:right">
+            <span class="badge">${escapeHtml(detail.invoiceType)}</span>
+            <p class="muted" style="margin-top:6px"><strong>${escapeHtml(detail.invoiceNumber)}</strong></p>
+            <p class="muted">Issued: ${formatDate(detail.issueDate)}</p>
+            ${detail.dueDate ? `<p class="muted">Due: ${formatDate(detail.dueDate)}</p>` : ''}
+            <p class="muted">Status: ${escapeHtml(detail.status)}</p>
+          </div>
+        </div>
+        <h3 style="font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Bill To</h3>
+        <div style="font-size:13px;margin-bottom:12px">
+          <div><strong>${escapeHtml(detail.customerName)}</strong></div>
+          ${detail.customerPhone ? `<div class="muted">${escapeHtml(detail.customerPhone)}</div>` : ''}
+          ${detail.customerEmail ? `<div class="muted">${escapeHtml(detail.customerEmail)}</div>` : ''}
+          ${detail.customerAddress ? `<div class="muted">${escapeHtml(detail.customerAddress)}</div>` : ''}
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Item</th>
+              <th class="text-center">Qty</th>
+              <th class="text-right">Unit Price</th>
+              <th class="text-center">Disc %</th>
+              <th class="text-center">Tax %</th>
+              <th class="text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody>${rows || '<tr><td colspan="7" class="text-center muted">No line items</td></tr>'}</tbody>
+        </table>
+        <div class="totals">
+          <table>
+            <tr><td class="muted">Subtotal</td><td class="text-right">${formatKES(detail.subtotal)}</td></tr>
+            ${detail.discountAmount > 0 ? `<tr><td class="muted">Discount</td><td class="text-right">-${formatKES(detail.discountAmount)}</td></tr>` : ''}
+            <tr><td class="muted">Tax</td><td class="text-right">${formatKES(detail.taxAmount)}</td></tr>
+            <tr class="grand"><td>Total</td><td class="text-right">${formatKES(detail.totalAmount)}</td></tr>
+          </table>
+        </div>
+        ${detail.notes ? `<div style="margin-top:16px"><strong>Notes:</strong> <span style="font-size:12px">${escapeHtml(detail.notes)}</span></div>` : ''}
+        ${detail.terms ? `<div style="margin-top:8px"><strong>Terms:</strong> <span style="font-size:12px">${escapeHtml(detail.terms)}</span></div>` : ''}
+        <div class="sign">
+          <div><div class="line">Authorised Signature</div></div>
+          <div><div class="line">Customer Acceptance</div></div>
+        </div>
+        <div class="footer">This document was generated by Mbumah Hardware POS · ${formatDateTime(new Date())}</div>
+      `;
+      printDocument(html, `${detail.invoiceType}-${detail.invoiceNumber}`);
+    } catch (err) {
+      const msg = handleError(err, 'Print invoice');
+      toast.error(msg);
+    }
+  }, []);
 
   const handleSendWhatsApp = async (invoice: InvoiceItem) => {
     try {
@@ -456,7 +604,8 @@ export default function InvoicesTab() {
         toast.success(`${res.documentTitle} sent via WhatsApp`);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send via WhatsApp');
+      const msg = handleError(err, 'Send invoice via WhatsApp');
+      toast.error(msg);
     }
   };
 
@@ -722,7 +871,7 @@ export default function InvoicesTab() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
-                            onClick={() => { setViewingInvoice(inv); setViewOpen(true); setTimeout(() => handlePrint(), 300); }}
+                            onClick={() => handlePrint(inv)}
                             title="Print"
                           >
                             <Printer className="h-4 w-4" />
@@ -749,20 +898,30 @@ export default function InvoicesTab() {
       </Card>
 
       {/* ── Create Dialog ── */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {getTypeIcon(createType)}
-              Create New Document
-            </DialogTitle>
-            <DialogDescription>
-              Generate a new invoice, quotation, or other financial document
-            </DialogDescription>
-          </DialogHeader>
-
-          <ScrollArea className="max-h-[80vh] -mx-6 px-6">
-            <div className="space-y-6 pb-4">
+      <ResponsiveDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        size="2xl"
+        title={
+          <span className="flex items-center gap-2">
+            {getTypeIcon(createType)}
+            Create New Document
+          </span>
+        }
+        description="Generate a new invoice, quotation, or other financial document"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreate} disabled={createMutation.isPending} className="gap-2">
+              {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Create {createType.charAt(0) + createType.slice(1).toLowerCase().replace('_', ' ')}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-6 pb-2">
               {/* Document Type + Customer */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -1121,20 +1280,8 @@ export default function InvoicesTab() {
                   />
                 </div>
               </div>
-            </div>
-          </ScrollArea>
-
-          <DialogFooter className="border-t pt-4">
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleCreate} disabled={createMutation.isPending} className="gap-2">
-              {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Create {createType.charAt(0) + createType.slice(1).toLowerCase().replace('_', ' ')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </ResponsiveDialog>
 
       {/* ── View Dialog ── */}
       <Dialog open={viewOpen} onOpenChange={setViewOpen}>
@@ -1153,7 +1300,7 @@ export default function InvoicesTab() {
                   </DialogDescription>
                 </div>
               </div>
-              <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5">
+              <Button variant="outline" size="sm" onClick={() => invoiceDetail && handlePrint(invoiceDetail)} className="gap-1.5">
                 <Printer className="h-4 w-4" /> Print
               </Button>
             </div>

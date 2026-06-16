@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -8,7 +8,7 @@ import {
   Minus, RotateCcw, Loader2, Filter, Users, Wallet,
   TrendingUp, TrendingDown, Scale, ChevronUp, ChevronDown,
   FileText, User, CircleDollarSign, AlertCircle, MoreHorizontal,
-  Pencil, Trash2, MessageCircle,
+  Pencil, Trash2, MessageCircle, Printer,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
@@ -18,6 +18,8 @@ import {
   type CustomerCreditItem,
   type CustomerItem,
 } from '@/lib/api';
+import { handleError } from '@/lib/error-handler';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,7 +29,6 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -144,6 +145,7 @@ export default function CreditsTab() {
 
   // State
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('all');
   const [creditTypeFilter, setCreditTypeFilter] = useState<string>('all');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -152,6 +154,19 @@ export default function CreditsTab() {
   const [showFilters, setShowFilters] = useState(false);
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  // Debounce search (300ms) — search is client-side; this prevents the filter
+  // from running on every keystroke for large ledgers.
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [searchQuery]);
 
   // Add credit/debit form state
   const [formCustomerId, setFormCustomerId] = useState<string>('');
@@ -199,7 +214,10 @@ export default function CreditsTab() {
       queryClient.invalidateQueries({ queryKey: ['customer-credits', currentStoreId] });
       queryClient.invalidateQueries({ queryKey: ['customers', currentStoreId] });
     },
-    onError: (err: Error) => toast.error(err.message || 'Failed to create entry'),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Create credit entry');
+      toast.error(msg);
+    },
   });
 
   const updateCreditMutation = useMutation({
@@ -212,7 +230,10 @@ export default function CreditsTab() {
       queryClient.invalidateQueries({ queryKey: ['customer-credits', currentStoreId] });
       queryClient.invalidateQueries({ queryKey: ['customers', currentStoreId] });
     },
-    onError: (err: Error) => toast.error(err.message || 'Failed to update entry'),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Update credit entry');
+      toast.error(msg);
+    },
   });
 
   const deleteCreditMutation = useMutation({
@@ -224,7 +245,10 @@ export default function CreditsTab() {
       queryClient.invalidateQueries({ queryKey: ['customer-credits', currentStoreId] });
       queryClient.invalidateQueries({ queryKey: ['customers', currentStoreId] });
     },
-    onError: (err: Error) => toast.error(err.message || 'Failed to void entry'),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Void credit entry');
+      toast.error(msg);
+    },
   });
 
   // Helpers
@@ -241,8 +265,8 @@ export default function CreditsTab() {
   const filteredCredits = useMemo(() => {
     let result = credits;
 
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
       result = result.filter((c) => {
         const customer = customerMap.get(c.customerId);
         const customerName = customer?.name?.toLowerCase() || '';
@@ -253,7 +277,7 @@ export default function CreditsTab() {
     }
 
     return result;
-  }, [credits, searchQuery, customerMap]);
+  }, [credits, debouncedSearch, customerMap]);
 
   // Sort credits
   const sortedCredits = useMemo(() => {
@@ -413,8 +437,68 @@ export default function CreditsTab() {
         toast.success(`${res.documentTitle} sent via WhatsApp`);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send via WhatsApp');
+      const msg = handleError(err, 'Send credit note via WhatsApp');
+      toast.error(msg);
     }
+  }
+
+  function handlePrintCredit(entry: CustomerCreditItem) {
+    const customer = customers.find((c: CustomerItem) => c.id === entry.customerId);
+    const customerName = customer?.name || 'Unknown Customer';
+    const customerPhone = customer?.phone || '—';
+    const badge = getCreditTypeBadge(entry.creditType);
+    const printWindow = window.open('', '_blank', 'width=800,height=900');
+    if (!printWindow) {
+      toast.error('Pop-up blocked. Please allow pop-ups to print.');
+      return;
+    }
+    const amt = (entry.creditType === 'CREDIT' || entry.creditType === 'REFUND' ? '+' : '-') + formatKES(entry.amount);
+    printWindow.document.write(`
+      <!doctype html><html><head><title>Credit Note - ${entry.reference || entry.id.slice(0, 8)}</title>
+      <style>
+        body { font-family: Arial, Helvetica, sans-serif; color: #1f2937; margin: 0; padding: 32px; }
+        h1 { color: #047857; margin: 0 0 4px; font-size: 22px; }
+        .muted { color: #6b7280; font-size: 12px; }
+        h2 { font-size: 14px; margin: 24px 0 8px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; }
+        .row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; border-bottom: 1px dashed #e5e7eb; }
+        .label { color: #6b7280; }
+        .value { font-weight: 600; }
+        .amount { font-size: 28px; font-weight: 700; color: ${entry.creditType === 'CREDIT' || entry.creditType === 'REFUND' ? '#047857' : '#b91c1c'}; }
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 9999px; background: #fef3c7; color: #92400e; font-size: 11px; font-weight: 700; }
+        .sign { margin-top: 64px; display: flex; justify-content: space-between; }
+        .sign div { width: 45%; }
+        .sign .line { border-top: 1px solid #9ca3af; margin-top: 36px; padding-top: 4px; font-size: 11px; color: #6b7280; }
+        .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #047857; padding-bottom: 12px; margin-bottom: 16px; }
+      </style></head>
+      <body>
+        <div class="head">
+          <div>
+            <h1>Mbumah Hardware</h1>
+            <p class="muted">Juja, Kiambu County · +254 700 000 000</p>
+          </div>
+          <div style="text-align:right">
+            <span class="badge">${badge.label.toUpperCase()}</span>
+            <p class="muted" style="margin-top:6px">Ref: ${entry.reference || '—'}</p>
+            <p class="muted">Date: ${formatDateTime(entry.createdAt)}</p>
+          </div>
+        </div>
+        <h2>Billed To</h2>
+        <div class="row"><span class="label">Customer</span><span class="value">${customerName}</span></div>
+        <div class="row"><span class="label">Phone</span><span class="value">${customerPhone}</span></div>
+        ${entry.description ? `<div class="row"><span class="label">Description</span><span class="value">${entry.description}</span></div>` : ''}
+        <h2>Amount</h2>
+        <div class="amount">${amt}</div>
+        <p class="muted" style="margin-top:4px">Running balance: ${formatKES(Math.abs(entry.runningBalance))} ${entry.runningBalance < 0 ? 'DR' : 'CR'}${entry.status === 'VOIDED' ? ' · VOIDED' : ''}</p>
+        <div class="sign">
+          <div><div class="line">Authorised Signature</div></div>
+          <div><div class="line">Customer Acknowledgement</div></div>
+        </div>
+        <p class="muted" style="margin-top:32px;text-align:center">This is a computer-generated credit note from Mbumah Hardware POS.</p>
+      </body></html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 250);
   }
 
   function openEditDialog(credit: CustomerCreditItem) {
@@ -773,9 +857,18 @@ export default function CreditsTab() {
                                   <DropdownMenuItem
                                     onClick={() => handleSendCreditWhatsApp(entry)}
                                     className="gap-2 text-green-600 dark:text-green-400 focus:text-green-600 focus:bg-green-50 dark:focus:bg-green-950/30"
+                                    onSelect={(e) => e.preventDefault()}
                                   >
                                     <MessageCircle className="h-4 w-4" />
                                     Send via WhatsApp
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => handlePrintCredit(entry)}
+                                    className="gap-2 focus:bg-muted/50"
+                                    onSelect={(e) => e.preventDefault()}
+                                  >
+                                    <Printer className="h-4 w-4" />
+                                    Print Credit Note
                                   </DropdownMenuItem>
                                   {!isVoided && (
                                     <>
@@ -881,17 +974,42 @@ export default function CreditsTab() {
       </div>
 
       {/* Add Credit/Debit Dialog */}
-      <Dialog open={addDialogOpen} onOpenChange={(open) => { if (!open) resetForm(); setAddDialogOpen(open); }}>
-        <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CircleDollarSign className="h-5 w-5" />
-              Add Credit / Debit Entry
-            </DialogTitle>
-            <DialogDescription>
-              Record a new credit, debit, adjustment, or refund for a customer account.
-            </DialogDescription>
-          </DialogHeader>
+      <ResponsiveDialog
+        open={addDialogOpen}
+        onOpenChange={(open) => { if (!open) resetForm(); setAddDialogOpen(open); }}
+        size="md"
+        title={
+          <span className="flex items-center gap-2">
+            <CircleDollarSign className="h-5 w-5" />
+            Add Credit / Debit Entry
+          </span>
+        }
+        description="Record a new credit, debit, adjustment, or refund for a customer account."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => { resetForm(); setAddDialogOpen(false); }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateEntry}
+              disabled={createCreditMutation.isPending}
+              className="gap-2"
+            >
+              {createCreditMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4" />
+                  Create Entry
+                </>
+              )}
+            </Button>
+          </>
+        }
+      >
           <div className="space-y-4 py-2">
             {/* Customer Selection */}
             <div className="space-y-2">
@@ -1030,43 +1148,45 @@ export default function CreditsTab() {
               </>
             )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { resetForm(); setAddDialogOpen(false); }}>
+      </ResponsiveDialog>
+
+      {/* Edit Credit Entry Dialog */}
+      <ResponsiveDialog
+        open={editDialogOpen}
+        onOpenChange={(open) => { if (!open) { setEditingCredit(null); } setEditDialogOpen(open); }}
+        size="md"
+        title={
+          <span className="flex items-center gap-2">
+            <Pencil className="h-5 w-5" />
+            Edit Credit Entry
+          </span>
+        }
+        description="Update the details of this credit entry. Changing the amount or type will recalculate running balances."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => { setEditingCredit(null); setEditDialogOpen(false); }}>
               Cancel
             </Button>
             <Button
-              onClick={handleCreateEntry}
-              disabled={createCreditMutation.isPending}
+              onClick={handleUpdateEntry}
+              disabled={updateCreditMutation.isPending}
               className="gap-2"
             >
-              {createCreditMutation.isPending ? (
+              {updateCreditMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Creating...
+                  Updating...
                 </>
               ) : (
                 <>
-                  <Plus className="h-4 w-4" />
-                  Create Entry
+                  <Pencil className="h-4 w-4" />
+                  Update Entry
                 </>
               )}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Credit Entry Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={(open) => { if (!open) { setEditingCredit(null); } setEditDialogOpen(open); }}>
-        <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Pencil className="h-5 w-5" />
-              Edit Credit Entry
-            </DialogTitle>
-            <DialogDescription>
-              Update the details of this credit entry. Changing the amount or type will recalculate running balances.
-            </DialogDescription>
-          </DialogHeader>
+          </>
+        }
+      >
           {editingCredit && (
             <div className="space-y-4 py-2">
               {/* Customer (read-only) */}
@@ -1170,30 +1290,7 @@ export default function CreditsTab() {
               </div>
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setEditingCredit(null); setEditDialogOpen(false); }}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleUpdateEntry}
-              disabled={updateCreditMutation.isPending}
-              className="gap-2"
-            >
-              {updateCreditMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                <>
-                  <Pencil className="h-4 w-4" />
-                  Update Entry
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </ResponsiveDialog>
 
       {/* Void Confirmation AlertDialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={(open) => { if (!open) setDeletingCredit(null); setDeleteDialogOpen(open); }}>

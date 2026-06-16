@@ -60,6 +60,10 @@ export function Providers({ children }: { children: ReactNode }) {
             staleTime: 30 * 1000,
             retry: 1,
             refetchOnWindowFocus: false,
+            // Auto-refresh server data every 1 minute so dashboards, POS stock,
+            // inventory and reports stay current without manual reloads.
+            refetchInterval: 60 * 1000,
+            refetchIntervalInBackground: false,
           },
         },
       })

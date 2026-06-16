@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
   ResponsiveContainer, PieChart, Pie, Cell,
+  Area, AreaChart,
 } from 'recharts';
 import {
   TrendingUp, TrendingDown, ShoppingCart, AlertTriangle,
@@ -13,6 +14,7 @@ import {
   Clock, ArrowRight, Activity, CheckCircle2,
   PackageX, CircleDollarSign, KeyRound, ChevronRight,
   Banknote, Zap, Timer, Play, Square, Calculator, LogOut,
+  ArrowUpRight, Sparkles,
 } from 'lucide-react';
 
 import { useAppStore, useAuthStore, type AppTab } from '@/lib/stores';
@@ -22,6 +24,7 @@ import {
   shiftsApi,
   formatKES, formatDateTime, formatRelativeTime,
 } from '@/lib/api';
+import { handleError } from '@/lib/error-handler';
 import { toast } from 'sonner';
 import type { TopProduct, ShiftData } from '@/lib/types';
 
@@ -2071,6 +2074,191 @@ function DashboardDetailDialog({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Sales Trend mini-widget — compact last-7-day revenue area chart + top-3
+// growing products. Pulls from /api/trends/analysis (range=7d). Falls back
+// gracefully if the trends endpoint isn't available yet.
+// ---------------------------------------------------------------------------
+
+interface DashboardGrowingProduct {
+  productId: string;
+  name: string;
+  growthPct: number;
+}
+interface DashboardForecastPoint {
+  label: string;
+  predicted: number;
+}
+interface DashboardTrendsPayload {
+  growing?: DashboardGrowingProduct[];
+  forecast?: DashboardForecastPoint[];
+  isDemo?: boolean;
+}
+
+async function fetchDashboardTrends(storeId: string): Promise<DashboardTrendsPayload> {
+  const params = new URLSearchParams({ storeId, range: '7d' });
+  const res = await fetch(`/api/trends/analysis?${params.toString()}`, { credentials: 'same-origin' });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(txt || `Trends API returned ${res.status}`);
+  }
+  const json = await res.json();
+  const d = json?.data ?? json;
+  return {
+    growing: Array.isArray(d?.growing) ? d.growing : [],
+    forecast: Array.isArray(d?.forecast) ? d.forecast : [],
+    isDemo: !!d?.isDemo,
+  };
+}
+
+function SalesTrendsWidget({ storeId, onSeeMore }: { storeId: string; onSeeMore: () => void }) {
+  const { data: trends, isLoading, error } = useQuery<DashboardTrendsPayload>({
+    queryKey: ['dashboard-trends', storeId],
+    queryFn: () => fetchDashboardTrends(storeId),
+    retry: false,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  });
+
+  // Surface fetch errors once (non-blocking)
+  React.useEffect(() => {
+    if (error) {
+      const msg = handleError(error, 'Dashboard trends');
+      console.warn('[Dashboard] trends fetch failed:', msg);
+    }
+  }, [error]);
+
+  const chartData = useMemo(() => {
+    return (trends?.forecast ?? []).map((f) => ({
+      label: f.label,
+      predicted: Math.round(Number(f.predicted ?? 0)),
+    }));
+  }, [trends]);
+
+  const topGrowing = useMemo(() => {
+    return (trends?.growing ?? []).slice(0, 3);
+  }, [trends]);
+
+  const totalForecast = chartData.reduce((s, d) => s + d.predicted, 0);
+  const peakDay = chartData.reduce((m, d) => Math.max(m, d.predicted), 0);
+
+  return (
+    <Card className="backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-all duration-200">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <CardTitle className="text-sm font-semibold flex items-center gap-2 flex-wrap">
+              <Sparkles className="h-4 w-4 text-primary" />
+              Sales Trend (7d)
+              {trends?.isDemo && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30">
+                  Demo
+                </Badge>
+              )}
+            </CardTitle>
+            <CardDescription className="text-xs mt-0.5">
+              Forecast: <strong>{formatKES(totalForecast)}</strong>{peakDay > 0 && <> · Peak: {formatKES(peakDay)}</>}
+            </CardDescription>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs shrink-0"
+            onClick={onSeeMore}
+          >
+            Details
+            <ArrowRight className="h-3 w-3 ml-1" />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="pb-4">
+        {isLoading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-20 w-full" />
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {/* Compact area chart */}
+            {chartData.length > 0 ? (
+              <div className="h-32">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="dashTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10 }} className="text-muted-foreground" />
+                    <YAxis
+                      tick={{ fontSize: 10 }}
+                      className="text-muted-foreground"
+                      tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`}
+                      width={36}
+                    />
+                    <RechartsTooltip
+                      formatter={(value: number) => [formatKES(value), 'Predicted']}
+                      contentStyle={{ fontSize: 12, padding: '4px 8px' }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="predicted"
+                      name="Predicted"
+                      stroke="#10b981"
+                      strokeWidth={2}
+                      fill="url(#dashTrendGrad)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-32 flex flex-col items-center justify-center text-center">
+                <TrendingUp className="h-8 w-8 text-muted-foreground/30 mb-1" />
+                <p className="text-xs text-muted-foreground">No forecast data yet.</p>
+                <p className="text-[10px] text-muted-foreground/70">Generates once sales history is available.</p>
+              </div>
+            )}
+
+            {/* Top 3 growing products list */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <ArrowUpRight className="h-3 w-3 text-green-600" />
+                  Top 3 Growing Products
+                </span>
+              </div>
+              {topGrowing.length > 0 ? (
+                <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                  {topGrowing.map((p, i) => (
+                    <div
+                      key={p.productId}
+                      className="flex items-center justify-between gap-2 rounded-md border bg-muted/20 px-2.5 py-1.5"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="text-[10px] font-bold text-muted-foreground shrink-0 w-4">#{i + 1}</span>
+                        <span className="text-xs font-medium truncate">{p.name}</span>
+                      </div>
+                      <Badge className="bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0">
+                        +{Math.round(p.growthPct || 0)}%
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-md border bg-muted/10 px-2.5 py-3 text-center">
+                  <p className="text-xs text-muted-foreground">No growing products detected yet.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function DashboardTab() {
   const { currentStoreId, setActiveTab } = useAppStore();
   const [lowStockDialogOpen, setLowStockDialogOpen] = useState(false);
@@ -2111,7 +2299,7 @@ export default function DashboardTab() {
       {/* Quick Actions Bar */}
       <QuickActions onTabSwitch={handleTabSwitch} />
 
-      {/* Bottom Grid: Activity Feed + Alerts + Top Products + Debt Aging */}
+      {/* Bottom Grid: Activity Feed + Alerts + Top Products + Debt Aging + Sales Trend */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Left Column */}
         <div className="space-y-4">
@@ -2121,6 +2309,7 @@ export default function DashboardTab() {
 
         {/* Right Column */}
         <div className="space-y-4">
+          <SalesTrendsWidget storeId={currentStoreId} onSeeMore={() => handleTabSwitch('reports')} />
           <AlertsPanel storeId={currentStoreId} onTabSwitch={handleTabSwitch} />
           <DebtAgingCard storeId={currentStoreId} />
         </div>

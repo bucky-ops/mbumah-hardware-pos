@@ -30,7 +30,9 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { handleError } from '@/lib/error-handler';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
@@ -290,8 +292,12 @@ export default function InventoryTab() {
       toast.success('Product created successfully');
       setAddProductOpen(false);
       setNewProduct({ name: '', sku: '', barcode: '', pricePerUnit: '', costPrice: '', quantityInStock: '', reorderLevel: '10', unitType: 'PIECE', categoryId: '', description: '', isRental: false, isBundle: false });
+      queryClient.invalidateQueries({ queryKey: ['products', currentStoreId] });
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Create product');
+      toast.error(msg);
+    },
   });
 
   const updateProductMutation = useMutation({
@@ -299,14 +305,24 @@ export default function InventoryTab() {
     onSuccess: () => {
       toast.success('Product updated');
       setEditProduct(null);
+      queryClient.invalidateQueries({ queryKey: ['products', currentStoreId] });
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Update product');
+      toast.error(msg);
+    },
   });
 
   const deleteProductMutation = useMutation({
     mutationFn: productsApi.delete,
-    onSuccess: () => toast.success('Product deleted'),
-    onError: (err: Error) => toast.error(err.message),
+    onSuccess: () => {
+      toast.success('Product deleted');
+      queryClient.invalidateQueries({ queryKey: ['products', currentStoreId] });
+    },
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Delete product');
+      toast.error(msg);
+    },
   });
 
   const stockAdjustMutation = useMutation({
@@ -319,7 +335,10 @@ export default function InventoryTab() {
       queryClient.invalidateQueries({ queryKey: ['products', currentStoreId] });
       queryClient.invalidateQueries({ queryKey: ['stock-movements', currentStoreId] });
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Adjust stock');
+      toast.error(msg);
+    },
   });
 
   // Category create mutation
@@ -333,7 +352,10 @@ export default function InventoryTab() {
       setNewCategoryDesc('');
       queryClient.invalidateQueries({ queryKey: ['categories', currentStoreId] });
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Create category');
+      toast.error(msg);
+    },
   });
 
   // Bulk adjust mutation
@@ -360,7 +382,10 @@ export default function InventoryTab() {
       queryClient.invalidateQueries({ queryKey: ['products', currentStoreId] });
       queryClient.invalidateQueries({ queryKey: ['stock-movements', currentStoreId] });
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Bulk adjust stock');
+      toast.error(msg);
+    },
   });
 
   // Quick inline adjust mutation
@@ -379,7 +404,10 @@ export default function InventoryTab() {
       queryClient.invalidateQueries({ queryKey: ['products', currentStoreId] });
       queryClient.invalidateQueries({ queryKey: ['stock-movements', currentStoreId] });
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Quick adjust stock');
+      toast.error(msg);
+    },
   });
 
   // Filtered and sorted products
@@ -571,12 +599,15 @@ export default function InventoryTab() {
         storeId: currentStoreId,
         phone,
       });
-      if (res.waLink) {
+      if (res?.waLink) {
         window.open(res.waLink, '_blank');
         toast.success('Inventory report sent via WhatsApp');
+      } else {
+        throw new Error('No WhatsApp link returned');
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send inventory report');
+      const msg = handleError(err, 'Send inventory via WhatsApp');
+      toast.error(msg);
     }
   };
 
@@ -1602,79 +1633,15 @@ export default function InventoryTab() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Product Dialog */}
-      <Dialog open={!!editProduct} onOpenChange={(open) => !open && setEditProduct(null)}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Product</DialogTitle>
-            <DialogDescription>Update product details</DialogDescription>
-          </DialogHeader>
-          {editProduct && (
-            <div className="space-y-4">
-              {/* Section: Basic Info */}
-              <div>
-                <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-                  <Package className="h-4 w-4" /> Basic Information
-                </h4>
-                <Separator className="mb-3" />
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2 col-span-2">
-                    <Label>Product Name</Label>
-                    <Input value={editProduct.name} onChange={(e) => setEditProduct({ ...editProduct, name: e.target.value })} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>SKU</Label>
-                    <Input value={editProduct.sku} onChange={(e) => setEditProduct({ ...editProduct, sku: e.target.value })} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Barcode</Label>
-                    <Input value={editProduct.barcode || ''} onChange={(e) => setEditProduct({ ...editProduct, barcode: e.target.value })} />
-                  </div>
-                  <div className="space-y-2 col-span-2">
-                    <Label>Description</Label>
-                    <Textarea value={editProduct.description || ''} onChange={(e) => setEditProduct({ ...editProduct, description: e.target.value })} rows={2} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Section: Pricing */}
-              <div>
-                <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-                  <DollarSign className="h-4 w-4" /> Pricing
-                </h4>
-                <Separator className="mb-3" />
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Selling Price</Label>
-                    <Input type="number" value={editProduct.pricePerUnit} onChange={(e) => setEditProduct({ ...editProduct, pricePerUnit: Number(e.target.value) })} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Cost Price</Label>
-                    <Input type="number" value={editProduct.costPrice} onChange={(e) => setEditProduct({ ...editProduct, costPrice: Number(e.target.value) })} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Section: Stock & Units */}
-              <div>
-                <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4" /> Stock & Units
-                </h4>
-                <Separator className="mb-3" />
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Stock</Label>
-                    <Input type="number" value={editProduct.quantityInStock} onChange={(e) => setEditProduct({ ...editProduct, quantityInStock: Number(e.target.value) })} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Reorder Level</Label>
-                    <Input type="number" value={editProduct.reorderLevel} onChange={(e) => setEditProduct({ ...editProduct, reorderLevel: Number(e.target.value) })} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
+      {/* Edit Product Dialog — ResponsiveDialog so all sections fit */}
+      <ResponsiveDialog
+        open={!!editProduct}
+        onOpenChange={(open) => { if (!open) setEditProduct(null); }}
+        title="Edit Product"
+        description="Update product details"
+        size="lg"
+        footer={
+          <>
             <Button variant="outline" onClick={() => setEditProduct(null)}>Cancel</Button>
             <Button
               onClick={() => editProduct && updateProductMutation.mutate({ id: editProduct.id, data: editProduct as unknown as Partial<CreateProductPayload> })}
@@ -1683,9 +1650,89 @@ export default function InventoryTab() {
               {updateProductMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
               Save Changes
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        }
+      >
+        {editProduct && (
+          <div className="space-y-6">
+            {/* Section: Basic Info */}
+            <section>
+              <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                <Package className="h-4 w-4" /> Basic Information
+              </h4>
+              <Separator className="mb-3" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Product Name</Label>
+                  <Input value={editProduct.name} onChange={(e) => setEditProduct({ ...editProduct, name: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>SKU</Label>
+                  <Input value={editProduct.sku} onChange={(e) => setEditProduct({ ...editProduct, sku: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Barcode</Label>
+                  <Input value={editProduct.barcode || ''} onChange={(e) => setEditProduct({ ...editProduct, barcode: e.target.value })} />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Description</Label>
+                  <Textarea value={editProduct.description || ''} onChange={(e) => setEditProduct({ ...editProduct, description: e.target.value })} rows={3} />
+                </div>
+              </div>
+            </section>
+
+            {/* Section: Pricing */}
+            <section>
+              <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                <DollarSign className="h-4 w-4" /> Pricing
+              </h4>
+              <Separator className="mb-3" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Selling Price (KES)</Label>
+                  <Input type="number" value={editProduct.pricePerUnit} onChange={(e) => setEditProduct({ ...editProduct, pricePerUnit: Number(e.target.value) })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Cost Price (KES)</Label>
+                  <Input type="number" value={editProduct.costPrice} onChange={(e) => setEditProduct({ ...editProduct, costPrice: Number(e.target.value) })} />
+                </div>
+              </div>
+              {editProduct.pricePerUnit > 0 && (
+                <div className="mt-2 rounded-lg border bg-muted/30 p-2 flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Profit Margin</span>
+                  <span className={`text-xs font-semibold ${
+                    ((editProduct.pricePerUnit - editProduct.costPrice) / editProduct.pricePerUnit * 100) >= 30
+                      ? 'text-green-600'
+                      : ((editProduct.pricePerUnit - editProduct.costPrice) / editProduct.pricePerUnit * 100) >= 15
+                        ? 'text-amber-600'
+                        : 'text-red-600'
+                  }`}>
+                    {((editProduct.pricePerUnit - editProduct.costPrice) / editProduct.pricePerUnit * 100).toFixed(1)}%
+                  </span>
+                </div>
+              )}
+            </section>
+
+            {/* Section: Stock & Units */}
+            <section>
+              <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                <BarChart3 className="h-4 w-4" /> Stock & Units
+              </h4>
+              <Separator className="mb-3" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Stock</Label>
+                  <Input type="number" value={editProduct.quantityInStock} onChange={(e) => setEditProduct({ ...editProduct, quantityInStock: Number(e.target.value) })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Reorder Level</Label>
+                  <Input type="number" value={editProduct.reorderLevel} onChange={(e) => setEditProduct({ ...editProduct, reorderLevel: Number(e.target.value) })} />
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+      </ResponsiveDialog>
 
       {/* Adjust Stock Dialog */}
       <Dialog open={!!adjustStockProduct} onOpenChange={(open) => !open && setAdjustStockProduct(null)}>
@@ -1845,63 +1892,20 @@ export default function InventoryTab() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Category Dialog */}
-      <Dialog open={addCategoryOpen} onOpenChange={setAddCategoryOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Tag className="h-5 w-5 text-accent-orange" />
-              Add New Category
-            </DialogTitle>
-            <DialogDescription>Create a new product category</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Category Name</Label>
-              <Input
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                placeholder="e.g. Safety Equipment"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Description <span className="text-muted-foreground">(optional)</span></Label>
-              <Input
-                value={newCategoryDesc}
-                onChange={(e) => setNewCategoryDesc(e.target.value)}
-                placeholder="Category description..."
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Palette className="h-4 w-4" /> Color
-              </Label>
-              <div className="flex flex-wrap gap-2">
-                {CATEGORY_COLOR_PALETTE.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    className={`w-7 h-7 rounded-full transition-all hover:scale-110 ${
-                      newCategoryColor === color ? 'ring-2 ring-offset-2 ring-primary scale-110' : ''
-                    }`}
-                    style={{ backgroundColor: color }}
-                    onClick={() => setNewCategoryColor(color)}
-                  />
-                ))}
-              </div>
-            </div>
-            {/* Preview */}
-            {newCategoryName && (
-              <div className="rounded-lg border bg-muted/20 p-3">
-                <p className="text-xs text-muted-foreground mb-1">Preview</p>
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: newCategoryColor }} />
-                  <span className="text-sm font-medium">{newCategoryName}</span>
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
+      {/* Add Category Dialog — ResponsiveDialog so color palette wraps on small screens */}
+      <ResponsiveDialog
+        open={addCategoryOpen}
+        onOpenChange={setAddCategoryOpen}
+        title={(
+          <span className="flex items-center gap-2">
+            <Tag className="h-5 w-5 text-accent-orange" />
+            Add New Category
+          </span>
+        )}
+        description="Create a new product category"
+        size="md"
+        footer={
+          <>
             <Button variant="outline" onClick={() => setAddCategoryOpen(false)}>Cancel</Button>
             <Button
               className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
@@ -1911,9 +1915,59 @@ export default function InventoryTab() {
               {createCategoryMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
               Create Category
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Category Name</Label>
+            <Input
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              placeholder="e.g. Safety Equipment"
+              autoFocus
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Description <span className="text-muted-foreground">(optional)</span></Label>
+            <Input
+              value={newCategoryDesc}
+              onChange={(e) => setNewCategoryDesc(e.target.value)}
+              placeholder="Category description..."
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <Palette className="h-4 w-4" /> Color
+            </Label>
+            <div className="flex flex-wrap gap-2">
+              {CATEGORY_COLOR_PALETTE.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  className={`w-7 h-7 rounded-full transition-all hover:scale-110 ${
+                    newCategoryColor === color ? 'ring-2 ring-offset-2 ring-primary scale-110' : ''
+                  }`}
+                  style={{ backgroundColor: color }}
+                  onClick={() => setNewCategoryColor(color)}
+                  aria-label={`Select color ${color}`}
+                  aria-pressed={newCategoryColor === color}
+                />
+              ))}
+            </div>
+          </div>
+          {/* Preview */}
+          {newCategoryName && (
+            <div className="rounded-lg border bg-muted/20 p-3">
+              <p className="text-xs text-muted-foreground mb-1">Preview</p>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: newCategoryColor }} />
+                <span className="text-sm font-medium">{newCategoryName}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </ResponsiveDialog>
     </div>
   );
 }

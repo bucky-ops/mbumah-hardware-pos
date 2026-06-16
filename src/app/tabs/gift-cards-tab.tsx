@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -22,6 +22,7 @@ import {
   formatDate,
   formatDateTime,
 } from '@/lib/api';
+import { handleError } from '@/lib/error-handler';
 import type { UpdateGiftCardPayload } from '@/lib/types';
 import type {
   GiftCardItem,
@@ -347,11 +348,25 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
 
   // ── State ──
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [reasonFilter, setReasonFilter] = useState<string>('ALL');
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [showFilters, setShowFilters] = useState(false);
+
+  // Debounce search (300ms) — gift cards list filters server-side, so this
+  // prevents an API round-trip on every keystroke.
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [searchQuery]);
 
   // Dialog states
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -441,13 +456,13 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
 
   // ── Queries ──
   const { data: giftCardsData, isLoading, error } = useQuery({
-    queryKey: ['giftCards', storeId, statusFilter, reasonFilter, searchQuery, sortField, sortOrder],
+    queryKey: ['giftCards', storeId, statusFilter, reasonFilter, debouncedSearch, sortField, sortOrder],
     queryFn: async () => {
       const result = await giftCardsApi.list({
         storeId,
         status: statusFilter !== 'ALL' ? statusFilter : undefined,
         reason: reasonFilter !== 'ALL' ? reasonFilter : undefined,
-        search: searchQuery || undefined,
+        search: debouncedSearch || undefined,
       });
       return Array.isArray(result.data) ? result.data : [];
     },
@@ -505,8 +520,9 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
       resetCreateForm();
       setCreateDialogOpen(false);
     },
-    onError: (err: Error) => {
-      toast.error(err.message || 'Failed to create gift card');
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Create gift card');
+      toast.error(msg);
     },
   });
 
@@ -543,8 +559,9 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
       setEditDialogOpen(false);
       setSelectedCard(null);
     },
-    onError: (err: Error) => {
-      toast.error(err.message || 'Failed to update gift card');
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Update gift card');
+      toast.error(msg);
     },
   });
 
@@ -569,8 +586,9 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
       setRedeemDialogOpen(false);
       setDetailDialogOpen(false);
     },
-    onError: (err: Error) => {
-      toast.error(err.message || 'Failed to redeem gift card');
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Redeem gift card');
+      toast.error(msg);
     },
   });
 
@@ -593,8 +611,9 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
       setAdjustForm({ amount: '', reason: '', notes: '' });
       setAdjustDialogOpen(false);
     },
-    onError: (err: Error) => {
-      toast.error(err.message || 'Failed to adjust balance');
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Adjust gift card balance');
+      toast.error(msg);
     },
   });
 
@@ -611,8 +630,9 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
       setDetailDialogOpen(false);
       setSelectedCard(null);
     },
-    onError: (err: Error) => {
-      toast.error(err.message || 'Failed to cancel gift card');
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Cancel gift card');
+      toast.error(msg);
     },
   });
 
@@ -628,8 +648,9 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
       setDetailDialogOpen(false);
       setSelectedCard(null);
     },
-    onError: (err: Error) => {
-      toast.error(err.message || 'Failed to delete gift card');
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Delete gift card');
+      toast.error(msg);
     },
   });
 
@@ -641,8 +662,9 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
       toast.success('Visibility toggled');
       queryClient.invalidateQueries({ queryKey: ['giftCards'] });
     },
-    onError: (err: Error) => {
-      toast.error(err.message || 'Failed to toggle visibility');
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Toggle gift card visibility');
+      toast.error(msg);
     },
   });
 
@@ -662,7 +684,8 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
         toast.success(`${res.documentTitle} sent via WhatsApp`);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send via WhatsApp');
+      const msg = handleError(err, 'Send gift card via WhatsApp');
+      toast.error(msg);
     }
   }, [storeId]);
 
@@ -747,12 +770,41 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
             Manage gift cards, track balances, and process redemptions
           </p>
         </div>
-        {canCreate(userRole) && (
-          <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Create Gift Card
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="How to redeem">
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left" className="max-w-xs">
+                <p className="text-xs leading-relaxed">
+                  <strong>How to redeem:</strong> Enter the gift card code at checkout,
+                  or use the <em>Redeem</em> action on any active card here in the Gift Cards tab.
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          {canCreate(userRole) && (
+            <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Create Gift Card
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* How-to-redeem helper banner */}
+      <div className="flex items-start gap-2 rounded-lg border border-pink-200 dark:border-pink-900/40 bg-pink-50/60 dark:bg-pink-950/20 px-3 py-2 text-xs text-pink-800 dark:text-pink-300">
+        <Info className="h-4 w-4 mt-0.5 shrink-0" />
+        <p className="leading-relaxed">
+          <strong>How to redeem a gift card:</strong> Open any active card&apos;s
+          <span className="font-medium"> ⋯ menu</span> and choose{' '}
+          <span className="font-medium">Redeem</span> — or click the{' '}
+          <span className="font-medium">Redeem</span> button on the card detail view.
+          You can also enter the gift card code directly at checkout.
+        </p>
       </div>
 
       {/* Search & Filters */}
@@ -1834,12 +1886,20 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
               Redeem Gift Card
             </DialogTitle>
             <DialogDescription>
-              Process a redemption for this gift card
+              Process a redemption for this gift card.
             </DialogDescription>
           </DialogHeader>
 
           {selectedCard && (
             <div className="grid gap-4 py-4">
+              {/* How-to-redeem helper banner */}
+              <div className="flex items-start gap-2 rounded-lg border border-pink-200 dark:border-pink-900/40 bg-pink-50/60 dark:bg-pink-950/20 px-3 py-2 text-xs text-pink-800 dark:text-pink-300">
+                <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                <p className="leading-relaxed">
+                  <strong>How to redeem:</strong> Enter the gift card code at checkout, or use Redeem here to apply it to a specific amount.
+                </p>
+              </div>
+
               {/* Card summary */}
               <div className="rounded-lg border p-3 bg-muted/30 space-y-2">
                 <div className="flex justify-between text-sm">

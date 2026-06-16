@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="public/logo.svg" alt="Mbumah Hardware Logo" width="120" height="120" />
+<img src="public/logo.png" alt="Mbumah Hardware Logo" width="140" height="140" />
 
 # 🔧 MBUMAH HARDWARE — POS & ERP
 

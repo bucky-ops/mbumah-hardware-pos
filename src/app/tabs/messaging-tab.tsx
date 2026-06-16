@@ -7,14 +7,18 @@ import {
   MessageSquare, Send, Phone, Clock, CheckCircle, AlertCircle,
   Loader2, Plus, Search, Filter, Smartphone, Mail,
   FileText, Bell, ChevronDown, RefreshCw,
-  PartyPopper, Heart, Gift, Sparkles, ThumbUp,
+  PartyPopper, Heart, Gift, Sparkles,
+  Calendar, Users, ExternalLink,
 } from 'lucide-react';
 import { useAppStore, useAuthStore } from '@/lib/stores';
 import {
-  messagesApi, customersApi, debtApi,
+  messagesApi, customersApi, debtApi, messagingApi,
   formatKES, formatDateTime,
   openWhatsApp, openEmail, openSMS,
+  type BulkMessageResult,
+  type BulkMessageRecipient,
 } from '@/lib/api';
+import { handleError } from '@/lib/error-handler';
 import type { MessageItem } from '@/lib/types';
 
 import { Button } from '@/components/ui/button';
@@ -175,6 +179,59 @@ const MESSAGE_TEMPLATES = [
   },
 ];
 
+// ── Kenyan Holiday / Bulk Broadcast templates ──────────────────────────────
+// One-click fill buttons in the Bulk Broadcast tab. Each `content` is sent
+// verbatim to every recipient in the chosen audience.
+
+const HOLIDAY_TEMPLATES: { id: string; label: string; content: string }[] = [
+  {
+    id: 'christmas',
+    label: '🎄 Christmas',
+    content:
+      '🎄 Merry Christmas from Mbumah Hardware! Wishing you joy and prosperity. Thank you for your continued business.',
+  },
+  {
+    id: 'new-year',
+    label: '🎉 New Year',
+    content:
+      '🎉 Happy New Year from Mbumah Hardware! Wishing you a prosperous year ahead. Visit us for great deals on building materials.',
+  },
+  {
+    id: 'easter',
+    label: '🐰 Easter',
+    content:
+      '🐰 Happy Easter from Mbumah Hardware! May this season bring you renewal and joy. Special discounts on building materials this week.',
+  },
+  {
+    id: 'madaraka',
+    label: '🇰🇪 Madaraka Day',
+    content:
+      '🇰🇪 Happy Madaraka Day from Mbumah Hardware! Celebrating Kenya\'s self-governance with great deals on building materials today.',
+  },
+  {
+    id: 'mashujaa',
+    label: '🇰🇪 Mashujaa Day',
+    content:
+      '🇰🇪 Happy Mashujaa Day from Mbumah Hardware! Celebrating our heroes with special offers. Visit us for quality building materials.',
+  },
+  {
+    id: 'jamhuri',
+    label: '🇰🇪 Jamhuri Day',
+    content:
+      '🇰🇪 Happy Jamhuri Day from Mbumah Hardware! Celebrating Kenya\'s Republic with exclusive holiday discounts on all building materials.',
+  },
+];
+
+type BulkAudience = 'ALL' | 'CUSTOMERS_WITH_PHONES' | 'DEBTORS' | 'LOYALTY_MEMBERS';
+type BulkChannel = 'WHATSAPP' | 'SMS';
+
+const AUDIENCE_LABELS: Record<BulkAudience, string> = {
+  ALL: 'All customers',
+  CUSTOMERS_WITH_PHONES: 'Customers with phones',
+  DEBTORS: 'Debtors (with outstanding balance)',
+  LOYALTY_MEMBERS: 'Loyalty members',
+};
+
 // ── Main Component ─────────────────────────────────────────
 
 export default function MessagingTab() {
@@ -212,6 +269,14 @@ export default function MessagingTab() {
   // ── Balance Update Dialog State ─────────────────────────
   const [showBalanceDialog, setShowBalanceDialog] = useState(false);
   const [selectedBalanceCustomerIds, setSelectedBalanceCustomerIds] = useState<Set<string>>(new Set());
+
+  // ── Bulk / Holiday Broadcast State ──────────────────────
+  const [bulkMessage, setBulkMessage] = useState('');
+  const [bulkSubject, setBulkSubject] = useState('');
+  const [bulkAudience, setBulkAudience] = useState<BulkAudience>('CUSTOMERS_WITH_PHONES');
+  const [bulkChannel, setBulkChannel] = useState<BulkChannel>('WHATSAPP');
+  const [bulkScheduledAt, setBulkScheduledAt] = useState('');
+  const [bulkResult, setBulkResult] = useState<BulkMessageResult | null>(null);
 
   // ── Queries ─────────────────────────────────────────────
 
@@ -354,8 +419,9 @@ export default function MessagingTab() {
         resetSendForm();
       }
     },
-    onError: (error: Error) => {
-      toast.error(`Failed to send message: ${error.message}`);
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Send message');
+      toast.error(msg);
     },
   });
 
@@ -366,8 +432,9 @@ export default function MessagingTab() {
       toast.success('Debt reminder sent');
       queryClient.invalidateQueries({ queryKey: ['messages', currentStoreId] });
     },
-    onError: (error: Error) => {
-      toast.error(`Failed to send reminder: ${error.message}`);
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Send debt reminder');
+      toast.error(msg);
     },
   });
 
@@ -378,8 +445,55 @@ export default function MessagingTab() {
       toast.success('Balance update sent');
       queryClient.invalidateQueries({ queryKey: ['messages', currentStoreId] });
     },
-    onError: (error: Error) => {
-      toast.error(`Failed to send balance update: ${error.message}`);
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Send balance update');
+      toast.error(msg);
+    },
+  });
+
+  // ── Bulk Broadcast Mutation ─────────────────────────────
+  // Calls messagingApi.bulk({ storeId, message, channel, audience, subject,
+  // scheduledAt }) and surfaces a per-recipient results panel.
+  const sendBulkBroadcastMutation = useMutation({
+    mutationFn: async (): Promise<BulkMessageResult> => {
+      const payload = {
+        storeId: currentStoreId,
+        message: bulkMessage.trim(),
+        channel: bulkChannel,
+        audience: bulkAudience,
+        subject: bulkSubject.trim() || undefined,
+        scheduledAt: bulkScheduledAt ? new Date(bulkScheduledAt).toISOString() : undefined,
+      };
+      // Preferred: typed API client (returns ApiResponse<BulkMessageResult>).
+      try {
+        const res = await messagingApi.bulk(payload);
+        if (res?.data) return res.data;
+      } catch {
+        // fall through to direct fetch
+      }
+      // Fallback: direct fetch with same-origin credentials.
+      const r = await fetch('/api/messaging/bulk', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json = (await r.json()) as { success?: boolean; data?: BulkMessageResult; error?: string };
+      if (!json.success || !json.data) {
+        throw new Error(json.error || `Request failed: ${r.status}`);
+      }
+      return json.data;
+    },
+    onSuccess: (result) => {
+      toast.success(
+        `Broadcast queued: ${result.sent.length} recipient${result.sent.length === 1 ? '' : 's'}, ${result.skipped.length} skipped`,
+      );
+      setBulkResult(result);
+      queryClient.invalidateQueries({ queryKey: ['messages', currentStoreId] });
+    },
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Send bulk broadcast');
+      toast.error(msg);
     },
   });
 
@@ -410,9 +524,12 @@ export default function MessagingTab() {
     const template = MESSAGE_TEMPLATES.find((t) => t.id === templateId);
     if (template) {
       const customerName = selectedCustomer?.name ?? '{customer_name}';
-      // Try to get debt amount for the selected customer
+      // Try to get debt amount for the selected customer (combine overdue + outstanding).
+      const allDebts = [...overdueDebts, ...outstandingDebts];
       const customerDebt = selectedCustomer
-        ? debts.filter(d => d.customerId === selectedCustomer.id).reduce((s, d) => s + d.balance, 0)
+        ? allDebts
+            .filter((d) => d.customerId === selectedCustomer.id)
+            .reduce((s, d) => s + d.balance, 0)
         : 0;
       const debtAmount = customerDebt > 0 ? customerDebt : 0;
       const content = template.content
@@ -552,9 +669,10 @@ export default function MessagingTab() {
 
       {/* ── Sub Tabs ───────────────────────────────────────── */}
       <Tabs value={activeSubTab} onValueChange={setActiveSubTab}>
-        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+        <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="quick-send">Quick Send</TabsTrigger>
+          <TabsTrigger value="bulk-broadcast">Broadcast</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
         </TabsList>
@@ -1259,6 +1377,286 @@ export default function MessagingTab() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ══════════════════════════════════════════════════════
+            BULK / HOLIDAY BROADCAST TAB
+        ══════════════════════════════════════════════════════ */}
+        <TabsContent value="bulk-broadcast" className="space-y-6 mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <PartyPopper className="h-5 w-5 text-amber-500" />
+                Bulk / Holiday Broadcast
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Send one message to many customers at once. We generate a wa.me deep link
+                per recipient (and log every send to the Messages table for audit).
+                Open each link to dispatch it in WhatsApp. SMS channel skips the link step
+                and just logs the message.
+              </p>
+
+              {/* Audience + Channel + Scheduled At */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5">
+                    <Users className="h-3.5 w-3.5" /> Audience
+                  </Label>
+                  <Select value={bulkAudience} onValueChange={(v) => setBulkAudience(v as BulkAudience)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">{AUDIENCE_LABELS.ALL}</SelectItem>
+                      <SelectItem value="CUSTOMERS_WITH_PHONES">{AUDIENCE_LABELS.CUSTOMERS_WITH_PHONES}</SelectItem>
+                      <SelectItem value="DEBTORS">{AUDIENCE_LABELS.DEBTORS}</SelectItem>
+                      <SelectItem value="LOYALTY_MEMBERS">{AUDIENCE_LABELS.LOYALTY_MEMBERS}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5">
+                    <Phone className="h-3.5 w-3.5" /> Channel
+                  </Label>
+                  <Select value={bulkChannel} onValueChange={(v) => setBulkChannel(v as BulkChannel)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="WHATSAPP">WhatsApp (wa.me link per recipient)</SelectItem>
+                      <SelectItem value="SMS">SMS (log only)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5" /> Scheduled At <span className="text-muted-foreground">(optional)</span>
+                  </Label>
+                  <Input
+                    type="datetime-local"
+                    value={bulkScheduledAt}
+                    onChange={(e) => setBulkScheduledAt(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Subject (optional) */}
+              <div className="space-y-2">
+                <Label>Subject <span className="text-muted-foreground">(optional)</span></Label>
+                <Input
+                  placeholder="e.g. Holiday Greetings from Mbumah Hardware"
+                  value={bulkSubject}
+                  onChange={(e) => setBulkSubject(e.target.value)}
+                />
+              </div>
+
+              {/* Quick holiday templates */}
+              <div className="space-y-2">
+                <Label>Quick Holiday Templates</Label>
+                <div className="flex flex-wrap gap-2">
+                  {HOLIDAY_TEMPLATES.map((t) => (
+                    <Button
+                      key={t.id}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-9"
+                      onClick={() => {
+                        setBulkMessage(t.content);
+                        if (!bulkSubject.trim()) setBulkSubject(t.label.replace(/^[^\w]+\s/, '').trim() + ' — Mbumah Hardware');
+                      }}
+                    >
+                      {t.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Message */}
+              <div className="space-y-2">
+                <Label>
+                  Message <span className="text-red-500">*</span>
+                </Label>
+                <Textarea
+                  placeholder="Type your broadcast message here, or pick a holiday template above…"
+                  value={bulkMessage}
+                  onChange={(e) => setBulkMessage(e.target.value)}
+                  rows={5}
+                  className="resize-y"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {bulkMessage.length} characters · sent verbatim to every recipient in the chosen audience
+                </p>
+              </div>
+
+              {/* Send button + audience hint */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-2">
+                <Button
+                  className="bg-green-600 hover:bg-green-700 text-white gap-2"
+                  onClick={() => {
+                    if (!bulkMessage.trim()) {
+                      toast.error('Message is required');
+                      return;
+                    }
+                    setBulkResult(null);
+                    sendBulkBroadcastMutation.mutate();
+                  }}
+                  disabled={sendBulkBroadcastMutation.isPending || !bulkMessage.trim()}
+                >
+                  {sendBulkBroadcastMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  Send Broadcast
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Audience: <span className="font-medium">{AUDIENCE_LABELS[bulkAudience]}</span>
+                  {bulkScheduledAt && (
+                    <> · scheduled for <span className="font-medium">{formatDateTime(bulkScheduledAt)}</span></>
+                  )}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Results panel */}
+          {bulkResult && (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    Broadcast Results
+                  </CardTitle>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <Badge className="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400">
+                      {bulkResult.sent.length} sent
+                    </Badge>
+                    {bulkResult.skipped.length > 0 && (
+                      <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+                        {bulkResult.skipped.length} skipped
+                      </Badge>
+                    )}
+                    <Badge variant="outline">
+                      {bulkResult.broadcastSummary.totalCandidates} candidates
+                    </Badge>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Summary banner */}
+                <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                  Channel: <span className="font-medium">{bulkResult.broadcastSummary.channel}</span>
+                  {' · '}Audience: <span className="font-medium">{AUDIENCE_LABELS[bulkResult.broadcastSummary.audience] ?? bulkResult.broadcastSummary.audience}</span>
+                  {' · '}Subject: <span className="font-medium">{bulkResult.broadcastSummary.subject || '—'}</span>
+                  {bulkResult.broadcastSummary.scheduledAt && (
+                    <> {' · '}Scheduled: <span className="font-medium">{formatDateTime(bulkResult.broadcastSummary.scheduledAt)}</span></>
+                  )}
+                </div>
+
+                {/* Recipients table */}
+                {bulkResult.sent.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No recipients received this broadcast.</p>
+                    <p className="text-xs mt-1">
+                      Check that the chosen audience has customers with valid phone numbers.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border max-h-96 overflow-y-auto">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-background z-10">
+                        <TableRow>
+                          <TableHead className="w-[40%]">Name</TableHead>
+                          <TableHead className="w-[35%]">Phone</TableHead>
+                          <TableHead className="text-right w-[25%]">Open</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {bulkResult.sent.map((r: BulkMessageRecipient) => (
+                          <TableRow key={r.customerId}>
+                            <TableCell className="font-medium text-sm break-words">{r.name || 'Unknown'}</TableCell>
+                            <TableCell className="text-sm break-all">{r.phone || '—'}</TableCell>
+                            <TableCell className="text-right">
+                              {r.waLink ? (
+                                <Button
+                                  asChild
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs gap-1.5 bg-green-50 text-green-700 border-green-200 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800"
+                                >
+                                  <a href={r.waLink} target="_blank" rel="noopener noreferrer">
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                    Open
+                                  </a>
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+
+                {/* Skipped reasons (collapsed) */}
+                {bulkResult.skipped.length > 0 && (
+                  <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3">
+                    <p className="text-xs font-medium text-amber-800 dark:text-amber-300 mb-1">
+                      Skipped recipients ({bulkResult.skipped.length})
+                    </p>
+                    <ul className="text-xs text-amber-700 dark:text-amber-400 space-y-0.5 max-h-32 overflow-y-auto">
+                      {bulkResult.skipped.slice(0, 20).map((s, i) => (
+                        <li key={s.customerId || i} className="break-words">
+                          • {s.name || s.customerId || 'Unknown'} ({s.phone || 'no phone'}): {s.reason}
+                        </li>
+                      ))}
+                      {bulkResult.skipped.length > 20 && (
+                        <li className="italic">… and {bulkResult.skipped.length - 20} more</li>
+                      )}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      // Open every waLink sequentially (browser will throttle but most will open).
+                      const links = bulkResult.sent
+                        .map((r) => r.waLink)
+                        .filter((l): l is string => Boolean(l));
+                      if (links.length === 0) {
+                        toast.info('No WhatsApp links to open');
+                        return;
+                      }
+                      if (links.length > 10) {
+                        toast.info(`Opening first 10 of ${links.length} WhatsApp chats (browsers block mass pop-ups).`);
+                      }
+                      links.slice(0, 10).forEach((l) => window.open(l, '_blank'));
+                    }}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                    Open All (first 10)
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setBulkResult(null)}
+                  >
+                    Dismiss
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* ══════════════════════════════════════════════════════

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -15,12 +15,15 @@ import {
 
 import { useAppStore } from '@/lib/stores';
 import {
-  vouchersApi, voucherCampaignsApi, whatsappApi,
+  vouchersApi, voucherCampaignsApi, whatsappApi, customersApi,
   formatKES, formatDate, formatDateTime,
   openWhatsApp, openEmail, openSMS,
   type VoucherItem,
   type VoucherCampaignItem,
+  type CustomerItem,
 } from '@/lib/api';
+import { handleError } from '@/lib/error-handler';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -194,9 +197,22 @@ export default function VouchersTab() {
 
   // Voucher filters
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
+
+  // Debounce search input (300ms) to avoid refetching on every keystroke.
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [searchQuery]);
 
   // Campaign filters
   const [campaignStatusFilter, setCampaignStatusFilter] = useState<string>('all');
@@ -211,6 +227,22 @@ export default function VouchersTab() {
 
   // Create campaign dialog
   const [createCampaignOpen, setCreateCampaignOpen] = useState(false);
+
+  // Redeem voucher code dialog
+  const [redeemCodeOpen, setRedeemCodeOpen] = useState(false);
+  const [redeemCode, setRedeemCode] = useState('');
+  const [redeemCustomerId, setRedeemCustomerId] = useState('');
+  const [redeemAmount, setRedeemAmount] = useState('');
+  const [redeemResult, setRedeemResult] = useState<{
+    success: boolean;
+    discountAmount?: number;
+    voucherCode?: string;
+    voucherName?: string;
+    newStatus?: string;
+    currentUses?: number;
+    maxUses?: number;
+    message?: string;
+  } | null>(null);
 
   // Voucher form state
   const [vFormName, setVFormName] = useState('');
@@ -237,13 +269,13 @@ export default function VouchersTab() {
   // ─── Queries ──────────────────────────────────────────────────────────────
 
   const { data: vouchersData, isLoading: vouchersLoading } = useQuery({
-    queryKey: ['vouchers', currentStoreId, statusFilter, typeFilter, searchQuery],
+    queryKey: ['vouchers', currentStoreId, statusFilter, typeFilter, debouncedSearch],
     queryFn: () =>
       vouchersApi.list({
         storeId: currentStoreId,
         status: statusFilter !== 'all' ? statusFilter : undefined,
         voucherType: typeFilter !== 'all' ? typeFilter : undefined,
-        search: searchQuery || undefined,
+        search: debouncedSearch || undefined,
       }),
     refetchInterval: 60000, // Auto-refresh every minute
   });
@@ -258,6 +290,12 @@ export default function VouchersTab() {
       }),
   });
 
+  const { data: customersData } = useQuery({
+    queryKey: ['customers', currentStoreId],
+    queryFn: () => customersApi.list({ storeId: currentStoreId, limit: 200 }),
+    enabled: !!currentStoreId,
+  });
+
   // ─── Mutations ────────────────────────────────────────────────────────────
 
   const createVoucherMutation = useMutation({
@@ -270,7 +308,10 @@ export default function VouchersTab() {
       queryClient.invalidateQueries({ queryKey: ['vouchers', currentStoreId] });
       queryClient.invalidateQueries({ queryKey: ['customer-vouchers'] });
     },
-    onError: (err: Error) => toast.error(err.message || 'Failed to create voucher'),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Create voucher');
+      toast.error(msg);
+    },
   });
 
   const updateVoucherMutation = useMutation({
@@ -283,7 +324,10 @@ export default function VouchersTab() {
       queryClient.invalidateQueries({ queryKey: ['vouchers', currentStoreId] });
       queryClient.invalidateQueries({ queryKey: ['customer-vouchers'] });
     },
-    onError: (err: Error) => toast.error(err.message || 'Failed to update voucher'),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Update voucher');
+      toast.error(msg);
+    },
   });
 
   const deleteVoucherMutation = useMutation({
@@ -295,7 +339,10 @@ export default function VouchersTab() {
       queryClient.invalidateQueries({ queryKey: ['vouchers', currentStoreId] });
       queryClient.invalidateQueries({ queryKey: ['customer-vouchers'] });
     },
-    onError: (err: Error) => toast.error(err.message || 'Failed to delete voucher'),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Delete voucher');
+      toast.error(msg);
+    },
   });
 
   const createCampaignMutation = useMutation({
@@ -306,20 +353,72 @@ export default function VouchersTab() {
       resetCampaignForm();
       queryClient.invalidateQueries({ queryKey: ['voucher-campaigns', currentStoreId] });
     },
-    onError: (err: Error) => toast.error(err.message || 'Failed to create campaign'),
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Create campaign');
+      toast.error(msg);
+    },
+  });
+
+  // Redeem voucher code — uses the typed API client if present, falls back to fetch.
+  const redeemByCodeMutation = useMutation({
+    mutationFn: async (payload: { code: string; storeId: string; customerId?: string; amount?: number }) => {
+      try {
+        const redeemByCode = (vouchersApi as unknown as { redeemByCode?: (p: typeof payload) => Promise<unknown> }).redeemByCode;
+        if (typeof redeemByCode === 'function') {
+          return await redeemByCode(payload) as { success?: boolean; data?: Record<string, unknown> };
+        }
+      } catch {
+        // fall through to fetch
+      }
+      const res = await fetch('/api/vouchers/redeem', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json() as { success?: boolean; data?: Record<string, unknown>; error?: string };
+      if (!json.success) throw new Error(json.error || 'Failed to redeem voucher');
+      return json;
+    },
+    onSuccess: (response) => {
+      const data = (response?.data ?? {}) as Record<string, unknown>;
+      const discountAmount = typeof data.discountAmount === 'number' ? data.discountAmount : undefined;
+      const voucher = (data.voucher ?? {}) as Record<string, unknown>;
+      setRedeemResult({
+        success: true,
+        discountAmount,
+        voucherCode: typeof voucher.code === 'string' ? voucher.code : redeemCode,
+        voucherName: typeof voucher.name === 'string' ? voucher.name : undefined,
+        newStatus: typeof voucher.status === 'string' ? voucher.status : undefined,
+        currentUses: typeof voucher.currentUses === 'number' ? voucher.currentUses : undefined,
+        maxUses: typeof voucher.maxUses === 'number' ? voucher.maxUses : undefined,
+      });
+      toast.success(
+        discountAmount !== undefined
+          ? `Voucher redeemed! Discount: ${formatKES(discountAmount)}`
+          : 'Voucher redeemed successfully'
+      );
+      queryClient.invalidateQueries({ queryKey: ['vouchers', currentStoreId] });
+    },
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Redeem voucher code');
+      setRedeemResult({ success: false, message: msg });
+      toast.error(msg);
+    },
   });
 
   // ─── Derived Data ────────────────────────────────────────────────────────
 
   const vouchers: VoucherItem[] = Array.isArray(vouchersData?.data) ? vouchersData.data : [];
   const campaigns: VoucherCampaignItem[] = Array.isArray(campaignsData?.data) ? campaignsData.data : [];
+  const customers: CustomerItem[] = Array.isArray(customersData?.data) ? customersData.data : [];
 
   // Filtered vouchers
   const filteredVouchers = useMemo(() => {
     let result = vouchers;
 
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
       result = result.filter(
         (v) =>
           v.code.toLowerCase().includes(q) ||
@@ -330,7 +429,7 @@ export default function VouchersTab() {
     }
 
     return result;
-  }, [vouchers, searchQuery]);
+  }, [vouchers, debouncedSearch]);
 
   // Collect all redemptions from vouchers
   const allRedemptions = useMemo(() => {
@@ -540,8 +639,9 @@ export default function VouchersTab() {
         window.open(res.waLink, '_blank');
         toast.success(`${res.documentTitle} sent via WhatsApp`);
       }
-    }).catch((err: Error) => {
-      toast.error(err.message || 'Failed to send via WhatsApp');
+    }).catch((err: unknown) => {
+      const msg = handleError(err, 'Send voucher via WhatsApp');
+      toast.error(msg);
     });
   }
 
@@ -665,16 +765,32 @@ export default function VouchersTab() {
               Manage discount vouchers, promotional campaigns, and track redemptions
             </p>
           </div>
-          <Button
-            onClick={() => {
-              resetVoucherForm();
-              setCreateVoucherOpen(true);
-            }}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Voucher
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRedeemCode('');
+                setRedeemCustomerId('');
+                setRedeemAmount('');
+                setRedeemResult(null);
+                setRedeemCodeOpen(true);
+              }}
+              className="gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+            >
+              <Receipt className="h-4 w-4" />
+              Redeem Voucher Code
+            </Button>
+            <Button
+              onClick={() => {
+                resetVoucherForm();
+                setCreateVoucherOpen(true);
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Voucher
+            </Button>
+          </div>
         </div>
 
         {/* ─── Stats Cards ─────────────────────────────────────────────────── */}
@@ -1911,6 +2027,140 @@ export default function VouchersTab() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* ─── Redeem Voucher Code Dialog ─────────────────────────────────── */}
+        <ResponsiveDialog
+          open={redeemCodeOpen}
+          onOpenChange={(open) => {
+            setRedeemCodeOpen(open);
+            if (!open) {
+              setRedeemCode('');
+              setRedeemCustomerId('');
+              setRedeemAmount('');
+              setRedeemResult(null);
+            }
+          }}
+          size="md"
+          title={
+            <span className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-emerald-600" />
+              Redeem Voucher Code
+            </span>
+          }
+          description="Enter a voucher code to apply the discount at checkout."
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setRedeemCodeOpen(false)}>Close</Button>
+              <Button
+                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+                disabled={redeemByCodeMutation.isPending || !redeemCode.trim()}
+                onClick={() => {
+                  const amountNum = parseFloat(redeemAmount);
+                  redeemByCodeMutation.mutate({
+                    code: redeemCode.trim(),
+                    storeId: currentStoreId,
+                    customerId: redeemCustomerId || undefined,
+                    amount: !isNaN(amountNum) ? amountNum : undefined,
+                  });
+                }}
+              >
+                {redeemByCodeMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Redeeming…</>
+                ) : (
+                  <><Send className="h-4 w-4" /> Redeem Code</>
+                )}
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            {/* Helper text */}
+            <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/60 dark:bg-emerald-950/20 p-3 text-xs text-emerald-800 dark:text-emerald-300">
+              <strong>How to redeem:</strong> Enter the voucher code printed on your voucher. The discount will be applied to the transaction. Optionally link it to a customer and enter the cart subtotal so the discount is calculated.
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="redeem-code">Voucher Code <span className="text-red-500">*</span></Label>
+              <Input
+                id="redeem-code"
+                value={redeemCode}
+                onChange={(e) => setRedeemCode(e.target.value)}
+                onBlur={(e) => setRedeemCode(e.target.value.toUpperCase().trim())}
+                placeholder="e.g. SUMMER20"
+                className="font-mono text-lg tracking-wider"
+                disabled={!!redeemResult?.success}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="redeem-customer">Customer (optional)</Label>
+                <Select value={redeemCustomerId} onValueChange={setRedeemCustomerId} disabled={!!redeemResult?.success}>
+                  <SelectTrigger id="redeem-customer"><SelectValue placeholder="Walk-in customer" /></SelectTrigger>
+                  <SelectContent>
+                    {customers.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}{c.phone ? ` · ${c.phone}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="redeem-amount">Cart Subtotal (optional)</Label>
+                <Input
+                  id="redeem-amount"
+                  type="number"
+                  value={redeemAmount}
+                  onChange={(e) => setRedeemAmount(e.target.value)}
+                  placeholder="KES"
+                  disabled={!!redeemResult?.success}
+                />
+              </div>
+            </div>
+
+            {/* Result */}
+            {redeemResult && (
+              redeemResult.success ? (
+                <div className="rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 p-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                    <p className="font-semibold text-emerald-800 dark:text-emerald-300">Voucher Redeemed Successfully</p>
+                  </div>
+                  <div className="space-y-1 text-sm">
+                    {redeemResult.voucherName && (
+                      <p><span className="text-muted-foreground">Voucher:</span> <span className="font-medium">{redeemResult.voucherName}</span></p>
+                    )}
+                    <p><span className="text-muted-foreground">Code:</span> <span className="font-mono font-medium">{redeemResult.voucherCode}</span></p>
+                    {redeemResult.discountAmount !== undefined && (
+                      <p className="text-base font-bold text-emerald-700 dark:text-emerald-300">
+                        Discount Applied: {formatKES(redeemResult.discountAmount)}
+                      </p>
+                    )}
+                    {redeemResult.newStatus && (
+                      <p><span className="text-muted-foreground">New Status:</span>
+                        <Badge variant="outline" className="ml-1 text-xs">{redeemResult.newStatus}</Badge>
+                      </p>
+                    )}
+                    {redeemResult.currentUses !== undefined && redeemResult.maxUses !== undefined && (
+                      <p className="text-xs text-muted-foreground">
+                        Uses: {redeemResult.currentUses} / {redeemResult.maxUses}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-4 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                    <p className="font-semibold text-red-800 dark:text-red-300">Redemption Failed</p>
+                  </div>
+                  <p className="text-sm text-red-700 dark:text-red-400 break-words">{redeemResult.message}</p>
+                </div>
+              )
+            )}
+          </div>
+        </ResponsiveDialog>
       </div>
     </TooltipProvider>
   );

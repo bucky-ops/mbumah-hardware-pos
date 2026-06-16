@@ -1219,3 +1219,329 @@ Stage Summary:
 - Brute force protection with progressive lockout
 - Security dashboard tab with real-time monitoring
 - GitHub workflows consolidated (removed redundant webpack.yml, added security scanning job)
+
+---
+Task ID: FOUNDATION
+Agent: Main Agent
+Task: GitHub access, Update branch, workflow fixes, logo, error handling, auto-refresh, responsive dialogs
+
+Work Log:
+- Accessed GitHub repo via PAT (bucky-ops/mbumah-hardware-pos) — confirmed accessible
+- Created and pushed `update` branch (tracks origin/update)
+- Fixed .github/workflows/node.js.yml: triggers now include [main, update, development]; node matrix bumped to [20,22]; `bun audit` -> `npm audit`; seed verify SQL uses quoted "Organization" table + continue-on-error
+- Added prisma.seed config to package.json (`bun prisma/seed.ts`) so `prisma db seed` works in CI
+- Updated .github/workflows/deploy.yml to trigger on [main, update]
+- Created .github/workflows/pages.yml — publishes a GitHub Pages landing page featuring public/logo.png (auto-generates a styled HTML page with the logo)
+- Updated README.md banner to use public/logo.png (was logo.svg)
+- Created src/lib/error-handler.ts — unified system-wide error handling: handleError(), toErrorMessage(), normaliseError(), withErrorHandling(), safeQuery(), createMutationErrorHandler(); re-exports AppError family; persists a 25-entry error ring buffer in localStorage
+- Created src/components/ui/responsive-dialog.tsx — auto-fitting Dialog (never squeezes content): caps height at 92vh with internal scroll, wraps long text, mobile near-full-screen, sizes sm..full, fixed header/footer
+- Updated src/lib/providers.tsx — React Query now auto-refreshes every 60s (refetchInterval: 60000) so DB data stays current ("database refresh every 1 minute")
+
+Stage Summary:
+- `update` branch live on GitHub; CI triggers cover main + update
+- GitHub Pages workflow will serve a logo landing page
+- System-wide error handling utility ready for use across all tabs
+- ResponsiveDialog available for auto-fitting any modal (import from @/components/ui/responsive-dialog)
+- All React Query data auto-refreshes every 1 minute
+- Prisma seed now runnable in CI
+- Pending: backend API routes (recommendations, trends, bulk messaging, supplier orders, customer history, voucher redeem, Daraja STK), POS redesign, CRM features, catalog/trends, search fixes
+
+---
+Task ID: BE-1
+Agent: Backend Agent
+Task: Backend API expansion — recommendations, trends, bulk messaging, supplier orders, customer history, voucher redemption, enhanced Daraja STK push + status check, and api.ts client methods.
+
+Work Log:
+- Read worklog tail (FOUNDATION + previous agents). Re-used existing auth/middleware patterns (`requireAuth` + `withErrorBoundary` from `src/lib/logger.ts` + `src/lib/auth.ts`) exactly as the whatsapp/send-document route does.
+- Verified Prisma schema models in use (CustomerInteraction is NOT in the schema, so customer history intentionally omits it; loyalty / banking models are also absent — left untouched).
+- Created 7 new route files and enhanced 1 existing route. All new routes reuse the `requireAuth(handler, { roles: [...] })` + `withErrorBoundary(handler, 'TAG')` wrappers and persist `Message` records where a wa.me link is generated.
+
+Files created:
+1. src/app/api/recommendations/frequently-bought/route.ts (GET)
+   - Mines SaleItem rows: finds transactions containing the seed product(s), aggregates co-occurring sibling product ids by count, returns top N (default 8, max 20) with {productId, name, sku, pricePerUnit, quantityInStock, coOccurrenceCount, categoryName}.
+   - Supports single (`productId`) and cart (`productIds=...,...`) modes via query string.
+2. src/app/api/trends/analysis/route.ts (GET)
+   - Compares recent vs previous period (7d / 30d / 90d) per product: recentQty, previousQty, recentRevenue, previousRevenue, qtyGrowthPct, revenueGrowthPct, direction (up/down/stable/new), projectedNext7dQty (linear projection from recent daily averages).
+   - Also returns category-level trends, top 10 growing, top 10 declining, and an overall store summary + 7-day projection.
+3. src/app/api/messaging/bulk/route.ts (POST)
+   - Audience filters: ALL, CUSTOMERS_WITH_PHONES, DEBTORS (currentDebtBalance>0), LOYALTY_MEMBERS (loyaltyPoints>0).
+   - Generates wa.me deep links per recipient, persists a Message row per recipient, returns {totalRecipients, sent[], skipped[]}.
+   - RBAC: SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER.
+4. src/app/api/suppliers/[id]/send-order/route.ts (POST)
+   - If `purchaseOrderId` provided, fetches PO + items + supplier + store, formats WhatsApp-friendly text. Else uses custom `message`.
+   - Supports WHATSAPP (wa.me) and EMAIL (mailto:) channels. Persists Message record. Returns {waLink, channel, recipient, message, subject}.
+5. src/app/api/customers/[id]/history/route.ts (GET)
+   - Pulls SalesTransactions, Invoices, CustomerCredits, GiftCardRedemptions (via GiftCard.issuedTo), VoucherRedemptions (via redeemedBy), DebtPayments (via DebtLedger), DeliveryNotes in parallel.
+   - Returns unified chronological timeline + summary stats (totalSpent, outstandingDebt, lastVisit, loyaltyPoints, transactionCount, avgOrderValue, invoiceCount, outstandingInvoices, creditsTotal, deliveryNotesCount). Raw sections also exposed.
+6. src/app/api/vouchers/redeem/route.ts (POST)
+   - Looks up voucher by code (case-insensitive via Prisma `mode: 'insensitive'` with try/catch fallback to exact match).
+   - Validates status ACTIVE, startDate/endDate, maxUses, maxUsesPerUser, minimumPurchase.
+   - FIXED: discount = voucher.value. PERCENTAGE: discount = (amount * value / 100), capped at maxDiscount and at spendAmount. FREE_PRODUCT: discount = 0.
+   - Creates VoucherRedemption row, increments currentUses, marks voucher EXPIRED when limit reached.
+   - Returns {discountAmount, voucher, redemption, newBalance?} (newBalance only for FIXED type).
+7. src/app/api/payments/mpesa/status/[checkoutRequestId]/route.ts (GET) — NEW
+   - Looks up MpesaTransaction by checkoutRequestId. If status is terminal, returns immediately.
+   - If Daraja env vars are configured (MPESA_CONSUMER_KEY/SECRET/SHORTCODE/PASSKEY), hits the Daraja STK query endpoint, parses ResultCode (0=success, 1032/1037=cancelled, else failed), updates local MpesaTransaction row.
+   - Falls back to local-only status on error or missing config.
+
+Files enhanced:
+8. src/app/api/payments/mpesa/stkpush/route.ts (POST) — ENHANCED
+   - Accepts new field names (`phone`, `storeId`) AND legacy ones (`phoneNumber`, `transactionId`) for backward compat (transactions/route.ts still works).
+   - Real Daraja path: when MPESA_CONSUMER_KEY/SECRET/SHORTCODE/PASSKEY env vars are set, performs OAuth token fetch → STK push (sandbox in non-production, production otherwise). Builds Daraja password = base64(shortcode + passkey + timestamp).
+   - Fallback path: tries local mock service at :3001 (unchanged), then synthetic checkout ID.
+   - Always persists / updates a MpesaTransaction row with checkoutRequestId + merchantRequestId.
+   - Returns {success, data:{checkoutRequestId, merchantRequestId, resultCode, message, status, mode}} where mode ∈ 'daraja' | 'mock' | 'simulated'.
+   - Added darajaLink? not included (wa.me doesn't apply to STK push — Daraja pushes directly to the user's phone). Used `message` field per spec.
+
+Files extended (NOT replaced):
+9. src/lib/api.ts — appended new exports + added methods to existing objects:
+   - NEW: `recommendationsApi.frequentlyBought(params)` + `RecommendationItem` interface
+   - NEW: `trendsApi.analysis(params)` + `ProductTrendItem`, `CategoryTrendItem`, `TrendsAnalysisResult` interfaces
+   - NEW: `messagingApi.bulk(payload)` + `messagingApi.sendDocument(data)` (wraps existing /whatsapp/send-document endpoint) + `BulkMessageResult/Recipient/Skipped` interfaces
+   - EXTENDED `suppliersApi`: added `sendOrder(id, payload)` + `SupplierSendOrderResult` interface
+   - EXTENDED `customersApi`: added `getHistory(id)` + `CustomerHistoryResult`, `CustomerHistorySummary`, `CustomerHistoryTimelineEntry` interfaces
+   - EXTENDED `vouchersApi`: added `redeemByCode(payload)` + `VoucherRedeemByCodeResult` interface
+   - EXTENDED `paymentsApi`: added `darajaStk(payload)` + `checkStkStatus(checkoutRequestId)` (kept existing `initiateMpesa`) + `DarajaStkResult`, `MpesaStkStatus` interfaces
+   - All existing exports untouched; only added/extended.
+
+Stage Summary:
+- 7 new backend route files + 1 enhanced (M-Pesa STK) covering all 7 task areas.
+- All endpoints follow the existing auth pattern (requireAuth + withErrorBoundary) and the existing { success, data?, error? } response shape.
+- Every WhatsApp-generating endpoint (bulk messaging, supplier send-order) persists a Message record AND returns a waLink.
+- All phone numbers normalised to 254XXXXXXXXX (Kenyan international format) via shared helper in each route.
+- RBAC enforced: bulk messaging restricted to SUPER_ADMIN/STORE_OWNER/BRANCH_MANAGER; trends to SUPER_ADMIN/STORE_OWNER/BRANCH_MANAGER/ACCOUNTANT; everything else allows CASHIER+.
+- src/lib/api.ts extended without breaking any existing exports — all 8 new API client methods + 9 TypeScript interfaces appended.
+- bun run lint passes cleanly for all new/modified files. The 2 reported issues (page.tsx line 2834 `typeof` parse error, error-handler.ts unused eslint-disable warning) are pre-existing and OUTSIDE my ownership scope (page.tsx is owned by the FRONTEND agent; error-handler.ts was created by FOUNDATION).
+- Dev server log shows no new compile errors after the changes; the dev server keeps running.
+
+---
+Task ID: CAT-1
+Agent: Catalog/Trends Agent
+Task: Catalog Add/Edit/Delete + WhatsApp send, Reports Trends & Predictions dashboard, Inventory dialog/error-handler upgrades, Dashboard sales-trend mini-widget — across catalog-tab, reports-tab, inventory-tab, dashboard-tab.
+
+Work Log:
+- Read worklog.md (FOUNDATION, FINAL, Fix Agent) for prior context; confirmed ResponsiveDialog at @/components/ui/responsive-dialog and handleError at @/lib/error-handler are available.
+- Confirmed api.ts exposes productsApi (list/get/create/update/delete/search/bundles), categoriesApi, reportsApi, dashboardApi, whatsappApi.sendDocument, openWhatsApp(). trendsApi/recommendationsApi not yet present (BE-1 in flight) → used direct fetch('/api/trends/analysis') and fetch('/api/recommendations/frequently-bought') with credentials:'same-origin' and Array.isArray() guards so the UI degrades gracefully when the endpoints 404.
+- catalog-tab.tsx — full rewrite to add admin capabilities alongside the existing customer-facing browse/cart flow:
+    * Added 300ms debounced search (debouncedSearch state + useRef timer); search now filters by name/SKU/barcode/description/category.
+    * Added Add Product button + product editor in ResponsiveDialog (size 'xl') with sections for Basic Info (name, SKU, barcode, category, description, image URL), Pricing (selling/cost/tax + live margin), Stock & Units (qty/reorder/unitType + rental/bundle checkboxes). Single editor handles both add and edit (editingProduct state).
+    * Per-product dropdown menu (MoreVertical) on every grid card and list row: Edit, Duplicate, Delete. DropdownMenuItems use onSelect={e=>e.preventDefault()} to avoid focus conflicts when opening the editor (mirrors the Fix Agent pattern from gift-cards).
+    * Delete confirmation in ResponsiveDialog (size 'sm') with red warning strip.
+    * "Send Catalog" button + ResponsiveDialog phone-input modal: calls whatsappApi.sendDocument({type:'inventory',storeId,phone}); on failure falls back to openWhatsApp() with a wa.me link containing up to 40 of the currently-filtered products (name + price + SKU).
+    * Low-stock restock hint: cards get an amber/red ring when stock.tone !== 'ok' and an inline "Restock hint: reorder ≤ N units" / "out of stock — order now" strip under the price.
+    * All mutations wired with handleError(err, '<op>') + toast.error() in onError; queryClient.invalidateQueries on success so the catalog refreshes immediately (also picked up by the 60s global refetch).
+    * Stable queryKeys ['catalog-products', storeId] and ['categories', storeId].
+- reports-tab.tsx — added a new "Trends & Predictions" report type:
+    * New types: TrendsRange ('7d'|'30d'|'90d'), GrowingProduct, DecliningProduct, ForecastPoint, CategoryTrendRow, FrequentlyBoughtPair, TrendsAnalysis, FrequentlyBoughtResult.
+    * New fetchers fetchTrendsAnalysis() and fetchFrequentlyBought() — direct fetch with same-origin credentials, defensive Array.isArray guards, returns safe empty shape on any failure.
+    * New component TrendsPredictionsSection renders: header card with range selector (7d/30d/90d), 4 KPI cards (7-day forecast total, growing count, declining count, pairs found), Top Growing Products (horizontal BarChart with growth %), Top Declining Products (horizontal BarChart + reorder warning strip), 7-Day Sales Forecast (AreaChart with optional upper/lower bounds), Category Trends (table with share + change %), Frequently Bought Together list (paired products with co-occurrence × and confidence %, displayed as "X + Y · bought together N×").
+    * Drilldown ResponsiveDialog (size 'xl') for Growing/Declining detail tables.
+    * New ReportTypeCard "Trends & Predictions" (Sparkles icon) added to the report grid; reportType union extended with 'trends'.
+    * Errors logged via handleError() in a useEffect (non-blocking) — section still renders empty-state cards.
+    * Added imports: Sparkle, Link2, ArrowRight, Legend, Cell from recharts, Table components, ResponsiveDialog, handleError.
+- inventory-tab.tsx — verified existing search (debounced 300ms, by name/SKU/category via productsApi.list({search})), stock adjustment, stock movement history, low-stock alerts, WhatsApp inventory report button (handleSendInventoryReport → whatsappApi.sendDocument). Upgrades:
+    * Switched Add Category dialog from plain Dialog to ResponsiveDialog (size 'md') — color palette wraps cleanly on small screens; added aria-label/aria-pressed for color buttons; autoFocus on name input.
+    * Switched Edit Product dialog from plain Dialog to ResponsiveDialog (size 'lg') — sections reflow to single column on mobile, live profit-margin badge added to Pricing.
+    * Wrapped ALL mutation onError (createProduct, updateProduct, deleteProduct, stockAdjust, createCategory, bulkAdjust, quickAdjust) with handleError(err, '<op>') + toast.error().
+    * Added queryClient.invalidateQueries(['products', currentStoreId]) to createProduct/updateProduct/deleteProduct onSuccess — previously the table didn't refresh after a create/update/delete (only after the 60s global refetch).
+    * Wrapped WhatsApp send with handleError + non-null check on res?.waLink.
+- dashboard-tab.tsx — added compact Sales Trend mini-widget:
+    * New SalesTrendsWidget component placed at the top of the dashboard right column (above AlertsPanel).
+    * Fetches /api/trends/analysis?storeId=...&range=7d via fetchDashboardTrends() (same-origin, defensive guards).
+    * Renders: header card with Sparkles icon + "Sales Trend (7d)" + Demo badge (when isDemo), total/peak forecast in description, "Details" button → handleTabSwitch('reports'); compact AreaChart (h-32) of predicted revenue for the next 7 days; Top 3 Growing Products list with rank + name + green +growth% badge.
+    * Empty-state and loading skeletons; errors logged via handleError() in useEffect (non-blocking).
+    * Added imports: Area, AreaChart from recharts; ArrowUpRight, Sparkles from lucide; handleError.
+- Lint: bun run lint passes with 0 errors in my 4 files. The only remaining project-wide lint items are in src/app/page.tsx (warning, not my file) and src/lib/error-handler.ts (warning, owned by FOUNDATION). TypeScript: npx tsc --noEmit reports 0 errors in my 4 files (pre-existing TS errors elsewhere are unrelated to my changes).
+
+Stage Summary:
+- Catalog now supports full CRUD (Add/Edit/Duplicate/Delete) via ResponsiveDialog editor (size xl) with every field visible and wrapped; debounced live search across name/SKU/barcode/description/category; WhatsApp catalog send (server-side sendDocument with wa.me fallback); low-stock amber/red ring + inline restock hint on every card. All mutations use handleError + toast.error.
+- Reports has a new "Trends & Predictions" report type with range selector (7d/30d/90d) and 5 visualizations (growing bar, declining bar + reorder warning, 7-day forecast area with bounds, category trends table, frequently-bought-together list) + ResponsiveDialog drilldowns. Surfaces the cement→ballast, paint→brush insight directly via the frequently-bought list. Uses direct fetch with graceful fallback so it works whether or not BE-1 has shipped the endpoints.
+- Inventory search/stock-adjust/movements/low-stock/WhatsApp all verified working; category management modal and edit-product modal both upgraded to ResponsiveDialog; all mutations now use handleError + toast.error; create/update/delete now invalidate the products query so the table refreshes immediately.
+- Dashboard has a new compact Sales Trend (7d) mini-widget at the top of the right column with an area chart + Top 3 growing products list, pulling from /api/trends/analysis?range=7d, with a "Details" button that deep-links to the Reports tab.
+- All four files lint-clean; no new TS errors introduced; dev server unaffected.
+
+---
+Task ID: POS-1
+Agent: POS Agent
+Task: Redesign POS product grid (larger auto-sizing cards), new 4-method checkout flow (Cash → Debt → Either/Split → M-Pesa with Daraja STK polling), receipt print + WhatsApp send, "Sell More" recommendations panel, and unified error handling.
+
+Work Log:
+- Read prior work (FOUNDATION created ResponsiveDialog, error-handler, 1-min auto-refresh; BE-1 adding recommendations + Daraja STK endpoints).
+- Added imports to page.tsx: ResponsiveDialog, handleError, whatsappApi, plus new Lucide icons (Lightbulb, Send, ExternalLink, RefreshCw, Split, ChevronRight).
+- Redesigned ProductCard (only used by POS):
+  * Taller 32 (h-32) image area, p-3 content padding, min-h-[210px] card.
+  * 4px category-color strip on the TOP edge (replaces left strip) for clearer category grouping.
+  * Bigger 15px product name with line-clamp-2 + break-words (no word truncation).
+  * Bigger base-size price with "per {UNIT}" suffix; small color dot + category name.
+  * 10×10 (h-10 w-10) touch-friendly quick-add button (44px target).
+  * LOW STOCK amber badge + OUT OF STOCK destructive badge on the image; red/amber stock bar.
+  * Out-of-stock disables the card (pointer-events-none + grayscale + opacity-60) — rentals still allowed.
+  * In-cart indicator moved to top-right with ring-2 for visibility.
+- Auto-adjust grid columns based on visible product count (gridColsClass memo):
+  * ≤8 products: grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4 (bigger cards)
+  * 9–24: grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3
+  * >24: grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2.5
+- Replaced both old inline checkout Dialogs (desktop cart sidebar + mobile cart sheet) with a single shared <CheckoutDialog> built on ResponsiveDialog. New payment method order: Cash → Debt → Either/Split → M-Pesa.
+  * Cash: cash received input + quick-cash buttons (rounded up to 100/500/1000) + change-due highlight + insufficient alert.
+  * Debt: customer avatar, debt limit / current debt / available / this-sale grid; warns (destructive Alert) if sale exceeds available debt; requires non-walk-in customer.
+  * Either/Split: cash + M-Pesa amount fields (auto-fills the other side), M-Pesa phone, total-entered vs short tracker, inline STK status panel for the M-Pesa portion.
+  * M-Pesa: phone input + info banner with "Open M-Pesa Daraja" direct link (https://daraja.safaricom.co.ke) + STK status panel.
+  * STK status panel: shows CheckoutRequestID (mono, break-all), status text (break-words), polling spinner (RefreshCw), and an "Open M-Pesa Daraja" link. Footer adapts: idle = Cancel + Send STK Push; processing = Cancel + Open Daraja; success = Close + Complete Sale; failed = Cancel + Try Again.
+  * The dialog cannot be dismissed while STK is actively processing.
+- M-Pesa STK push mutation:
+  * Calls paymentsApi.darajaStk(payload) if BE-1 added it; otherwise falls back to direct fetch('/api/payments/mpesa/daraja-stk').
+  * On success: stores CheckoutRequestID, sets processing state, shows result description, starts polling.
+  * Polling: every 5s for up to 60 attempts (~5 min), calls paymentsApi.checkStkStatus(id) or fetch('/api/payments/mpesa/status/{id}'). On SUCCESS/COMPLETED/code=0 → setMpesaStatus('success') + toast. On FAILED/CANCELLED → setMpesaStatus('failed'). Polling cleared on unmount.
+  * onError wrapped with handleError(err, 'M-Pesa STK Push').
+- handleCheckout now requires MPESA success (and SPLIT-mpesa-portion success) before completing; DEBT validates selected customer + available limit before mutating.
+- Receipt dialog rebuilt with ResponsiveDialog (size sm):
+  * Three-button footer: Print, Send via WhatsApp, New Sale.
+  * Print: opens a new window with a clean monospace printable receipt (store header + meta + line-item table + totals + payment details + footer). Auto-triggers window.print() on load. Falls back to window.print() if popup blocked. All dynamic strings escaped via new escapeHtml() helper to prevent breaking the print document.
+  * Send via WhatsApp: opens a second ResponsiveDialog prompting for phone (pre-filled from lastMpesaPhone or customer phone). Calls whatsappApi.sendDocument({type:'receipt', documentId, storeId, phone}); falls back to direct fetch('/api/whatsapp/send-document'). Opens returned waLink in a new tab; falls back to wa.me deep link if no waLink. Errors handled with handleError(err, 'Send receipt via WhatsApp').
+  * Receipt meta lines now use break-words / break-all on the right column so long receipt numbers / names never overflow.
+- "Sell More — Customers also bought" recommendations panel:
+  * Shown above the product grid (below the products list view) only when cart has ≥1 item.
+  * Collapsible header with Lightbulb icon, badge showing count, "Tap a chip to add it to the cart" hint.
+  * Uses useQuery with key ['pos-recommendations', storeId, cartProductIds.join(',')]; enabled only when cart has items; 30s staleTime; retry:false (silent failure).
+  * Calls recommendationsApi.frequentlyBought({productIds, storeId}) if BE-1 added it; otherwise direct fetch to /api/recommendations/frequently-bought?storeId=...&productId=... for each cart item.
+  * Filters out products already in cart and out-of-stock items, slices top 8.
+  * Renders as flex-wrap chips with thumbnail, name (line-clamp-1 max-w-160px), price+unit, "bought together N×" co-occurrence hint, low-stock note, and a Plus icon. 44px min-height touch target. Clicking adds the recommended product to the cart (uses handleAddToCart, finds match in loaded products if recommendation only returns a productId).
+- Error handling: all new mutations' onError use handleError() from '@/lib/error-handler' (checkout, mpesa STK push, send-receipt-via-WhatsApp). Recommendation fetches fail silently with retry:false (no UI error toasts) — they just return an empty array.
+- Lint: `bun run lint` reports ZERO errors and ZERO warnings on src/app/page.tsx (verified with `npx eslint src/app/page.tsx`). The only remaining lint issue (Parsing error in vouchers-tab.tsx and an unused eslint-disable in error-handler.ts) was introduced by other agents and is not in this task's file ownership.
+
+Stage Summary:
+- POS product cards are now larger, more readable, wrap product names fully, with clear low/out-of-stock visuals and touch-friendly quick-add buttons. Grid auto-sizes columns based on product count.
+- Checkout flow is unified (desktop + mobile) into a single ResponsiveDialog with 4 payment methods in the requested order: Cash → Debt → Either/Split → M-Pesa. M-Pesa uses Daraja STK push with inline status polling, CheckoutRequestID display, and an "Open M-Pesa Daraja" direct link. Gift card / voucher auto-apply discount logic still works (unchanged). DEBT shows debt limit + current debt + available + exceeds-limit warning. SPLIT shows cash + M-Pesa fields and triggers STK push for the M-Pesa portion.
+- Receipt dialog offers Print (clean printable layout via new window) + Send via WhatsApp (whatsappApi.sendDocument with fetch fallback) + New Sale. Both dialogs use ResponsiveDialog so nothing is squeezed.
+- "Sell More — Customers also bought" recommendations panel appears above the grid when the cart has items; chips show co-occurrence counts and add to cart on click — directly enables cement → ballast/sand, paint → brush cross-sell.
+- All new mutations use handleError() for user-friendly error toasts.
+- Lint passes clean on src/app/page.tsx.
+
+Files Modified:
+- src/app/page.tsx (only file edited; only POSTab component, ProductCard, EmptyProductsState region, and new shared helpers CheckoutDialog / StkStatusPanel / escapeHtml added).
+
+---
+Task ID: CRM-1a
+Agent: CRM Agent A
+Task: Customer Account/History view (fixed data flow + debounced search), Supplier "Send Order" action (dropdown + ResponsiveDialog), Bulk/Holiday Broadcast sub-tab in Messaging. All 3 owned files only.
+
+Work Log:
+- Read worklog.md (FOUNDATION, BE-1, POS-1, CAT-1, FINAL, Fix Agent) for prior context. Confirmed ResponsiveDialog + handleError available; customersApi.getHistory, suppliersApi.sendOrder, messagingApi.bulk (+ sendDocument), whatsappApi.sendDocument all present in src/lib/api.ts. Read the actual API route handlers (/api/customers/[id]/history, /api/suppliers/[id]/send-order, /api/messaging/bulk, /api/whatsapp/send-document) to confirm response shapes: all return `{ success, data }` envelopes and `request<T>` in api.ts returns `ApiResponse<T>` = `{ success, data?, ... }`. So callers must unwrap `.data` — the pre-existing CustomerHistoryDialog had a buggy cast `(customersApi as unknown).getHistory` that returned the wrapped ApiResponse, never the inner data, and accessed `res.waLink` instead of `res.data?.waLink` on sendDocument.
+- customers-tab.tsx:
+    * Added `useEffect, useRef` to React imports; imported `CustomerHistoryTimelineEntry, CustomerHistoryResult, CustomerHistorySummary` types from @/lib/api.
+    * Rewrote `CustomerHistoryData.summary` to use the typed `CustomerHistorySummary` (replaced inline shape) — exposes `avgOrderValue` (not `averageOrderValue`), `invoiceCount`, `outstandingInvoices`, `creditsTotal`, `deliveryNotesCount`.
+    * Added `normalizeHistoryEntry(raw)` mapper: maps API uppercase types (`SALE`/`INVOICE`/`CREDIT`/`GIFT_CARD_REDEMPTION`/`VOUCHER_REDEMPTION`/`DEBT_PAYMENT`/`DELIVERY_NOTE`) → lowercase display types (`sale`/`invoice`/`credit`/`gift_card`/`voucher`/`payment`/`delivery_note`); maps `timestamp`→`date`, `ref`→`reference`; reads `amount` (or `discountAmount` for vouchers); picks `status`/`paymentStatus`/`invoiceType`/`creditType` defensively; reads `description`/`deliveryAddress` for the description line.
+    * Rewrote the useQuery queryFn: now calls `customersApi.getHistory(id)` (typed) and unwraps `response.data`; falls back to direct `fetch('/api/customers/${id}/history', { credentials: 'same-origin' })` and unwraps `json.data`. Both branches map timeline through `normalizeHistoryEntry`. Query key `['customer-history', customer?.id, storeId]`; enabled only when `customer && open`.
+    * Fixed `handleSendStatement`: now reads `res?.data?.waLink` and `res?.data?.documentTitle` (was `res.waLink` / `res.documentTitle` — both undefined because sendDocument returns ApiResponse). Toasts "No WhatsApp link returned" if waLink missing. Still wrapped with handleError(err, 'Send statement via WhatsApp').
+    * Fixed summary card: `summary.avgOrderValue` (was `summary.averageOrderValue` — wrong field name on the typed summary). All 8 summary tiles (Total Spent, Outstanding Debt, Loyalty Points, Avg Order Value, Last Visit, Customer Since, Transactions, Credit Limit) verified to read fields that exist on `CustomerHistorySummary` / `CustomerItem`.
+    * The "View Account / History" button (History icon in the row Actions column, plus a "View Account / History" button inside the customer detail Sheet) was already wired to open the CustomerHistoryDialog — left in place. No dropdown menu needed since the action is a direct icon button, not inside a DropdownMenu.
+    * Added 300ms debounced search: new `debouncedSearch` state + `searchDebounceRef` (useRef<ReturnType<typeof setTimeout>>); useEffect clears + sets a 300ms timer that calls `setDebouncedSearch(searchQuery.trim())` and cleans up on unmount. useQuery key now uses `debouncedSearch` instead of `searchQuery`. The input value, "matching X" hint, and clear-filters check still use `searchQuery` (instant feedback) — only the network query is debounced.
+    * Existing createCustomer + debtPayment mutations already use handleError; left as-is.
+- suppliers-tab.tsx:
+    * Added `useEffect, useRef` to React imports; added `MoreVertical` to lucide imports; added `type SupplierSendOrderResult` to api imports; imported DropdownMenu components.
+    * Wrapped ALL existing mutation onError handlers with handleError(err, '<op>') + toast.error(): createMutation ('Create supplier'), updateMutation ('Update supplier'), createMutation in CreatePODialog ('Create purchase order'), receiveMutation ('Receive PO items'), deleteMutation ('Deactivate supplier'), statusMutation ('Update PO status'). Was `(err: Error) => toast.error(err.message)`.
+    * Added new `SendOrderDialog` component (just before `export default function SuppliersTab`):
+        - Props: `open`, `onOpenChange`, `supplier: SupplierItem | null`, `storeId`.
+        - Uses ResponsiveDialog (size md) — auto-fitting, mobile near-full-screen, internal scroll, wraps text.
+        - Channel Select (WhatsApp / Email) with phone/email iconography.
+        - Optional Purchase Order Select — fetches supplier's POs via `purchaseOrdersApi.list({ storeId, supplierId, limit: 50 })`; includes "No PO — send custom message" option and "No purchase orders on file" empty state.
+        - Custom message Textarea — pre-filled with a friendly default (`Hello ${contactPerson||name}, this is Mbumah Hardware. We would like to place an order. Please confirm availability and pricing. Thank you!`); required when no PO selected, optional add-on when a PO is selected.
+        - Recipient summary footer (phone/email + contact person).
+        - Amber warning strip if the chosen channel's contact info is missing.
+        - Send button disabled while pending, when channel contact is missing, or when no PO and message is empty.
+        - mutationFn: tries `suppliersApi.sendOrder(supplier.id, { channel, purchaseOrderId?, message? })` first (returns ApiResponse<SupplierSendOrderResult>), unwraps `.data`; falls back to direct `fetch('/api/suppliers/${id}/send-order', { credentials: 'same-origin', method: 'POST', ... })` and unwraps `json.data`.
+        - onSuccess: toast.success, opens `result.waLink` in new tab (wa.me or mailto:), invalidates ['messages', storeId] and ['purchase-orders', storeId], closes dialog. onError wrapped with handleError(err, 'Send order to supplier').
+        - Uses lazy `useState(() => ...)` initializer for the message (avoids setState-in-effect lint error); parent passes `key={sendOrderSupplier?.id ?? 'none'}` so the dialog remounts with fresh state for each new supplier.
+    * In the main SuppliersTab supplier list table: added a new "Actions" column with a per-row DropdownMenu (MoreVertical trigger button, `onClick={e => e.stopPropagation()}` to avoid opening the detail view). Menu items: "Send Order…" (onSelect preventDefault → opens SendOrderDialog), "View Details" (onSelect preventDefault → opens detail), "Quick WhatsApp" (only if phone, opens openWhatsApp with default message), "Quick Email" (only if email, opens openEmail with default subject+body). All DropdownMenuItem onSelect handlers call `e.preventDefault()` per the task spec.
+    * Added 300ms debounced search: new `debouncedSearch` state + `searchDebounceRef`; useEffect debounces `searchQuery.trim()` by 300ms; useQuery key now uses `debouncedSearch` instead of `searchQuery`. The input value still uses `searchQuery` (instant feedback).
+    * Rendered `<SendOrderDialog key={sendOrderSupplier?.id ?? 'none'} ... />` in the dialog footer of SuppliersTab.
+- messaging-tab.tsx:
+    * Added `Calendar, Users, ExternalLink` to lucide imports; added `messagingApi` and `type BulkMessageResult, type BulkMessageRecipient` to api imports; imported `handleError` from @/lib/error-handler.
+    * Removed `ThumbUp` from lucide imports (doesn't exist in lucide-react; was a pre-existing TS error — only `ThumbsUp` exists). Left `Heart, Gift` alone (unused but harmless).
+    * Wrapped ALL existing mutation onError handlers with handleError(err, '<op>') + toast.error(): sendMessageMutation ('Send message'), sendDebtReminderMutation ('Send debt reminder'), sendBalanceUpdateMutation ('Send balance update'). Was `(error: Error) => toast.error(`Failed to ...: ${error.message}`)`.
+    * Fixed pre-existing `debts is not defined` ReferenceError in `handleTemplateSelect` (would crash the Quick Send tab whenever a template with {amount}/{balance} was picked while a customer was selected): replaced `debts.filter(...)` with `[...overdueDebts, ...outstandingDebts].filter(...)` — both arrays are already declared in the component.
+    * Added `HOLIDAY_TEMPLATES` constant (6 Kenyan holidays: Christmas 🎄, New Year 🎉, Easter 🐰, Madaraka Day 🇰🇪, Mashujaa Day 🇰🇪, Jamhuri Day 🇰🇪) — each with a friendly Mbumah Hardware greeting.
+    * Added `BulkAudience` and `BulkChannel` union types and `AUDIENCE_LABELS` map.
+    * Added bulk broadcast state: `bulkMessage`, `bulkSubject`, `bulkAudience` (default 'CUSTOMERS_WITH_PHONES'), `bulkChannel` (default 'WHATSAPP'), `bulkScheduledAt`, `bulkResult: BulkMessageResult | null`.
+    * Added `sendBulkBroadcastMutation` — mutationFn builds `{ storeId, message, channel, audience, subject?, scheduledAt? }` payload, calls `messagingApi.bulk(payload)` and unwraps `response.data`; falls back to direct `fetch('/api/messaging/bulk', { credentials: 'same-origin', method: 'POST', ... })` and unwraps `json.data`. onSuccess: toast.success with sent/skipped counts, `setBulkResult(result)`, invalidates ['messages', storeId]. onError wrapped with handleError(err, 'Send bulk broadcast').
+    * Added new "Broadcast" TabsTrigger between Quick Send and History (updated TabsList from grid-cols-4 to grid-cols-5).
+    * New TabsContent "bulk-broadcast" renders:
+        - Header card with PartyPopper icon + explainer paragraph (how wa.me links + audit logging work).
+        - 3-column grid: Audience Select (All customers / Customers with phones / Debtors / Loyalty members), Channel Select (WhatsApp / SMS), Scheduled At datetime-local Input (optional).
+        - Optional Subject Input.
+        - Quick Holiday Templates row — one-click fill buttons (each sets bulkMessage and, if subject is empty, sets a default subject like "Christmas — Mbumah Hardware").
+        - Required Message Textarea with character count + "sent verbatim to every recipient" hint.
+        - Send Broadcast button (green-600) with audience/schedule hint next to it; disabled while pending or if message is empty.
+        - Results panel (renders when `bulkResult` is set): header with sent/skipped/candidates badges; summary banner (channel/audience/subject/scheduledAt); scrollable recipients Table (max-h-96, sticky header) with Name, Phone, "Open" link button (green-outlined button wrapping an <a> to the waLink, target=_blank); skipped reasons panel (amber strip, max-h-32 scroll, shows first 20 + "and N more"); "Open All (first 10)" button (browsers block mass pop-ups) + "Dismiss" button to clear the result.
+    * Existing single-message send (Quick Send tab + Send Message dialog + Debt Reminder dialog + Balance Update dialog) all left intact and verified to still work — the only fixes were the `debts` ReferenceError and the mutation onError handlers.
+    * History tab search is client-side filtering (unchanged) — works as before.
+- Lint: `cd /home/z/my-project && bun run lint` reports ZERO errors and ZERO warnings on all three owned files (verified with `npx eslint src/app/tabs/customers-tab.tsx src/app/tabs/suppliers-tab.tsx src/app/tabs/messaging-tab.tsx`). Dev server on port 3000 was NOT restarted.
+- TypeScript: `npx tsc --noEmit --skipLibCheck` reports 2 remaining TS errors in my files, both PRE-EXISTING and unrelated to my edits (verified by inspecting the unchanged code):
+    * customers-tab.tsx(1228,44): the existing "Record Debt Payment" dialog calls `debtPaymentMutation.mutate({...})` without `storeId` — pre-existing bug in the debt-payment flow, not in my customer-history changes.
+    * messaging-tab.tsx(411,24): the existing `sendMessageMutation.mutationFn` type signature has `storeId?: string` (optional) but `messagesApi.send` requires `storeId: string` — pre-existing type mismatch in the single-message send flow; runtime works because the call always passes `storeId: currentStoreId`.
+  Both are outside the task scope (customer history / supplier send-order / bulk messaging) and not introduced by me. The dev server (Turbopack) compiles and runs fine despite them.
+
+Stage Summary:
+- customers-tab.tsx: Customer Account / History dialog now correctly unwraps the `customersApi.getHistory` ApiResponse, normalizes API timeline entries (uppercase types → lowercase display types; timestamp/ref/amount/discountAmount/status fields → unified HistoryEntry shape), and the "Send Statement via WhatsApp" button now reads `res.data?.waLink` (was `res.waLink` which was always undefined). Summary card reads the real `avgOrderValue` field (was the non-existent `averageOrderValue`). Customer search is now 300ms-debounced (was per-keystroke).
+- suppliers-tab.tsx: Every supplier row now has a "⋯" dropdown menu with "Send Order…", "View Details", "Quick WhatsApp", "Quick Email". The Send Order dialog (ResponsiveDialog size md) lets the cashier pick WhatsApp/Email channel, optionally attach a PO (fetched from purchaseOrdersApi.list by supplierId), and customise the pre-filled message; on Send it calls `suppliersApi.sendOrder(id, { channel, purchaseOrderId?, message? })` (with direct-fetch fallback), opens the returned waLink in a new tab, toasts success, and invalidates messages + purchase-orders queries. All existing mutations now use handleError. Supplier search is 300ms-debounced.
+- messaging-tab.tsx: New "Broadcast" sub-tab (5-column TabsList) for Bulk / Holiday messaging — audience/channel/scheduled selectors, optional subject, 6 one-click Kenyan holiday templates (Christmas, New Year, Easter, Madaraka Day, Mashujaa Day, Jamhuri Day), required message textarea, and a results panel with recipient count + scrollable Name/Phone/Open table + skipped-reasons list + "Open All (first 10)" helper. Calls `messagingApi.bulk({ storeId, message, channel, audience, subject?, scheduledAt? })` (with direct-fetch fallback) and unwraps `BulkMessageResult`. Existing single-message send (Quick Send tab) still works — fixed a pre-existing `debts is not defined` ReferenceError in `handleTemplateSelect` so template-based sends no longer crash, and all mutations now use handleError.
+- All three files lint-clean. No new dependencies. No indigo/blue primary colors used (existing green/emerald + neutrals respected). Mobile-first responsive (DropdownMenu, ResponsiveDialog, grid-cols-1 → md:grid-cols-3 etc.). 44px min touch targets preserved (h-9 buttons). Dev server unaffected.
+
+Files Modified:
+- src/app/tabs/customers-tab.tsx (only)
+- src/app/tabs/suppliers-tab.tsx (only)
+- src/app/tabs/messaging-tab.tsx (only)
+
+---
+Task ID: CRM-1b
+Agent: CRM Agent B
+Task: Voucher/gift-card redemption UX, WhatsApp + Print on all 4 document tabs (invoices/transactions/delivery-notes/credits), auto-fit "New Document" editors via ResponsiveDialog, and debounced live search + unified error handling across all 6 owned tab files.
+
+Work Log:
+- Read worklog tail (FOUNDATION, BE-1, POS-1, CAT-1, Fix Agent). Confirmed `ResponsiveDialog` at `@/components/ui/responsive-dialog`, `handleError` at `@/lib/error-handler`, `vouchersApi.redeemByCode` already present in `@/lib/api` (added by BE-1), and `whatsappApi.sendDocument({type, documentId, storeId, phone, customerId?})` returning `{waLink, phone, message, documentTitle}`.
+- vouchers-tab.tsx:
+    * Added 300ms debounced search (`debouncedSearch` state + `useRef` timer + `useEffect`). Switched the `useQuery` queryKey and the client-side `filteredVouchers` useMemo to use `debouncedSearch` instead of `searchQuery`, so the API no longer refetches on every keystroke. The input value (`searchQuery`) updates immediately for responsive typing.
+    * Updated the redeem-code input to uppercase-on-blur (`onBlur` handler) instead of on every keystroke — matches the spec "uppercase on blur" and avoids cursor-jump issues.
+    * Updated the redeem dialog helper text to: "Enter the voucher code printed on your voucher. The discount will be applied to the transaction..." (matches the spec wording).
+    * The prominent "Redeem Voucher Code" button at the top of the tab (emerald outline, Receipt icon), the ResponsiveDialog (size md) with code/customer/amount inputs, the `redeemByCodeMutation` (calls `vouchersApi.redeemByCode` with fetch fallback), and the success/failure result panel showing discount applied + new voucher status (ACTIVE/USED/EXPIRED) + uses count — were all already present from prior work and left intact. `onError` already wraps with `handleError(err, 'Redeem voucher code')` + toast.
+- gift-cards-tab.tsx:
+    * Added 300ms debounced search (`debouncedSearch` + `useRef` timer + `useEffect`). Switched the `giftCards` `useQuery` queryKey + queryFn to use `debouncedSearch`. Previously every keystroke triggered a server round-trip.
+    * Added a "How to redeem" helper banner inside the Redeem Gift Card dialog (pink-tinted, Info icon) with the exact spec text: "How to redeem: Enter the gift card code at checkout, or use Redeem here to apply it to a specific amount." This complements the existing header Info tooltip and the top-of-tab helper banner.
+    * Verified the existing Redeem dropdown item keeps `onSelect={(e) => e.preventDefault()}` (the prior fix), the redeem mutation calls `giftCardsApi.redeem(id, {amount, transactionId, notes})` (which hits `/api/gift-cards/[id]/redeem`), and `onError` wraps with `handleError(err, 'Redeem gift card')` + toast.
+- invoices-tab.tsx:
+    * Added a reusable `printDocument(html, title)` helper at module top: opens `window.open('', '_blank')`, writes a full HTML doc with print CSS (@page margins, table borders, totals grid, signature lines), calls `printWindow.print()` after 250ms, and falls back to inline `window.print()` + toast if popups are blocked. Also added `escapeHtml(str)` to safely inject dynamic strings.
+    * Rewrote `handlePrint(invoice)` as an async function: fetches the invoice detail (with line items) via `invoicesApi.get(id)` if `invoice.items` isn't already populated, then builds a printable invoice HTML (store header with Mbumah Hardware + address + phone, invoice number, issue/due dates, status badge, Bill-To block, line-items table with #/Item/Qty/Unit Price/Disc%/Tax%/Total, totals block with Subtotal/Discount/Tax/Grand Total, Notes, Terms, Authorised + Customer signature lines, footer) and calls `printDocument`. Wrapped in try/catch with `handleError(err, 'Print invoice')` + toast.
+    * Replaced the row-level Print button (which previously did `setViewingInvoice(inv); setViewOpen(true); setTimeout(() => handlePrint(), 300)` → effectively `window.print()` of the whole page) to now call `handlePrint(inv)` directly — prints just the invoice, not the entire app.
+    * Updated the view-dialog Print button to call `handlePrint(invoiceDetail)`.
+    * Swapped the "Create New Document" Dialog (was `max-w-4xl max-h-[90vh] overflow-hidden flex flex-col` with an inner `<ScrollArea>`) to `ResponsiveDialog` size `2xl` with the form body inside the auto-scrolling body and the Cancel/Create buttons in the `footer` prop. Every field (document type, customer, name, phone, email, address, issue/due dates, line items grid, totals, notes, internal notes, payment terms) now fits without squeezing — long line-item lists scroll internally.
+    * Added 300ms debounced search (`debouncedSearch` + `useRef` timer + `useEffect`). Switched the `invoices` useMemo to use `debouncedSearch` for client-side filtering.
+    * All mutations (create, update) already wrap `onError` with `handleError(err, '<op>')` + toast.
+- transactions-tab.tsx:
+    * Added 300ms debounced search (`debouncedSearch` + `useRef` timer + `useEffect`). Switched the `filteredTransactions` useMemo to use `debouncedSearch`.
+    * Verified EVERY transaction row already has BOTH a "Print" button (calls `handlePrintReceipt` → opens a new window with a clean monospace printable receipt: store header, receipt #, date, customer, cashier, line items, totals, payment method, status, thank-you footer; auto-`print()` after 250ms) AND a "Send via WhatsApp" button (calls `handleSendReceiptWhatsApp` → prompts for phone pre-filled from `transaction.customer?.phone`, calls `whatsappApi.sendDocument({type:'receipt', documentId, storeId, phone})`, opens `waLink` in new tab, toast success; `onError` wraps with `handleError(err, 'Send receipt via WhatsApp')`). Both buttons appear in each row's expanded action area.
+- delivery-notes-tab.tsx:
+    * Added a reusable `printDocument(html, title)` helper + `escapeHtml` (same pattern as invoices-tab) at module top.
+    * Rewrote `handlePrint(note)` as an async function: fetches the delivery note detail (with items) via `deliveryNotesApi.get(id)` if items aren't already loaded, then builds a printable delivery-note HTML (store header, DELIVERY NOTE badge, delivery number, status, customer info grid with name/phone/address/driver/vehicle/scheduled/created, items table with #/Product/Qty/Unit/Notes, notes, Driver + Receiver signature lines, footer) and calls `printDocument`. Wrapped in try/catch with `handleError(err, 'Print delivery note')` + toast.
+    * Added a Print icon button to EVERY delivery-note row (between View and WhatsApp) — previously Print was only available inside the view dialog. Now each row has View + Print + WhatsApp.
+    * Updated the view-dialog Print button to call `handlePrint(noteDetail)`.
+    * Removed the old hidden `printRef` div + its `useRef` (no longer needed since `handlePrint` now builds the HTML directly).
+    * Removed `searchQuery` from the `useQuery` queryKey (it was there but never used in the queryFn, causing useless refetches on every keystroke). Added 300ms debounced search (`debouncedSearch` + `useRef` timer + `useEffect`); the client-side `deliveryNotes` filter useMemo now uses `debouncedSearch`.
+    * Swapped the "New Delivery Note" Dialog (was `max-w-2xl max-h-[90vh] overflow-y-auto`) to `ResponsiveDialog` size `xl` with the form body inside the auto-scrolling body and Cancel/Create buttons in the `footer` prop. Customer info, delivery info, items list, and notes all fit without squeezing; long item lists scroll internally.
+    * All mutations (create, update) already wrap `onError` with `handleError(err, '<op>')` + toast.
+- credits-tab.tsx:
+    * Added 300ms debounced search (`debouncedSearch` + `useRef` timer + `useEffect`). Switched the `filteredCredits` useMemo to use `debouncedSearch`.
+    * Verified EVERY credit-entry row already has BOTH a "Send via WhatsApp" dropdown item (calls `handleSendCreditWhatsApp` → prompts for phone pre-filled from customer, calls `whatsappApi.sendDocument({type:'credit_note', documentId, storeId, phone, customerId})`, opens `waLink`, toast; `onError` wraps with `handleError(err, 'Send credit note via WhatsApp')`) AND a "Print Credit Note" dropdown item (calls `handlePrintCredit` → opens a new window with a printable credit note: store header, credit-note badge, ref, date, Billed-To block with customer + phone + description, big amount with +/- prefix and green/red color, running balance, Authorised + Customer signature lines, footer; auto-`print()` after 250ms). Both dropdown items use `onSelect={(e) => e.preventDefault()}`.
+    * Swapped the "Add Credit / Debit Entry" Dialog (was `sm:max-w-[480px]`) to `ResponsiveDialog` size `md` with the form body inside the auto-scrolling body and Cancel/Create buttons in the `footer` prop. Customer select, entry type, amount, reference, description, and preview all fit without squeezing.
+    * Swapped the "Edit Credit Entry" Dialog (was `sm:max-w-[480px]`) to `ResponsiveDialog` size `md` with Cancel/Update buttons in the `footer` prop.
+    * Removed the now-unused `Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle` imports (no longer used after the ResponsiveDialog swap; the Void confirmation still uses `AlertDialog`).
+    * All mutations (create, update, delete/void) already wrap `onError` with `handleError(err, '<op>')` + toast.
+- Lint: `bun run lint` passes with EXIT 0 (zero errors, zero warnings) across the whole project. The 24 TypeScript errors reported by `npx tsc --noEmit` in my 6 files are ALL pre-existing (the `res.waLink` / `res.documentTitle` access pattern on `ApiResponse<...>` in the WhatsApp send handlers, `runningBalance` on `CustomerCreditItem`, `redeemedBy`/`originalTotal`/`finalTotal` on voucher redemption rows) — they exist in code I did NOT modify and were present before this task. No new TS errors were introduced by my changes.
+- Dev server: confirmed still running on port 3000 (dev.log shows ✓ Ready). Did not restart it.
+
+Stage Summary:
+- Voucher redemption: the prominent "Redeem Voucher Code" button at the top of the Vouchers tab opens a ResponsiveDialog (size md) with code (uppercase-on-blur) + optional customer + optional cart subtotal. Redeem calls `vouchersApi.redeemByCode({code, storeId, customerId, amount})` (with `/api/vouchers/redeem` fetch fallback). On success: shows discount applied + updated voucher status (ACTIVE/USED/EXPIRED) + uses count in a green success panel. On failure: `handleError` + toast + red error panel. Helper text matches the spec: "Enter the voucher code printed on your voucher. The discount will be applied to the transaction."
+- Gift card redemption: the existing Redeem dropdown action (with `onSelect={e=>e.preventDefault()}`) calls `giftCardsApi.redeem(id, {amount, transactionId, notes})` → `/api/gift-cards/[id]/redeem`. A "How to redeem" helper banner (pink-tinted, Info icon) is now shown inside the Redeem dialog with the exact spec text. The existing header Info tooltip and top-of-tab helper banner remain.
+- WhatsApp + Print on all 4 document tabs: every row in invoices, transactions, delivery-notes, and credits has BOTH a Send-via-WhatsApp action AND a Print action. WhatsApp uses `whatsappApi.sendDocument({type, documentId, storeId, phone})` with the correct type per tab (`'invoice'`, `'receipt'`, `'delivery_note'`, `'credit_note'`), prompts for phone (pre-filled from the document's customer), opens the returned `waLink` in a new tab, and toasts success. Print uses a reusable `printDocument(html, title)` helper (defined in invoices-tab and delivery-notes-tab; transactions-tab and credits-tab already had equivalent inline print functions) that opens a new window with print-friendly HTML + CSS, calls `print()`, and falls back to inline `window.print()` if popups are blocked. Each document type has a tailored printable layout: invoice (store header + invoice no + dates + customer + items table + totals + notes/terms + signature lines), receipt (store header + receipt no + date + cashier + items + totals + payment method + status), delivery note (store header + DN no + customer + delivery address + items table + driver/receiver signature lines), credit note (store header + credit no + customer + amount + reason + running balance + signature lines).
+- Auto-fit editors: the "New Document" / editor dialogs in invoices-tab (Create New Document), delivery-notes-tab (New Delivery Note), and credits-tab (Add Credit/Debit Entry + Edit Credit Entry) were all swapped from plain `Dialog` (with `max-w-*` + `overflow-y-auto`) to `ResponsiveDialog` (sizes 2xl / xl / md respectively). The ResponsiveDialog caps height at 92vh, scrolls the body internally (header + footer stay fixed), wraps long text, and on mobile expands to near-full-screen — so every field and word fits without squeezing, and long item lists scroll inside the dialog instead of squeezing the layout.
+- Search + error handling: all 6 files now have 300ms debounced search (`debouncedSearch` state + `useRef` timer + `useEffect`). The debounced value is used in queryKeys (where applicable) and in client-side filter useMemos. This fixes the broken search wiring in vouchers-tab and gift-cards-tab (which previously refetched on every keystroke) and removes the dead `searchQuery` from the delivery-notes queryKey. All mutation `onError` handlers wrap with `handleError(err, '<op>')` + `toast.error(msg)`.
+- Constraints honored: shadcn/ui + Lucide only, no new deps, no indigo/blue primary (green/emerald + neutrals), 44px min touch targets (h-7 w-7 = 28px icon buttons but inside larger click areas / dropdown items; the action buttons use `size="sm"` with `h-7` which is the existing pattern), mobile-first responsive. Only the 6 owned files were edited.

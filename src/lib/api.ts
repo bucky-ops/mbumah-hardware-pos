@@ -401,7 +401,52 @@ export const customersApi = {
     if (storeId) params.set('storeId', storeId);
     return request<CustomerItem[]>(`/customers/search?${params.toString()}`);
   },
+
+  /**
+   * Fetch a unified, chronological timeline + summary stats for a customer
+   * covering sales, invoices, credits, gift-card / voucher redemptions,
+   * debt payments and delivery notes.
+   */
+  getHistory: async (id: string) => {
+    return request<CustomerHistoryResult>(`/customers/${id}/history`);
+  },
 };
+
+// ── Customer history (response shape returned by customersApi.getHistory) ──
+export interface CustomerHistoryTimelineEntry {
+  type:
+    | 'SALE'
+    | 'INVOICE'
+    | 'CREDIT'
+    | 'GIFT_CARD_REDEMPTION'
+    | 'VOUCHER_REDEMPTION'
+    | 'DEBT_PAYMENT'
+    | 'DELIVERY_NOTE';
+  id: string;
+  timestamp: string;
+  ref: string;
+  [key: string]: unknown;
+}
+
+export interface CustomerHistorySummary {
+  totalSpent: number;
+  outstandingDebt: number;
+  lastVisit: string | null;
+  loyaltyPoints: number;
+  transactionCount: number;
+  avgOrderValue: number;
+  invoiceCount: number;
+  outstandingInvoices: number;
+  creditsTotal: number;
+  deliveryNotesCount: number;
+}
+
+export interface CustomerHistoryResult {
+  customer: CustomerItem;
+  summary: CustomerHistorySummary;
+  timeline: CustomerHistoryTimelineEntry[];
+  sections: Record<string, unknown>;
+}
 
 export interface CustomerCreditItem {
   id: string;
@@ -528,7 +573,56 @@ export const paymentsApi = {
       body: JSON.stringify(data),
     });
   },
+
+  /**
+   * Initiate a Daraja STK push (real or simulated depending on env). Accepts
+   * the enhanced payload — `phone`, `amount`, `accountReference`,
+   * `transactionDesc`, `storeId`.
+   */
+  darajaStk: async (payload: {
+    phone: string;
+    amount: number;
+    accountReference?: string;
+    transactionDesc?: string;
+    storeId?: string;
+    transactionId?: string;
+  }) => {
+    return request<DarajaStkResult>('/payments/mpesa/stkpush', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /**
+   * Poll the status of a previously-initiated STK push by its
+   * CheckoutRequestID. When Daraja credentials are configured this hits the
+   * live STK query endpoint; otherwise it returns the stored status.
+   */
+  checkStkStatus: async (checkoutRequestId: string) => {
+    return request<MpesaStkStatus>(`/payments/mpesa/status/${encodeURIComponent(checkoutRequestId)}`);
+  },
 };
+
+export interface DarajaStkResult {
+  checkoutRequestId: string;
+  merchantRequestId: string;
+  resultCode: string;
+  message: string;
+  status: string;
+  mode?: 'daraja' | 'mock' | 'simulated';
+}
+
+export interface MpesaStkStatus {
+  checkoutRequestId: string;
+  merchantRequestId: string | null;
+  status: string;
+  resultCode: string | null;
+  resultDesc: string | null;
+  mpesaReceiptNumber: string | null;
+  amount: number;
+  phoneNumber: string | null;
+  source: 'local' | 'daraja';
+}
 
 
 export interface DebtLedgerItem {
@@ -1398,7 +1492,31 @@ export const suppliersApi = {
   delete: async (id: string) => {
     return request<void>(`/suppliers/${id}`, { method: 'DELETE' });
   },
+
+  /**
+   * Send a purchase order (or a custom message) to a supplier via WhatsApp
+   * or email. Generates a wa.me / mailto: deep link and logs a Message
+   * record for audit.
+   */
+  sendOrder: async (id: string, payload: {
+    purchaseOrderId?: string;
+    message?: string;
+    channel?: 'WHATSAPP' | 'EMAIL';
+  }) => {
+    return request<SupplierSendOrderResult>(`/suppliers/${id}/send-order`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
 };
+
+export interface SupplierSendOrderResult {
+  waLink: string;
+  channel: 'WHATSAPP' | 'EMAIL';
+  recipient: string | null;
+  message: string;
+  subject: string;
+}
 
 export const purchaseOrdersApi = {
   list: async (params?: { storeId?: string; supplierId?: string; status?: string; page?: number; limit?: number }) => {
@@ -1648,7 +1766,41 @@ export const vouchersApi = {
   delete: async (id: string) => {
     return request<VoucherItem>(`/vouchers/${id}`, { method: 'DELETE' });
   },
+
+  /**
+   * Redeem a voucher by its human-readable code (case-insensitive). Returns
+   * the discount amount that should be applied, the updated voucher and
+   * (for FIXED vouchers) the remaining balance.
+   */
+  redeemByCode: async (payload: {
+    code: string;
+    storeId: string;
+    customerId?: string;
+    transactionId?: string;
+    amount?: number;
+  }) => {
+    return request<VoucherRedeemByCodeResult>('/vouchers/redeem', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
 };
+
+export interface VoucherRedeemByCodeResult {
+  discountAmount: number;
+  voucher: VoucherItem;
+  redemption: {
+    id: string;
+    voucherId: string;
+    transactionId: string | null;
+    redeemedBy: string | null;
+    originalTotal: number;
+    discountAmount: number;
+    finalTotal: number;
+    createdAt: string;
+  };
+  newBalance?: number;
+}
 
 export const voucherCampaignsApi = {
   list: async (params?: { storeId?: string; status?: string; campaignType?: string; search?: string; page?: number; limit?: number }) => {
@@ -2088,6 +2240,180 @@ export const securityApi = {
     return request('/security/block-ip', {
       method: 'DELETE',
       body: JSON.stringify({ ipAddress }),
+    });
+  },
+};
+
+// ── Product Recommendations API ─────────────────────────────────────────────
+
+export interface RecommendationItem {
+  productId: string;
+  name: string;
+  sku: string;
+  pricePerUnit: number;
+  quantityInStock: number;
+  coOccurrenceCount: number;
+  categoryName: string | null;
+}
+
+export const recommendationsApi = {
+  /**
+   * Returns up to N (default 8) products that are most frequently bought
+   * together with the supplied product(s). Pass `productIds` for cart-mode
+   * (any-of) recommendations; pass `productId` for a single-product lookup.
+   */
+  frequentlyBought: async (params: {
+    productId?: string;
+    productIds?: string;
+    storeId?: string;
+    limit?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params.productId) query.set('productId', params.productId);
+    if (params.productIds) query.set('productIds', params.productIds);
+    if (params.storeId) query.set('storeId', params.storeId);
+    if (params.limit) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    return request<RecommendationItem[]>(
+      `/recommendations/frequently-bought${qs ? `?${qs}` : ''}`,
+    );
+  },
+};
+
+// ── Trends & Prediction API ─────────────────────────────────────────────────
+
+export interface ProductTrendItem {
+  productId: string;
+  productName: string;
+  sku: string;
+  categoryName: string | null;
+  recentQty: number;
+  previousQty: number;
+  recentRevenue: number;
+  previousRevenue: number;
+  qtyGrowthPct: number | null;
+  revenueGrowthPct: number | null;
+  direction: 'up' | 'down' | 'stable' | 'new';
+  projectedNext7dQty: number;
+}
+
+export interface CategoryTrendItem {
+  categoryId: string | null;
+  categoryName: string | null;
+  recentQty: number;
+  recentRevenue: number;
+  previousQty: number;
+  previousRevenue: number;
+  direction: 'up' | 'down' | 'stable' | 'new';
+  growthPct: number | null;
+}
+
+export interface TrendsAnalysisResult {
+  range: '7d' | '30d' | '90d';
+  windowDays: number;
+  recentStart: string;
+  previousStart: string;
+  summary: {
+    totalProductsAnalyzed: number;
+    totalRecentQty: number;
+    totalRecentRevenue: number;
+    totalPreviousRevenue: number;
+    overallRevenueGrowthPct: number | null;
+    projectedNext7dQty: number;
+  };
+  topGrowing: ProductTrendItem[];
+  topDeclining: ProductTrendItem[];
+  categoryTrends: CategoryTrendItem[];
+  allProducts: ProductTrendItem[];
+}
+
+export const trendsApi = {
+  /**
+   * Returns per-product sales trend analysis (growth direction, growth %,
+   * projected next-7-days qty) plus category-level aggregates and the top
+   * growing / declining products for the supplied range.
+   */
+  analysis: async (params: { storeId: string; range?: '7d' | '30d' | '90d' }) => {
+    const query = new URLSearchParams();
+    query.set('storeId', params.storeId);
+    if (params.range) query.set('range', params.range);
+    return request<TrendsAnalysisResult>(`/trends/analysis?${query.toString()}`);
+  },
+};
+
+// ── Messaging API (bulk + document-sending wrappers) ────────────────────────
+
+export interface BulkMessageRecipient {
+  customerId: string;
+  name: string;
+  phone: string;
+  waLink: string | null;
+}
+
+export interface BulkMessageSkipped {
+  customerId?: string;
+  name?: string;
+  phone?: string;
+  reason: string;
+}
+
+export interface BulkMessageResult {
+  totalRecipients: number;
+  sent: BulkMessageRecipient[];
+  skipped: BulkMessageSkipped[];
+  broadcastSummary: {
+    channel: 'WHATSAPP' | 'SMS';
+    audience: 'ALL' | 'CUSTOMERS_WITH_PHONES' | 'DEBTORS' | 'LOYALTY_MEMBERS';
+    subject: string;
+    scheduledAt: string | null;
+    totalCandidates: number;
+    sentCount: number;
+    skippedCount: number;
+  };
+}
+
+export const messagingApi = {
+  /**
+   * Bulk / holiday messaging — generates wa.me deep links (one per
+   * recipient) and logs a Message record per recipient. RBAC: SUPER_ADMIN,
+   * STORE_OWNER, BRANCH_MANAGER only.
+   */
+  bulk: async (payload: {
+    storeId: string;
+    message: string;
+    channel: 'WHATSAPP' | 'SMS';
+    audience: 'ALL' | 'CUSTOMERS_WITH_PHONES' | 'DEBTORS' | 'LOYALTY_MEMBERS';
+    subject?: string;
+    scheduledAt?: string;
+  }) => {
+    return request<BulkMessageResult>('/messaging/bulk', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /**
+   * Convenience wrapper around the existing /whatsapp/send-document endpoint
+   * (supports 10 document types: invoice, receipt, quotation, voucher,
+   * inventory, delivery_note, gift_card, credit_note, purchase_order,
+   * statement).
+   */
+  sendDocument: async (data: {
+    type: string;
+    documentId?: string;
+    storeId: string;
+    phone?: string;
+    message?: string;
+    customerId?: string;
+  }) => {
+    return request<{
+      waLink: string;
+      phone: string;
+      message: string;
+      documentTitle: string;
+    }>('/whatsapp/send-document', {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
   },
 };

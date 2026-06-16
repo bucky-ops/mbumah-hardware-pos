@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   ShoppingBag, Search, Download, ChevronDown, ChevronUp,
   CalendarDays, TrendingUp, Hash, CreditCard, Smartphone, Banknote, Wallet,
@@ -11,6 +12,7 @@ import {
 
 import { transactionsApi, whatsappApi, formatKES, formatDateTime, type TransactionItem, type SaleItemDetail } from '@/lib/api';
 import { useAppStore } from '@/lib/stores';
+import { handleError } from '@/lib/error-handler';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -386,6 +388,7 @@ function TransactionRow({
   onRefund,
   onVoid,
   onSendWhatsApp,
+  onPrint,
 }: {
   transaction: TransactionItem;
   isExpanded: boolean;
@@ -394,6 +397,7 @@ function TransactionRow({
   onRefund: () => void;
   onVoid: () => void;
   onSendWhatsApp: () => void;
+  onPrint: () => void;
 }) {
   const items = transaction.items || [];
   const txType = getTransactionType(transaction);
@@ -491,8 +495,8 @@ function TransactionRow({
                 <Button variant="outline" size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); onViewReceipt(); }}>
                   <Eye className="h-3 w-3 mr-1" /> View Receipt
                 </Button>
-                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); onViewReceipt(); }}>
-                  <Printer className="h-3 w-3 mr-1" /> Reprint
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); onPrint(); }}>
+                  <Printer className="h-3 w-3 mr-1" /> Print
                 </Button>
                 {txType === 'sale' && transaction.paymentStatus === 'COMPLETED' && (
                   <Button variant="outline" size="sm" className="h-7 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30" onClick={(e) => { e.stopPropagation(); onRefund(); }}>
@@ -519,6 +523,7 @@ function TransactionRow({
 export default function TransactionsTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [datePreset, setDatePreset] = useState<DatePreset>('today');
   const [customDateFrom, setCustomDateFrom] = useState('');
   const [customDateTo, setCustomDateTo] = useState('');
@@ -528,6 +533,19 @@ export default function TransactionsTab() {
   const [amountFilterMin, setAmountFilterMin] = useState('');
   const [amountFilterMax, setAmountFilterMax] = useState('');
   const [showAmountFilter, setShowAmountFilter] = useState(false);
+
+  // Debounce search (300ms) — search is client-side, but this prevents the
+  // filter+sort from running on every keystroke for large transaction lists.
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [searchQuery]);
 
   // Receipt modal state
   const [receiptTransaction, setReceiptTransaction] = useState<TransactionItem | null>(null);
@@ -571,8 +589,8 @@ export default function TransactionsTab() {
   // Filter by search query, type, and amount
   const filteredTransactions = useMemo(() => {
     let result = transactions;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase();
       result = result.filter(
         (t) =>
           t.receiptNumber.toLowerCase().includes(q) ||
@@ -589,7 +607,7 @@ export default function TransactionsTab() {
       result = result.filter((t) => t.totalAmount <= Number(amountFilterMax));
     }
     return result;
-  }, [transactions, searchQuery, typeFilter, amountFilterMin, amountFilterMax]);
+  }, [transactions, debouncedSearch, typeFilter, amountFilterMin, amountFilterMax]);
 
   // Summary stats
   const summaryStats = useMemo(() => {
@@ -650,9 +668,74 @@ export default function TransactionsTab() {
         toast.success(`${res.documentTitle} sent via WhatsApp`);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send via WhatsApp');
+      const msg = handleError(err, 'Send receipt via WhatsApp');
+      toast.error(msg);
     }
   }, [currentStoreId]);
+
+  const handlePrintReceipt = useCallback((transaction: TransactionItem) => {
+    const items = transaction.items || [];
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (!printWindow) {
+      toast.error('Pop-up blocked. Please allow pop-ups to print.');
+      return;
+    }
+    const rows = items.map((item: SaleItemDetail) => `
+      <tr>
+        <td>${item.productName}</td>
+        <td style="text-align:center">${item.quantity} ${item.unitType}</td>
+        <td style="text-align:right">${formatKES(item.pricePerUnit)}</td>
+        <td style="text-align:right">${formatKES(item.lineTotal)}</td>
+      </tr>
+    `).join('');
+    printWindow.document.write(`
+      <!doctype html><html><head><title>Receipt ${transaction.receiptNumber}</title>
+      <style>
+        body { font-family: 'Courier New', monospace; padding: 16px; font-size: 12px; max-width: 320px; margin: 0 auto; color: #111; }
+        .center { text-align: center; }
+        .bold { font-weight: 700; }
+        hr { border: none; border-top: 1px dashed #999; margin: 8px 0; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 3px 0; font-size: 11px; }
+        th { border-bottom: 1px solid #999; text-align: left; }
+        .right { text-align: right; }
+        .muted { color: #555; }
+      </style></head>
+      <body>
+        <div class="center">
+          <h2 class="bold" style="margin:0">MBUMAH HARDWARE</h2>
+          <p class="muted" style="margin:2px 0">Juja, Kiambu County</p>
+          <p class="muted" style="margin:2px 0">+254 700 000 000</p>
+        </div>
+        <hr>
+        <p class="bold">Receipt #: ${transaction.receiptNumber}</p>
+        <p>Date: ${formatDateTime(transaction.createdAt)}</p>
+        <p>Customer: ${transaction.customer?.name || 'Walk-in'}</p>
+        <p>Cashier: ${transaction.cashier?.name || '—'}</p>
+        <hr>
+        <table>
+          <thead><tr><th>Item</th><th class="center">Qty</th><th class="right">Price</th><th class="right">Total</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <hr>
+        <div class="right">
+          <p>Subtotal: ${formatKES(transaction.subtotal)}</p>
+          <p>VAT: ${formatKES(transaction.taxAmount)}</p>
+          ${transaction.discountAmount > 0 ? `<p>Discount: -${formatKES(transaction.discountAmount)}</p>` : ''}
+          <p class="bold" style="font-size:14px">TOTAL: ${formatKES(transaction.totalAmount)}</p>
+        </div>
+        <hr>
+        <div class="center">
+          <p>Paid via ${transaction.paymentMethod}</p>
+          <p>Status: ${transaction.paymentStatus}</p>
+          <p class="muted">Thank you for your business!</p>
+        </div>
+      </body></html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 250);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -903,6 +986,7 @@ export default function TransactionsTab() {
                       onRefund={() => handleRefund(transaction)}
                       onVoid={() => handleVoid(transaction)}
                       onSendWhatsApp={() => handleSendReceiptWhatsApp(transaction)}
+                      onPrint={() => handlePrintReceipt(transaction)}
                     />
                   ))}
                 </TableBody>

@@ -21,6 +21,7 @@ import {
   BellRing, PackageX, AlertOctagon, CircleDollarSign, CheckCheck,
   Truck, UserPlus, Receipt, Filter, Info, Tag,
   LayoutGrid, List, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Pause, MessageSquare, PartyPopper, Sparkles, Zap, Ticket, Landmark, Award, Gift,
+  Lightbulb, Send, ExternalLink, RefreshCw, Split, ChevronRight,
 } from 'lucide-react';
 
 import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
@@ -29,7 +30,7 @@ import {
   productsApi, categoriesApi, customersApi, transactionsApi,
   paymentsApi, dashboardApi,
   rentalsApi, debtApi, notificationsApi,
-  giftCardsApi, vouchersApi,
+  giftCardsApi, vouchersApi, whatsappApi,
   formatKES, formatDate, formatDateTime, formatRelativeTime,
   type ProductListItem, type CustomerItem,
   type CategoryItem, type TransactionItem,
@@ -37,6 +38,8 @@ import {
   type NotificationItem, type GiftCardItem, type VoucherItem,
 } from '@/lib/api';
 import type { PaymentMethod, CartItem, UnitType, DashboardStats } from '@/lib/types';
+import { handleError } from '@/lib/error-handler';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1728,14 +1731,20 @@ function ProductCard({
     setTimeout(() => setIsBouncing(false), 400);
   };
 
+  // Out-of-stock disables interaction (rentals can still be added)
+  const disabled = isOutOfStock && !product.isRental;
+
   return (
     <Card
-      className={`overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 hover:-translate-y-1 hover:border-primary/30 hover:scale-[1.02] group border-l-4 card-glow relative h-full flex flex-col ${isBouncing ? 'animate-bounce-add' : ''}`}
-      style={{ borderLeftColor: categoryColor }}
-      onClick={handleClick}
+      className={`overflow-hidden transition-all duration-200 hover:-translate-y-1 hover:shadow-xl hover:border-primary/40 group relative h-full flex flex-col min-h-[210px] ${isBouncing ? 'animate-bounce-add' : ''} ${disabled ? 'opacity-60 grayscale pointer-events-none' : 'cursor-pointer hover:scale-[1.02]'}`}
+      style={{ borderTopColor: categoryColor, borderTopWidth: '4px' }}
+      onClick={disabled ? undefined : handleClick}
+      role="button"
+      aria-label={`${product.name}, ${formatKES(product.pricePerUnit)}, ${isOutOfStock ? 'out of stock' : `${product.quantityInStock} in stock`}`}
+      aria-disabled={disabled}
     >
       {/* Quick Add Popup Overlay */}
-      {showQuickAdd && (
+      {showQuickAdd && !disabled && (
         <QuickAddPopup
           product={product}
           currentQty={cartQuantity || 0}
@@ -1745,53 +1754,91 @@ function ProductCard({
       )}
       {/* In-cart indicator */}
       {cartQuantity && cartQuantity > 0 && (
-        <div className="absolute top-1.5 left-1.5 z-10 bg-primary text-primary-foreground text-[9px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 shadow-md">
+        <div className="absolute top-1.5 right-1.5 z-10 bg-primary text-primary-foreground text-[11px] font-bold rounded-full min-w-[22px] h-[22px] flex items-center justify-center px-1.5 shadow-md ring-2 ring-background">
           {cartQuantity}
         </div>
       )}
-      <div className="h-28 bg-muted flex items-center justify-center relative overflow-hidden shrink-0">
+      {/* Image area — taller & more readable */}
+      <div className="h-32 bg-muted flex items-center justify-center relative overflow-hidden shrink-0">
         {product.imageUrl ? (
           <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500" />
         ) : getCategoryImage(product.categoryId) ? (
           <img src={getCategoryImage(product.categoryId)!} alt={product.category?.name || ''} className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500" />
         ) : (
-          <Package className="h-9 w-9 text-muted-foreground/25" />
+          <Package className="h-10 w-10 text-muted-foreground/25" />
         )}
         {/* Gradient overlay on hover */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/0 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-          <div className="bg-white/90 dark:bg-black/70 rounded-full p-2 shadow-lg transform scale-50 group-hover:scale-100 transition-transform duration-200">
-            {cartQuantity && cartQuantity > 0 ? <Zap className="h-5 w-5 text-primary" /> : <Plus className="h-5 w-5 text-primary" />}
+        {!disabled && (
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/0 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+            <div className="bg-white/95 dark:bg-black/80 rounded-full p-2.5 shadow-lg transform scale-50 group-hover:scale-100 transition-transform duration-200">
+              {cartQuantity && cartQuantity > 0 ? <Zap className="h-5 w-5 text-primary" /> : <Plus className="h-5 w-5 text-primary" />}
+            </div>
           </div>
-        </div>
+        )}
         {/* Badges */}
-        {product.isRental && (
-          <Badge className="absolute top-1.5 left-1.5 bg-amber-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm z-20">RENTAL</Badge>
-        )}
-        {product.isBundle && (
-          <Badge className="absolute top-1.5 right-1.5 bg-purple-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm z-20">BUNDLE</Badge>
-        )}
-        {isNew && !product.isRental && !product.isBundle && (
-          <Badge className="absolute top-1.5 right-1.5 bg-green-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm z-20">NEW</Badge>
+        <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 z-20">
+          {product.isRental && (
+            <Badge className="bg-amber-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm">RENTAL</Badge>
+          )}
+          {product.isBundle && (
+            <Badge className="bg-purple-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm">BUNDLE</Badge>
+          )}
+          {isNew && !product.isRental && !product.isBundle && (
+            <Badge className="bg-green-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm">NEW</Badge>
+          )}
+        </div>
+        {/* Stock status badge (top-right when not in cart) */}
+        {(!cartQuantity || cartQuantity === 0) && (
+          <div className="absolute top-1.5 right-1.5 z-20">
+            {isOutOfStock ? (
+              <Badge variant="destructive" className="text-[10px] font-bold shadow-sm">OUT OF STOCK</Badge>
+            ) : isLowStock ? (
+              <Badge className="bg-amber-500 text-white text-[10px] font-semibold shadow-sm">LOW STOCK</Badge>
+            ) : null}
+          </div>
         )}
         {isOutOfStock && (
-          <div className="absolute inset-0 bg-red-500/10 flex items-center justify-center">
-            <Badge variant="destructive" className="text-[10px] font-bold">OUT OF STOCK</Badge>
-          </div>
+          <div className="absolute inset-0 bg-red-500/10 flex items-center justify-center pointer-events-none" />
         )}
       </div>
-      <CardContent className="p-2.5 flex-1 flex flex-col">
-        <h3 className="font-medium text-sm line-clamp-2 leading-tight">{product.name}</h3>
+      <CardContent className="p-3 flex-1 flex flex-col gap-1">
+        {/* Product name — wraps fully, never truncates words (no line-clamp so every word shows) */}
+        <h3 className="font-semibold text-[15px] leading-snug break-words min-h-[2.6em]">{product.name}</h3>
         {product.category && (
-          <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">{product.category.name}</p>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: categoryColor }} aria-hidden />
+            <p className="text-[11px] text-muted-foreground/80 truncate">{product.category.name}</p>
+          </div>
         )}
-        <div className="flex items-center justify-between mt-1.5 gap-1">
-          <span className="font-bold text-primary text-sm truncate">{formatKES(product.pricePerUnit)}</span>
-          <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${unitBadgeColor[product.unitType] || 'bg-muted text-muted-foreground'}`}>
-            {product.unitType}
-          </span>
+        <div className="flex items-end justify-between mt-1 gap-1.5">
+          <div className="min-w-0">
+            <p className="font-bold text-primary text-base leading-none break-words">{formatKES(product.pricePerUnit)}</p>
+            <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium mt-1 inline-block ${unitBadgeColor[product.unitType] || 'bg-muted text-muted-foreground'}`}>
+              per {product.unitType}
+            </span>
+          </div>
+          {/* Quick add button — touch-friendly 44px target */}
+          <Button
+            type="button"
+            size="icon"
+            variant={disabled ? 'ghost' : 'default'}
+            className="h-10 w-10 shrink-0 shadow-sm"
+            disabled={disabled}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (cartQuantity && cartQuantity > 0) {
+                setShowQuickAdd(true);
+              } else {
+                handleClick();
+              }
+            }}
+            aria-label={`Add ${product.name} to cart`}
+          >
+            {cartQuantity && cartQuantity > 0 ? <Zap className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+          </Button>
         </div>
-        {/* stock progress bar */}
-        <div className="flex items-center gap-1.5 mt-auto pt-1.5">
+        {/* Stock bar — clear low/out-of-stock visual */}
+        <div className="flex items-center gap-2 mt-auto pt-1.5">
           <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
             <div
               className={`h-full rounded-full animate-stock-fill ${stockBarColor} relative`}
@@ -1800,8 +1847,8 @@ function ProductCard({
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
             </div>
           </div>
-          <span className={`text-[9px] font-medium shrink-0 ${isOutOfStock ? 'text-red-500' : isLowStock ? 'text-amber-500' : 'text-muted-foreground'}`}>
-            {isOutOfStock ? 'Out' : `${product.quantityInStock}`}
+          <span className={`text-[10px] font-semibold shrink-0 ${isOutOfStock ? 'text-red-500' : isLowStock ? 'text-amber-500' : 'text-muted-foreground'}`}>
+            {isOutOfStock ? 'Out' : `${product.quantityInStock} left`}
           </span>
         </div>
       </CardContent>
@@ -1978,13 +2025,517 @@ function EmptyProductsState({ searchQuery }: { searchQuery: string }) {
   );
 }
 
+// ─── Shared checkout dialog (ResponsiveDialog) ───────────────────────────────
+// Used by both desktop & mobile POS so the payment flow stays consistent.
+// Order: Cash → Debt → Either/Split → M-Pesa.
+
+interface CheckoutDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  finalTotal: number;
+  totalDiscount: number;
+  paymentMethod: PaymentMethod;
+  setPaymentMethod: (m: PaymentMethod) => void;
+  cashReceived: string;
+  setCashReceived: (v: string) => void;
+  change: number;
+  selectedCustomer: string;
+  customers: CustomerItem[];
+  splitCashAmount: string;
+  setSplitCashAmount: (v: string) => void;
+  splitMpesaAmount: string;
+  setSplitMpesaAmount: (v: string) => void;
+  mpesaPhone: string;
+  setMpesaPhone: (v: string) => void;
+  mpesaStatus: 'idle' | 'processing' | 'success' | 'failed';
+  setMpesaStatus: (s: 'idle' | 'processing' | 'success' | 'failed') => void;
+  stkCheckoutRequestId: string;
+  stkResultDesc: string;
+  stkPolling: boolean;
+  mpesaMutation: { isPending: boolean; mutate: (data: { phoneNumber: string; amount: number; accountReference: string; transactionDesc: string }) => void };
+  checkoutMutation: { isPending: boolean };
+  onSendStkPush: () => void;
+  onRetryStk: () => void;
+  onCompleteSale: () => void;
+}
+
+const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: React.ElementType; desc: string }[] = [
+  { value: 'CASH', label: 'Cash', icon: Banknote, desc: 'Receive cash & give change' },
+  { value: 'DEBT', label: 'Debt', icon: Wallet, desc: 'Put it on a customer account' },
+  { value: 'SPLIT', label: 'Either / Split', icon: Split, desc: 'Cash + M-Pesa combined' },
+  { value: 'MPESA', label: 'M-Pesa', icon: Smartphone, desc: 'STK push to customer phone' },
+];
+
+function CheckoutDialog(props: CheckoutDialogProps) {
+  const {
+    open, onOpenChange, finalTotal, totalDiscount,
+    paymentMethod, setPaymentMethod,
+    cashReceived, setCashReceived, change,
+    selectedCustomer, customers,
+    splitCashAmount, setSplitCashAmount, splitMpesaAmount, setSplitMpesaAmount,
+    mpesaPhone, setMpesaPhone, mpesaStatus, setMpesaStatus,
+    stkCheckoutRequestId, stkResultDesc, stkPolling,
+    mpesaMutation, checkoutMutation,
+    onSendStkPush, onRetryStk, onCompleteSale,
+  } = props;
+
+  const customer = customers.find((c) => c.id === selectedCustomer);
+  const debtAvailable = customer ? Math.max(0, customer.debtLimit - customer.currentDebtBalance) : 0;
+  const exceedsDebt = customer ? finalTotal > debtAvailable : false;
+
+  const cashValid = !!cashReceived && Number(cashReceived) >= finalTotal;
+  const splitValid = (Number(splitCashAmount) || 0) + (Number(splitMpesaAmount) || 0) >= finalTotal && (Number(splitMpesaAmount) || 0) > 0 ? !!mpesaPhone && mpesaPhone.length >= 9 : true;
+  const mpesaValid = !!mpesaPhone && mpesaPhone.length >= 9;
+
+  // Reset M-Pesa status when payment method changes (away from MPESA)
+  useEffect(() => {
+    if (paymentMethod !== 'MPESA' && paymentMethod !== 'SPLIT' && mpesaStatus !== 'idle') {
+      setMpesaStatus('idle');
+    }
+  }, [paymentMethod, mpesaStatus, setMpesaStatus]);
+
+  const isProcessingMpesa = mpesaStatus === 'processing' || mpesaStatus === 'success' || mpesaStatus === 'failed';
+  const showMpesaPanel = (paymentMethod === 'MPESA' || paymentMethod === 'SPLIT');
+
+  // Build the footer buttons depending on state
+  const renderFooter = () => {
+    if (mpesaStatus === 'processing') {
+      return (
+        <>
+          <Button variant="outline" onClick={() => { onRetryStk(); }} disabled={stkPolling}>
+            Cancel
+          </Button>
+          <a
+            href="https://daraja.safaricom.co.ke"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-input bg-background text-sm font-medium hover:bg-muted"
+          >
+            <ExternalLink className="h-3.5 w-3.5" /> Open M-Pesa Daraja
+          </a>
+        </>
+      );
+    }
+    if (mpesaStatus === 'success') {
+      return (
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button
+            onClick={onCompleteSale}
+            disabled={checkoutMutation.isPending}
+            className="bg-green-600 hover:bg-green-700 text-white"
+          >
+            {checkoutMutation.isPending ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Completing…</>
+            ) : (
+              <><CheckCircle className="mr-2 h-4 w-4" />Complete Sale</>
+            )}
+          </Button>
+        </>
+      );
+    }
+    if (mpesaStatus === 'failed') {
+      return (
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={onRetryStk}>Try Again</Button>
+        </>
+      );
+    }
+    // Default: idle — show Cancel + Complete Sale / Send STK Push
+    const canComplete =
+      (paymentMethod === 'CASH' && cashValid) ||
+      (paymentMethod === 'DEBT' && !!selectedCustomer && !exceedsDebt) ||
+      (paymentMethod === 'SPLIT' && splitValid);
+
+    if (showMpesaPanel && !isProcessingMpesa) {
+      return (
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button
+            onClick={onSendStkPush}
+            disabled={mpesaMutation.isPending || !mpesaValid}
+            className="bg-green-600 hover:bg-green-700 text-white"
+          >
+            {mpesaMutation.isPending ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending STK…</>
+            ) : (
+              <><Smartphone className="mr-2 h-4 w-4" />Send STK Push</>
+            )}
+          </Button>
+        </>
+      );
+    }
+    return (
+      <>
+        <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+        <Button
+          onClick={onCompleteSale}
+          disabled={checkoutMutation.isPending || !canComplete}
+          className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+        >
+          {checkoutMutation.isPending ? (
+            <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing…</>
+          ) : (
+            <><CheckCircle className="mr-2 h-4 w-4" />Complete Sale</>
+          )}
+        </Button>
+      </>
+    );
+  };
+
+  return (
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={(o) => {
+        // Prevent closing while STK push is actively processing
+        if (!o && mpesaStatus === 'processing') return;
+        onOpenChange(o);
+      }}
+      title={
+        <span className="flex items-center gap-2">
+          <CreditCard className="h-5 w-5 text-primary" />
+          Complete Payment
+        </span>
+      }
+      description={
+        <span className="break-words">
+          Total: <span className="font-bold text-primary">{formatKES(finalTotal)}</span>
+          {totalDiscount > 0 && (
+            <span className="text-green-600 text-xs ml-2">(Save {formatKES(totalDiscount)})</span>
+          )}
+        </span>
+      }
+      size="md"
+      footer={renderFooter()}
+    >
+      <div className="space-y-4">
+        {/* Payment Method Selector — Cash, Debt, Either/Split, M-Pesa */}
+        <div>
+          <Label className="text-sm font-medium">Payment Method</Label>
+          <RadioGroup
+            value={paymentMethod}
+            onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}
+            className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2"
+          >
+            {PAYMENT_METHODS.map((m) => {
+              const Icon = m.icon;
+              return (
+                <div key={m.value}>
+                  <RadioGroupItem value={m.value} id={`pm-${m.value}`} className="peer sr-only" />
+                  <Label
+                    htmlFor={`pm-${m.value}`}
+                    className="flex flex-col items-center gap-1.5 p-3 border-2 rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50 transition-colors text-center min-h-[80px] justify-center"
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span className="text-xs font-semibold leading-tight">{m.label}</span>
+                    <span className="text-[10px] text-muted-foreground leading-tight line-clamp-2 break-words">{m.desc}</span>
+                  </Label>
+                </div>
+              );
+            })}
+          </RadioGroup>
+        </div>
+
+        {/* === CASH === */}
+        {paymentMethod === 'CASH' && (
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="cashReceived">Cash Received</Label>
+              <Input
+                id="cashReceived"
+                type="number"
+                placeholder="0"
+                value={cashReceived}
+                onChange={(e) => setCashReceived(e.target.value)}
+                className="text-lg font-semibold mt-1"
+              />
+              {/* Quick cash buttons */}
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {[finalTotal, Math.ceil(finalTotal / 100) * 100, Math.ceil(finalTotal / 500) * 500, Math.ceil(finalTotal / 1000) * 1000].map((amt, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setCashReceived(String(amt))}
+                    className="px-2.5 py-1 text-xs font-medium rounded border border-border bg-background hover:bg-muted transition-colors min-h-[36px]"
+                  >
+                    {formatKES(amt)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {change > 0 && (
+              <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg flex items-center justify-between">
+                <span className="text-sm font-medium text-green-700 dark:text-green-400">Change Due</span>
+                <span className="text-lg font-bold text-green-700 dark:text-green-400">{formatKES(change)}</span>
+              </div>
+            )}
+            {cashReceived && Number(cashReceived) < finalTotal && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Insufficient amount</AlertTitle>
+                <AlertDescription>Need {formatKES(finalTotal - Number(cashReceived))} more</AlertDescription>
+              </Alert>
+            )}
+          </div>
+        )}
+
+        {/* === DEBT === */}
+        {paymentMethod === 'DEBT' && (
+          <div className="space-y-3">
+            {!selectedCustomer || selectedCustomer === 'walk-in' ? (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Customer Required</AlertTitle>
+                <AlertDescription>
+                  Please select a customer (not walk-in) from the cart sidebar before proceeding with debt payment.
+                </AlertDescription>
+              </Alert>
+            ) : customer ? (
+              <>
+                <div className="p-3 rounded-lg border bg-muted/30 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Avatar className="h-9 w-9">
+                      <AvatarFallback>{customer.name.charAt(0).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{customer.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{customer.phone || 'No phone on file'}</p>
+                    </div>
+                  </div>
+                  <Separator />
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <p className="text-muted-foreground">Debt Limit</p>
+                      <p className="font-semibold">{formatKES(customer.debtLimit)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Current Debt</p>
+                      <p className="font-semibold">{formatKES(customer.currentDebtBalance)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Available</p>
+                      <p className="font-semibold text-green-600">{formatKES(debtAvailable)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">This Sale</p>
+                      <p className="font-semibold text-primary">{formatKES(finalTotal)}</p>
+                    </div>
+                  </div>
+                </div>
+                {exceedsDebt && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Exceeds Debt Limit</AlertTitle>
+                    <AlertDescription>
+                      This sale ({formatKES(finalTotal)}) exceeds the customer&rsquo;s available debt ({formatKES(debtAvailable)}).
+                      Collect partial cash or increase the debt limit on the customer record.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  On checkout, this sale will create a debt ledger entry against <span className="font-semibold">{customer.name}</span>&rsquo;s account.
+                </p>
+              </>
+            ) : null}
+          </div>
+        )}
+
+        {/* === SPLIT (Either) === */}
+        {paymentMethod === 'SPLIT' && (
+          <div className="space-y-3 p-3 rounded-lg border bg-muted/30">
+            <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+              <Split className="h-3 w-3" /> Split payment between Cash and M-Pesa
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="splitCash" className="text-xs flex items-center gap-1">
+                  <Banknote className="h-3 w-3" /> Cash Amount
+                </Label>
+                <Input
+                  id="splitCash"
+                  type="number"
+                  placeholder="0"
+                  value={splitCashAmount}
+                  onChange={(e) => {
+                    setSplitCashAmount(e.target.value);
+                    const remaining = finalTotal - Number(e.target.value);
+                    if (remaining > 0) setSplitMpesaAmount(String(remaining));
+                  }}
+                  className="mt-1 text-sm font-semibold"
+                />
+              </div>
+              <div>
+                <Label htmlFor="splitMpesa" className="text-xs flex items-center gap-1">
+                  <Smartphone className="h-3 w-3" /> M-Pesa Amount
+                </Label>
+                <Input
+                  id="splitMpesa"
+                  type="number"
+                  placeholder="0"
+                  value={splitMpesaAmount}
+                  onChange={(e) => {
+                    setSplitMpesaAmount(e.target.value);
+                    const remaining = finalTotal - Number(e.target.value);
+                    if (remaining > 0) setSplitCashAmount(String(remaining));
+                  }}
+                  className="mt-1 text-sm font-semibold"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="splitMpesaPhone" className="text-xs">M-Pesa Phone</Label>
+              <Input
+                id="splitMpesaPhone"
+                type="tel"
+                placeholder="0712 345 678"
+                value={mpesaPhone}
+                onChange={(e) => setMpesaPhone(e.target.value)}
+                className="mt-1 text-sm"
+              />
+            </div>
+            <div className="text-xs flex justify-between">
+              <span className="text-muted-foreground">Total Entered:</span>
+              <span className={`font-semibold ${(Number(splitCashAmount) || 0) + (Number(splitMpesaAmount) || 0) >= finalTotal ? 'text-green-600' : 'text-amber-600'}`}>
+                {formatKES((Number(splitCashAmount) || 0) + (Number(splitMpesaAmount) || 0))}
+                {((Number(splitCashAmount) || 0) + (Number(splitMpesaAmount) || 0)) < finalTotal && (
+                  <span className="ml-1">· short {formatKES(finalTotal - (Number(splitCashAmount) || 0) - (Number(splitMpesaAmount) || 0))}</span>
+                )}
+              </span>
+            </div>
+            {/* Show STK push state for split's mpesa portion */}
+            {isProcessingMpesa && <StkStatusPanel
+              status={mpesaStatus}
+              stkCheckoutRequestId={stkCheckoutRequestId}
+              stkResultDesc={stkResultDesc}
+              stkPolling={stkPolling}
+              amount={Number(splitMpesaAmount) || 0}
+            />}
+          </div>
+        )}
+
+        {/* === MPESA === */}
+        {paymentMethod === 'MPESA' && (
+          <div className="space-y-3">
+            {mpesaStatus === 'idle' && (
+              <>
+                <div>
+                  <Label htmlFor="mpesaPhone">M-Pesa Phone Number</Label>
+                  <Input
+                    id="mpesaPhone"
+                    type="tel"
+                    placeholder="0712 345 678"
+                    value={mpesaPhone}
+                    onChange={(e) => setMpesaPhone(e.target.value)}
+                    className="mt-1"
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    An STK push will be sent to this number. The customer must enter their M-Pesa PIN to authorise the payment of <span className="font-semibold">{formatKES(finalTotal)}</span>.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 p-2.5 rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900">
+                  <Smartphone className="h-4 w-4 text-green-600 shrink-0" />
+                  <p className="text-[11px] text-green-700 dark:text-green-300">
+                    Using Safaricom Daraja API. Need to check credentials or test callback?{' '}
+                    <a href="https://daraja.safaricom.co.ke" target="_blank" rel="noopener noreferrer" className="font-semibold underline inline-flex items-center gap-0.5">
+                      Open M-Pesa Daraja <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </p>
+                </div>
+              </>
+            )}
+            {isProcessingMpesa && (
+              <StkStatusPanel
+                status={mpesaStatus}
+                stkCheckoutRequestId={stkCheckoutRequestId}
+                stkResultDesc={stkResultDesc}
+                stkPolling={stkPolling}
+                amount={finalTotal}
+              />
+            )}
+          </div>
+        )}
+      </div>
+    </ResponsiveDialog>
+  );
+}
+
+// Inline STK status panel — used by CheckoutDialog for both MPESA and SPLIT methods
+function StkStatusPanel({
+  status, stkCheckoutRequestId, stkResultDesc, stkPolling, amount,
+}: {
+  status: 'processing' | 'success' | 'failed';
+  stkCheckoutRequestId: string;
+  stkResultDesc: string;
+  stkPolling: boolean;
+  amount: number;
+}) {
+  return (
+    <div className="rounded-lg border overflow-hidden">
+      <div className={`px-3 py-2 text-xs font-semibold flex items-center justify-between ${
+        status === 'success' ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300'
+        : status === 'failed' ? 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300'
+        : 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300'
+      }`}>
+        <span className="flex items-center gap-1.5">
+          {status === 'processing' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          {status === 'success' && <CheckCircle className="h-3.5 w-3.5" />}
+          {status === 'failed' && <AlertCircle className="h-3.5 w-3.5" />}
+          {status === 'processing' ? 'STK Push Sent — Awaiting PIN' : status === 'success' ? 'Payment Confirmed' : 'Payment Failed'}
+        </span>
+        <span className="font-mono">{formatKES(amount)}</span>
+      </div>
+      <div className="p-3 space-y-2 text-xs">
+        {stkCheckoutRequestId && (
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-muted-foreground shrink-0">CheckoutRequestID:</span>
+            <span className="font-mono break-all text-right">{stkCheckoutRequestId}</span>
+          </div>
+        )}
+        {stkResultDesc && (
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-muted-foreground shrink-0">Status:</span>
+            <span className="break-words text-right">{stkResultDesc}</span>
+          </div>
+        )}
+        {status === 'processing' && (
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <span className="text-muted-foreground flex items-center gap-1">
+              <RefreshCw className={`h-3 w-3 ${stkPolling ? 'animate-spin' : ''}`} />
+              {stkPolling ? 'Polling Safaricom every 5s…' : 'Waiting…'}
+            </span>
+            <a
+              href="https://daraja.safaricom.co.ke"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-0.5 text-primary hover:underline"
+            >
+              Daraja <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // POS TAB (kept inline - core feature)
+
+// Escape HTML special chars for safe inclusion in print-window HTML strings.
+function escapeHtml(s: string | null | undefined): string {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 function POSTab() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [mpesaDialogOpen, setMpesaDialogOpen] = useState(false);
   const [mpesaPhone, setMpesaPhone] = useState('');
   const [mpesaStatus, setMpesaStatus] = useState<'idle' | 'processing' | 'success' | 'failed'>('idle');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
@@ -2023,6 +2574,20 @@ function POSTab() {
   // Split payment
   const [splitCashAmount, setSplitCashAmount] = useState('');
   const [splitMpesaAmount, setSplitMpesaAmount] = useState('');
+
+  // M-Pesa Daraja STK Push state
+  const [stkCheckoutRequestId, setStkCheckoutRequestId] = useState<string>('');
+  const [stkPolling, setStkPolling] = useState<boolean>(false);
+  const [stkResultDesc, setStkResultDesc] = useState<string>('');
+  const stkPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Receipt send via WhatsApp state
+  const [receiptSendOpen, setReceiptSendOpen] = useState(false);
+  const [receiptSendPhone, setReceiptSendPhone] = useState('');
+  const [receiptSending, setReceiptSending] = useState(false);
+
+  // Sell-More recommendations collapse
+  const [recommendationsOpen, setRecommendationsOpen] = useState(true);
 
   const cart = useCartStore();
   const subtotal = cart.getSubtotal();
@@ -2149,36 +2714,184 @@ function POSTab() {
       setSelectedCustomer('');
       setAppliedGiftCardId('');
       setAppliedVoucherId('');
+      setMpesaStatus('idle');
+      setStkCheckoutRequestId('');
+      setStkResultDesc('');
+      setStkPolling(false);
       // Invalidate gift card and voucher queries so balances/status refresh
       queryClient.invalidateQueries({ queryKey: ['customer-gift-cards'] });
       queryClient.invalidateQueries({ queryKey: ['customer-vouchers'] });
       queryClient.invalidateQueries({ queryKey: ['giftCards'] });
       queryClient.invalidateQueries({ queryKey: ['vouchers'] });
     },
-    onError: (err: Error) => {
-      toast.error(err.message || 'Checkout failed');
+    onError: (err: unknown) => {
+      toast.error(handleError(err, 'Checkout'));
     },
   });
 
+  // M-Pesa Daraja STK Push mutation — uses paymentsApi.darajaStk if available, falls back to direct fetch
   const mpesaMutation = useMutation({
-    mutationFn: paymentsApi.initiateMpesa,
-    onSuccess: (res) => {
-      if (res.data) {
-        setMpesaStatus('processing');
-        // Simulate M-Pesa processing (in production, this would poll a status endpoint)
-        setTimeout(() => {
-          if (res.data?.resultCode === '0') {
-            setMpesaStatus('success');
-          } else {
-            setMpesaStatus('success'); // Default to success for demo
-          }
-        }, 5000);
+    mutationFn: async (data: { phoneNumber: string; amount: number; accountReference: string; transactionDesc: string }) => {
+      // Prefer the typed client method if BE-1 added it
+      const anyPayments = paymentsApi as unknown as {
+        darajaStk?: (data: { phoneNumber: string; amount: number; accountReference: string; transactionDesc: string }) => Promise<{ data?: { checkoutRequestId?: string; CheckoutRequestID?: string; ResponseCode?: string; ResponseDescription?: string; resultCode?: string; resultDesc?: string } }>;
+      };
+      if (typeof anyPayments.darajaStk === 'function') {
+        return anyPayments.darajaStk(data);
       }
+      // Fallback: direct fetch to the Daraja STK endpoint
+      const res = await fetch('/api/payments/mpesa/daraja-stk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(data),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json?.error || json?.message || `Daraja STK push failed (HTTP ${res.status})`);
+      }
+      return { data: json?.data ?? json };
     },
-    onError: () => {
+    onSuccess: (res) => {
+      const data = res?.data || (res as { data?: unknown } | undefined);
+      const crId = (data as { checkoutRequestId?: string; CheckoutRequestID?: string } | undefined)?.checkoutRequestId
+        || (data as { CheckoutRequestID?: string } | undefined)?.CheckoutRequestID
+        || '';
+      setStkCheckoutRequestId(crId);
+      setMpesaStatus('processing');
+      setStkResultDesc((data as { ResponseDescription?: string; resultDesc?: string } | undefined)?.ResponseDescription
+        || (data as { resultDesc?: string } | undefined)?.resultDesc
+        || 'STK push sent. Awaiting customer PIN entry.');
+      toast.success('STK push sent to customer phone');
+      // Begin polling status
+      startStkPolling(crId);
+    },
+    onError: (err: unknown) => {
       setMpesaStatus('failed');
+      toast.error(handleError(err, 'M-Pesa STK Push'));
     },
   });
+
+  // Poll Daraja STK status — uses paymentsApi.checkStkStatus if available, falls back to direct fetch
+  const startStkPolling = useCallback((checkoutRequestId: string) => {
+    if (stkPollRef.current) clearInterval(stkPollRef.current);
+    if (!checkoutRequestId) return;
+    setStkPolling(true);
+    let attempts = 0;
+    stkPollRef.current = setInterval(async () => {
+      attempts += 1;
+      try {
+        const anyPayments = paymentsApi as unknown as {
+          checkStkStatus?: (id: string) => Promise<{ data?: { status?: string; resultCode?: string; resultDesc?: string; mpesaReceiptNumber?: string } }>;
+        };
+        let result: { status?: string; resultCode?: string; resultDesc?: string; mpesaReceiptNumber?: string } | undefined;
+        if (typeof anyPayments.checkStkStatus === 'function') {
+          const r = await anyPayments.checkStkStatus(checkoutRequestId);
+          result = r?.data;
+        } else {
+          const res = await fetch(`/api/payments/mpesa/status/${encodeURIComponent(checkoutRequestId)}`, { credentials: 'same-origin' });
+          const json = await res.json().catch(() => ({}));
+          result = json?.data ?? json;
+        }
+        if (!result) return;
+        const status = (result.status || '').toString().toUpperCase();
+        const code = (result.resultCode || '').toString();
+        if (status === 'COMPLETED' || status === 'SUCCESS' || code === '0') {
+          clearStkPolling();
+          setStkPolling(false);
+          setMpesaStatus('success');
+          setStkResultDesc(result.resultDesc || 'Payment confirmed.');
+          toast.success('M-Pesa payment confirmed');
+        } else if (status === 'FAILED' || status === 'CANCELLED' || (code && code !== '0')) {
+          clearStkPolling();
+          setStkPolling(false);
+          setMpesaStatus('failed');
+          setStkResultDesc(result.resultDesc || 'Payment failed or cancelled.');
+        }
+      } catch (err) {
+        // Network blip — keep polling unless too many attempts
+        console.warn('STK status poll error', err);
+      }
+      if (attempts >= 60) { // ~5 min @ 5s interval
+        clearStkPolling();
+        setStkPolling(false);
+        setMpesaStatus('failed');
+        setStkResultDesc('Timed out waiting for M-Pesa confirmation.');
+      }
+    }, 5000);
+  }, []);
+
+  const clearStkPolling = useCallback(() => {
+    if (stkPollRef.current) {
+      clearInterval(stkPollRef.current);
+      stkPollRef.current = null;
+    }
+  }, []);
+
+  // Cleanup polling on unmount
+  useEffect(() => () => clearStkPolling(), [clearStkPolling]);
+
+  // Sell-More: Frequently Bought Together recommendations
+  const cartProductIds = useMemo(() => cart.items.map((i) => i.productId), [cart.items]);
+  const { data: recommendationsData, isLoading: recommendationsLoading } = useQuery({
+    queryKey: ['pos-recommendations', currentStoreId, cartProductIds.join(',')],
+    queryFn: async () => {
+      // Prefer the typed client method if BE-1 added it
+      type RecommendationsApiShape = {
+        recommendationsApi?: {
+          frequentlyBought: (params: { productIds: string[]; storeId: string }) => Promise<{ data?: Array<{ product?: ProductListItem; productId?: string; productName?: string; pricePerUnit?: number; coOccurrence?: number; count?: number; imageUrl?: string; unitType?: string }> }>;
+        };
+      };
+      const apiModule: RecommendationsApiShape = await import('@/lib/api') as unknown as RecommendationsApiShape;
+      if (typeof apiModule.recommendationsApi?.frequentlyBought === 'function') {
+        try {
+          return await apiModule.recommendationsApi.frequentlyBought({ productIds: cartProductIds, storeId: currentStoreId });
+        } catch {
+          // fall back to fetch
+        }
+      }
+      const url = `/api/recommendations/frequently-bought?storeId=${encodeURIComponent(currentStoreId)}&${cartProductIds.map((id) => `productId=${encodeURIComponent(id)}`).join('&')}`;
+      const res = await fetch(url, { credentials: 'same-origin' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || `Failed to load recommendations (HTTP ${res.status})`);
+      return { data: Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []) };
+    },
+    enabled: cartProductIds.length > 0,
+    staleTime: 30_000,
+    retry: false,
+  });
+
+  const recommendations: Array<{ product?: ProductListItem; productId?: string; productName?: string; pricePerUnit?: number; coOccurrence?: number; count?: number; imageUrl?: string; unitType?: string; quantityInStock?: number }> =
+    Array.isArray(recommendationsData?.data) ? (recommendationsData!.data as Array<{ product?: ProductListItem; productId?: string; productName?: string; pricePerUnit?: number; coOccurrence?: number; count?: number; imageUrl?: string; unitType?: string; quantityInStock?: number }>) : [];
+
+  // Filter out products already in cart & out-of-stock recommendations
+  const visibleRecommendations = useMemo(() => {
+    return recommendations
+      .filter((r) => {
+        const id = r.product?.id || r.productId;
+        if (!id) return false;
+        if (cartProductIds.includes(id)) return false;
+        const stock = r.product?.quantityInStock ?? r.quantityInStock ?? 0;
+        if (stock <= 0) return false;
+        return true;
+      })
+      .slice(0, 8);
+  }, [recommendations, cartProductIds]);
+
+  const handleAddRecommendation = (rec: { product?: ProductListItem; productId?: string; productName?: string; pricePerUnit?: number; imageUrl?: string; unitType?: string; quantityInStock?: number }) => {
+    // If a full product is provided, use it; otherwise synthesise a minimal item
+    if (rec.product) {
+      handleAddToCart(rec.product);
+      return;
+    }
+    // Fallback: try to find it in the loaded products list, else show a toast
+    const match = products.find((p) => p.id === rec.productId);
+    if (match) {
+      handleAddToCart(match);
+    } else {
+      toast.error(`Could not add "${rec.productName || 'product'}" — try refreshing the catalog.`);
+    }
+  };
 
   const products = Array.isArray(productsData?.data) ? productsData.data : [];
   const categories = Array.isArray(categoriesData?.data) ? categoriesData.data : [];
@@ -2343,8 +3056,9 @@ function POSTab() {
       return;
     }
 
-    if (paymentMethod === 'MPESA') {
-      setMpesaDialogOpen(true);
+    // For MPESA-only, the STK push must have been confirmed first
+    if (paymentMethod === 'MPESA' && mpesaStatus !== 'success') {
+      toast.error('Send the STK push and wait for confirmation before completing the sale.');
       return;
     }
 
@@ -2353,6 +3067,23 @@ function POSTab() {
       const mpesaAmt = Number(splitMpesaAmount) || 0;
       if (cashAmt + mpesaAmt < finalTotal) {
         toast.error('Split amounts must equal or exceed total');
+        return;
+      }
+      // If there's an M-Pesa portion, the STK push must have been confirmed
+      if (mpesaAmt > 0 && mpesaStatus !== 'success') {
+        toast.error('Send the M-Pesa STK push for the split portion and wait for confirmation.');
+        return;
+      }
+    }
+
+    if (paymentMethod === 'DEBT') {
+      if (!selectedCustomer || selectedCustomer === 'walk-in') {
+        toast.error('Select a customer to put the sale on their debt account');
+        return;
+      }
+      const cust = customers.find((c) => c.id === selectedCustomer);
+      if (cust && finalTotal > (cust.debtLimit - cust.currentDebtBalance)) {
+        toast.error('Sale exceeds the customer\'s available debt limit');
         return;
       }
     }
@@ -2365,7 +3096,7 @@ function POSTab() {
       paymentMethod,
       paymentDetails: {
         cashAmount: paymentMethod === 'CASH' ? Number(cashReceived) || finalTotal : paymentMethod === 'SPLIT' ? Number(splitCashAmount) || 0 : undefined,
-        mpesaPhone: paymentMethod === 'SPLIT' ? mpesaPhone : undefined,
+        mpesaPhone: (paymentMethod === 'MPESA' || paymentMethod === 'SPLIT') ? mpesaPhone : undefined,
         debtAccountId: paymentMethod === 'DEBT' ? selectedCustomer : undefined,
         giftCardId: appliedGiftCardId || undefined,
         voucherId: appliedVoucherId || undefined,
@@ -2375,16 +3106,157 @@ function POSTab() {
   };
 
   const handleMpesaPay = () => {
-    if (!mpesaPhone || mpesaPhone.length < 10) {
+    if (!mpesaPhone || mpesaPhone.length < 9) {
       toast.error('Enter a valid phone number');
+      return;
+    }
+    // For SPLIT, use the M-Pesa portion amount; for MPESA, use finalTotal
+    const amount = paymentMethod === 'SPLIT' ? (Number(splitMpesaAmount) || 0) : finalTotal;
+    if (amount <= 0) {
+      toast.error('Enter an M-Pesa amount greater than zero');
       return;
     }
     mpesaMutation.mutate({
       phoneNumber: mpesaPhone.startsWith('0') ? `254${mpesaPhone.slice(1)}` : mpesaPhone,
-      amount: finalTotal,
+      amount,
       accountReference: `MBT-${Date.now()}`,
       transactionDesc: 'MBUMAH HARDWARE Purchase',
     });
+  };
+
+  // Send receipt via WhatsApp — uses whatsappApi.sendDocument with a fetch fallback
+  const handleSendReceiptWhatsApp = async () => {
+    if (!lastTransaction) return;
+    if (!receiptSendPhone || receiptSendPhone.length < 9) {
+      toast.error('Enter a valid WhatsApp phone number');
+      return;
+    }
+    setReceiptSending(true);
+    try {
+      const phone = receiptSendPhone.startsWith('0') ? `254${receiptSendPhone.slice(1)}` : receiptSendPhone;
+      let result: { waLink?: string; phone?: string; message?: string; documentTitle?: string } | undefined;
+      try {
+        const r = await whatsappApi.sendDocument({
+          type: 'receipt',
+          documentId: lastTransaction.id,
+          storeId: currentStoreId,
+          phone,
+        });
+        result = r?.data;
+      } catch (e) {
+        // Fall back to direct fetch
+        const res = await fetch('/api/whatsapp/send-document', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ type: 'receipt', documentId: lastTransaction.id, storeId: currentStoreId, phone }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(json?.error || json?.message || `HTTP ${res.status}`);
+        result = json?.data ?? json;
+      }
+      const waLink = result?.waLink;
+      toast.success('Receipt prepared for WhatsApp');
+      if (waLink) {
+        window.open(waLink, '_blank', 'noopener,noreferrer');
+      } else {
+        // Fallback: deep link
+        const msg = `Hello, your receipt for ${formatKES(lastTransaction.totalAmount)} from MBUMAH HARDWARE (Receipt #${lastTransaction.receiptNumber}) is ready. Thank you for shopping with us!`;
+        const normalized = phone.startsWith('+') ? phone.slice(1) : phone;
+        window.open(`https://wa.me/${normalized}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer');
+      }
+      setReceiptSendOpen(false);
+    } catch (err) {
+      toast.error(handleError(err, 'Send receipt via WhatsApp'));
+    } finally {
+      setReceiptSending(false);
+    }
+  };
+
+  // Print receipt — opens a new window with a clean printable layout
+  const handlePrintReceipt = () => {
+    if (!lastTransaction) return;
+    const store = STORE_LIST.find((s) => s.id === currentStoreId);
+    const itemsHtml = (lastTransaction.items || []).map((item) => `
+      <tr>
+        <td class="name">${escapeHtml(item.productName)}</td>
+        <td class="qty">${item.quantity}</td>
+        <td class="unit">${item.unitType}</td>
+        <td class="price">${formatKES(item.pricePerUnit ?? 0)}</td>
+        <td class="total">${formatKES(item.lineTotal)}</td>
+      </tr>
+    `).join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${escapeHtml(lastTransaction.receiptNumber)}</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Courier New', monospace; padding: 12px; max-width: 320px; margin: 0 auto; color: #000; }
+        h1, h2, h3, p { margin: 0; }
+        .center { text-align: center; }
+        .store-name { font-size: 18px; font-weight: bold; letter-spacing: 1px; margin-bottom: 2px; }
+        .store-info { font-size: 11px; color: #444; }
+        .meta { font-size: 11px; margin: 8px 0; }
+        .meta-row { display: flex; justify-content: space-between; }
+        hr { border: none; border-top: 1px dashed #000; margin: 8px 0; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        th { text-align: left; font-size: 10px; text-transform: uppercase; padding: 2px 0; border-bottom: 1px solid #000; }
+        td { padding: 2px 0; vertical-align: top; }
+        td.name { width: 45%; }
+        td.qty, td.unit { text-align: center; width: 12%; }
+        td.price { text-align: right; width: 15%; }
+        td.total { text-align: right; width: 16%; font-weight: bold; }
+        .totals { font-size: 12px; margin: 8px 0; }
+        .totals .meta-row { padding: 1px 0; }
+        .totals .grand { font-size: 14px; font-weight: bold; padding-top: 4px; }
+        .footer { text-align: center; margin-top: 12px; font-size: 11px; }
+        @media print { body { padding: 0; } }
+      </style></head><body>
+      <div class="center">
+        <div class="store-name">MBUMAH HARDWARE</div>
+        <div class="store-info">${escapeHtml(store?.shortName || 'Juja Main Branch')}</div>
+        <div class="store-info">${escapeHtml(store?.location || '')}</div>
+        <div class="store-info">Tel: ${escapeHtml(store?.phone || '+254 700 123 456')}</div>
+      </div>
+      <hr/>
+      <div class="meta">
+        <div class="meta-row"><span>Receipt #:</span><strong>${escapeHtml(lastTransaction.receiptNumber)}</strong></div>
+        <div class="meta-row"><span>Date:</span><span>${escapeHtml(formatDateTime(lastTransaction.createdAt))}</span></div>
+        <div class="meta-row"><span>Cashier:</span><span>${escapeHtml(lastTransaction.cashier?.name || useAuthStore.getState().user?.name || 'N/A')}</span></div>
+        <div class="meta-row"><span>Customer:</span><span>${escapeHtml(lastTransaction.customer?.name || 'Walk-in')}</span></div>
+      </div>
+      <hr/>
+      <table>
+        <thead><tr><th>Item</th><th class="qty">Qty</th><th class="unit">Unit</th><th class="price">Price</th><th class="total">Total</th></tr></thead>
+        <tbody>${itemsHtml}</tbody>
+      </table>
+      <hr/>
+      <div class="totals">
+        <div class="meta-row"><span>Subtotal</span><span>${formatKES(lastTransaction.subtotal)}</span></div>
+        <div class="meta-row"><span>VAT (16%)</span><span>${formatKES(lastTransaction.taxAmount)}</span></div>
+        ${lastTransaction.discountAmount > 0 ? `<div class="meta-row"><span>Discount</span><span>-${formatKES(lastTransaction.discountAmount)}</span></div>` : ''}
+        <div class="meta-row grand"><span>TOTAL</span><span>${formatKES(lastTransaction.totalAmount)}</span></div>
+      </div>
+      <hr/>
+      <div class="meta">
+        <div class="meta-row"><span>Payment</span><span>${escapeHtml(lastTransaction.paymentMethod)}</span></div>
+        ${lastTransaction.paymentMethod === 'CASH' && lastCashReceived > 0 ? `<div class="meta-row"><span>Cash Received</span><span>${formatKES(lastCashReceived)}</span></div>` : ''}
+        ${lastTransaction.paymentMethod === 'CASH' && (lastCashReceived - lastTransaction.totalAmount) > 0 ? `<div class="meta-row"><span>Change</span><span>${formatKES(lastCashReceived - lastTransaction.totalAmount)}</span></div>` : ''}
+        ${lastTransaction.paymentMethod === 'MPESA' && lastMpesaPhone ? `<div class="meta-row"><span>M-Pesa Phone</span><span>${escapeHtml(lastMpesaPhone)}</span></div>` : ''}
+      </div>
+      <div class="footer">
+        <p><strong>Thank you for shopping at MBUMAH HARDWARE!</strong></p>
+        <p>Asante sana!</p>
+      </div>
+      <script>window.onload = function() { window.print(); }</script>
+      </body></html>`;
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (printWindow) {
+      printWindow.document.open();
+      printWindow.document.write(html);
+      printWindow.document.close();
+    } else {
+      // Popup blocked — fall back to inline print
+      window.print();
+    }
   };
 
   const change = paymentMethod === 'CASH' && cashReceived ? Number(cashReceived) - finalTotal : 0;
@@ -2403,6 +3275,17 @@ function POSTab() {
     });
     return sorted;
   }, [products, sortField, sortOrder]);
+
+  // Auto-adjust grid columns based on number of products visible:
+  //  - Very few (≤8): fewer cols, bigger cards
+  //  - Medium (9–24): standard grid
+  //  - Many (>24): denser grid
+  const gridColsClass = useMemo(() => {
+    const n = sortedProducts.length;
+    if (n <= 8) return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4';
+    if (n <= 24) return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3';
+    return 'grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2.5';
+  }, [sortedProducts.length]);
 
   // Cart note handler
   const handleCartNoteChange = (productId: string, note: string) => {
@@ -2504,7 +3387,7 @@ function POSTab() {
         ) : products.length === 0 ? (
           <EmptyProductsState searchQuery={searchQuery} />
         ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 items-stretch">
+          <div className={`grid ${gridColsClass} items-stretch`}>
             {sortedProducts.map((product) => (
               <ProductCard
                 key={product.id}
@@ -2584,6 +3467,83 @@ function POSTab() {
                 </tbody>
               </table>
             </div>
+          </Card>
+        )}
+
+        {/* Sell More — Frequently Bought Together recommendations */}
+        {cart.items.length > 0 && (
+          <Card className="border-primary/30 bg-gradient-to-br from-primary/5 via-card to-card overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setRecommendationsOpen(!recommendationsOpen)}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors"
+              aria-expanded={recommendationsOpen}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="shrink-0 h-8 w-8 rounded-full bg-primary/15 flex items-center justify-center">
+                  <Lightbulb className="h-4 w-4 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold flex items-center gap-2">
+                    Sell More — Customers also bought
+                    <Badge variant="secondary" className="text-[10px] h-5 px-1.5">{visibleRecommendations.length}</Badge>
+                  </p>
+                  <p className="text-[11px] text-muted-foreground truncate">Tap a chip to add it to the cart</p>
+                </div>
+              </div>
+              <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${recommendationsOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {recommendationsOpen && (
+              <div className="px-4 pb-4 pt-1">
+                {recommendationsLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Finding related products…
+                  </div>
+                ) : visibleRecommendations.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-2">
+                    No frequent add-on suggestions yet for this cart. Sell more of these items and recommendations will appear here.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {visibleRecommendations.map((rec) => {
+                      const name = rec.product?.name || rec.productName || 'Product';
+                      const price = rec.product?.pricePerUnit ?? rec.pricePerUnit ?? 0;
+                      const unit = rec.product?.unitType || rec.unitType || 'PIECE';
+                      const img = rec.product?.imageUrl || rec.imageUrl || getCategoryImage(rec.product?.categoryId);
+                      const co = rec.coOccurrence ?? rec.count ?? 0;
+                      const stock = rec.product?.quantityInStock ?? rec.quantityInStock ?? 0;
+                      return (
+                        <button
+                          key={rec.product?.id || rec.productId}
+                          type="button"
+                          onClick={() => handleAddRecommendation(rec)}
+                          className="group flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full border border-border bg-background hover:border-primary/40 hover:bg-primary/5 transition-all min-h-[44px] focus:outline-none focus:ring-2 focus:ring-ring"
+                          title={`Add ${name} to cart`}
+                        >
+                          <div className="h-8 w-8 rounded-full bg-muted overflow-hidden flex items-center justify-center shrink-0">
+                            {img ? (
+                              <img src={img} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              <Package className="h-4 w-4 text-muted-foreground/40" />
+                            )}
+                          </div>
+                          <div className="flex flex-col items-start leading-tight min-w-0">
+                            <span className="text-xs font-medium line-clamp-1 break-words max-w-[160px]">{name}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {formatKES(price)} · {unit}
+                              {co > 0 && <span className="text-primary/80"> · bought together {co}×</span>}
+                              {stock > 0 && stock <= 5 && <span className="text-amber-600"> · {stock} left</span>}
+                            </span>
+                          </div>
+                          <Plus className="h-3.5 w-3.5 text-primary shrink-0 group-hover:scale-110 transition-transform" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </Card>
         )}
       </div>
@@ -2794,195 +3754,17 @@ function POSTab() {
                   </div>
                 </div>
 
-                <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="w-full bg-gradient-to-r from-accent-orange to-amber-500 hover:from-accent-orange/90 hover:to-amber-600 text-white font-semibold h-12 shadow-lg shadow-accent-orange/20" size="lg">
-                      <CreditCard className="mr-2 h-4 w-4" />
-                      <span className="flex flex-col items-start leading-tight">
-                        <span className="text-xs font-normal opacity-80">Checkout (F9)</span>
-                        <span>{formatKES(finalTotal)}</span>
-                      </span>
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-lg">
-                    <DialogHeader>
-                      <DialogTitle className="flex items-center gap-2">
-                        <CreditCard className="h-5 w-5 text-primary" />
-                        Complete Payment
-                      </DialogTitle>
-                      <DialogDescription>
-                        Total: <span className="font-bold text-primary">{formatKES(finalTotal)}</span>
-                        {totalDiscount > 0 && (
-                          <span className="text-green-600 text-xs ml-2">(Save {formatKES(totalDiscount)})</span>
-                        )}
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div>
-                        <Label className="text-sm font-medium">Payment Method</Label>
-                        <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)} className="grid grid-cols-4 gap-2 mt-2">
-                          <div>
-                            <RadioGroupItem value="CASH" id="cash" className="peer sr-only" />
-                            <Label htmlFor="cash" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
-                              <Banknote className="h-5 w-5" />
-                              <span className="text-xs font-medium">Cash</span>
-                            </Label>
-                          </div>
-                          <div>
-                            <RadioGroupItem value="MPESA" id="mpesa" className="peer sr-only" />
-                            <Label htmlFor="mpesa" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
-                              <Smartphone className="h-5 w-5" />
-                              <span className="text-xs font-medium">M-Pesa</span>
-                            </Label>
-                          </div>
-                          <div>
-                            <RadioGroupItem value="SPLIT" id="split" className="peer sr-only" />
-                            <Label htmlFor="split" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
-                              <CreditCard className="h-5 w-5" />
-                              <span className="text-xs font-medium">Split</span>
-                            </Label>
-                          </div>
-                          <div>
-                            <RadioGroupItem value="DEBT" id="debt" className="peer sr-only" />
-                            <Label htmlFor="debt" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
-                              <Wallet className="h-5 w-5" />
-                              <span className="text-xs font-medium">Debt</span>
-                            </Label>
-                          </div>
-                        </RadioGroup>
-                      </div>
-
-                      {paymentMethod === 'CASH' && (
-                        <div className="space-y-3">
-                          <div>
-                            <Label htmlFor="cashReceived">Cash Received</Label>
-                            <Input
-                              id="cashReceived"
-                              type="number"
-                              placeholder="0"
-                              value={cashReceived}
-                              onChange={(e) => setCashReceived(e.target.value)}
-                              className="text-lg font-semibold mt-1"
-                            />
-                          </div>
-                          {change > 0 && (
-                            <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg">
-                              <p className="text-sm font-medium text-green-700 dark:text-green-400">
-                                Change: {formatKES(change)}
-                              </p>
-                            </div>
-                          )}
-                          {cashReceived && Number(cashReceived) < finalTotal && (
-                            <Alert variant="destructive">
-                              <AlertCircle className="h-4 w-4" />
-                              <AlertTitle>Insufficient amount</AlertTitle>
-                              <AlertDescription>Need {formatKES(finalTotal - Number(cashReceived))} more</AlertDescription>
-                            </Alert>
-                          )}
-                        </div>
-                      )}
-
-                      {paymentMethod === 'DEBT' && !selectedCustomer && (
-                        <Alert>
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertTitle>Customer Required</AlertTitle>
-                          <AlertDescription>Please select a customer before proceeding with debt payment.</AlertDescription>
-                        </Alert>
-                      )}
-
-                      {paymentMethod === 'MPESA' && (
-                        <div>
-                          <Label htmlFor="mpesaPhone">M-Pesa Phone Number</Label>
-                          <Input
-                            id="mpesaPhone"
-                            type="tel"
-                            placeholder="0712 345 678"
-                            value={mpesaPhone}
-                            onChange={(e) => setMpesaPhone(e.target.value)}
-                            className="mt-1"
-                          />
-                        </div>
-                      )}
-
-                      {paymentMethod === 'SPLIT' && (
-                        <div className="space-y-3 p-3 rounded-lg border bg-muted/30">
-                          <p className="text-xs font-medium text-muted-foreground">Split payment between Cash and M-Pesa</p>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <Label htmlFor="splitCash" className="text-xs flex items-center gap-1">
-                                <Banknote className="h-3 w-3" /> Cash Amount
-                              </Label>
-                              <Input
-                                id="splitCash"
-                                type="number"
-                                placeholder="0"
-                                value={splitCashAmount}
-                                onChange={(e) => {
-                                  setSplitCashAmount(e.target.value);
-                                  const remaining = finalTotal - Number(e.target.value);
-                                  if (remaining > 0) setSplitMpesaAmount(String(remaining));
-                                }}
-                                className="mt-1 text-sm font-semibold"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="splitMpesa" className="text-xs flex items-center gap-1">
-                                <Smartphone className="h-3 w-3" /> M-Pesa Amount
-                              </Label>
-                              <Input
-                                id="splitMpesa"
-                                type="number"
-                                placeholder="0"
-                                value={splitMpesaAmount}
-                                onChange={(e) => {
-                                  setSplitMpesaAmount(e.target.value);
-                                  const remaining = finalTotal - Number(e.target.value);
-                                  if (remaining > 0) setSplitCashAmount(String(remaining));
-                                }}
-                                className="mt-1 text-sm font-semibold"
-                              />
-                            </div>
-                          </div>
-                          <div>
-                            <Label htmlFor="splitMpesaPhone" className="text-xs">M-Pesa Phone</Label>
-                            <Input
-                              id="splitMpesaPhone"
-                              type="tel"
-                              placeholder="0712 345 678"
-                              value={mpesaPhone}
-                              onChange={(e) => setMpesaPhone(e.target.value)}
-                              className="mt-1 text-sm"
-                            />
-                          </div>
-                          {Number(splitCashAmount) + Number(splitMpesaAmount) < finalTotal && (
-                            <p className="text-[10px] text-amber-600 font-medium">
-                              Amounts must total at least {formatKES(finalTotal)}. Remaining: {formatKES(finalTotal - Number(splitCashAmount) - Number(splitMpesaAmount))}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setCheckoutOpen(false)}>Cancel</Button>
-                      <Button
-                        onClick={handleCheckout}
-                        disabled={
-                          checkoutMutation.isPending ||
-                          (paymentMethod === 'CASH' && (!cashReceived || Number(cashReceived) < finalTotal)) ||
-                          (paymentMethod === 'DEBT' && !selectedCustomer) ||
-                          (paymentMethod === 'SPLIT' && (Number(splitCashAmount) + Number(splitMpesaAmount) < finalTotal))
-                        }
-                        className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
-                      >
-                        {checkoutMutation.isPending ? (
-                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
-                        ) : (
-                          <><CheckCircle className="mr-2 h-4 w-4" />Complete Sale</>
-                        )}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+                <Button
+                  className="w-full bg-gradient-to-r from-accent-orange to-amber-500 hover:from-accent-orange/90 hover:to-amber-600 text-white font-semibold h-12 shadow-lg shadow-accent-orange/20"
+                  size="lg"
+                  onClick={() => setCheckoutOpen(true)}
+                >
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  <span className="flex flex-col items-start leading-tight">
+                    <span className="text-xs font-normal opacity-80">Checkout (F9)</span>
+                    <span>{formatKES(finalTotal)}</span>
+                  </span>
+                </Button>
               </div>
             </>
           )}
@@ -2998,312 +3780,240 @@ function POSTab() {
         </Card>
       </div>
 
-      {/* Receipt Dialog */}
-      <Dialog open={receiptOpen} onOpenChange={setReceiptOpen}>
-        <DialogContent className="sm:max-w-lg receipt-dialog backdrop-blur-sm">
-          <DialogHeader className="pb-2">
-            <DialogTitle className="text-center flex items-center justify-center gap-2">
-              <PartyPopper className="h-5 w-5 text-primary" />
-              Receipt
-            </DialogTitle>
-            <DialogDescription className="sr-only">Receipt preview</DialogDescription>
-          </DialogHeader>
-          {lastTransaction && (
-            <div className="receipt-content receipt-printable space-y-4 text-sm" id="receipt-content">
-              {/* Store Header */}
-              <div className="text-center space-y-0.5">
-                <h2 className="text-lg font-bold">MBUMAH HARDWARE</h2>
-                <p className="text-xs text-muted-foreground">{STORE_LIST.find(s => s.id === currentStoreId)?.shortName || 'Juja Main Branch'}</p>
-                <p className="text-xs text-muted-foreground">Tel: +254 700 123 456</p>
-              </div>
-              <Separator />
-              {/* Receipt Meta */}
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Receipt #:</span>
-                  <span className="font-mono font-semibold">{lastTransaction.receiptNumber}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Date:</span>
-                  <span>{formatDateTime(lastTransaction.createdAt)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Cashier:</span>
-                  <span>{lastTransaction.cashier?.name || useAuthStore.getState().user?.name || 'N/A'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Customer:</span>
-                  <span>{lastTransaction.customer?.name || 'Walk-in'}</span>
-                </div>
-              </div>
-              <Separator />
-              {/* Line Items */}
-              <div className="space-y-1">
-                <div className="grid grid-cols-12 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  <span className="col-span-5">Item</span>
-                  <span className="col-span-2 text-center">Qty</span>
-                  <span className="col-span-2 text-center">Unit</span>
-                  <span className="col-span-3 text-right">Total</span>
-                </div>
-                {(lastTransaction.items || []).map((item) => (
-                  <div key={item.id} className="grid grid-cols-12 text-xs py-0.5">
-                    <span className="col-span-5 truncate">{item.productName}</span>
-                    <span className="col-span-2 text-center">{item.quantity}</span>
-                    <span className="col-span-2 text-center">{item.unitType}</span>
-                    <span className="col-span-3 text-right">{formatKES(item.lineTotal)}</span>
-                  </div>
-                ))}
-              </div>
-              <Separator />
-              {/* Totals */}
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span>{formatKES(lastTransaction.subtotal)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">VAT (16%)</span>
-                  <span>{formatKES(lastTransaction.taxAmount)}</span>
-                </div>
-                {lastTransaction.discountAmount > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span>Discount</span>
-                    <span>-{formatKES(lastTransaction.discountAmount)}</span>
-                  </div>
-                )}
-                <Separator />
-                <div className="flex justify-between font-bold text-base">
-                  <span>Total</span>
-                  <span className="text-primary">{formatKES(lastTransaction.totalAmount)}</span>
-                </div>
-              </div>
-              <Separator />
-              {/* Payment Details */}
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Payment Method</span>
-                  <Badge variant="secondary" className="text-[10px]">
-                    {lastTransaction.paymentMethod === 'CASH' && <Banknote className="h-3 w-3 mr-1" />}
-                    {lastTransaction.paymentMethod === 'MPESA' && <Smartphone className="h-3 w-3 mr-1" />}
-                    {lastTransaction.paymentMethod === 'DEBT' && <Wallet className="h-3 w-3 mr-1" />}
-                    {lastTransaction.paymentMethod}
-                  </Badge>
-                </div>
-                {lastTransaction.paymentMethod === 'CASH' && lastCashReceived > 0 && (
-                  <>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Cash Received</span>
-                      <span>{formatKES(lastCashReceived)}</span>
-                    </div>
-                    {lastCashReceived - lastTransaction.totalAmount > 0 && (
-                      <div className="flex justify-between text-green-600 font-semibold">
-                        <span>Change</span>
-                        <span>{formatKES(lastCashReceived - lastTransaction.totalAmount)}</span>
-                      </div>
-                    )}
-                  </>
-                )}
-                {lastTransaction.paymentMethod === 'MPESA' && lastMpesaPhone && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">M-Pesa Phone</span>
-                    <span>{lastMpesaPhone}</span>
-                  </div>
-                )}
-              </div>
-              <Separator />
-              {/* Footer */}
-              <div className="text-center space-y-1">
-                <p className="font-semibold text-xs">Thank you for shopping at MBUMAH HARDWARE!</p>
-                <p className="text-xs text-muted-foreground italic">Asante sana!</p>
-              </div>
-            </div>
-          )}
-          <DialogFooter className="gap-2 sm:gap-0">
+      {/* Checkout Dialog (shared — desktop & mobile) */}
+      <CheckoutDialog
+        open={checkoutOpen}
+        onOpenChange={setCheckoutOpen}
+        finalTotal={finalTotal}
+        totalDiscount={totalDiscount}
+        paymentMethod={paymentMethod}
+        setPaymentMethod={setPaymentMethod}
+        cashReceived={cashReceived}
+        setCashReceived={setCashReceived}
+        change={change}
+        selectedCustomer={selectedCustomer}
+        customers={customers}
+        splitCashAmount={splitCashAmount}
+        setSplitCashAmount={setSplitCashAmount}
+        splitMpesaAmount={splitMpesaAmount}
+        setSplitMpesaAmount={setSplitMpesaAmount}
+        mpesaPhone={mpesaPhone}
+        setMpesaPhone={setMpesaPhone}
+        mpesaStatus={mpesaStatus}
+        setMpesaStatus={setMpesaStatus}
+        stkCheckoutRequestId={stkCheckoutRequestId}
+        stkResultDesc={stkResultDesc}
+        stkPolling={stkPolling}
+        mpesaMutation={mpesaMutation}
+        checkoutMutation={checkoutMutation}
+        onSendStkPush={handleMpesaPay}
+        onRetryStk={() => { setMpesaStatus('idle'); setStkCheckoutRequestId(''); setStkResultDesc(''); clearStkPolling(); }}
+        onCompleteSale={handleCheckout}
+      />
+
+      {/* Receipt Dialog (ResponsiveDialog) — Print + WhatsApp + New Sale */}
+      <ResponsiveDialog
+        open={receiptOpen}
+        onOpenChange={setReceiptOpen}
+        title={
+          <span className="flex items-center gap-2 justify-center">
+            <PartyPopper className="h-5 w-5 text-primary" />
+            Receipt
+          </span>
+        }
+        description="Sale completed successfully. Print, send via WhatsApp, or start a new sale."
+        size="sm"
+        footer={
+          <div className="flex flex-wrap gap-2 w-full">
+            <Button variant="outline" onClick={handlePrintReceipt} className="flex-1 min-w-[120px]">
+              <Printer className="mr-2 h-4 w-4" />
+              Print
+            </Button>
             <Button
               variant="outline"
               onClick={() => {
-                const printContents = document.getElementById('receipt-content');
-                if (printContents) {
-                  const printWindow = window.open('', '', 'width=400,height=600');
-                  if (printWindow) {
-                    printWindow.document.write(`<html><head><title>Receipt - MBUMAH HARDWARE</title><style>body{font-family:monospace;padding:16px;font-size:12px;}table{width:100%;border-collapse:collapse;}td,th{text-align:left;padding:2px 4px;}.text-right{text-align:right;}.font-bold{font-weight:bold;}.border-top{border-top:1px dashed #000;padding-top:8px;margin-top:8px;}</style></head><body>${printContents.innerHTML}</body></html>`);
-                    printWindow.document.close();
-                    printWindow.print();
-                    printWindow.close();
-                  }
-                } else {
-                  window.print();
-                }
+                // Pre-fill phone from selected customer (now cleared) or lastMpesaPhone
+                setReceiptSendPhone(lastMpesaPhone || lastTransaction?.customer?.phone || '');
+                setReceiptSendOpen(true);
               }}
+              className="flex-1 min-w-[120px] text-green-700 dark:text-green-400 border-green-300 dark:border-green-800 hover:bg-green-50 dark:hover:bg-green-950/30"
             >
-              <Printer className="mr-2 h-4 w-4" />
-              Print Receipt
+              <Send className="mr-2 h-4 w-4" />
+              Send via WhatsApp
             </Button>
             <Button
-              onClick={() => {
-                setReceiptOpen(false);
-                setLastTransaction(null);
-              }}
-              className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+              onClick={() => { setReceiptOpen(false); setLastTransaction(null); }}
+              className="flex-1 min-w-[120px] bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
             >
               <ShoppingCart className="mr-2 h-4 w-4" />
               New Sale
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* M-Pesa STK Push Dialog */}
-      <Dialog open={mpesaDialogOpen} onOpenChange={(open) => {
-        if (!open && mpesaStatus === 'processing') return; // prevent closing while processing
-        setMpesaDialogOpen(open);
-        if (!open) setMpesaStatus('idle');
-      }}>
-        <DialogContent className="sm:max-w-md overflow-hidden p-0">
-          {/* M-Pesa Brand Header */}
-          <div className="bg-gradient-to-br from-green-600 to-green-700 px-6 pt-6 pb-4 text-white">
-            <div className="flex items-center gap-3 mb-1">
-              <div className="bg-white/20 rounded-full p-2.5">
-                <Smartphone className="h-6 w-6" />
-              </div>
-              <div>
-                <DialogTitle className="text-xl font-bold tracking-tight">Lipa na M-Pesa</DialogTitle>
-                <DialogDescription className="text-green-100 text-sm">
-                  Online STK Push Payment
-                </DialogDescription>
-              </div>
-            </div>
-            <div className="mt-4 bg-white/15 rounded-lg p-3 flex items-center justify-between">
-              <span className="text-sm text-green-100">Amount to Pay</span>
-              <span className="text-2xl font-bold">{formatKES(finalTotal)}</span>
-            </div>
           </div>
-
-          <div className="px-6 pb-6">
-            {mpesaStatus === 'idle' && (
-              <div className="space-y-5 pt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="mpesaPhoneDialog" className="text-sm font-medium">
-                    M-Pesa Phone Number
-                  </Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">+254</span>
-                    <Input
-                      id="mpesaPhoneDialog"
-                      type="tel"
-                      placeholder="7XX XXX XXX"
-                      className="pl-14 text-lg font-mono tracking-wider h-12"
-                      value={mpesaPhone.startsWith('254') ? mpesaPhone.slice(3) : mpesaPhone.startsWith('0') ? mpesaPhone.slice(1) : mpesaPhone}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/\D/g, '');
-                        setMpesaPhone(val);
-                      }}
-                    />
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    Enter the Safaricom number registered with M-Pesa. An STK push will be sent to this phone.
-                  </p>
-                </div>
-                <Button
-                  className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-base font-semibold"
-                  onClick={handleMpesaPay}
-                  disabled={mpesaMutation.isPending || !mpesaPhone || mpesaPhone.length < 9}
-                >
-                  {mpesaMutation.isPending ? (
-                    <><Loader2 className="mr-2 h-5 w-5 animate-spin" />Sending STK Push...</>
-                  ) : (
-                    <><Smartphone className="mr-2 h-5 w-5" />Send STK Push</>
-                  )}
-                </Button>
+        }
+      >
+        {lastTransaction && (
+          <div className="receipt-content receipt-printable space-y-4 text-sm" id="receipt-content">
+            {/* Store Header */}
+            <div className="text-center space-y-0.5">
+              <h2 className="text-lg font-bold">MBUMAH HARDWARE</h2>
+              <p className="text-xs text-muted-foreground">{STORE_LIST.find(s => s.id === currentStoreId)?.shortName || 'Juja Main Branch'}</p>
+              <p className="text-xs text-muted-foreground">Tel: +254 700 123 456</p>
+            </div>
+            <Separator />
+            {/* Receipt Meta */}
+            <div className="space-y-1 text-xs">
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground shrink-0">Receipt #:</span>
+                <span className="font-mono font-semibold break-all text-right">{lastTransaction.receiptNumber}</span>
               </div>
-            )}
-
-            {mpesaStatus === 'processing' && (
-              <div className="text-center py-8 space-y-5">
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-24 h-24 rounded-full bg-green-100 dark:bg-green-950/30 animate-ping opacity-20" />
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground shrink-0">Date:</span>
+                <span className="text-right break-words">{formatDateTime(lastTransaction.createdAt)}</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground shrink-0">Cashier:</span>
+                <span className="text-right break-words">{lastTransaction.cashier?.name || useAuthStore.getState().user?.name || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground shrink-0">Customer:</span>
+                <span className="text-right break-words">{lastTransaction.customer?.name || 'Walk-in'}</span>
+              </div>
+            </div>
+            <Separator />
+            {/* Line Items */}
+            <div className="space-y-1">
+              <div className="grid grid-cols-12 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                <span className="col-span-5">Item</span>
+                <span className="col-span-2 text-center">Qty</span>
+                <span className="col-span-2 text-center">Unit</span>
+                <span className="col-span-3 text-right">Total</span>
+              </div>
+              {(lastTransaction.items || []).map((item) => (
+                <div key={item.id} className="grid grid-cols-12 text-xs py-0.5">
+                  <span className="col-span-5 break-words pr-1">{item.productName}</span>
+                  <span className="col-span-2 text-center">{item.quantity}</span>
+                  <span className="col-span-2 text-center">{item.unitType}</span>
+                  <span className="col-span-3 text-right">{formatKES(item.lineTotal)}</span>
+                </div>
+              ))}
+            </div>
+            <Separator />
+            {/* Totals */}
+            <div className="space-y-1 text-xs">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span>{formatKES(lastTransaction.subtotal)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">VAT (16%)</span>
+                <span>{formatKES(lastTransaction.taxAmount)}</span>
+              </div>
+              {lastTransaction.discountAmount > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>Discount</span>
+                  <span>-{formatKES(lastTransaction.discountAmount)}</span>
+                </div>
+              )}
+              <Separator />
+              <div className="flex justify-between font-bold text-base">
+                <span>Total</span>
+                <span className="text-primary">{formatKES(lastTransaction.totalAmount)}</span>
+              </div>
+            </div>
+            <Separator />
+            {/* Payment Details */}
+            <div className="space-y-1 text-xs">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Payment Method</span>
+                <Badge variant="secondary" className="text-[10px]">
+                  {lastTransaction.paymentMethod === 'CASH' && <Banknote className="h-3 w-3 mr-1" />}
+                  {lastTransaction.paymentMethod === 'MPESA' && <Smartphone className="h-3 w-3 mr-1" />}
+                  {lastTransaction.paymentMethod === 'DEBT' && <Wallet className="h-3 w-3 mr-1" />}
+                  {lastTransaction.paymentMethod}
+                </Badge>
+              </div>
+              {lastTransaction.paymentMethod === 'CASH' && lastCashReceived > 0 && (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Cash Received</span>
+                    <span>{formatKES(lastCashReceived)}</span>
                   </div>
-                  <div className="relative flex items-center justify-center">
-                    <div className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-950/30 flex items-center justify-center">
-                      <Smartphone className="h-10 w-10 text-green-600" />
+                  {lastCashReceived - lastTransaction.totalAmount > 0 && (
+                    <div className="flex justify-between text-green-600 font-semibold">
+                      <span>Change</span>
+                      <span>{formatKES(lastCashReceived - lastTransaction.totalAmount)}</span>
                     </div>
-                  </div>
+                  )}
+                </>
+              )}
+              {lastTransaction.paymentMethod === 'MPESA' && lastMpesaPhone && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">M-Pesa Phone</span>
+                  <span>{lastMpesaPhone}</span>
                 </div>
-                <div>
-                  <p className="text-lg font-semibold">Waiting for M-Pesa PIN</p>
-                  <p className="text-sm text-muted-foreground mt-1 max-w-xs mx-auto">
-                    Please check your phone <span className="font-mono font-medium">+254{mpesaPhone.startsWith('254') ? mpesaPhone.slice(3) : mpesaPhone.startsWith('0') ? mpesaPhone.slice(1) : mpesaPhone}</span> and enter your M-Pesa PIN to authorize payment.
-                  </p>
-                </div>
-                <div className="flex items-center justify-center gap-2 text-green-600">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  <span className="text-sm font-medium">Processing...</span>
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  This will auto-close when payment is confirmed
-                </p>
-              </div>
-            )}
-
-            {mpesaStatus === 'success' && (
-              <div className="text-center py-8 space-y-5">
-                <div className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-950/30 flex items-center justify-center mx-auto">
-                  <CheckCircle className="h-10 w-10 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-lg font-semibold text-green-600">Payment Successful!</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    M-Pesa payment of {formatKES(finalTotal)} confirmed
-                  </p>
-                </div>
-                <Button
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                  onClick={() => {
-                    setMpesaDialogOpen(false);
-                    setMpesaStatus('idle');
-                    // Proceed to complete the checkout after M-Pesa success
-                    checkoutMutation.mutate({
-                      storeId: currentStoreId,
-                      customerId: selectedCustomer || undefined,
-                      cashierId: useAuthStore.getState().user?.id || '',
-                      items: cart.items,
-                      paymentMethod: 'MPESA',
-                      paymentDetails: {
-                        mpesaPhone,
-                      },
-                    });
-                  }}
-                >
-                  Complete Sale
-                </Button>
-              </div>
-            )}
-
-            {mpesaStatus === 'failed' && (
-              <div className="text-center py-8 space-y-5">
-                <div className="w-20 h-20 rounded-full bg-red-100 dark:bg-red-950/30 flex items-center justify-center mx-auto">
-                  <AlertCircle className="h-10 w-10 text-destructive" />
-                </div>
-                <div>
-                  <p className="text-lg font-semibold text-destructive">Payment Failed</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    The M-Pesa transaction could not be completed. Please try again or choose a different payment method.
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <Button variant="outline" className="flex-1" onClick={() => setMpesaDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={() => setMpesaStatus('idle')}>
-                    Try Again
-                  </Button>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
+            <Separator />
+            {/* Footer */}
+            <div className="text-center space-y-1">
+              <p className="font-semibold text-xs">Thank you for shopping at MBUMAH HARDWARE!</p>
+              <p className="text-xs text-muted-foreground italic">Asante sana!</p>
+            </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        )}
+      </ResponsiveDialog>
+
+      {/* Send Receipt via WhatsApp Dialog */}
+      <ResponsiveDialog
+        open={receiptSendOpen}
+        onOpenChange={setReceiptSendOpen}
+        title={<span className="flex items-center gap-2"><Send className="h-4 w-4 text-green-600" /> Send Receipt via WhatsApp</span>}
+        description="Enter the customer's WhatsApp number. We'll generate the receipt and open WhatsApp with the document ready to send."
+        size="sm"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setReceiptSendOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleSendReceiptWhatsApp}
+              disabled={receiptSending || !receiptSendPhone || receiptSendPhone.length < 9}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {receiptSending ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Preparing…</>
+              ) : (
+                <><Send className="mr-2 h-4 w-4" />Send</>
+              )}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div>
+            <Label htmlFor="receiptPhone">WhatsApp Phone Number</Label>
+            <div className="relative mt-1">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">+254</span>
+              <Input
+                id="receiptPhone"
+                type="tel"
+                placeholder="7XX XXX XXX"
+                className="pl-14"
+                value={receiptSendPhone.startsWith('254') ? receiptSendPhone.slice(3) : receiptSendPhone.startsWith('0') ? receiptSendPhone.slice(1) : receiptSendPhone}
+                onChange={(e) => setReceiptSendPhone(e.target.value.replace(/\D/g, ''))}
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1.5">
+              Receipt will be sent from the MBUMAH HARDWARE WhatsApp Business account. The customer must have WhatsApp installed on this number.
+            </p>
+          </div>
+          {lastTransaction && (
+            <div className="rounded-md border bg-muted/30 p-2.5 text-xs space-y-1">
+              <div className="flex justify-between"><span className="text-muted-foreground">Receipt #</span><span className="font-mono font-semibold">{lastTransaction.receiptNumber}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Amount</span><span className="font-semibold">{formatKES(lastTransaction.totalAmount)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Customer</span><span>{lastTransaction.customer?.name || 'Walk-in'}</span></div>
+            </div>
+          )}
+        </div>
+      </ResponsiveDialog>
 
       {/* Add Customer Dialog */}
       <Dialog open={addCustomerOpen} onOpenChange={setAddCustomerOpen}>
@@ -3610,137 +4320,17 @@ function POSTab() {
                     <span className="gradient-text">{formatKES(finalTotal)}</span>
                   </div>
                 </div>
-                <Dialog open={checkoutOpen} onOpenChange={(v) => { setCheckoutOpen(v); if (!v) return; }}>
-                  <DialogTrigger asChild>
-                    <Button className="w-full bg-gradient-to-r from-accent-orange to-amber-500 hover:from-accent-orange/90 hover:to-amber-600 text-white font-semibold h-12 shadow-lg shadow-accent-orange/20" size="lg">
-                      <CreditCard className="mr-2 h-4 w-4" />
-                      <span className="flex flex-col items-start leading-tight">
-                        <span className="text-xs font-normal opacity-80">Checkout (F9)</span>
-                        <span>{formatKES(finalTotal)}</span>
-                      </span>
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-lg">
-                    <DialogHeader>
-                      <DialogTitle className="flex items-center gap-2">
-                        <CreditCard className="h-5 w-5 text-primary" />
-                        Complete Payment
-                      </DialogTitle>
-                      <DialogDescription>
-                        Total: <span className="font-bold text-primary">{formatKES(finalTotal)}</span>
-                        {totalDiscount > 0 && (
-                          <span className="text-green-600 text-xs ml-2">(Save {formatKES(totalDiscount)})</span>
-                        )}
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div>
-                        <Label className="text-sm font-medium">Payment Method</Label>
-                        <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)} className="grid grid-cols-4 gap-2 mt-2">
-                          <div>
-                            <RadioGroupItem value="CASH" id="mobile-cash" className="peer sr-only" />
-                            <Label htmlFor="mobile-cash" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
-                              <Banknote className="h-5 w-5" />
-                              <span className="text-xs font-medium">Cash</span>
-                            </Label>
-                          </div>
-                          <div>
-                            <RadioGroupItem value="MPESA" id="mobile-mpesa" className="peer sr-only" />
-                            <Label htmlFor="mobile-mpesa" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
-                              <Smartphone className="h-5 w-5" />
-                              <span className="text-xs font-medium">M-Pesa</span>
-                            </Label>
-                          </div>
-                          <div>
-                            <RadioGroupItem value="SPLIT" id="mobile-split" className="peer sr-only" />
-                            <Label htmlFor="mobile-split" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
-                              <CreditCard className="h-5 w-5" />
-                              <span className="text-xs font-medium">Split</span>
-                            </Label>
-                          </div>
-                          <div>
-                            <RadioGroupItem value="DEBT" id="mobile-debt" className="peer sr-only" />
-                            <Label htmlFor="mobile-debt" className="flex flex-col items-center gap-1.5 p-3 border rounded-lg cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50">
-                              <Wallet className="h-5 w-5" />
-                              <span className="text-xs font-medium">Debt</span>
-                            </Label>
-                          </div>
-                        </RadioGroup>
-                      </div>
-                      {paymentMethod === 'CASH' && (
-                        <div className="space-y-3">
-                          <div>
-                            <Label htmlFor="mobile-cashReceived">Cash Received</Label>
-                            <Input id="mobile-cashReceived" type="number" placeholder="0" value={cashReceived} onChange={(e) => setCashReceived(e.target.value)} className="text-lg font-semibold mt-1" />
-                          </div>
-                          {change > 0 && (
-                            <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg">
-                              <p className="text-sm font-medium text-green-700 dark:text-green-400">Change: {formatKES(change)}</p>
-                            </div>
-                          )}
-                          {cashReceived && Number(cashReceived) < finalTotal && (
-                            <Alert variant="destructive">
-                              <AlertCircle className="h-4 w-4" />
-                              <AlertTitle>Insufficient amount</AlertTitle>
-                              <AlertDescription>Need {formatKES(finalTotal - Number(cashReceived))} more</AlertDescription>
-                            </Alert>
-                          )}
-                        </div>
-                      )}
-                      {paymentMethod === 'DEBT' && !selectedCustomer && (
-                        <Alert>
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertTitle>Customer Required</AlertTitle>
-                          <AlertDescription>Please select a customer for debt payment.</AlertDescription>
-                        </Alert>
-                      )}
-                      {paymentMethod === 'MPESA' && (
-                        <div>
-                          <Label htmlFor="mobile-mpesaPhone">M-Pesa Phone Number</Label>
-                          <Input id="mobile-mpesaPhone" type="tel" placeholder="0712 345 678" value={mpesaPhone} onChange={(e) => setMpesaPhone(e.target.value)} className="mt-1" />
-                        </div>
-                      )}
-                      {paymentMethod === 'SPLIT' && (
-                        <div className="space-y-3 p-3 rounded-lg border bg-muted/30">
-                          <p className="text-xs font-medium text-muted-foreground">Split payment between Cash and M-Pesa</p>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <Label htmlFor="mobile-splitCash" className="text-xs flex items-center gap-1"><Banknote className="h-3 w-3" /> Cash</Label>
-                              <Input id="mobile-splitCash" type="number" placeholder="0" value={splitCashAmount} onChange={(e) => { setSplitCashAmount(e.target.value); const r = finalTotal - Number(e.target.value); if (r > 0) setSplitMpesaAmount(String(r)); }} className="mt-1 text-sm font-semibold" />
-                            </div>
-                            <div>
-                              <Label htmlFor="mobile-splitMpesa" className="text-xs flex items-center gap-1"><Smartphone className="h-3 w-3" /> M-Pesa</Label>
-                              <Input id="mobile-splitMpesa" type="number" placeholder="0" value={splitMpesaAmount} onChange={(e) => { setSplitMpesaAmount(e.target.value); const r = finalTotal - Number(e.target.value); if (r > 0) setSplitCashAmount(String(r)); }} className="mt-1 text-sm font-semibold" />
-                            </div>
-                          </div>
-                          <div>
-                            <Label htmlFor="mobile-splitPhone" className="text-xs">M-Pesa Phone</Label>
-                            <Input id="mobile-splitPhone" type="tel" placeholder="0712 345 678" value={mpesaPhone} onChange={(e) => setMpesaPhone(e.target.value)} className="mt-1 text-sm" />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setCheckoutOpen(false)}>Cancel</Button>
-                      <Button
-                        onClick={handleCheckout}
-                        disabled={
-                          checkoutMutation.isPending ||
-                          (paymentMethod === 'CASH' && (!cashReceived || Number(cashReceived) < finalTotal)) ||
-                          (paymentMethod === 'DEBT' && !selectedCustomer) ||
-                          (paymentMethod === 'SPLIT' && (Number(splitCashAmount) + Number(splitMpesaAmount) < finalTotal))
-                        }
-                        className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
-                      >
-                        {checkoutMutation.isPending ? (
-                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
-                        ) : (
-                          <><CheckCircle className="mr-2 h-4 w-4" />Complete Sale</>
-                        )}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+                <Button
+                  className="w-full bg-gradient-to-r from-accent-orange to-amber-500 hover:from-accent-orange/90 hover:to-amber-600 text-white font-semibold h-12 shadow-lg shadow-accent-orange/20"
+                  size="lg"
+                  onClick={() => { setMobileCartOpen(false); setCheckoutOpen(true); }}
+                >
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  <span className="flex flex-col items-start leading-tight">
+                    <span className="text-xs font-normal opacity-80">Checkout (F9)</span>
+                    <span>{formatKES(finalTotal)}</span>
+                  </span>
+                </Button>
               </div>
             </>
           )}
