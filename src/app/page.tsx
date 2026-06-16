@@ -2804,7 +2804,7 @@ function POSTab() {
                       </span>
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-lg">
+                  <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
                     <DialogHeader>
                       <DialogTitle className="flex items-center gap-2">
                         <CreditCard className="h-5 w-5 text-primary" />
@@ -2817,7 +2817,7 @@ function POSTab() {
                         )}
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4">
+                    <div className="space-y-4 flex-1 overflow-y-auto min-h-0 pr-1">
                       <div>
                         <Label className="text-sm font-medium">Payment Method</Label>
                         <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)} className="grid grid-cols-4 gap-2 mt-2">
@@ -3620,7 +3620,7 @@ function POSTab() {
                       </span>
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-lg">
+                  <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
                     <DialogHeader>
                       <DialogTitle className="flex items-center gap-2">
                         <CreditCard className="h-5 w-5 text-primary" />
@@ -3633,7 +3633,7 @@ function POSTab() {
                         )}
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4">
+                    <div className="space-y-4 flex-1 overflow-y-auto min-h-0 pr-1">
                       <div>
                         <Label className="text-sm font-medium">Payment Method</Label>
                         <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)} className="grid grid-cols-4 gap-2 mt-2">
