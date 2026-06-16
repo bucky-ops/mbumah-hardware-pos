@@ -1,7 +1,67 @@
 'use client';
 
 /**
- * MBUMAH HARDWARE - Main Application
+ * ============================================================================
+ * MBUMAH HARDWARE POS — Main Application Entry (src/app/page.tsx)
+ * ============================================================================
+ *
+ * This single file holds the entire POS (Point-of-Sale) front-end for the
+ * Mbumah Hardware store. It is intentionally split into many small
+ * components (declared BOTTOM-UP) so each one can be read in isolation.
+ *
+ * ── FILE LAYOUT (top → bottom) ──────────────────────────────────────────────
+ *
+ *   1. Imports (React, TanStack Query, next-themes, sonner, lucide-react,
+ *      Zustand stores, API client, shadcn/ui primitives, ReceiptActions,
+ *      and lazy-loaded tab components.)
+ *
+ *   2. Small leaf components
+ *        - TabLoadingFallback, getCategoryImage, useLiveClock,
+ *          ConfettiOverlay, KeyboardShortcutsHelp, QuickAddPopup
+ *
+ *   3. LoginScreen — username + password form, demo accounts.
+ *
+ *   4. Notification system — useNotificationCount + NotificationCenter.
+ *
+ *   5. LowStockAlertDialog — modal warning when adding a low-stock item.
+ *
+ *   6. AppSidebar — left nav: store selector, tab list, user profile.
+ *
+ *   7. TopBar — global search, live clock, theme toggle, notifications.
+ *
+ *   8. Dashboard widgets — useAnimatedCounter, MiniSparkline, DashboardStats.
+ *
+ *   9. Catalogue UI — CategoryChips, ProductCard, CartItemRow, EmptyStates.
+ *
+ *  10. POSTab  ← THE MAIN POS SCREEN
+ *        Layout:  ┌──────────────────────┬──────────────┐
+ *                 │  Products grid       │  Cart sidebar │
+ *                 │  (search, filters,   │  (items +     │
+ *                 │   category chips)    │   checkout)   │
+ *                 └──────────────────────┴──────────────┘
+ *        On mobile the cart becomes a slide-in Sheet.
+ *
+ *  11. MainApp — auth gate: shows LoginScreen or the full app shell.
+ *  12. useHasMounted — SSR-safe mounted flag.
+ *  13. HomePage (default export) — wraps MainApp in ErrorBoundary.
+ *
+ * ── KEY DIVS YOU WILL LOOK FOR (search these exact strings) ────────────────
+ *
+ *   • Desktop Cart Sidebar container  → "CartSidebar.root"
+ *   • Desktop Cart items ScrollArea   → "CartSidebar.itemsScrollArea"
+ *   • Desktop Cart extras (scrollable)→ "CartSidebar.extrasScroll"
+ *   • Desktop Cart FIXED FOOTER       → "CartSidebar.fixedFooter"
+ *       (this div holds the totals + the Checkout button)
+ *   • Desktop Checkout <Dialog>       → "CheckoutDialog.desktop"
+ *   • Mobile Cart Sheet               → "CartSheet.root"
+ *   • Mobile Cart FIXED FOOTER        → "CartSheet.fixedFooter"
+ *   • Mobile Checkout <Dialog>        → "CheckoutDialog.mobile"
+ *
+ *   The Checkout BUTTON itself is the <Button> inside <DialogTrigger asChild>
+ *   immediately below the "CartSidebar.fixedFooter" / "CartSheet.fixedFooter"
+ *   comment markers.
+ *
+ * ============================================================================
  */
 
 import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef, createContext, useContext, useSyncExternalStore } from 'react';
@@ -79,6 +139,10 @@ const LazyBankingTab = lazy(() => import('./tabs/banking-tab'));
 const LazyLoyaltyTab = lazy(() => import('./tabs/loyalty-tab'));
 const LazySecurityTab = lazy(() => import('./tabs/security-tab'));
 
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 2a: TabLoadingFallback — Suspense fallback shown while a lazy
+// tab chunk is being fetched.  Purely presentational.
+// ───────────────────────────────────────────────────────────────────────────
 function TabLoadingFallback() {
   return (
     <div className="space-y-4">
@@ -146,12 +210,20 @@ const CATEGORY_IMAGES: Record<string, string> = {
   cat_nails_screws: '/categories/cat_nails.png',
 };
 
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 2b: getCategoryImage — maps a product categoryId to a static
+// placeholder image path under /public.  Returns null when no mapping.
+// ───────────────────────────────────────────────────────────────────────────
 function getCategoryImage(categoryId: string | null | undefined): string | null {
   if (!categoryId) return null;
   return CATEGORY_IMAGES[categoryId] || null;
 }
 
 
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 2c: useLiveClock — returns a Date that updates every second.
+// Used by the TopBar to render a live clock.  Cleans up on unmount.
+// ───────────────────────────────────────────────────────────────────────────
 function useLiveClock() {
   const [now, setNow] = useState(new Date());
 
@@ -176,6 +248,10 @@ interface ShortcutCallbacks {
 const ShortcutCallbacksContext = createContext<ShortcutCallbacks>({});
 
 
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 2d: ConfettiOverlay — full-screen confetti burst shown briefly
+// after a successful sale.  `active` toggles it on/off.
+// ───────────────────────────────────────────────────────────────────────────
 function ConfettiOverlay({ active }: { active: boolean }) {
   const [particles, setParticles] = useState<Array<{ id: number; x: number; color: string; delay: number; duration: number; size: number }>>([]);
 
@@ -223,6 +299,10 @@ function ConfettiOverlay({ active }: { active: boolean }) {
 }
 
 
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 2e: KeyboardShortcutsHelp — modal that lists every POS keyboard
+// shortcut (F1-F12, etc).  Opened from the TopBar help button.
+// ───────────────────────────────────────────────────────────────────────────
 function KeyboardShortcutsHelp({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const shortcuts = [
     { keys: '⌘K / Ctrl+K', description: 'Focus search bar', icon: Search },
@@ -271,6 +351,10 @@ function KeyboardShortcutsHelp({ open, onOpenChange }: { open: boolean; onOpenCh
 }
 
 
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 2f: QuickAddPopup — popover that lets cashiers add 1/5/10 units
+// to the cart in one click, surfaced from a ProductCard.
+// ───────────────────────────────────────────────────────────────────────────
 function QuickAddPopup({
   product,
   currentQty,
@@ -322,6 +406,10 @@ function QuickAddPopup({
 }
 
 
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 3: LoginScreen — username + password form.  On success the auth
+// store is hydrated and MainApp swaps to the full POS shell.
+// ───────────────────────────────────────────────────────────────────────────
 function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -476,6 +564,10 @@ function LoginScreen() {
 
 
 // Hook to provide notification count globally
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 4a: useNotificationCount — TanStack Query hook polling the
+// unread-notification count for a given store.  Refetches every 30s.
+// ───────────────────────────────────────────────────────────────────────────
 function useNotificationCount(storeId: string) {
   const { data } = useQuery({
     queryKey: ['notification-count', storeId],
@@ -504,6 +596,10 @@ function useNotificationCount(storeId: string) {
 
 type NotificationFilter = 'all' | 'critical' | 'warning' | 'info';
 
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 4b: NotificationCenter — dropdown panel (rendered inside the
+// TopBar bell).  Lists recent notifications, supports mark-as-read.
+// ───────────────────────────────────────────────────────────────────────────
 function NotificationCenter({
   open,
   onOpenChange,
@@ -753,6 +849,10 @@ function NotificationCenter({
 }
 
 
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 5: LowStockAlertDialog — modal warning fired when a cashier
+// adds a product whose quantityInStock is below the low-stock threshold.
+// ───────────────────────────────────────────────────────────────────────────
 function LowStockAlertDialog({
   open,
   onOpenChange,
@@ -921,6 +1021,13 @@ function LowStockAlertDialog({
 }
 
 
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 6: AppSidebar — left navigation rail.  Contains:
+//   • store selector (multi-tenant)
+//   • primary tab list (POS, Dashboard, Inventory, Customers, …)
+//   • user profile dropdown with logout
+// Collapses to a slide-in drawer on mobile.
+// ───────────────────────────────────────────────────────────────────────────
 function AppSidebar() {
   const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen, currentStoreId, setCurrentStoreId } = useAppStore();
   const user = useAuthStore((s) => s.user);
@@ -1126,6 +1233,11 @@ function AppSidebar() {
 
 // TOP BAR (with live Date/Time)
 
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 7: TopBar — top application bar.  Contains the global product
+// search, live clock, theme toggle, notifications bell, and the help
+// (keyboard shortcuts) button.
+// ───────────────────────────────────────────────────────────────────────────
 function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonElement | null> }) {
   const { activeTab, toggleSidebar, setActiveTab } = useAppStore();
   const cartItems = useCartStore((s) => s.items);
@@ -1360,6 +1472,10 @@ function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonEle
 
 
 // Animated counter hook
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 8a: useAnimatedCounter — animates a number from its previous
+// value to `target` over `duration` ms using requestAnimationFrame.
+// ───────────────────────────────────────────────────────────────────────────
 function useAnimatedCounter(target: number, duration = 800) {
   const [count, setCount] = useState(0);
   const prevTarget = useRef(0);
@@ -1390,6 +1506,10 @@ function useAnimatedCounter(target: number, duration = 800) {
 }
 
 // Mini sparkline component
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 8b: MiniSparkline — tiny inline SVG line chart used inside the
+// dashboard KPI cards to show a 7-day trend.
+// ───────────────────────────────────────────────────────────────────────────
 function MiniSparkline({ data, color, height = 24 }: { data: number[]; color: string; height?: number }) {
   if (data.length < 2) return null;
   const max = Math.max(...data);
@@ -1409,6 +1529,10 @@ function MiniSparkline({ data, color, height = 24 }: { data: number[]; color: st
   );
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 8c: DashboardStats — row of KPI cards (today's revenue, sales
+// count, low-stock count, etc.) rendered at the top of the POS tab.
+// ───────────────────────────────────────────────────────────────────────────
 function DashboardStats({ storeId, onLowStockClick }: { storeId: string; onLowStockClick?: () => void }) {
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', storeId],
@@ -1571,6 +1695,10 @@ function DashboardStats({ storeId, onLowStockClick }: { storeId: string; onLowSt
 }
 
 
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 9a: CategoryChips — horizontal scrollable row of category
+// filter pills.  Clicking one filters the product grid below.
+// ───────────────────────────────────────────────────────────────────────────
 function CategoryChips({
   categories,
   selected,
@@ -1670,6 +1798,11 @@ function CategoryChips({
 }
 
 
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 9b: ProductCard — single product tile in the grid.  Shows image,
+// name, price, stock badge, and quick-add button.  Clicking opens the
+// QuickAddPopup.
+// ───────────────────────────────────────────────────────────────────────────
 function ProductCard({
   product,
   onAdd,
@@ -1812,6 +1945,11 @@ function ProductCard({
 
 // CART ITEM ROW (enhanced)
 
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 9c: CartItemRow — one row inside the cart.  Renders product name,
+// unit price, qty stepper (− / qty / +), quick-add (+1/+2/+5/+10), an
+// optional note input, the line total, and a remove (✕) button.
+// ───────────────────────────────────────────────────────────────────────────
 function CartItemRow({
   item,
   onUpdateQty,
@@ -1917,6 +2055,10 @@ function CartItemRow({
 }
 
 
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 9d: EmptyCartState — friendly illustration shown in the cart
+// panel when there are no items.
+// ───────────────────────────────────────────────────────────────────────────
 function EmptyCartState() {
   return (
     <div className="p-8 text-center">
@@ -1960,6 +2102,10 @@ function EmptyCartState() {
   );
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 9e: EmptyProductsState — illustration shown in the product grid
+// when a search returns no matches.
+// ───────────────────────────────────────────────────────────────────────────
 function EmptyProductsState({ searchQuery }: { searchQuery: string }) {
   return (
     <div className="text-center py-16">
@@ -1981,7 +2127,45 @@ function EmptyProductsState({ searchQuery }: { searchQuery: string }) {
 
 // POS TAB (kept inline - core feature)
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTION 10: POSTab — THE MAIN POINT-OF-SALE SCREEN
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Layout (desktop):
+//   ┌───────────────────────────────┬───────────────────┐
+//   │  Product grid                 │  Cart sidebar     │
+//   │  (search + categories + sort) │  (items, totals,  │
+//   │                               │   checkout)       │
+//   └───────────────────────────────┴───────────────────┘
+//
+// Layout (mobile):
+//   Product grid fills the screen; a floating cart button opens a
+//   right-side Sheet containing the same cart UI.
+//
+// The checkout button lives in a FIXED FOOTER at the bottom of the cart
+// (both desktop sidebar and mobile sheet) so it is ALWAYS visible —
+// search this file for "CartSidebar.fixedFooter" (desktop) or
+// "CartSheet.fixedFooter" (mobile) to jump straight to it.
+//
+// ═══════════════════════════════════════════════════════════════════════════
 function POSTab() {
+  // ─────────────────────────────────────────────────────────────────────────
+  // POSTab — LOCAL UI STATE
+  // ─────────────────────────────────────────────────────────────────────────
+  // searchQuery        : text typed into the product search box
+  // selectedCategory   : 'all' or a categoryId from the CategoryChips
+  // checkoutOpen       : controls the Checkout <Dialog> (desktop + mobile)
+  // mpesaDialogOpen    : controls the M-Pesa STK-push sub-dialog
+  // mpesaPhone/Status  : phone + idle|processing|success|failed for STK push
+  // paymentMethod      : CASH | MPESA | SPLIT | DEBT  (radio group in checkout)
+  // cashReceived       : cash handed by customer (used to compute change)
+  // selectedCustomer   : 'walk-in' or a customer.id
+  // lowStockAlertOpen  : controls the LowStockAlertDialog
+  // discountCode       : typed discount code (SAVE10, SAVE20, MBUMAH, …)
+  // cartBadgeShake     : brief shake animation trigger when items are added
+  // addedItemId        : last-added productId (drives the row slide-in anim)
+  // mobileCartOpen     : controls the mobile Cart <Sheet>
+  // ─────────────────────────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -2467,14 +2651,28 @@ function POSTab() {
     setCartNotes(prev => ({ ...prev, [productId]: note }));
   };
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // POSTab — JSX RENDER
+  // ─────────────────────────────────────────────────────────────────────────
+  // Root layout: a flex row on desktop (product grid + cart sidebar) and a
+  // flex column on mobile (product grid only; cart opens as a Sheet).
+  // `relative` is needed so the confetti overlay and the checkout loading
+  // spinner can absolutely-position themselves inside this container.
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col lg:flex-row gap-4 h-full relative">
-      {/* Confetti Overlay */}
+      {/* Confetti Overlay — burst shown for ~2s after a successful sale */}
       <ConfettiOverlay active={confettiActive} />
 
-      {/* Product Grid */}
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          LEFT COLUMN — PRODUCT GRID
+          ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          Contains: dashboard KPIs, search bar, category chips, sort menu,
+          and the scrollable grid (or list) of ProductCards.
+          `flex-1 min-w-0` lets it shrink and clip cleanly on narrow screens.
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <div className="flex-1 min-w-0 space-y-4">
-        {/* Dashboard Stats */}
+        {/* Dashboard Stats — KPI cards row */}
         <DashboardStats storeId={currentStoreId} onLowStockClick={() => setLowStockAlertOpen(true)} />
 
         {/* Search, View Toggle, and Category Chips */}
@@ -2646,8 +2844,32 @@ function POSTab() {
         )}
       </div>
 
-      {/* Cart Sidebar - Desktop only */}
-      <div className="hidden lg:block lg:w-96 shrink-0">
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          RIGHT COLUMN — DESKTOP CART SIDEBAR  (search: CartSidebar.root)
+          ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          Hidden on mobile (lg:block).  Fixed width 384px (lg:w-96).  The
+          inner <Card> is `sticky top-20` so it stays in view while the
+          product grid scrolls, and uses a flex column with three regions:
+
+            ┌─────────────────────────────────────────────┐
+            │  CardHeader  — Cart title, Hold/Clear btns  │  ← (1) header
+            ├─────────────────────────────────────────────┤
+            │  ScrollArea — cart item rows                │  ← (2) items
+            ├─────────────────────────────────────────────┤
+            │  Extras div (max-h-38%, scroll)             │  ← (3a) extras
+            │   • discount code                            │
+            │   • customer selector                        │
+            │   • gift card / voucher benefits             │
+            ├─────────────────────────────────────────────┤
+            │  FIXED FOOTER (shrink-0, no scroll)          │  ← (3b) footer
+            │   • Subtotal / VAT / Discount / Total        │
+            │   • ★ CHECKOUT BUTTON (opens the Dialog) ★   │
+            └─────────────────────────────────────────────┘
+
+          The footer NEVER scrolls out of view — that is the fix that keeps
+          the Checkout button reachable even with 20+ items in the cart.
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <div className="hidden lg:block lg:w-96 shrink-0"> {/* CartSidebar.root */}
         <Card className="relative sticky top-20 flex flex-col max-h-[calc(100vh-7rem)] bg-gradient-to-b from-card/95 to-card/90 backdrop-blur-sm shadow-lg border border-border/50">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -2683,7 +2905,11 @@ function POSTab() {
             </div>
           </CardHeader>
           <Separator />
-          <ScrollArea className="flex-1 min-h-0 custom-scrollbar">
+          {/* CartSidebar.itemsScrollArea — flex-1 so it grows to fill the
+              space between the header and the extras; min-h-0 so it can
+              actually shrink and scroll.  Renders EmptyCartState or the
+              list of CartItemRow components. */}
+          <ScrollArea className="flex-1 min-h-0 custom-scrollbar"> {/* CartSidebar.itemsScrollArea */}
             {cart.items.length === 0 ? (
               <EmptyCartState />
             ) : (
@@ -2705,8 +2931,12 @@ function POSTab() {
           {cart.items.length > 0 && (
             <>
               <Separator />
-              {/* Scrollable extras: discount / customer / benefits — bounded so totals + checkout stay visible */}
-              <div className="shrink-0 max-h-[38%] overflow-y-auto px-4 pt-3 pb-1 space-y-3 custom-scrollbar">
+              {/* ━━━ CartSidebar.extrasScroll ━━━
+                  Bounded to max-h-[38%] and scrolls internally ONLY if the
+                  discount/customer/benefits content overflows.  This keeps the
+                  fixed footer (and the Checkout button) below it always
+                  visible. */}
+              <div className="shrink-0 max-h-[38%] overflow-y-auto px-4 pt-3 pb-1 space-y-3 custom-scrollbar"> {/* CartSidebar.extrasScroll */}
                 {/* Discount Code */}
                 <div className="flex gap-1.5">
                   <Input
@@ -2829,9 +3059,27 @@ function POSTab() {
                 )}
               </div>
 
-              {/* Fixed footer: totals + checkout button — ALWAYS visible, never scrolled out of view */}
+              {/* ═══════════════════════════════════════════════════════════════════
+                  ★ CartSidebar.fixedFooter ★  ←  THIS DIV HOLDS THE CHECKOUT (DESKTOP)
+                  ═══════════════════════════════════════════════════════════════════
+                  `shrink-0` + no overflow → this region is NEVER scrolled out
+                  of view, no matter how many items are in the cart above it.
+
+                  Contents (top → bottom):
+                    1. Totals block (Subtotal, VAT 16%, Discount, Total)
+                    2. The Checkout <Dialog> — whose <DialogTrigger asChild>
+                       wraps the big orange ★ CHECKOUT BUTTON ★
+                       (F9 keyboard shortcut also opens it via a global
+                       window event listener set up in useEffect above)
+
+                  If you are looking for "where is the checkout button in
+                  the code?" — it is the <Button className="w-full
+                  bg-gradient-to-r from-accent-orange ..."> immediately
+                  inside <DialogTrigger asChild> below this comment.
+              ══════════════════════════════════════════════════════════════════ */}
               <Separator />
-              <div className="shrink-0 px-4 pt-2 pb-3 space-y-2.5">
+              <div className="shrink-0 px-4 pt-2 pb-3 space-y-2.5"> {/* CartSidebar.fixedFooter */}
+                {/* Totals block — Subtotal / VAT / Discount / Total */}
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Subtotal</span>
@@ -2857,8 +3105,16 @@ function POSTab() {
                   </div>
                 </div>
 
-                <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
+                {/* CheckoutDialog.desktop — the modal that opens when the
+                    Checkout button (or F9) is pressed.  Contains the order
+                    items table, payment-method radio group, gift-card code
+                    entry, cash-received input, and the Complete Sale button. */}
+                <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}> {/* CheckoutDialog.desktop */}
                   <DialogTrigger asChild>
+                    {/* ★★★ THE DESKTOP CHECKOUT BUTTON ★★★
+                        Big orange gradient button, full width of the cart
+                        sidebar.  Shows the keyboard hint (F9) and the
+                        current final total.  Clicking sets checkoutOpen=true. */}
                     <Button className="w-full bg-gradient-to-r from-accent-orange to-amber-500 hover:from-accent-orange/90 hover:to-amber-600 text-white font-semibold h-12 shadow-lg shadow-accent-orange/20" size="lg">
                       <CreditCard className="mr-2 h-4 w-4" />
                       <span className="flex flex-col items-start leading-tight">
@@ -3600,7 +3856,10 @@ function POSTab() {
         storeId={currentStoreId}
       />
 
-      {/* Mobile Cart FAB (Floating Action Button) */}
+      {/* Mobile Cart FAB (Floating Action Button) — visible only on screens
+          smaller than `lg`.  Fixed to the bottom-right.  Tapping it opens
+          the mobile Cart <Sheet> below.  The red badge shows the item count.
+          Only rendered when the cart has at least one item. */}
       {cart.items.length > 0 && (
         <button
           type="button"
@@ -3615,8 +3874,25 @@ function POSTab() {
         </button>
       )}
 
-      {/* Mobile Cart Sheet */}
-      <Sheet open={mobileCartOpen} onOpenChange={setMobileCartOpen}>
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          MOBILE CART SHEET  (search: CartSheet.root)
+          ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          Slides in from the right on mobile only.  Same three-region layout
+          as the desktop sidebar:
+
+            ┌─────────────────────────────────────────────┐
+            │  SheetHeader — Cart title, Hold/Clear btns   │
+            ├─────────────────────────────────────────────┤
+            │  ScrollArea — cart item rows                 │
+            ├─────────────────────────────────────────────┤
+            │  Extras div (max-h-38%, scroll)              │
+            ├─────────────────────────────────────────────┤
+            │  FIXED FOOTER (shrink-0, no scroll)          │  ← CartSheet.fixedFooter
+            │   • Subtotal / VAT / Discount / Total        │
+            │   • ★ CHECKOUT BUTTON ★                      │
+            └─────────────────────────────────────────────┘
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <Sheet open={mobileCartOpen} onOpenChange={setMobileCartOpen}> {/* CartSheet.root */}
         <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
           <SheetHeader className="p-4 pb-2 border-b shrink-0">
             <div className="flex items-center justify-between">
@@ -3668,7 +3944,10 @@ function POSTab() {
           </ScrollArea>
           {cart.items.length > 0 && (
             <>
-              <div className="max-h-[38%] overflow-y-auto px-4 pt-3 pb-1 space-y-3 border-t shrink-0 custom-scrollbar">
+              {/* CartSheet.extrasScroll — bounded scroll area for the
+                  discount code, customer selector and gift-card benefits.
+                  Mirrors the desktop CartSidebar.extrasScroll. */}
+              <div className="max-h-[38%] overflow-y-auto px-4 pt-3 pb-1 space-y-3 border-t shrink-0 custom-scrollbar"> {/* CartSheet.extrasScroll */}
                 <div className="flex gap-1.5">
                   <Input
                     placeholder="Discount code"
@@ -3788,9 +4067,20 @@ function POSTab() {
                 )}
               </div>
 
-              {/* Fixed footer: totals + checkout button — ALWAYS visible, never scrolled out of view */}
+              {/* ═══════════════════════════════════════════════════════════════════
+                  ★ CartSheet.fixedFooter ★  ←  THIS DIV HOLDS THE CHECKOUT (MOBILE)
+                  ═══════════════════════════════════════════════════════════════════
+                  Mobile mirror of CartSidebar.fixedFooter.  `shrink-0` + no
+                  overflow → the totals + Checkout button below are always
+                  visible, no matter how many items are in the cart above.
+
+                  The Checkout <Dialog> immediately below is the SAME modal
+                  as the desktop one (CheckoutDialog.mobile) — opening it
+                  from either breakpoint renders the same dialog content.
+              ══════════════════════════════════════════════════════════════════ */}
               <Separator />
-              <div className="shrink-0 px-4 pt-2 pb-3 space-y-2.5">
+              <div className="shrink-0 px-4 pt-2 pb-3 space-y-2.5"> {/* CartSheet.fixedFooter */}
+                {/* Totals block — Subtotal / VAT / Discount / Total */}
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Subtotal</span>
@@ -3815,8 +4105,14 @@ function POSTab() {
                     <span className="gradient-text">{formatKES(finalTotal)}</span>
                   </div>
                 </div>
-                <Dialog open={checkoutOpen} onOpenChange={(v) => { setCheckoutOpen(v); if (!v) return; }}>
+
+                {/* CheckoutDialog.mobile — same modal as CheckoutDialog.desktop;
+                    both are controlled by the same `checkoutOpen` state. */}
+                <Dialog open={checkoutOpen} onOpenChange={(v) => { setCheckoutOpen(v); if (!v) return; }}> {/* CheckoutDialog.mobile */}
                   <DialogTrigger asChild>
+                    {/* ★★★ THE MOBILE CHECKOUT BUTTON ★★★
+                        Full-width orange gradient button at the bottom of the
+                        mobile cart sheet.  Tapping it opens the checkout modal. */}
                     <Button className="w-full bg-gradient-to-r from-accent-orange to-amber-500 hover:from-accent-orange/90 hover:to-amber-600 text-white font-semibold h-12 shadow-lg shadow-accent-orange/20" size="lg">
                       <CreditCard className="mr-2 h-4 w-4" />
                       <span className="flex flex-col items-start leading-tight">
@@ -4050,6 +4346,11 @@ function POSTab() {
 }
 
 
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 11: MainApp — auth gate.  Reads the auth store; if no session is
+// present it renders <LoginScreen/>, otherwise it renders the full app
+// shell (sidebar + topbar + active tab).  Also owns the active-tab state.
+// ───────────────────────────────────────────────────────────────────────────
 function MainApp() {
   const { activeTab, setActiveTab, currentStoreId } = useAppStore();
   const user = useAuthStore((s) => s.user);
@@ -4170,6 +4471,11 @@ function MainApp() {
 
 // Hydration-safe client-only mount detection
 const emptySubscribe = () => () => {};
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 12: useHasMounted — SSR-safe "has this component mounted on the
+// client yet?" flag.  Used to gate theme-dependent UI to avoid hydration
+// mismatches.
+// ───────────────────────────────────────────────────────────────────────────
 function useHasMounted() {
   return useSyncExternalStore(
     emptySubscribe,
@@ -4178,6 +4484,11 @@ function useHasMounted() {
   );
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// SECTION 13: HomePage (default export) — the Next.js App Router page entry
+// point.  Wraps <MainApp/> in an <ErrorBoundary/> so any render error in
+// the POS falls back to a friendly error screen instead of a white page.
+// ───────────────────────────────────────────────────────────────────────────
 export default function HomePage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const hasMounted = useHasMounted();
