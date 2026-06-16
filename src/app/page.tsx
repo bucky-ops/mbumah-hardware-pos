@@ -2705,7 +2705,8 @@ function POSTab() {
           {cart.items.length > 0 && (
             <>
               <Separator />
-              <div className="shrink-0 p-4 space-y-3 overflow-y-auto max-h-[50%] custom-scrollbar">
+              {/* Scrollable extras: discount / customer / benefits — bounded so totals + checkout stay visible */}
+              <div className="shrink-0 max-h-[38%] overflow-y-auto px-4 pt-3 pb-1 space-y-3 custom-scrollbar">
                 {/* Discount Code */}
                 <div className="flex gap-1.5">
                   <Input
@@ -2826,7 +2827,11 @@ function POSTab() {
                     )}
                   </div>
                 )}
+              </div>
 
+              {/* Fixed footer: totals + checkout button — ALWAYS visible, never scrolled out of view */}
+              <Separator />
+              <div className="shrink-0 px-4 pt-2 pb-3 space-y-2.5">
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Subtotal</span>
@@ -3663,7 +3668,7 @@ function POSTab() {
           </ScrollArea>
           {cart.items.length > 0 && (
             <>
-              <div className="p-4 space-y-3 border-t shrink-0 overflow-y-auto max-h-[50%] custom-scrollbar">
+              <div className="max-h-[38%] overflow-y-auto px-4 pt-3 pb-1 space-y-3 border-t shrink-0 custom-scrollbar">
                 <div className="flex gap-1.5">
                   <Input
                     placeholder="Discount code"
@@ -3781,6 +3786,11 @@ function POSTab() {
                     )}
                   </div>
                 )}
+              </div>
+
+              {/* Fixed footer: totals + checkout button — ALWAYS visible, never scrolled out of view */}
+              <Separator />
+              <div className="shrink-0 px-4 pt-2 pb-3 space-y-2.5">
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Subtotal</span>
