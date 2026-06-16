@@ -2,12 +2,12 @@
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth, AuthSession } from '@/lib/auth';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateSKU } from '@/lib/helpers';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
-async function getProductsHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function getProductsHandler(request: NextRequest, session: AuthSession): Promise<Response> {
   const { searchParams } = new URL(request.url);
 
   const storeId = searchParams.get('storeId');
@@ -25,7 +25,7 @@ async function getProductsHandler(...args: unknown[]): Promise<Response> {
   const lowStock = searchParams.get('lowStock') === 'true';
   const isActive = searchParams.get('isActive');
   const page = parseInt(searchParams.get('page') || '1');
-  const limit = parseInt(searchParams.get('limit') || '50');
+  const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '50'), 1), 100);
   const sortBy = searchParams.get('sortBy') || 'name';
   const sortOrder = searchParams.get('sortOrder') || 'asc';
 
@@ -99,8 +99,7 @@ async function getProductsHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-async function createProductHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function createProductHandler(request: NextRequest, session: AuthSession): Promise<Response> {
   const body = await request.json();
 
   const {
@@ -184,5 +183,5 @@ async function createProductHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: product }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getProductsHandler, 'PRODUCTS_LIST');
-export const POST = withErrorBoundary(createProductHandler, 'PRODUCTS_CREATE');
+export const GET = withErrorBoundary(requireAuth(getProductsHandler), 'PRODUCTS_LIST');
+export const POST = withErrorBoundary(requireAuth(createProductHandler), 'PRODUCTS_CREATE');

@@ -2,6 +2,7 @@
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth, AuthSession } from '@/lib/auth';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
@@ -9,9 +10,8 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-async function getProductHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
-  const context = args[1] as RouteContext;
+async function getProductHandler(request: NextRequest, session: AuthSession, ...args: unknown[]): Promise<Response> {
+  const context = args[0] as RouteContext;
   const { id } = await context.params;
 
   const product = await db.product.findUnique({
@@ -53,9 +53,8 @@ async function getProductHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: product });
 }
 
-async function updateProductHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
-  const context = args[1] as RouteContext;
+async function updateProductHandler(request: NextRequest, session: AuthSession, ...args: unknown[]): Promise<Response> {
+  const context = args[0] as RouteContext;
   const { id } = await context.params;
   const body = await request.json();
 
@@ -117,9 +116,8 @@ async function updateProductHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: product });
 }
 
-async function deleteProductHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
-  const context = args[1] as RouteContext;
+async function deleteProductHandler(request: NextRequest, session: AuthSession, ...args: unknown[]): Promise<Response> {
+  const context = args[0] as RouteContext;
   const { id } = await context.params;
 
   const existing = await db.product.findUnique({
@@ -176,6 +174,6 @@ async function deleteProductHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const GET = withErrorBoundary(getProductHandler, 'PRODUCT_DETAIL');
-export const PUT = withErrorBoundary(updateProductHandler, 'PRODUCT_UPDATE');
-export const DELETE = withErrorBoundary(deleteProductHandler, 'PRODUCT_DELETE');
+export const GET = withErrorBoundary(requireAuth(getProductHandler), 'PRODUCT_DETAIL');
+export const PUT = withErrorBoundary(requireAuth(updateProductHandler), 'PRODUCT_UPDATE');
+export const DELETE = withErrorBoundary(requireAuth(deleteProductHandler), 'PRODUCT_DELETE');

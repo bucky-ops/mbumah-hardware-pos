@@ -2,6 +2,7 @@
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth, AuthSession } from '@/lib/auth';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
@@ -9,9 +10,8 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-async function getCustomerHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
-  const context = args[1] as RouteContext;
+async function getCustomerHandler(request: NextRequest, session: AuthSession, ...args: unknown[]): Promise<Response> {
+  const context = args[0] as RouteContext;
   const { id } = await context.params;
 
   const customer = await db.customer.findUnique({
@@ -71,9 +71,8 @@ async function getCustomerHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-async function updateCustomerHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
-  const context = args[1] as RouteContext;
+async function updateCustomerHandler(request: NextRequest, session: AuthSession, ...args: unknown[]): Promise<Response> {
+  const context = args[0] as RouteContext;
   const { id } = await context.params;
   const body = await request.json();
 
@@ -98,9 +97,15 @@ async function updateCustomerHandler(...args: unknown[]): Promise<Response> {
   }
 
   const updateData: Record<string, unknown> = {};
+  // SECURITY (H-02): `loyaltyPoints` and `debtLimit` are intentionally NOT in this
+  // allowlist. Both have financial impact (loyalty points can be redeemed for
+  // discounts; debtLimit governs how much credit a customer can take on) and must
+  // not be mutable from the generic customer-update endpoint. They should only be
+  // modifiable through dedicated admin endpoints with proper role checks
+  // (e.g. SUPER_ADMIN / ACCOUNTANT) and explicit audit logging.
   const allowedFields = [
     'name', 'phone', 'email', 'address', 'idNumber',
-    'debtLimit', 'preferredChannel', 'isActive', 'loyaltyPoints',
+    'preferredChannel', 'isActive',
   ];
 
   for (const field of allowedFields) {
@@ -133,5 +138,5 @@ async function updateCustomerHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: customer });
 }
 
-export const GET = withErrorBoundary(getCustomerHandler, 'CUSTOMER_DETAIL');
-export const PUT = withErrorBoundary(updateCustomerHandler, 'CUSTOMER_UPDATE');
+export const GET = withErrorBoundary(requireAuth(getCustomerHandler), 'CUSTOMER_DETAIL');
+export const PUT = withErrorBoundary(requireAuth(updateCustomerHandler), 'CUSTOMER_UPDATE');

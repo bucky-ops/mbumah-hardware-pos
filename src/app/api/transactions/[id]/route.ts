@@ -2,15 +2,15 @@
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth, AuthSession } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-async function getTransactionHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
-  const context = args[1] as RouteContext;
+async function getTransactionHandler(request: NextRequest, session: AuthSession, ...args: unknown[]): Promise<Response> {
+  const context = args[0] as RouteContext;
   const { id } = await context.params;
 
   const transaction = await db.salesTransaction.findUnique({
@@ -69,4 +69,4 @@ async function getTransactionHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const GET = withErrorBoundary(getTransactionHandler, 'TRANSACTION_DETAIL');
+export const GET = withErrorBoundary(requireAuth(getTransactionHandler), 'TRANSACTION_DETAIL');

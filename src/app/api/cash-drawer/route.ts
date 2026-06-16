@@ -2,6 +2,7 @@
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth, AuthSession } from '@/lib/auth';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateJournalEntryNumber } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
@@ -9,8 +10,7 @@ import { LogSeverity, LogComponent } from '@/lib/types';
 
 const VALID_DRAWER_ACTIONS = ['OPEN', 'CLOSE', 'CASH_IN', 'CASH_OUT'];
 
-async function getCashDrawerHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function getCashDrawerHandler(request: NextRequest, session: AuthSession): Promise<Response> {
   const { searchParams } = new URL(request.url);
 
   const storeId = searchParams.get('storeId');
@@ -26,7 +26,7 @@ async function getCashDrawerHandler(...args: unknown[]): Promise<Response> {
   const dateTo = searchParams.get('dateTo') || '';
   const action = searchParams.get('action') || '';
   const page = parseInt(searchParams.get('page') || '1');
-  const limit = parseInt(searchParams.get('limit') || '50');
+  const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '50'), 1), 100);
 
   const where: Record<string, unknown> = { storeId };
 
@@ -97,15 +97,15 @@ async function getCashDrawerHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function createCashDrawerHandler(request: NextRequest, session: AuthSession): Promise<Response> {
   const body = await request.json();
 
-  const { storeId, userId, eventType, amount, notes } = body;
+  const { storeId, eventType, amount, notes } = body;
+  const userId = session.userId;
 
-    if (!storeId || !userId || !eventType || amount === undefined || amount === null) {
+    if (!storeId || !eventType || amount === undefined || amount === null) {
     return Response.json(
-      { success: false, error: 'storeId, userId, eventType, and amount are required.' },
+      { success: false, error: 'storeId, eventType, and amount are required.' },
       { status: 400 }
     );
   }
@@ -125,13 +125,6 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-    const user = await db.user.findUnique({ where: { id: userId } });
-  if (!user || !user.isActive) {
-    return Response.json(
-      { success: false, error: 'Invalid or inactive user.' },
-      { status: 400 }
-    );
-  }
 
     const lastEntry = await db.cashDrawerLog.findFirst({
     where: { storeId },
@@ -174,7 +167,7 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
 
     if ((eventType === 'CASH_IN' || eventType === 'CASH_OUT') && parsedAmount > 0) {
     try {
-      const orgId = user.organizationId;
+      const orgId = session.organizationId;
       const accounts = await getAccountIds(orgId, [
         ACCOUNT_CODES.CASH_ON_HAND,
         ACCOUNT_CODES.OWNER_EQUITY,
@@ -255,9 +248,9 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
     action: 'CASH_DRAWER_EVENT',
     component: LogComponent.FINANCIAL,
     severity: LogSeverity.INFO,
-    message: `Cash drawer ${eventType}: KES ${parsedAmount.toLocaleString()} by ${user.name}. New balance: KES ${newBalance.toLocaleString()}`,
+    message: `Cash drawer ${eventType}: KES ${parsedAmount.toLocaleString()} by ${session.email}. New balance: KES ${newBalance.toLocaleString()}`,
     storeId,
-    userId,
+    userId: session.userId,
     metadata: {
       logId: logEntry.id,
       eventType,
@@ -270,5 +263,5 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: logEntry }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getCashDrawerHandler, 'CASH_DRAWER_LIST');
-export const POST = withErrorBoundary(createCashDrawerHandler, 'CASH_DRAWER_CREATE');
+export const GET = withErrorBoundary(requireAuth(getCashDrawerHandler), 'CASH_DRAWER_LIST');
+export const POST = withErrorBoundary(requireAuth(createCashDrawerHandler), 'CASH_DRAWER_CREATE');

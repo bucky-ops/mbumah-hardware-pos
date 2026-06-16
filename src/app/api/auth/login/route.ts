@@ -10,22 +10,22 @@ import { loginSchema, validateInput } from '@/lib/validations';
 import { checkBruteForce, recordFailedAttempt, recordSuccessfulLogin } from '@/lib/brute-force';
 import { sanitizeInput, getClientIp } from '@/lib/security';
 
-// Verify password with support for both bcrypt hashes and legacy "hashed_" format
-async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
-  // First try bcrypt compare (for new passwords)
+// Verify password — only bcrypt is supported; legacy plaintext is rejected
+async function verifyPassword(password: string, storedHash: string): Promise<{ valid: boolean; requiresReset: boolean }> {
+  // If the stored hash is a proper bcrypt hash, verify it
   try {
     if (storedHash.startsWith('$2')) {
-      return await bcrypt.compare(password, storedHash);
+      const valid = await bcrypt.compare(password, storedHash);
+      return { valid, requiresReset: false };
     }
   } catch { /* ignore bcrypt errors */ }
 
-  // Fallback: support legacy "hashed_" format for existing users during migration
+  // Legacy "hashed_" format: do NOT compare in plaintext — force password reset
   if (storedHash.startsWith('hashed_')) {
-    const plainPart = storedHash.replace('hashed_', '').replace(/_\d+$/, '');
-    if (password === plainPart) return true;
+    return { valid: false, requiresReset: true };
   }
 
-  return false;
+  return { valid: false, requiresReset: false };
 }
 
 // Generate a cryptographically secure token using only crypto.getRandomValues
@@ -56,12 +56,9 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
   const bruteForceResult = checkBruteForce(email, ip);
   if (!bruteForceResult.allowed) {
     return Response.json(
-      { success: false, error: bruteForceResult.message || 'Account temporarily locked. Please try again later.' },
+      { success: false, error: 'Invalid email or password.' },
       {
-        status: 423,
-        headers: {
-          'Retry-After': String(bruteForceResult.retryAfter || 300),
-        },
+        status: 401,
       }
     );
   }
@@ -108,12 +105,9 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
     } catch { /* ignore logging errors */ }
 
     return Response.json(
-      { success: false, error: `Account is locked. Try again in ${minutesLeft} minute(s).` },
+      { success: false, error: 'Invalid email or password.' },
       {
-        status: 423,
-        headers: {
-          'Retry-After': String(retryAfter),
-        },
+        status: 401,
       }
     );
   }
@@ -139,7 +133,17 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
   }
 
   // 8. If password wrong: recordFailedAttempt → 401
-  if (!await verifyPassword(password, user.passwordHash)) {
+  const passwordResult = await verifyPassword(password, user.passwordHash);
+  if (passwordResult.requiresReset) {
+    // Flag the user for forced password reset on next login
+    try {
+      await db.user.update({
+        where: { id: user.id },
+        data: { requiresPasswordReset: true },
+      });
+    } catch { /* ignore if field doesn't exist yet */ }
+  }
+  if (!passwordResult.valid) {
     const failedResult = await recordFailedAttempt(email, ip);
 
     try {
@@ -211,7 +215,6 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
     organization: {
       id: user.organization.id,
       name: user.organization.name,
-      taxPin: user.organization.taxPin,
     },
     store: user.store ? {
       id: user.store.id,

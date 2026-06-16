@@ -2,12 +2,12 @@
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth, AuthSession } from '@/lib/auth';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { createCustomerSchema, validateInput } from '@/lib/validations';
 
-async function getCustomersHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function getCustomersHandler(request: NextRequest, session: AuthSession): Promise<Response> {
   const { searchParams } = new URL(request.url);
 
   const storeId = searchParams.get('storeId');
@@ -22,7 +22,7 @@ async function getCustomersHandler(...args: unknown[]): Promise<Response> {
   const isActive = searchParams.get('isActive');
   const hasDebt = searchParams.get('hasDebt') === 'true';
   const page = parseInt(searchParams.get('page') || '1');
-  const limit = parseInt(searchParams.get('limit') || '50');
+  const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '50'), 1), 100);
   const sortBy = searchParams.get('sortBy') || 'name';
   const sortOrder = searchParams.get('sortOrder') || 'asc';
 
@@ -88,8 +88,7 @@ async function getCustomersHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-async function createCustomerHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function createCustomerHandler(request: NextRequest, session: AuthSession): Promise<Response> {
   const body = await request.json();
 
   const validation = validateInput(createCustomerSchema, body);
@@ -104,10 +103,13 @@ async function createCustomerHandler(...args: unknown[]): Promise<Response> {
     address,
     idNumber,
     debtLimit,
+    // SECURITY (H-09): Read preferredChannel and isActive from the Zod-validated
+    // payload instead of the raw request body. They are now part of
+    // createCustomerSchema, so any malformed value is rejected at the schema layer
+    // before reaching this handler.
+    preferredChannel,
+    isActive,
   } = validation.data;
-
-  const preferredChannel = (body as Record<string, unknown>).preferredChannel || 'SMS';
-  const isActive = (body as Record<string, unknown>).isActive ?? true;
 
     if (phone) {
     const existing = await db.customer.findFirst({
@@ -130,7 +132,7 @@ async function createCustomerHandler(...args: unknown[]): Promise<Response> {
       address: address || null,
       idNumber: idNumber || null,
       debtLimit: debtLimit ?? 50000,
-      preferredChannel: preferredChannel || 'SMS',
+      preferredChannel: preferredChannel ?? 'SMS',
       isActive: isActive ?? true,
     },
   });
@@ -147,5 +149,5 @@ async function createCustomerHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: customer }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getCustomersHandler, 'CUSTOMERS_LIST');
-export const POST = withErrorBoundary(createCustomerHandler, 'CUSTOMERS_CREATE');
+export const GET = withErrorBoundary(requireAuth(getCustomersHandler), 'CUSTOMERS_LIST');
+export const POST = withErrorBoundary(requireAuth(createCustomerHandler), 'CUSTOMERS_CREATE');

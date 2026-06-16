@@ -2,14 +2,14 @@
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth, AuthSession } from '@/lib/auth';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateReceiptNumber, generateJournalEntryNumber, calculateLineTotal } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, PaymentMethod, PaymentStatus } from '@/lib/types';
 import { checkoutSchema, validateInput } from '@/lib/validations';
 
-async function getTransactionsHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function getTransactionsHandler(request: NextRequest, session: AuthSession): Promise<Response> {
   const { searchParams } = new URL(request.url);
 
   const storeId = searchParams.get('storeId');
@@ -29,7 +29,7 @@ async function getTransactionsHandler(...args: unknown[]): Promise<Response> {
   const dateFrom = searchParams.get('dateFrom') || '';
   const dateTo = searchParams.get('dateTo') || '';
   const page = parseInt(searchParams.get('page') || '1');
-  const limit = parseInt(searchParams.get('limit') || '20');
+  const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '20'), 1), 100);
   const sortBy = searchParams.get('sortBy') || 'createdAt';
   const sortOrder = searchParams.get('sortOrder') || 'desc';
 
@@ -110,8 +110,7 @@ async function getTransactionsHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-async function createTransactionHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function createTransactionHandler(request: NextRequest, session: AuthSession): Promise<Response> {
   const body = await request.json();
 
   const validation = validateInput(checkoutSchema, body);
@@ -121,13 +120,14 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
   const {
     storeId,
     customerId,
-    cashierId,
     items,
     paymentMethod,
     paymentDetails,
     discountAmount,
     notes,
   } = validation.data;
+  // SECURITY: Use authenticated session user ID as cashier (do not trust client)
+  const cashierId = session.userId;
 
   if (!Object.values(PaymentMethod).includes(paymentMethod)) {
     return Response.json(
@@ -178,10 +178,11 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
   });
 
   if (products.length !== productIds.length) {
-    const foundIds = products.map((p) => p.id);
-    const missingIds = productIds.filter((id: string) => !foundIds.includes(id));
+    // SECURITY (L-01): Don't echo the missing product IDs back to the client —
+    // revealing which IDs are/aren't valid lets an attacker enumerate the product
+    // namespace and probe for soft-deleted/inactive records. Use a generic message.
     return Response.json(
-      { success: false, error: `Products not found or inactive: ${missingIds.join(', ')}` },
+      { success: false, error: 'One or more products not found.' },
       { status: 400 }
     );
   }
@@ -658,5 +659,5 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: fullTransaction }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getTransactionsHandler, 'TRANSACTIONS_LIST');
-export const POST = withErrorBoundary(createTransactionHandler, 'TRANSACTIONS_CREATE');
+export const GET = withErrorBoundary(requireAuth(getTransactionsHandler), 'TRANSACTIONS_LIST');
+export const POST = withErrorBoundary(requireAuth(createTransactionHandler), 'TRANSACTIONS_CREATE');

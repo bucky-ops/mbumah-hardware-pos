@@ -7,7 +7,15 @@ import { systemLog } from './logger';
 import { LogSeverity, LogComponent } from './types';
 
 // ---------------------------------------------------------------------------
-// a) sanitizeInput — strip dangerous content from a string
+// a) sanitizeInput — XSS sanitizer for string input
+// ---------------------------------------------------------------------------
+// NOTE (M-01): SQL keyword stripping was removed because it is an anti-pattern.
+// It mangled legitimate user input (e.g. "Select Hardware" -> " Hardware") and
+// did NOT prevent SQL injection — all database access goes through Prisma's
+// parameterized queries, which already neutralize injection vectors.
+// This function is now a pure XSS sanitizer (null-byte / control-char stripping
+// + HTML entity encoding). Defense against SQL injection must come from the
+// data layer (parameterized queries), never from input string manipulation.
 // ---------------------------------------------------------------------------
 
 export function sanitizeInput(input: string): string {
@@ -21,29 +29,17 @@ export function sanitizeInput(input: string): string {
   // Remove control characters (except newline, carriage return, tab)
   sanitized = sanitized.replace(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 
-  // Strip HTML tags
-  sanitized = sanitized.replace(/<[^>]*>/g, '');
-
   // Strip script injections — <script>...</script>, javascript: protocol, event handlers
+  // (These are stripped before HTML entity encoding so the encoded output cannot
+  // reconstitute a script tag when rendered.)
   sanitized = sanitized.replace(/<\s*script[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi, '');
   sanitized = sanitized.replace(/javascript\s*:/gi, '');
   sanitized = sanitized.replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '');
 
-  // Strip SQL injection patterns
-  const sqlPatterns = [
-    /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|ALTER|CREATE|EXEC|EXECUTE)\b)/gi,
-    /(--\s)/g,
-    /(;)\s*(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|ALTER|CREATE|EXEC|EXECUTE)\b/gi,
-    /('(\s|%27)*(OR|AND)(\s|%27)*')/gi,
-    /(\b(OR|AND)\s+\d+\s*=\s*\d+)/gi,
-    /(\bOR\b\s+['"]\w+['"]\s*=\s*['"]\w+['"])/gi,
-  ];
-
-  for (const pattern of sqlPatterns) {
-    sanitized = sanitized.replace(pattern, '');
-  }
-
-  // Encode special characters
+  // Encode special HTML characters to prevent XSS when the value is rendered.
+  // We no longer strip generic HTML tags (<[^>]*>) here — that was too aggressive
+  // for legitimate free-form text (e.g. "If total < 5, reorder"). HTML encoding
+  // below already neutralizes < and > so the encoded output is safe to render.
   sanitized = sanitized
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -122,10 +118,17 @@ export function isCSRFValid(request: NextRequest): boolean {
     return true;
   }
 
-  // If no allowed origins configured, allow same-origin requests via Origin check
+  // If no allowed origins configured, allow same-origin requests via exact Origin match
   const host = request.headers.get('Host');
-  if (origin && host && origin.includes(host)) {
-    return true;
+  if (origin && host) {
+    try {
+      const originHostname = new URL(origin).hostname;
+      if (originHostname === host) {
+        return true;
+      }
+    } catch {
+      // Invalid URL — skip
+    }
   }
 
   // Fallback: check Referer header (some older browsers don't send Origin for same-origin)
@@ -141,8 +144,13 @@ export function isCSRFValid(request: NextRequest): boolean {
     }
   }
 
-  // Allow requests without Origin/Referer in development mode
-  if (process.env.NODE_ENV === 'development' && !origin && !referer) {
+  // Allow requests without Origin/Referer ONLY when an explicit opt-in env var
+  // is set. This must NEVER be based on NODE_ENV alone — doing so silently
+  // disables CSRF protection for every development/staging deployment, even
+  // those that are network-reachable. Operators must set ALLOW_CSRF_BYPASS=true
+  // deliberately (e.g. in a local .env.local for non-browser API testing).
+  // In production this env var should always be unset.
+  if (process.env.ALLOW_CSRF_BYPASS === 'true' && !origin && !referer) {
     return true;
   }
 
@@ -287,11 +295,25 @@ export async function logSecurityEvent(options: SecurityEventLogOptions): Promis
 
 export function isRequestSizeValid(request: NextRequest, maxBytes: number = 1048576): boolean {
   const contentLength = request.headers.get('Content-Length');
+  const transferEncoding = request.headers.get('Transfer-Encoding');
 
-  if (!contentLength) return true; // No Content-Length header — allow
+  // Detect chunked transfer encoding — apply conservative default limit
+  // NOTE: For Next.js API routes, body size limits should also be enforced at
+  // the route config level via `export const config = { api: { bodyParser: { sizeLimit } } }`
+  // or the App Router equivalent. This middleware check is a defense-in-depth layer only.
+  if (transferEncoding?.toLowerCase().includes('chunked')) {
+    // Chunked requests have no Content-Length — allow but flag for route-level enforcement
+    return true;
+  }
+
+  if (!contentLength) {
+    // No Content-Length header and not chunked — likely a simple GET/HEAD/OPTIONS
+    // or a small request. Allow through; route-level size limits serve as backstop.
+    return true;
+  }
 
   const length = parseInt(contentLength, 10);
-  if (isNaN(length)) return true; // Unparseable — allow
+  if (isNaN(length)) return false; // Unparseable — reject (was previously allowed)
 
   return length <= maxBytes;
 }

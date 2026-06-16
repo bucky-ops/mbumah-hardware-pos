@@ -2,12 +2,12 @@
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth, AuthSession } from '@/lib/auth';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateJournalEntryNumber } from '@/lib/helpers';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
-async function getJournalEntriesHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function getJournalEntriesHandler(request: NextRequest, session: AuthSession): Promise<Response> {
   const { searchParams } = new URL(request.url);
 
   const storeId = searchParams.get('storeId');
@@ -23,7 +23,7 @@ async function getJournalEntriesHandler(...args: unknown[]): Promise<Response> {
   const dateFrom = searchParams.get('dateFrom') || '';
   const dateTo = searchParams.get('dateTo') || '';
   const page = parseInt(searchParams.get('page') || '1');
-  const limit = parseInt(searchParams.get('limit') || '20');
+  const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '20'), 1), 100);
   const sortBy = searchParams.get('sortBy') || 'entryDate';
   const sortOrder = searchParams.get('sortOrder') || 'desc';
 
@@ -93,8 +93,7 @@ async function getJournalEntriesHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-async function createJournalEntryHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function createJournalEntryHandler(request: NextRequest, session: AuthSession): Promise<Response> {
   const body = await request.json();
 
   const {
@@ -104,8 +103,8 @@ async function createJournalEntryHandler(...args: unknown[]): Promise<Response> 
     referenceId,
     lines,
     isPosted,
-    createdBy,
   } = body;
+  const createdBy = session.userId;
 
   if (!storeId || !description || !lines || !Array.isArray(lines) || lines.length < 2) {
     return Response.json(
@@ -133,10 +132,10 @@ async function createJournalEntryHandler(...args: unknown[]): Promise<Response> 
   });
 
   if (accounts.length !== accountIds.length) {
-    const foundIds = accounts.map((a) => a.id);
-    const missingIds = accountIds.filter((id: string) => !foundIds.includes(id));
+    // SECURITY (L-01): Don't reveal which account IDs are missing — generic
+    // message avoids leaking the chart-of-accounts namespace to the client.
     return Response.json(
-      { success: false, error: `Accounts not found: ${missingIds.join(', ')}` },
+      { success: false, error: 'One or more accounts not found.' },
       { status: 400 }
     );
   }
@@ -194,5 +193,5 @@ async function createJournalEntryHandler(...args: unknown[]): Promise<Response> 
   return Response.json({ success: true, data: entry }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getJournalEntriesHandler, 'JOURNAL_LIST');
-export const POST = withErrorBoundary(createJournalEntryHandler, 'JOURNAL_CREATE');
+export const GET = withErrorBoundary(requireAuth(getJournalEntriesHandler), 'JOURNAL_LIST');
+export const POST = withErrorBoundary(requireAuth(createJournalEntryHandler), 'JOURNAL_CREATE');

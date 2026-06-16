@@ -11,7 +11,13 @@ export const createUserSchema = z.object({
   name: z.string().min(2).max(100),
   email: z.string().email(),
   role: z.enum(['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'CASHIER', 'ACCOUNTANT']),
-  password: z.string().min(6, 'Password must be at least 6 characters').max(128),
+  password: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number')
+    .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character')
+    .max(128),
   phone: z.string().optional(),
   storeId: z.string().optional(),
   organizationId: z.string().optional(),
@@ -67,6 +73,12 @@ export const createCustomerSchema = z.object({
   address: z.string().max(500).optional(),
   idNumber: z.string().max(50).optional(),
   debtLimit: z.number().nonnegative().optional(),
+  // SECURITY (H-09): preferredChannel and isActive must go through Zod validation
+  // rather than being read from the raw body, so that arbitrary / malicious values
+  // cannot bypass the schema (e.g. a non-boolean isActive string, or a channel
+  // outside the allowed set).
+  preferredChannel: z.enum(['SMS', 'EMAIL', 'WHATSAPP', 'PRINT']).optional(),
+  isActive: z.boolean().optional(),
 });
 
 // Product schemas
