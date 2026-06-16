@@ -131,13 +131,13 @@ jobs:
         if: steps.cache-node-modules.outputs.cache-hit != 'true'
         run: bun install --frozen-lockfile
 
+      - name: Switch Prisma provider to PostgreSQL for CI
+        run: sed -i 's/provider = "sqlite"/provider = "postgresql"/' prisma/schema.prisma
+
       - name: Generate Prisma Client
         run: bun run db:generate
 
       # ── Database Setup ───────────────────────────────────────────────────
-      - name: Switch Prisma provider to PostgreSQL for CI
-        run: sed -i 's/provider = "sqlite"/provider = "postgresql"/' prisma/schema.prisma
-
       - name: Push Prisma schema to PostgreSQL
         run: bunx prisma db push --skip-generate
         env:
@@ -212,11 +212,11 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Generate Prisma Client
-        run: bun run db:generate
-
       - name: Switch Prisma provider to PostgreSQL for CI
         run: sed -i 's/provider = "sqlite"/provider = "postgresql"/' prisma/schema.prisma
+
+      - name: Generate Prisma Client
+        run: bun run db:generate
 
       - name: Push Prisma schema
         run: bunx prisma db push --skip-generate
