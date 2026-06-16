@@ -120,13 +120,12 @@ export async function recordFailedAttempt(email: string, ip: string): Promise<Br
       });
     } catch { /* ignore logging errors */ }
     
-    // Also lock the user in DB if they exist
+    // Set lockedUntil on the user record for temporary lockout (do NOT deactivate the account)
     try {
       await db.user.updateMany({
         where: { email: email.toLowerCase() },
-        data: { 
-          isActive: false,
-          // We'll set a custom field to track lockout vs manual deactivation
+        data: {
+          lockedUntil: new Date(lockedUntil),
         },
       });
     } catch { /* user may not exist */ }

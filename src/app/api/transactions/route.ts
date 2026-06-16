@@ -121,13 +121,14 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
   const {
     storeId,
     customerId,
-    cashierId,
     items,
     paymentMethod,
     paymentDetails,
     discountAmount,
     notes,
   } = validation.data;
+  // SECURITY: Must use session user ID after requireAuth() is added
+  const cashierId = validation.data.cashierId; // TODO: Replace with session user ID from requireAuth()
 
   if (!Object.values(PaymentMethod).includes(paymentMethod)) {
     return Response.json(

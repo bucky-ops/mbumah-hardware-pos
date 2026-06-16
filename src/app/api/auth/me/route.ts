@@ -68,7 +68,6 @@ async function getMeHandler(...args: unknown[]): Promise<Response> {
       organization: {
         id: user.organization.id,
         name: user.organization.name,
-        taxPin: user.organization.taxPin,
       },
       store: user.store ? {
         id: user.store.id,
