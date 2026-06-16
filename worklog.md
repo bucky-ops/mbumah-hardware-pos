@@ -1189,3 +1189,33 @@ Stage Summary:
 - Dropdown trigger button visible on mobile/touch (focus-visible:opacity-100)
 - Update mutation uses proper TypeScript types (UpdateGiftCardPayload)
 - CSRF token auto-retries on 403 CSRF failures (stale token resilience)
+
+---
+Task ID: FINAL
+Agent: Main Agent
+Task: Push security updates, fix gift card edit/delete, add WhatsApp document sending
+
+Work Log:
+- Pushed all security updates to GitHub (commits c6a7d7f, 3ff5bdd, 24c9557)
+- Fixed middleware to be Edge-compatible (removed Prisma imports that crash Edge Runtime)
+- Made middleware self-contained with inline rate limiting, CSRF validation, request size validation
+- Verified gift card edit/delete API routes exist (PUT/DELETE on /api/gift-cards/[id])
+- Verified API client includes CSRF token and credentials: 'same-origin' for all requests
+- Created WhatsApp document sending API (/api/whatsapp/send-document) supporting 10 document types:
+  - invoice, receipt, quotation, voucher, inventory, delivery_note, gift_card, credit_note, purchase_order, statement
+- Added WhatsApp send buttons to: invoices, transactions, delivery notes, vouchers, gift cards, credits, inventory tabs
+- Added whatsappApi.sendDocument() to API client
+- Verified via curl: login works (SUCCESS - System Administrator), security headers present, rate limiting active
+- Lint passes clean
+
+Stage Summary:
+- All security features implemented and pushed to GitHub
+- Gift card edit/delete now works (CSRF tokens included in requests)
+- WhatsApp document sending supports 10 document types across all relevant tabs
+- Middleware is Edge-compatible (no Prisma imports)
+- Security headers (HSTS, CSP, X-Frame-Options, etc.) applied to all responses
+- Rate limiting with 7 tiers (AUTH, PASSWORD_RESET, PAYMENT, READ, WRITE, SEARCH, MESSAGING)
+- CSRF protection with token-based and Origin-based validation
+- Brute force protection with progressive lockout
+- Security dashboard tab with real-time monitoring
+- GitHub workflows consolidated (removed redundant webpack.yml, added security scanning job)
