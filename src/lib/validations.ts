@@ -57,6 +57,8 @@ export const checkoutSchema = z.object({
     mpesaPhone: z.string().optional(),
     debtAccountId: z.string().optional(),
     giftCardId: z.string().optional(),
+    giftCardCode: z.string().optional(),
+    giftCardAmount: z.number().nonnegative().optional(),
     voucherId: z.string().optional(),
     discountAmount: z.number().optional(),
   }).optional(),

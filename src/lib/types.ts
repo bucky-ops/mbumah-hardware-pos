@@ -173,6 +173,8 @@ export interface PaymentDetails {
   mpesaPhone?: string;
   debtAccountId?: string;
   giftCardId?: string;
+  giftCardCode?: string;
+  giftCardAmount?: number;
   voucherId?: string;
   discountAmount?: number;
 }

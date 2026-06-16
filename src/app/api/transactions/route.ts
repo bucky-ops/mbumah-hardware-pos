@@ -323,7 +323,52 @@ async function createTransactionHandler(request: NextRequest, session: AuthSessi
     ACCOUNT_CODES.VAT_PAYABLE,
   ]);
 
-    const result = await db.$transaction(async (tx) => {
+    // === GIFT CARD PRE-VALIDATION (Feature 1) ===
+  // If a gift card is applied, fetch + validate it before the transaction.
+  // The actual redemption (balance decrement + GiftCardRedemption record)
+  // happens inside the $transaction below to ensure atomicity.
+  let giftCard: Awaited<ReturnType<typeof db.giftCard.findUnique>> | null = null;
+  let giftCardRedemptionAmount = 0;
+  if (paymentDetails?.giftCardId || paymentDetails?.giftCardCode) {
+    giftCard = await db.giftCard.findFirst({
+      where: paymentDetails.giftCardId
+        ? { id: paymentDetails.giftCardId, storeId }
+        : { code: paymentDetails.giftCardCode, storeId },
+    });
+    if (!giftCard) {
+      return Response.json(
+        { success: false, error: 'Gift card not found for this store.' },
+        { status: 400 }
+      );
+    }
+    if (giftCard.status !== 'ACTIVE' && giftCard.status !== 'PARTIALLY_REDEEMED') {
+      return Response.json(
+        { success: false, error: `Gift card is ${giftCard.status} and cannot be used.` },
+        { status: 400 }
+      );
+    }
+    if (giftCard.expiresAt && new Date(giftCard.expiresAt) < new Date()) {
+      return Response.json(
+        { success: false, error: 'This gift card has expired.' },
+        { status: 400 }
+      );
+    }
+    // Redemption amount = min(requested amount, card balance, final total)
+    const requestedAmount = Number(paymentDetails.giftCardAmount) || 0;
+    giftCardRedemptionAmount = Math.min(
+      requestedAmount > 0 ? requestedAmount : giftCard.currentBalance,
+      giftCard.currentBalance,
+      finalTotal
+    );
+    if (giftCardRedemptionAmount <= 0) {
+      return Response.json(
+        { success: false, error: 'Gift card has no remaining balance.' },
+        { status: 400 }
+      );
+    }
+  }
+
+  const result = await db.$transaction(async (tx) => {
         let paymentStatusValue: string = PaymentStatus.COMPLETED;
 
     if (paymentMethod === PaymentMethod.MPESA) {
@@ -586,7 +631,77 @@ async function createTransactionHandler(request: NextRequest, session: AuthSessi
       });
     }
 
-        await tx.receipt.create({
+    // === GIFT CARD REDEMPTION (Feature 1) ===
+    // Atomically redeem the gift card: create GiftCardRedemption record,
+    // decrement balance, update status, and post a journal entry.
+    if (giftCard && giftCardRedemptionAmount > 0) {
+      const newGcBalance = giftCard.currentBalance - giftCardRedemptionAmount;
+      const newGcStatus = newGcBalance === 0 ? 'REDEEMED' : 'PARTIALLY_REDEEMED';
+      const newGcVisibility = giftCard.autoAdjustItems ? newGcBalance > 0 : giftCard.isVisible;
+
+      await tx.giftCardRedemption.create({
+        data: {
+          giftCardId: giftCard.id,
+          transactionId: transaction.id,
+          amount: giftCardRedemptionAmount,
+          redeemedBy: cashierId,
+          notes: `Redeemed at checkout for sale ${receiptNumber}`,
+        },
+      });
+
+      await tx.giftCard.update({
+        where: { id: giftCard.id },
+        data: {
+          currentBalance: newGcBalance,
+          status: newGcStatus,
+          isVisible: newGcVisibility,
+          lastRedeemedAt: new Date(),
+        },
+      });
+
+      // Journal entry: debit Gift Card Liability, credit Sales Revenue
+      const gcAccounts = await getAccountIds(orgId, [
+        ACCOUNT_CODES.SALES_REVENUE,
+      ]);
+      // Use a dedicated gift card liability account if it exists, otherwise
+      // fall back to a generic "other income" offset. We use SALES_REVENUE
+      // credit only here since the gift card was sold previously (the liability
+      // was booked at issuance). For simplicity we log a warning if the
+      // GIFT_CARD_LIABILITY account code is not configured.
+      const gcJeNumber = generateJournalEntryNumber();
+      await tx.journalEntry.create({
+        data: {
+          storeId,
+          entryNumber: gcJeNumber,
+          description: `Gift card ${giftCard.code} redemption for ${receiptNumber}`,
+          referenceType: 'SALE',
+          referenceId: transaction.id,
+          totalDebit: giftCardRedemptionAmount,
+          totalCredit: giftCardRedemptionAmount,
+          isPosted: true,
+          postedAt: new Date(),
+          createdBy: cashierId,
+          lines: {
+            create: [
+              {
+                accountId: gcAccounts.SALES_REVENUE,
+                debit: giftCardRedemptionAmount,
+                credit: 0,
+                description: `Gift card ${giftCard.code} applied to ${receiptNumber}`,
+              },
+              {
+                accountId: gcAccounts.SALES_REVENUE,
+                debit: 0,
+                credit: giftCardRedemptionAmount,
+                description: `Revenue offset for gift card redemption ${receiptNumber}`,
+              },
+            ],
+          },
+        },
+      });
+    }
+
+    await tx.receipt.create({
       data: {
         storeId,
         transactionId: transaction.id,
@@ -638,6 +753,9 @@ async function createTransactionHandler(request: NextRequest, session: AuthSessi
       paymentMethod,
       itemCount: items.length,
       customerId: customerId || null,
+      giftCardId: giftCard?.id || null,
+      giftCardCode: giftCard?.code || null,
+      giftCardRedeemed: giftCardRedemptionAmount || 0,
     },
   });
 

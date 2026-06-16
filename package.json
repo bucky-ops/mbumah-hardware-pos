@@ -13,6 +13,7 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
+    "db:seed-hardware": "tsx prisma/seed-hardware-items.ts",
     "db:reset": "prisma migrate reset",
     "vercel-build": "prisma generate && next build"
   },

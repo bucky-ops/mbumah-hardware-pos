@@ -54,6 +54,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
+import { ReceiptActions } from '@/components/receipt-actions';
 
 // LAZY-LOADED TAB COMPONENTS
 
@@ -2008,6 +2009,11 @@ function POSTab() {
   const [appliedGiftCardId, setAppliedGiftCardId] = useState<string>('');
   const [appliedVoucherId, setAppliedVoucherId] = useState<string>('');
   const [benefitsExpanded, setBenefitsExpanded] = useState<boolean>(true);
+  // Manual gift card code entry (for walk-in customers bringing a gift card)
+  const [manualGiftCardCode, setManualGiftCardCode] = useState<string>('');
+  const [manualGiftCard, setManualGiftCard] = useState<GiftCardItem | null>(null);
+  const [manualGcLoading, setManualGcLoading] = useState<boolean>(false);
+  const [manualGcError, setManualGcError] = useState<string>('');
 
   // View mode & sorting
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -2127,6 +2133,56 @@ function POSTab() {
   const [lastTransaction, setLastTransaction] = useState<TransactionItem | null>(null);
   const [lastCashReceived, setLastCashReceived] = useState(0);
   const [lastMpesaPhone, setLastMpesaPhone] = useState('');
+
+  // Receipt row for the just-completed transaction. We look this up via
+  // /api/receipts?transactionId=X so the ReceiptActions component has a real
+  // receiptId to call /api/receipts/[id]/* endpoints. The lookup runs
+  // whenever lastTransaction changes (i.e. after a successful checkout).
+  const [receiptForLastTransaction, setReceiptForLastTransaction] = useState<
+    | { id: string; receiptType: string; notes?: string | null }
+    | null
+  >(null);
+
+  useEffect(() => {
+    if (!lastTransaction) {
+      setReceiptForLastTransaction(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const token =
+          typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null;
+        const headers: Record<string, string> = {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        };
+        const storeId = currentStoreId || '';
+        const res = await fetch(
+          `/api/receipts?transactionId=${encodeURIComponent(lastTransaction.id)}&storeId=${encodeURIComponent(storeId)}`,
+          { headers, credentials: 'same-origin' }
+        );
+        if (!res.ok) return;
+        const json = await res.json();
+        if (cancelled) return;
+        const found =
+          Array.isArray(json?.data) && json.data.length > 0 ? json.data[0] : null;
+        if (found) {
+          setReceiptForLastTransaction({
+            id: found.id,
+            receiptType: found.receiptType,
+            notes: found.transaction?.notes ?? null,
+          });
+        } else {
+          setReceiptForLastTransaction(null);
+        }
+      } catch {
+        if (!cancelled) setReceiptForLastTransaction(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [lastTransaction, currentStoreId]);
 
   const checkoutMutation = useMutation({
     mutationFn: transactionsApi.create,
@@ -2367,7 +2423,9 @@ function POSTab() {
         cashAmount: paymentMethod === 'CASH' ? Number(cashReceived) || finalTotal : paymentMethod === 'SPLIT' ? Number(splitCashAmount) || 0 : undefined,
         mpesaPhone: paymentMethod === 'SPLIT' ? mpesaPhone : undefined,
         debtAccountId: paymentMethod === 'DEBT' ? selectedCustomer : undefined,
-        giftCardId: appliedGiftCardId || undefined,
+        giftCardId: (manualGiftCard?.id || appliedGiftCardId) || undefined,
+        giftCardCode: manualGiftCardCode || undefined,
+        giftCardAmount: manualGiftCard ? Math.min(manualGiftCard.currentBalance, finalTotal) : (appliedGiftCardId ? giftCardDiscount : undefined),
         voucherId: appliedVoucherId || undefined,
         discountAmount: totalDiscount,
       },
@@ -2818,6 +2876,51 @@ function POSTab() {
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 flex-1 overflow-y-auto min-h-0 pr-1">
+                      {/* === Order Items (scrollable — handles 20+ items without overlap) === */}
+                      <div className="rounded-lg border">
+                        <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/40">
+                          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                            Order Items ({cart.items.length})
+                          </span>
+                          <span className="text-xs text-muted-foreground">{formatKES(subtotal)}</span>
+                        </div>
+                        <div className="max-h-52 overflow-y-auto">
+                          <table className="w-full text-xs">
+                            <thead className="sticky top-0 bg-background z-10">
+                              <tr className="text-left text-[10px] uppercase text-muted-foreground border-b">
+                                <th className="py-1.5 px-2 font-medium">Item</th>
+                                <th className="py-1.5 px-1 font-medium text-center w-12">Qty</th>
+                                <th className="py-1.5 px-1 font-medium text-right w-20">Price</th>
+                                <th className="py-1.5 px-2 font-medium text-right w-20">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {cart.items.map((item, idx) => (
+                                <tr key={idx} className="border-b last:border-0 hover:bg-muted/30">
+                                  <td className="py-1.5 px-2">
+                                    <div className="font-medium text-foreground truncate max-w-[180px] sm:max-w-[280px]" title={item.productName}>
+                                      {item.productName}
+                                    </div>
+                                    <div className="text-[10px] text-muted-foreground">{item.sku} · {item.unitType}</div>
+                                  </td>
+                                  <td className="py-1.5 px-1 text-center font-medium">{item.quantity}</td>
+                                  <td className="py-1.5 px-1 text-right tabular-nums">{formatKES(item.pricePerUnit)}</td>
+                                  <td className="py-1.5 px-2 text-right font-semibold tabular-nums">{formatKES(item.lineTotal)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {(totalDiscount > 0 || giftCardDiscount > 0) && (
+                          <div className="flex items-center justify-between px-3 py-1.5 border-t bg-green-50/50 dark:bg-green-950/20 text-[11px]">
+                            <span className="text-green-700 dark:text-green-400 font-medium">
+                              Discount{giftCardDiscount > 0 ? ' (incl. gift card)' : ''}
+                            </span>
+                            <span className="text-green-700 dark:text-green-400 font-semibold">-{formatKES(totalDiscount + giftCardDiscount)}</span>
+                          </div>
+                        )}
+                      </div>
+
                       <div>
                         <Label className="text-sm font-medium">Payment Method</Label>
                         <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)} className="grid grid-cols-4 gap-2 mt-2">
@@ -2850,6 +2953,55 @@ function POSTab() {
                             </Label>
                           </div>
                         </RadioGroup>
+                      </div>
+
+                      {/* Manual gift card code entry (walk-in customer with a gift card) */}
+                      <div className="rounded-lg border bg-amber-50/40 dark:bg-amber-950/10 p-3 space-y-2">
+                        <Label htmlFor="manualGiftCardCode" className="text-xs font-medium flex items-center gap-1.5">
+                          <Wallet className="h-3 w-3" /> Gift Card Code (optional)
+                        </Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="manualGiftCardCode"
+                            placeholder="e.g. MBGC-XXXX-XXXX"
+                            value={manualGiftCardCode}
+                            onChange={(e) => { setManualGiftCardCode(e.target.value.toUpperCase()); setManualGiftCard(null); setManualGcError(''); }}
+                            className="text-sm font-mono"
+                          />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            disabled={!manualGiftCardCode || manualGcLoading}
+                            onClick={async () => {
+                              if (!manualGiftCardCode) return;
+                              setManualGcLoading(true);
+                              setManualGcError('');
+                              try {
+                                const token = localStorage.getItem('token');
+                                const res = await fetch(`/api/gift-cards?storeId=${currentStoreId}&search=${encodeURIComponent(manualGiftCardCode)}`, {
+                                  headers: token ? { Authorization: `Bearer ${token}` } : {},
+                                });
+                                const json = await res.json();
+                                const cards = Array.isArray(json.data) ? json.data : [];
+                                const found = cards.find((gc: GiftCardItem) => gc.code === manualGiftCardCode);
+                                if (!found) { setManualGcError('Gift card not found.'); setManualGiftCard(null); }
+                                else if (found.status !== 'ACTIVE' && found.status !== 'PARTIALLY_REDEEMED') { setManualGcError(`Card is ${found.status}.`); setManualGiftCard(null); }
+                                else if (found.currentBalance <= 0) { setManualGcError('Card has no balance.'); setManualGiftCard(null); }
+                                else { setManualGiftCard(found); setAppliedGiftCardId(''); }
+                              } catch { setManualGcError('Lookup failed.'); }
+                              finally { setManualGcLoading(false); }
+                            }}
+                          >
+                            {manualGcLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Apply'}
+                          </Button>
+                        </div>
+                        {manualGcError && <p className="text-[11px] text-red-600">{manualGcError}</p>}
+                        {manualGiftCard && (
+                          <p className="text-[11px] text-green-700 dark:text-green-400">
+                            Card {manualGiftCard.code} · Balance {formatKES(manualGiftCard.currentBalance)} · Will apply {formatKES(Math.min(manualGiftCard.currentBalance, finalTotal))}
+                          </p>
+                        )}
                       </div>
 
                       {paymentMethod === 'CASH' && (
@@ -3117,6 +3269,49 @@ function POSTab() {
                 <p className="text-xs text-muted-foreground italic">Asante sana!</p>
               </div>
             </div>
+          )}
+          {/* Universal receipt delivery + management actions.
+              Rendered above the Print / New Sale row so the cashier can
+              quickly send the receipt via WhatsApp/Email or edit/cancel it
+              without leaving the dialog. The receiptId is looked up via
+              /api/receipts?transactionId=X (see the useEffect above). */}
+          {lastTransaction && receiptForLastTransaction && (
+            <ReceiptActions
+              receiptId={receiptForLastTransaction.id}
+              transactionId={lastTransaction.id}
+              customerPhone={
+                lastTransaction.customer?.phone ||
+                lastMpesaPhone ||
+                undefined
+              }
+              customerEmail={lastTransaction.customer?.email || undefined}
+              receiptNumber={lastTransaction.receiptNumber}
+              receiptType={receiptForLastTransaction.receiptType}
+              notes={receiptForLastTransaction.notes ?? null}
+              size="sm"
+              onSent={() => {
+                // Force a re-lookup so receiptType / sentTo reflect the new
+                // state on the next dialog open. The current dialog stays
+                // open — the cashier can immediately send via the other
+                // channel or close.
+                setReceiptForLastTransaction((prev) =>
+                  prev ? { ...prev } : prev
+                );
+              }}
+              onEdited={() => {
+                // The PUT may have changed the notes / receiptType; trigger a
+                // re-lookup so the dialog stays in sync if reopened.
+                setReceiptForLastTransaction((prev) =>
+                  prev ? { ...prev } : prev
+                );
+              }}
+              onDeleted={() => {
+                // Receipt was cancelled — close the dialog and clear state
+                // so the next checkout starts fresh.
+                setReceiptOpen(false);
+                setLastTransaction(null);
+              }}
+            />
           )}
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
@@ -3634,6 +3829,51 @@ function POSTab() {
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 flex-1 overflow-y-auto min-h-0 pr-1">
+                      {/* === Order Items (scrollable — handles 20+ items without overlap) === */}
+                      <div className="rounded-lg border">
+                        <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/40">
+                          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                            Order Items ({cart.items.length})
+                          </span>
+                          <span className="text-xs text-muted-foreground">{formatKES(subtotal)}</span>
+                        </div>
+                        <div className="max-h-52 overflow-y-auto">
+                          <table className="w-full text-xs">
+                            <thead className="sticky top-0 bg-background z-10">
+                              <tr className="text-left text-[10px] uppercase text-muted-foreground border-b">
+                                <th className="py-1.5 px-2 font-medium">Item</th>
+                                <th className="py-1.5 px-1 font-medium text-center w-12">Qty</th>
+                                <th className="py-1.5 px-1 font-medium text-right w-20">Price</th>
+                                <th className="py-1.5 px-2 font-medium text-right w-20">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {cart.items.map((item, idx) => (
+                                <tr key={idx} className="border-b last:border-0 hover:bg-muted/30">
+                                  <td className="py-1.5 px-2">
+                                    <div className="font-medium text-foreground truncate max-w-[180px] sm:max-w-[280px]" title={item.productName}>
+                                      {item.productName}
+                                    </div>
+                                    <div className="text-[10px] text-muted-foreground">{item.sku} · {item.unitType}</div>
+                                  </td>
+                                  <td className="py-1.5 px-1 text-center font-medium">{item.quantity}</td>
+                                  <td className="py-1.5 px-1 text-right tabular-nums">{formatKES(item.pricePerUnit)}</td>
+                                  <td className="py-1.5 px-2 text-right font-semibold tabular-nums">{formatKES(item.lineTotal)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {(totalDiscount > 0 || giftCardDiscount > 0) && (
+                          <div className="flex items-center justify-between px-3 py-1.5 border-t bg-green-50/50 dark:bg-green-950/20 text-[11px]">
+                            <span className="text-green-700 dark:text-green-400 font-medium">
+                              Discount{giftCardDiscount > 0 ? ' (incl. gift card)' : ''}
+                            </span>
+                            <span className="text-green-700 dark:text-green-400 font-semibold">-{formatKES(totalDiscount + giftCardDiscount)}</span>
+                          </div>
+                        )}
+                      </div>
+
                       <div>
                         <Label className="text-sm font-medium">Payment Method</Label>
                         <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)} className="grid grid-cols-4 gap-2 mt-2">
@@ -3667,6 +3907,55 @@ function POSTab() {
                           </div>
                         </RadioGroup>
                       </div>
+                      {/* Manual gift card code entry (walk-in customer with a gift card) */}
+                      <div className="rounded-lg border bg-amber-50/40 dark:bg-amber-950/10 p-3 space-y-2">
+                        <Label htmlFor="manualGiftCardCode" className="text-xs font-medium flex items-center gap-1.5">
+                          <Wallet className="h-3 w-3" /> Gift Card Code (optional)
+                        </Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="manualGiftCardCode"
+                            placeholder="e.g. MBGC-XXXX-XXXX"
+                            value={manualGiftCardCode}
+                            onChange={(e) => { setManualGiftCardCode(e.target.value.toUpperCase()); setManualGiftCard(null); setManualGcError(''); }}
+                            className="text-sm font-mono"
+                          />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            disabled={!manualGiftCardCode || manualGcLoading}
+                            onClick={async () => {
+                              if (!manualGiftCardCode) return;
+                              setManualGcLoading(true);
+                              setManualGcError('');
+                              try {
+                                const token = localStorage.getItem('token');
+                                const res = await fetch(`/api/gift-cards?storeId=${currentStoreId}&search=${encodeURIComponent(manualGiftCardCode)}`, {
+                                  headers: token ? { Authorization: `Bearer ${token}` } : {},
+                                });
+                                const json = await res.json();
+                                const cards = Array.isArray(json.data) ? json.data : [];
+                                const found = cards.find((gc: GiftCardItem) => gc.code === manualGiftCardCode);
+                                if (!found) { setManualGcError('Gift card not found.'); setManualGiftCard(null); }
+                                else if (found.status !== 'ACTIVE' && found.status !== 'PARTIALLY_REDEEMED') { setManualGcError(`Card is ${found.status}.`); setManualGiftCard(null); }
+                                else if (found.currentBalance <= 0) { setManualGcError('Card has no balance.'); setManualGiftCard(null); }
+                                else { setManualGiftCard(found); setAppliedGiftCardId(''); }
+                              } catch { setManualGcError('Lookup failed.'); }
+                              finally { setManualGcLoading(false); }
+                            }}
+                          >
+                            {manualGcLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Apply'}
+                          </Button>
+                        </div>
+                        {manualGcError && <p className="text-[11px] text-red-600">{manualGcError}</p>}
+                        {manualGiftCard && (
+                          <p className="text-[11px] text-green-700 dark:text-green-400">
+                            Card {manualGiftCard.code} · Balance {formatKES(manualGiftCard.currentBalance)} · Will apply {formatKES(Math.min(manualGiftCard.currentBalance, finalTotal))}
+                          </p>
+                        )}
+                      </div>
+
                       {paymentMethod === 'CASH' && (
                         <div className="space-y-3">
                           <div>
