@@ -1,11 +1,137 @@
 // Next.js Middleware — Comprehensive security layer for /api/* routes
 // Layers: Rate limiting → Request size → CSRF → Content-Type → Auth → Response headers
+//
+// IMPORTANT: This runs in Edge Runtime. NO imports that touch Prisma/Node.js APIs.
+// All security logic is self-contained here.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { isRateLimited, RATE_LIMIT_TIERS, type RateLimitTier } from '@/lib/rate-limit';
-import { isCSRFValid, getClientIp, validateContentType, isRequestSizeValid, logSecurityEvent, SecurityEvent } from '@/lib/security';
 
-// Routes that must remain accessible without a Bearer token
+// ── In-Memory Rate Limiter (Edge-compatible) ─────────────────────────────────
+
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+  blocked: boolean;
+  blockedUntil: number;
+}
+
+const limits = new Map<string, RateLimitEntry>();
+
+const RATE_LIMIT_TIERS: Record<string, { max: number; windowMs: number }> = {
+  AUTH: { max: 5, windowMs: 15 * 60 * 1000 },
+  PASSWORD_RESET: { max: 3, windowMs: 60 * 60 * 1000 },
+  PAYMENT: { max: 20, windowMs: 60 * 1000 },
+  READ: { max: 100, windowMs: 60 * 1000 },
+  WRITE: { max: 30, windowMs: 60 * 1000 },
+  SEARCH: { max: 30, windowMs: 60 * 1000 },
+  MESSAGING: { max: 10, windowMs: 60 * 1000 },
+};
+
+type RateLimitTier = keyof typeof RATE_LIMIT_TIERS;
+
+// Cleanup expired entries every 5 minutes
+const CLEANUP_INTERVAL = 5 * 60 * 1000;
+let lastCleanup = Date.now();
+
+function cleanup() {
+  const now = Date.now();
+  if (now - lastCleanup < CLEANUP_INTERVAL) return;
+  lastCleanup = now;
+  for (const [key, entry] of limits) {
+    if (entry.resetAt < now && !entry.blocked) limits.delete(key);
+    if (entry.blocked && entry.blockedUntil < now) limits.delete(key);
+  }
+}
+
+function isRateLimited(key: string, tier: RateLimitTier): { limited: boolean; remaining: number; resetAt: number; retryAfter?: number } {
+  cleanup();
+  const options = RATE_LIMIT_TIERS[tier];
+  const now = Date.now();
+  const entry = limits.get(key);
+
+  if (entry?.blocked && entry.blockedUntil > now) {
+    return { limited: true, remaining: 0, resetAt: entry.blockedUntil, retryAfter: Math.ceil((entry.blockedUntil - now) / 1000) };
+  }
+
+  if (!entry || entry.resetAt < now) {
+    limits.set(key, { count: 1, resetAt: now + options.windowMs, blocked: false, blockedUntil: 0 });
+    return { limited: false, remaining: options.max - 1, resetAt: now + options.windowMs };
+  }
+
+  if (entry.count >= options.max) {
+    return { limited: true, remaining: 0, resetAt: entry.resetAt, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
+  }
+
+  entry.count++;
+  return { limited: false, remaining: options.max - entry.count, resetAt: entry.resetAt };
+}
+
+// ── CSRF Validation (Edge-compatible) ────────────────────────────────────────
+
+function isCSRFValid(request: NextRequest): boolean {
+  const method = request.method.toUpperCase();
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return true;
+
+  // Check custom header X-CSRF-Token matching cookie csrf_token
+  const csrfHeader = request.headers.get('X-CSRF-Token');
+  const csrfCookie = request.cookies.get('csrf_token')?.value;
+  if (csrfHeader && csrfCookie && csrfHeader === csrfCookie) return true;
+
+  // Check Origin header against Host
+  const origin = request.headers.get('Origin');
+  const host = request.headers.get('Host');
+  if (origin && host && origin.includes(host)) return true;
+
+  // Check Referer header
+  const referer = request.headers.get('Referer');
+  if (referer && host) {
+    try {
+      const refererUrl = new URL(referer);
+      if (refererUrl.host === host) return true;
+    } catch { /* skip */ }
+  }
+
+  // Allow in development without Origin/Referer
+  if (process.env.NODE_ENV === 'development' && !origin && !referer) return true;
+
+  return false;
+}
+
+// ── Client IP Extraction ────────────────────────────────────────────────────
+
+function getClientIp(request: NextRequest): string {
+  const forwardedFor = request.headers.get('x-forwarded-for');
+  if (forwardedFor) {
+    const ips = forwardedFor.split(',').map(ip => ip.trim());
+    if (ips[0]) return ips[0];
+  }
+  const realIp = request.headers.get('x-real-ip');
+  if (realIp) return realIp.trim();
+  return 'unknown';
+}
+
+// ── Request Size Validation ─────────────────────────────────────────────────
+
+function isRequestSizeValid(request: NextRequest, maxBytes: number): boolean {
+  const contentLength = request.headers.get('Content-Length');
+  if (!contentLength) return true;
+  const length = parseInt(contentLength, 10);
+  if (isNaN(length)) return true;
+  return length <= maxBytes;
+}
+
+// ── Content-Type Validation ─────────────────────────────────────────────────
+
+function validateContentType(request: NextRequest): boolean {
+  const method = request.method.toUpperCase();
+  if (method === 'GET' || method === 'DELETE') return true;
+  const contentType = request.headers.get('Content-Type');
+  if (!contentType) return false;
+  return contentType.toLowerCase().includes('application/json');
+}
+
+// ── Routes Configuration ────────────────────────────────────────────────────
+
 const PUBLIC_PATHS = [
   '/api/auth/login',
   '/api/auth/logout',
@@ -13,12 +139,12 @@ const PUBLIC_PATHS = [
   '/api/security/csrf-token',
 ];
 
-// Routes that don't need CSRF validation (webhook callbacks)
 const CSRF_EXEMPT_PATHS = [
   '/api/payments/mpesa/callback',
 ];
 
-// Determine rate limit tier based on route and method
+// ── Rate Limit Tier Resolution ──────────────────────────────────────────────
+
 function getRateLimitTier(pathname: string, method: string): RateLimitTier {
   if (pathname.startsWith('/api/auth/login')) return 'AUTH';
   if (pathname.startsWith('/api/auth/password-reset')) return 'PASSWORD_RESET';
@@ -30,6 +156,8 @@ function getRateLimitTier(pathname: string, method: string): RateLimitTier {
   return 'WRITE';
 }
 
+// ── Main Middleware ─────────────────────────────────────────────────────────
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const method = request.method;
@@ -39,8 +167,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Health endpoint: allow without any checks
-  if (pathname === '/api/health') {
+  // Health & CSRF token endpoints: allow without any checks
+  if (pathname === '/api/health' || pathname === '/api/security/csrf-token') {
     return NextResponse.next();
   }
 
@@ -52,15 +180,6 @@ export async function middleware(request: NextRequest) {
   const rateLimitResult = isRateLimited(rateLimitKey, tier);
 
   if (rateLimitResult.limited) {
-    try {
-      await logSecurityEvent({
-        event: SecurityEvent.RATE_LIMITED,
-        message: `Rate limit exceeded on ${method} ${pathname}`,
-        ipAddress: clientIp,
-        metadata: { tier, retryAfter: rateLimitResult.retryAfter, method, resource: pathname, blocked: true },
-      });
-    } catch { /* ignore logging errors */ }
-
     return Response.json(
       { success: false, error: 'Too many requests. Please try again later.' },
       {
@@ -75,16 +194,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── Layer 2: Request Size Validation ───────────────────────────
-  if (!isRequestSizeValid(request, 1048576)) { // 1MB max
-    try {
-      await logSecurityEvent({
-        event: SecurityEvent.INVALID_INPUT,
-        message: `Request payload too large on ${method} ${pathname}`,
-        ipAddress: clientIp,
-        metadata: { reason: 'Request too large', method, resource: pathname, blocked: true },
-      });
-    } catch { /* ignore */ }
-
+  if (!isRequestSizeValid(request, 1048576)) {
     return Response.json(
       { success: false, error: 'Request payload too large. Maximum size is 1MB.' },
       { status: 413 }
@@ -96,21 +206,6 @@ export async function middleware(request: NextRequest) {
   const isCSRFExempt = CSRF_EXEMPT_PATHS.some(p => pathname.startsWith(p));
 
   if (isStateChanging && !isCSRFExempt && !isCSRFValid(request)) {
-    try {
-      await logSecurityEvent({
-        event: SecurityEvent.CSRF_FAILED,
-        message: `CSRF validation failed on ${method} ${pathname}`,
-        ipAddress: clientIp,
-        metadata: {
-          origin: request.headers.get('origin'),
-          referer: request.headers.get('referer'),
-          method,
-          resource: pathname,
-          blocked: true,
-        },
-      });
-    } catch { /* ignore */ }
-
     return Response.json(
       { success: false, error: 'CSRF validation failed. Please refresh the page and try again.' },
       { status: 403 }
@@ -125,7 +220,7 @@ export async function middleware(request: NextRequest) {
     );
   }
 
-  // ── Layer 5: Authentication (existing) ─────────────────────────
+  // ── Layer 5: Authentication ────────────────────────────────────
   const isPublicPath = PUBLIC_PATHS.some(p => pathname.startsWith(p));
 
   if (!isPublicPath) {
@@ -149,7 +244,6 @@ export async function middleware(request: NextRequest) {
   // ── Layer 6: Continue with rate limit headers ──────────────────
   const response = NextResponse.next();
 
-  // Add rate limit info headers
   response.headers.set('X-RateLimit-Remaining', String(rateLimitResult.remaining));
   response.headers.set('X-RateLimit-Reset', String(rateLimitResult.resetAt));
   response.headers.set('X-RateLimit-Limit', String(RATE_LIMIT_TIERS[tier].max));
