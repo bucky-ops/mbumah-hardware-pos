@@ -135,6 +135,9 @@ jobs:
         run: bun run db:generate
 
       # ── Database Setup ───────────────────────────────────────────────────
+      - name: Switch Prisma provider to PostgreSQL for CI
+        run: sed -i 's/provider = "sqlite"/provider = "postgresql"/' prisma/schema.prisma
+
       - name: Push Prisma schema to PostgreSQL
         run: bunx prisma db push --skip-generate
         env:
@@ -211,6 +214,9 @@ jobs:
 
       - name: Generate Prisma Client
         run: bun run db:generate
+
+      - name: Switch Prisma provider to PostgreSQL for CI
+        run: sed -i 's/provider = "sqlite"/provider = "postgresql"/' prisma/schema.prisma
 
       - name: Push Prisma schema
         run: bunx prisma db push --skip-generate
