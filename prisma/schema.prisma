@@ -97,6 +97,9 @@ model User {
   avatarUrl       String?
   isActive        Boolean  @default(true)
   lastLoginAt     DateTime?
+  lockedUntil      DateTime?  // Account locked until this time
+  failedLoginAttempts Int     @default(0)
+  lastFailedLoginAt DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -112,6 +115,7 @@ model User {
   @@index([organizationId])
   @@index([storeId])
   @@index([email])
+  @@index([isActive])
   @@map("users")
 }
 
@@ -122,12 +126,15 @@ model Session {
   ipAddress    String?
   userAgent    String?
   expiresAt    DateTime
+  lastActiveAt    DateTime  @default(now()) // Track session activity
+  isSuspicious    Boolean   @default(false) // Flag suspicious sessions
   createdAt    DateTime @default(now())
 
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([token])
+  @@index([expiresAt])
   @@map("sessions")
 }
 
@@ -251,6 +258,7 @@ model StockMovement {
 
   @@index([storeId])
   @@index([productId])
+  @@index([movementType])
   @@index([createdAt])
   @@map("stock_movements")
 }
@@ -351,6 +359,8 @@ model SalesTransaction {
   @@index([cashierId])
   @@index([customerId])
   @@index([paymentStatus])
+  @@index([receiptNumber])
+  @@index([paymentMethod])
   @@index([createdAt])
   @@map("sales_transactions")
 }
@@ -398,6 +408,7 @@ model Payment {
   @@index([storeId])
   @@index([transactionId])
   @@index([paymentMethod])
+  @@index([status])
   @@map("payments")
 }
 
@@ -556,6 +567,7 @@ model JournalEntry {
   @@index([entryDate])
   @@index([referenceType])
   @@index([isPosted])
+  @@index([createdAt])
   @@map("journal_entries")
 }
 
@@ -709,6 +721,7 @@ model Expense {
 
   @@index([storeId])
   @@index([category])
+  @@index([status])
   @@index([paidBy])
   @@index([createdAt])
   @@map("expenses")
@@ -762,6 +775,7 @@ model SystemLog {
 
   @@index([storeId])
   @@index([userId])
+  @@index([action])
   @@index([component])
   @@index([severity])
   @@index([createdAt])
@@ -822,6 +836,7 @@ model GiftCard {
   @@index([storeId])
   @@index([code])
   @@index([status])
+  @@index([issuedTo])
   @@index([reason])
   @@map("gift_cards")
 }
@@ -978,6 +993,7 @@ model Invoice {
   items           InvoiceItem[]
 
   @@index([storeId])
+  @@index([invoiceNumber])
   @@index([invoiceType])
   @@index([status])
   @@index([customerId])
@@ -1053,4 +1069,28 @@ model DeliveryNoteItem {
   @@index([deliveryNoteId])
   @@index([productId])
   @@map("delivery_note_items")
+}
+
+// ── SECURITY & AUDIT ──────────────────────────────────────────────────────────
+model SecurityEvent {
+  id            String   @id @default(cuid())
+  eventType     String   // RATE_LIMITED, CSRF_FAILED, BRUTE_FORCE, INVALID_INPUT, SUSPICIOUS_ACTIVITY, ACCOUNT_LOCKED, SESSION_HIJACK_ATTEMPT, UNAUTHORIZED_ACCESS
+  severity      String   @default("WARN") // DEBUG, INFO, WARN, ERROR, CRITICAL
+  ipAddress     String?
+  userId        String?
+  storeId       String?
+  resource      String?  // Which resource was targeted
+  action        String?  // What action was attempted
+  details       String?  // JSON string with additional context
+  userAgent     String?
+  blocked       Boolean  @default(false) // Was the request blocked?
+  createdAt     DateTime @default(now())
+
+  @@index([eventType])
+  @@index([ipAddress])
+  @@index([userId])
+  @@index([severity])
+  @@index([createdAt])
+  @@index([blocked])
+  @@map("security_events")
 }

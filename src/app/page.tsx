@@ -14,7 +14,7 @@ import {
   CheckCircle, Clock,
   ShoppingBag, CreditCard, Smartphone,
   AlertCircle, Loader2,
-  Home, Store, Mail, ShieldCheck, Eye, EyeOff,
+  Home, Store, Mail, Shield, ShieldCheck, Eye, EyeOff,
   Banknote, Wallet,
   TrendingUp, ArrowDownRight, AlertTriangle, DollarSign, Wrench, Hammer,
   CalendarDays, Printer, Bell, ChevronDown,
@@ -76,6 +76,7 @@ const LazyMessagingTab = lazy(() => import('./tabs/messaging-tab'));
 const LazyTransfersTab = lazy(() => import('./tabs/transfers-tab'));
 const LazyBankingTab = lazy(() => import('./tabs/banking-tab'));
 const LazyLoyaltyTab = lazy(() => import('./tabs/loyalty-tab'));
+const LazySecurityTab = lazy(() => import('./tabs/security-tab'));
 
 function TabLoadingFallback() {
   return (
@@ -110,6 +111,7 @@ const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
   { id: 'transfers', label: 'Transfers', icon: ArrowUpDown },
   { id: 'banking', label: 'Banking', icon: Landmark },
   { id: 'loyalty', label: 'Loyalty', icon: Award },
+  { id: 'security', label: 'Security', icon: Shield },
   { id: 'admin', label: 'Admin', icon: Settings },
 ];
 
@@ -3819,6 +3821,7 @@ function MainApp() {
       case 'transfers': return <Suspense fallback={<TabLoadingFallback />}><LazyTransfersTab /></Suspense>;
       case 'banking': return <Suspense fallback={<TabLoadingFallback />}><LazyBankingTab /></Suspense>;
       case 'loyalty': return <Suspense fallback={<TabLoadingFallback />}><LazyLoyaltyTab /></Suspense>;
+      case 'security': return <Suspense fallback={<TabLoadingFallback />}><LazySecurityTab /></Suspense>;
       default: return <POSTab />;
     }
   };

@@ -7,6 +7,8 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { isRateLimited } from '@/lib/rate-limit';
 import { loginSchema, validateInput } from '@/lib/validations';
+import { checkBruteForce, recordFailedAttempt, recordSuccessfulLogin } from '@/lib/brute-force';
+import { sanitizeInput, getClientIp } from '@/lib/security';
 
 // Verify password with support for both bcrypt hashes and legacy "hashed_" format
 async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
@@ -37,15 +39,35 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const body = await request.json();
 
+  // 1. Parse and validate input
   const validation = validateInput(loginSchema, body);
   if (!validation.success) {
     return Response.json({ success: false, error: validation.error }, { status: 400 });
   }
-  const { email, password } = validation.data;
+  const { email: rawEmail, password } = validation.data;
 
-  // Rate limit by IP address before any DB queries
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || request.headers.get('x-real-ip') || 'unknown';
-  const rateLimit = isRateLimited(`login:${ip}`, { max: 5, windowMs: 15 * 60 * 1000 });
+  // 2. Sanitize email
+  const email = sanitizeInput(rawEmail.toLowerCase().trim());
+
+  // 3. Get client IP
+  const ip = getClientIp(request);
+
+  // 4. Check brute force lockout
+  const bruteForceResult = checkBruteForce(email, ip);
+  if (!bruteForceResult.allowed) {
+    return Response.json(
+      { success: false, error: bruteForceResult.message || 'Account temporarily locked. Please try again later.' },
+      {
+        status: 423,
+        headers: {
+          'Retry-After': String(bruteForceResult.retryAfter || 300),
+        },
+      }
+    );
+  }
+
+  // 5. Check rate limit (secondary check using tier system)
+  const rateLimit = isRateLimited(ip, 'AUTH');
   if (rateLimit.limited) {
     return Response.json(
       { success: false, error: 'Too many login attempts. Please try again later.' },
@@ -60,15 +82,46 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
+  // 6. Look up user in DB
   const user = await db.user.findUnique({
-    where: { email: email.toLowerCase().trim() },
+    where: { email },
     include: {
       organization: true,
       store: true,
     },
   });
 
+  // Check for DB-level account lockout (lockedUntil field)
+  if (user?.lockedUntil && new Date(user.lockedUntil) > new Date()) {
+    const retryAfter = Math.ceil((new Date(user.lockedUntil).getTime() - Date.now()) / 1000);
+    const minutesLeft = Math.ceil(retryAfter / 60);
+
+    try {
+      await systemLog({
+        action: 'LOGIN_BLOCKED',
+        component: LogComponent.AUTH,
+        severity: LogSeverity.WARN,
+        message: `Login attempt on locked account: ${email}`,
+        userId: user.id,
+        metadata: { email, reason: 'ACCOUNT_LOCKED_DB', lockedUntil: user.lockedUntil },
+      });
+    } catch { /* ignore logging errors */ }
+
+    return Response.json(
+      { success: false, error: `Account is locked. Try again in ${minutesLeft} minute(s).` },
+      {
+        status: 423,
+        headers: {
+          'Retry-After': String(retryAfter),
+        },
+      }
+    );
+  }
+
+  // 7. If user not found: recordFailedAttempt → 401
   if (!user || !user.isActive) {
+    const failedResult = await recordFailedAttempt(email, ip);
+
     try {
       await systemLog({
         action: 'LOGIN_FAILED',
@@ -80,12 +133,15 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
     } catch { /* ignore logging errors */ }
 
     return Response.json(
-      { success: false, error: 'Invalid email or password.' },
+      { success: false, error: 'Invalid email or password.', warning: failedResult.message },
       { status: 401 }
     );
   }
 
+  // 8. If password wrong: recordFailedAttempt → 401
   if (!await verifyPassword(password, user.passwordHash)) {
+    const failedResult = await recordFailedAttempt(email, ip);
+
     try {
       await systemLog({
         action: 'LOGIN_FAILED',
@@ -98,11 +154,15 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
     } catch { /* ignore logging errors */ }
 
     return Response.json(
-      { success: false, error: 'Invalid email or password.' },
+      { success: false, error: 'Invalid email or password.', warning: failedResult.message },
       { status: 401 }
     );
   }
 
+  // 9. Login OK: recordSuccessfulLogin
+  recordSuccessfulLogin(email, ip);
+
+  // 10. Create session and update lastLoginAt
   const token = generateToken();
 
   const expiresAt = new Date();
@@ -120,7 +180,12 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
 
   await db.user.update({
     where: { id: user.id },
-    data: { lastLoginAt: new Date() },
+    data: {
+      lastLoginAt: new Date(),
+      lockedUntil: null,          // Clear any residual lockout on successful login
+      failedLoginAttempts: 0,     // Reset failed attempts counter
+      lastFailedLoginAt: null,    // Clear last failed attempt timestamp
+    },
   });
 
   try {

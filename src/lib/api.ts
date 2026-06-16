@@ -41,21 +41,78 @@ interface ApiResponse<T = unknown> {
   };
 }
 
+// CSRF token management
+let csrfToken: string | null = null;
+
+async function fetchCSRFToken(): Promise<string> {
+  try {
+    const res = await fetch(`${API_BASE}/security/csrf-token`, { credentials: 'same-origin' });
+    const json = await res.json();
+    if (json.success && json.data?.token) {
+      csrfToken = json.data.token;
+      return csrfToken;
+    }
+    // Fallback: try reading from cookie
+    const cookieMatch = document.cookie.match(/csrf_token=([^;]+)/);
+    if (cookieMatch) {
+      csrfToken = cookieMatch[1];
+      return csrfToken;
+    }
+    return '';
+  } catch {
+    // Fallback: try reading from cookie
+    if (typeof document !== 'undefined') {
+      const cookieMatch = document.cookie.match(/csrf_token=([^;]+)/);
+      if (cookieMatch) {
+        csrfToken = cookieMatch[1];
+        return csrfToken;
+      }
+    }
+    return '';
+  }
+}
+
+// Initialize CSRF token on app load
+if (typeof window !== 'undefined') {
+  fetchCSRFToken().catch(() => {});
+}
+
 async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null;
 
+  // Include CSRF token for state-changing methods
+  const method = (options.method || 'GET').toUpperCase();
+  const isStateChanging = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+
+  let csrfHeader: Record<string, string> = {};
+  if (isStateChanging) {
+    if (!csrfToken) {
+      await fetchCSRFToken();
+    }
+    // Also try reading from cookie as backup
+    if (!csrfToken && typeof document !== 'undefined') {
+      const cookieMatch = document.cookie.match(/csrf_token=([^;]+)/);
+      if (cookieMatch) csrfToken = cookieMatch[1];
+    }
+    if (csrfToken) {
+      csrfHeader = { 'X-CSRF-Token': csrfToken };
+    }
+  }
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...csrfHeader,
     ...(options.headers as Record<string, string> || {}),
   };
 
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
     headers,
+    credentials: 'same-origin', // Include cookies for CSRF validation
   });
 
   if (response.status === 401) {
@@ -1897,5 +1954,90 @@ export const bankingApi = {
         body: JSON.stringify(data),
       });
     },
+  },
+};
+
+// ── Security API ──────────────────────────────────────────────────────────────
+
+export interface SecurityDashboardOverview {
+  securityScore: number;
+  eventsLast24h: number;
+  eventsLast7d: number;
+  eventsLast30d: number;
+  blockedAttempts24h: number;
+  criticalEvents24h: number;
+  activeSessions: number;
+  lockedAccounts: number;
+}
+
+export interface SecurityEventItem {
+  id: string;
+  eventType: string;
+  severity: string;
+  ipAddress: string | null;
+  userId: string | null;
+  storeId: string | null;
+  resource: string | null;
+  action: string | null;
+  details: unknown;
+  userAgent: string | null;
+  blocked: boolean;
+  createdAt: string;
+}
+
+export const securityApi = {
+  dashboard: async (storeId?: string) => {
+    const query = storeId ? `?storeId=${storeId}` : '';
+    return request<{
+      overview: SecurityDashboardOverview;
+      breakdown: {
+        byType: { type: string; count: number }[];
+        bySeverity: { severity: string; count: number }[];
+      };
+      topTargets: {
+        ips: { ip: string; count: number }[];
+        resources: { resource: string; count: number }[];
+      };
+      recentCritical: SecurityEventItem[];
+      timeline: { hour: string; count: number }[];
+    }>(`/security/dashboard${query}`);
+  },
+
+  events: async (params?: {
+    page?: number;
+    limit?: number;
+    eventType?: string;
+    severity?: string;
+    ipAddress?: string;
+    blocked?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    storeId?: string;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.eventType) query.set('eventType', params.eventType);
+    if (params?.severity) query.set('severity', params.severity);
+    if (params?.ipAddress) query.set('ipAddress', params.ipAddress);
+    if (params?.blocked) query.set('blocked', params.blocked);
+    if (params?.dateFrom) query.set('dateFrom', params.dateFrom);
+    if (params?.dateTo) query.set('dateTo', params.dateTo);
+    if (params?.storeId) query.set('storeId', params.storeId);
+    return request<SecurityEventItem[]>(`/security/events?${query.toString()}`);
+  },
+
+  blockIp: async (ipAddress: string, duration?: number, reason?: string) => {
+    return request('/security/block-ip', {
+      method: 'POST',
+      body: JSON.stringify({ ipAddress, duration, reason }),
+    });
+  },
+
+  unblockIp: async (ipAddress: string) => {
+    return request('/security/block-ip', {
+      method: 'DELETE',
+      body: JSON.stringify({ ipAddress }),
+    });
   },
 };
