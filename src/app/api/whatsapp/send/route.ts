@@ -2,11 +2,11 @@
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth, AuthSession } from '@/lib/auth';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
-async function sendWhatsAppHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function sendWhatsAppHandler(request: NextRequest, session: AuthSession): Promise<Response> {
   const body = await request.json();
 
   const { phone, message, storeId, customerId, messageType } = body;
@@ -63,4 +63,4 @@ async function sendWhatsAppHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const POST = withErrorBoundary(sendWhatsAppHandler, 'WHATSAPP_SEND');
+export const POST = withErrorBoundary(requireAuth(sendWhatsAppHandler), 'WHATSAPP_SEND');

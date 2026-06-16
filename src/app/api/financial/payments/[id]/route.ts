@@ -2,6 +2,7 @@
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth, AuthSession } from '@/lib/auth';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
@@ -9,8 +10,8 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-async function voidPaymentHandler(...args: unknown[]): Promise<Response> {
-  const context = args[1] as RouteContext;
+async function voidPaymentHandler(request: NextRequest, session: AuthSession, ...args: unknown[]): Promise<Response> {
+  const context = args[0] as RouteContext;
   const { id } = await context.params;
 
   const existing = await db.payment.findUnique({ where: { id } });
@@ -61,4 +62,4 @@ async function voidPaymentHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const PUT = withErrorBoundary(voidPaymentHandler, 'PAYMENT_VOID');
+export const PUT = withErrorBoundary(requireAuth(voidPaymentHandler), 'PAYMENT_VOID');

@@ -2,6 +2,7 @@
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth, AuthSession } from '@/lib/auth';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateJournalEntryNumber } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES, type AccountCode } from '@/lib/account-helper';
@@ -18,8 +19,7 @@ const CATEGORY_ACCOUNT_MAP: Record<string, string> = {
 
 const VALID_CATEGORIES = ['RENT', 'SALARIES', 'UTILITIES', 'TRANSPORT', 'MAINTENANCE', 'SUPPLIES', 'BAD_DEBT', 'OTHER'];
 
-async function getExpensesHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function getExpensesHandler(request: NextRequest, session: AuthSession): Promise<Response> {
   const { searchParams } = new URL(request.url);
 
   const storeId = searchParams.get('storeId');
@@ -91,8 +91,7 @@ async function getExpensesHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-async function createExpenseHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function createExpenseHandler(request: NextRequest, session: AuthSession): Promise<Response> {
   const body = await request.json();
 
   const validation = validateInput(createExpenseSchema, body);
@@ -104,10 +103,10 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
     description,
     amount,
     category,
-    paidBy,
     paymentMethod,
     notes,
   } = validation.data;
+  const paidBy = session.userId;
 
   if (!VALID_CATEGORIES.includes(category)) {
     return Response.json(
@@ -116,12 +115,6 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  if (!paidBy) {
-    return Response.json(
-      { success: false, error: 'paidBy is required.' },
-      { status: 400 }
-    );
-  }
 
   const expensePaymentMethod = paymentMethod || 'CASH';
   if (!['CASH', 'MPESA', 'BANK_TRANSFER', 'CHEQUE'].includes(expensePaymentMethod)) {
@@ -131,15 +124,8 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-    const user = await db.user.findUnique({ where: { id: paidBy } });
-  if (!user || !user.isActive) {
-    return Response.json(
-      { success: false, error: 'Invalid or inactive user for paidBy.' },
-      { status: 400 }
-    );
-  }
-
-    const orgId = user.organizationId;
+    // Derive organization from session
+  const orgId = session.organizationId;
   const creditAccountCode = expensePaymentMethod === 'MPESA'
     ? ACCOUNT_CODES.MPESA_ACCOUNT
     : ACCOUNT_CODES.CASH_ON_HAND;
@@ -275,5 +261,5 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
   );
 }
 
-export const GET = withErrorBoundary(getExpensesHandler, 'EXPENSES_LIST');
-export const POST = withErrorBoundary(createExpenseHandler, 'EXPENSES_CREATE');
+export const GET = withErrorBoundary(requireAuth(getExpensesHandler), 'EXPENSES_LIST');
+export const POST = withErrorBoundary(requireAuth(createExpenseHandler), 'EXPENSES_CREATE');

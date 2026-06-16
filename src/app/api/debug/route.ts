@@ -1,9 +1,14 @@
 // GET /api/debug - Debug endpoint for diagnosing deployment issues
-// DISABLED in production — returns 404
+// COMPLETELY DISABLED in production — returns 404 at both build-time and runtime
 
 export async function GET() {
-  // Block this endpoint entirely in production
-  if (process.env.NODE_ENV === 'production') {
+  // Double guard: check both NODE_ENV and a build-time flag
+  if (process.env.NODE_ENV === 'production' || process.env.DISABLE_DEBUG_ENDPOINT === 'true') {
+    return Response.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  // Also block if not in development
+  if (process.env.NODE_ENV !== 'development') {
     return Response.json({ error: 'Not found' }, { status: 404 });
   }
 

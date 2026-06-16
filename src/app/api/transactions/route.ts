@@ -2,14 +2,14 @@
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth, AuthSession } from '@/lib/auth';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateReceiptNumber, generateJournalEntryNumber, calculateLineTotal } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, PaymentMethod, PaymentStatus } from '@/lib/types';
 import { checkoutSchema, validateInput } from '@/lib/validations';
 
-async function getTransactionsHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function getTransactionsHandler(request: NextRequest, session: AuthSession): Promise<Response> {
   const { searchParams } = new URL(request.url);
 
   const storeId = searchParams.get('storeId');
@@ -110,8 +110,7 @@ async function getTransactionsHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-async function createTransactionHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function createTransactionHandler(request: NextRequest, session: AuthSession): Promise<Response> {
   const body = await request.json();
 
   const validation = validateInput(checkoutSchema, body);
@@ -127,8 +126,8 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     discountAmount,
     notes,
   } = validation.data;
-  // SECURITY: Must use session user ID after requireAuth() is added
-  const cashierId = validation.data.cashierId; // TODO: Replace with session user ID from requireAuth()
+  // SECURITY: Use authenticated session user ID as cashier (do not trust client)
+  const cashierId = session.userId;
 
   if (!Object.values(PaymentMethod).includes(paymentMethod)) {
     return Response.json(
@@ -659,5 +658,5 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: fullTransaction }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getTransactionsHandler, 'TRANSACTIONS_LIST');
-export const POST = withErrorBoundary(createTransactionHandler, 'TRANSACTIONS_CREATE');
+export const GET = withErrorBoundary(requireAuth(getTransactionsHandler), 'TRANSACTIONS_LIST');
+export const POST = withErrorBoundary(requireAuth(createTransactionHandler), 'TRANSACTIONS_CREATE');

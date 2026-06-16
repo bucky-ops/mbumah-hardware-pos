@@ -2,11 +2,11 @@
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth, AuthSession } from '@/lib/auth';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
-async function stkPushHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function stkPushHandler(request: NextRequest, session: AuthSession): Promise<Response> {
   const body = await request.json();
 
   const {
@@ -130,4 +130,4 @@ async function stkPushHandler(...args: unknown[]): Promise<Response> {
   }
 }
 
-export const POST = withErrorBoundary(stkPushHandler, 'MPESA_STK_PUSH');
+export const POST = withErrorBoundary(requireAuth(stkPushHandler), 'MPESA_STK_PUSH');

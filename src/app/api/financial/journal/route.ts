@@ -2,12 +2,12 @@
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth, AuthSession } from '@/lib/auth';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateJournalEntryNumber } from '@/lib/helpers';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
-async function getJournalEntriesHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function getJournalEntriesHandler(request: NextRequest, session: AuthSession): Promise<Response> {
   const { searchParams } = new URL(request.url);
 
   const storeId = searchParams.get('storeId');
@@ -93,8 +93,7 @@ async function getJournalEntriesHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-async function createJournalEntryHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function createJournalEntryHandler(request: NextRequest, session: AuthSession): Promise<Response> {
   const body = await request.json();
 
   const {
@@ -104,8 +103,8 @@ async function createJournalEntryHandler(...args: unknown[]): Promise<Response> 
     referenceId,
     lines,
     isPosted,
-    createdBy,
   } = body;
+  const createdBy = session.userId;
 
   if (!storeId || !description || !lines || !Array.isArray(lines) || lines.length < 2) {
     return Response.json(
@@ -194,5 +193,5 @@ async function createJournalEntryHandler(...args: unknown[]): Promise<Response> 
   return Response.json({ success: true, data: entry }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getJournalEntriesHandler, 'JOURNAL_LIST');
-export const POST = withErrorBoundary(createJournalEntryHandler, 'JOURNAL_CREATE');
+export const GET = withErrorBoundary(requireAuth(getJournalEntriesHandler), 'JOURNAL_LIST');
+export const POST = withErrorBoundary(requireAuth(createJournalEntryHandler), 'JOURNAL_CREATE');

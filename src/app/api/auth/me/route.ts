@@ -4,6 +4,8 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
 async function getMeHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const authHeader = request.headers.get('authorization');
@@ -43,12 +45,28 @@ async function getMeHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
+  // M-09: Check idle timeout — if lastActiveAt is more than 30 minutes ago, invalidate
+  const now = new Date();
+  if (session.lastActiveAt && (now.getTime() - new Date(session.lastActiveAt).getTime()) > IDLE_TIMEOUT_MS) {
+    await db.session.delete({ where: { id: session.id } }).catch(() => {});
+    return Response.json(
+      { success: false, error: 'Session timed out due to inactivity. Please login again.' },
+      { status: 401 }
+    );
+  }
+
   if (!session.user.isActive) {
     return Response.json(
       { success: false, error: 'User account is deactivated.' },
       { status: 403 }
     );
   }
+
+  // M-09: Update session activity timestamp
+  await db.session.update({
+    where: { id: session.id },
+    data: { lastActiveAt: now },
+  }).catch(() => {});
 
   const user = session.user;
 
@@ -68,6 +86,7 @@ async function getMeHandler(...args: unknown[]): Promise<Response> {
       organization: {
         id: user.organization.id,
         name: user.organization.name,
+        taxPin: user.organization.taxPin,
       },
       store: user.store ? {
         id: user.store.id,

@@ -8,7 +8,7 @@ import { isCSRFValid, getClientIp, validateContentType, isRequestSizeValid, logS
 // Routes that must remain accessible without a Bearer token
 const PUBLIC_PATHS = [
   '/api/auth/login',
-  '/api/auth/logout',
+  // '/api/auth/logout' removed from PUBLIC_PATHS (M-07): requires auth token
   '/api/payments/mpesa/callback',
   '/api/security/csrf-token',
 ];
@@ -48,7 +48,7 @@ export async function middleware(request: NextRequest) {
 
   // ── Layer 1: Rate Limiting ─────────────────────────────────────
   const tier = getRateLimitTier(pathname, method);
-  const rateLimitKey = `${tier}:${clientIp}:${pathname.split('/').slice(0, 3).join('/')}`;
+  const rateLimitKey = `${tier}:${clientIp}`; // M-10: aggregate per IP per tier, not per path
   const rateLimitResult = isRateLimited(rateLimitKey, tier);
 
   if (rateLimitResult.limited) {
@@ -153,6 +153,17 @@ export async function middleware(request: NextRequest) {
   response.headers.set('X-RateLimit-Remaining', String(rateLimitResult.remaining));
   response.headers.set('X-RateLimit-Reset', String(rateLimitResult.resetAt));
   response.headers.set('X-RateLimit-Limit', String(RATE_LIMIT_TIERS[tier].max));
+
+  // ── Security Response Headers (H-04) ──────────────────────────
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+
+  // HSTS — only in production
+  if (process.env.NODE_ENV === 'production') {
+    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  }
 
   return response;
 }
