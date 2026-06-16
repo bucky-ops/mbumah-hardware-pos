@@ -8,12 +8,12 @@ import {
   Minus, RotateCcw, Loader2, Filter, Users, Wallet,
   TrendingUp, TrendingDown, Scale, ChevronUp, ChevronDown,
   FileText, User, CircleDollarSign, AlertCircle, MoreHorizontal,
-  Pencil, Trash2,
+  Pencil, Trash2, MessageCircle,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
-  customerCreditsApi, customersApi,
+  customerCreditsApi, customersApi, whatsappApi,
   formatKES, formatDate, formatDateTime,
   type CustomerCreditItem,
   type CustomerItem,
@@ -396,6 +396,27 @@ export default function CreditsTab() {
   }
 
   // Edit helpers
+  async function handleSendCreditWhatsApp(entry: CustomerCreditItem) {
+    try {
+      const customer = customers.find((c: CustomerItem) => c.id === entry.customerId);
+      const phone = prompt('Enter WhatsApp phone number:', customer?.phone || '') || '';
+      if (!phone) return;
+      const res = await whatsappApi.sendDocument({
+        type: 'credit_note',
+        documentId: entry.id,
+        storeId: currentStoreId,
+        phone,
+        customerId: entry.customerId,
+      });
+      if (res.waLink) {
+        window.open(res.waLink, '_blank');
+        toast.success(`${res.documentTitle} sent via WhatsApp`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send via WhatsApp');
+    }
+  }
+
   function openEditDialog(credit: CustomerCreditItem) {
     setEditingCredit(credit);
     setEditCreditType(credit.creditType);
@@ -749,6 +770,13 @@ export default function CreditsTab() {
                                       Edit Entry
                                     </DropdownMenuItem>
                                   )}
+                                  <DropdownMenuItem
+                                    onClick={() => handleSendCreditWhatsApp(entry)}
+                                    className="gap-2 text-green-600 dark:text-green-400 focus:text-green-600 focus:bg-green-50 dark:focus:bg-green-950/30"
+                                  >
+                                    <MessageCircle className="h-4 w-4" />
+                                    Send via WhatsApp
+                                  </DropdownMenuItem>
                                   {!isVoided && (
                                     <>
                                       <DropdownMenuSeparator />

@@ -13,7 +13,7 @@ import {
 
 import { useAppStore } from '@/lib/stores';
 import {
-  deliveryNotesApi,
+  deliveryNotesApi, whatsappApi,
   formatDate, formatDateTime, formatKES,
   openWhatsApp,
   type DeliveryNoteItem,
@@ -296,25 +296,21 @@ export default function DeliveryNotesTab() {
   }
 
   function handleSendWhatsApp(note: DeliveryNoteItem) {
-    const phone = note.customerPhone || '';
-    const itemsList = note.items
-      ? note.items.map((item, i) => `${i + 1}. ${item.productName} x${item.quantity} ${item.unitType}`).join('\n')
-      : '';
-    const message = [
-      `*Delivery Note: ${note.deliveryNumber}*`,
-      `Customer: ${note.customerName}`,
-      note.deliveryAddress ? `Address: ${note.deliveryAddress}` : '',
-      note.driverName ? `Driver: ${note.driverName}` : '',
-      note.vehicleNumber ? `Vehicle: ${note.vehicleNumber}` : '',
-      note.scheduledDate ? `Scheduled: ${formatDate(note.scheduledDate)}` : '',
-      '',
-      itemsList ? `*Items:*\n${itemsList}` : '',
-      '',
-      'Thank you for doing business with us',
-      '',
-      '— Mbumah Hardware',
-    ].filter(Boolean).join('\n');
-    openWhatsApp(phone, message);
+    const phone = prompt('Enter WhatsApp phone number:', note.customerPhone || '') || '';
+    if (!phone) return;
+    whatsappApi.sendDocument({
+      type: 'delivery_note',
+      documentId: note.id,
+      storeId: currentStoreId,
+      phone,
+    }).then((res) => {
+      if (res.waLink) {
+        window.open(res.waLink, '_blank');
+        toast.success(`${res.documentTitle} sent via WhatsApp`);
+      }
+    }).catch((err: Error) => {
+      toast.error(err.message || 'Failed to send via WhatsApp');
+    });
   }
 
   function handleStatusUpdate(id: string, newStatus: string) {

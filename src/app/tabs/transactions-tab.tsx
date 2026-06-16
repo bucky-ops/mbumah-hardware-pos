@@ -6,10 +6,10 @@ import {
   ShoppingBag, Search, Download, ChevronDown, ChevronUp,
   CalendarDays, TrendingUp, Hash, CreditCard, Smartphone, Banknote, Wallet,
   Filter, FileText, RotateCcw, Ban, Eye, Printer, AlertTriangle,
-  ArrowUpRight, ArrowDownRight, Minus, Receipt, X,
+  ArrowUpRight, ArrowDownRight, Minus, Receipt, X, MessageCircle,
 } from 'lucide-react';
 
-import { transactionsApi, formatKES, formatDateTime, type TransactionItem, type SaleItemDetail } from '@/lib/api';
+import { transactionsApi, whatsappApi, formatKES, formatDateTime, type TransactionItem, type SaleItemDetail } from '@/lib/api';
 import { useAppStore } from '@/lib/stores';
 
 import { Button } from '@/components/ui/button';
@@ -385,6 +385,7 @@ function TransactionRow({
   onViewReceipt,
   onRefund,
   onVoid,
+  onSendWhatsApp,
 }: {
   transaction: TransactionItem;
   isExpanded: boolean;
@@ -392,6 +393,7 @@ function TransactionRow({
   onViewReceipt: () => void;
   onRefund: () => void;
   onVoid: () => void;
+  onSendWhatsApp: () => void;
 }) {
   const items = transaction.items || [];
   const txType = getTransactionType(transaction);
@@ -502,6 +504,9 @@ function TransactionRow({
                     <Ban className="h-3 w-3 mr-1" /> Void
                   </Button>
                 )}
+                <Button variant="outline" size="sm" className="h-7 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30" onClick={(e) => { e.stopPropagation(); onSendWhatsApp(); }}>
+                  <MessageCircle className="h-3 w-3 mr-1" /> WhatsApp
+                </Button>
               </div>
             </div>
           </TableCell>
@@ -629,6 +634,25 @@ export default function TransactionsTab() {
   const handleVoid = useCallback((transaction: TransactionItem) => {
     setVoidTransaction(transaction);
   }, []);
+
+  const handleSendReceiptWhatsApp = useCallback(async (transaction: TransactionItem) => {
+    try {
+      const phone = prompt('Enter WhatsApp phone number:', transaction.customer?.phone || '') || '';
+      if (!phone) return;
+      const res = await whatsappApi.sendDocument({
+        type: 'receipt',
+        documentId: transaction.id,
+        storeId: currentStoreId,
+        phone,
+      });
+      if (res.waLink) {
+        window.open(res.waLink, '_blank');
+        toast.success(`${res.documentTitle} sent via WhatsApp`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send via WhatsApp');
+    }
+  }, [currentStoreId]);
 
   return (
     <div className="space-y-6">
@@ -878,6 +902,7 @@ export default function TransactionsTab() {
                       onViewReceipt={() => handleViewReceipt(transaction)}
                       onRefund={() => handleRefund(transaction)}
                       onVoid={() => handleVoid(transaction)}
+                      onSendWhatsApp={() => handleSendReceiptWhatsApp(transaction)}
                     />
                   ))}
                 </TableBody>

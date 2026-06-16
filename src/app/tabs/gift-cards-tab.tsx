@@ -10,16 +10,19 @@ import {
   XCircle, Clock, ChevronDown, Settings2, Sparkles,
   TrendingDown, TrendingUp, Ban, RefreshCw, Wallet,
   MoreHorizontal, Pencil, Trash2, ShieldAlert, Info,
+  MessageCircle,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
   giftCardsApi,
   customersApi,
+  whatsappApi,
   formatKES,
   formatDate,
   formatDateTime,
 } from '@/lib/api';
+import type { UpdateGiftCardPayload } from '@/lib/types';
 import type {
   GiftCardItem,
   GiftCardReason,
@@ -510,8 +513,8 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
   const updateMutation = useMutation({
     mutationFn: async () => {
       if (!selectedCard) throw new Error('No card selected');
-      const payload: Record<string, unknown> = {
-        reason: editForm.reason,
+      const payload: UpdateGiftCardPayload = {
+        reason: editForm.reason as GiftCardReason,
         recipientName: editForm.recipientName || undefined,
         recipientPhone: editForm.recipientPhone || undefined,
         recipientEmail: editForm.recipientEmail || undefined,
@@ -644,6 +647,25 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
   });
 
   // ── Helpers ──
+  const handleSendGiftCardWhatsApp = useCallback(async (card: GiftCardItem) => {
+    try {
+      const phone = prompt('Enter WhatsApp phone number:', card.recipientPhone || '') || '';
+      if (!phone) return;
+      const res = await whatsappApi.sendDocument({
+        type: 'gift_card',
+        documentId: card.id,
+        storeId,
+        phone,
+      });
+      if (res.waLink) {
+        window.open(res.waLink, '_blank');
+        toast.success(`${res.documentTitle} sent via WhatsApp`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send via WhatsApp');
+    }
+  }, [storeId]);
+
   const resetCreateForm = useCallback(() => {
     setCreateForm({
       code: generateGiftCardCode(),
@@ -890,7 +912,7 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="h-7 w-7 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <MoreHorizontal className="h-4 w-4" />
@@ -905,6 +927,7 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
                             <DropdownMenuItem
                               onClick={() => openDetailDialog(card)}
                               className="gap-2 cursor-pointer"
+                              onSelect={(e) => e.preventDefault()}
                             >
                               <Info className="h-4 w-4" />
                               View Details
@@ -915,6 +938,7 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
                               <DropdownMenuItem
                                 onClick={() => openEditDialog(card)}
                                 className="gap-2 cursor-pointer"
+                                onSelect={(e) => e.preventDefault()}
                               >
                                 <Pencil className="h-4 w-4" />
                                 Edit Gift Card
@@ -959,6 +983,7 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
                                       setRedeemDialogOpen(true);
                                     }}
                                     className="gap-2 cursor-pointer"
+                                    onSelect={(e) => e.preventDefault()}
                                   >
                                     <TrendingDown className="h-4 w-4 text-green-600" />
                                     Redeem
@@ -974,6 +999,7 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
                                       setAdjustDialogOpen(true);
                                     }}
                                     className="gap-2 cursor-pointer"
+                                    onSelect={(e) => e.preventDefault()}
                                   >
                                     <TrendingUp className="h-4 w-4 text-cyan-600" />
                                     Adjust Balance
@@ -985,12 +1011,23 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
 
                           {/* Cancel / Delete section */}
                           <DropdownMenuSeparator />
+                          {/* Send via WhatsApp */}
+                          <DropdownMenuItem
+                            onClick={() => handleSendGiftCardWhatsApp(card)}
+                            className="gap-2 cursor-pointer text-green-600 dark:text-green-400 focus:text-green-600 focus:bg-green-50 dark:focus:bg-green-950/30"
+                            onSelect={(e) => e.preventDefault()}
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                            Send via WhatsApp
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
                           {canCancel(userRole) && ['ACTIVE', 'PARTIALLY_REDEEMED'].includes(card.status) && (
                             <DropdownMenuItem
                               onClick={() => {
                                 setSelectedCard(card);
                                 setCancelDialogOpen(true);
                               }}
+                              onSelect={(e) => e.preventDefault()}
                               className="gap-2 cursor-pointer text-amber-600 dark:text-amber-400 focus:text-amber-600 focus:bg-amber-50 dark:focus:bg-amber-950/30"
                             >
                               <Ban className="h-4 w-4" />
@@ -1003,6 +1040,7 @@ export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTab
                                 setSelectedCard(card);
                                 setDeleteDialogOpen(true);
                               }}
+                              onSelect={(e) => e.preventDefault()}
                               className="gap-2 cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/30"
                             >
                               <Trash2 className="h-4 w-4" />

@@ -15,7 +15,7 @@ import {
 
 import { useAppStore } from '@/lib/stores';
 import {
-  vouchersApi, voucherCampaignsApi,
+  vouchersApi, voucherCampaignsApi, whatsappApi,
   formatKES, formatDate, formatDateTime,
   openWhatsApp, openEmail, openSMS,
   type VoucherItem,
@@ -530,8 +530,19 @@ export default function VouchersTab() {
 
   function sendVoucherWhatsApp(voucher: VoucherItem, phone: string) {
     if (!phone) { toast.error('No phone number available'); return; }
-    openWhatsApp(phone, getVoucherMessage(voucher));
-    toast.success('WhatsApp opened with voucher details');
+    whatsappApi.sendDocument({
+      type: 'voucher',
+      documentId: voucher.id,
+      storeId: currentStoreId,
+      phone,
+    }).then((res) => {
+      if (res.waLink) {
+        window.open(res.waLink, '_blank');
+        toast.success(`${res.documentTitle} sent via WhatsApp`);
+      }
+    }).catch((err: Error) => {
+      toast.error(err.message || 'Failed to send via WhatsApp');
+    });
   }
 
   function sendVoucherSMS(voucher: VoucherItem, phone: string) {

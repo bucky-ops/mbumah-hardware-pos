@@ -8,12 +8,13 @@ import {
   MoreVertical, Edit, Trash2, Loader2, CheckCircle, Copy, ArrowUpDown,
   Minus, TrendingUp, BarChart3, ChevronUp, ChevronDown, ChevronsUpDown,
   Download, History, ArrowUp, ArrowDown, RotateCcw, X, ImageIcon,
-  Filter, ChevronRight, Tag, Palette, Zap, ShoppingCart, Info
+  Filter, ChevronRight, Tag, Palette, Zap, ShoppingCart, Info,
+  MessageCircle
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
-  productsApi, categoriesApi, stockMovementsApi,
+  productsApi, categoriesApi, stockMovementsApi, whatsappApi,
   formatKES, formatDate, formatDateTime,
   type ProductListItem,
   type CategoryItem,
@@ -561,6 +562,24 @@ export default function InventoryTab() {
     });
   };
 
+  const handleSendInventoryReport = async () => {
+    try {
+      const phone = prompt('Enter WhatsApp phone number to send inventory report:') || '';
+      if (!phone) return;
+      const res = await whatsappApi.sendDocument({
+        type: 'inventory',
+        storeId: currentStoreId,
+        phone,
+      });
+      if (res.waLink) {
+        window.open(res.waLink, '_blank');
+        toast.success('Inventory report sent via WhatsApp');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send inventory report');
+    }
+  };
+
   const handleStockAdjust = () => {
     if (!adjustStockProduct || stockAdjustAmount === 0) return;
     stockAdjustMutation.mutate({
@@ -718,6 +737,16 @@ export default function InventoryTab() {
         </Select>
 
         {/* Category management button */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon" className="h-10 w-10 shrink-0 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30" onClick={() => handleSendInventoryReport()}>
+                <MessageCircle className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Send Inventory Report via WhatsApp</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>

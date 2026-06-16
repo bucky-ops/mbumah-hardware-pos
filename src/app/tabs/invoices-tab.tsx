@@ -13,7 +13,7 @@ import {
 
 import { useAppStore } from '@/lib/stores';
 import {
-  invoicesApi, productsApi, customersApi,
+  invoicesApi, productsApi, customersApi, whatsappApi,
   formatKES, formatDate, formatDateTime,
   openWhatsApp,
   type InvoiceItem,
@@ -440,23 +440,24 @@ export default function InvoicesTab() {
     window.print();
   };
 
-  const handleSendWhatsApp = (invoice: InvoiceItem) => {
-    const phone = invoice.customerPhone || '';
-    const itemsList = invoice.items
-      ? invoice.items.map((item, i) => `${i + 1}. ${item.productName} x${item.quantity} ${item.unitType} — ${formatKES(item.lineTotal)}`).join('\n')
-      : '';
-    const message = [
-      `*${invoice.invoiceType === 'QUOTATION' ? 'Quotation' : invoice.invoiceType === 'PROFORMA' ? 'Proforma' : 'Invoice'}: ${invoice.invoiceNumber}*`,
-      `Date: ${formatDate(invoice.issueDate)}`,
-      `Customer: ${invoice.customerName}`,
-      '',
-      itemsList ? `*Items:*\n${itemsList}` : '',
-      `*Total: ${formatKES(invoice.totalAmount)}*`,
-      invoice.dueDate ? `Due Date: ${formatDate(invoice.dueDate)}` : '',
-      '',
-      '— Mbumah Hardware',
-    ].filter(Boolean).join('\n');
-    openWhatsApp(phone, message);
+  const handleSendWhatsApp = async (invoice: InvoiceItem) => {
+    try {
+      const phone = prompt('Enter WhatsApp phone number:', invoice.customerPhone || '') || '';
+      if (!phone) return;
+      const docType = invoice.invoiceType === 'QUOTATION' ? 'quotation' : invoice.invoiceType === 'PROFORMA' ? 'quotation' : 'invoice';
+      const res = await whatsappApi.sendDocument({
+        type: docType,
+        documentId: invoice.id,
+        storeId: currentStoreId,
+        phone,
+      });
+      if (res.waLink) {
+        window.open(res.waLink, '_blank');
+        toast.success(`${res.documentTitle} sent via WhatsApp`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send via WhatsApp');
+    }
   };
 
   // ── Product dropdown ref ──

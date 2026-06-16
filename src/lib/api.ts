@@ -124,6 +124,50 @@ async function request<T>(
     throw new Error('Session expired. Please login again.');
   }
 
+  // Handle CSRF failure: retry once with a fresh token
+  if (response.status === 403 && isStateChanging) {
+    const errorData = await response.json().catch(() => ({}));
+    const errorMsg = errorData.error || errorData.message || '';
+    if (errorMsg.toLowerCase().includes('csrf')) {
+      // Force refresh the CSRF token and retry once
+      csrfToken = null;
+      await fetchCSRFToken();
+      if (!csrfToken && typeof document !== 'undefined') {
+        const cookieMatch = document.cookie.match(/csrf_token=([^;]+)/);
+        if (cookieMatch) csrfToken = cookieMatch[1];
+      }
+      const retryHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+        ...(options.headers as Record<string, string> || {}),
+      };
+      const retryResponse = await fetch(`${API_BASE}${endpoint}`, {
+        ...options,
+        headers: retryHeaders,
+        credentials: 'same-origin',
+      });
+      if (retryResponse.status === 401) {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('mbt_token');
+          localStorage.removeItem('mbt_user');
+          window.location.reload();
+        }
+        throw new Error('Session expired. Please login again.');
+      }
+      if (!retryResponse.ok) {
+        const retryErrorData = await retryResponse.json().catch(() => ({}));
+        throw new Error(retryErrorData.error || retryErrorData.message || `Request failed: ${retryResponse.status}`);
+      }
+      const retryJson = await retryResponse.json();
+      if (retryJson && retryJson.success && retryJson.data === undefined) {
+        retryJson.data = ([] as unknown) as T;
+      }
+      return retryJson;
+    }
+    throw new Error(errorMsg || `Request failed: ${response.status}`);
+  }
+
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.error || errorData.message || `Request failed: ${response.status}`);
@@ -1634,6 +1678,12 @@ export const whatsappApi = {
     return request<{ phone: string; waLink: string; messageType: string }>('/whatsapp/send', {
       method: 'POST',
       body: JSON.stringify(params),
+    });
+  },
+  sendDocument: async (data: { type: string; documentId?: string; storeId: string; phone?: string; message?: string; customerId?: string }) => {
+    return request<{ waLink: string; phone: string; message: string; documentTitle: string }>('/whatsapp/send-document', {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
   },
 };
