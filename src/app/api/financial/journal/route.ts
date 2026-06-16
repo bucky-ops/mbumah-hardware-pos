@@ -23,7 +23,7 @@ async function getJournalEntriesHandler(request: NextRequest, session: AuthSessi
   const dateFrom = searchParams.get('dateFrom') || '';
   const dateTo = searchParams.get('dateTo') || '';
   const page = parseInt(searchParams.get('page') || '1');
-  const limit = parseInt(searchParams.get('limit') || '20');
+  const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '20'), 1), 100);
   const sortBy = searchParams.get('sortBy') || 'entryDate';
   const sortOrder = searchParams.get('sortOrder') || 'desc';
 
@@ -132,10 +132,10 @@ async function createJournalEntryHandler(request: NextRequest, session: AuthSess
   });
 
   if (accounts.length !== accountIds.length) {
-    const foundIds = accounts.map((a) => a.id);
-    const missingIds = accountIds.filter((id: string) => !foundIds.includes(id));
+    // SECURITY (L-01): Don't reveal which account IDs are missing — generic
+    // message avoids leaking the chart-of-accounts namespace to the client.
     return Response.json(
-      { success: false, error: `Accounts not found: ${missingIds.join(', ')}` },
+      { success: false, error: 'One or more accounts not found.' },
       { status: 400 }
     );
   }

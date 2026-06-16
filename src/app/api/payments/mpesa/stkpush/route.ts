@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { requireAuth, AuthSession } from '@/lib/auth';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
+import { maskSensitiveData } from '@/lib/security';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
 async function stkPushHandler(request: NextRequest, session: AuthSession): Promise<Response> {
@@ -64,14 +65,18 @@ async function stkPushHandler(request: NextRequest, session: AuthSession): Promi
       });
     }
 
+    // L-02: mask phone numbers in logs to prevent PII leakage. The full phone
+    // number is never needed for audit purposes — last 4 digits is enough to
+    // correlate with support tickets and customer records.
+    const maskedPhone = maskSensitiveData(formattedPhone, 'phone');
     await systemLog({
       action: 'MPESA_STK_PUSH_INITIATED',
       component: LogComponent.PAYMENT,
       severity: LogSeverity.INFO,
-      message: `M-Pesa STK Push initiated for ${formattedPhone}, amount KES ${amount}`,
+      message: `M-Pesa STK Push initiated for ${maskedPhone}, amount KES ${amount}`,
       storeId: storeId || undefined,
       metadata: {
-        phoneNumber: formattedPhone,
+        phoneNumber: maskedPhone,
         amount,
         checkoutRequestId: mockData.checkoutRequestId || mockData.CheckoutRequestID,
         transactionId,
@@ -103,14 +108,16 @@ async function stkPushHandler(request: NextRequest, session: AuthSession): Promi
       });
     }
 
+    // L-02: mask phone number before logging (avoid plaintext PII in logs).
+    const maskedPhone = maskSensitiveData(formattedPhone, 'phone');
     await systemLog({
       action: 'MPESA_STK_PUSH_SIMULATED',
       component: LogComponent.PAYMENT,
       severity: LogSeverity.WARN,
-      message: `M-Pesa mock service unavailable. Simulated STK Push for ${formattedPhone}`,
+      message: `M-Pesa mock service unavailable. Simulated STK Push for ${maskedPhone}`,
       storeId: storeId || undefined,
       metadata: {
-        phoneNumber: formattedPhone,
+        phoneNumber: maskedPhone,
         amount,
         checkoutRequestId: simulatedCheckoutId,
         error: error instanceof Error ? error.message : 'Unknown error',

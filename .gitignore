@@ -78,3 +78,7 @@ screenshots/
 
 # Runner PID
 /tmp/
+
+# H-07: seeded user credentials (random per-user passwords from prisma/seed.ts)
+.seed-passwords.local
+*.seed-passwords.local

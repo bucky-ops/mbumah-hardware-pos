@@ -22,7 +22,7 @@ async function getCustomersHandler(request: NextRequest, session: AuthSession): 
   const isActive = searchParams.get('isActive');
   const hasDebt = searchParams.get('hasDebt') === 'true';
   const page = parseInt(searchParams.get('page') || '1');
-  const limit = parseInt(searchParams.get('limit') || '50');
+  const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '50'), 1), 100);
   const sortBy = searchParams.get('sortBy') || 'name';
   const sortOrder = searchParams.get('sortOrder') || 'asc';
 
@@ -103,10 +103,13 @@ async function createCustomerHandler(request: NextRequest, session: AuthSession)
     address,
     idNumber,
     debtLimit,
+    // SECURITY (H-09): Read preferredChannel and isActive from the Zod-validated
+    // payload instead of the raw request body. They are now part of
+    // createCustomerSchema, so any malformed value is rejected at the schema layer
+    // before reaching this handler.
+    preferredChannel,
+    isActive,
   } = validation.data;
-
-  const preferredChannel = (body as Record<string, unknown>).preferredChannel || 'SMS';
-  const isActive = (body as Record<string, unknown>).isActive ?? true;
 
     if (phone) {
     const existing = await db.customer.findFirst({
@@ -129,7 +132,7 @@ async function createCustomerHandler(request: NextRequest, session: AuthSession)
       address: address || null,
       idNumber: idNumber || null,
       debtLimit: debtLimit ?? 50000,
-      preferredChannel: preferredChannel || 'SMS',
+      preferredChannel: preferredChannel ?? 'SMS',
       isActive: isActive ?? true,
     },
   });

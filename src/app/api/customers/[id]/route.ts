@@ -97,9 +97,15 @@ async function updateCustomerHandler(request: NextRequest, session: AuthSession,
   }
 
   const updateData: Record<string, unknown> = {};
+  // SECURITY (H-02): `loyaltyPoints` and `debtLimit` are intentionally NOT in this
+  // allowlist. Both have financial impact (loyalty points can be redeemed for
+  // discounts; debtLimit governs how much credit a customer can take on) and must
+  // not be mutable from the generic customer-update endpoint. They should only be
+  // modifiable through dedicated admin endpoints with proper role checks
+  // (e.g. SUPER_ADMIN / ACCOUNTANT) and explicit audit logging.
   const allowedFields = [
     'name', 'phone', 'email', 'address', 'idNumber',
-    'debtLimit', 'preferredChannel', 'isActive', 'loyaltyPoints',
+    'preferredChannel', 'isActive',
   ];
 
   for (const field of allowedFields) {

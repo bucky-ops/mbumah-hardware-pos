@@ -25,7 +25,7 @@ async function getProductsHandler(request: NextRequest, session: AuthSession): P
   const lowStock = searchParams.get('lowStock') === 'true';
   const isActive = searchParams.get('isActive');
   const page = parseInt(searchParams.get('page') || '1');
-  const limit = parseInt(searchParams.get('limit') || '50');
+  const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '50'), 1), 100);
   const sortBy = searchParams.get('sortBy') || 'name';
   const sortOrder = searchParams.get('sortOrder') || 'asc';
 

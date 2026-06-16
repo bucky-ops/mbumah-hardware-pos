@@ -73,6 +73,12 @@ export const createCustomerSchema = z.object({
   address: z.string().max(500).optional(),
   idNumber: z.string().max(50).optional(),
   debtLimit: z.number().nonnegative().optional(),
+  // SECURITY (H-09): preferredChannel and isActive must go through Zod validation
+  // rather than being read from the raw body, so that arbitrary / malicious values
+  // cannot bypass the schema (e.g. a non-boolean isActive string, or a channel
+  // outside the allowed set).
+  preferredChannel: z.enum(['SMS', 'EMAIL', 'WHATSAPP', 'PRINT']).optional(),
+  isActive: z.boolean().optional(),
 });
 
 // Product schemas

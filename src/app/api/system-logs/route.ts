@@ -21,7 +21,7 @@ async function getSystemLogsHandler(
   const dateTo = searchParams.get('dateTo') || '';
   const search = searchParams.get('search') || '';
   const page = parseInt(searchParams.get('page') || '1');
-  const limit = parseInt(searchParams.get('limit') || '50');
+  const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '50'), 1), 100);
   const sortBy = searchParams.get('sortBy') || 'createdAt';
   const sortOrder = searchParams.get('sortOrder') || 'desc';
 

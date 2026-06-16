@@ -29,7 +29,7 @@ async function getTransactionsHandler(request: NextRequest, session: AuthSession
   const dateFrom = searchParams.get('dateFrom') || '';
   const dateTo = searchParams.get('dateTo') || '';
   const page = parseInt(searchParams.get('page') || '1');
-  const limit = parseInt(searchParams.get('limit') || '20');
+  const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '20'), 1), 100);
   const sortBy = searchParams.get('sortBy') || 'createdAt';
   const sortOrder = searchParams.get('sortOrder') || 'desc';
 
@@ -178,10 +178,11 @@ async function createTransactionHandler(request: NextRequest, session: AuthSessi
   });
 
   if (products.length !== productIds.length) {
-    const foundIds = products.map((p) => p.id);
-    const missingIds = productIds.filter((id: string) => !foundIds.includes(id));
+    // SECURITY (L-01): Don't echo the missing product IDs back to the client —
+    // revealing which IDs are/aren't valid lets an attacker enumerate the product
+    // namespace and probe for soft-deleted/inactive records. Use a generic message.
     return Response.json(
-      { success: false, error: `Products not found or inactive: ${missingIds.join(', ')}` },
+      { success: false, error: 'One or more products not found.' },
       { status: 400 }
     );
   }

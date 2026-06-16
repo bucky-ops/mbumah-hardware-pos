@@ -1,6 +1,29 @@
 // GET /api/debug - Debug endpoint for diagnosing deployment issues
 // COMPLETELY DISABLED in production — returns 404 at both build-time and runtime
 
+// SECURITY (L-01): Sanitize raw database/Prisma error messages before surfacing
+// them in the (development-only) debug payload. Raw driver messages can include
+// connection-string fragments, internal schema/table names, and SQL syntax — none
+// of which should be exposed even to a developer looking at the JSON response in
+// a browser. We classify the error by family and return a stable, generic string.
+function sanitizeDebugError(label: string, err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  const lower = raw.toLowerCase();
+  if (lower.includes('authentication') || lower.includes('password') || lower.includes('credential')) {
+    return `${label}: authentication failed`;
+  }
+  if (lower.includes('connect') || lower.includes('econnrefused') || lower.includes('timeout') || lower.includes('reach')) {
+    return `${label}: connection failed`;
+  }
+  if (lower.includes('does not exist') || lower.includes('relation') || lower.includes('column')) {
+    return `${label}: schema/table not found`;
+  }
+  if (lower.includes('permission') || lower.includes('denied')) {
+    return `${label}: permission denied`;
+  }
+  return `${label}: failed`;
+}
+
 export async function GET() {
   // Double guard: check both NODE_ENV and a build-time flag
   if (process.env.NODE_ENV === 'production' || process.env.DISABLE_DEBUG_ENDPOINT === 'true') {
@@ -54,7 +77,7 @@ export async function GET() {
       } catch (queryErr: unknown) {
         results.databaseQuery = {
           status: 'Failed',
-          error: queryErr instanceof Error ? queryErr.message : String(queryErr),
+          error: sanitizeDebugError('database query', queryErr),
         };
       }
 
@@ -63,13 +86,13 @@ export async function GET() {
     } catch (createErr: unknown) {
       results.prismaClientCreate = {
         status: 'Failed',
-        error: createErr instanceof Error ? createErr.message : String(createErr),
+        error: sanitizeDebugError('prisma client create', createErr),
       };
     }
   } catch (importErr: unknown) {
     results.prismaImport = {
       status: 'Failed',
-      error: importErr instanceof Error ? importErr.message : String(importErr),
+      error: sanitizeDebugError('prisma import', importErr),
     };
   }
 
@@ -92,7 +115,7 @@ export async function GET() {
           files: existsSync(resolved) ? readdirSync(resolved).slice(0, 10) : [],
         };
       } catch (e) {
-        engineCheck[p] = `Error: ${e}`;
+        engineCheck[p] = sanitizeDebugError('path check', e);
       }
     }
     results.prismaPaths = engineCheck;

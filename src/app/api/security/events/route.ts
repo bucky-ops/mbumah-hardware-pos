@@ -13,7 +13,7 @@ async function getSecurityEventsHandler(
   const { searchParams } = new URL(request.url);
 
   const page = parseInt(searchParams.get('page') || '1');
-  const limit = parseInt(searchParams.get('limit') || '20');
+  const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '20'), 1), 100);
   const eventType = searchParams.get('eventType') || '';
   const severity = searchParams.get('severity') || '';
   const ipAddress = searchParams.get('ipAddress') || '';

@@ -1,9 +1,140 @@
 // Database seed script - runs on first boot if no users exist
+//
+// H-07: Seed Default Passwords
+// ----------------------------------------------------------------------------
+// All seeded users are now given a UNIQUE, cryptographically-random password
+// generated with `crypto.randomBytes`. The passwords are written to
+// `<project_root>/.seed-passwords.local` (gitignored) AND printed to stdout
+// with a warning banner. They are NOT hardcoded in source.
+//
+// RECOMMENDED FULL FIX (requires schema change, tracked as follow-up):
+//  - Add `mustChangePassword Boolean @default(false)` to the User model.
+//  - Set `mustChangePassword: true` for all seeded users so the auth layer
+//    forces a password reset on first login.
+//  - The login route (Task 5-a) already returns `requiresReset` for legacy
+//    `hashed_`-prefixed hashes; wiring that flag to a real DB column is the
+//    remaining piece. See Task 5-a follow-up items in the worklog.
+// ----------------------------------------------------------------------------
 
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
+import { writeFileSync } from 'fs';
+import { join } from 'path';
 
 const prisma = new PrismaClient();
+
+// ---------------------------------------------------------------------------
+// H-07: Secure password generation + credential journaling
+// ---------------------------------------------------------------------------
+// Collects (email, plaintext) pairs so we can write them all to
+// `.seed-passwords.local` and print them at the end of the seed run.
+const seededCredentials: Array<{ email: string; password: string; role: string }> = [];
+
+/**
+ * Generate a cryptographically-secure password of the given length using
+ * `crypto.randomBytes`. The character set is chosen so the output satisfies
+ * the M-03 password policy (min 8 chars + uppercase + lowercase + digit +
+ * special) introduced in Task 6-a.
+ *
+ * The password is built by rejection-sampling bytes into a curated alphabet
+ * (no modulo bias). At least one character from each required class is then
+ * force-injected and the result is shuffled (Fisher-Yates, also driven by
+ * `randomBytes`) so the injected characters do not occupy fixed positions.
+ */
+function generateSecurePassword(length: number = 16): string {
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';  // no I, O
+  const lower = 'abcdefghijkmnopqrstuvwxyz';  // no l
+  const digits = '23456789';                  // no 0, 1
+  const special = '!@#$%^&*-_=+';
+  const all = upper + lower + digits + special;
+
+  function sampleFrom(alphabet: string, n: number): string {
+    const k = alphabet.length;
+    const limit = Math.floor(256 / k) * k;
+    let out = '';
+    let buf = randomBytes(n * 2 + 8);
+    let i = 0;
+    while (out.length < n) {
+      if (i >= buf.length) { buf = randomBytes(n * 2 + 8); i = 0; }
+      const b = buf[i++];
+      if (b < limit) out += alphabet[b % k];
+    }
+    return out;
+  }
+
+  // Force one char from each required class so the policy is always met.
+  const parts = [
+    sampleFrom(upper, 1),
+    sampleFrom(lower, 1),
+    sampleFrom(digits, 1),
+    sampleFrom(special, 1),
+    sampleFrom(all, length - 4),
+  ];
+
+  // Fisher-Yates shuffle driven by randomBytes.
+  const arr = parts.join('').split('');
+  const shuffleBuf = randomBytes(arr.length * 2);
+  for (let j = arr.length - 1; j > 0; j--) {
+    const limit = Math.floor(256 / (j + 1)) * (j + 1);
+    let idx = shuffleBuf[j * 2] + (j * 2 + 1 < shuffleBuf.length ? shuffleBuf[j * 2 + 1] << 8 : 0);
+    while (idx >= limit) {
+      idx = randomBytes(2).readUInt16BE(0);
+    }
+    const swapWith = idx % (j + 1);
+    const tmp = arr[j]; arr[j] = arr[swapWith]; arr[swapWith] = tmp;
+  }
+  return arr.join('');
+}
+
+/**
+ * Generate a fresh secure password, hash it, and journal the plaintext for
+ * operator retrieval. Returns the bcrypt hash for storage on the User row.
+ */
+async function makeHashedPasswordFor(email: string, role: string): Promise<string> {
+  const password = generateSecurePassword(16);
+  const hash = await bcrypt.hash(password, 12);
+  seededCredentials.push({ email, password, role });
+  return hash;
+}
+
+/**
+ * Print + persist all seeded credentials at the end of the run. The file is
+ * written to `<project_root>/.seed-passwords.local` (gitignored). The same
+ * data is also printed to stdout with a hard-to-miss warning banner so
+ * anyone watching the seed output captures the passwords.
+ */
+function dumpSeededCredentials(): void {
+  if (seededCredentials.length === 0) return;
+
+  const banner =
+    '\n' +
+    '============================================================\n' +
+    '  SEEDED USER CREDENTIALS — CHANGE THESE IMMEDIATELY ON FIRST LOGIN\n' +
+    '  (H-07: random per-user passwords generated with crypto.randomBytes)\n' +
+    '============================================================\n';
+  const lines = seededCredentials.map(
+    (c) => `${c.email.padEnd(36)} | ${c.role.padEnd(16)} | ${c.password}`
+  );
+  const body = banner + lines.join('\n') + '\n' +
+    '------------------------------------------------------------\n' +
+    'These credentials have ALSO been written to <project_root>/.seed-passwords.local\n' +
+    '(gitignored). Delete that file after distributing/rotating the passwords.\n';
+  console.warn(body);
+
+  try {
+    // Use process.cwd() (not __dirname) so the file lands in a
+    // predictable location regardless of whether Prisma runs the seed
+    // via ts-node (CommonJS) or via tsx/esbuild (ESM, where __dirname
+    // is undefined). When run via `npm run db:seed` from the project
+    // root, this writes to <project_root>/.seed-passwords.local.
+    const outPath = join(process.cwd(), '.seed-passwords.local');
+    writeFileSync(outPath, body, { mode: 0o600 });
+    console.log(`[seed] Credentials written to ${outPath}`);
+  } catch (err) {
+    console.error('[seed] Failed to write .seed-passwords.local:', err);
+  }
+}
 
 // Generate date N days ago
 function daysAgo(n: number): Date {
@@ -123,7 +254,6 @@ async function main() {
   });
 
   // 3. Seed Super Admin
-  const adminPasswordHash = await bcrypt.hash('password123', 12);
   const superAdmin = await prisma.user.create({
     data: {
       id: 'user_super_admin',
@@ -131,7 +261,7 @@ async function main() {
       storeId: store.id,
       email: 'admin@mbumahhardware.co.ke',
       name: 'System Administrator',
-      passwordHash: adminPasswordHash,
+      passwordHash: await makeHashedPasswordFor('admin@mbumahhardware.co.ke', 'SUPER_ADMIN'),
       role: 'SUPER_ADMIN',
       phone: '0795191909',
       isActive: true,
@@ -146,7 +276,7 @@ async function main() {
       storeId: store.id,
       email: 'cashier@mbumahhardware.co.ke',
       name: 'Grace Wanjiku',
-      passwordHash: adminPasswordHash,
+      passwordHash: await makeHashedPasswordFor('cashier@mbumahhardware.co.ke', 'CASHIER'),
       role: 'CASHIER',
       phone: '0759963601',
       isActive: true,
@@ -160,7 +290,7 @@ async function main() {
       storeId: store.id,
       email: 'accountant@mbumahhardware.co.ke',
       name: 'James Otieno',
-      passwordHash: adminPasswordHash,
+      passwordHash: await makeHashedPasswordFor('accountant@mbumahhardware.co.ke', 'ACCOUNTANT'),
       role: 'ACCOUNTANT',
       phone: '0787485104',
       isActive: true,
@@ -175,7 +305,7 @@ async function main() {
       storeId: storeThika.id,
       email: 'thika.manager@mbumahhardware.co.ke',
       name: 'David Njoroge',
-      passwordHash: adminPasswordHash,
+      passwordHash: await makeHashedPasswordFor('thika.manager@mbumahhardware.co.ke', 'BRANCH_MANAGER'),
       role: 'BRANCH_MANAGER',
       phone: '0712345678',
       isActive: true,
@@ -189,7 +319,7 @@ async function main() {
       storeId: storeRuiru.id,
       email: 'ruiru.manager@mbumahhardware.co.ke',
       name: 'Samuel Kibet',
-      passwordHash: adminPasswordHash,
+      passwordHash: await makeHashedPasswordFor('ruiru.manager@mbumahhardware.co.ke', 'BRANCH_MANAGER'),
       role: 'BRANCH_MANAGER',
       phone: '0723456789',
       isActive: true,
@@ -203,7 +333,7 @@ async function main() {
       storeId: storeNairobiCbd.id,
       email: 'nairobi.manager@mbumahhardware.co.ke',
       name: 'Mary Akinyi',
-      passwordHash: adminPasswordHash,
+      passwordHash: await makeHashedPasswordFor('nairobi.manager@mbumahhardware.co.ke', 'BRANCH_MANAGER'),
       role: 'BRANCH_MANAGER',
       phone: '0734567890',
       isActive: true,
@@ -217,7 +347,7 @@ async function main() {
       storeId: storeNakuru.id,
       email: 'nakuru.manager@mbumahhardware.co.ke',
       name: 'Peter Ruto',
-      passwordHash: adminPasswordHash,
+      passwordHash: await makeHashedPasswordFor('nakuru.manager@mbumahhardware.co.ke', 'BRANCH_MANAGER'),
       role: 'BRANCH_MANAGER',
       phone: '0745678901',
       isActive: true,
@@ -232,7 +362,7 @@ async function main() {
       storeId: storeThika.id,
       email: 'thika.cashier@mbumahhardware.co.ke',
       name: 'Lucy Wambui',
-      passwordHash: adminPasswordHash,
+      passwordHash: await makeHashedPasswordFor('thika.cashier@mbumahhardware.co.ke', 'CASHIER'),
       role: 'CASHIER',
       phone: '0719111222',
       isActive: true,
@@ -246,7 +376,7 @@ async function main() {
       storeId: storeRuiru.id,
       email: 'ruiru.cashier@mbumahhardware.co.ke',
       name: 'Diana Muthoni',
-      passwordHash: adminPasswordHash,
+      passwordHash: await makeHashedPasswordFor('ruiru.cashier@mbumahhardware.co.ke', 'CASHIER'),
       role: 'CASHIER',
       phone: '0728222333',
       isActive: true,
@@ -260,7 +390,7 @@ async function main() {
       storeId: storeNairobiCbd.id,
       email: 'nairobi.cashier@mbumahhardware.co.ke',
       name: 'Vincent Ochieng',
-      passwordHash: adminPasswordHash,
+      passwordHash: await makeHashedPasswordFor('nairobi.cashier@mbumahhardware.co.ke', 'CASHIER'),
       role: 'CASHIER',
       phone: '0739333444',
       isActive: true,
@@ -274,7 +404,7 @@ async function main() {
       storeId: storeNakuru.id,
       email: 'nakuru.cashier@mbumahhardware.co.ke',
       name: 'Eunice Jeptoo',
-      passwordHash: adminPasswordHash,
+      passwordHash: await makeHashedPasswordFor('nakuru.cashier@mbumahhardware.co.ke', 'CASHIER'),
       role: 'CASHIER',
       phone: '0740444555',
       isActive: true,
@@ -289,7 +419,7 @@ async function main() {
       storeId: store.id,
       email: 'owner@mbumahhardware.co.ke',
       name: 'Mbumah Hardware Owner',
-      passwordHash: adminPasswordHash,
+      passwordHash: await makeHashedPasswordFor('owner@mbumahhardware.co.ke', 'STORE_OWNER'),
       role: 'STORE_OWNER',
       phone: '0795191910',
       isActive: true,
@@ -1591,6 +1721,10 @@ async function main() {
   console.log('   🏭 Suppliers seeded: ' + suppliers.length);
   console.log('   🎁 Gift cards seeded: 14');
   console.log('   🎁 Gift card redemptions seeded: ' + giftCardRedemptions.length);
+
+  // H-07: dump the random per-user credentials so operators can retrieve them.
+  // (Writes to prisma/.seed-passwords.local and prints to stdout.)
+  dumpSeededCredentials();
 }
 
 main()

@@ -6,6 +6,54 @@ import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { requireAuth, AuthSession } from '@/lib/auth';
 
+// Sensitive config keys (containing 'secret', 'key', 'password', 'token', or 'pin')
+// have their values masked in API responses and audit logs to prevent credential
+// leakage via the system-config endpoint.
+const SENSITIVE_KEY_PATTERNS = ['secret', 'password', 'token', 'apikey', 'api_key'];
+
+function isSensitiveConfigKey(rawKey: string): boolean {
+  const k = rawKey.toLowerCase();
+  // Match any of the patterns as standalone words/substrings, but avoid
+  // false positives like 'keywords' or 'keyresult' by checking boundaries.
+  if (k.includes('secret') || k.includes('password') || k.includes('token')) {
+    return true;
+  }
+  // 'key' / 'pin' need word-boundary-ish checks to avoid 'keyboard' / 'pinning' false positives
+  if (/\bkey\b/.test(k) || /(^|_)pin(_|$)/.test(k)) {
+    return true;
+  }
+  return SENSITIVE_KEY_PATTERNS.some((p) => k.includes(p));
+}
+
+function maskConfigValue(rawValue: string): string {
+  if (typeof rawValue !== 'string' || rawValue.length === 0) {
+    return '***';
+  }
+  // Show first 2 chars + '***' for short identifiable hint, or full mask if very short
+  if (rawValue.length <= 4) {
+    return '***';
+  }
+  return rawValue.slice(0, 2) + '***';
+}
+
+type ConfigRow = {
+  id: string;
+  key: string;
+  value: string;
+  category?: string | null;
+  description?: string | null;
+  updatedAt?: Date;
+  createdAt?: Date;
+};
+
+function maskSensitiveConfig<T extends ConfigRow>(config: T): T {
+  if (isSensitiveConfigKey(config.key)) {
+    return { ...config, value: maskConfigValue(config.value) };
+  }
+  return config;
+}
+
+
 async function getSystemConfigHandler(
   request: NextRequest,
   _session: AuthSession
@@ -14,9 +62,15 @@ async function getSystemConfigHandler(
 
   const category = searchParams.get('category') || '';
 
-  const configs = await db.systemConfig.findMany({
+  const rawConfigs = await db.systemConfig.findMany({
     orderBy: { key: 'asc' },
   });
+
+  // SECURITY (H-05): Mask sensitive config values (secret/key/password/token/pin)
+  // before returning to the client. The endpoint is SUPER_ADMIN-only but defense
+  // in depth prevents accidental credential leakage via logs, proxies, or browser
+  // dev tools that capture API responses.
+  const configs = rawConfigs.map(maskSensitiveConfig);
 
   const categorized: Record<string, typeof configs> = {
     General: [],
@@ -93,19 +147,31 @@ async function updateSystemConfigHandler(
     data: { value: String(value) },
   });
 
+  // SECURITY (H-05): Mask sensitive config values in audit log so credentials
+  // are not persisted in plaintext in the SystemLog table.
+  const sensitive = isSensitiveConfigKey(existing.key);
+  const loggedOldValue = sensitive ? maskConfigValue(existing.value) : existing.value;
+  const loggedNewValue = sensitive ? maskConfigValue(String(value)) : String(value);
+
   await systemLog({
     action: 'CONFIG_UPDATED',
     component: 'SYSTEM',
     severity: 'INFO',
-    message: `Config "${existing.key}" updated from "${existing.value}" to "${value}"`,
+    message: `Config "${existing.key}" updated${sensitive ? ' (sensitive value)' : ` from "${loggedOldValue}" to "${loggedNewValue}"`}`,
     userId: session.userId,
     storeId: session.storeId || undefined,
-    metadata: { key: existing.key, oldValue: existing.value, newValue: value, updatedBy: session.email },
+    metadata: {
+      key: existing.key,
+      oldValue: loggedOldValue,
+      newValue: loggedNewValue,
+      isSensitive: sensitive,
+      updatedBy: session.email,
+    },
   });
 
   return Response.json({
     success: true,
-    data: updated,
+    data: maskSensitiveConfig(updated),
   });
 }
 
