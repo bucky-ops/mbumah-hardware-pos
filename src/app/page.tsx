@@ -365,19 +365,47 @@ function LoginScreen() {
       </div>
 
       <div className="w-full max-w-md relative z-10">
-        <Card className="shadow-2xl border border-white/10 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl">
+        {/* Welcome tagline above card */}
+        <div className="text-center mb-5 text-white">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/60 mb-1.5">
+            Kenya's Hardware Trade · Powered by Mbumah
+          </p>
+          <h2 className="text-xl font-semibold text-white/90 flex items-center justify-center gap-2">
+            <Sparkles className="h-4 w-4 text-amber-300" />
+            Run your store with confidence
+          </h2>
+        </div>
+
+        <Card className="shadow-2xl border border-white/10 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl">
           <CardHeader className="text-center pb-2">
             {/* Animated logo */}
-            <div className="mx-auto w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center mb-4 shadow-lg animate-pulse-slow">
+            <div className="mx-auto w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center mb-4 shadow-lg ring-4 ring-white/20 animate-pulse-slow">
               <img src="/logo.png" alt="Mbumah Hardware" className="w-full h-full object-cover" />
             </div>
             <CardTitle className="text-2xl font-bold tracking-tight">MBUMAH HARDWARE</CardTitle>
-            <CardDescription className="text-base">POS & ERP System</CardDescription>
+            <CardDescription className="text-base font-medium text-foreground/70">
+              Point of Sale &amp; ERP System
+            </CardDescription>
+
+            {/* Trust badges row */}
+            <div className="flex flex-wrap items-center justify-center gap-1.5 mt-3">
+              <span className="inline-flex items-center gap-1 rounded-full border border-green-200 dark:border-green-900/50 bg-green-50 dark:bg-green-950/30 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:text-green-400">
+                <ShieldCheck className="h-3 w-3" /> Bank-grade security
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                <Smartphone className="h-3 w-3" /> M-Pesa Daraja ready
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
+                <Store className="h-3 w-3" /> 5 branches
+              </span>
+            </div>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="email" className="text-sm font-medium">Email Address</Label>
+                </div>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -386,14 +414,25 @@ function LoginScreen() {
                     placeholder="cashier@mbumahhardware.co.ke"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10"
+                    className="pl-10 h-11"
                     required
                     disabled={isLoading}
+                    autoComplete="email"
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password" className="text-sm font-medium">Password</Label>
+                  <button
+                    type="button"
+                    onClick={() => toast.info('Contact your branch manager on 0795 191 909 to reset your password.')}
+                    className="text-[11px] font-medium text-primary/80 hover:text-primary underline-offset-2 hover:underline transition-colors"
+                    tabIndex={-1}
+                  >
+                    Forgot password?
+                  </button>
+                </div>
                 <div className="relative">
                   <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -402,9 +441,10 @@ function LoginScreen() {
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 pr-10"
+                    className="pl-10 pr-10 h-11"
                     required
                     disabled={isLoading}
+                    autoComplete="current-password"
                   />
                   <button
                     type="button"
@@ -419,7 +459,7 @@ function LoginScreen() {
               </div>
               <Button
                 type="submit"
-                className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground font-semibold"
+                className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground font-semibold h-11 shadow-md shadow-accent-orange/20"
                 disabled={isLoading}
                 size="lg"
               >
@@ -429,15 +469,23 @@ function LoginScreen() {
                     Signing In...
                   </>
                 ) : (
-                  'Sign In'
+                  <>
+                    <LogOut className="mr-2 h-4 w-4 rotate-180" />
+                    Sign In to Dashboard
+                  </>
                 )}
               </Button>
             </form>
 
-            {/* Demo Accounts */}
+            {/* Demo Accounts — collapsible, lower visual weight */}
             <div className="mt-6">
-              <Separator className="mb-4" />
-              <p className="text-xs text-muted-foreground text-center mb-3">Quick Demo Access</p>
+              <div className="flex items-center gap-3 mb-3">
+                <Separator className="flex-1" />
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                  Quick Demo Access
+                </span>
+                <Separator className="flex-1" />
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {DEMO_ACCOUNTS.map((acct) => {
                   const Icon = acct.icon;
@@ -446,7 +494,8 @@ function LoginScreen() {
                       key={acct.email}
                       type="button"
                       onClick={() => fillDemo(acct)}
-                      className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all text-center ${acct.bg}`}
+                      className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all text-center hover:scale-[1.03] active:scale-[0.98] ${acct.bg}`}
+                      title={`Sign in as ${acct.role}`}
                     >
                       <Icon className={`h-5 w-5 ${acct.color}`} />
                       <span className="text-[10px] font-medium leading-tight">{acct.role}</span>
@@ -454,13 +503,34 @@ function LoginScreen() {
                   );
                 })}
               </div>
+              <p className="text-[10px] text-muted-foreground/50 text-center mt-2.5">
+                Tap a role to auto-fill credentials, then press Sign In
+              </p>
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col gap-2 text-sm text-muted-foreground">
-            <p className="text-xs">Select a demo account above or enter credentials manually</p>
+          <CardFooter className="flex flex-col gap-3 text-sm text-muted-foreground">
+            <div className="flex items-center justify-center gap-3 w-full text-[11px] text-muted-foreground/70">
+              <a
+                href="tel:+254795191909"
+                className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+              >
+                <Smartphone className="h-3 w-3" /> 0795 191 909
+              </a>
+              <span className="text-muted-foreground/30">·</span>
+              <a
+                href="mailto:info@mbumahhardware.co.ke"
+                className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+              >
+                <Mail className="h-3 w-3" /> Support
+              </a>
+              <span className="text-muted-foreground/30">·</span>
+              <span className="inline-flex items-center gap-1">
+                <ShieldCheck className="h-3 w-3" /> Privacy
+              </span>
+            </div>
           </CardFooter>
-          {/* Kenyan flag accent at bottom */}
-          <div className="flex h-1.5 rounded-b-xl overflow-hidden">
+          {/* Subtle Kenyan flag accent at bottom */}
+          <div className="flex h-1 rounded-b-xl overflow-hidden">
             <div className="flex-1 bg-black" />
             <div className="flex-1 bg-red-600" />
             <div className="flex-1 bg-green-600" />
@@ -469,7 +539,7 @@ function LoginScreen() {
         </Card>
         {/* Branding text */}
         <p className="text-center mt-4 text-xs text-white/40 font-medium tracking-wider">
-          Powered by MBUMAH HARDWARE
+          Powered by MBUMAH HARDWARE · Made in Kenya 🇰🇪
         </p>
       </div>
     </div>
@@ -1200,6 +1270,59 @@ function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonEle
                 ⌘K
               </kbd>
             </Button>
+            {/* Help & Tips Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 relative" aria-label="Help and tips">
+                  <Lightbulb className="h-4 w-4" />
+                  <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse-slow" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72">
+                <DropdownMenuLabel className="flex items-center gap-2 text-sm">
+                  <Lightbulb className="h-4 w-4 text-amber-500" />
+                  Help &amp; Quick Tips
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold">
+                  Top Shortcuts
+                </DropdownMenuLabel>
+                <div className="px-2 py-1 space-y-1 text-xs">
+                  <div className="flex items-center justify-between px-2 py-1 rounded hover:bg-muted/50">
+                    <span>Open POS</span><kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">F2</kbd>
+                  </div>
+                  <div className="flex items-center justify-between px-2 py-1 rounded hover:bg-muted/50">
+                    <span>Inventory</span><kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">F3</kbd>
+                  </div>
+                  <div className="flex items-center justify-between px-2 py-1 rounded hover:bg-muted/50">
+                    <span>Customers</span><kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">F4</kbd>
+                  </div>
+                  <div className="flex items-center justify-between px-2 py-1 rounded hover:bg-muted/50">
+                    <span>Checkout cart</span><kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">F9</kbd>
+                  </div>
+                  <div className="flex items-center justify-between px-2 py-1 rounded hover:bg-muted/50">
+                    <span>Search anywhere</span><kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">⌘K</kbd>
+                  </div>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => toast.info('Press the ? key on your keyboard to see all shortcuts.')}>
+                  <Keyboard className="mr-2 h-4 w-4" />
+                  All keyboard shortcuts
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setActiveTab('pos')}>
+                  <ShoppingCart className="mr-2 h-4 w-4 text-green-600" />
+                  Start a new sale
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => toast.info('📞 Call support: 0795 191 909\n📧 Email: info@mbumahhardware.co.ke')}>
+                  <Smartphone className="mr-2 h-4 w-4" />
+                  Contact support
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => toast.info('MBUMAH HARDWARE POS & ERP\nVersion 1.0.0\nMade in Kenya 🇰🇪')}>
+                  <Info className="mr-2 h-4 w-4" />
+                  About this system
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {/* Notification Bell Dropdown */}
             <DropdownMenu open={notifDropdownOpen} onOpenChange={setNotifDropdownOpen}>
               <DropdownMenuTrigger asChild>

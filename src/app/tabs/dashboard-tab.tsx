@@ -229,7 +229,7 @@ function KpiCards({ storeId, onCardClick }: { storeId: string; onCardClick: (kpi
       metricKey: 'revenue' as KpiMetricKey,
     },
     {
-      label: 'Transactions',
+      label: "Today's Transactions",
       value: data?.todayTransactions ?? 0,
       animatedValue: animatedTransactions,
       format: 'number' as const,
@@ -244,7 +244,7 @@ function KpiCards({ storeId, onCardClick }: { storeId: string; onCardClick: (kpi
       metricKey: 'transactions' as KpiMetricKey,
     },
     {
-      label: 'Low Stock Alerts',
+      label: 'Low Stock (Action Needed)',
       value: data?.lowStockProducts ?? 0,
       animatedValue: animatedLowStock,
       format: 'number' as const,
@@ -302,7 +302,11 @@ function KpiCards({ storeId, onCardClick }: { storeId: string; onCardClick: (kpi
         return (
           <Card
             key={kpi.label}
-            className={`border-l-4 ${kpi.borderColor} py-0 bg-gradient-to-br ${kpi.gradient} backdrop-blur-sm hover:shadow-md transition-all duration-200 animate-fade-in cursor-pointer hover:-translate-y-0.5 active:translate-y-0`}
+            className={`border-l-4 ${kpi.borderColor} py-0 bg-gradient-to-br ${kpi.gradient} backdrop-blur-sm hover:shadow-md transition-all duration-200 animate-fade-in cursor-pointer hover:-translate-y-0.5 active:translate-y-0 group ${
+              kpi.metricKey === 'lowStock' && kpi.value > 0
+                ? 'ring-2 ring-red-400/50 animate-pulse-slow'
+                : ''
+            }`}
             style={{ animationDelay: `${index * 100}ms` }}
             onClick={() => onCardClick({
               metricKey: kpi.metricKey,
@@ -355,6 +359,15 @@ function KpiCards({ storeId, onCardClick }: { storeId: string; onCardClick: (kpi
                     </div>
                     <MiniSparkline data={sparkData} color={kpi.sparkColor} />
                   </div>
+                  {kpi.metricKey === 'debt' && kpi.value > 0 && (
+                    <p className="text-[10px] text-red-600/80 dark:text-red-400/80 mt-1.5 font-medium flex items-center gap-0.5">
+                      <ArrowRight className="h-2.5 w-2.5" />
+                      Tap to view debtors
+                    </p>
+                  )}
+                  <p className="text-[10px] text-muted-foreground/70 mt-1.5 text-right opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                    Click for details ↓
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -2259,6 +2272,77 @@ function SalesTrendsWidget({ storeId, onSeeMore }: { storeId: string; onSeeMore:
   );
 }
 
+// Friendly store display names for the welcome hero (kept in sync with STORE_LIST in page.tsx)
+const STORE_DISPLAY_NAMES: Record<string, string> = {
+  store_juja_main: 'Juja Main',
+  store_thika: 'Thika',
+  store_ruiru: 'Ruiru',
+  store_nairobi_cbd: 'Nairobi CBD',
+  store_nakuru: 'Nakuru',
+};
+
+// Welcome hero banner — personalized greeting + quick-action shortcuts shown at the top of the dashboard.
+function WelcomeHero() {
+  const { user } = useAuthStore();
+  const { currentStoreId, setActiveTab } = useAppStore();
+
+  const firstName = (user?.name || '').trim().split(/\s+/)[0];
+  const greeting = firstName ? `Karibu, ${firstName} 👋` : 'Karibu 👋';
+  const branchName = STORE_DISPLAY_NAMES[currentStoreId] ?? 'your branch';
+  const today = new Date().toLocaleDateString('en-KE', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  return (
+    <Card className="overflow-hidden border-0 bg-gradient-to-br from-green-600 via-emerald-600 to-teal-600 text-white shadow-md">
+      <CardContent className="p-4 sm:p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-emerald-100 shrink-0" aria-hidden="true" />
+              <h2 className="text-lg sm:text-xl font-bold tracking-tight">{greeting}</h2>
+            </div>
+            <p className="text-xs sm:text-sm text-emerald-50/90 mt-1">
+              Here&rsquo;s what&rsquo;s happening at <span className="font-semibold">{branchName}</span> today · {today}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Button
+              size="sm"
+              className="bg-white text-green-700 hover:bg-emerald-50 hover:text-green-700 font-semibold shadow-sm gap-1.5"
+              onClick={() => setActiveTab('pos')}
+            >
+              <ShoppingCart className="h-4 w-4" />
+              New Sale (F2)
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="bg-white/10 border-white/40 text-white hover:bg-white/20 hover:text-white backdrop-blur-sm gap-1.5"
+              onClick={() => setActiveTab('catalog')}
+            >
+              <Plus className="h-4 w-4" />
+              Add Product
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="bg-white/10 border-white/40 text-white hover:bg-white/20 hover:text-white backdrop-blur-sm gap-1.5"
+              onClick={() => setActiveTab('reports')}
+            >
+              <BarChart3 className="h-4 w-4" />
+              View Reports
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function DashboardTab() {
   const { currentStoreId, setActiveTab } = useAppStore();
   const [lowStockDialogOpen, setLowStockDialogOpen] = useState(false);
@@ -2287,6 +2371,9 @@ export default function DashboardTab() {
 
   return (
     <div className="space-y-4 animate-fade-in">
+      {/* Welcome Hero — personalized greeting + quick actions */}
+      <WelcomeHero />
+
       {/* Top KPI Cards Row */}
       <KpiCards storeId={currentStoreId} onCardClick={handleKpiCardClick} />
 

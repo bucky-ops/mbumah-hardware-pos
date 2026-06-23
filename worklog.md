@@ -1634,3 +1634,90 @@ Stage Summary:
 - ALL workflows pass on both `main` and `update` branches — no remaining errors
 - Pages API confirms workflow-based build type with HTTPS enforced
 - Recurring QA cron (every 15 min, Africa/Nairobi) re-established for ongoing dev + bug-fix loop
+
+---
+Task ID: 3b
+Agent: frontend-styling-expert
+Task: Dashboard welcome hero + KPI polish
+
+Work Log:
+- Read worklog tail (PAGES-API-VERIFY was the most recent section) to confirm project state — no prior 3a/3b work exists; this task is the first dashboard UX polish pass in this batch.
+- Read /home/z/my-project/src/lib/stores.ts: confirmed `useAuthStore` exports `user: AuthUser | null`; AuthUser shape from /src/lib/types.ts is `{ id, email, name, role, organizationId, storeId?, isActive }` — no store name on the user object, so a friendly static STORE_DISPLAY_NAMES mapping was created inside dashboard-tab.tsx (5 entries mirroring STORE_LIST in page.tsx: store_juja_main → "Juja Main", store_thika → "Thika", store_ruiru → "Ruiru", store_nairobi_cbd → "Nairobi CBD", store_nakuru → "Nakuru"), with "your branch" as fallback for unknown storeIds.
+- Confirmed `useAuthStore` and `useAppStore` are already imported in dashboard-tab.tsx (line 20). No new imports required.
+- Confirmed `animate-pulse-slow` keyframe exists in /src/app/globals.css (line 365) — reused for the low-stock urgent ring.
+- Confirmed Sparkles, ShoppingCart, Plus, BarChart3, ArrowRight icons are all already imported from lucide-react — no new icon imports needed.
+- Change 1 — Welcome Hero: added a new `WelcomeHero` component (defined just above `export default function DashboardTab()` at line ~2284) and rendered `<WelcomeHero />` as the first child inside `<div className="space-y-4 animate-fade-in">` (before `<KpiCards>`).
+    * Card: `bg-gradient-to-br from-green-600 via-emerald-600 to-teal-600` with white text, `border-0`, `shadow-md`, `overflow-hidden`.
+    * Left section: Sparkles icon + heading "Karibu, {firstName} 👋" (firstName derived from `user?.name` split on whitespace; falls back to "Karibu 👋" when no user/no name). Subline: "Here's what's happening at {branchName} today · {today}" where today = `new Date().toLocaleDateString('en-KE', { weekday:'long', year:'numeric', month:'long', day:'numeric' })`. Used `&rsquo;` HTML entity to keep the apostrophe JSX-safe.
+    * Right section: 3 quick-action buttons in a `flex flex-wrap gap-2` row — "New Sale (F2)" (solid: `bg-white text-green-700 hover:bg-emerald-50` + ShoppingCart icon) → `setActiveTab('pos')`; "Add Product" (outline: `bg-white/10 border-white/40 text-white hover:bg-white/20` + Plus icon) → `setActiveTab('catalog')`; "View Reports" (same outline style + BarChart3 icon) → `setActiveTab('reports')`. All `size="sm"`.
+    * Responsive: outer flex is `flex-col sm:flex-row sm:items-center sm:justify-between gap-4` — stacks vertically on mobile, row on sm+.
+- Change 2 — KPI label + urgency polish (inside the existing `kpis` array in `KpiCards`):
+    * "Transactions" → "Today's Transactions".
+    * "Low Stock Alerts" → "Low Stock (Action Needed)".
+    * "Outstanding Debt" label kept as-is.
+    * Low Stock card now conditionally gets `ring-2 ring-red-400/50 animate-pulse-slow` when `kpi.value > 0` (i.e., when `data?.lowStockProducts > 0`). Conditional appended to the Card's className via template literal with `group` also added for hover-state hinting. When count is 0, no ring — matches the "no false alarms at a glance" intent.
+    * Outstanding Debt card now shows a small red "→ Tap to view debtors" hint (`text-[10px] text-red-600/80 ...` with ArrowRight icon) below the trend row, only when `kpi.value > 0`. Gives cashiers an explicit affordance to drill into debtor details.
+- Change 3 — Click-for-details hover hint: added a small `text-[10px] text-muted-foreground/70 mt-1.5 text-right opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none` paragraph reading "Click for details ↓" at the bottom of every KPI card. `group` was added to the Card className to enable `group-hover:`. Cards remain fully clickable (existing onClick / onKeyDown handlers untouched) and the hint is purely cosmetic (pointer-events-none).
+- Kept the existing `kpis` array structure intact (same fields: label, value, animatedValue, format, icon, color, iconBg, gradient, borderColor, sparkColor, trend, trendUp, metricKey) — the click handler that builds `KpiDetail` from these fields is unchanged, so the detail-dialog flow still works.
+- Did NOT modify the data fetching logic, refetchInterval (30000ms), animations, or any other component in the file. Only `KpiCards` and a new `WelcomeHero` component + its invocation in `DashboardTab` were touched.
+- Lint: `cd /home/z/my-project && bun run lint` → EXIT 0 (0 errors, 0 warnings). No new TypeScript or ESLint issues introduced.
+- Browser verification via agent-browser (dev server already running on :3000):
+    * Loaded http://localhost:3000 — page auto-resumed an existing Super Admin session (no re-login needed; lockout not triggered).
+    * Snapshot confirmed the welcome hero renders with heading "Karibu, System 👋" (firstName derived from "System Administrator") + subline "Here's what's happening at Juja Main today · Wednesday, 23 July 2025" (locale en-KE formatting works).
+    * Three quick-action buttons rendered: "New Sale (F2)", "Add Product", "View Reports" — all clickable, all wired to setActiveTab.
+    * KPI cards now read: "Today's Revenue", "Today's Transactions", "Low Stock (Action Needed)", "Outstanding Debt" — label changes confirmed.
+    * "Tap to view debtors" hint confirmed visible on Outstanding Debt card (count > 0).
+    * "Click for details ↓" hint confirmed present on all 4 KPI cards (opacity-0 by default, visible on hover).
+    * No new console errors from my changes. The only console error was a pre-existing "Authentication required" on the trends fetch (separate API/session issue, unrelated to dashboard-tab.tsx).
+- Did NOT restart the dev server. Turbopack Fast Refresh picked up all edits cleanly.
+
+Stage Summary:
+- Only file edited: /home/z/my-project/src/app/tabs/dashboard-tab.tsx (5 surgical edits via MultiEdit).
+- New artifacts: `STORE_DISPLAY_NAMES` mapping + `WelcomeHero` component (defined just above `DashboardTab`); `<WelcomeHero />` invocation as first child of the dashboard's root `space-y-4 animate-fade-in` div.
+- Welcome hero: personalized green-gradient greeting card with branch name + today's date + 3 quick-action shortcuts (New Sale F2 / Add Product / View Reports). Responsive (stacks on mobile, row on sm+).
+- KPI polish: clearer time-scoped labels ("Today's Transactions", "Low Stock (Action Needed)"), pulsing red ring on Low Stock card when count > 0, "Tap to view debtors" hint on Outstanding Debt card when balance > 0, "Click for details ↓" hover hint on every KPI card.
+- Lint passes clean (0 errors). Browser snapshot confirms all changes render correctly with the live Super Admin session. No regressions to KPI card click → detail dialog flow, refetchInterval, or animations.
+
+---
+Task ID: UI-IMPROVE
+Agent: Main Agent
+Task: Improve user interface to be client-friendly + review everything and suggest
+
+Work Log:
+- Audited existing UI with Agent Browser + VLM (login, dashboard, POS tabs)
+- VLM audit findings captured: login lacked trust signals/forgot-password/help links; dashboard lacked "start here" guidance and time-context on KPI labels; Low Stock lacked urgency; no help entry point in TopBar
+- Redesigned LoginScreen (page.tsx 327-547):
+  * Added welcome tagline above card ("Run your store with confidence" + "Kenya's Hardware Trade · Powered by Mbumah")
+  * Added 3 trust badges under title: Bank-grade security, M-Pesa Daraja ready, 5 branches
+  * Larger subtitle ("Point of Sale & ERP System") with better contrast (text-foreground/70 font-medium)
+  * Taller inputs (h-11) with autoComplete attributes
+  * "Forgot password?" link next to Password label (toasts branch-manager reset instructions)
+  * "Sign In to Dashboard" CTA with arrow icon + shadow
+  * Demo accounts section visually de-emphasized (uppercase tracking label, hover-scale, helper text)
+  * Footer with tel:+254795191909, mailto:info@mbumahhardware.co.ke, Privacy badge
+  * Refined Kenyan flag accent (1px height instead of 1.5)
+  * Branding footer "Made in Kenya 🇰🇪"
+- Added Help & Tips dropdown to TopBar (page.tsx 1273-1325):
+  * Lightbulb icon with pulsing amber dot indicator
+  * "TOP SHORTCUTS" section listing F2/F3/F4/F9/Cmd+K inline
+  * Menu items: All keyboard shortcuts (toast), Start a new sale (setActiveTab('pos')), Contact support (toast with phone+email), About this system (toast version)
+- Delegated dashboard-tab improvements to frontend-styling-expert subagent (Task 3b) which:
+  * Added WelcomeHero component ("Karibu, {firstName} 👋" + branch + date + 3 quick actions)
+  * Relabeled KPIs: "Today's Transactions", "Low Stock (Action Needed)"
+  * Added pulsing red ring on Low Stock card when count > 0
+  * Added "→ Tap to view debtors" hint on Outstanding Debt card
+  * Added "Click for details ↓" hover hint on all KPI cards
+- Verified via Agent Browser:
+  * Login redesign: all 6 VLM checks pass (welcome tagline, trust badges, forgot password, demo separation, contact links, hierarchy)
+  * Dashboard redesign: all 5 VLM checks pass (welcome hero, quick actions, relabeled KPIs, red urgency ring, debtors hint)
+  * Help dropdown: both VLM checks pass (shortcuts list + menu items)
+  * Interaction verified: "Start a new sale" menu item correctly switches to POS tab
+- bun run lint: EXIT 0 (0 errors, 0 warnings)
+- Dev server: stable, all API routes 200, no runtime errors
+
+Stage Summary:
+- Login screen now client-friendly: trust signals, helpful links, clear hierarchy, welcoming tagline
+- Dashboard now has a personalized welcome hero with quick actions + clearer KPI urgency
+- TopBar Help button gives instant access to shortcuts + support + about
+- All changes verified visually (VLM) + interactively (Agent Browser)
+- Files edited: src/app/page.tsx (login redesign + help dropdown), src/app/tabs/dashboard-tab.tsx (welcome hero + KPI polish by subagent)
