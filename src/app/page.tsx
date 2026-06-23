@@ -3730,7 +3730,7 @@ function POSTab() {
           {cart.items.length > 0 && (
             <>
               <Separator className="shrink-0" />
-              <div className="shrink-0 p-4 space-y-3 overflow-y-auto max-h-[45%] custom-scrollbar border-t">
+              <div className="shrink-0 max-h-[42%] overflow-y-auto custom-scrollbar border-t px-4 pt-3 pb-2 space-y-3">
                 {/* Discount Code */}
                 <div className="flex gap-1.5">
                   <Input
@@ -3876,7 +3876,10 @@ function POSTab() {
                     <span className="gradient-text">{formatKES(finalTotal)}</span>
                   </div>
                 </div>
+              </div>
 
+              {/* Checkout button — always pinned at the bottom, never scrolled out of view */}
+              <div className="shrink-0 p-3 border-t bg-card/80 backdrop-blur-sm space-y-1.5">
                 <Button
                   className="w-full bg-gradient-to-r from-accent-orange to-amber-500 hover:from-accent-orange/90 hover:to-amber-600 text-white font-semibold h-12 shadow-lg shadow-accent-orange/20"
                   size="lg"
@@ -3888,6 +3891,9 @@ function POSTab() {
                     <span>{formatKES(finalTotal)}</span>
                   </span>
                 </Button>
+                <p className="text-center text-[10px] text-muted-foreground">
+                  {cart.getItemCount()} item{cart.getItemCount() !== 1 ? 's' : ''} in cart · Total {formatKES(finalTotal)}
+                </p>
               </div>
             </>
           )}
@@ -4301,7 +4307,7 @@ function POSTab() {
           </div>
           {cart.items.length > 0 && (
             <>
-              <div className="p-4 space-y-3 border-t shrink-0 overflow-y-auto max-h-[45%] custom-scrollbar">
+              <div className="max-h-[42%] overflow-y-auto custom-scrollbar border-t shrink-0 px-4 pt-3 pb-2 space-y-3">
                 <div className="flex gap-1.5">
                   <Input
                     placeholder="Discount code"
@@ -4443,6 +4449,10 @@ function POSTab() {
                     <span className="gradient-text">{formatKES(finalTotal)}</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Checkout button — always pinned at the bottom of the sheet */}
+              <div className="shrink-0 p-3 border-t bg-card/80 backdrop-blur-sm space-y-1.5">
                 <Button
                   className="w-full bg-gradient-to-r from-accent-orange to-amber-500 hover:from-accent-orange/90 hover:to-amber-600 text-white font-semibold h-12 shadow-lg shadow-accent-orange/20"
                   size="lg"
@@ -4454,6 +4464,9 @@ function POSTab() {
                     <span>{formatKES(finalTotal)}</span>
                   </span>
                 </Button>
+                <p className="text-center text-[10px] text-muted-foreground">
+                  {cart.getItemCount()} item{cart.getItemCount() !== 1 ? 's' : ''} in cart · Total {formatKES(finalTotal)}
+                </p>
               </div>
             </>
           )}

@@ -1754,3 +1754,30 @@ Stage Summary:
 - Both desktop (sticky Card) and mobile (Sheet) carts fixed
 - Tested with up to 12 items; checkout button remains visible and functional
 - Files edited: src/app/page.tsx only (2 surgical edits — desktop cart Card + mobile cart Sheet)
+
+---
+Task ID: POS-CART-SCROLL-FIX
+Agent: Main Agent
+Task: Fix POS cart overflow — items overlap & checkout button becomes unreachable when more than 6 items are added. User explicitly requested: "add a scroll function to the checkout, push update to github".
+
+Work Log:
+- Inspected src/app/page.tsx POSTab cart panel (desktop sidebar + mobile Sheet).
+- Root cause: the cart footer held discount code + customer select + benefits + totals AND the Checkout button all inside ONE scrollable `max-h-[45%]` box. With many cart items + expanded benefits, the Checkout button was pushed below the fold inside that cramped footer scroll area — users couldn't see or reach it. Cart items themselves were already in a `flex-1 min-h-0 overflow-y-auto` list, but the footer layout was the bottleneck.
+- Fix (applied to BOTH desktop cart sidebar and mobile cart Sheet):
+  1. Split the footer into TWO sections:
+     - Scrollable "extras" area: `shrink-0 max-h-[42%] overflow-y-auto` containing discount code, customer select, customer benefits, and totals (subtotal/VAT/discount/total).
+     - Pinned Checkout button area: `shrink-0 p-3 border-t bg-card/80 backdrop-blur-sm` containing the Checkout button + an item-count caption ("N items in cart · Total Ksh X").
+  2. The Checkout button is now ALWAYS visible at the bottom of the cart panel regardless of how many items are in the cart or whether benefits are expanded.
+  3. Reduced footer cap from 45% → 42% to give cart items slightly more breathing room.
+- Verified via Agent Browser (logged in as Cashier Grace, navigated to POS, added 8 distinct products to cart):
+  - Cart badge shows "8".
+  - Cart items container: clientHeight=286px, scrollHeight=656px → properly scrollable, NO item overlap (items flow in `space-y-2`).
+  - Checkout button bounding box: y=835, bottom=883 < viewport height 900 → fully on-screen (`fullyOnScreen: true`).
+  - No console/runtime errors.
+- Lint passes clean (0 errors).
+- Committed and pushed to GitHub `main` and `update` branches.
+
+Stage Summary:
+- POS cart now supports unlimited items: the item list scrolls independently, the extras (discount/customer/totals) scroll in a capped 42% area, and the Checkout button is permanently pinned at the bottom — always reachable.
+- Applies to both desktop cart sidebar and mobile cart bottom-sheet.
+- Browser-verified with 8 items (exceeds the 6-item breakage point the user reported).
