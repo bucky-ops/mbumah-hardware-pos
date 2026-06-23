@@ -3673,8 +3673,8 @@ function POSTab() {
 
       {/* Cart Sidebar - Desktop only */}
       <div className="hidden lg:block lg:w-96 shrink-0">
-        <Card className="relative sticky top-20 flex flex-col max-h-[calc(100vh-7rem)] bg-gradient-to-b from-card/95 to-card/90 backdrop-blur-sm shadow-lg border border-border/50">
-          <CardHeader className="pb-3">
+        <Card className="relative sticky top-20 flex flex-col h-[calc(100vh-7rem)] overflow-hidden bg-gradient-to-b from-card/95 to-card/90 backdrop-blur-sm shadow-lg border border-border/50">
+          <CardHeader className="pb-3 shrink-0">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
                 <ShoppingCart className="h-4 w-4" />
@@ -3707,8 +3707,8 @@ function POSTab() {
               </div>
             </div>
           </CardHeader>
-          <Separator />
-          <ScrollArea className="flex-1 min-h-0 custom-scrollbar">
+          <Separator className="shrink-0" />
+          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
             {cart.items.length === 0 ? (
               <EmptyCartState />
             ) : (
@@ -3726,11 +3726,11 @@ function POSTab() {
                 ))}
               </div>
             )}
-          </ScrollArea>
+          </div>
           {cart.items.length > 0 && (
             <>
-              <Separator />
-              <div className="shrink-0 p-4 space-y-3 overflow-y-auto max-h-[50%] custom-scrollbar">
+              <Separator className="shrink-0" />
+              <div className="shrink-0 p-4 space-y-3 overflow-y-auto max-h-[45%] custom-scrollbar border-t">
                 {/* Discount Code */}
                 <div className="flex gap-1.5">
                   <Input
@@ -4280,7 +4280,7 @@ function POSTab() {
               </div>
             </div>
           </SheetHeader>
-          <ScrollArea className="flex-1 min-h-0 custom-scrollbar">
+          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
             {cart.items.length === 0 ? (
               <EmptyCartState />
             ) : (
@@ -4298,10 +4298,10 @@ function POSTab() {
                 ))}
               </div>
             )}
-          </ScrollArea>
+          </div>
           {cart.items.length > 0 && (
             <>
-              <div className="p-4 space-y-3 border-t shrink-0 overflow-y-auto max-h-[50%] custom-scrollbar">
+              <div className="p-4 space-y-3 border-t shrink-0 overflow-y-auto max-h-[45%] custom-scrollbar">
                 <div className="flex gap-1.5">
                   <Input
                     placeholder="Discount code"

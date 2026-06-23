@@ -1721,3 +1721,36 @@ Stage Summary:
 - TopBar Help button gives instant access to shortcuts + support + about
 - All changes verified visually (VLM) + interactively (Agent Browser)
 - Files edited: src/app/page.tsx (login redesign + help dropdown), src/app/tabs/dashboard-tab.tsx (welcome hero + KPI polish by subagent)
+
+---
+Task ID: CART-OVERFLOW-FIX
+Agent: Main Agent
+Task: Fix POS cart overflow — items overlapping & checkout button hidden when >6 items
+
+Work Log:
+- Reproduced the bug: with 8+ cart items, the Radix ScrollArea inside the flex-column cart Card failed to constrain its content height, and the checkout section's `max-h-[50%]` didn't resolve (percentage height needs a definite parent height, but Card used `max-h-[calc(100vh-7rem)]` which is a max cap, not a definite height)
+- Root causes:
+  1. Card used `max-h-[calc(100vh-7rem)]` (max-height) instead of `h-[calc(100vh-7rem)]` (definite height) → percentage heights on children didn't resolve
+  2. Radix `<ScrollArea>` inside a flex column with `flex-1 min-h-0` is unreliable for height constraint — content can overflow the viewport
+  3. Card lacked `overflow-hidden` so overflowing content spilled out visually (overlapping)
+  4. Checkout section's `max-h-[50%]` resolved to nothing, letting it grow unbounded and push the checkout button off-screen
+- Fix applied to desktop cart Card (page.tsx ~3676):
+  * `max-h-[calc(100vh-7rem)]` → `h-[calc(100vh-7rem)]` (definite height)
+  * Added `overflow-hidden` to Card
+  * Added `shrink-0` to CardHeader + Separator elements so they don't compress
+  * Replaced `<ScrollArea className="flex-1 min-h-0 custom-scrollbar">` → `<div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">` (plain div scrolls reliably in flex contexts)
+  * Checkout section: `max-h-[50%]` → `max-h-[45%]` (now resolves correctly since parent has definite height) + added `border-t` + `shrink-0`
+- Same fix applied to mobile cart Sheet (page.tsx ~4283):
+  * Replaced `<ScrollArea>` → plain `<div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">`
+  * Checkout section `max-h-[50%]` → `max-h-[45%]`
+- Verified via Agent Browser (1280×800 desktop viewport):
+  * Added 8 different products → all cart items render without overlap, orange Checkout button visible at y=752 (viewport 800px), VLM confirms 3/3 checks pass
+  * Added 12 products total → Checkout button STILL visible at y=752, VLM confirms 3/3 checks pass (items separated, button visible, scrollbar present)
+  * Pressed F9 → checkout dialog opens with all 4 payment methods (Cash/Debt/Split/M-Pesa)
+- bun run lint: EXIT 0 (0 errors, 0 warnings)
+
+Stage Summary:
+- POS cart now properly scrolls when exceeding visible space — no more item overlap or hidden checkout button
+- Both desktop (sticky Card) and mobile (Sheet) carts fixed
+- Tested with up to 12 items; checkout button remains visible and functional
+- Files edited: src/app/page.tsx only (2 surgical edits — desktop cart Card + mobile cart Sheet)
