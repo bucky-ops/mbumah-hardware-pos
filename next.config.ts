@@ -86,6 +86,24 @@ const nextConfig: NextConfig = {
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
           { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
           { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },
+          // ── PWA installability headers ──
+          // Link to the web app manifest so browsers can discover it without
+          // a <link rel="manifest"> tag (and so it is served with the correct
+          // MIME type / CORS for install prompts).
+          {
+            key: "Link",
+            value: '</manifest.json>; rel="manifest"; crossorigin=use-credentials',
+          },
+          // Allow the app to run in standalone / fullscreen mode when installed.
+          { key: "Mobile-Web-App-Capable", value: "yes" },
+          { key: "Apple-Mobile-Web-App-Capable", value: "yes" },
+          {
+            key: "Apple-Mobile-Web-App-Status-Bar-Style",
+            value: "black-translucent",
+          },
+          { key: "Apple-Mobile-Web-App-Title", value: "MBUMAH POS" },
+          // Application name for Windows / Android tiles.
+          { key: "Application-Name", value: "MBUMAH POS" },
           // Content Security Policy
           {
             key: "Content-Security-Policy",
@@ -95,6 +113,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://cdn.shopify.com https://utfs.io https://*.vercel-storage.com",
+              "manifest-src 'self'",
               "connect-src 'self' https://*.vercel.app https://sandbox.safaricom.co.ke https://api.safaricom.co.ke",
               "frame-ancestors 'none'",
               "base-uri 'self'",
@@ -102,6 +121,14 @@ const nextConfig: NextConfig = {
               "object-src 'none'",
             ].join("; "),
           },
+        ],
+      },
+      // Serve the manifest with the correct MIME type so install prompts work.
+      {
+        source: "/manifest.json",
+        headers: [
+          { key: "Content-Type", value: "application/manifest+json" },
+          { key: "Cache-Control", value: "public, max-age=3600" },
         ],
       },
       {

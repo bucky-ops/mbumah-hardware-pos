@@ -22,10 +22,21 @@ import {
   Truck, UserPlus, Receipt, Filter, Info, Tag,
   LayoutGrid, List, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Pause, MessageSquare, PartyPopper, Sparkles, Zap, Ticket, Landmark, Award, Gift,
   Lightbulb, Send, ExternalLink, RefreshCw, Split, ChevronRight,
+  Wifi, WifiOff, CloudOff, CloudLightning,
 } from 'lucide-react';
 
 import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
 import { ErrorBoundary } from '@/components/error-boundary';
+import {
+  saveOfflineTransaction,
+  buildOfflineReceipt,
+  syncQueue,
+  initOfflineSync,
+  primeOfflineCount,
+  onBackgroundSync,
+  subscribeOfflineCount,
+  getOfflineCountSnapshot,
+} from '@/lib/offline-sync';
 import {
   productsApi, categoriesApi, customersApi, transactionsApi,
   paymentsApi, dashboardApi,
@@ -37,7 +48,7 @@ import {
   type RentalItem, type DebtLedgerItem,
   type NotificationItem, type GiftCardItem, type VoucherItem,
 } from '@/lib/api';
-import type { PaymentMethod, CartItem, UnitType, DashboardStats } from '@/lib/types';
+import type { PaymentMethod, CartItem, UnitType, DashboardStats, CheckoutPayload } from '@/lib/types';
 import { handleError } from '@/lib/error-handler';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
@@ -2717,6 +2728,20 @@ function POSTab() {
   // Sell-More recommendations collapse
   const [recommendationsOpen, setRecommendationsOpen] = useState(true);
 
+  // ── Offline-first POS state ──
+  // Tracks live browser connectivity so the cashier sees an "Offline" badge
+  // and the checkout mutation knows to enqueue the sale locally instead of
+  // attempting a doomed network request.
+  const [isOnline, setIsOnline] = useState(true);
+  // Pending offline-sales count (reactive via useSyncExternalStore).
+  const offlineQueueCount = useSyncExternalStore(
+    subscribeOfflineCount,
+    getOfflineCountSnapshot,
+    () => 0, // SSR snapshot — no queue on the server
+  );
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const authUser = useAuthStore((s) => s.user);
   const cart = useCartStore();
   const subtotal = cart.getSubtotal();
   const tax = cart.getTax();
@@ -2739,6 +2764,77 @@ function POSTab() {
       window.removeEventListener('pos-hold-cart', handleHoldCart);
     };
   }, [cart.items.length]);
+
+  // ── Offline-first POS: connectivity tracking + auto-sync ──
+  // On mount: prime the cached queue count, register the online/offline
+  // window listeners (which auto-fire syncQueue when connectivity returns),
+  // and subscribe to background-sync results so we can toast the cashier.
+  useEffect(() => {
+    // Initialise connectivity from the live navigator value (handles the case
+    // where the app was launched while already offline).
+    if (typeof navigator !== 'undefined') {
+      setIsOnline(navigator.onLine);
+    }
+
+    primeOfflineCount().catch(() => { /* non-fatal */ });
+    const cleanupSync = initOfflineSync();
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      toast.success('Back online — syncing queued sales…', { duration: 3000 });
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      toast.warning('You are offline. Sales will be saved locally and synced automatically.', {
+        duration: 5000,
+      });
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Toast the result of each automatic background sync.
+    const unsubSync = onBackgroundSync((result) => {
+      if (result.succeeded > 0) {
+        toast.success(`Synced ${result.succeeded} offline sale${result.succeeded !== 1 ? 's' : ''} to the server.`, {
+          duration: 4000,
+        });
+      }
+      if (result.failed > 0) {
+        toast.error(`${result.failed} sale${result.failed !== 1 ? 's' : ''} failed to sync and will retry.`, {
+          duration: 5000,
+        });
+      }
+    });
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      cleanupSync();
+      unsubSync();
+    };
+  }, []);
+
+  // Manual "Sync now" handler — triggered by the offline badge button.
+  const handleManualSync = useCallback(async () => {
+    if (isSyncing || offlineQueueCount === 0) return;
+    setIsSyncing(true);
+    try {
+      const result = await syncQueue();
+      if (result.succeeded > 0) {
+        toast.success(`Synced ${result.succeeded} sale${result.succeeded !== 1 ? 's' : ''}.`);
+      }
+      if (result.failed > 0) {
+        toast.error(`${result.failed} sale${result.failed !== 1 ? 's' : ''} still pending (will retry automatically).`);
+      }
+      if (result.attempted === 0) {
+        toast.info('No queued sales to sync.');
+      }
+    } catch {
+      toast.error('Sync failed — please check your connection and try again.');
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [isSyncing, offlineQueueCount]);
 
   const { data: productsData, isLoading: productsLoading } = useQuery({
     queryKey: ['products', currentStoreId, searchQuery, selectedCategory],
@@ -2826,11 +2922,69 @@ function POSTab() {
   const [lastMpesaPhone, setLastMpesaPhone] = useState('');
 
   const checkoutMutation = useMutation({
-    mutationFn: transactionsApi.create,
+    mutationFn: async (payload: CheckoutPayload) => {
+      console.log('[MUTATION-FN] checkoutMutation.mutationFn CALLED, payload items=', payload?.items?.length);
+      // ── Offline-first checkout ──
+      // If the browser is known to be offline, skip the doomed network
+      // request entirely and persist the sale to the IndexedDB queue. The
+      // cashier gets an immediate synthetic receipt (with a client-generated
+      // receipt number) so the customer can be handed paper proof right away.
+      // The real server-side transaction is created when syncQueue() replays
+      // the payload after connectivity returns.
+      const currentlyOnline =
+        typeof navigator === 'undefined' ? true : navigator.onLine;
+
+      if (!currentlyOnline) {
+        const row = await saveOfflineTransaction(payload);
+        if (row) {
+          const synthetic = buildOfflineReceipt(row, authUser?.name || 'Cashier');
+          toast.warning('Offline Mode: Sale saved locally and will sync automatically.', {
+            duration: 5000,
+          });
+          return { success: true, data: synthetic };
+        }
+        // If IndexedDB is unavailable for some reason, fall through to the
+        // network attempt (which will fail and surface a real error).
+      }
+
+      try {
+        return await transactionsApi.create(payload);
+      } catch (err) {
+        // Network-layer failure while "online" (e.g. DNS down, server
+        // unreachable, connection dropped mid-request). `fetch` throws a
+        // TypeError for these — distinguish from a genuine server-side 4xx/5xx
+        // error (which `request()` rejects with a real Error carrying the
+        // server message).
+        const isNetworkError =
+          err instanceof TypeError ||
+          (err instanceof Error && /fetch|network|failed to fetch/i.test(err.message));
+
+        if (isNetworkError) {
+          const row = await saveOfflineTransaction(payload);
+          if (row) {
+            const synthetic = buildOfflineReceipt(row, authUser?.name || 'Cashier');
+            toast.warning('Network error — Sale saved locally and will sync automatically.', {
+              duration: 5000,
+            });
+            return { success: true, data: synthetic };
+          }
+        }
+        // Genuine server error (4xx/5xx) or queue failure — surface to onError.
+        throw err;
+      }
+    },
     onSuccess: (res) => {
-      toast.success('Transaction completed successfully!');
-      setConfettiActive(true);
-      setTimeout(() => setConfettiActive(false), 4000);
+      // Detect offline-queued sales via the PENDING_SYNC sentinel so we show
+      // the correct messaging (the receipt is still rendered for the cashier).
+      const wasOffline = res.data?.paymentStatus === 'PENDING_SYNC';
+      if (wasOffline) {
+        setConfettiActive(true);
+        setTimeout(() => setConfettiActive(false), 4000);
+      } else {
+        toast.success('Transaction completed successfully!');
+        setConfettiActive(true);
+        setTimeout(() => setConfettiActive(false), 4000);
+      }
       if (res.data) {
         setLastTransaction(res.data);
         setLastCashReceived(paymentMethod === 'CASH' || paymentMethod === 'SPLIT' ? Number(splitCashAmount) || Number(cashReceived) || finalTotal : 0);
@@ -2856,6 +3010,9 @@ function POSTab() {
       queryClient.invalidateQueries({ queryKey: ['customer-vouchers'] });
       queryClient.invalidateQueries({ queryKey: ['giftCards'] });
       queryClient.invalidateQueries({ queryKey: ['vouchers'] });
+      // Offline sales don't hit the server immediately, so the dashboard /
+      // transactions lists won't reflect them yet — skip invalidating those
+      // (they'll refresh naturally when syncQueue completes).
     },
     onError: (err: unknown) => {
       toast.error(handleError(err, 'Checkout'));
@@ -3188,6 +3345,7 @@ function POSTab() {
   };
 
   const handleCheckout = () => {
+    console.log('[HANDLE-CHECKOUT] called, online=', navigator.onLine, 'items=', cart.items.length);
     if (cart.items.length === 0) {
       toast.error('Cart is empty');
       return;
@@ -3225,6 +3383,7 @@ function POSTab() {
       }
     }
 
+    console.log('[HANDLE-CHECKOUT] about to call checkoutMutation.mutate()');
     checkoutMutation.mutate({
       storeId: currentStoreId,
       customerId: selectedCustomer || undefined,
@@ -3443,6 +3602,59 @@ function POSTab() {
 
       {/* Product Grid — Catalog (3 of 5 columns on desktop) */}
       <div className="col-span-1 lg:col-span-3 min-w-0 space-y-4">
+        {/* ── Online / Offline status indicator ──
+            Shows the cashier live connectivity + the count of sales queued
+            locally for sync. When offline or when there are pending sales,
+            the badge becomes a button that triggers a manual sync attempt. */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div
+            role="status"
+            aria-live="polite"
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+              isOnline
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300'
+                : 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300'
+            }`}
+          >
+            {isOnline ? (
+              <>
+                <Wifi className="h-3.5 w-3.5" />
+                <span>Online</span>
+              </>
+            ) : (
+              <>
+                <WifiOff className="h-3.5 w-3.5 animate-pulse" />
+                <span>Offline Mode</span>
+              </>
+            )}
+            {offlineQueueCount > 0 && (
+              <span className="inline-flex items-center gap-1 ml-1 pl-2 border-l border-current/30">
+                <CloudOff className="h-3 w-3" />
+                <span>{offlineQueueCount} pending sync{offlineQueueCount !== 1 ? 's' : ''}</span>
+              </span>
+            )}
+          </div>
+
+          {offlineQueueCount > 0 && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleManualSync}
+              disabled={isSyncing || !isOnline}
+              className="h-7 gap-1.5 text-xs"
+              title={isOnline ? 'Sync queued sales to the server now' : 'Reconnect to sync queued sales'}
+            >
+              {isSyncing ? (
+                <RefreshCw className="h-3 w-3 animate-spin" />
+              ) : (
+                <CloudLightning className="h-3 w-3" />
+              )}
+              {isSyncing ? 'Syncing…' : 'Sync now'}
+            </Button>
+          )}
+        </div>
+
         {/* Dashboard Stats */}
         <DashboardStats storeId={currentStoreId} onLowStockClick={() => setLowStockAlertOpen(true)} />
 

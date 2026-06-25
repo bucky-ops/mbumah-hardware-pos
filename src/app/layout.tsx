@@ -34,11 +34,22 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "MBUMAH HARDWARE - POS & ERP System",
   description:
-    "Enterprise Point of Sale & ERP System for MBUMAH HARDWARE. Manage sales, inventory, customers, rentals, and financials.",
+    "Enterprise Point of Sale & ERP System for MBUMAH HARDWARE. Manage sales, inventory, customers, rentals, and financials — with offline-first checkout.",
   keywords: ["MBUMAH HARDWARE", "POS", "ERP", "Point of Sale", "Inventory", "Kenya"],
   authors: [{ name: "MBUMAH HARDWARE" }],
+  manifest: "/manifest.json",
+  applicationName: "MBUMAH POS",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "MBUMAH POS",
+  },
+  formatDetection: {
+    telephone: false,
+  },
   icons: {
     icon: "/logo.svg",
+    apple: "/logo.svg",
   },
 };
 
