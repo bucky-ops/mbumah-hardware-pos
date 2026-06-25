@@ -1966,3 +1966,89 @@ Stage Summary:
 - ✅ BONUS FIX: `splits` added to Zod schema (was being stripped, breaking SPLIT payments).
 - Lint clean (0 errors). Browser-verified: 2 successful checkouts (1 without discount, 1 with 50 Ksh discount), both with balanced journal entries including COGS and contra-revenue lines.
 - STOPPING HERE per pacing rules. Awaiting user "continue" to proceed to Phase 3 (Tasks 4+5: Vitest setup + financial accounting tests + conventional commits + git push).
+
+---
+Task ID: PHASE-3 / TASKS 4 & 5 (Vitest Test Suite + Conventional Commits + Git Push)
+Agent: Main Agent
+Task: Execute Phase 3 of the Master Z.ai Prompt — Vitest setup with financial accounting tests (Task 4) + conventional commits + git push (Task 5).
+
+Work Log:
+TASK 4 — Vitest Financial Accounting Test Suite:
+
+  4a. Installed test dependencies (npm install -D):
+      - vitest@4.1.9 — test runner
+      - @vitejs/plugin-react@6.0.3 — React JSX transform (for future component tests)
+      - jsdom@29.1.1 — DOM environment
+      - @testing-library/react@16.3.2 — React component testing utilities
+      - (vite-tsconfig-paths installed but later replaced by native resolve.tsconfigPaths option per Vitest deprecation guidance)
+
+  4b. vitest.config.ts:
+      - jsdom environment, globals enabled, setupFiles: ['./src/tests/setup.ts']
+      - include: src/tests/**/*.test.{ts,tsx}
+      - 30s test/hook timeout (financial tests touch SQLite filesystem DB)
+      - resolve.tsconfigPaths: true (native @/* → ./src/* resolution, no deprecated plugin)
+
+  4c. src/tests/setup.ts:
+      - Manual .env loader (reads .env, parses KEY=VALUE, strips quotes) — no dotenv dependency
+      - DATABASE_URL fallback to file:./prisma/dev.db
+      - IntersectionObserver + matchMedia stubs (jsdom doesn't define them; transitively-imported UI modules reference them at load time)
+
+  4d. src/tests/lib/account-helper.test.ts — 4 tests verifying recordSaleJournalEntry double-entry invariants:
+      - Test isolation: rollback-transaction pattern — each test runs the helper inside db.$transaction, throws a ROLLBACK sentinel at the end to force rollback, catches the sentinel so the test sees a clean exit. Dev DB stays clean.
+      - Test 1 (cash sale): credits Sales Revenue (4000) + VAT Payable (2100), debits Cash on Hand (1000); verifies debits=credits, entry is posted, revenue/vat/cash amounts correct.
+      - Test 2 (cart discount): routes discount to Sales Discounts contra-revenue (4300, debit), leaves Sales Revenue at FULL gross (discount does NOT net revenue); verifies cash(1060) + discount(100) = revenue(1000) + vat(160) = 1160.
+      - Test 3 (gift card): debits Gift Card Liability (2300, unearned revenue decreases), NO cash touched; verifies pure gift-card sale has no Cash on Hand line.
+      - Test 4 (golden-rule safeguard): deliberately unbalanced entry (cash=500 but sale=1160) — helper must throw with /unbalanced/i message containing the receipt number; verifies NO journal entry persisted.
+      - All 4 tests pass in ~1.1s.
+
+  4e. package.json: added "test": "vitest run" + "test:watch": "vitest" scripts.
+
+TASK 5 — Conventional Commits + Git Push:
+
+  5a. Discovered the 2 unpushed commits from Phase 1/2 (da4707f, be33703) had UUID placeholder messages. Since they hadn't been pushed to origin, performed a `git reset --soft 88c375a` to unstage them, then re-committed into 5 proper Conventional Commits:
+
+      1. feat(pos): add cart-level discounts, gift card payment, and grid cart layout
+         (src/lib/stores.ts + src/app/page.tsx — Phase 1 frontend: Zustand discount state, lg:grid-cols-5 cart layout, cart discount input, Pay with Gift Card Dialog, checkout payload fix)
+
+      2. fix(shifts): enforce single-active shift via endedAt null check
+         (src/app/api/shifts/route.ts — Phase 2a: OR: [{ endedAt: null }, { status: 'ACTIVE' }], ghost-shift-proof)
+
+      3. fix(checkout): atomic recordSaleJournalEntry with gift card, COGS, and stock safeguard
+         (src/app/api/transactions/route.ts + src/lib/account-helper.ts + src/lib/validations.ts — Phase 2c: single recordSaleJournalEntry call, GIFT_CARD/SPLIT support, in-tx stock safeguard, COGS, account-helper description→subType fix, Zod splits schema)
+
+      4. test(financial): add double-entry journal entry Vitest suite
+         (vitest.config.ts + src/tests/setup.ts + src/tests/lib/account-helper.test.ts + package.json + package-lock.json — Phase 3 / Task 4)
+
+      5. chore: update worklog with Phase 1/2/3 completion records + verification screenshot
+         (worklog.md + pos-phase2-verified.png)
+
+  5b. CI failure diagnosis + fix:
+      - After pushing the 5 commits (696eb9d), GitHub Actions "Node.js CI with Webpack" #54 FAILED at "Install dependencies" step (`bun install --frozen-lockfile`).
+      - Root cause: the CI workflow uses `bun install --frozen-lockfile` (expects bun.lock), but I installed the vitest deps with npm (updated package-lock.json, not bun.lock). Reproduced locally: `error: lockfile had changes, but lockfile is frozen`.
+      - Fix: ran `bun install` (without --frozen) to regenerate bun.lock with the new vitest deps, then committed as:
+        6. fix(ci): sync bun.lock for new vitest dev dependencies
+      - Pushed (642453e). CI re-ran: Node.js CI #55 ALL JOBS SUCCESS (Lint & Type Check ✅, Build & Test Node 20 ✅, Build & Test Node 22 ✅, Security Scan ✅, Integration Tests ✅). Deploy to Production #48 ✅.
+
+  5c. Final git state:
+      - Local main = origin/main = 642453e (fully in sync).
+      - 6 conventional commits pushed this session (5 planned + 1 CI fix).
+      - Working tree clean.
+
+PHASE 3 VERIFICATION:
+- `npx vitest run` → 4/4 tests pass (1.08s): src/tests/lib/account-helper.test.ts ✓
+- `bun run lint` → EXIT 0 (0 errors, 0 warnings).
+- `bun install --frozen-lockfile` → succeeds (CI install step now passes).
+- GitHub Actions on 642453e: Node.js CI #55 SUCCESS, Deploy to Production #48 SUCCESS.
+- Dev server: running, all API routes returning 200, no errors in dev.log.
+
+Stage Summary:
+- ✅ TASK 4: Vitest suite installed + configured + 4 financial-accounting tests written and passing. Tests verify the 4 core double-entry invariants: cash sale balance, contra-revenue discount routing, gift-card liability debit, and golden-rule safeguard. Rollback-transaction isolation keeps the dev DB clean.
+- ✅ TASK 5: 6 conventional commits pushed to origin/main (feat(pos), fix(shifts), fix(checkout), test(financial), chore, fix(ci)). All CI green on the final commit.
+- Master Z.ai Prompt 5-task enterprise update (Phases 1+2+3) is COMPLETE:
+  * Task 1: Prisma schema indexes (committed in prior 936626d)
+  * Task 2: Frontend cart UI / discounts / gift card (commit 2cb4e8e)
+  * Task 3: Backend security + atomic checkout (commits 6e44b37 + bb02f60)
+  * Task 4: Vitest financial tests (commit 0c942ca)
+  * Task 5: Conventional commits + git push (commits 696eb9d + 642453e)
+- Production: Vercel production live at https://mbumah-hardware-pos-one.vercel.app (from prior session). GitHub Pages landing page live.
+- Recurring webDevReview cron: job_id 231788, every 15 min, Africa/Nairobi.
