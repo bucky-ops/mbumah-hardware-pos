@@ -33,12 +33,13 @@ Fixes # (issue number)
 
 ## ✅ Quality Checklist (Required)
 
-These four items are **mandatory** for every PR. Please do not request review until all are checked.
+These items are **mandatory** for every PR. Please do not request review until all are checked.
 
 - [ ] **Tested locally** — I ran `bun run dev` and manually verified the feature/fix works end-to-end (not just "it compiles").
 - [ ] **Prisma migrations included** — If this PR changes `prisma/schema.prisma`, I ran `bun run db:migrate --name <desc>` and committed the `prisma/migrations/` files. (Check this box even if there were no schema changes.)
 - [ ] **No `any` types used** — I did not introduce any `any` types or `@ts-ignore` / `@ts-expect-error` suppressions. TypeScript strict mode passes.
 - [ ] **Multi-tenancy (`storeId`) verified** — Every new/modified database query is scoped by `storeId` (or explicitly SUPER_ADMIN scoped). No cross-store data leakage is possible.
+- [ ] **Added `export const dynamic = 'force-dynamic'` to API routes** — Every new/modified API route handler (`src/app/api/**/route.ts`) exports `dynamic = 'force-dynamic'`. This prevents Next.js from statically pre-rendering dynamic routes during `next build`, which would crash the Vercel build by triggering eager env validation when runtime secrets aren't injected. (Check this box even if the PR doesn't touch API routes.)
 
 ## Database Changes
 
