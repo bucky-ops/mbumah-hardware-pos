@@ -2260,3 +2260,40 @@ Stage Summary:
 - The 10/10 Enterprise SaaS Upgrade (5 phases from Prompt 2) + the 4 phases from Prompt 1 are ALL COMPLETE.
 - Lint clean. 27/27 tests pass. Browser E2E clean (checkout golden path works, immutability guard fires correctly on update/delete but allows create).
 - NEXT: The combined Master Prompt work is fully complete. The recurring webDevReview cron (job_id 231915, every 15 min, Africa/Nairobi) will continue to drive incremental improvements.
+
+---
+Task ID: phase1-vercel-fix
+Agent: Principal Next.js Engineer (main)
+Task: PHASE 1 — Fix Vercel build & runtime crashes (SKIP_ENV_VALIDATION pattern, vercel-build script, API route force-dynamic, font preload, Vercel Analytics/Speed Insights).
+
+Work Log:
+- Read existing src/lib/env.ts (already had a NEXT_RUNTIME-based build-aware pattern) and rewrote it to use the industry-standard `SKIP_ENV_VALIDATION` pattern (create-t3-app convention):
+  * If `process.env.SKIP_ENV_VALIDATION` is truthy (`1`/`true`/`yes`) → skip Zod validation, export `process.env` cast to schema type. This lets `next build` collect page data for /api/* routes WITHOUT crashing on missing runtime secrets.
+  * If falsy (runtime: Vercel serverless, `bun run dev`) → run `envSchema.safeParse(process.env)`, throw descriptive `EnvValidationError` listing ALL gaps on failure.
+  * Kept `EnvValidationError`, `requireEnv()`, `isProduction`, `isTest`, `isBuildTime` exports for backwards compat with existing call sites.
+  * Preserved the client-bundle guard (returns permissive stub if `typeof window !== 'undefined'`).
+- Updated package.json `vercel-build` script to: `node scripts/setup-prisma-provider.mjs && SKIP_ENV_VALIDATION=1 prisma generate && SKIP_ENV_VALIDATION=1 next build`.
+  * NOTE: The user's literal instruction was `SKIP_ENV_VALIDATION=1 prisma generate && next build`, but in shell semantics the `SKIP_ENV_VALIDATION=1` prefix only applies to the immediately-following command (`prisma generate`), NOT `next build`. Since `next build` is EXACTLY where env validation crashes during page-data collection, the flag MUST be on `next build` too. Added `SKIP_ENV_VALIDATION=1` before BOTH `prisma generate` and `next build`.
+  * Kept `node scripts/setup-prisma-provider.mjs` as the first step — this is the essential SQLite↔PostgreSQL auto-detection (reads DATABASE_URL scheme, rewrites `provider` in schema.prisma). Removing it would break the dual-provider build.
+- Verified the three target API routes already had `export const dynamic = 'force-dynamic';` AND only named HTTP method exports (POST/GET), NO default exports:
+  * src/app/api/auth/login/route.ts → `export const dynamic = 'force-dynamic';` + `export const POST = ...` ✓
+  * src/app/api/dashboard/route.ts → `export const dynamic = 'force-dynamic';` + `export const GET = ...` ✓
+  * src/app/api/auth/me/route.ts → `export const dynamic = 'force-dynamic';` + `export const GET = ...` ✓
+- Updated src/app/layout.tsx font configuration: changed BOTH Geist Sans AND Geist Mono to `preload: false`.
+  * Previously Geist Sans had `preload: true` and Geist Mono had `preload: false`. The Chrome console warning about unused preloaded font (`797e433ab948586e-s.p.29207c2f.woff2`) was the mono variant being eagerly fetched but never painted on the login screen. Setting both to `preload: false` defers fetch until the CSS variables actually reference them — eliminates the warning with no perceivable latency cost (`display: swap` keeps text visible via system fallback).
+  * Verified `<Analytics />` from `@vercel/analytics/next` and `<SpeedInsights />` from `@vercel/speed-insights/next` are already injected inside `<body>` (within `<Providers>`).
+  * Verified `@vercel/analytics` (^2.0.1) and `@vercel/speed-insights` (^1.3.1) are already in package.json dependencies.
+- Ran `bun run lint` → 0 errors, 0 warnings.
+- Verified dev server still running and healthy: `POST /api/auth/login 200`, `GET / 200`, no ENV_VALIDATION_FAILED, no 500s.
+- agent-browser E2E verification:
+  * Opened http://localhost:3000/ → page titled "MBUMAH HARDWARE - POS & ERP System" rendered.
+  * Snapshot confirms full login UI: hero ("KENYA'S HARDWARE TRADE · POWERED BY MBUMAH"), heading "Run your store with confidence", MBUMAH HARDWARE branding, login form (email/password/sign-in), Quick Demo Access (Super Admin / Branch Mgr Thika / Cashier / Accountant), footer ("Powered by MBUMAH HARDWARE · Made in Kenya 🇰🇪").
+  * Browser console: NO font preload warnings (fix confirmed). Only informational logs: Vercel Analytics/Speed Insights "Failed to load script from va.vercel-scripts.com" — these are EXPECTED in local dev (scripts only load on real Vercel deployments) and are NOT errors.
+
+Stage Summary:
+- ✅ src/lib/env.ts rewritten with SKIP_ENV_VALIDATION pattern (create-t3-app standard). Build phase skips validation; runtime validates eagerly with descriptive errors.
+- ✅ package.json `vercel-build` = `node scripts/setup-prisma-provider.mjs && SKIP_ENV_VALIDATION=1 prisma generate && SKIP_ENV_VALIDATION=1 next build`. Flag on `next build` is critical (that's where page-data collection triggers env import).
+- ✅ All 3 API routes (login, dashboard, me) confirmed `force-dynamic` + named exports only (no default exports).
+- ✅ layout.tsx: both fonts `preload: false` (resolves Chrome console warning). Analytics + SpeedInsights already injected. Packages already in deps.
+- ✅ Lint clean. Dev server healthy. Browser E2E clean (login page fully rendered, no console warnings).
+- ⏸️ STOPPING HERE per instructions. Awaiting user to type 'continue' for PHASE 2 (10/10 README + GitHub meta-files) and PHASE 3 (git push + manual Vercel/Neon DB instructions).

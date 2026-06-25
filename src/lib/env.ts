@@ -1,28 +1,47 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Build-aware environment-variable validation (Zod)
+// MBUMAH HARDWARE POS — Environment-variable validation (Zod)
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// This module validates required environment variables at module-load time,
-// BUT it is **build-aware**: during `next build` (when `NEXT_RUNTIME` is
-// undefined), validation is SKIPPED so the build doesn't crash on missing
-// runtime secrets (NEXTAUTH_SECRET, DATABASE_URL, etc.).
+// This module validates required environment variables at module-load time
+// using the industry-standard `SKIP_ENV_VALIDATION` pattern (popularized by
+// create-t3-app). This is the SAME pattern used by Vercel-deployed Next.js
+// apps across the ecosystem.
 //
-// At runtime (Vercel serverless, `bun run dev`), a full `envSchema.safeParse`
-// runs and throws a descriptive `EnvValidationError` on failure — long before
-// a cryptic 500 surfaces in the logs.
+// ## How it works
 //
-// ## Why skip at build time?
+//   ┌──────────────────────────────────────────────────────────────────────┐
+//   │  `SKIP_ENV_VALIDATION` is truthy?                                    │
+//   │                                                                      │
+//   │   YES (build phase / vercel-build script)                            │
+//   │     → Skip Zod validation entirely.                                  │
+//   │     → Export `process.env` cast to the schema type.                  │
+//   │     → Lets `next build` collect page data for /api/* routes          │
+//   │       WITHOUT crashing on missing runtime secrets.                   │
+//   │                                                                      │
+//   │   NO (runtime: Vercel serverless, `bun run dev`)                     │
+//   │     → Run `envSchema.safeParse(process.env)`.                        │
+//   │     → Throw a descriptive `EnvValidationError` listing ALL gaps.     │
+//   │     → Fails fast & loud — long before a cryptic 500 surfaces.        │
+//   └──────────────────────────────────────────────────────────────────────┘
 //
-// Next.js sets `process.env.NEXT_RUNTIME` to `'nodejs'` or `'edge'` ONLY inside
-// the actual server runtime. During `next build` (static page-data collection,
-// route analysis, type-checking), `NEXT_RUNTIME` is `undefined`. Runtime
-// secrets are NOT injected at build time on Vercel, so eagerly validating them
-// during the build phase would always fail and crash the deployment.
+// ## Why this pattern?
 //
-// Usage:
+// Next.js `next build` statically analyzes route modules to collect page
+// data. During this phase, runtime secrets (DATABASE_URL, NEXTAUTH_SECRET,
+// etc.) are NOT injected on Vercel. Eagerly validating them at import time
+// would crash the build with `Failed to collect page data for /api/auth/login`.
+//
+// The `SKIP_ENV_VALIDATION=1` flag is set in the `vercel-build` npm script
+// (see package.json), so the build phase skips validation entirely. At
+// runtime — when Vercel injects the real env vars — the flag is absent and
+// the full Zod validation runs.
+//
+// ## Usage
+//
 //   import { env, requireEnv } from '@/lib/env';
-//   const url = env.DATABASE_URL;            // validated at import time (runtime)
+//   const url = env.DATABASE_URL;            // validated at import (runtime)
 //   const secret = requireEnv('JWT_SECRET'); // enforced at request time
+//
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { z } from 'zod';
@@ -48,9 +67,11 @@ export class EnvValidationError extends Error {
         '  • Vercel:     Project Settings → Environment Variables → add the keys',
         '                for the Production / Preview / Development environments.',
         '  • NEXTAUTH_SECRET / JWT_SECRET: generate with `openssl rand -base64 32`.',
-        '  • NEXTAUTH_URL: the canonical app URL (e.g. https://mbumah-hardware-pos-one.vercel.app).',
+        '  • NEXTAUTH_URL: the canonical app URL (e.g. https://mbumah-hardware-pos.vercel.app).',
         '  • DATABASE_URL: Neon/Supabase POOLED connection string',
-        '                (append ?pgbouncer=true&connection_limit=1).',
+        '                (append ?pgbouncer=true&connect_timeout=15).',
+        '  • Build phase: the `vercel-build` script sets SKIP_ENV_VALIDATION=1,',
+        '                so this error should NEVER appear during `next build`.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
       ].join('\n'),
     );
@@ -75,7 +96,7 @@ const envSchema = z.object({
   // NextAuth — NEXTAUTH_URL is the canonical public URL of the deployment.
   NEXTAUTH_URL: z
     .string()
-    .url('NEXTAUTH_URL must be a valid URL (e.g. https://mbumah-hardware-pos-one.vercel.app).')
+    .url('NEXTAUTH_URL must be a valid URL (e.g. https://mbumah-hardware-pos.vercel.app).')
     .optional(),
 
   // NEXTAUTH_SECRET signs session JWTs. Min 16 chars (use `openssl rand -base64 32`).
@@ -99,14 +120,16 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
-// ── Build-phase detection ────────────────────────────────────────────────────
+// ── Build-phase detection (legacy compat, kept for downstream callers) ──────
 //
-// Next.js sets `process.env.NEXT_RUNTIME` to `'nodejs'` or `'edge'` ONLY inside
-// the actual server runtime. During `next build` (static page-data collection,
-// route analysis), `NEXT_RUNTIME` is `undefined`. We use this to skip eager
-// validation at build time — otherwise a missing `NEXTAUTH_SECRET` would crash
-// the Vercel build even though the secret IS present at runtime.
-export const isBuildTime = typeof process.env.NEXT_RUNTIME === 'undefined';
+// `isBuildTime` is still exported for any code that branched on the old
+// NEXT_RUNTIME heuristic. Under the SKIP_ENV_VALIDATION pattern the build
+// phase is determined by the env flag, but we keep this helper for
+// backwards compatibility with existing call sites.
+export const isBuildTime =
+  typeof process.env.NEXT_RUNTIME === 'undefined' ||
+  process.env.SKIP_ENV_VALIDATION === '1' ||
+  process.env.SKIP_ENV_VALIDATION === 'true';
 
 // ── Validation (eager, runs at import time — runtime only) ───────────────────
 
@@ -117,17 +140,24 @@ function validateEnv(): Env {
     return {
       DATABASE_URL: '',
       NODE_ENV: 'development',
-    } as Env;
+    } as unknown as Env;
   }
 
-  // ── BUILD PHASE: skip validation. ──────────────────────────────────────────
+  // ── BUILD PHASE: skip validation when SKIP_ENV_VALIDATION is truthy. ──────
   //
-  // Runtime secrets (DATABASE_URL, NEXTAUTH_SECRET, etc.) are NOT available
-  // during `next build` on Vercel. Validating here would always fail and
-  // crash the build. We export `process.env` cast to the schema type so
-  // TypeScript stays satisfied; the real validation runs at runtime when
-  // `NEXT_RUNTIME` is defined.
-  if (isBuildTime) {
+  // The `vercel-build` npm script sets `SKIP_ENV_VALIDATION=1`, so during
+  // `next build` we skip the Zod parse entirely and export `process.env`
+  // cast to the schema type. This is what allows `next build` to collect
+  // page data for /api/auth/login (and every other route that transitively
+  // imports this module) WITHOUT crashing on missing runtime secrets.
+  //
+  // At runtime (Vercel serverless, `bun run dev`) the flag is absent, so
+  // the full Zod `safeParse` runs and throws on any gap.
+  if (
+    process.env.SKIP_ENV_VALIDATION === '1' ||
+    process.env.SKIP_ENV_VALIDATION === 'true' ||
+    process.env.SKIP_ENV_VALIDATION === 'yes'
+  ) {
     return process.env as unknown as Env;
   }
 
@@ -154,8 +184,8 @@ function validateEnv(): Env {
  *   env.JWT_SECRET      // string | undefined
  *   env.NODE_ENV        // 'development' | 'test' | 'production'
  *
- * At build time this is an unvalidated `process.env` cast (see `validateEnv`).
- * At runtime it is fully Zod-validated.
+ * At build time (SKIP_ENV_VALIDATION=1) this is an unvalidated `process.env`
+ * cast (see `validateEnv`). At runtime it is fully Zod-validated.
  */
 export const env: Env = validateEnv();
 

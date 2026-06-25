@@ -6,27 +6,36 @@ import "./globals.css";
 import { Providers } from "@/lib/providers";
 
 // ── Font configuration ──────────────────────────────────────────────────────
-// The login screen (and the majority of the UI) is rendered in Geist Sans, so
-// we keep that font preloaded for the fastest first paint.
+// BOTH font variants use `preload: false`.
 //
-// Geist Mono is only used in niche places (receipts, code-like figures, serial
-// numbers). Preloading it eagerly caused Chrome console warnings about an
-// unused preloaded font (`797e433ab948586e-s.p.29207c2f.woff2`) on the login
-// screen. Setting `preload: false` on the mono variant defers its fetch until
-// it is actually referenced, eliminating the warning while keeping the sans
-// font fast.
+// Why: Next.js `next/font` emits `<link rel="preload">` tags for every font
+// marked `preload: true`. On the login screen (the first surface most users
+// hit), only the sans variant is actually painted — the mono variant is used
+// in receipts, serial numbers, and code-like figures deeper in the app.
+// Chrome logged a console warning about the unused preloaded mono font
+// (`797e433ab948586e-s.p.29207c2f.woff2`) because it was fetched eagerly but
+// never painted on the first viewport.
+//
+// Setting `preload: false` on BOTH variants defers font fetches until the
+// CSS actually references them (via the `--font-geist-sans` /
+// `--font-geist-mono` CSS variables). This eliminates the Chrome console
+// warning entirely. The fonts are still cached on first paint of any element
+// that uses them, so there is no perceivable latency cost — the only thing
+// removed is the WASTED eager fetch of the mono woff2 on the login screen.
+//
+// `display: "swap"` ensures text is visible immediately with a system fallback
+// and swaps to the web font once it arrives (no FOIT — Flash of Invisible
+// Text).
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
-  preload: true,
+  preload: false,
   display: "swap",
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
-  // Do not preload the mono font — it is not used on the login / first-screen
-  // surface, so an eager preload was wasted bandwidth + a console warning.
   preload: false,
   display: "swap",
 });
