@@ -5,18 +5,18 @@
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
     "build": "next build",
-    "postinstall": "prisma generate",
+    "postinstall": "node scripts/setup-prisma-provider.mjs && prisma generate",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:push": "prisma db push",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:migrate:deploy": "prisma migrate deploy",
+    "db:push": "node scripts/setup-prisma-provider.mjs && prisma db push",
+    "db:generate": "node scripts/setup-prisma-provider.mjs && prisma generate",
+    "db:migrate": "node scripts/setup-prisma-provider.mjs && prisma migrate dev",
+    "db:migrate:deploy": "node scripts/setup-prisma-provider.mjs && prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset",
-    "vercel-build": "prisma generate && next build"
+    "vercel-build": "node scripts/setup-prisma-provider.mjs && prisma generate && next build"
   },
   "prisma": {
     "seed": "bun prisma/seed.ts"

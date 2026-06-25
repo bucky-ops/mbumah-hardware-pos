@@ -1,11 +1,14 @@
 // MBUMAH HARDWARE POS & ERP - Prisma Schema
 // Multi-tenant via storeId discriminator. SQLite for dev, PostgreSQL for prod.
 //
-// Switching to PostgreSQL:
-//   1. Change provider to "postgresql"
-//   2. Update DATABASE_URL in .env
-//   3. Run: npx prisma migrate dev --name init_pg
-//   4. Run: npx prisma db seed
+// The provider is set AUTOMATICALLY by `scripts/setup-prisma-provider.mjs`
+// based on the DATABASE_URL scheme:
+//   • file:./...        → sqlite      (local dev)
+//   • postgresql://...  → postgresql  (Vercel / Neon / Supabase)
+//
+// The script runs before `prisma generate` in postinstall, vercel-build,
+// and all db:* scripts. Do NOT manually change the provider below — it will
+// be overwritten on the next install/build.
 //
 // Notes:
 //   - IDs use cuid() for cross-DB compat
@@ -17,7 +20,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"  // Change to "postgresql" for Vercel/Supabase
+  // Auto-set by scripts/setup-prisma-provider.mjs — do not edit manually.
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
