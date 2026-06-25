@@ -1,0 +1,164 @@
+name: 🐛 Bug Report
+description: Report a bug or unexpected behavior in Mbumah Hardware POS
+title: "[BUG] <short summary>"
+labels: ["bug", "needs-triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report! Before you continue,
+        please:
+        - **Search** existing issues to avoid duplicates.
+        - **Update** to the latest `main` — your bug may already be fixed.
+        - For **security vulnerabilities**, do NOT use this form. See [SECURITY.md](https://github.com/bucky-ops/mbumah-hardware-pos/blob/main/SECURITY.md) and report privately.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: "When I ... the system does ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Step-by-step instructions to trigger the bug.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. Enter '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened. Paste error messages / stack traces here.
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Where did the bug occur?
+      options:
+        - Local development (`bun run dev`)
+        - Vercel preview deployment
+        - Vercel production deployment
+        - Docker Compose (self-hosted)
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js Version
+      description: Run `node --version` to find out.
+      placeholder: "e.g. 20.14.0"
+    validations:
+      required: true
+
+  - type: input
+    id: bun-version
+    attributes:
+      label: Bun Version
+      description: Run `bun --version` to find out. (Enter N/A if not using Bun.)
+      placeholder: "e.g. 1.1.8"
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser
+      description: If the bug is in the UI, which browser (and version)?
+      placeholder: "e.g. Chrome 125, Firefox 126, Safari 17.4"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: database
+    attributes:
+      label: Database
+      description: Which database backend are you using?
+      options:
+        - SQLite (local dev default)
+        - PostgreSQL (Vercel / Supabase / Neon)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      placeholder: "e.g. Windows 11, macOS Sonoma, Ubuntu 22.04"
+    validations:
+      required: false
+
+  - type: input
+    id: commit
+    attributes:
+      label: App Version / Commit SHA
+      description: The commit you're running on. Run `git rev-parse --short HEAD`.
+      placeholder: "e.g. v0.2.0 or 2dbcaea"
+    validations:
+      required: false
+
+  - type: textarea
+    id: store-context
+    attributes:
+      label: Store / POS Context
+      description: If the bug involves a specific store, payment, or rental, give context (do NOT paste real customer PII or real M-Pesa codes).
+      placeholder: |
+        - Store: e.g. Juja Main
+        - Terminal type: Desktop / Tablet / Mobile
+        - Payment method involved: Cash / M-Pesa / Debt
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs
+      description: Paste server logs, browser console errors, or network responses. Remove any secrets/tokens first.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: If applicable, drag screenshots here.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have searched existing issues and this is not a duplicate.
+          required: true
+        - label: I am running on the latest `main` branch.
+          required: true
+        - label: This is NOT a security vulnerability (security issues go to SECURITY.md).
+          required: true

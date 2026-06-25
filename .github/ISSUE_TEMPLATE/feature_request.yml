@@ -1,0 +1,174 @@
+name: ✨ Feature Request
+description: Suggest a new feature or enhancement for Mbumah Hardware POS
+title: "[FEATURE] <short summary>"
+labels: ["enhancement", "needs-triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! Please:
+        - **Search** existing issues first to avoid duplicates.
+        - Keep it focused — one feature per request.
+        - Remember this project is built for the **Kenyan hardware store** context.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve? "I'm always frustrated when..."
+      placeholder: "As a cashier, I struggle to ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: A clear description of what you want to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative solutions or workarounds you've thought about.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Feature Area
+      description: Which module does this touch?
+      options:
+        - POS / Checkout
+        - Inventory Management
+        - Customer Management
+        - M-Pesa Integration
+        - Debt Tracking
+        - Equipment Rentals
+        - Financial / Double-Entry Bookkeeping
+        - Reports & Exports
+        - Authentication / Authorization
+        - Admin / System Configuration
+        - API Routes
+        - Database Schema
+        - UI / UX
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: affected-roles
+    attributes:
+      label: Affected User Roles
+      description: Who benefits from this feature? (Select all that apply.)
+      multiple: true
+      options:
+        - SUPER_ADMIN
+        - STORE_OWNER
+        - BRANCH_MANAGER
+        - CASHIER
+        - ACCOUNTANT
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How impactful is this for store operations?
+      options:
+        - Low — nice to have
+        - Medium — meaningful improvement
+        - High — significant operational impact
+        - Critical — blocking daily operations
+    validations:
+      required: true
+
+  - type: textarea
+    id: user-flow
+    attributes:
+      label: Expected User Flow
+      description: Describe the interaction step by step.
+      placeholder: |
+        1. User navigates to...
+        2. User clicks on...
+        3. System responds with...
+    validations:
+      required: false
+
+  - type: textarea
+    id: api-changes
+    attributes:
+      label: Proposed API Changes
+      description: New or modified endpoints, if any.
+      placeholder: |
+        - GET /api/... - Description
+        - POST /api/... - Description
+    validations:
+      required: false
+
+  - type: textarea
+    id: db-changes
+    attributes:
+      label: Proposed Database Changes
+      description: Prisma schema additions, if any.
+      render: prisma
+      placeholder: |
+        model Example {
+          id    String @id @default(cuid())
+          // proposed fields
+        }
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: kenya-context
+    attributes:
+      label: Kenya-Specific Considerations
+      description: Does this feature involve Kenyan regulatory or market requirements?
+      options:
+        - label: KRA / eTIMS compliance (e-invoicing, tax reporting)
+        - label: M-Pesa (Daraja) integration changes
+        - label: KES currency handling
+        - label: Kenyan business regulations
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: When is this feature "done"?
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+    validations:
+      required: false
+
+  - type: textarea
+    id: mockups
+    attributes:
+      label: Mockups / Screenshots
+      description: Attach any visual references here.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Anything else relevant?
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have searched existing issues and this is not a duplicate.
+          required: true
+        - label: This is a single, focused feature request (not a bundle of ideas).
+          required: true
