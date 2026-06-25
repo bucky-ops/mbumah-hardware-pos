@@ -11,6 +11,13 @@ import { loginSchema, validateInput } from '@/lib/validations';
 import { checkBruteForce, recordFailedAttempt, recordSuccessfulLogin } from '@/lib/brute-force';
 import { sanitizeInput, getClientIp } from '@/lib/security';
 
+// Force this route to be dynamically rendered at request time.
+// This prevents Next.js from attempting to collect page data / statically
+// pre-render this route during `next build`, which would trigger the eager
+// env validation (and crash the Vercel build when runtime secrets aren't
+// injected at build time). Auth routes are inherently request-scoped.
+export const dynamic = 'force-dynamic';
+
 // Reference `env` so the import isn't tree-shaken — the side effect of
 // importing @/lib/env is the eager validation of DATABASE_URL / NODE_ENV.
 // (Auth secrets are validated lazily via requireEnv() if/when needed.)

@@ -5,6 +5,13 @@ import { db } from '@/lib/db';
 import { env } from '@/lib/env'; // Eager env validation — fails fast on missing DATABASE_URL
 import { withErrorBoundary } from '@/lib/logger';
 
+// Force this route to be dynamically rendered at request time.
+// This prevents Next.js from attempting to collect page data / statically
+// pre-render this route during `next build`, which would trigger the eager
+// env validation (and crash the Vercel build when runtime secrets aren't
+// injected at build time). The dashboard is per-store, per-request by nature.
+export const dynamic = 'force-dynamic';
+
 // Side-effect import: validates env at module load.
 void env;
 

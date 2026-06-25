@@ -1,22 +1,28 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Eager environment-variable validation (Zod)
+// MBUMAH HARDWARE POS — Build-aware environment-variable validation (Zod)
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// Importing this module validates every required environment variable at
-// module-load time. A missing or malformed variable throws a descriptive
-// `EnvValidationError` with a remediation hint — long before a cryptic 51ms
-// 500 surfaces in the Vercel serverless logs.
+// This module validates required environment variables at module-load time,
+// BUT it is **build-aware**: during `next build` (when `NEXT_RUNTIME` is
+// undefined), validation is SKIPPED so the build doesn't crash on missing
+// runtime secrets (NEXTAUTH_SECRET, DATABASE_URL, etc.).
+//
+// At runtime (Vercel serverless, `bun run dev`), a full `envSchema.safeParse`
+// runs and throws a descriptive `EnvValidationError` on failure — long before
+// a cryptic 500 surfaces in the logs.
+//
+// ## Why skip at build time?
+//
+// Next.js sets `process.env.NEXT_RUNTIME` to `'nodejs'` or `'edge'` ONLY inside
+// the actual server runtime. During `next build` (static page-data collection,
+// route analysis, type-checking), `NEXT_RUNTIME` is `undefined`. Runtime
+// secrets are NOT injected at build time on Vercel, so eagerly validating them
+// during the build phase would always fail and crash the deployment.
 //
 // Usage:
 //   import { env, requireEnv } from '@/lib/env';
-//   const url = env.DATABASE_URL;            // validated at import time
-//   const optional = env.NEXTAUTH_URL;       // may be undefined in some envs
-//
-// The `db.ts` module already validates DATABASE_URL eagerly (with a richer
-// Neon/Supabase pooling message). This module covers the AUTH secrets that
-// the login route and NextAuth depend on. Importing `@/lib/env` from any
-// server entry point (login, dashboard, NextAuth config) guarantees the
-// auth secrets are present and well-formed before the handler runs.
+//   const url = env.DATABASE_URL;            // validated at import time (runtime)
+//   const secret = requireEnv('JWT_SECRET'); // enforced at request time
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { z } from 'zod';
@@ -55,31 +61,30 @@ export class EnvValidationError extends Error {
 
 // ── Schema ───────────────────────────────────────────────────────────────────
 //
-// `DATABASE_URL` is validated eagerly in db.ts (with a richer message), so
-// here we only type-check it as a non-empty string. The auth secrets are
-// validated for presence + minimum length (32 chars for secrets — the
-// minimum safe size for a HMAC-SHA256 session token).
+// `DATABASE_URL` is required — the app cannot function without a database.
+// The auth secrets (NEXTAUTH_SECRET, JWT_SECRET, NEXTAUTH_URL) are optional at
+// import time; they are enforced lazily via `requireEnv()` in the routes that
+// actually need them, so a dev env that hasn't set up auth can still boot.
 const envSchema = z.object({
-  // Database — the db.ts module does the heavy validation; we just confirm
-  // presence here so the auth routes fail fast if someone deleted the .env.
+  // Database — required. The db.ts module does the richer Neon/Supabase
+  // pooling validation; here we just confirm presence.
   DATABASE_URL: z
     .string()
     .min(1, 'DATABASE_URL is required (use the Neon/Supabase POOLED connection string).'),
 
   // NextAuth — NEXTAUTH_URL is the canonical public URL of the deployment.
-  // NEXTAUTH_SECRET is used to sign session JWTs.
   NEXTAUTH_URL: z
     .string()
     .url('NEXTAUTH_URL must be a valid URL (e.g. https://mbumah-hardware-pos-one.vercel.app).')
     .optional(),
 
+  // NEXTAUTH_SECRET signs session JWTs. Min 16 chars (use `openssl rand -base64 32`).
   NEXTAUTH_SECRET: z
     .string()
     .min(16, 'NEXTAUTH_SECRET should be at least 16 characters (use `openssl rand -base64 32`).')
     .optional(),
 
-  // JWT_SECRET — used by the custom token-based auth in login/route.ts
-  // (separate from NextAuth). Must be at least 32 chars for HMAC-SHA256.
+  // JWT_SECRET — used by the custom token-based auth in login/route.ts.
   JWT_SECRET: z
     .string()
     .min(16, 'JWT_SECRET should be at least 16 characters (use `openssl rand -base64 32`).')
@@ -94,49 +99,46 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
-// ── Validation (eager, runs at import time) ──────────────────────────────────
+// ── Build-phase detection ────────────────────────────────────────────────────
+//
+// Next.js sets `process.env.NEXT_RUNTIME` to `'nodejs'` or `'edge'` ONLY inside
+// the actual server runtime. During `next build` (static page-data collection,
+// route analysis), `NEXT_RUNTIME` is `undefined`. We use this to skip eager
+// validation at build time — otherwise a missing `NEXTAUTH_SECRET` would crash
+// the Vercel build even though the secret IS present at runtime.
+export const isBuildTime = typeof process.env.NEXT_RUNTIME === 'undefined';
+
+// ── Validation (eager, runs at import time — runtime only) ───────────────────
 
 function validateEnv(): Env {
-  // Only validate on the server — client bundles don't have access to
-  // process.env.* (Next.js statically replaces NEXT_PUBLIC_* at build time).
+  // Client bundle guard — this module is server-only, but prevent a
+  // confusing crash if a client component accidentally imports it.
   if (typeof window !== 'undefined') {
-    // Return a permissive stub for client-side imports (shouldn't happen in
-    // practice — this module is server-only — but the guard prevents a
-    // confusing crash if a client component accidentally imports it).
     return {
       DATABASE_URL: '',
       NODE_ENV: 'development',
     } as Env;
   }
 
-  const raw = {
-    DATABASE_URL: process.env.DATABASE_URL,
-    NEXTAUTH_URL: process.env.NEXTAUTH_URL,
-    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
-    JWT_SECRET: process.env.JWT_SECRET,
-    NODE_ENV: process.env.NODE_ENV,
-  };
-
-  // DATABASE_URL is the only HARD-required variable (the app cannot function
-  // without a database). The auth secrets are optional at import time —
-  // they're only required when the auth routes actually run, so we don't
-  // block the entire app from booting if they're missing in a dev env that
-  // hasn't set up auth yet. The login route will call requireEnv() to
-  // enforce them at request time.
-  const missing: string[] = [];
-  if (!raw.DATABASE_URL || raw.DATABASE_URL.trim() === '') {
-    missing.push('DATABASE_URL');
+  // ── BUILD PHASE: skip validation. ──────────────────────────────────────────
+  //
+  // Runtime secrets (DATABASE_URL, NEXTAUTH_SECRET, etc.) are NOT available
+  // during `next build` on Vercel. Validating here would always fail and
+  // crash the build. We export `process.env` cast to the schema type so
+  // TypeScript stays satisfied; the real validation runs at runtime when
+  // `NEXT_RUNTIME` is defined.
+  if (isBuildTime) {
+    return process.env as unknown as Env;
   }
 
-  if (missing.length > 0) {
-    throw new EnvValidationError(missing);
-  }
-
-  // Parse with Zod — this catches malformed URLs and too-short secrets.
-  const parsed = envSchema.safeParse(raw);
+  // ── RUNTIME: run the full Zod safeParse and throw on failure. ──────────────
+  //
+  // `safeParse` (not `parse`) so we can collect ALL issues into a single
+  // descriptive `EnvValidationError` rather than throwing on the first one.
+  const parsed = envSchema.safeParse(process.env);
   if (!parsed.success) {
     const issues = parsed.error.issues.map(
-      (i) => `${i.path.join('.')}: ${i.message}`,
+      (i) => `${i.path.join('.') || '(root)'}: ${i.message}`,
     );
     throw new EnvValidationError(issues);
   }
@@ -146,11 +148,14 @@ function validateEnv(): Env {
 
 /**
  * The validated environment. Access properties directly:
- *   env.DATABASE_URL    // string (guaranteed present)
+ *   env.DATABASE_URL    // string (guaranteed present at runtime)
  *   env.NEXTAUTH_URL    // string | undefined
  *   env.NEXTAUTH_SECRET // string | undefined
  *   env.JWT_SECRET      // string | undefined
  *   env.NODE_ENV        // 'development' | 'test' | 'production'
+ *
+ * At build time this is an unvalidated `process.env` cast (see `validateEnv`).
+ * At runtime it is fully Zod-validated.
  */
 export const env: Env = validateEnv();
 

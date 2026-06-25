@@ -4,6 +4,14 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 
+// Force this route to be dynamically rendered at request time.
+// This prevents Next.js from attempting to collect page data / statically
+// pre-render this route during `next build`, which would trigger the eager
+// env validation (and crash the Vercel build when runtime secrets aren't
+// injected at build time). The /me route reads the Bearer token from the
+// request header, so it is inherently request-scoped.
+export const dynamic = 'force-dynamic';
+
 async function getMeHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const authHeader = request.headers.get('authorization');
