@@ -2683,6 +2683,11 @@ function POSTab() {
   const [appliedVoucherId, setAppliedVoucherId] = useState<string>('');
   const [benefitsExpanded, setBenefitsExpanded] = useState<boolean>(true);
 
+  // Cart-level flat discount (Ksh) input + Pay-with-Gift-Card dialog
+  const [cartDiscountInput, setCartDiscountInput] = useState<string>('');
+  const [payWithGiftCardOpen, setPayWithGiftCardOpen] = useState(false);
+  const [giftCardPayCode, setGiftCardPayCode] = useState('');
+
   // View mode & sorting
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortField, setSortField] = useState<'name' | 'price' | 'stock' | 'category'>('name');
@@ -2715,6 +2720,10 @@ function POSTab() {
   const cart = useCartStore();
   const subtotal = cart.getSubtotal();
   const tax = cart.getTax();
+  // Pre-discount total (subtotal + tax). Used as the base for gift card /
+  // voucher discount math so we don't double-count the cart-level discount.
+  const preDiscountTotal = subtotal + tax;
+  // Cart total after the cashier's flat discount has been applied.
   const total = cart.getTotal();
 
   // Listen for keyboard shortcut events from MainApp
@@ -2830,6 +2839,7 @@ function POSTab() {
       }
       cart.clearCart();
       setCartNotes({});
+      setCartDiscountInput('');
       setCheckoutOpen(false);
       setCashReceived('');
       setSplitCashAmount('');
@@ -3046,19 +3056,22 @@ function POSTab() {
     }
   }, [selectedCustomer, customerGiftCards.length, customerVouchers.length]);
 
-  // Gift card / voucher discount computation
+  // Gift card / voucher discount computation (caps against the pre-discount total)
   const selectedGiftCard = appliedGiftCardId ? customerGiftCards.find(gc => gc.id === appliedGiftCardId) : null;
   const selectedVoucher = appliedVoucherId ? customerVouchers.find(v => v.id === appliedVoucherId) : null;
-  const giftCardDiscount = selectedGiftCard ? Math.min(selectedGiftCard.currentBalance, total) : 0;
+  const giftCardDiscount = selectedGiftCard ? Math.min(selectedGiftCard.currentBalance, preDiscountTotal) : 0;
   const voucherDiscount = selectedVoucher
     ? selectedVoucher.voucherType === 'FIXED'
-      ? Math.min(selectedVoucher.value, total)
+      ? Math.min(selectedVoucher.value, preDiscountTotal)
       : selectedVoucher.voucherType === 'PERCENTAGE'
-        ? Math.min(total * (selectedVoucher.value / 100), selectedVoucher.maxDiscount || total)
+        ? Math.min(preDiscountTotal * (selectedVoucher.value / 100), selectedVoucher.maxDiscount || preDiscountTotal)
         : 0
     : 0;
-  const totalDiscount = giftCardDiscount + voucherDiscount;
-  const finalTotal = Math.max(0, total - totalDiscount);
+  // Cart-level flat discount (Ksh) set by the cashier via the cart footer input.
+  // ISO 9001: totalDiscount is the sum of all contra-revenue adjustments.
+  const cartDiscount = cart.discount;
+  const totalDiscount = giftCardDiscount + voucherDiscount + cartDiscount;
+  const finalTotal = Math.max(0, preDiscountTotal - totalDiscount);
 
   const handleAddToCart = (product: ProductListItem, qty?: number) => {
     if (product.quantityInStock <= 0 && !product.isRental) {
@@ -3103,6 +3116,7 @@ function POSTab() {
     localStorage.setItem('mbt_held_carts', JSON.stringify(heldCarts));
     cart.clearCart();
     setCartNotes({});
+    setCartDiscountInput('');
     setSelectedCustomer('');
     toast.success('Cart held successfully');
   };
@@ -3217,13 +3231,20 @@ function POSTab() {
       cashierId: useAuthStore.getState().user?.id || '',
       items: cart.items,
       paymentMethod,
+      // Cart-level flat discount (from the discount input in the cart footer).
+      // This is separate from line-level discounts (which are baked into each
+      // item's discountPercent) and from gift-card / voucher redemptions
+      // (which are handled as payment-method side effects). The API subtracts
+      // this from the pre-discount total and routes it to the SALES_DISCOUNTS
+      // contra-revenue account in the journal entry.
+      discountAmount: cartDiscount || undefined,
       paymentDetails: {
         cashAmount: paymentMethod === 'CASH' ? Number(cashReceived) || finalTotal : paymentMethod === 'SPLIT' ? Number(splitCashAmount) || 0 : undefined,
         mpesaPhone: (paymentMethod === 'MPESA' || paymentMethod === 'SPLIT') ? mpesaPhone : undefined,
         debtAccountId: paymentMethod === 'DEBT' ? selectedCustomer : undefined,
         giftCardId: appliedGiftCardId || undefined,
+        giftCardCode: paymentMethod === 'GIFT_CARD' ? giftCardPayCode || undefined : undefined,
         voucherId: appliedVoucherId || undefined,
-        discountAmount: totalDiscount,
       },
     });
   };
@@ -3416,12 +3437,12 @@ function POSTab() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 h-full relative">
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 h-full relative">
       {/* Confetti Overlay */}
       <ConfettiOverlay active={confettiActive} />
 
-      {/* Product Grid */}
-      <div className="flex-1 min-w-0 space-y-4">
+      {/* Product Grid — Catalog (3 of 5 columns on desktop) */}
+      <div className="col-span-1 lg:col-span-3 min-w-0 space-y-4">
         {/* Dashboard Stats */}
         <DashboardStats storeId={currentStoreId} onLowStockClick={() => setLowStockAlertOpen(true)} />
 
@@ -3671,9 +3692,9 @@ function POSTab() {
         )}
       </div>
 
-      {/* Cart Sidebar - Desktop only */}
-      <div className="hidden lg:block lg:w-96 shrink-0">
-        <Card className="relative sticky top-20 flex flex-col h-[calc(100vh-7rem)] overflow-hidden bg-gradient-to-b from-card/95 to-card/90 backdrop-blur-sm shadow-lg border border-border/50">
+      {/* Cart Sidebar - Desktop only (2 of 5 columns) */}
+      <div className="hidden lg:block lg:col-span-2">
+        <Card className="relative sticky top-20 flex flex-col h-[calc(100vh-120px)] overflow-hidden bg-gradient-to-b from-card/95 to-card/90 backdrop-blur-sm shadow-lg border border-border/50">
           <CardHeader className="pb-3 shrink-0">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
@@ -3699,7 +3720,7 @@ function POSTab() {
                     <Button variant="ghost" size="sm" onClick={holdCart} className="text-amber-600 h-7" title="Hold current cart (F10)">
                       <Pause className="h-3.5 w-3.5 mr-1" /> Hold
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => { cart.clearCart(); setCartNotes({}); }} className="text-destructive h-7">
+                    <Button variant="ghost" size="sm" onClick={() => { cart.clearCart(); setCartNotes({}); setCartDiscountInput(''); }} className="text-destructive h-7">
                       <Trash2 className="h-3.5 w-3.5 mr-1" /> Clear
                     </Button>
                   </>
@@ -3731,7 +3752,7 @@ function POSTab() {
             <>
               <Separator className="shrink-0" />
               <div className="shrink-0 max-h-[42%] overflow-y-auto custom-scrollbar border-t px-4 pt-3 pb-2 space-y-3">
-                {/* Discount Code */}
+                {/* Discount Code (voucher/promo) */}
                 <div className="flex gap-1.5">
                   <Input
                     placeholder="Discount code"
@@ -3744,6 +3765,53 @@ function POSTab() {
                     Apply
                   </Button>
                 </div>
+
+                {/* Cart-level flat discount (Ksh) — cashier manual override */}
+                <div className="flex gap-1.5 items-center">
+                  <Tag className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    placeholder="Cart discount (Ksh)"
+                    value={cartDiscountInput}
+                    onChange={(e) => {
+                      setCartDiscountInput(e.target.value);
+                      const amt = Number(e.target.value);
+                      if (!Number.isNaN(amt)) {
+                        cart.setDiscount(amt);
+                      } else if (e.target.value === '') {
+                        cart.setDiscount(0);
+                      }
+                    }}
+                    className="h-8 text-xs"
+                    aria-label="Cart discount amount in Kenyan Shillings"
+                  />
+                  {cart.discount > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs text-destructive shrink-0"
+                      onClick={() => { cart.setDiscount(0); setCartDiscountInput(''); }}
+                      title="Clear cart discount"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+
+                {/* Pay with Gift Card — opens dedicated dialog */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-8 text-xs border-amber-300 text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700 dark:hover:bg-amber-950/30"
+                  onClick={() => setPayWithGiftCardOpen(true)}
+                  disabled={cart.items.length === 0}
+                >
+                  <Gift className="h-3.5 w-3.5 mr-1.5" />
+                  Pay with Gift Card
+                </Button>
 
                 {/* Customer Selection */}
                 <div className="flex gap-1.5">
@@ -4239,6 +4307,106 @@ function POSTab() {
         storeId={currentStoreId}
       />
 
+      {/* Pay with Gift Card Dialog — redeem a gift card code against the cart */}
+      <Dialog open={payWithGiftCardOpen} onOpenChange={setPayWithGiftCardOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Gift className="h-5 w-5 text-amber-500" />
+              Pay with Gift Card
+            </DialogTitle>
+            <DialogDescription>
+              Enter the gift card code printed on the card. The available balance will be applied as a discount to this sale. Any unused balance remains on the card for future purchases.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="space-y-1.5">
+              <label htmlFor="gift-card-code" className="text-xs font-medium text-muted-foreground">
+                Gift Card Code
+              </label>
+              <Input
+                id="gift-card-code"
+                placeholder="e.g. MBT-GC-XXXX-XXXX"
+                value={giftCardPayCode}
+                onChange={(e) => setGiftCardPayCode(e.target.value.toUpperCase())}
+                className="font-mono tracking-wider"
+                onKeyDown={(e) => { if (e.key === 'Enter' && giftCardPayCode.trim()) {
+                  void (async () => {
+                    try {
+                      const res = await giftCardsApi.redeemByCode({
+                        code: giftCardPayCode.trim(),
+                        storeId: currentStoreId,
+                        amount: finalTotal,
+                      });
+                      if (res.data) {
+                        cart.setDiscount(res.data.discountAmount);
+                        setCartDiscountInput(String(res.data.discountAmount));
+                        toast.success(`Gift card applied: ${formatKES(res.data.discountAmount)} discount`);
+                        setPayWithGiftCardOpen(false);
+                        setGiftCardPayCode('');
+                      } else {
+                        toast.error(res.error || 'Invalid gift card code');
+                      }
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : 'Failed to redeem gift card');
+                    }
+                  })();
+                }}}
+                aria-label="Gift card code"
+              />
+            </div>
+            <div className="rounded-md border border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 p-2.5 text-xs space-y-1">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Sale Total (pre-discount)</span>
+                <span className="font-medium">{formatKES(preDiscountTotal)}</span>
+              </div>
+              {cart.discount > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span className="flex items-center gap-1"><Tag className="h-3 w-3" />Current Discount</span>
+                  <span className="font-medium">-{formatKES(cart.discount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-semibold border-t border-amber-200 dark:border-amber-900/50 pt-1">
+                <span>Balance Due</span>
+                <span>{formatKES(finalTotal)}</span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setPayWithGiftCardOpen(false); setGiftCardPayCode(''); }}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              disabled={!giftCardPayCode.trim()}
+              onClick={async () => {
+                try {
+                  const res = await giftCardsApi.redeemByCode({
+                    code: giftCardPayCode.trim(),
+                    storeId: currentStoreId,
+                    amount: finalTotal,
+                  });
+                  if (res.data) {
+                    cart.setDiscount(res.data.discountAmount);
+                    setCartDiscountInput(String(res.data.discountAmount));
+                    toast.success(`Gift card applied: ${formatKES(res.data.discountAmount)} discount`);
+                    setPayWithGiftCardOpen(false);
+                    setGiftCardPayCode('');
+                  } else {
+                    toast.error(res.error || 'Invalid gift card code');
+                  }
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : 'Failed to redeem gift card');
+                }
+              }}
+            >
+              <Gift className="h-4 w-4 mr-2" />
+              Apply Gift Card
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Mobile Cart FAB (Floating Action Button) */}
       {cart.items.length > 0 && (
         <button
@@ -4278,7 +4446,7 @@ function POSTab() {
                     <Button variant="ghost" size="sm" onClick={holdCart} className="text-amber-600 h-7 text-xs">
                       <Pause className="h-3.5 w-3.5 mr-1" /> Hold
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => { cart.clearCart(); setCartNotes({}); }} className="text-destructive h-7 text-xs">
+                    <Button variant="ghost" size="sm" onClick={() => { cart.clearCart(); setCartNotes({}); setCartDiscountInput(''); }} className="text-destructive h-7 text-xs">
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </>

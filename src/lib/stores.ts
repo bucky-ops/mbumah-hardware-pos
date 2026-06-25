@@ -77,6 +77,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
 interface CartState {
   items: CartItem[];
+  discount: number;
+  setDiscount: (amount: number) => void;
   addItem: (item: Omit<CartItem, 'lineTotal'>) => void;
   removeItem: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
@@ -96,6 +98,15 @@ function calculateLineTotal(item: Omit<CartItem, 'lineTotal'>): number {
 
 export const useCartStore = create<CartState>((set, get) => ({
   items: [],
+  discount: 0,
+
+  setDiscount: (amount) => {
+    // Cart-level flat discount (Ksh). Clamped to >= 0 and capped at the
+    // pre-discount total so it can never make the total negative.
+    const maxDiscount = get().getSubtotal() + get().getTax();
+    const safe = Math.max(0, Math.min(amount, maxDiscount));
+    set({ discount: Number.isFinite(safe) ? safe : 0 });
+  },
 
   addItem: (item) => {
     const { items } = get();
@@ -146,7 +157,7 @@ export const useCartStore = create<CartState>((set, get) => ({
     set({ items: updated });
   },
 
-  clearCart: () => set({ items: [] }),
+  clearCart: () => set({ items: [], discount: 0 }),
 
   getSubtotal: () => {
     return get().items.reduce((sum, item) => sum + item.lineTotal, 0);
@@ -160,7 +171,11 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
 
   getTotal: () => {
-    return get().getSubtotal() + get().getTax();
+    // Cart-level flat discount is subtracted from (subtotal + tax).
+    // Never returns negative — discount is clamped in setDiscount, but we
+    // guard here too for safety (ISO 9001 financial integrity).
+    const preDiscount = get().getSubtotal() + get().getTax();
+    return Math.max(0, preDiscount - get().discount);
   },
 
   getItemCount: () => {
