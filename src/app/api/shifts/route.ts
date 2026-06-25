@@ -75,13 +75,33 @@ async function createShiftHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-    const existingActiveShift = await db.shift.findFirst({
-    where: { storeId, userId, status: 'ACTIVE' },
-    });
+  // Single-active enforcement (ISO 27001 data integrity): block a new shift
+  // if ANY open shift exists for this user+store. We check `endedAt: null` as
+  // the canonical "open" signal — more robust than `status` alone, which can
+  // drift out of sync if a prior end-shift call crashed midway (ghost shift).
+  // The `status: 'ACTIVE'` clause catches legacy rows with status set but
+  // endedAt populated.
+  const existingOpenShift = await db.shift.findFirst({
+    where: {
+      storeId,
+      userId,
+      OR: [
+        { endedAt: null },
+        { status: 'ACTIVE' },
+      ],
+    },
+    select: { id: true, startedAt: true, status: true, endedAt: true },
+  });
 
-  if (existingActiveShift) {
+  if (existingOpenShift) {
     return Response.json(
-      { success: false, error: 'You already have an active shift. Please end it before starting a new one.' },
+      {
+        success: false,
+        error:
+          'You already have an open shift for this store. Please end the current shift before starting a new one.',
+        code: 'OPEN_SHIFT_EXISTS',
+        openShiftId: existingOpenShift.id,
+      },
       { status: 400 }
     );
   }
