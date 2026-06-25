@@ -76,6 +76,34 @@ export function mapErrorToUserMessage(error: unknown): string {
 }
 
 // Safe wrapper for API route handlers
+//
+// ## Diagnostic mode (EXPOSE_ERRORS)
+//
+// By default, production 500 responses return a sanitized `userMessage` with
+// NO stack trace — to avoid leaking internals to end users. This is the
+// correct secure default, but it makes Vercel production crashes effectively
+// invisible (you see "An unexpected error occurred" in the Network tab with
+// no clue why).
+//
+// To diagnose a production 500, set `EXPOSE_ERRORS=true` in your Vercel
+// Environment Variables (Project Settings → Environment Variables), redeploy,
+// and reproduce the request. The 500 response body will then include the
+// FULL error details:
+//
+//   {
+//     "success": false,
+//     "error": "<userMessage>",
+//     "detail": {
+//       "name": "PrismaClientInitializationError",
+//       "message": "The table `User` does not exist in the database...",
+//       "stack": "...",
+//       "code": "P1003",
+//       "component": "AUTH_LOGIN"
+//     }
+//   }
+//
+// Remove `EXPOSE_ERRORS` once the issue is resolved — it is NOT recommended
+// for long-term production use (stack traces can leak schema/SQL details).
 export function withErrorBoundary(
   handler: (...args: unknown[]) => Promise<Response>,
   component: string
@@ -86,18 +114,63 @@ export function withErrorBoundary(
     } catch (error) {
       const userMessage = mapErrorToUserMessage(error);
       const stackTrace = error instanceof Error ? error.stack : undefined;
+      const errorName = error instanceof Error ? error.name : typeof error;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown API error';
+      // Prisma errors carry a `code` (e.g. P1003 = table missing, P1001 = connection lost).
+      // Grab it for diagnostics — `any` cast is intentional because Prisma's error
+      // class isn't imported here to avoid a circular dep.
+      const errorCode = (error as { code?: string } | null)?.code;
 
-      await systemLog({
-        action: 'API_ERROR',
-        component,
-        severity: LogSeverity.ERROR,
-        message: error instanceof Error ? error.message : 'Unknown API error',
-        stackTrace,
-        metadata: { args: args.map(a => String(a).slice(0, 200)) },
-      });
+      // Best-effort system log — never let logging failures mask the original error.
+      try {
+        await systemLog({
+          action: 'API_ERROR',
+          component,
+          severity: LogSeverity.ERROR,
+          message: errorMessage,
+          stackTrace,
+          metadata: {
+            args: args.map(a => String(a).slice(0, 200)),
+            errorName,
+            errorCode,
+          },
+        });
+      } catch {
+        // logging failed (likely the same DB issue) — fall through to response
+      }
 
+      // Determine whether to expose full error details.
+      //
+      // - In development: always expose (NODE_ENV === 'development').
+      // - In production: expose ONLY when EXPOSE_ERRORS is truthy
+      //   ('true' / '1' / 'yes'). This is the opt-in diagnostic flag the user
+      //   sets in Vercel env vars to debug production 500s.
+      const exposeErrors =
+        process.env.NODE_ENV === 'development' ||
+        process.env.EXPOSE_ERRORS === 'true' ||
+        process.env.EXPOSE_ERRORS === '1' ||
+        process.env.EXPOSE_ERRORS === 'yes';
+
+      if (exposeErrors) {
+        return Response.json(
+          {
+            success: false,
+            error: userMessage,
+            detail: {
+              name: errorName,
+              message: errorMessage,
+              code: errorCode,
+              stack: stackTrace,
+              component,
+            },
+          },
+          { status: 500 }
+        );
+      }
+
+      // Production default: sanitized response, no internals leaked.
       return Response.json(
-        { success: false, error: userMessage, detail: process.env.NODE_ENV === 'development' ? stackTrace : undefined },
+        { success: false, error: userMessage },
         { status: 500 }
       );
     }

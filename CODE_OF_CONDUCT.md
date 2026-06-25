@@ -1,5 +1,7 @@
 # Contributor Covenant Code of Conduct
 
+> **Our community, our pledge.** Mbumah Hardware POS exists to give Kenyan hardware traders the same software quality that Western retailers take for granted. That mission only works if our community — contributors, maintainers, users, and the cashiers and shop owners who depend on this software — is welcoming, safe, and respectful. This Code of Conduct applies to everyone who participates.
+
 ## Our Pledge
 
 We as members, contributors, and leaders pledge to make participation in our
@@ -60,8 +62,10 @@ representative at an online or offline event.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement at
-**conduct@mbumah-hardware.local** (replace with the maintainer's verified email).
-All complaints will be reviewed and investigated promptly and fairly.
+**conduct@mbumah-hardware.local** (replace with the maintainer's verified email
+if different — verify the address on the maintainer's public GitHub profile
+before sending). All complaints will be reviewed and investigated promptly and
+fairly.
 
 All community leaders are obligated to respect the privacy and security of the
 reporter of any incident. Further details of specific enforcement policies may

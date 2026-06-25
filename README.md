@@ -60,22 +60,25 @@ Mbumah Hardware POS isn't a generic POS reskinned for Africa — it was designed
 - Designed for the **eTIMS (Electronic Tax Invoice Management System)** rollout — invoice data is structured to map cleanly to KRA's required fields.
 
 ### 🔌 Offline-Resilient by Design
-- Hardware shops in peri-urban Kenya (Juja, Thika, Ruiru, Nakuru) frequently lose connectivity. The POS:
-  - **Persists cart & form state** to `localStorage` so a cashier never loses a half-rung sale during a blackout.
-  - **Queues M-Pesa STK requests** and re-checks status when the network returns.
-  - **30-minute idle timeout** with auto-lock — protects against unattended till walk-aways common in busy yards.
+- Hardware shops in peri-urban Kenya (Juja, Thika, Ruiru, Nakuru) frequently lose connectivity — Safaricom outages, KPLC power rationing, or last-mile fibre cuts are weekly realities. The POS:
+  - **Persists cart & form state** to `localStorage` so a cashier never loses a half-rung sale during a blackout. On reload, the in-progress sale is restored and the cashier can resume or void it.
+  - **Queues M-Pesa STK requests** and polls the Daraja query API on a backoff schedule — when the network returns, the queued request is confirmed and the sale is posted automatically.
+  - **Optimistic UI with rollback** — sales, debt payments, and rental checkouts render instantly and only rollback if the server explicitly rejects them, so a 2-second latency spike doesn't feel like a freeze.
+  - **30-minute idle timeout** with auto-lock — protects against unattended till walk-aways common in busy yards where a cashier may step out to load a customer's truck.
+  - **Serverless-friendly schema** — every monetary write is idempotent on a client-supplied idempotency key, so a retried request after a network blip never double-posts.
 
 ### 🔧 Hardware-Store-Specific Logic (Not Just Retail)
 These features exist because **hardware shops do things general retailers don't**:
 
 | Feature | Why It Matters for Hardware |
 |---------|------------------------------|
-| **🔧 Equipment Rentals** | Hardware shops rent out generators, ladders, scaffolding, compacters. Full rental lifecycle: checkout → overdue alerts → return with damage assessment → security deposit refund. |
-| **💰 B2B Customer Debt (Mkopo)** | Contractors and *fundis* buy on credit and settle weekly/monthly. Aging buckets (30/60/90 days), credit limits, and statement exports are built-in — not bolted on. |
-| **📦 Bulk & Bundle Pricing** | Cement by the bag, nails by the kg, paint by the drum. Unit-of-measure conversions and bundle SKUs are native. |
-| **🚚 Supplier Purchase Orders** | Track POs to local distributors (Bamburi, Crown Paints, Safaricom for airtime stock) with fulfillment and backorder tracking. |
-| **⏱️ Shift Cash Reconciliation** | Cash drawer counts at shift open/close — critical because Kenyan shops run on cash + M-Pesa mixed tills. Discrepancies are flagged for the manager. |
-| **🎁 Gift Cards** | Increasingly popular for corporate buyers and holidays — full CRUD with reasons and auto-hiding exhausted cards. |
+| **🔧 Equipment Rentals** | Hardware shops rent out generators, ladders, scaffolding, compacters, plate compactors, and breakers. Full rental lifecycle: checkout → overdue alerts (with daily-rate accrual) → return with damage assessment → security-deposit refund or forfeiture. The `Rental` model tracks `dailyRate`, `securityDeposit`, `damageFee`, and `status` (`ACTIVE` / `RETURNED` / `OVERDUE` / `LOST`) so the daily rentals board is a real operational tool, not an afterthought. |
+| **💰 B2B Customer Debt (Mkopo)** | Contractors and *fundis* (masons, plumbers, electricians) buy on credit and settle weekly or monthly — this is how the Kenyan hardware trade actually works. Aging buckets (30/60/90 days), per-contractor credit limits, statement exports, and a debt-collection dashboard are built-in — not bolted on. The `Debt` model carries `dueDate`, `status` (`OUTSTANDING` / `PARTIALLY_PAID` / `SETTLED` / `WRITTEN_OFF`), and `agingBucket`, and the Accounts Receivable report rolls it up by contractor. |
+| **📦 Bulk & Bundle Pricing** | Cement by the bag, nails by the kg, paint by the drum, mesh by the metre. Unit-of-measure conversions and bundle SKUs (e.g. "Tiling Kit" = 1× trowel + 1× level + 5× spacers) are native. |
+| **🚚 Supplier Purchase Orders** | Track POs to local distributors (Bamburi Cement, Crown Paints, Safaricom for airtime stock, Rhinox Plumbing) with line-item fulfillment, backorder tracking, and landed-cost calculation (so the unit cost reflects transport from Industrial Area, not just the invoice price). |
+| **⏱️ Shift Cash Reconciliation** | Cash drawer counts at shift open/close — critical because Kenyan shops run on cash + M-Pesa mixed tills. Discrepancies are flagged for the manager and logged to the audit trail. The system supports both "blind close" (cashier declares count without seeing expected) and "revealed close" (manager mode). |
+| **🎁 Gift Cards** | Increasingly popular for corporate buyers (a contractor pre-loading a card for a foreman) and holidays. Full CRUD with reasons, auto-hiding exhausted cards, and redemption history. |
+| **🧾 KRA eTIMS-Ready Invoices** | Every `Transaction` carries `taxBreakdown` (VAT 16% / Zero-Rated / Exempt) and a sequential invoice number, ready to feed into KRA's eTIMS API when the rollout reaches your county. |
 
 > **Bottom line:** If you've ever tried to run a Kenyan hardware shop on a generic POS, you know they fall down on rentals, contractor debt, and M-Pesa reconciliation. This one doesn't.
 
@@ -736,101 +739,239 @@ chore:    Build process, tooling, etc.
 
 Common issues and their fixes. If your problem isn't listed here, [open a bug report](https://github.com/bucky-ops/mbumah-hardware-pos/issues/new?template=bug_report.yml).
 
-### 💸 M-Pesa STK Push Callbacks Not Firing (Local Dev)
+### 💸 M-Pesa Daraja Callback Issues (ngrok for Local Testing)
 
-**Symptom:** You trigger STK Push locally, the prompt appears on your phone, you enter your PIN, but the sale status stays "PENDING" forever.
+**Symptom:** You trigger STK Push locally, the prompt appears on your phone, you enter your PIN, and M-Pesa deducts the money — but the sale status stays `PENDING` forever and the cashier screen never advances.
 
-**Cause:** Safaricom's Daraja API needs to reach your callback URL over the **public internet**. `localhost:3000` is not reachable from Safaricom's servers, so the callback never arrives.
+**Root cause:** Safaricom's Daraja API needs to **call back your server over the public internet** to deliver the payment result. `http://localhost:3000` (or `127.0.0.1`) is *not* reachable from Safaricom's servers — they have no way to dial into your laptop on your home/office network. So Safaricom fires the callback, gets a connection refused / timeout, and never retries. Your local server simply never sees the result.
 
-**Fix — use ngrok:**
+**Fix — expose your local dev server with ngrok:**
+
 ```bash
-# 1. Expose your local dev server
+# 1. Install ngrok (one-time):  https://ngrok.com/download
+#    Or via Homebrew:  brew install ngrok
+
+# 2. Expose your local Next.js dev server (must already be running on :3000)
 ngrok http 3000
 
-# 2. Copy the https forwarding URL, e.g. https://abc123.ngrok.io
-# 3. Set the callback URL env var (use the ngrok URL, NOT localhost)
-MPESA_CALLBACK_URL=https://abc123.ngrok.io/api/mpesa/callback
+# 3. ngrok prints a forwarding URL like:
+#       Forwarding  https://abc123.ngrok.app -> http://localhost:3000
+#    Copy the HTTPS URL (NOT the http:// one, and NOT localhost).
 
-# 4. Restart the dev server so the new env takes effect
+# 4. Set the callback URL env var to the ngrok HTTPS URL + Daraja callback path
+export MPESA_CALLBACK_URL="https://abc123.ngrok.app/api/payments/mpesa/callback"
+
+# 5. Restart the dev server so the new env var takes effect (Next.js doesn't
+#    hot-reload .env on most shells)
 bun run dev
+
+# 6. In the Safaricom Daraja developer portal (https://developer.safaricom.co.ke)
+#    → My Apps → your app → confirm the "Confirmation URL" and "Validation URL"
+#    point to the ngrok HTTPS URL (or rely on the per-request callback URL
+#    passed in the STK Push payload, which is what this codebase does).
 ```
 
-> **Production note:** On Vercel, your callback URL is just `https://your-domain.vercel.app/api/mpesa/callback` — no ngrok needed. Make sure it's registered in your Daraja app on the Safaricom developer portal.
+> **Why HTTPS?** Daraja requires TLS on callback URLs in production. ngrok's free HTTPS endpoints satisfy this for sandbox testing.
 
-**Still not working?** Check:
-- The callback URL is registered & confirmed on the Daraja portal (Safaricom sends a validation request).
-- `MPESA_CONSUMER_KEY` / `MPESA_CONSUMER_SECRET` are for the correct app (Sandbox vs Production).
-- The Daraja sandbox sometimes has latency — wait 30–60s before assuming failure.
+> **Why ngrok and not localhost?** Because Safaricom's servers initiate the HTTP POST to *your* URL — there's no way for them to reach a process bound to your laptop's loopback interface. ngrok tunnels a public hostname down to your local port.
+
+**Production note:** On Vercel, your callback URL is simply `https://your-domain.vercel.app/api/payments/mpesa/callback` — no ngrok needed. Register it once in the Daraja developer portal for your Production app (separate from Sandbox credentials).
+
+**Still not working?** Check, in order:
+1. **ngrok is still running** — if you Ctrl-C'd the ngrok process, the tunnel is dead and callbacks will 502.
+2. **The callback URL is registered & confirmed on the Daraja portal** — Safaricom sends a one-time validation request to your confirmation/validation URLs; if that 404s, your app is rejected.
+3. **`MPESA_CONSUMER_KEY` / `MPESA_CONSUMER_SECRET` are for the correct app** — Sandbox credentials do NOT work against the Production endpoint, and vice versa.
+4. **`MPESA_ENVIRONMENT` matches your credentials** — `sandbox` vs `production`.
+5. **Daraja sandbox latency** — the sandbox sometimes has 30–60s lag before the callback fires. Don't assume failure before then.
+6. **Check the ngrok inspector** at `http://localhost:4040` — it shows every request Safaricom made to your tunnel, including the raw POST body and your server's response code. This is the single fastest way to debug a missing callback.
 
 ---
 
 ### 💥 Vercel 500 Internal Server Error on Login / API Calls
 
-**Symptom:** Deployed to Vercel, the site loads, but `/api/auth/login` (or other DB-touching endpoints) returns `500 Internal Server Error`.
+**Symptom:** Deployed to Vercel, the homepage loads, but `/api/auth/login` (or any other DB-touching endpoint) returns `500 Internal Server Error`. The Vercel function logs show one of:
 
-**Cause #1 — PgBouncer connection pooling (most common):**
-Serverless databases (Supabase, Neon, Render) put a pooled connection string behind a PgBouncer proxy in **transaction mode**. Prisma's default connection settings conflict with this and throw errors like:
 ```
 Error: prepared statement "s0" already exists
-// or
-Error: Can't reach database server
+Error: Can't reach database server at <host>:5432
+Error: Timed out fetching a new connection from the connection pool
+Error: PrismaClientInitializationError: Database connection error
+Error: ENV_VALIDATION_FAILED: Missing: DATABASE_URL, NEXTAUTH_SECRET
 ```
 
-**Fix — add the PgBouncer params to `DATABASE_URL`:**
-```bash
-# Append ?pgbouncer=true&connection_limit=1 to your DATABASE_URL
-DATABASE_URL=postgresql://user:pass@host:5432/db?pgbouncer=true&connection_limit=1
-```
-And in `prisma/schema.prisma`, set the direct URL for migrations:
-```prisma
-datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")              // pooled — used at runtime
-  directUrl = env("DIRECT_DATABASE_URL")        // unpooled — used for migrations
-}
-```
-
-**Cause #2 — Prisma client not generated on Vercel:**
-The `vercel-build` script runs `prisma generate && next build`. If you customized the build command and dropped `prisma generate`, you'll get `PrismaClientInitializationError`.
-
-**Fix:** Ensure `package.json` has:
-```json
-"scripts": {
-  "vercel-build": "prisma generate && next build"
-}
-```
-
-**Cause #3 — Missing env vars:**
-Vercel will silently let your API route boot with `undefined` for `DATABASE_URL` if you forgot to add it in the Vercel dashboard. Double-check **Settings → Environment Variables** and that the variable is available to the correct environment (Production / Preview / Development).
+This is the **#1 deployment failure mode** for this project. There are four common causes, in order of likelihood.
 
 ---
 
-### 👻 Ghost Shifts (Shift Won't Close / Orphaned Open Shift)
+#### Cause 1 — Neon PgBouncer pooling params missing (most common)
 
-**Symptom:** A cashier tries to start a new shift but the system says "You already have an open shift" — yet the previous shift doesn't show in the active shifts list, or it shows as already closed.
+Neon, Supabase, Render, and other serverless Postgres providers put a **pooled connection string** behind a PgBouncer proxy running in **transaction mode**. Prisma's default connection settings conflict with transaction-mode pooling and throw errors like `prepared statement "s0" already exists` or `Timed out fetching a new connection from the connection pool`.
 
-**Cause:** The shift record exists in the DB with `status: 'OPEN'` but the UI state is out of sync (e.g., the cashier hard-refreshed mid-close, or the close-shift API call failed after the UI optimistically updated).
+**Fix — append the PgBouncer params to your `DATABASE_URL`:**
 
-**Fix A — Force-close via the Shifts tab:**
-1. Go to **Shifts** tab → look for the orphaned `OPEN` shift.
-2. Use the **Force Close** action (available to `BRANCH_MANAGER` and above).
-3. Enter the actual cash drawer count; the system will record the discrepancy.
+```bash
+# Neon:  use the "-pooler" hostname (NOT the direct hostname)
+DATABASE_URL="postgresql://user:pass@ep-cool-name-pooler.region.aws.neon.tech/dbname?sslmode=require&pgbouncer=true&connect_timeout=15"
 
-**Fix B — Database-level cleanup (last resort):**
-```sql
--- Find the ghost shift
-SELECT id, userId, storeId, status, openedAt FROM Shift
-WHERE status = 'OPEN' AND userId = '<user-id>';
-
--- Close it manually (replace with real values)
-UPDATE Shift
-SET status = 'CLOSED', closedAt = NOW(), closingCash = openingCash, updatedAt = NOW()
-WHERE id = '<shift-id>';
+# Supabase:  use the transaction-mode pooler (port 6543, NOT 5432)
+DATABASE_URL="postgresql://user:pass@db.xxxxx.supabase.co:6543/postgres?pgbouncer=true&connect_timeout=15"
 ```
 
-**Prevention:**
-- The close-shift flow is now idempotent — if the API call fails, retrying won't double-close.
-- A nightly cron (`SHIFT_RECONCILIATION`) auto-flags shifts open >24h for manager review.
+Two params are mandatory on Vercel serverless:
+
+| Param | Why |
+|-------|-----|
+| `pgbouncer=true` | Tells Prisma to disable prepared statements (which break under PgBouncer transaction mode). Without this you'll see `prepared statement "s0" already exists` after the first warm invocation. |
+| `connect_timeout=15` | Vercel serverless functions time out at 10s on the Hobby tier (60s on Pro). Prisma's default `connect_timeout=5` is too aggressive — a cold Neon compute (which can take 8–10s to wake from suspend) will trip it. 15s gives enough headroom. |
+
+**Also set `directUrl` in `prisma/schema.prisma`** for migrations (which cannot run through PgBouncer):
+
+```prisma
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")          // pooled — used at runtime by Prisma Client
+  directUrl = env("DIRECT_DATABASE_URL")   // unpooled — used by prisma migrate / db push
+}
+```
+
+```bash
+# In Vercel env vars, set DIRECT_DATABASE_URL to the NON-pooled Neon hostname
+# (the one WITHOUT "-pooler" in it). Migrations use a single long-lived
+# connection and will fail under PgBouncer transaction mode.
+DIRECT_DATABASE_URL="postgresql://user:pass@ep-cool-name.region.aws.neon.tech/dbname?sslmode=require"
+```
+
+> **`relationMode` note:** If you see errors about foreign key constraints during `prisma db push` on Neon — e.g. "Foreign key constraint failed during table creation" — you may need to set `relationMode = "prisma"` in the datasource block. This is **not** required for this project as currently structured (we use `cuid()` IDs and explicit joins, not deferred FKs), but if you add cross-store foreign keys you may need it.
+
+---
+
+#### Cause 2 — Tables don't exist (Vercel does NOT auto-run migrations)
+
+**Vercel runs `npm run vercel-build` (which is `prisma generate && next build`)** — it does NOT run `prisma migrate deploy` or `prisma db push`. So your Neon database starts **completely empty** after the first deploy. Every API route that touches a table returns 500 with `relation "User" does not exist`.
+
+**Fix — push the schema and seed, manually, after the first successful deploy:**
+
+```bash
+# 1. Make sure your local .env has the SAME DATABASE_URL as Vercel
+#    (the pooled Neon connection string from Cause 1)
+#    AND DIRECT_DATABASE_URL pointing to the non-pooled hostname.
+
+# 2. Install dependencies locally (if you haven't)
+bun install
+
+# 3. Push the schema — creates all 25+ tables on Neon
+#    (We use `db push` rather than `migrate deploy` because this project
+#    uses schema-first iteration. `db push` is idempotent and safe.)
+bun run db:push
+#    ↑ runs:  node scripts/setup-prisma-provider.mjs && prisma db push
+
+# 4. Seed the demo data (5 stores, demo users, sample products, gift cards, etc.)
+bun run db:seed
+#    ↑ runs:  prisma db seed
+
+# 5. Verify in the Neon SQL editor:
+#    SELECT COUNT(*) FROM "Store";    -- should be 5
+#    SELECT COUNT(*) FROM "User";     -- should be 5 demo users
+#    SELECT COUNT(*) FROM "Product";  -- should be ~50 sample products
+```
+
+> **Why not `prisma migrate deploy` in the build script?** Running migrations during `next build` is fragile: a failed migration fails the deploy, and migrations need the *direct* (non-pooled) connection string which we don't want in the build environment. The standard Prisma + Vercel pattern is to run migrations as a separate manual step (or via a CI job with `DIRECT_DATABASE_URL` injected). For this project, `db:push` against your pooled Neon URL is the simplest correct path.
+
+> **Re-running after schema changes:** Any time `prisma/schema.prisma` changes, re-run `bun run db:push` locally (with the Vercel-matching `DATABASE_URL`) to apply the schema delta to Neon. Commit the schema change but do NOT commit migrations — this project does not use a `prisma/migrations/` folder.
+
+---
+
+#### Cause 3 — Prisma Client not generated during the build
+
+If you customized the `vercel-build` script and dropped `prisma generate`, every DB call crashes with `PrismaClientInitializationError: Cannot read property 'user' of undefined`.
+
+**Fix — keep `prisma generate` in the build script:**
+
+```json
+{
+  "scripts": {
+    "vercel-build": "node scripts/setup-prisma-provider.mjs && SKIP_ENV_VALIDATION=1 prisma generate && SKIP_ENV_VALIDATION=1 next build"
+  }
+}
+```
+
+The `SKIP_ENV_VALIDATION=1` prefix is critical — without it, `next build` tries to collect page data for `/api/*` routes, which transitively imports `@/lib/env`, which eagerly Zod-validates runtime secrets (which aren't injected at build time). The build crashes with `Failed to collect page data for /api/auth/login`. This was the root cause fixed in Phase 1 of the deployment hardening work; the pattern is the same one used by [create-t3-app](https://create.t3.gg/) and most production Vercel + Next.js + Prisma stacks.
+
+---
+
+#### Cause 4 — Missing or mis-scoped env vars in Vercel
+
+Vercel will silently let your API route boot with `undefined` for `DATABASE_URL` if you forgot to add it, added it only to "Development" but deployed to "Production", or added it with a trailing space.
+
+**Fix:**
+
+1. Go to **Vercel → Project → Settings → Environment Variables**.
+2. Confirm each variable exists and is checked for **Production**, **Preview**, AND **Development** (unless you deliberately want to scope it).
+3. Confirm there are **no trailing spaces** in the value (Vercel's UI preserves them — a stray space at the end of `DATABASE_URL` corrupts the connection string).
+4. **Redeploy** after adding/changing env vars (Vercel does not auto-redeploy on env-only changes).
+5. Required env vars at runtime: `DATABASE_URL` (pooled), `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `JWT_SECRET`. See the [⚙️ Configuration](#️-configuration) section.
+
+---
+
+### 👻 Ghost Shifts (Orphaned / Unclosed Shift)
+
+**What is a ghost shift?** A "ghost shift" is a `Shift` record that was **opened but never closed** — the `status` column still reads `OPEN` and `endTime` is `NULL`, but the cashier is no longer actively operating it. Ghost shifts typically arise from:
+
+- **Browser crash** — the cashier's tab died mid-shift and the close-shift API call never fired.
+- **Power outage** — the POS terminal lost power; on reboot the cashier can't open a new shift because the old one is still `OPEN`.
+- **Network blip during close** — the close-shift request hit the server but the response was lost (e.g. M-Pesa callback raced the close call); the UI optimistically rolled back, leaving the shift `OPEN` server-side.
+- **Cashier forgot to close** — end of day, cashier locked the screen and went home without running the close-shift flow.
+
+**Symptom:** A cashier tries to start a new shift and the system rejects it with *"You already have an open shift"* — but the previous shift doesn't appear in the active-shifts list (because the list filters by today's date and the orphan is from yesterday), OR it appears but the cashier can't reconcile cash they don't have on hand.
+
+**Fix A — Close it via the Shifts tab (preferred):**
+
+1. Log in as `BRANCH_MANAGER`, `STORE_OWNER`, or `SUPER_ADMIN`.
+2. Navigate to **Shift Management** → the system auto-detects unclosed shifts for the selected store/user and surfaces a *"X unclosed shifts detected"* banner.
+3. Find the orphaned `OPEN` shift (filter by cashier name or date range if needed).
+4. Click **Force Close** (available to manager+ roles; cashiers cannot force-close their own orphaned shifts to prevent self-reconciliation fraud).
+5. Enter the actual cash drawer count. The system records any discrepancy between expected and actual cash as a `CashDiscrepancy` audit entry, attributed to the closing manager with a mandatory reconciliation note.
+
+**Fix B — Database-level cleanup (last resort, for DBAs only):**
+
+If the UI flow is unavailable (e.g. the shift belongs to a deleted user, or the store was archived), run the SQL directly against your Neon/Postgres database:
+
+```sql
+-- 1. Find all ghost shifts across all stores
+SELECT id, "userId", "storeId", status, "openedAt", "endedAt", "openingCash"
+FROM "Shift"
+WHERE status = 'OPEN' AND "endedAt" IS NULL;
+
+-- 2. For a specific user
+SELECT id, "userId", "storeId", status, "openedAt", "openingCash"
+FROM "Shift"
+WHERE status = 'OPEN' AND "userId" = '<user-id>';
+
+-- 3. Close a single ghost shift (replace <shift-id> with the actual id)
+--    Set closingCash = openingCash to record a zero-discrepancy close,
+--    OR set it to the counted amount if the drawer was actually counted.
+UPDATE "Shift"
+SET status     = 'CLOSED',
+    "endedAt"  = NOW(),
+    "closingCash" = "openingCash",
+    "updatedAt"   = NOW(),
+    note       = 'Force-closed by DBA after ghost-shift detection (browser crash / power outage)'
+WHERE id = '<shift-id>';
+
+-- 4. Audit-trail the manual close (recommended)
+INSERT INTO "AuditLog" ("actorUserId", action, entity, "entityId", metadata, "createdAt")
+VALUES ('<dba-user-id>', 'SHIFT_FORCE_CLOSE', 'Shift', '<shift-id>',
+        '{"reason":"ghost shift","method":"sql"}'::jsonb, NOW());
+```
+
+> **Schema note:** column names are quoted (`"userId"`, `"openedAt"`, `"endedAt"`) because Prisma generates them in PascalCase under PostgreSQL by default. On SQLite they're unquoted.
+
+**Prevention (already implemented in this codebase):**
+
+- The close-shift flow is **idempotent** — if the API call fails, retrying won't double-close. The endpoint checks the current `status` before mutating.
+- The **Shift Management** UI surfaces unclosed shifts older than 24 hours with a red *"STALE SHIFT"* badge so managers can intervene before the next morning.
+- A nightly cron (`SHIFT_RECONCILIATION`, scheduled via the system-config `cronJobs` registry) auto-flags shifts open >24h for manager review and sends a notification to the store's `BRANCH_MANAGER`.
+- On shift-start, the API checks for any pre-existing `OPEN` shift for the user+store and offers a one-tap "Resume Previous Shift" affordance instead of forcing a manual cleanup.
 
 ---
 

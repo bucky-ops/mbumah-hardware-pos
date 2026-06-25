@@ -88,6 +88,27 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: willingness
+    attributes:
+      label: Willingness to Contribute
+      description: Are you able to help implement this feature?
+      options:
+        - Yes — I'm willing to open a PR
+        - Maybe — I can help test / review but not code
+        - No — I'm requesting this be built by maintainers
+    validations:
+      required: true
+
+  - type: input
+    id: dependencies
+    attributes:
+      label: Dependencies / Blockers
+      description: Any issues, PRs, or external services this depends on? Enter "None" if not.
+      placeholder: "e.g. Requires #123 to merge first; depends on Daraja v2 API access"
+    validations:
+      required: false
+
   - type: textarea
     id: user-flow
     attributes:
@@ -171,4 +192,6 @@ body:
         - label: I have searched existing issues and this is not a duplicate.
           required: true
         - label: This is a single, focused feature request (not a bundle of ideas).
+          required: true
+        - label: I understand this is an open-source project and there is no SLA for feature delivery.
           required: true

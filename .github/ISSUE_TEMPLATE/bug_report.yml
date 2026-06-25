@@ -84,14 +84,32 @@ body:
     validations:
       required: true
 
-  - type: input
+  - type: dropdown
     id: browser
     attributes:
       label: Browser
-      description: If the bug is in the UI, which browser (and version)?
-      placeholder: "e.g. Chrome 125, Firefox 126, Safari 17.4"
+      description: Which browser did the bug occur in? (For non-UI bugs, select "N/A — server-side only".)
+      options:
+        - N/A — server-side only (API / build / CLI)
+        - Chrome (desktop)
+        - Firefox (desktop)
+        - Safari (desktop)
+        - Edge (desktop)
+        - Chrome (Android)
+        - Safari (iOS)
+        - Samsung Internet
+        - Other (specify in Additional Context)
     validations:
-      required: false
+      required: true
+
+  - type: input
+    id: browser-version
+    attributes:
+      label: Browser Version
+      description: Run `chrome://version` (or equivalent) to find the exact build. Enter N/A if server-side only.
+      placeholder: "e.g. Chrome 125.0.6422.142, Firefox 126.0.1, Safari 17.4 (19617.1.15.10)"
+    validations:
+      required: true
 
   - type: dropdown
     id: database
@@ -109,9 +127,10 @@ body:
     id: os
     attributes:
       label: Operating System
-      placeholder: "e.g. Windows 11, macOS Sonoma, Ubuntu 22.04"
+      description: The OS of the machine running the dev server / browser.
+      placeholder: "e.g. Windows 11 23H2, macOS Sonoma 14.5, Ubuntu 22.04.4 LTS"
     validations:
-      required: false
+      required: true
 
   - type: input
     id: commit
@@ -151,6 +170,20 @@ body:
     validations:
       required: false
 
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How badly does this affect store operations?
+      options:
+        - Critical — blocks daily operations / causes financial loss
+        - High — major feature broken, no workaround
+        - Medium — feature broken, workaround exists
+        - Low — cosmetic / minor inconvenience
+        - Unknown — not sure yet
+    validations:
+      required: true
+
   - type: checkboxes
     id: terms
     attributes:
@@ -158,7 +191,9 @@ body:
       options:
         - label: I have searched existing issues and this is not a duplicate.
           required: true
-        - label: I am running on the latest `main` branch.
+        - label: I am running on the latest `main` branch (or have noted the commit SHA above).
           required: true
-        - label: This is NOT a security vulnerability (security issues go to SECURITY.md).
+        - label: This is NOT a security vulnerability (security issues go to SECURITY.md and must be reported PRIVATELY).
+          required: true
+        - label: I have redacted any real customer PII, M-Pesa codes, or production credentials from my logs and screenshots.
           required: true

@@ -96,13 +96,59 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
   }
 
   // 6. Look up user in DB
-  const user = await db.user.findUnique({
-    where: { email },
-    include: {
-      organization: true,
-      store: true,
-    },
-  });
+  //
+  // Dedicated try/catch around the FIRST database call so that DB-level
+  // failures (missing `User` table, connection timeout, wrong provider,
+  // exhausted connection pool) produce a CLEAR, DISTINCT error response
+  // instead of being caught by the generic withErrorBoundary and masked
+  // as "An unexpected error occurred".
+  //
+  // When EXPOSE_ERRORS=true is set in the environment, the full Prisma error
+  // message + code (e.g. P1003 "table does not exist", P1001 "connection
+  // lost", P1009 "database does not exist") is included in the response body
+  // so you can see EXACTLY what's wrong from the browser Network tab — no
+  // need to dig through Vercel logs.
+  let user;
+  try {
+    user = await db.user.findUnique({
+      where: { email },
+      include: {
+        organization: true,
+        store: true,
+      },
+    });
+  } catch (dbError) {
+    const exposeErrors =
+      process.env.NODE_ENV === 'development' ||
+      process.env.EXPOSE_ERRORS === 'true' ||
+      process.env.EXPOSE_ERRORS === '1' ||
+      process.env.EXPOSE_ERRORS === 'yes';
+
+    const dbErrName = dbError instanceof Error ? dbError.name : typeof dbError;
+    const dbErrMsg = dbError instanceof Error ? dbError.message : 'Unknown DB error';
+    const dbErrCode = (dbError as { code?: string } | null)?.code;
+
+    return Response.json(
+      {
+        success: false,
+        error: 'Database connection failed. The database may be unreachable or the schema has not been pushed.',
+        detail: exposeErrors
+          ? {
+              name: dbErrName,
+              message: dbErrMsg,
+              code: dbErrCode,
+              hint:
+                'If code is P1003 (table missing): run `npx prisma db push` against the production DATABASE_URL. ' +
+                'If code is P1001 (connection lost): verify DATABASE_URL in Vercel is the Neon POOLED string ' +
+                '(-pooler hostname) with ?pgbouncer=true&connect_timeout=15. ' +
+                'If code is P1009 (db missing): the database name in DATABASE_URL does not exist on the server.',
+              component: 'AUTH_LOGIN_DB',
+            }
+          : undefined,
+      },
+      { status: 500 }
+    );
+  }
 
   // Check for DB-level account lockout (lockedUntil field)
   if (user?.lockedUntil && new Date(user.lockedUntil) > new Date()) {
