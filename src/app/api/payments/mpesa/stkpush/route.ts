@@ -140,7 +140,22 @@ async function darajaStkPush(params: {
     },
     body: JSON.stringify(payload),
   });
-  const json = (await res.json()) as Record<string, string>;
+  const rawBody = await res.text();
+  let json: Record<string, string> = {};
+  try {
+    json = JSON.parse(rawBody) as Record<string, string>;
+  } catch {
+    // Non-JSON response from Daraja — keep rawBody for diagnostics.
+  }
+
+  // Log the full Daraja response for debugging callback/credential issues.
+  if (!res.ok || json.ResponseCode && json.ResponseCode !== '0') {
+    console.error('[MPESA STK] Daraja response:', {
+      status: res.status,
+      body: rawBody,
+      payload: { phone, amount, accountReference },
+    });
+  }
 
   return {
     checkoutRequestId: json.CheckoutRequestID || json.checkoutRequestId || '',
@@ -174,6 +189,17 @@ async function stkPushHandler(...args: unknown[]): Promise<Response> {
   const transactionDesc = body.transactionDesc || 'Payment';
 
   const formattedPhone = normalisePhone(String(rawPhone));
+
+  // Strict validation: Daraja requires exactly 254 + 9 digits.
+  if (!/^254\d{9}$/.test(formattedPhone)) {
+    return Response.json(
+      {
+        success: false,
+        error: `Invalid phone number format. Got "${formattedPhone}". Expected 2547XXXXXXXX (12 digits).`,
+      },
+      { status: 400 },
+    );
+  }
 
   // Find any pre-existing MpesaTransaction row created by the checkout
   // flow (transactions/route.ts creates one with status PENDING before

@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateReceiptNumber, generateJournalEntryNumber, calculateLineTotal } from '@/lib/helpers';
-import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
+import { getAccountIds, ACCOUNT_CODES, recordSaleJournalEntry } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, PaymentMethod, PaymentStatus } from '@/lib/types';
 import { checkoutSchema, validateInput } from '@/lib/validations';
 
@@ -139,6 +139,16 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
   if (paymentMethod === PaymentMethod.DEBT && !customerId) {
     return Response.json(
       { success: false, error: 'Customer is required for debt payments.' },
+      { status: 400 }
+    );
+  }
+
+  // GIFT_CARD requires a gift card code (or an auto-applied giftCardId).
+  const giftCardCode = paymentDetails?.giftCardCode?.trim();
+  const giftCardIdFromDetails = paymentDetails?.giftCardId;
+  if (paymentMethod === PaymentMethod.GIFT_CARD && !giftCardCode && !giftCardIdFromDetails) {
+    return Response.json(
+      { success: false, error: 'A gift card code is required for gift card payments.' },
       { status: 400 }
     );
   }

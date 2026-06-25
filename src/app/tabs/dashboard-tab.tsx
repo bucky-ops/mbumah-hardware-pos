@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
   ResponsiveContainer, PieChart, Pie, Cell,
@@ -1574,6 +1574,7 @@ function useShiftDuration(startedAt: string | null) {
 
 function ShiftStatusCard({ storeId }: { storeId: string }) {
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
   const [startingCash, setStartingCash] = useState('');
   const [endDialogOpen, setEndDialogOpen] = useState(false);
   const [countedCash, setCountedCash] = useState('');
@@ -1614,6 +1615,8 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
         toast.success('Shift started successfully!');
         setStartingCash('');
         refetch();
+        queryClient.invalidateQueries({ queryKey: ['current-shift'] });
+        queryClient.invalidateQueries({ queryKey: ['shifts'] });
       } else {
         toast.error(res.error || 'Failed to start shift.');
       }
@@ -1661,6 +1664,8 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
         setEndingCash('');
         setEndNotes('');
         refetch();
+        queryClient.invalidateQueries({ queryKey: ['current-shift'] });
+        queryClient.invalidateQueries({ queryKey: ['shifts'] });
       } else {
         toast.error(res.error || 'Failed to end shift.');
       }

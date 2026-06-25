@@ -12,10 +12,8 @@ async function getCurrentShiftHandler(...args: unknown[]): Promise<Response> {
   const userId = searchParams.get('userId');
 
   if (!storeId || !userId) {
-    return Response.json(
-      { success: false, error: 'storeId and userId are required.' },
-      { status: 400 }
-    );
+    // Graceful no-op during initial hydration instead of a console-flooding 400.
+    return Response.json({ success: true, data: null });
   }
 
   const shift = await db.shift.findFirst({

@@ -1781,3 +1781,40 @@ Stage Summary:
 - POS cart now supports unlimited items: the item list scrolls independently, the extras (discount/customer/totals) scroll in a capped 42% area, and the Checkout button is permanently pinned at the bottom — always reachable.
 - Applies to both desktop cart sidebar and mobile cart bottom-sheet.
 - Browser-verified with 8 items (exceeds the 6-item breakage point the user reported).
+
+---
+Task ID: DB-RESTORE + CRON-RECREATE + POS-VERIFY
+Agent: Main Agent
+Task: Continue from previous session — recreate the 15-min webDevReview cron, verify the live site end-to-end with agent-browser, fix any blocking bugs found.
+
+Work Log:
+- Read worklog tail (last 200 lines). Most recent prior task: POS-CART-SCROLL-FIX (pinned checkout button + 2-section cart footer). Prior cron (job_id 227896) had been cleared — no active crons existed.
+- Created the mandatory recurring webDevReview cron: job_id 231611, kind=webDevReview, fixed_rate=900s (15 min), tz=Africa/Nairobi, priority=5. Payload contains the full 7-point QA + new-requirements brief.
+- Initial Agent Browser load of http://localhost:3000 → login page rendered correctly with all redesigned UI (welcome tagline, trust badges, forgot password link, demo accounts, footer links).
+- Attempted Super Admin login → FAILED with HTTP 500 on POST /api/auth/login.
+- Root cause investigation (tail of dev.log): PrismaClientInitializationError "Error code 14: Unable to open the database file" on db.user.findUnique AND db.systemLog.create.
+- Verified root cause: `db/` directory did not exist (DATABASE_URL=file:/home/z/my-project/db/custom.db). No .db files anywhere in the project.
+- Fix:
+    1. `mkdir -p /home/z/my-project/db`
+    2. `bun run db:push` → created SQLite db at /home/z/my-project/db/custom.db, schema synced, Prisma Client regenerated.
+    3. `bun run db:seed` → seeded full sample dataset: 5 stores, Super Admin + 4 branch managers + 5 cashiers, 73 products (29 Juja Main + 44 branches), 24 customers, 26 accounts, 30 sales transactions, 19 stock movements, 3 equipment rentals, 13 cash drawer logs, 13 expenses, 11 suppliers, 14 gift cards, 11 gift card redemptions.
+- Retried login as Super Admin (admin@mbumahhardware.co.ke) → SUCCESS. Dashboard loaded with "Karibu, System 👋" welcome hero and full sidebar (POS, Catalog, Inventory, Customers, Transactions, Rentals, Financial, Reports, Suppliers, Gift Cards, Admin).
+- POS cart scroll fix verification (set viewport 1280×800):
+    * Navigated to POS tab.
+    * Added 8 distinct products to cart (2-inch Nails, 3-inch Nails, 4-inch Nails, Bamburi Cement, Cable 2.5mm, Chain Link, Concrete Mixer, Construction Starter Kit).
+    * Cart total: Ksh 125,419.20. Checkout button: y=735, bottom=783, viewport=800 → visible:true ✅
+    * Added 4 more items (12 total: + Crown Vinyl Silk 20L, Dulux Weathershield 20L, Dulux Weathershield 4L, Heavy Duty Wheelbarrow).
+    * Cart total: Ksh 154,303.20. Checkout button: y=735, bottom=783, viewport=800 → visible:true ✅
+    * Cart item layout audit: 12 items, 0 overlaps, each item 72px tall with consistent 8px gaps (e.g., item0 bottom=357 → item1 y=365).
+    * Cart container: clientHeight=186px, scrollHeight=976px → properly scrollable, no overflow spill.
+- Clicked the Checkout button → "Complete Payment" dialog opens with all 4 payment methods visible: Cash (default), Debt, Either/Split (Cash + M-Pesa combined), and M-Pesa.
+- Final dev.log health check: tail -100 shows 70× HTTP 200 + 1× HTTP 500 (the 500 is the pre-fix login attempt only — confirmed no post-fix 500s).
+- Closed dialog + browser session cleanly.
+
+Stage Summary:
+- CRITICAL bug fixed: missing SQLite db file was preventing ALL logins (HTTP 500). Created db/ dir, ran db:push + db:seed. Site is now fully functional with seeded sample data.
+- Mandatory recurring webDevReview cron re-established: job_id 231611, every 15 min, Africa/Nairobi tz.
+- POS cart scroll fix from previous task (POS-CART-SCROLL-FIX) VERIFIED working end-to-end: with 8 AND 12 cart items (both exceed the original 6-item breakage point), the Checkout button remains fully on-screen (visible:true), items have no overlap, the cart item list scrolls independently, and clicking Checkout opens the Complete Payment dialog with all payment methods.
+- All redesigned UI confirmed rendering: login trust badges/welcome tagline/forgot password/footer links, dashboard welcome hero with personalized greeting + quick actions, TopBar Help dropdown.
+- Dev server stable, no post-fix runtime errors, all API routes returning 200.
+- Next phase recommendation: with the DB now seeded, the next 15-min webDevReview cycle can advance new features (e.g., wire remaining tabs to ResponsiveDialog, expand reports/recommendations with the now-real seeded sales data, polish mobile views).

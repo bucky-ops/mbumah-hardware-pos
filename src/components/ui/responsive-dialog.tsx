@@ -81,9 +81,15 @@ export function ResponsiveDialog({
                     {title}
                   </DialogPrimitive.Title>
                 )}
-                {description && (
+                {description ? (
                   <DialogPrimitive.Description className="mt-1 text-sm text-muted-foreground break-words">
                     {description}
+                  </DialogPrimitive.Description>
+                ) : (
+                  // sr-only fallback so Radix never warns about a missing
+                  // Description / aria-describedby on DialogContent.
+                  <DialogPrimitive.Description className="sr-only">
+                    Dialog
                   </DialogPrimitive.Description>
                 )}
               </div>

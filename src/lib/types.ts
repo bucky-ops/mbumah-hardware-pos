@@ -15,6 +15,7 @@ export const PaymentMethod = {
   MPESA: 'MPESA',
   DEBT: 'DEBT',
   SPLIT: 'SPLIT',
+  GIFT_CARD: 'GIFT_CARD',
 } as const;
 
 export type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod];

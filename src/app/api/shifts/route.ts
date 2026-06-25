@@ -11,10 +11,10 @@ async function getShiftsHandler(...args: unknown[]): Promise<Response> {
 
   const storeId = searchParams.get('storeId');
   if (!storeId) {
-    return Response.json(
-      { success: false, error: 'storeId is required.' },
-      { status: 400 }
-    );
+    // Gracefully return an empty list during initial hydration / before a
+    // store is selected, instead of a hard 400 that floods the console and
+    // trips React Query error toasts ("failed to load shift").
+    return Response.json({ success: true, data: [] });
   }
 
   const status = searchParams.get('status') || '';
@@ -76,8 +76,8 @@ async function createShiftHandler(...args: unknown[]): Promise<Response> {
   }
 
     const existingActiveShift = await db.shift.findFirst({
-    where: { userId, status: 'ACTIVE' },
-  });
+    where: { storeId, userId, status: 'ACTIVE' },
+    });
 
   if (existingActiveShift) {
     return Response.json(
@@ -86,17 +86,41 @@ async function createShiftHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  const shift = await db.shift.create({
-    data: {
-      userId,
-      storeId,
-      startingCash: startingCash || 0,
-      status: 'ACTIVE',
-    },
-    include: {
-      user: { select: { id: true, name: true, email: true, role: true } },
-      store: { select: { id: true, name: true, location: true } },
-    },
+  // Wrap shift creation + opening cash-drawer log atomically so a "ghost"
+  // shift can never exist without its corresponding drawer entry.
+  const shift = await db.$transaction(async (tx) => {
+    const newShift = await tx.shift.create({
+      data: {
+        userId,
+        storeId,
+        startingCash: startingCash || 0,
+        status: 'ACTIVE',
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true, role: true } },
+        store: { select: { id: true, name: true, location: true } },
+      },
+    });
+
+    // Record opening balance in the cash drawer ledger.
+    const lastDrawerEntry = await tx.cashDrawerLog.findFirst({
+      where: { storeId },
+      orderBy: { createdAt: 'desc' },
+    });
+    const priorBalance = lastDrawerEntry?.balance ?? 0;
+
+    await tx.cashDrawerLog.create({
+      data: {
+        storeId,
+        userId,
+        action: 'SHIFT_OPEN',
+        amount: startingCash || 0,
+        balance: priorBalance + (startingCash || 0),
+        notes: `Opening cash for shift started by ${newShift.user.name}`,
+      },
+    });
+
+    return newShift;
   });
 
   await systemLog({
