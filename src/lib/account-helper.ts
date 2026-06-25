@@ -29,28 +29,36 @@ export type AccountCode = (typeof ACCOUNT_CODES)[keyof typeof ACCOUNT_CODES];
 
 const accountCache = new Map<string, string>();
 
-// Default account names for auto-creation
-const ACCOUNT_DEFAULTS: Record<string, { name: string; type: string; description: string }> = {
-  '1000': { name: 'Cash on Hand', type: 'ASSET', description: 'Physical cash in drawer' },
-  '1100': { name: 'M-Pesa Account', type: 'ASSET', description: 'M-Pesa mobile money account' },
-  '1200': { name: 'Accounts Receivable', type: 'ASSET', description: 'Money owed by customers' },
-  '1300': { name: 'Inventory', type: 'ASSET', description: 'Inventory asset' },
-  '1400': { name: 'Rental Deposits Held', type: 'LIABILITY', description: 'Security deposits held for rentals' },
-  '2000': { name: 'Accounts Payable', type: 'LIABILITY', description: 'Money owed to suppliers' },
-  '2100': { name: 'VAT Payable', type: 'LIABILITY', description: 'VAT collected and owed to KRA' },
-  '2200': { name: 'Customer Deposits', type: 'LIABILITY', description: 'Advance payments from customers' },
-  '2300': { name: 'Gift Card Liability', type: 'LIABILITY', description: 'Unearned revenue from sold gift cards' },
-  '3000': { name: 'Owner Equity', type: 'EQUITY', description: 'Owner investment in the business' },
-  '3100': { name: 'Retained Earnings', type: 'EQUITY', description: 'Accumulated profits' },
-  '4000': { name: 'Sales Revenue', type: 'REVENUE', description: 'Revenue from product sales' },
-  '4100': { name: 'Rental Revenue', type: 'REVENUE', description: 'Revenue from equipment rentals' },
-  '4200': { name: 'Late Fee Revenue', type: 'REVENUE', description: 'Revenue from late return fees' },
-  '4300': { name: 'Sales Discounts', type: 'EXPENSE', description: 'Contra-revenue for checkout discounts granted' },
-  '5000': { name: 'Cost of Goods Sold', type: 'EXPENSE', description: 'Direct cost of products sold' },
-  '5100': { name: 'Rent Expense', type: 'EXPENSE', description: 'Shop rent expense' },
-  '5200': { name: 'Salaries Expense', type: 'EXPENSE', description: 'Employee salaries' },
-  '5300': { name: 'Utilities Expense', type: 'EXPENSE', description: 'Electricity, water, internet' },
-  '5400': { name: 'Bad Debt Expense', type: 'EXPENSE', description: 'Uncollectible customer debts' },
+// Default account definitions for auto-creation.
+// The Account model has: name, type, subType, normalBalance, isActive —
+// it does NOT have a `description` column, so we map the old description
+// intent into subType + normalBalance (proper chart-of-accounts metadata).
+const ACCOUNT_DEFAULTS: Record<string, {
+  name: string;
+  type: string;
+  subType: string;
+  normalBalance: string;
+}> = {
+  '1000': { name: 'Cash on Hand',           type: 'ASSET',     subType: 'CURRENT_ASSET',     normalBalance: 'DEBIT'  },
+  '1100': { name: 'M-Pesa Account',          type: 'ASSET',     subType: 'CURRENT_ASSET',     normalBalance: 'DEBIT'  },
+  '1200': { name: 'Accounts Receivable',     type: 'ASSET',     subType: 'CURRENT_ASSET',     normalBalance: 'DEBIT'  },
+  '1300': { name: 'Inventory',               type: 'ASSET',     subType: 'CURRENT_ASSET',     normalBalance: 'DEBIT'  },
+  '1400': { name: 'Rental Deposits Held',    type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
+  '2000': { name: 'Accounts Payable',        type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
+  '2100': { name: 'VAT Payable',             type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
+  '2200': { name: 'Customer Deposits',       type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
+  '2300': { name: 'Gift Card Liability',     type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
+  '3000': { name: 'Owner Equity',            type: 'EQUITY',    subType: 'OWNER_EQUITY',      normalBalance: 'CREDIT' },
+  '3100': { name: 'Retained Earnings',       type: 'EQUITY',    subType: 'RETAINED_EARNINGS', normalBalance: 'CREDIT' },
+  '4000': { name: 'Sales Revenue',           type: 'REVENUE',   subType: 'OPERATING_REVENUE', normalBalance: 'CREDIT' },
+  '4100': { name: 'Rental Revenue',          type: 'REVENUE',   subType: 'OPERATING_REVENUE', normalBalance: 'CREDIT' },
+  '4200': { name: 'Late Fee Revenue',        type: 'REVENUE',   subType: 'OTHER_REVENUE',     normalBalance: 'CREDIT' },
+  '4300': { name: 'Sales Discounts',         type: 'EXPENSE',   subType: 'CONTRA_REVENUE',    normalBalance: 'DEBIT'  },
+  '5000': { name: 'Cost of Goods Sold',      type: 'EXPENSE',   subType: 'OPERATING_EXPENSE', normalBalance: 'DEBIT'  },
+  '5100': { name: 'Rent Expense',            type: 'EXPENSE',   subType: 'OPERATING_EXPENSE', normalBalance: 'DEBIT'  },
+  '5200': { name: 'Salaries Expense',        type: 'EXPENSE',   subType: 'OPERATING_EXPENSE', normalBalance: 'DEBIT'  },
+  '5300': { name: 'Utilities Expense',       type: 'EXPENSE',   subType: 'OPERATING_EXPENSE', normalBalance: 'DEBIT'  },
+  '5400': { name: 'Bad Debt Expense',        type: 'EXPENSE',   subType: 'OPERATING_EXPENSE', normalBalance: 'DEBIT'  },
 };
 
 export async function getAccountId(organizationId: string, code: AccountCode): Promise<string> {
@@ -75,7 +83,8 @@ export async function getAccountId(organizationId: string, code: AccountCode): P
           code,
           name: defaults.name,
           type: defaults.type,
-          description: defaults.description,
+          subType: defaults.subType,
+          normalBalance: defaults.normalBalance,
           isActive: true,
         },
         select: { id: true },
@@ -138,7 +147,8 @@ export async function getAccountIds(
               code,
               name: defaults.name,
               type: defaults.type,
-              description: defaults.description,
+              subType: defaults.subType,
+              normalBalance: defaults.normalBalance,
               isActive: true,
             },
             select: { id: true },

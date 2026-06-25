@@ -54,6 +54,14 @@ export const checkoutSchema = z.object({
     giftCardCode: z.string().optional(),
     voucherId: z.string().optional(),
     discountAmount: z.number().optional(),
+    // SPLIT payments: array of { method, amount, reference? } so the checkout
+    // can record multiple tenders (e.g. cash + M-Pesa) in one transaction.
+    splits: z.array(z.object({
+      method: z.enum(['CASH', 'MPESA', 'GIFT_CARD']),
+      amount: z.number().positive(),
+      reference: z.string().optional(),
+      giftCardCode: z.string().optional(),
+    })).optional(),
   }).optional(),
   discountAmount: z.number().nonnegative().optional(),
   notes: z.string().max(1000).optional(),
