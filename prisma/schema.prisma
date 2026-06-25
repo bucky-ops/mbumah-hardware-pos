@@ -209,6 +209,8 @@ model Product {
   @@index([name])
   @@index([categoryId])
   @@index([isActive])
+  // Composite multi-tenant performance index (ISO 27001: scoped storeId + time range)
+  @@index([storeId, createdAt])
   @@map("products")
 }
 
@@ -362,6 +364,8 @@ model SalesTransaction {
   @@index([receiptNumber])
   @@index([paymentMethod])
   @@index([createdAt])
+  // Composite multi-tenant performance index (ISO 27001: scoped storeId + time range)
+  @@index([storeId, createdAt])
   @@map("sales_transactions")
 }
 
@@ -961,6 +965,8 @@ model Shift {
   @@index([storeId])
   @@index([userId])
   @@index([status])
+  // Composite multi-tenant performance index (ISO 27001: scoped storeId + time range)
+  @@index([storeId, createdAt])
   @@map("shifts")
 }
 
