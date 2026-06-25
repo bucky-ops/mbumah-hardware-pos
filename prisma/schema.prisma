@@ -1,14 +1,14 @@
 // MBUMAH HARDWARE POS & ERP - Prisma Schema
-// Multi-tenant via storeId discriminator. SQLite for dev, PostgreSQL for prod.
+// Multi-tenant via storeId discriminator. PostgreSQL for prod, SQLite for dev.
 //
-// The provider is set AUTOMATICALLY by `scripts/setup-prisma-provider.mjs`
-// based on the DATABASE_URL scheme:
-//   • file:./...        → sqlite      (local dev)
-//   • postgresql://...  → postgresql  (Vercel / Neon / Supabase)
+// The committed provider is "postgresql" (for Vercel production).
+// For local dev with SQLite, `scripts/setup-prisma-provider.sh` runs in
+// `postinstall` and detects the DATABASE_URL scheme:
+//   • file:./...        → switches to sqlite      (local dev)
+//   • postgresql://...  → stays postgresql         (Vercel / Neon / Supabase)
 //
-// The script runs before `prisma generate` in postinstall, vercel-build,
-// and all db:* scripts. Do NOT manually change the provider below — it will
-// be overwritten on the next install/build.
+// The `build` script is just `next build` — no provider manipulation at
+// build time. The correct Prisma client is generated during `postinstall`.
 //
 // Notes:
 //   - IDs use cuid() for cross-DB compat
@@ -20,7 +20,9 @@ generator client {
 }
 
 datasource db {
-  // Auto-set by scripts/setup-prisma-provider.mjs — do not edit manually.
+  // Committed as "postgresql" for Vercel. Auto-switched to "sqlite" by
+  // scripts/setup-prisma-provider.sh during postinstall when DATABASE_URL
+  // starts with "file:" (local dev). Do not edit manually.
   provider = "sqlite"
   url      = env("DATABASE_URL")
 }
