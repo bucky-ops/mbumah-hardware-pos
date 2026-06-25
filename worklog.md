@@ -1818,3 +1818,38 @@ Stage Summary:
 - All redesigned UI confirmed rendering: login trust badges/welcome tagline/forgot password/footer links, dashboard welcome hero with personalized greeting + quick actions, TopBar Help dropdown.
 - Dev server stable, no post-fix runtime errors, all API routes returning 200.
 - Next phase recommendation: with the DB now seeded, the next 15-min webDevReview cycle can advance new features (e.g., wire remaining tabs to ResponsiveDialog, expand reports/recommendations with the now-real seeded sales data, polish mobile views).
+
+---
+Task ID: GITHUB-VERCEL-CHECK
+Agent: Main Agent
+Task: Verify all changes are merged with main on GitHub and that Vercel production is working.
+
+Work Log:
+- Git merge verification:
+    * Local main HEAD = 9ed68db, origin/main HEAD = 9ed68db, origin/update HEAD = 9ed68db (all identical). Merge is CONFIRMED — no divergence, working tree clean.
+- GitHub Actions status on main @ 9ed68db (queried via Actions API):
+    * "Deploy to Production" (deploy.yml) → status=completed, conclusion=success ✅
+    * "Node.js CI with Webpack" (node.js.yml) → status=completed, conclusion=success ✅
+    * Both green for the latest commit pushed this session.
+- Vercel production deployment investigation:
+    * Queried GitHub Deployments API — found Vercel-connected environments "Production – mbumah-hardware-pos" and "Production – mbumah-hardware-pos-ltcm".
+    * LAST Vercel production deployment: 2026-06-13 @ commit a76ea7b (env "Production – mbumah-hardware-pos"), status=success, target_url=https://mbumah-hardware-l75ytekvw-recaros-projects.vercel.app
+    * That URL is now behind Vercel team SSO (returns 302 → vercel.com/sso-api) — not publicly reachable.
+    * Vercel production is 33 commits behind main (a76ea7b → 9ed68db). No auto-deploy has happened since June 13.
+- Root cause of stalled Vercel deploys:
+    * Queried repo Actions secrets API (HTTP 200, access OK). Only ONE secret is configured: NEON_API_KEY.
+    * The Vercel workflow (.github/workflows/vercel-deploy.yml, workflow_dispatch only) requires VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID — ALL THREE are MISSING from the repo secrets.
+    * Manually triggered vercel-deploy.yml on main @ 9ed68db (workflow_dispatch, HTTP 204 accepted). Run 28163333547 completed=FAILURE at step "Pull Vercel Environment Information".
+    * Extracted failing log line: `Error: You defined "--token", but it's missing a value` (vercel CLI exit code 1). Confirms VERCEL_TOKEN secret is empty/missing.
+- GitHub Pages (the other "production" surface) IS live and up to date @ commit 8dcf285 (2026-06-23): https://bucky-ops.github.io/mbumah-hardware-pos/ — but that only serves the static logo landing page, not the full app.
+
+Stage Summary:
+- ✅ MERGE: All changes ARE merged with main on GitHub. Local main, origin/main, and origin/update all point to 9ed68db. Working tree clean.
+- ✅ CI: Both GitHub Actions workflows (Deploy to Production build-verify + Node.js CI) PASS on 9ed68db.
+- ❌ VERCEL PRODUCTION: NOT working / NOT up to date. Last successful Vercel deploy was June 13 @ a76ea7b (33 commits behind). The Vercel Production Deployment workflow FAILS because VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID GitHub secrets are not configured.
+- ✅ GitHub Pages is live and up to date (logo landing page only).
+- ACTION REQUIRED (user): To bring Vercel production up to date, add 3 GitHub repo secrets (Settings → Secrets and variables → Actions → New repository secret):
+    1. VERCEL_TOKEN — from Vercel Account Settings → Tokens
+    2. VERCEL_ORG_ID — from Vercel team settings (or `.vercel/project.json` orgId)
+    3. VERCEL_PROJECT_ID — from Vercel project settings (or `.vercel/project.json` projectId)
+  Then either (a) manually trigger "Vercel Production Deployment" workflow on main, or (b) re-enable Vercel Git integration in the Vercel dashboard so pushes auto-deploy.
