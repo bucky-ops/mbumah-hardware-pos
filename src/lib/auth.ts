@@ -11,7 +11,7 @@
 // validation.
 
 import { NextRequest } from 'next/server';
-import { db } from '@/lib/db';
+import { db, runWithTenant, runWithoutTenant } from '@/lib/db';
 import { systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
@@ -75,6 +75,23 @@ export async function getSessionFromRequest(
   };
 }
 
+// ── Tenant scoping helper ────────────────────────────────────────────────────
+//
+// Wraps a handler in the appropriate ORM-level tenant context so that every
+// store-scoped Prisma query inside it is automatically filtered by `storeId`
+// (see src/lib/db.ts). SUPER_ADMIN users (and users without a store
+// assignment) run without tenant enforcement so they can access cross-store /
+// org-level data. Non-admin users are scoped to their own store.
+function runWithSessionTenant<T>(
+  session: AuthSession,
+  fn: () => Promise<T>,
+): Promise<T> {
+  if (session.role === 'SUPER_ADMIN' || !session.storeId) {
+    return runWithoutTenant(fn);
+  }
+  return runWithTenant(session.storeId, fn);
+}
+
 // ── Route wrapper: requireAuth ───────────────────────────────────────────────
 
 type AuthedHandler = (
@@ -134,7 +151,11 @@ export function requireAuth(
       }
     }
 
-    return handler(request, session, ...args.slice(1));
+    // Run the handler inside the ORM-level tenant context so every
+    // store-scoped Prisma query is automatically filtered by storeId.
+    return runWithSessionTenant(session, () =>
+      handler(request, session, ...args.slice(1))
+    );
   };
 }
 
@@ -238,6 +259,10 @@ export function requireStoreAccess(handler: StoreScopedHandler) {
       );
     }
 
-    return handler(request, session, ...args.slice(1));
+    // Run the handler inside the ORM-level tenant context. Non-admin users
+    // are scoped to their own store; SUPER_ADMIN runs without enforcement.
+    return runWithSessionTenant(session, () =>
+      handler(request, session, ...args.slice(1))
+    );
   };
 }

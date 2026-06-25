@@ -1,7 +1,7 @@
 // PUT/DELETE /api/expenses/[id]
 
 import { NextRequest } from 'next/server';
-import { db } from '@/lib/db';
+import { db, withImmutabilityBypass } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
@@ -152,13 +152,18 @@ async function deleteExpenseHandler(...args: unknown[]): Promise<Response> {
   });
 
   if (existing.journalEntryId) {
-    await db.journalEntry.update({
-      where: { id: existing.journalEntryId },
-      data: {
-        isVoided: true,
-        voidedAt: new Date(),
-      },
-    });
+    // Voiding the linked JournalEntry is a sanctioned mutation on the
+    // append-only financial ledger — wrapped in withImmutabilityBypass().
+    await withImmutabilityBypass(() =>
+      db.journalEntry.update({
+        where: { id: existing.journalEntryId! },
+        data: {
+          isVoided: true,
+          voidedAt: new Date(),
+        },
+      }),
+      'expense_void_linked_journal',
+    );
   }
 
   await systemLog({

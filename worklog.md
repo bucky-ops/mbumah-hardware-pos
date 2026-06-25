@@ -2052,3 +2052,51 @@ Stage Summary:
   * Task 5: Conventional commits + git push (commits 696eb9d + 642453e)
 - Production: Vercel production live at https://mbumah-hardware-pos-one.vercel.app (from prior session). GitHub Pages landing page live.
 - Recurring webDevReview cron: job_id 231788, every 15 min, Africa/Nairobi.
+
+---
+Task ID: ENTERPRISE-UPGRADE-STEP1
+Agent: Main Agent (Z.ai Code)
+Task: 10/10 Enterprise SaaS Upgrade — Step 1 (PHASE 1 & PHASE 2): Vercel Analytics/Layout fix + Serverless DB Hardening + ORM Multi-Tenancy & Financial Immutability guards
+
+Work Log:
+- Reviewed current state: layout.tsx already had <Analytics/> but was missing <SpeedInsights/>; db.ts was a bare singleton with no serverless hardening, no env validation, no ORM-level guards; package.json had @vercel/analytics but not @vercel/speed-insights.
+- package.json: Added @vercel/speed-insights ^1.3.1 (latest stable; ^3.2.0 does not exist). Installed via `bun add`.
+- src/app/layout.tsx: Imported & injected <SpeedInsights/> from @vercel/speed-insights/next inside <body>. Set Geist_Mono preload:false (mono font not used on login screen → was causing Chrome "unused preloaded font" console warning for 797e433ab948586e-s.p.29207c2f.woff2). Kept Geist Sans preload:true. Added explicit `display:"swap"`. Added PWA-capable `viewport` export (themeColor) as foundation for Phase 3 offline-first work.
+- src/lib/db.ts: Complete production rewrite (was 13 lines, now ~370):
+  * Eager DATABASE_URL validation — throws a highly descriptive boxed error (with Vercel/Neon/Supabase pooling instructions) if missing or malformed, instead of letting Prisma crash with an opaque 51ms 500.
+  * Serverless singleton via globalThis.__mbumahPrisma (renamed from `prisma` to avoid collisions); datasourceUrl passed explicitly; minimal error logging in prod, error+warn in dev.
+  * Prisma Client Extension ($extends, name:"mbumahHardened") implementing TWO guardrails:
+    (A) Zero-Trust Multi-Tenancy via node:async_hooks AsyncLocalStorage:
+        - runWithTenant(storeId, fn) / runWithoutTenant(fn) / getTenantContext()
+        - Whitelist of 34 STORE_SCOPED_MODELS (Product, SalesTransaction, JournalEntry, Customer, Shift, Payment, Expense, Rental, GiftCard, Voucher, Invoice, DeliveryNote, Supplier, etc.) — carefully EXCLUDED User (nullable storeId, identity), Session, SystemLog (nullable, org-level), Account (org-scoped), StoreTransfer (fromStoreId/toStoreId), and *Item children (scoped via parent FK).
+        - Intercepts findMany/findFirst/findUnique/count/aggregate/groupBy/update/updateMany/delete/deleteMany → AND-injects storeId into `where` when a tenant context is active AND not bypassed AND caller hasn't already pinned storeId. Never widens access — only narrows. Passthrough when no context (login, seeding, SUPER_ADMIN).
+    (B) Financial Immutability:
+        - IMMUTABLE_MODELS = {journalEntry, journalEntryLine, systemLog} (AuditLog reserved — schema uses systemLog for audit trails).
+        - update/updateMany/delete/deleteMany on these throw ImmutabilityViolationError ("IMMUTABILITY_VIOLATION: Financial and Audit records cannot be modified or deleted.").
+        - withImmutabilityBypass(fn, reason) escape hatch via separate AsyncLocalStorage for SANCTIONED internal mutations only (M-Pesa posting, journal void, expense void). Dev-mode console.warn on every bypass for audit visibility.
+- src/lib/auth.ts: Added runWithSessionTenant() helper; wrapped handler invocation in both requireAuth() and requireStoreAccess() so EVERY authenticated API route automatically gets ORM-level tenancy enforcement for free (no per-route refactor needed). SUPER_ADMIN / null-storeId users run via runWithoutTenant (passthrough) → preserves cross-store admin views.
+- Wrapped the 3 legitimate journalEntry.update / journalEntryLine.updateMany call sites in withImmutabilityBypass() so the immutability guard doesn't break sanctioned posting/voiding flows:
+  * src/app/api/financial/journal/[id]/route.ts — journal entry voiding (reason:"journal_entry_void")
+  * src/app/api/payments/mpesa/callback/route.ts — M-Pesa STK callback posting pending JE + reclassifying lines to cash (reason:"mpesa_callback_posting"), wrapped both mutations in a single bypass scope inside the $transaction
+  * src/app/api/expenses/[id]/route.ts — expense void marking linked JE voided (reason:"expense_void_linked_journal")
+- Verified no other .update/.delete/.updateMany/.deleteMany calls exist on immutable models (rg confirmed only the 3 sites above, all now wrapped).
+- Lint: `bun run lint` → 0 errors, 0 warnings (clean).
+- Browser verification via agent-browser (MANDATORY self-verification):
+  * Login page renders correctly (email/password/quick-login buttons).
+  * Login as Super Admin (admin@mbumahhardware.co.ke) → dashboard loads with live data (Today's Revenue Ksh59,790, 5 transactions, top products table).
+  * POS tab → products & categories load (tenant-scoped queries, SUPER_ADMIN passthrough confirmed).
+  * Added 2-inch Nails to cart → total Ksh150.80 (Ksh130 + 16% VAT) calculated correctly.
+  * Checkout → Complete Payment dialog → exact cash → Complete Sale → "Transaction completed successfully!" toast + Receipt dialog.
+  * dev.log: `POST /api/transactions 201 in 39ms` — confirms journalEntry.create is ALLOWED by immutability guard (only update/delete blocked). Zero IMMUTABILITY_VIOLATION errors. Zero 500s. Zero DB connection errors.
+  * Console: <Analytics/> and <SpeedInsights/> now correctly attempt to load from va.vercel-scripts.com (confirms Phase 1/2 injection; expected to fail in local sandbox, will work on Vercel prod). Pre-existing "Authentication required" trends warning is NOT a regression (caught by error boundary).
+
+Stage Summary:
+- Step 1 (PHASE 1 & PHASE 2) COMPLETE and browser-verified. App remains fully functional.
+- Vercel crash root cause (missing/garbled DATABASE_URL → silent Prisma 51ms 500) now fails fast with a descriptive boxed error including Neon/Supabase PgBouncer pooling instructions (?pgbouncer=true&connection_limit=1).
+- Zero-trust multi-tenancy is now enforced at the ORM layer for all 34 store-scoped models on every authenticated route (via requireAuth/requireStoreAccess auto-wiring), with a safe passthrough for SUPER_ADMIN/login/seeding.
+- Financial immutability is now enforced at the ORM layer — journalEntry/journalEntryLine/systemLog are append-only; the 3 sanctioned posting/voiding paths use audited withImmutabilityBypass() escape hatches.
+- Layout: <SpeedInsights/> injected, font preload warning fixed, PWA viewport foundation added.
+- NO breaking changes: existing explicit `where:{storeId}` filters become redundant-but-harmless (AND-merged); login/session/seed flows pass through unchanged.
+- Artifacts: src/lib/db.ts (rewritten), src/lib/auth.ts (tenant wiring), src/app/layout.tsx (analytics+fonts), src/app/api/financial/journal/[id]/route.ts, src/app/api/payments/mpesa/callback/route.ts, src/app/api/expenses/[id]/route.ts (bypass wraps), package.json (@vercel/speed-insights).
+- NEXT (Step 2, awaiting "continue"): PHASE 3 — Offline POS & PWA Architecture (IndexedDB OfflineTransactionQueue, online/offline status badge, next.config PWA headers) + then PHASE 4 (WAC inventory valuation) & PHASE 5 (Vitest tests for WAC + immutability).
+- Also still queued from the combined prompts after Step 2: PHASE 3 (Prompt1) env.ts Zod validator + API route imports, and PHASE 4 (Prompt1) VERCEL_RECOVERY.md deployment guide.

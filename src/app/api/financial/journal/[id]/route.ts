@@ -1,7 +1,7 @@
 // PUT /api/financial/journal/[id] - Void a journal entry
 
 import { NextRequest } from 'next/server';
-import { db } from '@/lib/db';
+import { db, withImmutabilityBypass } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
@@ -32,20 +32,27 @@ async function voidJournalEntryHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  const entry = await db.journalEntry.update({
-    where: { id },
-    data: {
-      isVoided: true,
-      voidedAt: new Date(),
-    },
-    include: {
-      lines: {
-        include: {
-          account: { select: { id: true, code: true, name: true, type: true } },
+  // Voiding flips `isVoided` / `voidedAt` on the append-only JournalEntry.
+  // This is a sanctioned mutation — wrapped in withImmutabilityBypass() so the
+  // ORM-level immutability guard permits it. (Future: replace UPDATE-void with
+  // a reversing JournalEntry for full textbook immutability.)
+  const entry = await withImmutabilityBypass(() =>
+    db.journalEntry.update({
+      where: { id },
+      data: {
+        isVoided: true,
+        voidedAt: new Date(),
+      },
+      include: {
+        lines: {
+          include: {
+            account: { select: { id: true, code: true, name: true, type: true } },
+          },
         },
       },
-    },
-  });
+    }),
+    'journal_entry_void',
+  );
 
   if (existing.referenceType === 'EXPENSE' && existing.referenceId) {
     await db.expense.updateMany({

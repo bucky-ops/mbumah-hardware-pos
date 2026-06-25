@@ -1,7 +1,7 @@
 // POST /api/payments/mpesa/callback
 
 import { NextRequest } from 'next/server';
-import { db } from '@/lib/db';
+import { db, withImmutabilityBypass } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateJournalEntryNumber } from '@/lib/helpers';
 import { getAccountId, ACCOUNT_CODES } from '@/lib/account-helper';
@@ -149,30 +149,36 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
         });
 
         if (pendingJE) {
-          await tx.journalEntry.update({
-            where: { id: pendingJE.id },
-            data: {
-              isPosted: true,
-              postedAt: new Date(),
-              description: pendingJE.description?.replace('(pending)', '(completed)') || pendingJE.description,
-            },
-          });
+          // Posting a pending journal entry (M-Pesa confirmed) is a sanctioned
+          // mutation on the append-only JournalEntry + JournalEntryLine models.
+          // Wrapped in withImmutabilityBypass() so the ORM-level guard permits
+          // it. AsyncLocalStorage propagates through the $transaction boundary.
+          await withImmutabilityBypass(async () => {
+            await tx.journalEntry.update({
+              where: { id: pendingJE.id },
+              data: {
+                isPosted: true,
+                postedAt: new Date(),
+                description: pendingJE.description?.replace('(pending)', '(completed)') || pendingJE.description,
+              },
+            });
 
-                              const store = await tx.store.findUnique({ where: { id: mpesaTx.storeId }, select: { organizationId: true } });
-          const orgId = store?.organizationId || 'org_mbumah';
-          const mpesaAccountId = await getAccountId(orgId, ACCOUNT_CODES.MPESA_ACCOUNT);
-          const cashAccountId = await getAccountId(orgId, ACCOUNT_CODES.CASH_ON_HAND);
+            const store = await tx.store.findUnique({ where: { id: mpesaTx.storeId }, select: { organizationId: true } });
+            const orgId = store?.organizationId || 'org_mbumah';
+            const mpesaAccountId = await getAccountId(orgId, ACCOUNT_CODES.MPESA_ACCOUNT);
+            const cashAccountId = await getAccountId(orgId, ACCOUNT_CODES.CASH_ON_HAND);
 
-          await tx.journalEntryLine.updateMany({
-            where: {
-              journalEntryId: pendingJE.id,
-              accountId: mpesaAccountId,
-              debit: { gt: 0 },
-            },
-            data: {
-              accountId: cashAccountId,
-            },
-          });
+            await tx.journalEntryLine.updateMany({
+              where: {
+                journalEntryId: pendingJE.id,
+                accountId: mpesaAccountId,
+                debit: { gt: 0 },
+              },
+              data: {
+                accountId: cashAccountId,
+              },
+            });
+          }, 'mpesa_callback_posting');
         }
       });
     }
