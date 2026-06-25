@@ -1853,3 +1853,116 @@ Stage Summary:
     2. VERCEL_ORG_ID — from Vercel team settings (or `.vercel/project.json` orgId)
     3. VERCEL_PROJECT_ID — from Vercel project settings (or `.vercel/project.json` projectId)
   Then either (a) manually trigger "Vercel Production Deployment" workflow on main, or (b) re-enable Vercel Git integration in the Vercel dashboard so pushes auto-deploy.
+
+---
+Task ID: VERCEL-UNBLOCK + PHASE-1 (Tasks 1 & 2)
+Agent: Main Agent
+Task: User provided Vercel token + Master Z.ai Prompt (Phase 1/2/3). Unblock Vercel production, then execute Phase 1 (Task 1: DB schema; Task 2: Frontend UI/cart/discounts/gift cards).
+
+Work Log:
+VERCEL PRODUCTION UNBLOCK:
+- User provided Vercel token vcp_*** at end of message. Used Vercel API to fetch:
+    * VERCEL_ORG_ID = team_VmVQcu8Piwz4KvXho7u8PEG1 (default team, user Recaro / muchiricollins98@gmail.com)
+    * VERCEL_PROJECT_ID = prj_QRudtTd5IjPzxtf1MWL5ECSBFLXf (mbumah-hardware-pos)
+- Encrypted all 3 secrets with the repo's libsodium public key (fetched via Actions API) and PUT them to GitHub. All 3 created (HTTP 201): VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID. Repo now has 4 secrets total (NEON_API_KEY + 3 Vercel).
+- Triggered Vercel Production Deployment workflow (workflow_dispatch, ID 295216654) on main. First run failed at "Pull Vercel Environment Information" → confirmed by the secrets-fix (next run passed that step).
+- 2nd failure: "Build Project" step → `Error: Command "bun install" exited with 127` (GitHub Actions runner has no bun). Fixed vercel.json: installCommand/buildCommand switched from `bun install`/`bun run build` to `npm install --legacy-peer-deps`/`npm run build`. Bumped vercel-deploy.yml Node 20→22.
+- 3rd failure: "Deploy to Vercel" step → `Environment Variable "DATABASE_URL" references Secret "database_url", which does not exist.` Root cause: vercel.json used `@database_url` / `@nextauth_secret` / `@nextauth_url` Vercel-Secret syntax, but those secrets don't exist. The Vercel project already has DATABASE_URL / NEXTAUTH_SECRET / NEXTAUTH_URL configured as sensitive env vars (production+preview). Fix: removed the entire `env` block from vercel.json so Vercel uses the existing project env vars directly.
+- 4th run (main @ 88c375a): ALL STEPS SUCCEEDED. Build Project ✅, Deploy to Vercel ✅. New GitHub deployment created: id=5194957700, env="Production – mbumah-hardware-pos", sha=88c375a, state=success.
+- Production URL (SSO-protected deployment URL): https://mbumah-hardware-9xoxty8ei-recaros-projects.vercel.app (returns 302→Vercel SSO; team deployment protection enabled).
+- Production alias domain (PUBLIC, no SSO): https://mbumah-hardware-pos-one.vercel.app → HTTP 200, serves full app (<title>MBUMAH HARDWARE - POS & ERP System</title>). VERCEL PRODUCTION IS LIVE AND WORKING.
+
+PHASE 1 / TASK 1 — Database & Schema Updates:
+- prisma/schema.prisma: SalesTransaction already had `discountAmount Float @default(0)` (line 336) — kept as Float (SQLite doesn't support @db.Decimal; the production PostgreSQL schema.prisma.pg already uses Decimal). Added composite multi-tenant index `@@index([storeId, createdAt])` to SalesTransaction, Product, and Shift models (ISO 27001 scoped-query performance).
+- Ran `bun run db:push` (SQLite dev) — schema synced, new indexes applied. Ran `bun run db:generate` — Prisma Client regenerated (v6.19.2). (Used db:push not `prisma migrate dev` because this dev project uses SQLite with push workflow; the prompt's migrate command is for the PostgreSQL production path.)
+
+PHASE 1 / TASK 2a — src/lib/stores.ts (cart-level discount):
+- Added `discount: number` and `setDiscount: (amount: number) => void` to CartState interface.
+- setDiscount clamps to [0, subtotal+tax] and guards NaN/Infinity (ISO 9001 financial integrity — total can never go negative).
+- getTotal() now returns `Math.max(0, (subtotal + tax) - discount)`.
+- clearCart() now also resets discount to 0.
+
+PHASE 1 / TASK 2b — POS cart UI (src/app/page.tsx POSTab):
+- Refactored desktop layout from `flex flex-col lg:flex-row` → `grid grid-cols-1 lg:grid-cols-5` (catalog: lg:col-span-3, cart: lg:col-span-2).
+- Cart Card height changed to `h-[calc(100vh-120px)]` (per spec). Scrollable items area `flex-1 min-h-0 overflow-y-auto custom-scrollbar` already present (verified).
+- Added cart-level flat discount input (type=number, Ksh) in cart footer — calls cart.setDiscount() live; includes a Clear button when discount > 0. aria-label set for accessibility.
+- Added "Pay with Gift Card" button (amber outline) + dedicated Dialog. Dialog includes <DialogDescription> inside <DialogHeader> (WCAG fix — no Radix aria-describedby warning). Dialog redeems gift card by code via giftCardsApi.redeemByCode(), shows live Sale Total / Current Discount / Balance Due summary, supports Enter-key submit.
+- Updated discount computation: introduced preDiscountTotal (subtotal+tax) as the base for gift card/voucher caps (prevents double-counting the cart-level discount). totalDiscount now = giftCardDiscount + voucherDiscount + cartDiscount. finalTotal = max(0, preDiscountTotal - totalDiscount).
+- Reset cartDiscountInput to '' at all 4 clearCart call sites (checkout completion, hold cart, desktop Clear button, mobile Clear button) so the input stays in sync with the store.
+
+PHASE 1 / TASK 2c — globals.css custom-scrollbar:
+- Verified .custom-scrollbar styles already exist (lines 137-161): 6px width, transparent track, oklch thumb with 3px radius, hover state, dark mode variants. No changes needed.
+
+PHASE 1 VERIFICATION:
+- `bun run lint` → EXIT 0 (0 errors, 0 warnings).
+- Dev server (Turbopack) picked up all edits cleanly; no compile errors in dev.log; all API routes returning 200.
+- Agent Browser (1280×800, Super Admin session):
+    * Added 4 products to cart → Checkout total showed Ksh 1,357.20.
+    * Entered 100 in the new "Cart discount amount in Kenyan Shillings" spinbutton → Checkout total updated to Ksh 1,257.20 (exactly 100 less). Discount line "Discount -Ksh 100" confirmed in cart totals breakdown.
+    * "Pay with Gift Card" button rendered; clicking opened the Dialog with title "Pay with Gift Card", DialogDescription text ("Enter the gift card code printed on the card..."), "Balance Due" summary, and Cancel/Apply Gift Card buttons. Accessibility verified.
+    * The new "Cart discount" spinbutton + "Pay with Gift Card" button render alongside the existing "Discount code" input — all 3 confirmed in the accessibility snapshot.
+
+Stage Summary:
+- ✅ VERCEL PRODUCTION UNBLOCKED AND LIVE: https://mbumah-hardware-pos-one.vercel.app serves the full app (HTTP 200, correct <title>). All 3 GitHub secrets configured; vercel-deploy.yml workflow passes end-to-end on main @ 88c375a (build + deploy both success). The deployment URL itself is SSO-protected (team security policy), but the production alias domain is public.
+- ✅ PHASE 1 / TASK 1: Composite @@index([storeId, createdAt]) added to SalesTransaction, Product, Shift. Schema synced via db:push; Prisma Client regenerated.
+- ✅ PHASE 1 / TASK 2a: Cart store has cart-level discount state + setDiscount + getTotal subtracts it (clamped, never negative).
+- ✅ PHASE 1 / TASK 2b: POS cart refactored to lg:grid-cols-5 (3 catalog / 2 cart), fixed height h-[calc(100vh-120px)], scrollable items area, cart-level discount input, Pay-with-Gift-Card Dialog with DialogDescription (WCAG-compliant).
+- ✅ PHASE 1 / TASK 2c: .custom-scrollbar styles confirmed present in globals.css.
+- Lint clean (0 errors). Browser-verified: cart discount reduces total correctly; gift card dialog opens with description.
+- STOPPING HERE per pacing rules. Awaiting user "continue" to proceed to Phase 2 (Task 3: Backend API & Security — shifts ghost-shift prevention, M-Pesa phone validation, transactions $transaction + recordSaleJournalEntry).
+
+---
+Task ID: PHASE-2 / TASK 3 (Backend API & Security)
+Agent: Main Agent
+Task: Execute Phase 2 of the Master Z.ai Prompt — backend security & atomicity: shifts single-active enforcement, M-Pesa phone validation, atomic checkout with recordSaleJournalEntry.
+
+Work Log:
+TASK 3a — Shifts single-active enforcement (src/app/api/shifts/route.ts):
+- Strengthened the open-shift check from `status: 'ACTIVE'` only → `OR: [{ endedAt: null }, { status: 'ACTIVE' }]`. The `endedAt: null` check is the canonical "open" signal — it catches ghost shifts where a prior end-shift call crashed midway (status not updated but endedAt is null). ISO 27001 data integrity.
+- Added `code: 'OPEN_SHIFT_EXISTS'` and `openShiftId` to the 400 response for programmatic handling.
+- The shift creation + cash-drawer log remains wrapped in `db.$transaction` (pre-existing, verified).
+
+TASK 3b — M-Pesa STK Push phone validation (src/app/api/payments/mpesa/stkpush/route.ts):
+- VERIFIED already present: `normalisePhone()` converts 0XXXXXXXXX / +254XXXXXXXXX / 254XXXXXXXXX → 254XXXXXXXXX, and strict validation `/^254\d{9}$/` (line 194) rejects malformed numbers with a 400. No changes needed — this was completed in a prior session.
+
+TASK 3c — Atomic checkout with recordSaleJournalEntry (src/app/api/transactions/route.ts + src/lib/account-helper.ts + src/lib/validations.ts + src/app/page.tsx):
+
+  1. Refactored transactions/route.ts createTransactionHandler:
+     - Replaced 3 duplicated inline JournalEntry blocks (CASH / MPESA / DEBT) with a single `recordSaleJournalEntry(tx, {...})` call that handles ALL payment types via a `paymentBreakdown` object.
+     - Added GIFT_CARD payment handling: pre-validates gift card (existence/status/expiry/balance) with 400 before the tx; inside the tx, re-fetches the gift card (race-condition guard), decrements balance, updates status (REDEEMED/PARTIALLY_REDEEMED), creates a GiftCardRedemption record. The JE debits GIFT_CARD_LIABILITY via the helper.
+     - Added SPLIT payment journal-entry support: reads `paymentDetails.splits` and builds a multi-tender paymentBreakdown (cash + mpesa + giftCard).
+     - Added in-transaction stock safeguard: re-reads `quantityInStock` inside the tx and throws if decrementing would go negative (prevents oversell under concurrent checkouts — ISO 9001).
+     - Added COGS computation: `cogsAmount = Σ(costPrice × quantity)` for non-rental items; passed to `recordSaleJournalEntry` which records Dr COGS / Cr Inventory.
+     - Pre-fetches all 9 account IDs via `getAccountIds()` BEFORE the `$transaction` to warm the in-memory cache (prevents in-tx auto-create latency from exceeding Prisma's 5s interactive-transaction timeout).
+     - Increased `$transaction` timeout from 5s (default) → 15s with `maxWait: 10s`.
+
+  2. Fixed account-helper.ts ACCOUNT_DEFAULTS bug:
+     - The Account model has `subType` and `normalBalance` columns but NO `description` column. The auto-create path was passing `description: defaults.description` which Prisma rejected ("Unknown argument `description`"), causing auto-creation of SALES_DISCOUNTS (4300) to fail silently (caught by the try/catch in getAccountIds).
+     - Replaced `description` with `subType` (e.g. CURRENT_ASSET, CURRENT_LIABILITY, OPERATING_REVENUE, CONTRA_REVENUE, OPERATING_EXPENSE) and `normalBalance` (DEBIT/CREDIT) in all 20 account defaults and both `db.account.create` call sites.
+     - This was a latent bug: discounted checkouts would have failed because SALES_DISCOUNTS couldn't be auto-created. Now fixed.
+
+  3. Added `splits` to checkoutSchema (src/lib/validations.ts):
+     - `paymentDetails.splits` is now a Zod-validated array of `{ method: 'CASH'|'MPESA'|'GIFT_CARD', amount, reference?, giftCardCode? }`. Previously `splits` was stripped by Zod's default strip-unknown behavior, so SPLIT payments silently fell through to the single-payment else branch.
+
+  4. Fixed checkout payload in src/app/page.tsx:
+     - The cart-level discount (`cart.discount`) was NOT being sent to the API — `discountAmount` was inside `paymentDetails` (wrong location; API expects it at top level) and was set to `totalDiscount` (line + gift card + voucher discounts, wrong value).
+     - Moved `discountAmount: cartDiscount` to the top level of the checkout payload. Now the API receives the cart-level flat discount and routes it to the SALES_DISCOUNTS contra-revenue account.
+     - Also added `giftCardCode: giftCardPayCode` to paymentDetails for GIFT_CARD method (so the API can look up and redeem the card).
+
+PHASE 2 VERIFICATION:
+- `bun run lint` → EXIT 0 (0 errors, 0 warnings).
+- Agent Browser end-to-end tests (Super Admin session, 1280×800):
+  * CASH checkout (no discount): POST /api/transactions 201 in 58ms. Journal entry JE-20260625-80455 created, balanced (508.2 = 508.2): Cr Sales Revenue 270, Cr VAT 43.2, Dr Cash 313.2, Dr COGS 195, Cr Inventory 195. Stock deducted (400→399, 450→449). Cash drawer log updated (balance 24013.2).
+  * Discounted CASH checkout (50 Ksh cart discount): POST /api/transactions 201 in 45ms. Journal entry JE-20260625-96683 created, balanced (508.2 = 508.2): Cr Sales Revenue 270, Cr VAT 43.2, Dr Cash 263.2, **Dr Sales Discounts 50** (contra-revenue), Dr COGS 195, Cr Inventory 195. The SALES_DISCOUNTS (4300) account was auto-created on first discounted sale (EXPENSE/CONTRA_REVENUE, DEBIT normal balance).
+  * Balance identity verified: Cash(263.2) + Discount(50) + COGS(195) = Revenue(270) + VAT(43.2) + Inventory(195) = 508.2.
+- Dev log: no errors, no 500s, no Prisma validation errors after the account-helper fix.
+
+Stage Summary:
+- ✅ TASK 3a: Shifts route enforces single-active shift using `endedAt: null` (ghost-shift-proof) + `status: 'ACTIVE'` (legacy-proof). 400 with `code: 'OPEN_SHIFT_EXISTS'` + `openShiftId`.
+- ✅ TASK 3b: M-Pesa STK Push validates phone to `^254\d{9}$` (already present, verified).
+- ✅ TASK 3c: Transactions route refactored to use `recordSaleJournalEntry` — single balanced double-entry JE per sale, handles CASH/MPESA/DEBT/GIFT_CARD/SPLIT, records COGS + contra-revenue discounts, enforces golden rule (throws if debits ≠ credits). Gift card redemption is atomic. Stock safeguard prevents negative stock. Transaction timeout raised to 15s.
+- ✅ BONUS FIX: account-helper.ts `description` → `subType`/`normalBalance` (was silently breaking account auto-creation for SALES_DISCOUNTS, COGS, INVENTORY).
+- ✅ BONUS FIX: checkout payload now sends cart-level `discountAmount` at top level (was buried in paymentDetails with wrong value).
+- ✅ BONUS FIX: `splits` added to Zod schema (was being stripped, breaking SPLIT payments).
+- Lint clean (0 errors). Browser-verified: 2 successful checkouts (1 without discount, 1 with 50 Ksh discount), both with balanced journal entries including COGS and contra-revenue lines.
+- STOPPING HERE per pacing rules. Awaiting user "continue" to proceed to Phase 3 (Tasks 4+5: Vitest setup + financial accounting tests + conventional commits + git push).
