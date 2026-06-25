@@ -3,12 +3,18 @@
 import { NextRequest } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
+import { env } from '@/lib/env'; // Eager env validation — fails fast on missing secrets
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { isRateLimited } from '@/lib/rate-limit';
 import { loginSchema, validateInput } from '@/lib/validations';
 import { checkBruteForce, recordFailedAttempt, recordSuccessfulLogin } from '@/lib/brute-force';
 import { sanitizeInput, getClientIp } from '@/lib/security';
+
+// Reference `env` so the import isn't tree-shaken — the side effect of
+// importing @/lib/env is the eager validation of DATABASE_URL / NODE_ENV.
+// (Auth secrets are validated lazily via requireEnv() if/when needed.)
+void env;
 
 // Verify password with support for both bcrypt hashes and legacy "hashed_" format
 async function verifyPassword(password: string, storedHash: string): Promise<boolean> {

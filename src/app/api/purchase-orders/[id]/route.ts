@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { calculateWeightedAverageCost } from '@/lib/account-helper';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -114,9 +115,38 @@ async function updatePurchaseOrderHandler(...args: unknown[]): Promise<Response>
           data: { receivedQty: newReceivedQty },
         });
 
+        // ── Weighted Average Cost (WAC) recompute ──
+        // IAS 2 mandates WAC for interchangeable inventory. Each reception
+        // blends the incoming per-unit cost with the on-hand WAC, producing
+        // a new per-unit cost that is used for COGS at checkout and balance-
+        // sheet valuation. We read the current stock + costPrice, compute
+        // the new WAC, then update BOTH fields in a single write so the
+        // books stay consistent.
+        const productBefore = await tx.product.findUnique({
+          where: { id: item.productId },
+          select: { quantityInStock: true, costPrice: true, name: true, sku: true },
+        });
+
+        if (!productBefore) {
+          throw new Error(`Product ${item.productId} not found during GRN receive.`);
+        }
+
+        const wac = calculateWeightedAverageCost({
+          currentStock: productBefore.quantityInStock,
+          currentWac: productBefore.costPrice,
+          incomingStock: recv.receivedQty,
+          incomingUnitCost: item.unitPrice,
+        });
+
                 await tx.product.update({
           where: { id: item.productId },
-          data: { quantityInStock: { increment: recv.receivedQty } },
+          data: {
+            quantityInStock: { increment: recv.receivedQty },
+            // Persist the new blended WAC so the next checkout / valuation
+            // uses the correct per-unit cost. Rounded to 4 DP inside the
+            // helper (KRA eTIMS precision).
+            costPrice: wac.newWac,
+          },
         });
 
                 const warehouseStock = await tx.warehouseStock.findUnique({

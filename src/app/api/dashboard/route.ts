@@ -2,7 +2,11 @@
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import { env } from '@/lib/env'; // Eager env validation — fails fast on missing DATABASE_URL
 import { withErrorBoundary } from '@/lib/logger';
+
+// Side-effect import: validates env at module load.
+void env;
 
 async function getDashboardHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;

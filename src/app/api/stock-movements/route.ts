@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent, StockMovementType } from '@/lib/types';
+import { calculateWeightedAverageCost } from '@/lib/account-helper';
 
 async function getStockMovementsHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
@@ -114,6 +115,7 @@ async function createStockAdjustmentHandler(...args: unknown[]): Promise<Respons
     quantity,
     reason,
     performedBy,
+    unitCost,
   } = body;
 
   if (!storeId || !productId || !quantity || !adjustmentType) {
@@ -146,6 +148,28 @@ async function createStockAdjustmentHandler(...args: unknown[]): Promise<Respons
     );
   }
 
+  // PURCHASE movements represent receiving new stock at a known unit cost —
+  // they MUST carry a unitCost so we can blend the WAC. Other movement types
+  // (ADJUSTMENT / TRANSFER / RETURN) issue stock at the current WAC and don't
+  // need a unitCost.
+  const parsedUnitCost =
+    unitCost !== undefined && unitCost !== null ? parseFloat(String(unitCost)) : null;
+
+  if (adjustmentType === StockMovementType.PURCHASE) {
+    if (adjustmentQuantity < 0) {
+      return Response.json(
+        { success: false, error: 'PURCHASE movements must have a positive quantity (use ADJUSTMENT to issue stock).' },
+        { status: 400 }
+      );
+    }
+    if (parsedUnitCost === null || isNaN(parsedUnitCost) || parsedUnitCost < 0) {
+      return Response.json(
+        { success: false, error: 'PURCHASE movements require a non-negative unitCost so the WAC can be recomputed.' },
+        { status: 400 }
+      );
+    }
+  }
+
   const product = await db.product.findUnique({ where: { id: productId } });
   if (!product) {
     return Response.json(
@@ -159,6 +183,21 @@ async function createStockAdjustmentHandler(...args: unknown[]): Promise<Respons
       { success: false, error: `Insufficient stock. Current: ${product.quantityInStock}, Adjustment: ${adjustmentQuantity}` },
       { status: 400 }
     );
+  }
+
+  // ── WAC recompute (PURCHASE only) ──
+  // For PURCHASE we blend the incoming cost with the on-hand WAC. For other
+  // movement types we leave costPrice unchanged (issuances don't change the
+  // per-unit cost; transfers/returns move at the existing WAC).
+  let newWac: number | null = null;
+  if (adjustmentType === StockMovementType.PURCHASE && parsedUnitCost !== null) {
+    const wac = calculateWeightedAverageCost({
+      currentStock: product.quantityInStock,
+      currentWac: product.costPrice,
+      incomingStock: adjustmentQuantity,
+      incomingUnitCost: parsedUnitCost,
+    });
+    newWac = wac.newWac;
   }
 
   const result = await db.$transaction(async (tx) => {
@@ -187,7 +226,13 @@ async function createStockAdjustmentHandler(...args: unknown[]): Promise<Respons
         if (adjustmentQuantity > 0) {
       await tx.product.update({
         where: { id: productId },
-        data: { quantityInStock: { increment: adjustmentQuantity } },
+        data: {
+          quantityInStock: { increment: adjustmentQuantity },
+          // Persist the new blended WAC for PURCHASE movements. For other
+          // movement types (ADJUSTMENT / TRANSFER / RETURN) we leave
+          // costPrice untouched.
+          ...(newWac !== null ? { costPrice: newWac } : {}),
+        },
       });
     } else {
       await tx.product.update({
@@ -201,7 +246,7 @@ async function createStockAdjustmentHandler(...args: unknown[]): Promise<Respons
 
     const updatedProduct = await db.product.findUnique({
     where: { id: productId },
-    select: { quantityInStock: true },
+    select: { quantityInStock: true, costPrice: true },
   });
 
   await systemLog({
@@ -219,6 +264,9 @@ async function createStockAdjustmentHandler(...args: unknown[]): Promise<Respons
       quantity: adjustmentQuantity,
       previousStock: product.quantityInStock,
       newStock: updatedProduct?.quantityInStock,
+      previousWac: product.costPrice,
+      newWac: updatedProduct?.costPrice,
+      unitCost: parsedUnitCost,
       reason,
     },
   });
@@ -229,6 +277,8 @@ async function createStockAdjustmentHandler(...args: unknown[]): Promise<Respons
       ...result,
       previousStock: product.quantityInStock,
       newStock: updatedProduct?.quantityInStock,
+      previousWac: product.costPrice,
+      newWac: updatedProduct?.costPrice,
     },
   }, { status: 201 });
 }

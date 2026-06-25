@@ -261,6 +261,13 @@ const IMMUTABLE_MODELS = new Set<string>([
   // added to schema.prisma, add it here.
 ]);
 
+// Lowercase mirror of IMMUTABLE_MODELS for casing-agnostic lookups.
+// Prisma passes the model name to query interceptors in PascalCase
+// (e.g. "JournalEntry"), so we normalise via toLowerCase() before checking.
+const IMMUTABLE_MODELS_LOWER = new Set<string>(
+  [...IMMUTABLE_MODELS].map((m) => m.toLowerCase()),
+);
+
 export class ImmutabilityViolationError extends Error {
   readonly code = "IMMUTABILITY_VIOLATION";
   constructor(model: string, operation: string) {
@@ -456,12 +463,19 @@ function injectTenant<T extends { where?: any }>(args: T): T {
 /**
  * Throw `IMMUTABILITY_VIOLATION` unless the call is inside an active
  * `withImmutabilityBypass()` scope.
+ *
+ * NOTE: Prisma passes the `model` parameter to query interceptors in
+ * **PascalCase** (e.g. `"JournalEntry"`) — matching the schema model name.
+ * Our `IMMUTABLE_MODELS` set is keyed in camelCase (matching the Prisma
+ * client property name). We normalise to lowercase before the lookup so the
+ * check is casing-agnostic and works regardless of which convention Prisma
+ * uses in future versions.
  */
 function assertMutable(model: string, operation: string): void {
   if (immutabilityBypassStorage.getStore()) {
     return; // Sanctioned bypass active — allow.
   }
-  if (IMMUTABLE_MODELS.has(model)) {
+  if (IMMUTABLE_MODELS.has(model) || IMMUTABLE_MODELS_LOWER.has(model.toLowerCase())) {
     throw new ImmutabilityViolationError(model, operation);
   }
 }

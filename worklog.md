@@ -2145,3 +2145,118 @@ Stage Summary:
 - NO breaking changes: existing online checkouts are unaffected (the offline path is only triggered when `navigator.onLine === false` or fetch throws TypeError).
 - STOPPING HERE per pacing rules. Awaiting user "continue" to proceed to PHASE 4 (WAC inventory valuation in account-helper.ts + purchase-orders/stock-movements routes) and PHASE 5 (Vitest tests for WAC + immutability ORM extension).
 - Also still queued from the combined prompts after Step 3: PHASE 3 (Prompt 1) env.ts Zod validator for DATABASE_URL/NEXTAUTH_URL/NEXTAUTH_SECRET/JWT_SECRET + API route imports, and PHASE 4 (Prompt 1) VERCEL_RECOVERY.md deployment guide.
+
+---
+Task ID: ENTERPRISE-UPGRADE-STEP3 / PHASES 4 & 5 + PROMPT-1 PHASES 3 & 4
+Agent: Main Agent (Z.ai Code)
+Task: 10/10 Enterprise SaaS Upgrade — Step 3: PHASE 4 (WAC inventory valuation) + PHASE 5 (Vitest tests for WAC + immutability ORM extension) + Prompt 1 Phase 3 (env.ts Zod validator) + Prompt 1 Phase 4 (VERCEL_RECOVERY.md deployment guide).
+
+Work Log:
+
+PHASE 4 — Weighted Average Cost (WAC) inventory valuation:
+
+  4a. src/lib/account-helper.ts — Added `calculateWeightedAverageCost(inputs: WacInputs): WacResult` pure function:
+      * Implements IAS 2 (Inventories) weighted-average costing for interchangeable items.
+      * Formula: newWac = (currentQty × currentWac + incomingQty × incomingUnitCost) / newQty.
+      * Edge cases handled:
+        - Zero current stock → WAC becomes the incoming unit cost (first-ever reception).
+        - Zero incoming quantity → WAC unchanged (no division by zero).
+        - Negative incoming (issuance/correction) → WAC unchanged; guards against driving total stock below zero.
+        - Issuing from an empty shelf (0 on-hand + negative incoming) → throws.
+      * Floating-point precision: all outputs rounded to 4 decimal places (1/100 of a cent) — matches KRA eTIMS requirements and prevents binary-float drift over thousands of receptions.
+      * Guardrails: throws on negative currentStock / currentWac / incomingUnitCost (data corruption indicators).
+      * Exports: WacInputs, WacResult interfaces + calculateWeightedAverageCost function.
+
+  4b. src/app/api/purchase-orders/[id]/route.ts — Integrated WAC into the GRN (goods-received-note) `receive` action:
+      * For each received item, reads the product's current quantityInStock + costPrice, computes the new WAC via calculateWeightedAverageCost(), and persists BOTH fields (quantityInStock increment + costPrice = newWac) in a single tx.product.update inside the $transaction.
+      * The incoming unit cost is the PO item's `unitPrice` (the negotiated purchase price).
+      * This ensures the balance-sheet Inventory valuation and the COGS at checkout both use the correct blended per-unit cost after every reception.
+
+  4c. src/app/api/stock-movements/route.ts — Integrated WAC into the PURCHASE stock-movement type:
+      * PURCHASE movements now REQUIRE a `unitCost` field (validated non-negative). Returns 400 if missing — without a unit cost the WAC cannot be recomputed.
+      * PURCHASE movements must have a positive quantity (use ADJUSTMENT to issue stock). Returns 400 on negative.
+      * ADJUSTMENT / TRANSFER / RETURN movements are left unchanged — they issue stock at the current WAC and don't need a unitCost.
+      * The systemLog metadata now captures previousWac + newWac + unitCost for full audit traceability.
+      * The response body now includes previousWac + newWac so the frontend can display the cost change.
+
+PHASE 5 — Vitest ISO 9001 test suite:
+
+  5a. src/tests/lib/wac.test.ts — 14 pure-function unit tests for calculateWeightedAverageCost:
+      1. Standard blend (100@10 + 50@13 → 150@11.00).
+      2. First-ever reception (0 stock → WAC = incoming cost).
+      3. Zero incoming quantity (WAC unchanged, no division by zero).
+      4. Issuance (negative incoming → WAC constant, quantity reduces).
+      5. Over-issuance throws (would drive stock negative).
+      6. Issuing from empty shelf throws.
+      7. Floating-point precision (4 DP rounding, no binary drift).
+      8. Non-terminating decimal division (1/3 → 1.6667, no float noise).
+      9. Guardrails: negative currentStock / currentWac / incomingUnitCost throw.
+      10. Successive receptions converge to textbook WAC.
+      11. totalValue invariant (totalValue ≈ Σ constituent values).
+      12. Full stock-out issuance (issue 100% → totalValue=0, WAC preserved for reference).
+      All 14 tests pass in ~11ms (pure function, no DB).
+
+  5b. src/tests/lib/immutability.test.ts — 9 integration tests proving the Prisma Client Extension's financial-immutability guard fires correctly:
+      1. db.journalEntry.delete() → throws ImmutabilityViolationError.
+      2. db.journalEntry.update() → throws ImmutabilityViolationError.
+      3. db.journalEntry.deleteMany() → throws ImmutabilityViolationError.
+      4. db.journalEntry.updateMany() → throws ImmutabilityViolationError.
+      5. db.journalEntryLine.delete() → throws ImmutabilityViolationError.
+      6. Error carries code === "IMMUTABILITY_VIOLATION".
+      7. withImmutabilityBypass() allows the sanctioned mutation (the escape hatch works).
+      8. journalEntry.create() is NOT blocked (append-only — writes fine).
+      9. recordSaleJournalEntry() is NOT blocked (helper only creates, never mutates).
+      All 9 tests pass in ~84ms (uses rollback-transaction isolation).
+
+  5c. CRITICAL BUG FIX in src/lib/db.ts — Discovered + fixed a casing bug in the immutability guard:
+      * The Prisma Client Extension passes the `model` parameter to query interceptors in **PascalCase** (e.g. `"JournalEntry"`) — matching the schema model name.
+      * But `IMMUTABLE_MODELS` was a Set of **camelCase** strings (e.g. `"journalEntry"`) — matching the Prisma client property name.
+      * `IMMUTABLE_MODELS.has("JournalEntry")` returned `false`, so `assertMutable()` never threw, and the guard was SILENTLY NOT WORKING since Step 1.
+      * In production this was masked because the 3 sanctioned paths (M-Pesa posting, journal void, expense void) all call `withImmutabilityBypass()` which logs a warning but isn't actually needed (since the guard doesn't fire). The mutations succeeded regardless.
+      * Fix: added `IMMUTABLE_MODELS_LOWER` (lowercase mirror set) + `assertMutable()` now checks `model.toLowerCase()` as a fallback. Casing-agnostic.
+      * The immutability tests now PROVE the guard fires (tests 1-6 fail without the fix, pass with it). This is exactly the kind of latent bug the Phase 5 ISO 9001 testing mandate was designed to catch.
+
+PROMPT 1 PHASE 3 — Eager env validation (Zod):
+
+  src/lib/env.ts — Created a Zod-based env validator:
+  * Schema validates: DATABASE_URL (required, non-empty), NEXTAUTH_URL (optional, must be valid URL), NEXTAUTH_SECRET (optional, min 16 chars), JWT_SECRET (optional, min 16 chars), NODE_ENV (enum, defaults to 'development').
+  * Eager validation at import time — throws EnvValidationError (code: 'ENV_VALIDATION_FAILED') listing ALL missing/malformed keys in one shot (not one-by-one across restarts).
+  * Exports: `env` (validated object), `requireEnv(key)` (lazy per-route enforcement for auth secrets), `isProduction`, `isTest`, `EnvValidationError` class.
+  * SSR-safe — returns a permissive stub if imported client-side (shouldn't happen but prevents confusing crashes).
+  * Imported into src/app/api/auth/login/route.ts and src/app/api/dashboard/route.ts with `void env;` to trigger eager validation without tree-shaking. The login route was the original 51ms-500 crash site; now it fails fast with a descriptive error if DATABASE_URL is missing.
+
+PROMPT 1 PHASE 4 — Deployment recovery guide:
+
+  VERCEL_RECOVERY.md — Created a comprehensive 8-section deployment recovery guide:
+  1. Quick Triage Checklist (5-step <30s diagnostic).
+  2. The 51ms 500 root cause & fix (DATABASE_URL eager validation, font preload, Analytics/SpeedInsights).
+  3. Environment Variables required set (table with examples + security notes).
+  4. Database Connection Pooling (Neon -pooler + Supabase port 6543, why connection_limit=1).
+  5. Step-by-Step Recovery Procedure (5 steps: confirm root cause → verify env → redeploy → monitor → smoke test).
+  6. Post-Deployment Smoke Test (7-point manual/agent-browser checklist).
+  7. Common Failure Modes & Fixes (8-row symptom→cause→fix table including IMMUTABILITY_VIOLATION + ENV_VALIDATION_FAILED).
+  8. Rollback Procedure (Vercel Dashboard promote / CLI / Git revert, with DB migration caveat).
+  + Appendix: text architecture diagram showing Vercel → env.ts/db.ts → Neon/Supabase PgBouncer flow.
+
+VERIFICATION:
+
+  - `bun run lint` → 0 errors, 0 warnings.
+  - `npx vitest run` → 27/27 tests pass across 3 test files (wac.test.ts: 14, account-helper.test.ts: 4, immutability.test.ts: 9) in 1.38s.
+  - agent-browser E2E (Super Admin session):
+    * App loaded → dashboard rendered with live data.
+    * POS tab → products + categories loaded (tenant-scoped).
+    * "Online" badge rendered (emerald).
+    * Added 2-inch Nails to cart → Checkout (F9) → Complete Payment dialog → Cash 200 Ksh → Complete Sale → "Transaction completed successfully!" + Receipt dialog.
+    * `POST /api/transactions 201 in 39ms` in dev.log — confirms journalEntry.create is ALLOWED (the immutability guard only blocks update/delete, not create).
+    * Financial tab → Journal Entries table loaded.
+    * dev.log: zero errors, zero 500s, zero IMMUTABILITY_VIOLATION, zero ENV_VALIDATION_FAILED.
+
+Stage Summary:
+- ✅ PHASE 4 (WAC): calculateWeightedAverageCost() pure function + integration into purchase-orders GRN receive + stock-movements PURCHASE type. IAS 2 compliant. 4-DP precision (KRA eTIMS).
+- ✅ PHASE 5 (Vitest): 23 new tests (14 WAC + 9 immutability) → 27 total tests all passing. ISO 9001 coverage.
+- ✅ CRITICAL BUG FIX: immutability guard casing bug (PascalCase vs camelCase model names) — the guard was silently not firing since Step 1. Now fixed + proven by tests.
+- ✅ PROMPT 1 PHASE 3 (env.ts): Zod eager validation for DATABASE_URL / NEXTAUTH_URL / NEXTAUTH_SECRET / JWT_SECRET / NODE_ENV. Imported into login + dashboard routes.
+- ✅ PROMPT 1 PHASE 4 (VERCEL_RECOVERY.md): 8-section deployment recovery guide with triage checklist, root-cause analysis, connection-pooling instructions, step-by-step recovery, smoke test, failure-mode table, rollback procedure.
+- The 10/10 Enterprise SaaS Upgrade (5 phases from Prompt 2) + the 4 phases from Prompt 1 are ALL COMPLETE.
+- Lint clean. 27/27 tests pass. Browser E2E clean (checkout golden path works, immutability guard fires correctly on update/delete but allows create).
+- NEXT: The combined Master Prompt work is fully complete. The recurring webDevReview cron (job_id 231915, every 15 min, Africa/Nairobi) will continue to drive incremental improvements.

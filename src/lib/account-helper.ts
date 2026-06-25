@@ -181,6 +181,153 @@ export async function getAccountIds(
 export { ACCOUNT_CODES };
 
 // ─────────────────────────────────────────────────────────────────────────
+// Weighted Average Cost (WAC) inventory valuation
+// ─────────────────────────────────────────────────────────────────────────
+//
+// When new stock arrives (purchase order GRN, stock-movement PURCHASE
+// adjustment, supplier return), the per-unit cost of the EXISTING inventory
+// is blended with the incoming cost. This produces a single "weighted
+// average cost" per unit that is used for:
+//
+//   • COGS recognition at checkout (the `cogsAmount` passed to
+//     `recordSaleJournalEntry` is `Σ(wac × qtySold)`)
+//   • Inventory valuation on the balance sheet (Inventory asset = wac × qtyOnHand)
+//   • Gross-margin reporting (revenue − (wac × qtySold))
+//
+// WAC is mandated by IAS 2 (Inventories) for interchangeable items and is
+// the simplest valuation method that resists profit manipulation (vs FIFO /
+// LIFO which can be gamed by cherry-picking which "lot" was sold).
+//
+// Formula:
+//   newQty = currentQty + incomingQty
+//   newWac = (currentQty × currentWac) + (incomingQty × incomingUnitCost)
+//            ─────────────────────────────────────────────────────────────
+//                                  newQty
+//
+// Edge cases handled:
+//   • Zero / negative current stock → WAC becomes the incoming unit cost.
+//   • Zero incoming quantity → WAC is unchanged (no division by zero).
+//   • Negative incoming quantity (stock-out correction) → weighted against
+//     the current WAC, but ONLY if it doesn't drive total stock below zero.
+//   • Floating-point precision: rounded to 4 decimal places (1/100 of a
+//     cent) to avoid binary-float drift accumulating over thousands of
+//     receptions. The 4-DP ceiling matches KRA eTIMS requirements.
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface WacInputs {
+  /** Current quantity on hand (must be ≥ 0). */
+  currentStock: number;
+  /** Current weighted-average cost per unit (must be ≥ 0). */
+  currentWac: number;
+  /** Quantity being received (positive) or issued (negative). */
+  incomingStock: number;
+  /** Per-unit cost of the incoming stock (must be ≥ 0 for receptions). */
+  incomingUnitCost: number;
+}
+
+export interface WacResult {
+  /** New quantity on hand after the movement. */
+  newStock: number;
+  /** New weighted-average cost per unit (rounded to 4 DP). */
+  newWac: number;
+  /** Total cost value of the new on-hand inventory (newStock × newWac). */
+  totalValue: number;
+}
+
+/**
+ * Compute the new Weighted Average Cost after a stock reception (or issue).
+ *
+ * Pure function — no side effects, no DB calls — so it is trivially unit-
+ * testable. Callers are responsible for persisting `newWac` back onto the
+ * `Product.costPrice` (or a dedicated `weightedAverageCost` column) inside
+ * the same transaction that increments `quantityInStock`.
+ */
+export function calculateWeightedAverageCost(inputs: WacInputs): WacResult {
+  const { currentStock, currentWac, incomingStock, incomingUnitCost } = inputs;
+
+  // ── Guardrails ──
+  if (currentStock < 0) {
+    throw new Error(
+      `WAC: currentStock must be ≥ 0 (received ${currentStock}). Negative on-hand indicates a prior stockout that must be corrected before costing.`,
+    );
+  }
+  if (currentWac < 0) {
+    throw new Error(
+      `WAC: currentWac must be ≥ 0 (received ${currentWac}). A negative cost is nonsensical and indicates data corruption.`,
+    );
+  }
+  if (incomingUnitCost < 0) {
+    throw new Error(
+      `WAC: incomingUnitCost must be ≥ 0 (received ${incomingUnitCost}). A negative purchase cost is not permitted.`,
+    );
+  }
+
+  const newStock = currentStock + incomingStock;
+
+  // ── Edge case: incoming stock is zero → WAC unchanged, no division ──
+  if (incomingStock === 0) {
+    return {
+      newStock,
+      newWac: round4(currentWac),
+      totalValue: round4(currentStock * currentWac),
+    };
+  }
+
+  // ── Edge case: zero current stock → WAC becomes the incoming unit cost ──
+  // This also covers the "first ever reception" case (currentStock === 0,
+  // currentWac === 0). And it covers a negative currentStock guard (already
+  // thrown above) so we don't divide by a zero-stock × zero-wac product.
+  if (currentStock === 0) {
+    // If incoming is negative here, that's a stock-out of an empty shelf —
+    // reject it so the books don't go negative.
+    if (incomingStock < 0) {
+      throw new Error(
+        `WAC: cannot issue ${Math.abs(incomingStock)} units from a product with 0 on-hand stock.`,
+      );
+    }
+    return {
+      newStock,
+      newWac: round4(incomingUnitCost),
+      totalValue: round4(incomingStock * incomingUnitCost),
+    };
+  }
+
+  // ── Edge case: negative incoming (issuance / correction) ──
+  // Issuing stock at the current WAC doesn't change the per-unit cost —
+  // we're just reducing the quantity. The total value shrinks proportionally.
+  // We DO guard against driving total stock below zero.
+  if (incomingStock < 0) {
+    if (newStock < 0) {
+      throw new Error(
+        `WAC: issuance of ${Math.abs(incomingStock)} units would drive on-hand stock negative (current=${currentStock}, new=${newStock}).`,
+      );
+    }
+    // Issuance at WAC — cost per unit unchanged.
+    return {
+      newStock,
+      newWac: round4(currentWac),
+      totalValue: round4(newStock * currentWac),
+    };
+  }
+
+  // ── Standard weighted-average blend ──
+  const currentValue = currentStock * currentWac;
+  const incomingValue = incomingStock * incomingUnitCost;
+  const blendedWac = (currentValue + incomingValue) / newStock;
+
+  return {
+    newStock,
+    newWac: round4(blendedWac),
+    totalValue: round4(currentValue + incomingValue),
+  };
+}
+
+/** Round to 4 decimal places (1/100 of a cent) — KRA eTIMS precision. */
+function round4(n: number): number {
+  return Math.round(n * 10000) / 10000;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Double-entry journal helpers (Task 4)
 // ─────────────────────────────────────────────────────────────────────────
 
