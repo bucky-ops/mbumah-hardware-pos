@@ -6,14 +6,19 @@
 
 ### Modern Point-of-Sale & Enterprise Resource Planning System for Kenyan Hardware Stores
 
-[![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js&logoColor=white)](https://nextjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Prisma](https://img.shields.io/badge/Prisma-6-2D3748?logo=prisma&logoColor=white)](https://www.prisma.io/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![License](https://img.shields.io/badge/License-MIT-green)](https://opensource.org/licenses/MIT)
-[![Vercel](https://img.shields.io/badge/Vercel-Ready-black?logo=vercel&logoColor=white)](https://vercel.com/)
+<!-- TODO: Insert UI Screenshots here — recommended tool: shots.so for clean browser mockups -->
+<!-- Suggested shots: POS checkout, Dashboard KPIs, Rentals board, Financial double-entry journal, Mobile responsive view -->
 
-[🌐 Live Demo](#-getting-started) · [📖 Documentation](#-table-of-contents) · [🐛 Report Bug](https://github.com/bucky-ops/mbumah-hardware-pos/issues) · [✨ Request Feature](https://github.com/bucky-ops/mbumah-hardware-pos/issues)
+[![Vercel Deployment](https://img.shields.io/badge/Vercel-Live-000000?logo=vercel&logoColor=white)](https://mbumah-hardware-pos-one.vercel.app)
+[![CI Status](https://github.com/bucky-ops/mbumah-hardware-pos/actions/workflows/node.js.yml/badge.svg?branch=main)](https://github.com/bucky-ops/mbumah-hardware-pos/actions/workflows/node.js.yml)
+[![License: MIT](https://img.shields.io/github/license/bucky-ops/mbumah-hardware-pos?color=green)](LICENSE)
+[![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js&logoColor=white)](https://nextjs.org/)
+[![Prisma](https://img.shields.io/badge/Prisma-6-2D3748?logo=prisma&logoColor=white)](https://www.prisma.io/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Tailwind CSS 4](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Code Style: Conventional Commits](https://img.shields.io/badge/Commits-Conventional-fe7d37?logo=semantic-release&logoColor=white)](https://www.conventionalcommits.org/)
+
+**🔗 Links:** [🚀 Live Vercel Demo](https://mbumah-hardware-pos-one.vercel.app) · [📄 GitHub Pages Landing](https://bucky-ops.github.io/mbumah-hardware-pos/) · [🐛 Report Bug](https://github.com/bucky-ops/mbumah-hardware-pos/issues/new?template=bug_report.yml) · [✨ Request Feature](https://github.com/bucky-ops/mbumah-hardware-pos/issues/new?template=feature_request.yml)
 
 </div>
 
@@ -21,6 +26,7 @@
 
 ## 📑 Table of Contents
 
+- [🇰🇪 Built for the Kenyan Market](#-built-for-the-kenyan-market)
 - [✨ Feature Highlights](#-feature-highlights)
 - [🏗️ Architecture Overview](#️-architecture-overview)
 - [🛠️ Tech Stack](#️-tech-stack)
@@ -33,7 +39,45 @@
 - [⚙️ Configuration](#️-configuration)
 - [🚢 Deployment](#-deployment)
 - [🤝 Contributing](#-contributing)
+- [🛠️ Troubleshooting & FAQ](#️-troubleshooting--faq)
 - [📄 License](#-license)
+
+---
+
+## 🇰🇪 Built for the Kenyan Market
+
+Mbumah Hardware POS isn't a generic POS reskinned for Africa — it was designed **from day one** for the realities of running a hardware shop in Kenya. Every core module maps to a pain point that Kenyan *hardware traders* (not just retailers) face daily:
+
+### 💸 M-Pesa Daraja Integration (STK Push)
+- **STK Push** checkout via Safaricom's Daraja API — the customer gets a prompt on their phone, enters their PIN, and the sale is settled.
+- **Callback URL** handling for production (with ngrok for local dev — see [Troubleshooting](#-troubleshooting--faq)).
+- **C2B / B2C** ready architecture — the schema and service layer already model `MpesaTransaction`, so onboarding new Daraja payment types is a config change, not a refactor.
+- **Auto-reconciliation** — STK Push callbacks update the sale status and post to the cash/M-Pesa ledger accounts automatically via the double-entry engine.
+
+### 🏛️ eTIMS / KRA Tax Compliance
+- Tax categories (`VAT 16%`, `Zero-Rated`, `Exempt`) are first-class citizens on every `Product` and `SalesTransaction`.
+- The **Tax tab** produces filings-ready summaries grouped by KRA tax type, so end-of-month VAT returns are a CSV export, not a spreadsheet nightmare.
+- Designed for the **eTIMS (Electronic Tax Invoice Management System)** rollout — invoice data is structured to map cleanly to KRA's required fields.
+
+### 🔌 Offline-Resilient by Design
+- Hardware shops in peri-urban Kenya (Juja, Thika, Ruiru, Nakuru) frequently lose connectivity. The POS:
+  - **Persists cart & form state** to `localStorage` so a cashier never loses a half-rung sale during a blackout.
+  - **Queues M-Pesa STK requests** and re-checks status when the network returns.
+  - **30-minute idle timeout** with auto-lock — protects against unattended till walk-aways common in busy yards.
+
+### 🔧 Hardware-Store-Specific Logic (Not Just Retail)
+These features exist because **hardware shops do things general retailers don't**:
+
+| Feature | Why It Matters for Hardware |
+|---------|------------------------------|
+| **🔧 Equipment Rentals** | Hardware shops rent out generators, ladders, scaffolding, compacters. Full rental lifecycle: checkout → overdue alerts → return with damage assessment → security deposit refund. |
+| **💰 B2B Customer Debt (Mkopo)** | Contractors and *fundis* buy on credit and settle weekly/monthly. Aging buckets (30/60/90 days), credit limits, and statement exports are built-in — not bolted on. |
+| **📦 Bulk & Bundle Pricing** | Cement by the bag, nails by the kg, paint by the drum. Unit-of-measure conversions and bundle SKUs are native. |
+| **🚚 Supplier Purchase Orders** | Track POs to local distributors (Bamburi, Crown Paints, Safaricom for airtime stock) with fulfillment and backorder tracking. |
+| **⏱️ Shift Cash Reconciliation** | Cash drawer counts at shift open/close — critical because Kenyan shops run on cash + M-Pesa mixed tills. Discrepancies are flagged for the manager. |
+| **🎁 Gift Cards** | Increasingly popular for corporate buyers and holidays — full CRUD with reasons and auto-hiding exhausted cards. |
+
+> **Bottom line:** If you've ever tried to run a Kenyan hardware shop on a generic POS, you know they fall down on rentals, contractor debt, and M-Pesa reconciliation. This one doesn't.
 
 ---
 
@@ -685,6 +729,148 @@ chore:    Build process, tooling, etc.
 - 📱 PWA / offline support
 - 🏛️ eTIMS full integration
 - 📊 More report types
+
+---
+
+## 🛠️ Troubleshooting & FAQ
+
+Common issues and their fixes. If your problem isn't listed here, [open a bug report](https://github.com/bucky-ops/mbumah-hardware-pos/issues/new?template=bug_report.yml).
+
+### 💸 M-Pesa STK Push Callbacks Not Firing (Local Dev)
+
+**Symptom:** You trigger STK Push locally, the prompt appears on your phone, you enter your PIN, but the sale status stays "PENDING" forever.
+
+**Cause:** Safaricom's Daraja API needs to reach your callback URL over the **public internet**. `localhost:3000` is not reachable from Safaricom's servers, so the callback never arrives.
+
+**Fix — use ngrok:**
+```bash
+# 1. Expose your local dev server
+ngrok http 3000
+
+# 2. Copy the https forwarding URL, e.g. https://abc123.ngrok.io
+# 3. Set the callback URL env var (use the ngrok URL, NOT localhost)
+MPESA_CALLBACK_URL=https://abc123.ngrok.io/api/mpesa/callback
+
+# 4. Restart the dev server so the new env takes effect
+bun run dev
+```
+
+> **Production note:** On Vercel, your callback URL is just `https://your-domain.vercel.app/api/mpesa/callback` — no ngrok needed. Make sure it's registered in your Daraja app on the Safaricom developer portal.
+
+**Still not working?** Check:
+- The callback URL is registered & confirmed on the Daraja portal (Safaricom sends a validation request).
+- `MPESA_CONSUMER_KEY` / `MPESA_CONSUMER_SECRET` are for the correct app (Sandbox vs Production).
+- The Daraja sandbox sometimes has latency — wait 30–60s before assuming failure.
+
+---
+
+### 💥 Vercel 500 Internal Server Error on Login / API Calls
+
+**Symptom:** Deployed to Vercel, the site loads, but `/api/auth/login` (or other DB-touching endpoints) returns `500 Internal Server Error`.
+
+**Cause #1 — PgBouncer connection pooling (most common):**
+Serverless databases (Supabase, Neon, Render) put a pooled connection string behind a PgBouncer proxy in **transaction mode**. Prisma's default connection settings conflict with this and throw errors like:
+```
+Error: prepared statement "s0" already exists
+// or
+Error: Can't reach database server
+```
+
+**Fix — add the PgBouncer params to `DATABASE_URL`:**
+```bash
+# Append ?pgbouncer=true&connection_limit=1 to your DATABASE_URL
+DATABASE_URL=postgresql://user:pass@host:5432/db?pgbouncer=true&connection_limit=1
+```
+And in `prisma/schema.prisma`, set the direct URL for migrations:
+```prisma
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")              // pooled — used at runtime
+  directUrl = env("DIRECT_DATABASE_URL")        // unpooled — used for migrations
+}
+```
+
+**Cause #2 — Prisma client not generated on Vercel:**
+The `vercel-build` script runs `prisma generate && next build`. If you customized the build command and dropped `prisma generate`, you'll get `PrismaClientInitializationError`.
+
+**Fix:** Ensure `package.json` has:
+```json
+"scripts": {
+  "vercel-build": "prisma generate && next build"
+}
+```
+
+**Cause #3 — Missing env vars:**
+Vercel will silently let your API route boot with `undefined` for `DATABASE_URL` if you forgot to add it in the Vercel dashboard. Double-check **Settings → Environment Variables** and that the variable is available to the correct environment (Production / Preview / Development).
+
+---
+
+### 👻 Ghost Shifts (Shift Won't Close / Orphaned Open Shift)
+
+**Symptom:** A cashier tries to start a new shift but the system says "You already have an open shift" — yet the previous shift doesn't show in the active shifts list, or it shows as already closed.
+
+**Cause:** The shift record exists in the DB with `status: 'OPEN'` but the UI state is out of sync (e.g., the cashier hard-refreshed mid-close, or the close-shift API call failed after the UI optimistically updated).
+
+**Fix A — Force-close via the Shifts tab:**
+1. Go to **Shifts** tab → look for the orphaned `OPEN` shift.
+2. Use the **Force Close** action (available to `BRANCH_MANAGER` and above).
+3. Enter the actual cash drawer count; the system will record the discrepancy.
+
+**Fix B — Database-level cleanup (last resort):**
+```sql
+-- Find the ghost shift
+SELECT id, userId, storeId, status, openedAt FROM Shift
+WHERE status = 'OPEN' AND userId = '<user-id>';
+
+-- Close it manually (replace with real values)
+UPDATE Shift
+SET status = 'CLOSED', closedAt = NOW(), closingCash = openingCash, updatedAt = NOW()
+WHERE id = '<shift-id>';
+```
+
+**Prevention:**
+- The close-shift flow is now idempotent — if the API call fails, retrying won't double-close.
+- A nightly cron (`SHIFT_RECONCILIATION`) auto-flags shifts open >24h for manager review.
+
+---
+
+### 🔄 "D.map is not a function" Production Crash
+
+**Symptom:** Page loads but crashes with `D.map is not a function` in the browser console.
+
+**Cause:** An API endpoint returned a non-array (e.g., `null`, `{}`, or an error object) where the frontend expected an array, and `.map()` was called on it.
+
+**Fix:** This was resolved in a prior patch — all API data extractions now use `Array.isArray()` guards. If you see it again, ensure you're on the latest `main` and that the offending tab uses the `safeArray()` / `safeData()` helpers from `@/lib/api`.
+
+---
+
+### 🏗️ Prisma Migration Errors on Vercel
+
+**Symptom:** `vercel-build` fails with `Prisma schema validation error` or `relation does not exist`.
+
+**Cause:** The schema was changed locally (`db:push`) but the migration wasn't committed, so Vercel's DB is out of sync.
+
+**Fix:**
+```bash
+# Locally, create & apply the migration
+bun run db:migrate --name your_change_description
+
+# Commit the migration files
+git add prisma/migrations/
+git commit -m "db: add your_change_description migration"
+
+# On Vercel, the build runs prisma migrate deploy automatically
+```
+
+> For rapid prototyping, `db:push` is fine locally — but **always** create a proper migration before deploying to production.
+
+---
+
+### ❓ Still Stuck?
+
+- 📖 Read the full **[Vercel Deployment Guide](docs/VERCEL_DEPLOYMENT_GUIDE.md)** and **[Vercel Recovery Guide](VERCEL_RECOVERY.md)**
+- 🐛 [Open a bug report](https://github.com/bucky-ops/mbumah-hardware-pos/issues/new?template=bug_report.yml) with your Node version, browser, and reproduction steps
+- 🔒 For security-sensitive issues, see [SECURITY.md](SECURITY.md) — **do not** open a public issue
 
 ---
 
