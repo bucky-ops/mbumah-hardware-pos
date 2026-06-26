@@ -6,6 +6,10 @@ on:
 
 env:
   DATABASE_URL: "file:./test.db"
+  # DIRECT_URL is required by prisma/schema.prisma (directUrl = env("DIRECT_URL")).
+  # For the SQLite build environment we point it at the same file. In production
+  # (Vercel/Neon) this is set to the non-pooled direct Postgres connection string.
+  DIRECT_URL: "file:./test.db"
 
 jobs:
   deploy:

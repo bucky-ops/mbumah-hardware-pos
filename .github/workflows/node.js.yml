@@ -19,6 +19,10 @@ concurrency:
 env:
   NODE_ENV: test
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mbumah_pos_test?schema=public
+  # DIRECT_URL is required by prisma/schema.prisma (directUrl = env("DIRECT_URL")).
+  # For CI's local Postgres we point it at the same instance. In production
+  # (Vercel/Neon) this is set to the non-pooled direct connection string.
+  DIRECT_URL: postgresql://postgres:postgres@localhost:5432/mbumah_pos_test?schema=public
   JWT_SECRET: ci-test-secret-do-not-use-in-production
   NEXT_PUBLIC_APP_URL: http://localhost:3000
   NEXT_PUBLIC_CURRENCY: KES

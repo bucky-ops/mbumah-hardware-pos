@@ -34,6 +34,23 @@ export function formatKES(amount: number): string {
   }).format(amount);
 }
 
+/**
+ * Format a date as a readable string (e.g. "26 Jun 2026").
+ * Accepts Date, ISO string, or timestamp. Returns '—' for null/undefined.
+ * Used by PDF report generation (export-pdf route) and other server-side
+ * formatting where the api.ts formatDateTime (client-side) isn't available.
+ */
+export function formatDate(date: Date | string | number | null | undefined): string {
+  if (date === null || date === undefined) return '—';
+  const d = typeof date === 'object' ? date : new Date(date);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 export function calculateAgingBucket(dueDate: Date): string {
   const now = new Date();
   const due = new Date(dueDate);
