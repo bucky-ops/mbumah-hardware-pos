@@ -88,6 +88,18 @@ model Store {
   invoices        Invoice[]
   deliveryNotes   DeliveryNote[]
 
+  // ── Payroll & HR (Phase 1 — ERP enhancement) ──
+  // NOTE: LeaveType and EmployeeLeaveBalance are NOT directly related to Store:
+  //   • LeaveType is organisation-wide policy (not tenant data)
+  //   • EmployeeLeaveBalance resolves via Employee.storeId
+  // Only the store-scoped payroll models have a direct Store relation here.
+  employees           Employee[]
+  payrollPeriods      PayrollPeriod[]
+  payrollRuns         PayrollRun[]
+  payrollDetails      PayrollDetail[]
+  leaveRequests       LeaveRequest[]
+  attendanceRecords   AttendanceRecord[]
+
   @@index([organizationId])
   @@map("stores")
 }
@@ -120,6 +132,11 @@ model User {
   cashDrawerLogs     CashDrawerLog[]
   shifts             Shift[]
   issuedGiftCards    GiftCard[]         @relation("IssuedByUser")
+
+  // Employee profile (optional — an employee may exist without a user account,
+  // e.g. casual labourers; a user may exist without an employee profile, e.g.
+  // an org-level SUPER_ADMIN who isn't on any store payroll).
+  employee           Employee?
 
   @@index([organizationId])
   @@index([storeId])
@@ -1108,4 +1125,424 @@ model SecurityEvent {
   @@index([createdAt])
   @@index([blocked])
   @@map("security_events")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAYROLL & HUMAN RESOURCES (Phase 1 — ERP Enhancement)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Design notes:
+//
+//   • Multi-tenancy: Every store-scoped model carries a non-nullable `storeId`
+//     and is registered in `STORE_SCOPED_MODELS` in src/lib/db.ts so the Prisma
+//     Client Extension automatically AND-injects `storeId` into every query.
+//     This enforces zero-trust tenant isolation at the ORM layer — developers
+//     cannot "forget" to scope a payroll query by store.
+//
+//   • LeaveType is the ONLY model here WITHOUT a storeId. Leave types are
+//     organisation-wide policy (Annual, Sick, Maternity, Compassionate, etc.)
+//     defined once and referenced by every store. EmployeeLeaveBalance,
+//     LeaveRequest, etc. resolve via employee.storeId.
+//
+//   • Monetary fields use Float for consistency with the existing schema
+//     (Product.pricePerUnit, SalesTransaction.total, etc. are all Float).
+//     A future task will migrate ALL monetary fields to Decimal @db.Decimal(10,2)
+//     for KRA eTIMS compliance — but that is a schema-wide change, not
+//     payroll-specific, so we keep parity here.
+//
+//   • PAYSLIP immutability: PayrollDetail is append-only (a payslip, once
+//     generated, must never be silently edited — corrections are made via
+//     adjusting entries in the next payroll run). PayrollDetail is registered
+//     in IMMUTABLE_MODELS in src/lib/db.ts; sanctioned mutations (e.g. voiding
+//     a payslip) use withImmutabilityBypass().
+//
+//   • Status enums are stored as String (not Prisma enum) for SQLite/dev
+//     compatibility and to allow adding new statuses without a migration.
+//     The allowed values are documented inline and enforced at the API layer.
+//
+//   • PAYE/NSSF/NHDF: Kenyan statutory deductions are calculated in
+//     src/lib/payroll-helpers.ts (Phase 2). The schema stores the FINAL
+//     computed amounts; the breakdown is preserved in the `deductionsBreakdown`
+//     JSON column for auditability and payslip rendering.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A staff member employed at a store. An Employee MAY be linked to a User
+/// account (so they can log in and view their own payslips / request leave),
+/// but does not HAVE to be — casual labourers and contractors without system
+/// access still need payroll records.
+model Employee {
+  id                  String   @id @default(cuid())
+  storeId             String
+
+  // Optional link to a system User account. When set, the employee can log in
+  // and access the self-service portal (view payslips, request leave, clock in).
+  // CASCADE on User delete: if the user account is removed, the employee record
+  // is preserved (set to null) so historical payroll is never orphaned.
+  userId              String?  @unique
+
+  // Identity
+  firstName           String
+  lastName            String
+  email               String?  // Unique per store (not globally) — two stores
+                               // could legitimately have employees with the
+                               // same personal email.
+  phone               String?
+  nationalId          String?  // Kenyan National ID — required for KRA PAYE
+  kraPin              String?  // KRA PIN — required for PAYE returns
+  nssfNumber          String?  // National Social Security Fund
+  nhifNumber          String?  // National Hospital Insurance Fund (now SHIF)
+  photoUrl            String?
+
+  // Employment
+  jobTitle            String?  // e.g. "Senior Cashier", "Store Supervisor"
+  role                String   @default("STAFF") // STAFF, SUPERVISOR, MANAGER, CASHIER, ACCOUNTANT
+  employmentType      String   @default("PERMANENT") // PERMANENT, CONTRACT, CASUAL, PROBATION, INTERN
+  hireDate            DateTime
+  terminationDate     DateTime? // null = active; set when employment ends
+  status              String   @default("ACTIVE") // ACTIVE, SUSPENDED, TERMINATED, ON_LEAVE
+
+  // Compensation (monthly figures in KES)
+  basicSalary         Float    @default(0)   // Gross basic before allowances/deductions
+  hourlyRate          Float?                  // For casual/overtime calculation
+  houseAllowance      Float    @default(0)
+  transportAllowance  Float    @default(0)
+  medicalAllowance    Float    @default(0)
+  otherAllowances     Float    @default(0)
+
+  // Statutory deduction config (computed at payroll time; stored here as the
+  // employee's current configuration). Actual per-run amounts live in
+  // PayrollDetail.deductionsBreakdown.
+  payeExempt          Boolean  @default(false) // KRA PAYE exemption (e.g. disabled persons)
+  nssfExempt          Boolean  @default(false)
+  nhifExempt          Boolean  @default(false)
+
+  // Bank details for salary disbursement (NEVER store raw account numbers in
+  // logs — mask in UI). Encrypted at rest by Neon TLS; application-layer
+  // encryption can be layered on later if required.
+  bankName            String?
+  bankAccountName     String?
+  bankAccountNumber   String?
+  bankBranchCode      String?
+  bankSwift           String?  // For international wires (rare in Kenya)
+
+  // Emergency contact
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  emergencyContactRelation String?
+
+  // Metadata
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  store               Store                 @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user                User?                 @relation(fields: [userId], references: [id])
+  payrollDetails      PayrollDetail[]
+  leaveBalances       EmployeeLeaveBalance[]
+  leaveRequests       LeaveRequest[]
+  attendanceRecords   AttendanceRecord[]
+
+  @@unique([storeId, email])
+  @@index([storeId])
+  @@index([userId])
+  @@index([status])
+  @@index([hireDate])
+  @@index([employmentType])
+  @@index([storeId, status])
+  @@map("employees")
+}
+
+/// A payroll cycle (e.g. "January 2026", "Week 5 2026"). A store creates one
+/// PayrollPeriod per cycle; a PayrollRun is then generated against it.
+model PayrollPeriod {
+  id          String   @id @default(cuid())
+  storeId     String
+  name        String   // e.g. "January 2026" or "2026-W05"
+  startDate   DateTime
+  endDate     DateTime
+  payDate     DateTime? // Scheduled disbursement date
+  status      String   @default("DRAFT") // DRAFT, PROCESSING, PAID, VOIDED
+  periodType  String   @default("MONTHLY") // MONTHLY, WEEKLY, BI_WEEKLY
+
+  // Aggregate totals (computed when the run is processed). Stored on the
+  // period for fast dashboard rendering without joining PayrollDetail.
+  totalGross    Float    @default(0)
+  totalDeductions Float  @default(0)
+  totalNet      Float    @default(0)
+  employeeCount Int      @default(0)
+
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store       Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  runs        PayrollRun[]
+
+  @@unique([storeId, name])
+  @@index([storeId])
+  @@index([status])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([storeId, status])
+  @@map("payroll_periods")
+}
+
+/// A single execution of payroll for a PayrollPeriod. A period may have
+/// multiple runs (e.g. initial run + a supplementary run for late hires),
+/// though typically just one. Each run produces a PayrollDetail per employee.
+model PayrollRun {
+  id              String   @id @default(cuid())
+  payrollPeriodId String
+  storeId         String   // Denormalised from PayrollPeriod for tenant-scoping
+
+  runType         String   @default("REGULAR") // REGULAR, SUPPLEMENTARY, OFF_CYCLE, BONUS
+  status          String   @default("DRAFT") // DRAFT, PROCESSING, COMPLETED, PAID, VOIDED, FAILED
+  initiatedBy     String?  // User ID of the manager who initiated the run
+  processedAt     DateTime?
+  paidAt          DateTime?
+
+  // Aggregate totals for THIS run (sum of PayrollDetail rows)
+  totalGross      Float    @default(0)
+  totalDeductions Float    @default(0)
+  totalNet        Float    @default(0)
+  employeeCount   Int      @default(0)
+
+  // Failure context (if status = FAILED)
+  errorMessage    String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  payrollPeriod   PayrollPeriod  @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
+  store           Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  details         PayrollDetail[]
+
+  @@index([payrollPeriodId])
+  @@index([storeId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([storeId, status])
+  @@map("payroll_runs")
+}
+
+/// An individual payslip line within a PayrollRun. One row per employee per
+/// run. This is the IMMUTABLE financial record — once a run is COMPLETED, the
+/// PayrollDetail rows must never be edited (corrections go in the next run).
+model PayrollDetail {
+  id              String   @id @default(cuid())
+  payrollRunId    String
+  employeeId      String
+  storeId         String   // Denormalised for tenant-scoping
+
+  // Earnings breakdown (KES)
+  basicSalary     Float    @default(0)
+  houseAllowance  Float    @default(0)
+  transportAllowance Float @default(0)
+  medicalAllowance Float   @default(0)
+  otherAllowances Float    @default(0)
+  overtimePay     Float    @default(0)
+  grossPay        Float    @default(0) // Sum of all earnings
+
+  // Statutory deductions (KES) — computed per Kenyan law in payroll-helpers.ts
+  paye            Float    @default(0) // Pay As You Earn income tax
+  nssf            Float    @default(0) // National Social Security Fund
+  nhif            Float    @default(0) // National Hospital Insurance Fund / SHIF
+  housingLevy     Float    @default(0) // Affordable Housing Levy (1.5%)
+
+  // Other deductions
+  payeArrears     Float    @default(0)
+  loanDeduction   Float    @default(0) // Salary advance / staff loan recovery
+  otherDeductions Float    @default(0)
+  totalDeductions Float    @default(0) // Sum of all deductions
+
+  netPay          Float    @default(0) // grossPay - totalDeductions
+
+  // Working stats for the period (used in calculation + payslip display)
+  daysWorked      Int      @default(0)
+  daysPresent     Int      @default(0)
+  daysAbsent      Int      @default(0)
+  daysOnLeave     Int      @default(0)
+  overtimeHours   Float    @default(0)
+
+  // JSON breakdown for audit / payslip rendering. Stored as String for SQLite
+  // compat; PostgreSQL could use Json type. Contains the full calc trace:
+  //   { "payeBands": [...], "nssfTier": "...", "nhifTier": "...", ... }
+  deductionsBreakdown String?
+
+  // Payment status & reference
+  paymentStatus   String   @default("PENDING") // PENDING, PAID, FAILED, HELD
+  paymentRef      String?  // Bank transfer reference / M-Pesa B2B ref
+  paymentDate     DateTime?
+  payslipPdfUrl   String?  // Generated PDF path (S3/Vercel Blob)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  payrollRun      PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employee        Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  store           Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([payrollRunId, employeeId])
+  @@index([payrollRunId])
+  @@index([employeeId])
+  @@index([storeId])
+  @@index([paymentStatus])
+  @@index([storeId, paymentStatus])
+  @@map("payroll_details")
+}
+
+/// Organisation-wide leave policy types. NOT store-scoped (a leave type is a
+/// policy concept, not tenant data). Specific entitlements per employee live
+/// in EmployeeLeaveBalance.
+model LeaveType {
+  id                  String   @id @default(cuid())
+  name                String   @unique // Annual, Sick, Maternity, Paternity, Compassionate, Study, Sabbatical
+  code                String   @unique // ANNUAL, SICK, MATERNITY, etc.
+  description         String?
+  defaultDaysPerYear  Float    @default(0) // 0 = unlimited (e.g. Compassionate)
+  isPaid              Boolean  @default(true)
+  isStatutory         Boolean  @default(false) // True for leave mandated by Kenyan law
+  carryForwardAllowed Boolean  @default(true)
+  maxCarryForwardDays Float    @default(0)
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  balances            EmployeeLeaveBalance[]
+  requests            LeaveRequest[]
+
+  @@index([isActive])
+  @@index([isStatutory])
+  @@map("leave_types")
+}
+
+/// Per-employee leave entitlement tracker. One row per (employee, leaveType).
+/// Updated when a LeaveRequest is approved (usedDays += requested) and on the
+/// start of a new leave year (availableDays resets, carryForward applied).
+model EmployeeLeaveBalance {
+  id                  String   @id @default(cuid())
+  employeeId          String
+  leaveTypeId         String
+
+  // The leave "year" this balance applies to (an employee may have multiple
+  // rows per leaveType across years). For most orgs this aligns with the
+  // calendar year, but some use a hire-anniversary cycle.
+  leaveYear           Int      // e.g. 2026
+
+  allocatedDays       Float    @default(0) // Days granted for this year
+  usedDays            Float    @default(0) // Days already taken / approved
+  pendingDays         Float    @default(0) // Days in PENDING leave requests
+  carryForwardDays    Float    @default(0) // Brought forward from prior year
+  encashedDays        Float    @default(0) // Days paid out in lieu
+
+  // available = allocated + carryForward - used - pending
+  // (Computed at read time to avoid drift; not stored.)
+
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  employee            Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType           LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, leaveTypeId, leaveYear])
+  @@index([employeeId])
+  @@index([leaveTypeId])
+  @@index([leaveYear])
+  @@map("employee_leave_balances")
+}
+
+/// A leave request submitted by an employee. Approval workflow:
+///   PENDING → APPROVED | REJECTED | CANCELLED
+/// On APPROVED: EmployeeLeaveBalance.usedDays += (endDate - startDate + 1) days
+/// On REJECTED/CANCELLED: EmployeeLeaveBalance.pendingDays -= same
+model LeaveRequest {
+  id              String   @id @default(cuid())
+  employeeId      String
+  leaveTypeId     String
+  storeId         String   // Denormalised from Employee for tenant-scoping
+
+  startDate       DateTime
+  endDate         DateTime
+  returnDate      DateTime? // Expected return (defaults to endDate + 1 day)
+  workingDays     Float    @default(0) // Computed: count of working days in range
+  halfDay         Boolean  @default(false)
+
+  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED, CANCELLED, TAKEN
+  reason          String?  // Employee's stated reason
+  rejectionReason String?  // Manager's reason if rejected
+  attachmentUrl   String?  // e.g. medical certificate for sick leave
+
+  // Approval chain
+  approvedBy      String?  // User ID of approver
+  approvedAt      DateTime?
+
+  // Emergency contact during leave (optional)
+  emergencyContact String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType       LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([leaveTypeId])
+  @@index([storeId])
+  @@index([status])
+  @@index([startDate])
+  @@index([storeId, status])
+  @@index([employeeId, status])
+  @@map("leave_requests")
+}
+
+/// Daily attendance / time-tracking record. One row per employee per day.
+/// Supports both simple clock-in/out and shift-based attendance.
+model AttendanceRecord {
+  id              String   @id @default(cuid())
+  employeeId      String
+  storeId         String   // Denormalised for tenant-scoping
+  // NOTE: stored as DateTime (not @db.Date) for SQLite/dev compatibility.
+  // The application layer enforces date-only semantics (midnight UTC).
+  // On PostgreSQL a future migration can switch this to @db.Date.
+  date            DateTime // The calendar day (no time component)
+
+  // Clock times (nullable for manual entries / absent days)
+  checkIn         DateTime?
+  checkOut        DateTime?
+  breakStart      DateTime?
+  breakEnd        DateTime?
+  breakHours      Float    @default(0) // Total break time in hours
+
+  // Computed totals
+  workingHours    Float    @default(0) // (checkOut - checkIn) - breakHours
+  overtimeHours   Float    @default(0) // Hours beyond the standard shift
+  expectedHours   Float    @default(8) // Standard shift length
+
+  status          String   @default("PRESENT") // PRESENT, ABSENT, LATE, HALF_DAY, LEAVE, HOLIDAY, WEEKEND, REMOTE
+  lateMinutes     Int      @default(0) // Minutes late past shift start
+  earlyLeaveMinutes Int    @default(0)
+
+  // Source / verification
+  source          String   @default("MANUAL") // MANUAL, BIOMETRIC, MOBILE, RFID
+  location        String?  // GPS / IP at clock-in (for remote verification)
+  verified        Boolean  @default(false) // Verified by a supervisor?
+
+  notes           String?
+  approvedBy      String?  // Supervisor who approved manual entries
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, date])
+  @@index([employeeId])
+  @@index([storeId])
+  @@index([date])
+  @@index([status])
+  @@index([storeId, date])
+  @@index([employeeId, date])
+  @@map("attendance_records")
 }

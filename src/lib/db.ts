@@ -238,6 +238,16 @@ const STORE_SCOPED_MODELS = new Set<string>([
   "taxCategory",
   "notification",
   "subcategory",
+  // ── Payroll & HR (Phase 1 — ERP enhancement) ──
+  // LeaveType is intentionally NOT here — it's organisation-wide policy,
+  // not tenant-scoped data.
+  "employee",
+  "payrollPeriod",
+  "payrollRun",
+  "payrollDetail",
+  "employeeLeaveBalance",
+  "leaveRequest",
+  "attendanceRecord",
 ]);
 
 // ── 5. Immutability — append-only financial & audit models ───────────────────
@@ -259,6 +269,11 @@ const IMMUTABLE_MODELS = new Set<string>([
   // `auditLog` is reserved for future use — the current schema uses
   // `systemLog` for audit trails. If/when a dedicated AuditLog model is
   // added to schema.prisma, add it here.
+  // Payroll payslips are append-only financial records. Once a payroll run
+  // is COMPLETED, the per-employee PayrollDetail rows must never be edited —
+  // corrections are made via adjusting entries in the NEXT payroll run.
+  // Sanctioned voiding flows use withImmutabilityBypass().
+  "payrollDetail",
 ]);
 
 // Lowercase mirror of IMMUTABLE_MODELS for casing-agnostic lookups.
@@ -399,6 +414,24 @@ const hardenedClient = baseClient.$extends({
       },
     },
     systemLog: {
+      async update({ model, operation, args, query }: any) {
+        assertMutable(model, operation);
+        return query(args);
+      },
+      async updateMany({ model, operation, args, query }: any) {
+        assertMutable(model, operation);
+        return query(args);
+      },
+      async delete({ model, operation, args, query }: any) {
+        assertMutable(model, operation);
+        return query(args);
+      },
+      async deleteMany({ model, operation, args, query }: any) {
+        assertMutable(model, operation);
+        return query(args);
+      },
+    },
+    payrollDetail: {
       async update({ model, operation, args, query }: any) {
         assertMutable(model, operation);
         return query(args);
