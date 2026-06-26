@@ -23,6 +23,7 @@ import {
   LayoutGrid, List, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Pause, MessageSquare, PartyPopper, Sparkles, Zap, Ticket, Landmark, Award, Gift,
   Lightbulb, Send, ExternalLink, RefreshCw, Split, ChevronRight,
   Wifi, WifiOff, CloudOff, CloudLightning,
+  Building2, BadgeDollarSign, MessagesSquare,
 } from 'lucide-react';
 
 import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
@@ -94,6 +95,9 @@ const LazyBankingTab = lazy(() => import('./tabs/banking-tab'));
 const LazyLoyaltyTab = lazy(() => import('./tabs/loyalty-tab'));
 const LazySecurityTab = lazy(() => import('./tabs/security-tab'));
 const LazyPayrollTab = lazy(() => import('./tabs/payroll-tab'));
+const LazyEtimsTab = lazy(() => import('./tabs/etims-tab'));
+const LazyDebtManagementTab = lazy(() => import('./tabs/debt-management-tab'));
+const LazyConversationsTab = lazy(() => import('./tabs/conversations-tab'));
 
 function TabLoadingFallback() {
   return (
@@ -130,9 +134,12 @@ const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType; roles: s
   { id: 'gift-cards', label: 'Gift Cards', icon: CreditCard, roles: SENIOR_ROLES },
   { id: 'vouchers', label: 'Vouchers', icon: Ticket, roles: SENIOR_ROLES },
   { id: 'invoices', label: 'Invoices', icon: Receipt, roles: MGMT_ROLES },
+  { id: 'etims', label: 'eTIMS', icon: Building2, roles: MGMT_ROLES },
   { id: 'delivery', label: 'Delivery', icon: Truck, roles: SENIOR_ROLES },
   { id: 'credits', label: 'Credits', icon: CircleDollarSign, roles: MGMT_ROLES },
+  { id: 'debt-management', label: 'Debt Mgmt', icon: BadgeDollarSign, roles: MGMT_ROLES },
   { id: 'messaging', label: 'Messaging', icon: MessageSquare, roles: ALL_ROLES },
+  { id: 'conversations', label: 'Chat', icon: MessagesSquare, roles: ALL_ROLES },
   { id: 'transfers', label: 'Transfers', icon: ArrowUpDown, roles: SENIOR_ROLES },
   { id: 'banking', label: 'Banking', icon: Landmark, roles: ['SUPER_ADMIN', 'STORE_OWNER', 'ACCOUNTANT'] },
   { id: 'loyalty', label: 'Loyalty', icon: Award, roles: SENIOR_ROLES },
@@ -1037,9 +1044,18 @@ function AppSidebar() {
 
   // Role-based tab visibility — SUPER_ADMIN sees all; others see only their allowed tabs
   const visibleTabs = filterTabsByRole(user?.role);
-  // Navigation groups (filtered by role)
-  const mainNavItems = visibleTabs.filter(t => ['pos', 'catalog', 'inventory', 'customers', 'transactions'].includes(t.id));
-  const managementNavItems = visibleTabs.filter(t => ['rentals', 'suppliers', 'financial', 'reports', 'gift-cards', 'payroll', 'admin'].includes(t.id));
+  // Navigation groups (filtered by role). Every tab in TAB_CONFIG must belong
+  // to exactly one group so nothing is orphaned/unreachable in the sidebar.
+  const NAV_GROUPS: { label: string; ids: AppTab[] }[] = [
+    { label: 'Main',       ids: ['dashboard', 'pos', 'catalog', 'inventory', 'customers', 'transactions'] },
+    { label: 'Sales & Credit', ids: ['invoices', 'delivery', 'credits', 'debt-management', 'vouchers', 'gift-cards', 'loyalty'] },
+    { label: 'Finance',    ids: ['financial', 'banking', 'payroll', 'transfers'] },
+    { label: 'Operations', ids: ['rentals', 'suppliers', 'messaging', 'conversations'] },
+    { label: 'Compliance & System', ids: ['etims', 'reports', 'security', 'admin'] },
+  ];
+  const navGroups = NAV_GROUPS
+    .map(g => ({ label: g.label, items: visibleTabs.filter(t => g.ids.includes(t.id)) }))
+    .filter(g => g.items.length > 0);
 
   const renderNavItem = ({ id, label, icon: Icon }: { id: AppTab; label: string; icon: React.ElementType }) => (
     <button
@@ -1147,19 +1163,15 @@ function AppSidebar() {
 
           {/* Navigation */}
           <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto custom-scrollbar">
-            {/* Main Section */}
-            <div className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 flex items-center gap-1.5">
-              <span>Main</span>
-              <Separator className="flex-1 bg-sidebar-border/50" />
-            </div>
-            {mainNavItems.map(renderNavItem)}
-
-            {/* Management Section */}
-            <div className="px-4 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 flex items-center gap-1.5">
-              <span>Management</span>
-              <Separator className="flex-1 bg-sidebar-border/50" />
-            </div>
-            {managementNavItems.map(renderNavItem)}
+            {navGroups.map((group, idx) => (
+              <div key={group.label}>
+                <div className={`px-4 ${idx === 0 ? 'pt-2' : 'pt-4'} pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 flex items-center gap-1.5`}>
+                  <span>{group.label}</span>
+                  <Separator className="flex-1 bg-sidebar-border/50" />
+                </div>
+                {group.items.map(renderNavItem)}
+              </div>
+            ))}
           </nav>
 
           {/* Footer - User Profile Dropdown */}
@@ -4963,6 +4975,9 @@ function MainApp() {
       case 'loyalty': return <Suspense fallback={<TabLoadingFallback />}><LazyLoyaltyTab /></Suspense>;
       case 'security': return <Suspense fallback={<TabLoadingFallback />}><LazySecurityTab /></Suspense>;
       case 'payroll': return <Suspense fallback={<TabLoadingFallback />}><LazyPayrollTab /></Suspense>;
+      case 'etims': return <Suspense fallback={<TabLoadingFallback />}><LazyEtimsTab /></Suspense>;
+      case 'debt-management': return <Suspense fallback={<TabLoadingFallback />}><LazyDebtManagementTab /></Suspense>;
+      case 'conversations': return <Suspense fallback={<TabLoadingFallback />}><LazyConversationsTab /></Suspense>;
       default: return <POSTab />;
     }
   };

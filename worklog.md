@@ -3260,3 +3260,92 @@ Stage Summary:
 Next Actions (per user's pacing rules — STOP here and await 'continue' for Phase 5: UI/UX):
 - Phase 5: UI tabs (etims-tab.tsx, debt-management-tab.tsx, messages-tab.tsx),
   resizable sidebar, product form enhancements, then final git push.
+
+---
+Task ID: v2-phase-5-ui-ux
+Agent: Main Agent (Principal Software Architect)
+Task: PHASE 5 — Wire the three Phase-4 tabs (etims-tab, debt-management-tab, conversations-tab) into the main application navigation and verify end-to-end via agent-browser.
+
+Work Log:
+
+PHASE 5 — UI/UX integration & sidebar restructure:
+
+1. Lint cleanup (conversations-tab.tsx):
+   - 2 pre-existing lint errors: `react-hooks/set-state-in-effect` in
+     ConversationSettingsDialog (line 608) and NewConversationDialog (line 778).
+     Both used `useEffect` to reset form state when the dialog opened.
+   - Refactored to the React-recommended `key` remount pattern: parent now
+     passes `key={`settings-${conversation.id}-${showSettings}`}` and
+     `key={`new-${showNewDialog}`}` so the dialog components remount fresh on
+     each open. Form state is initialised lazily from props/defaults — no
+     effect-based reset needed. Removed both offending `useEffect` blocks.
+   - `bun run lint` → 0 errors, 0 warnings.
+
+2. AppTab type extension (src/lib/stores.ts):
+   - Added 'etims' | 'debt-management' | 'conversations' to the AppTab union
+     so the new tabs are type-safe throughout the nav/switch logic.
+
+3. page.tsx wiring:
+   - Added 3 lazy imports: LazyEtimsTab, LazyDebtManagementTab,
+     LazyConversationsTab (code-split, keeps initial bundle lean).
+   - Added 3 lucide icons to the import list: Building2 (eTIMS),
+     BadgeDollarSign (Debt Mgmt), MessagesSquare (Chat).
+   - TAB_CONFIG: inserted the 3 new entries in logical positions:
+     * 'etims' (Building2, MGMT_ROLES) right after 'invoices'
+     * 'debt-management' (BadgeDollarSign, MGMT_ROLES) after 'credits'
+     * 'conversations' (MessagesSquare, ALL_ROLES) right after 'messaging'
+   - renderTab switch: added 3 Suspense-wrapped cases.
+
+4. CRITICAL UX FIX — sidebar nav restructure:
+   - ROOT CAUSE found during verification: the sidebar only rendered 2 groups
+     (mainNavItems + managementNavItems) covering 12 of 25 tabs. The other 13
+     tabs (vouchers, invoices, banking, security, transfers, loyalty, credits,
+     delivery, messaging, and now the 3 new ones) were orphaned — present in
+     TAB_CONFIG but unreachable from the sidebar.
+   - Replaced the two ad-hoc arrays with a NAV_GROUPS config of 5 labelled
+     groups that partition ALL 25 tabs:
+       Main:             dashboard, pos, catalog, inventory, customers, transactions
+       Sales & Credit:   invoices, delivery, credits, debt-management, vouchers, gift-cards, loyalty
+       Finance:          financial, banking, payroll, transfers
+       Operations:       rentals, suppliers, messaging, conversations
+       Compliance & Sys: etims, reports, security, admin
+   - Nav now maps over navGroups (role-filtered, empty groups hidden) so every
+     permitted tab is reachable. Group headers render with separators.
+
+VERIFICATION (agent-browser end-to-end):
+- Logged in as Super Admin. Sidebar now lists all 25 tabs across 5 groups:
+  "Dashboard | POS | Catalog | Inventory | Customers | Transactions | Gift Cards
+   | Vouchers | Invoices | Delivery | Credits | Debt Mgmt | Loyalty | Financial
+   | Transfers | Banking | Payroll | Rentals | Suppliers | Messaging | Chat |
+   Reports | eTIMS | Security | Admin" ✅
+- eTIMS tab: renders "KRA eTIMS Integration" header, Profile/Invoices/Audit Log
+  sub-tabs. Profile section shows KraBusinessProfile form (Business PIN,
+  Name, Username, Environment, password status). ✅
+- eTIMS Invoices sub-tab: 6 summary cards (Total 1, Pending 1, others 0) +
+  1 invoice row: KRA # P051234567X-20260626-000001, Receipt MBM-RCPT-002,
+  Customer Akinyi Builders Ltd, Ksh 50,200, Status Pending. ✅
+- Debt Management tab: 3 sub-tabs (Overdue Board / Pipeline / History). Stats
+  cards: Overdue Customers 6, Total Overdue Ksh 200,340, 1-60 days 0, 61+ days 6.
+  Overdue list shows Akinyi Builders Ltd (Ksh 90,000) + Peter Odhiambo
+  (Ksh 40,000). ✅
+- Conversations (Chat) tab: two-pane layout — left conversation list (empty
+  state "No conversations yet"), right "Select a conversation" prompt. "New
+  Conversation" button opens dialog with Title/Type/Participants fields. ✅
+- Dev log: zero runtime errors after navigating all 3 tabs. ✅
+- Sticky footer: layout uses `min-h-screen flex flex-col` + `<footer mt-auto>`
+  pattern — verified in code. ✅
+- Lint: 0 errors, 0 warnings. ✅
+
+Stage Summary:
+- ✅ PHASE 5 COMPLETE: All 3 Phase-4 bounded-context tabs wired into the app
+  navigation with lazy loading + Suspense. Every tab in TAB_CONFIG is now
+  reachable (the pre-existing 13 orphaned-tab bug was also fixed in the same
+  pass — major UX improvement).
+- ✅ Lint clean (0/0). Dev server healthy. All 3 new tabs verified
+  end-to-end via agent-browser with real backend data flowing through the
+  Phase-4 API routes + Phase-3 helpers + Phase-2 Prisma models.
+- ✅ Sidebar restructured into 5 logical labelled groups covering all 25 tabs.
+
+Next Actions:
+- Commit & push to GitHub (auto-deploys to Vercel).
+- Create the recurring 15-minute webDevReview cron job for ongoing QA.

@@ -2417,3 +2417,329 @@ export const messagingApi = {
     });
   },
 };
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// v2.0.0 — KRA eTIMS API client
+// ════════════════════════════════════════════════════════════════════════════
+
+export interface KraBusinessProfileItem {
+  id: string;
+  storeId: string;
+  businessPin: string;
+  businessName: string;
+  registrationDate: string;
+  kraUsername: string;
+  environment: 'sandbox' | 'production';
+  isActive: boolean;
+  passwordConfigured: boolean;
+  tokenConfigured?: boolean;
+  tokenExpiresAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InvoiceForKraItem {
+  id: string;
+  storeId: string;
+  transactionId: string;
+  kraInvoiceNumber: string;
+  kraTaxBreakdown: string;
+  submissionStatus: 'PENDING' | 'SUBMITTED' | 'ACCEPTED' | 'REJECTED' | 'FAILED';
+  kraSubmissionId: string | null;
+  cuPin: string | null;
+  qrCode: string | null;
+  submittedAt: string | null;
+  acceptedAt: string | null;
+  retryCount: number;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+  transaction?: {
+    id: string;
+    receiptNumber: string;
+    totalAmount: number;
+    paymentMethod: string;
+    createdAt: string;
+    customer: { id: string; name: string; phone: string | null } | null;
+  } | null;
+  _count?: { submissions: number };
+}
+
+export interface KraSubmissionItem {
+  id: string;
+  storeId: string;
+  invoiceForKraId: string;
+  kraReferenceNumber: string | null;
+  status: string;
+  responseJson: string | null;
+  httpStatus: number | null;
+  latencyMs: number | null;
+  errorMessage: string | null;
+  submittedAt: string;
+  processedAt: string | null;
+  invoiceForKra?: {
+    id: string;
+    kraInvoiceNumber: string;
+    submissionStatus: string;
+    transaction: { id: string; receiptNumber: string } | null;
+  } | null;
+}
+
+export const kraApi = {
+  getProfile: async (storeId: string) => {
+    const query = new URLSearchParams({ storeId });
+    return request<KraBusinessProfileItem | null>(`/kra/profile?${query.toString()}`);
+  },
+
+  upsertProfile: async (data: {
+    storeId: string;
+    businessPin: string;
+    businessName: string;
+    registrationDate?: string;
+    kraUsername: string;
+    kraPassword: string;
+    environment?: 'sandbox' | 'production';
+    isActive?: boolean;
+  }) => {
+    return request<KraBusinessProfileItem>('/kra/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  submitInvoice: async (data: { transactionId: string; storeId: string; dryRun?: boolean }) => {
+    return request<{ invoiceForKra: InvoiceForKraItem; result?: unknown; dryRun?: boolean }>(
+      '/kra/submit',
+      { method: 'POST', body: JSON.stringify(data) },
+    );
+  },
+
+  queryStatus: async (invoiceForKraId: string) => {
+    const query = new URLSearchParams({ invoiceForKraId });
+    return request<InvoiceForKraItem>(`/kra/status?${query.toString()}`);
+  },
+
+  listInvoices: async (params: {
+    storeId: string;
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }) => {
+    const query = new URLSearchParams();
+    query.set('storeId', params.storeId);
+    if (params.status) query.set('status', params.status);
+    if (params.search) query.set('search', params.search);
+    if (params.page) query.set('page', String(params.page));
+    if (params.limit) query.set('limit', String(params.limit));
+    if (params.sortBy) query.set('sortBy', params.sortBy);
+    if (params.sortOrder) query.set('sortOrder', params.sortOrder);
+    return request<InvoiceForKraItem[]>(`/kra/invoices?${query.toString()}`);
+  },
+
+  listSubmissions: async (params: { storeId: string; invoiceForKraId?: string; status?: string; limit?: number }) => {
+    const query = new URLSearchParams();
+    query.set('storeId', params.storeId);
+    if (params.invoiceForKraId) query.set('invoiceForKraId', params.invoiceForKraId);
+    if (params.status) query.set('status', params.status);
+    if (params.limit) query.set('limit', String(params.limit));
+    return request<KraSubmissionItem[]>(`/kra/submissions?${query.toString()}`);
+  },
+};
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// v2.0.0 — Debt Reminders API client
+// ════════════════════════════════════════════════════════════════════════════
+
+export interface DebtReminderItem {
+  id: string;
+  storeId: string;
+  customerId: string;
+  debtLedgerId: string;
+  reminderType: 'EMAIL' | 'SMS' | 'WHATSAPP' | 'IN_APP';
+  status: 'PENDING' | 'SENT' | 'FAILED' | 'DELIVERED';
+  message: string;
+  providerMessageId: string | null;
+  errorMessage: string | null;
+  sentAt: string;
+  deliveredAt: string | null;
+  customer?: { id: string; name: string; phone: string | null; email: string | null };
+  debtLedger?: {
+    id: string;
+    balance: number;
+    dueDate: string;
+    agingBucket: string;
+  };
+}
+
+export interface OverdueCustomerItem {
+  customerId: string;
+  customerName: string;
+  phone: string | null;
+  email: string | null;
+  totalOverdue: number;
+  oldestDueDate: string;
+  agingBucket: 'CURRENT' | 'DAYS_30' | 'DAYS_60' | 'DAYS_90_PLUS';
+  debts: Array<{
+    debtLedgerId: string;
+    balance: number;
+    dueDate: string;
+    agingBucket: string;
+  }>;
+  pendingReminders: number;
+}
+
+export interface ReminderScheduleResult {
+  totalEligible: number;
+  scheduled: number;
+  skipped: number;
+  errors: number;
+  details: Array<{ customerId: string; debtLedgerId: string; scheduled: boolean; reason?: string }>;
+}
+
+export const debtRemindersApi = {
+  list: async (params: {
+    storeId: string;
+    status?: string;
+    reminderType?: string;
+    customerId?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }) => {
+    const query = new URLSearchParams();
+    query.set('storeId', params.storeId);
+    if (params.status) query.set('status', params.status);
+    if (params.reminderType) query.set('reminderType', params.reminderType);
+    if (params.customerId) query.set('customerId', params.customerId);
+    if (params.page) query.set('page', String(params.page));
+    if (params.limit) query.set('limit', String(params.limit));
+    if (params.sortBy) query.set('sortBy', params.sortBy);
+    if (params.sortOrder) query.set('sortOrder', params.sortOrder);
+    return request<DebtReminderItem[]>(`/reminders/debt?${query.toString()}`);
+  },
+
+  listOverdue: async (storeId: string, daysThreshold = 1, limit = 50) => {
+    const query = new URLSearchParams({
+      storeId,
+      daysThreshold: String(daysThreshold),
+      limit: String(limit),
+    });
+    return request<OverdueCustomerItem[]>(`/reminders/debt/overdue?${query.toString()}`);
+  },
+
+  schedule: async (storeId: string) => {
+    return request<ReminderScheduleResult>('/reminders/debt/schedule', {
+      method: 'POST',
+      body: JSON.stringify({ storeId }),
+    });
+  },
+
+  process: async (storeId: string) => {
+    return request<{ sent: number; failed: number; total: number }>(
+      '/reminders/debt/process',
+      { method: 'POST', body: JSON.stringify({ storeId }) },
+    );
+  },
+};
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// v2.0.0 — Conversations API client (internal staff chat)
+// ════════════════════════════════════════════════════════════════════════════
+
+export interface ConversationItem {
+  id: string;
+  storeId: string;
+  type: 'INTERNAL' | 'CUSTOMER_SUPPORT';
+  title: string | null;
+  participantIds: string[];
+  participants?: Array<{
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    storeId?: string;
+  }>;
+  lastMessageAt: string | null;
+  lastMessagePreview: string | null;
+  messageCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConversationMessageItem {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  sender?: { id: string; name: string; email: string; role: string };
+  content: string;
+  messageType: 'TEXT' | 'IMAGE' | 'FILE' | 'SYSTEM';
+  attachmentUrl: string | null;
+  sentAt: string;
+  readBy: string[];
+  isOwn: boolean;
+}
+
+export const conversationsApi = {
+  list: async (storeId: string, type?: string, limit = 50) => {
+    const query = new URLSearchParams({ storeId, limit: String(limit) });
+    if (type) query.set('type', type);
+    return request<ConversationItem[]>(`/messages/conversations?${query.toString()}`);
+  },
+
+  create: async (data: {
+    storeId: string;
+    type?: 'INTERNAL' | 'CUSTOMER_SUPPORT';
+    title?: string;
+    participantIds: string[];
+  }) => {
+    return request<ConversationItem>('/messages/conversations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  get: async (conversationId: string) => {
+    return request<ConversationItem>(`/messages/conversations/${conversationId}`);
+  },
+
+  update: async (conversationId: string, data: {
+    title?: string;
+    type?: 'INTERNAL' | 'CUSTOMER_SUPPORT';
+    addParticipantIds?: string[];
+    removeParticipantIds?: string[];
+  }) => {
+    return request<ConversationItem>(`/messages/conversations/${conversationId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (conversationId: string) => {
+    return request<void>(`/messages/conversations/${conversationId}`, { method: 'DELETE' });
+  },
+
+  listMessages: async (conversationId: string, params?: { limit?: number; before?: string; order?: 'asc' | 'desc' }) => {
+    const query = new URLSearchParams();
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.before) query.set('before', params.before);
+    if (params?.order) query.set('order', params.order);
+    const qs = query.toString();
+    return request<ConversationMessageItem[]>(
+      `/messages/conversations/${conversationId}/messages${qs ? `?${qs}` : ''}`,
+    );
+  },
+
+  postMessage: async (conversationId: string, data: { content: string; messageType?: string; attachmentUrl?: string }) => {
+    return request<ConversationMessageItem>(`/messages/conversations/${conversationId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
