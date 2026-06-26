@@ -2,15 +2,32 @@
 // MBUMAH HARDWARE POS — Environment-variable validation (Zod)
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// This module validates required environment variables at module-load time
-// using the industry-standard `SKIP_ENV_VALIDATION` pattern (popularized by
-// create-t3-app). This is the SAME pattern used by Vercel-deployed Next.js
-// apps across the ecosystem.
+// This module validates required environment variables using the
+// `SKIP_ENV_VALIDATION` pattern (popularized by create-t3-app).
+//
+// ## CRITICAL DESIGN DECISION: LAZY validation (non-throwing at import)
+//
+// Previous versions of this module threw `EnvValidationError` EAGERLY at
+// module-import time. This caused OPAQUE 500 errors on Vercel when ANY single
+// env var was malformed — e.g. if `NEXTAUTH_URL` was set to a random string
+// instead of a URL, the ENTIRE `/api/auth/login` route would crash during
+// module evaluation, BEFORE the route handler ever ran. The `withErrorBoundary`
+// wrapper could NOT catch this (it only wraps the handler, not module init),
+// so Vercel returned the default Next.js 500 HTML page with NO diagnostic info.
+//
+// The fix: validation is now LAZY. The `env` export returns a Proxy that
+// validates on FIRST property access (not at import). This means:
+//   • Importing `@/lib/env` NEVER throws — routes always load successfully.
+//   • Validation runs once on the first `env.DATABASE_URL` access.
+//   • If validation fails, the error is thrown at the call site (inside the
+//     route handler), where `withErrorBoundary` CAN catch it and return a
+//     proper JSON error response with the full diagnostic detail.
+//   • `requireEnv('KEY')` validates that specific key on-demand.
 //
 // ## How it works
 //
 //   ┌──────────────────────────────────────────────────────────────────────┐
-//   │  `SKIP_ENV_VALIDATION` is truthy?                                    │
+//   │  `SKIP_ENV_VALIDATION` is truthy OR NEXT_PHASE=phase-production-build?│
 //   │                                                                      │
 //   │   YES (build phase / vercel-build script)                            │
 //   │     → Skip Zod validation entirely.                                  │
@@ -19,28 +36,17 @@
 //   │       WITHOUT crashing on missing runtime secrets.                   │
 //   │                                                                      │
 //   │   NO (runtime: Vercel serverless, `bun run dev`)                     │
-//   │     → Run `envSchema.safeParse(process.env)`.                        │
-//   │     → Throw a descriptive `EnvValidationError` listing ALL gaps.     │
-//   │     → Fails fast & loud — long before a cryptic 500 surfaces.        │
+//   │     → Return a LAZY proxy.                                           │
+//   │     → First property access triggers Zod `safeParse`.                │
+//   │     → If validation fails, throws `EnvValidationError` at call site. │
+//   │     → `withErrorBoundary` catches it → JSON 500 with details.        │
 //   └──────────────────────────────────────────────────────────────────────┘
-//
-// ## Why this pattern?
-//
-// Next.js `next build` statically analyzes route modules to collect page
-// data. During this phase, runtime secrets (DATABASE_URL, NEXTAUTH_SECRET,
-// etc.) are NOT injected on Vercel. Eagerly validating them at import time
-// would crash the build with `Failed to collect page data for /api/auth/login`.
-//
-// The `SKIP_ENV_VALIDATION=1` flag is set in the `vercel-build` npm script
-// (see package.json), so the build phase skips validation entirely. At
-// runtime — when Vercel injects the real env vars — the flag is absent and
-// the full Zod validation runs.
 //
 // ## Usage
 //
 //   import { env, requireEnv } from '@/lib/env';
-//   const url = env.DATABASE_URL;            // validated at import (runtime)
-//   const secret = requireEnv('JWT_SECRET'); // enforced at request time
+//   const url = env.DATABASE_URL;            // validates on first access
+//   const secret = requireEnv('JWT_SECRET'); // enforces specific key
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -86,6 +92,11 @@ export class EnvValidationError extends Error {
 // The auth secrets (NEXTAUTH_SECRET, JWT_SECRET, NEXTAUTH_URL) are optional at
 // import time; they are enforced lazily via `requireEnv()` in the routes that
 // actually need them, so a dev env that hasn't set up auth can still boot.
+//
+// NOTE: NEXTAUTH_URL uses `.min(1)` instead of `.url()` so that a malformed
+// value (e.g. a random string accidentally pasted into the Vercel env var)
+// does NOT crash the entire app. The URL format is validated lazily by the
+// routes that actually need a valid URL (e.g. NextAuth callbacks).
 const envSchema = z.object({
   // Database — required. The db.ts module does the richer Neon/Supabase
   // pooling validation; here we just confirm presence.
@@ -94,9 +105,11 @@ const envSchema = z.object({
     .min(1, 'DATABASE_URL is required (use the Neon/Supabase POOLED connection string).'),
 
   // NextAuth — NEXTAUTH_URL is the canonical public URL of the deployment.
+  // Uses .min(1) NOT .url() — a malformed value should not crash the app.
+  // Routes that need a valid URL validate it explicitly.
   NEXTAUTH_URL: z
     .string()
-    .url('NEXTAUTH_URL must be a valid URL (e.g. https://mbumah-hardware-pos.vercel.app).')
+    .min(1, 'NEXTAUTH_URL is set but empty.')
     .optional(),
 
   // NEXTAUTH_SECRET signs session JWTs. Min 16 chars (use `openssl rand -base64 32`).
@@ -120,12 +133,10 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
-// ── Build-phase detection (legacy compat, kept for downstream callers) ──────
+// ── Build-phase detection ────────────────────────────────────────────────────
 //
-// `isBuildTime` is still exported for any code that branched on the old
-// NEXT_RUNTIME heuristic. Under the SKIP_ENV_VALIDATION pattern the build
-// phase is determined by the env flag, but we keep this helper for
-// backwards compatibility with existing call sites.
+// `isBuildTime` is true during `next build` (when env vars aren't injected)
+// so that eager validation is skipped and page-data collection succeeds.
 export const isBuildTime =
   typeof process.env.NEXT_RUNTIME === 'undefined' ||
   process.env.SKIP_ENV_VALIDATION === '1' ||
@@ -138,8 +149,12 @@ export const isBuildTime =
   process.env.NEXT_PHASE === 'phase-production-build' ||
   process.env.NEXT_PHASE === 'phase-instrumentation';
 
-// ── Validation (eager, runs at import time — runtime only) ───────────────────
+// ── Validation (lazy — runs on first access, NOT at import) ──────────────────
 
+/**
+ * Run the full Zod safeParse and return the validated env (or throw).
+ * Called lazily on first `env.X` access so that module import NEVER throws.
+ */
 function validateEnv(): Env {
   // Client bundle guard — this module is server-only, but prevent a
   // confusing crash if a client component accidentally imports it.
@@ -152,20 +167,6 @@ function validateEnv(): Env {
 
   // ── BUILD PHASE: skip validation when SKIP_ENV_VALIDATION is truthy OR ──
   // ── when Next.js signals the build phase via NEXT_PHASE. ──────────────────
-  //
-  // The `vercel-build` npm script sets `SKIP_ENV_VALIDATION=1`, so during
-  // `next build` we skip the Zod parse entirely and export `process.env`
-  // cast to the schema type. This is what allows `next build` to collect
-  // page data for /api/auth/login (and every other route that transitively
-  // imports this module) WITHOUT crashing on missing runtime secrets.
-  //
-  // Layer 2: Next.js automatically sets `NEXT_PHASE=phase-production-build`
-  // during `next build` and `phase-instrumentation` during instrumentation.
-  // Detecting these makes `next build` work EVEN IF the caller forgets to
-  // prefix `SKIP_ENV_VALIDATION=1` — Next.js itself signals the build phase.
-  //
-  // At runtime (Vercel serverless, `bun run dev`) both flags are absent, so
-  // the full Zod `safeParse` runs and throws on any gap.
   const NEXT_PHASE_BUILD = 'phase-production-build';
   const NEXT_PHASE_INSTRUMENT = 'phase-instrumentation';
   if (
@@ -193,18 +194,39 @@ function validateEnv(): Env {
   return parsed.data;
 }
 
-/**
- * The validated environment. Access properties directly:
- *   env.DATABASE_URL    // string (guaranteed present at runtime)
- *   env.NEXTAUTH_URL    // string | undefined
- *   env.NEXTAUTH_SECRET // string | undefined
- *   env.JWT_SECRET      // string | undefined
- *   env.NODE_ENV        // 'development' | 'test' | 'production'
- *
- * At build time (SKIP_ENV_VALIDATION=1) this is an unvalidated `process.env`
- * cast (see `validateEnv`). At runtime it is fully Zod-validated.
- */
-export const env: Env = validateEnv();
+// ── Lazy proxy: validates on first property access ───────────────────────────
+//
+// This is the KEY change. Instead of `export const env = validateEnv()` (which
+// runs validation at import time and can crash module loading), we return a
+// Proxy that defers validation until the first property is accessed.
+//
+// Benefits:
+//   1. Importing `@/lib/env` NEVER throws — all routes load successfully.
+//   2. Validation runs exactly once (cached after first access).
+//   3. If validation fails, the error is thrown at the CALL SITE (inside a
+//      route handler), where withErrorBoundary CAN catch it → JSON 500.
+//   4. Build phase (SKIP_ENV_VALIDATION / NEXT_PHASE) still skips entirely.
+//
+let cachedEnv: Env | null = null;
+
+function getEnv(): Env {
+  if (cachedEnv === null) {
+    cachedEnv = validateEnv();
+  }
+  return cachedEnv;
+}
+
+export const env: Env = new Proxy({} as Env, {
+  get(_target, prop: string) {
+    return getEnv()[prop as keyof Env];
+  },
+  ownKeys() {
+    return Reflect.ownKeys(getEnv());
+  },
+  getOwnPropertyDescriptor(_target, prop: string) {
+    return Reflect.getOwnPropertyDescriptor(getEnv(), prop);
+  },
+});
 
 /**
  * Assert that a specific environment variable is present at request time.
@@ -219,7 +241,7 @@ export const env: Env = validateEnv();
  *   const secret = requireEnv('JWT_SECRET');
  */
 export function requireEnv(key: 'NEXTAUTH_SECRET' | 'JWT_SECRET' | 'NEXTAUTH_URL'): string {
-  const value = env[key];
+  const value = getEnv()[key];
   if (!value || value.trim() === '') {
     throw new EnvValidationError([key]);
   }
@@ -231,10 +253,10 @@ export function requireEnv(key: 'NEXTAUTH_SECRET' | 'JWT_SECRET' | 'NEXTAUTH_URL
  * Convenience accessor so callers don't need to import `env` directly for
  * a simple boolean check.
  */
-export const isProduction = env.NODE_ENV === 'production';
+export const isProduction = process.env.NODE_ENV === 'production';
 
 /**
  * True when running in the Vitest test suite. Used to relax eager env
  * validation in test contexts where the full env isn't set up.
  */
-export const isTest = env.NODE_ENV === 'test';
+export const isTest = process.env.NODE_ENV === 'test';
