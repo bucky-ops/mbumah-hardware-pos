@@ -1,6 +1,6 @@
 // GET /api/transactions/[id]
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 
@@ -11,7 +11,7 @@ interface RouteContext {
 }
 
 async function getTransactionHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+  const _request = args[0] as NextRequest;
   const context = args[1] as RouteContext;
   const { id } = await context.params;
 

@@ -314,7 +314,7 @@ export class NotificationService implements INotificationService {
     userId: string,
     title: string,
     message: string,
-    targetTab?: string,
+    _targetTab?: string,
   ): Promise<SendResult> {
     try {
       // Find the user's store to scope the notification.

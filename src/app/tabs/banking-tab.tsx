@@ -5,23 +5,20 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Wallet, Landmark, ArrowUpRight, ArrowDownRight, Search,
-  Plus, Loader2, Filter, Building2, CheckCircle2, Clock,
+  Plus, Loader2, Building2, CheckCircle2, Clock,
   AlertCircle, ChevronLeft, ChevronRight, Phone,
-  FileText, Banknote, RefreshCw, Eye, X, Minus,
+  FileText, Banknote, RefreshCw, Eye, Minus,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
   bankingApi,
   formatKES, formatDate, formatDateTime,
-  type BankAccountItem,
-  type BankTransactionItem,
   type BankReconciliationItem,
-  type MpesaReconciliationItem,
 } from '@/lib/api';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';

@@ -19,7 +19,7 @@ export default defineConfig({
     // Financial tests touch the filesystem SQLite DB; allow generous time.
     testTimeout: 30000,
     hookTimeout: 30000,
-    reporter: 'default',
+    reporters: ['default'],
   },
   resolve: {
     // Native tsconfig path resolution (replaces the deprecated

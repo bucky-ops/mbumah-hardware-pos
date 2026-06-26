@@ -13,7 +13,7 @@
 // Returns Content-Type: text/html — the client opens it in a new tab and
 // the user uses the browser's "Save as PDF" (Ctrl+P → Save as PDF).
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';

@@ -209,7 +209,16 @@ function validateEnv(): Env {
 //
 let cachedEnv: Env | null = null;
 
-function getEnv(): Env {
+/**
+ * Run (or return cached) environment validation. Exported so that callers
+ * which want EAGER validation on startup — e.g. `src/app/layout.tsx` — can
+ * trigger it explicitly without relying on the lazy proxy's first-access
+ * behaviour. Calling this multiple times is cheap: the result is cached.
+ *
+ * @throws {EnvValidationError} if any required env var is missing/malformed
+ *         and we are not in a build / skip-validation context.
+ */
+export function getEnv(): Env {
   if (cachedEnv === null) {
     cachedEnv = validateEnv();
   }

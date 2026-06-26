@@ -1,6 +1,6 @@
 // GET/POST /api/financial/journal
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateJournalEntryNumber } from '@/lib/helpers';

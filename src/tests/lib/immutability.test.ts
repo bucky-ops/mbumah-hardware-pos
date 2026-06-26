@@ -34,7 +34,7 @@ async function withRollback<T>(
   let result: T;
   try {
     result = await db.$transaction(async (tx) => {
-      const r = await fn(tx);
+      const _r = await fn(tx);
       throw ROLLBACK;
     });
     return result;

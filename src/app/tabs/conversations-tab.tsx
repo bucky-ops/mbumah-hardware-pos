@@ -20,8 +20,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   MessageSquare, Send, Plus, Search, ArrowLeft, Users,
-  Loader2, Trash2, Settings2, Hash, Clock, CheckCheck,
-  RefreshCw, X, UserCircle2,
+  Loader2, Trash2, Settings2, Hash, CheckCheck,
+  RefreshCw, X,
 } from 'lucide-react';
 
 import { useAppStore, useAuthStore } from '@/lib/stores';
@@ -34,7 +34,7 @@ import {
 import { handleError } from '@/lib/error-handler';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -53,7 +53,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -292,7 +291,7 @@ function ConversationThread({
   conversationId: string;
   onBack: () => void;
 }) {
-  const authUser = useAuthStore((s) => s.user);
+  const _authUser = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
   const [messageText, setMessageText] = useState('');
   const [showSettings, setShowSettings] = useState(false);
@@ -609,7 +608,7 @@ function ConversationSettingsDialog({
   // initial values are always fresh — no effect-based reset needed.
 
   const updateMutation = useMutation({
-    mutationFn: (data: { title?: string; type?: 'INTERNAL' | 'CUSTOMER_SUPPORT'; addParticipantIds?: string[] }) =>
+    mutationFn: (data: { title?: string; type?: 'INTERNAL' | 'CUSTOMER_SUPPORT'; addParticipantIds?: string[]; removeParticipantIds?: string[] }) =>
       conversationsApi.update(conversation.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conversation', conversation.id] });

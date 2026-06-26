@@ -3,19 +3,16 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import {
-  Download, BarChart3, Package, TrendingUp, TrendingDown,
+import { BarChart3, Package, TrendingUp, TrendingDown,
   ArrowUpRight, ArrowDownRight, Minus, FileText, Boxes,
-  ShoppingCart, DollarSign, FileSpreadsheet, FileDown,
+  ShoppingCart, DollarSign, FileDown,
   Calendar, Clock, Eye, Play, Sparkles, PieChart,
   HeartPulse, RotateCcw, CreditCard, Banknote, Smartphone,
-  AlertTriangle, Users, Timer, Printer, Wrench,
-  Search, ClipboardList, Sparkle, Link2, ArrowRight,
+  AlertTriangle, Users, Timer, Printer, Wrench, Sparkle, Link2, ArrowRight,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  Legend, Cell,
 } from 'recharts';
 
 import { useAppStore } from '@/lib/stores';
@@ -23,8 +20,6 @@ import {
   reportsApi, dashboardApi,
   customersApi, rentalsApi, transactionsApi,
   formatKES,
-  type CustomerItem,
-  type RentalItem,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
 
@@ -36,7 +31,6 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -254,7 +248,7 @@ function ConicPieChart({ segments }: {
 
 // Mini Sparkline Component (CSS-based)
 
-function MiniSparkline({ data, color = 'text-primary', height = 24 }: {
+function _MiniSparkline({ data, color = 'text-primary', height = 24 }: {
   data: number[]; color?: string; height?: number;
 }) {
   if (data.length === 0) return null;
@@ -1104,7 +1098,7 @@ export default function ReportsTab() {
     return (salesReport.totalRevenue / inventoryReport.totalInventoryValue).toFixed(2);
   }, [inventoryReport, salesReport]);
 
-  const salesSparkline = [35, 48, 42, 55, 50, 62, 58, 72, 65, 78, 70, 85];
+  const _salesSparkline = [35, 48, 42, 55, 50, 62, 58, 72, 65, 78, 70, 85];
 
   const paymentMethodIcons: Record<string, React.ReactNode> = {
     CASH: <Banknote className="h-4 w-4" />,

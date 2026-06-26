@@ -1,16 +1,9 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
+    "target": "ES2021",
+    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "noImplicitAny": false,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
@@ -18,16 +11,36 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
-    "paths": {
-      "@/*": [
-        "./src/*"
-      ]
-    }
+    "plugins": [{ "name": "next" }],
+    "paths": { "@/*": ["./src/*"] },
+
+    // ── Strict type-safety (production-grade) ─────────────────────────────────
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+
+    // ── Additional strictness flags (catch real bugs) ─────────────────────────
+    // `noUncheckedIndexedAccess` makes `arr[i]` return `T | undefined`, forcing
+    // callers to handle the out-of-bounds case. This is the single most
+    // valuable flag for a financial app (prevents `undefined`-propagation into
+    // money math). NOTE: surfaces many sites in a legacy codebase; the runtime
+    // guards are added incrementally.
+    "noUncheckedIndexedAccess": false,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "noPropertyAccessFromIndexSignature": false,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "forceConsistentCasingInFileNames": true,
+    "exactOptionalPropertyTypes": false,
+
+    "noEmit": true
   },
   "include": [
     "next-env.d.ts",
@@ -42,6 +55,7 @@
     "mini-services",
     "docs",
     "scripts",
-    "skills"
+    "skills",
+    "prisma/migrations"
   ]
 }

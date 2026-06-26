@@ -26,7 +26,7 @@ import {
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
 import { toast } from 'sonner';
-import type { TopProduct, ShiftData } from '@/lib/types';
+import type { TopProduct } from '@/lib/types';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -62,7 +62,7 @@ async function authedFetch(
   return fetch(input, { ...init, headers, credentials: 'same-origin' });
 }
 
-const CHART_COLORS = [
+const _CHART_COLORS = [
   'hsl(var(--chart-1))',
   'hsl(var(--chart-2))',
   'hsl(var(--chart-3))',
@@ -465,7 +465,7 @@ function SalesOverview({ storeId }: { storeId: string }) {
         const hourLabels = ['6am', '7am', '8am', '9am', '10am', '11am', '12pm', '1pm', '2pm', '3pm', '4pm', '5pm', '6pm', '7pm'];
         const nonZeroHours = dashboardData.salesByHour.filter((h: { amount: number }) => h.amount > 0);
         return {
-          revenueChartData: nonZeroHours.map((h: { hour: string; amount: number }, i: number) => ({
+          revenueChartData: nonZeroHours.map((h: { hour: string; amount: number }, _i: number) => ({
             label: hourLabels[parseInt(h.hour) - 6] || h.hour,
             revenue: h.amount,
             expenses: Math.round(h.amount * 0.35),
@@ -1638,7 +1638,7 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
       } else {
         toast.error(res.error || 'Failed to start shift.');
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to start shift. Please try again.');
     } finally {
       setIsStarting(false);
@@ -1687,7 +1687,7 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
       } else {
         toast.error(res.error || 'Failed to end shift.');
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to end shift. Please try again.');
     } finally {
       setIsEnding(false);

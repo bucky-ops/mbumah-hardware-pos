@@ -14,7 +14,7 @@
 //   type    — INTERNAL | CUSTOMER_SUPPORT (optional filter)
 //   limit   — default 50, max 200
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';

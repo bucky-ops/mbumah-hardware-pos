@@ -5,7 +5,7 @@
 //   POST — initiate a new payroll run (DRAFT status) and optionally process it
 //          immediately (when ?process=true is passed)
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';

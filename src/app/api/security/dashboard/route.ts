@@ -1,10 +1,10 @@
 // GET /api/security/dashboard - Security overview for admin dashboard
 // Requires SUPER_ADMIN or STORE_OWNER role
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
-import { requireAuth, AuthSession } from '@/lib/auth';
+import { requireAuth, type AuthSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 

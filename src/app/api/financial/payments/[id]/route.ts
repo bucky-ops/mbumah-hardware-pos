@@ -1,6 +1,5 @@
 // PUT /api/financial/payments/[id] - Void a payment
 
-import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';

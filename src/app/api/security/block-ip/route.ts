@@ -2,8 +2,8 @@
 // DELETE /api/security/block-ip - Unblock an IP address
 // Requires SUPER_ADMIN role
 
-import { NextRequest } from 'next/server';
-import { requireAuth, AuthSession } from '@/lib/auth';
+import { type NextRequest } from 'next/server';
+import { requireAuth, type AuthSession } from '@/lib/auth';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { blockKey, resetRateLimit } from '@/lib/rate-limit';
 import { LogSeverity, LogComponent } from '@/lib/types';

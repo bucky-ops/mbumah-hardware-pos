@@ -5,10 +5,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Users, Search, Plus, CircleDollarSign, AlertTriangle,
-  Eye, Loader2, HandCoins, Banknote, Smartphone,
-  MessageSquare, ShoppingBag, Award, Phone, Mail, MapPin, CreditCard, Clock,
-  ArrowUpDown, Filter, UserPlus, TrendingUp, Calendar, FileText, Bell,
-  History, Send, Printer, Tag, Gift, Truck, FileCheck, Receipt,
+  Eye, Loader2, HandCoins, Banknote, Smartphone, ShoppingBag, Phone, Mail, MapPin, CreditCard, Clock,
+  ArrowUpDown, Filter, UserPlus, TrendingUp, FileText, Bell,
+  History, Send, Tag, Gift, Truck, FileCheck, Receipt,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
@@ -25,7 +24,7 @@ import { handleError } from '@/lib/error-handler';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -584,9 +583,9 @@ export default function CustomersTab() {
   const selectedDebt = activeDebts.find((d) => d.id === selectedDebtLedgerId);
   const currentDebtBalance = selectedDebt ? selectedDebt.amountOwed - selectedDebt.amountPaid : (selectedCustomer?.currentDebtBalance ?? 0);
   const newBalancePreview = Math.max(0, currentDebtBalance - paymentAmountNum);
-  const goldCustomers = rawCustomers.filter(c => c.loyaltyPoints >= 1500).length;
+  const _goldCustomers = rawCustomers.filter(c => c.loyaltyPoints >= 1500).length;
   const customersWithDebt = rawCustomers.filter(c => c.currentDebtBalance > 0).length;
-  const averageSpend = rawCustomers.length > 0 ? 0 : 0; // Would need total spend data
+  const _averageSpend = rawCustomers.length > 0 ? 0 : 0; // Would need total spend data
   const newCustomersThisMonth = rawCustomers.filter(c => {
     const created = new Date(c.createdAt);
     const now = new Date();
@@ -594,7 +593,7 @@ export default function CustomersTab() {
   }).length;
 
   // Fuzzy search
-  const fuzzyMatch = (query: string, text: string): boolean => {
+  const _fuzzyMatch = (query: string, text: string): boolean => {
     const q = query.toLowerCase();
     const t = text.toLowerCase();
     if (t.includes(q)) return true;
@@ -1002,7 +1001,7 @@ export default function CustomersTab() {
                       </TableCell>
                     </TableRow>
                   ) : customers.map((customer, idx) => {
-                    const debtStatus = getDebtStatus(customer.currentDebtBalance, customer.debtLimit);
+                    const _debtStatus = getDebtStatus(customer.currentDebtBalance, customer.debtLimit);
                     const loyalty = getLoyaltyTier(customer.loyaltyPoints);
                     const gradient = getAvatarGradient(customer.name);
                     const initials = customer.name.split(' ').map(n => n[0]).join('').slice(0, 2);
@@ -1250,7 +1249,7 @@ export default function CustomersTab() {
           {selectedCustomer && (() => {
             const gradient = getAvatarGradient(selectedCustomer.name);
             const loyalty = getLoyaltyTier(selectedCustomer.loyaltyPoints);
-            const debtStatus = getDebtStatus(selectedCustomer.currentDebtBalance, selectedCustomer.debtLimit);
+            const _debtStatus = getDebtStatus(selectedCustomer.currentDebtBalance, selectedCustomer.debtLimit);
             const hasOverdueDebt = debts.some(d => d.status === 'OVERDUE');
             const aging = getDebtAgingBreakdown();
             const totalAging = aging.current + aging.thirty + aging.sixty + aging.ninety + aging.overNinety;

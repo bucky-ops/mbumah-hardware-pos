@@ -7,11 +7,11 @@ import {
   Activity, ArrowRight, Plus, CheckCircle, Loader2,
   Cpu, HardDrive, Clock, Users, Zap, Trash2, RefreshCw,
   Database, ShieldCheck, AlertCircle, Info, Bell,
-  Search, ChevronDown, ChevronUp, FileDown, Globe,
-  Shield, Wrench, PackageX, AlertOctagon, LogOut,
+  Search, ChevronDown, FileDown, Globe,
+  Shield, Wrench, PackageX, AlertOctagon,
   UserCheck, UserX, PlusCircle, MinusCircle,
-  Settings, Save, Eye, Edit3, UserPlus, X,
-  AlertTriangle, Terminal, BarChart3, MapPin, Phone,
+  Settings, Save, Edit3, UserPlus, X,
+  AlertTriangle, Terminal, MapPin, Phone,
   MessageSquare, Mail, Smartphone, Store,
 } from 'lucide-react';
 
@@ -19,8 +19,7 @@ import { useAppStore } from '@/lib/stores';
 import {
   systemLogsApi, stockMovementsApi, productsApi,
   auditLogsApi, systemConfigApi, usersApi,
-  formatDateTime, formatKES,
-  type SystemLogItem, type StockMovementItem,
+  formatDateTime,
   type AuditLogItem, type SystemConfigItem, type UserItem,
 } from '@/lib/api';
 
@@ -30,7 +29,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -134,37 +132,12 @@ function MiniSparkline({ data, color = 'text-primary', height = 24 }: {
   );
 }
 
-// Animated Counter Component
+// Animated Counter Component — REMOVED (dead code: defined but never used).
+// If a counting animation is needed again, re-introduce as `AnimatedCounter`
+// (no leading underscore — React component names must start with uppercase so
+// the react-hooks/rules-of-hooks rule recognises them).
 
-function AnimatedCounter({ value, duration = 1000 }: { value: number; duration?: number }) {
-  const [display, setDisplay] = useState(0);
-  const prevRef = React.useRef(value);
-  const rafRef = React.useRef<number>(0);
-
-  useEffect(() => {
-    const start = prevRef.current;
-    const end = value;
-    const startTime = Date.now();
-
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplay(Math.round(start + (end - start) * eased));
-      if (progress < 1) {
-        rafRef.current = requestAnimationFrame(animate);
-      }
-    };
-
-    rafRef.current = requestAnimationFrame(animate);
-    prevRef.current = value;
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [value, duration]);
-
-  return <>{display.toLocaleString()}</>;
-}
-
-// Stock Adjustment Dialog 
+// Stock Adjustment Dialog
 
 const REASON_CATEGORIES = [
   { value: 'RESTOCK', label: 'Restock', icon: PlusCircle, color: 'text-green-600' },
@@ -872,7 +845,7 @@ function AuditLogSection({ storeId }: { storeId: string }) {
 
 const CONFIG_CATEGORIES = ['Store', 'Receipts', 'Notifications', 'Payments', 'Advanced'];
 
-function ConfigEditor({ storeId }: { storeId: string }) {
+function ConfigEditor({ storeId: _storeId }: { storeId: string }) {
   const queryClient = useQueryClient();
   const [activeCategory, setActiveCategory] = useState('Store');
   const [editingKey, setEditingKey] = useState<string | null>(null);

@@ -10,7 +10,7 @@
 //      (which is updated by the callback handler when a real callback
 //      arrives, or remains at PROCESSING / PENDING otherwise).
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
@@ -54,7 +54,7 @@ async function fetchDarajaToken(
 }
 
 async function statusHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+  const _request = args[0] as NextRequest;
   const context = args[1] as RouteContext;
   const checkoutRequestId = (await context.params).checkoutRequestId;
 
@@ -145,7 +145,7 @@ async function statusHandler(...args: unknown[]): Promise<Response> {
       const resultCode = json.ResultCode || '';
       const resultDesc = json.ResultDesc || '';
       let nextStatus = mpesaTxn.status;
-      let mpesaReceiptNumber: string | null = null;
+      const mpesaReceiptNumber: string | null = null;
 
       // 0 = success, 1032/1037 = timeouts/cancelled-by-user
       if (resultCode === '0') {

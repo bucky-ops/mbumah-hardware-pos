@@ -17,7 +17,7 @@
 //   daysThreshold — minimum days past due to be included (default 1)
 //   limit         — cap the customer count (default 50, max 500)
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { requireStoreAccess } from '@/lib/auth';

@@ -7,7 +7,7 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area,
 } from 'recharts';
 import {
-  Shield, ShieldOff, AlertTriangle, Users, Lock, Unlock,
+  Shield, ShieldOff, AlertTriangle, Users,
   Activity, Eye, Ban, RefreshCw, Filter, X,
 } from 'lucide-react';
 
@@ -263,8 +263,8 @@ export default function SecurityTab() {
   }, [dateFrom, dateTo, filterEventType, filterSeverity]);
 
   const {
-    data: eventsResponse,
-    isLoading: eventsLoading,
+    data: _eventsResponse,
+    isLoading: _eventsLoading,
   } = useQuery({
     queryKey: ['security-events', eventsParams],
     queryFn: () => fetchEvents(eventsParams),

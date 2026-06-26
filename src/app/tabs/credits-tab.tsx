@@ -5,8 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   CreditCard, Search, Plus, ArrowUpRight, ArrowDownRight,
-  Minus, RotateCcw, Loader2, Filter, Users, Wallet,
-  TrendingUp, TrendingDown, Scale, ChevronUp, ChevronDown,
+  Minus, RotateCcw, Loader2, Filter, Users, Wallet, Scale, ChevronUp, ChevronDown,
   FileText, User, CircleDollarSign, AlertCircle, MoreHorizontal,
   Pencil, Trash2, MessageCircle, Printer,
 } from 'lucide-react';

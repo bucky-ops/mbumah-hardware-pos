@@ -1,6 +1,6 @@
 // GET/PUT /api/customers/[id]
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
@@ -12,7 +12,7 @@ interface RouteContext {
 }
 
 async function getCustomerHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+  const _request = args[0] as NextRequest;
   const context = args[1] as RouteContext;
   const { id } = await context.params;
 

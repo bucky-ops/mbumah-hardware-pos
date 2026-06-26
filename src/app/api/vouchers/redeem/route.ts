@@ -13,9 +13,9 @@
 // Returns: { success, discountAmount, voucher, newBalance? }
 //   - newBalance is only returned for FIXED vouchers (value - discount)
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { requireAuth, AuthSession } from '@/lib/auth';
+import { requireAuth, type AuthSession } from '@/lib/auth';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 

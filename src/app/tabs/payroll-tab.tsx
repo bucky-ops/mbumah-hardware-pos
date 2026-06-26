@@ -20,11 +20,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Users, UserPlus, CalendarDays, CalendarRange, Wallet, Clock,
-  Search, Plus, Edit, Trash2, Eye, Check, X, AlertCircle, Loader2,
-  Banknote, Phone, Mail, Briefcase, TrendingUp, Filter, Download,
-  CheckCircle, XCircle, Clock3, MapPin, CreditCard, FileText, User,
-  IdCard, Building2, AlertTriangle, Calendar, IndianRupee, PiggyBank,
-  ChevronDown, MoreHorizontal, ArrowUpDown, Pause, Play, BadgeCheck,
+  Search, Plus, Edit, Eye, Check, X, AlertCircle, Loader2,
+  Banknote, Phone, Mail, Briefcase,
+  CheckCircle, XCircle, Clock3, FileText, User,
+  IdCard, Building2, AlertTriangle, Calendar, PiggyBank, Play,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';

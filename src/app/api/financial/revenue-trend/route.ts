@@ -1,6 +1,6 @@
 // GET /api/financial/revenue-trend (daily revenue, generates demo data if empty)
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 

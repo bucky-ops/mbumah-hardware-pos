@@ -1,10 +1,10 @@
 // GET/PUT /api/system-config
 // Requires SUPER_ADMIN role
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
-import { requireAuth, AuthSession } from '@/lib/auth';
+import { requireAuth, type AuthSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 

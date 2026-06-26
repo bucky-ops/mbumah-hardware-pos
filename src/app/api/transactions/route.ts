@@ -21,7 +21,7 @@
 // If ANY step throws, the entire transaction rolls back — no partial
 // sales, no orphaned stock movements, no unbalanced journal entries.
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateReceiptNumber, calculateLineTotal } from '@/lib/helpers';

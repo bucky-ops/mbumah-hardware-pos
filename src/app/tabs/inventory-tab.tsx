@@ -6,8 +6,8 @@ import { toast } from 'sonner';
 import {
   Package, Search, Plus, AlertTriangle, AlertCircle, DollarSign,
   MoreVertical, Edit, Trash2, Loader2, CheckCircle, Copy, ArrowUpDown,
-  Minus, TrendingUp, BarChart3, ChevronUp, ChevronDown, ChevronsUpDown,
-  Download, History, ArrowUp, ArrowDown, RotateCcw, X, ImageIcon,
+  Minus, BarChart3, ChevronUp, ChevronDown, ChevronsUpDown,
+  Download, History, RotateCcw, X, ImageIcon,
   Filter, ChevronRight, Tag, Palette, Zap, ShoppingCart, Info,
   MessageCircle
 } from 'lucide-react';
@@ -17,7 +17,6 @@ import {
   productsApi, categoriesApi, stockMovementsApi, whatsappApi,
   formatKES, formatDate, formatDateTime,
   type ProductListItem,
-  type CategoryItem,
   type StockMovementItem,
   type CreateProductPayload,
 } from '@/lib/api';
@@ -37,9 +36,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { Progress } from '@/components/ui/progress';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -477,7 +473,7 @@ export default function InventoryTab() {
   const lowStockCount = allProducts.filter(p => p.quantityInStock <= p.reorderLevel && p.quantityInStock > 0).length;
   const outOfStockCount = allProducts.filter(p => p.quantityInStock <= 0).length;
   const totalInventoryValue = allProducts.reduce((sum, p) => sum + (p.costPrice * p.quantityInStock), 0);
-  const avgProfitMargin = (() => {
+  const _avgProfitMargin = (() => {
     if (allProducts.length === 0) return 0;
     const total = allProducts.reduce((sum, p) => {
       if (p.pricePerUnit > 0) return sum + ((p.pricePerUnit - p.costPrice) / p.pricePerUnit * 100);
@@ -635,7 +631,7 @@ export default function InventoryTab() {
   };
 
   // Compute sales velocity (approximate from stock movements)
-  const getProductSalesVelocity = (productId: string): number => {
+  const getProductSalesVelocity = (_productId: string): number => {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const saleMovements = productMovements.filter(
@@ -1446,7 +1442,7 @@ export default function InventoryTab() {
             const stockRatio = detailProduct.reorderLevel > 0
               ? detailProduct.quantityInStock / (detailProduct.reorderLevel * 3)
               : 1;
-            const stockPct = Math.min(100, Math.max(0, stockRatio * 100));
+            const _stockPct = Math.min(100, Math.max(0, stockRatio * 100));
 
             return (
               <div className="space-y-5">

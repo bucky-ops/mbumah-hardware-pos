@@ -6,7 +6,7 @@
 // This is the "process now" endpoint — called after a run is created in
 // DRAFT status, or to retry a FAILED run.
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';

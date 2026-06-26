@@ -1,10 +1,10 @@
 // GET /api/system-logs
 // Requires SUPER_ADMIN or ACCOUNTANT role
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
-import { requireAuth, AuthSession } from '@/lib/auth';
+import { requireAuth, type AuthSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 

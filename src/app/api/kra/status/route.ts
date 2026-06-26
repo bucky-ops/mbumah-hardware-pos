@@ -14,7 +14,7 @@
 //   6. Update the InvoiceForKRA.submissionStatus + acceptedAt if applicable.
 //   7. Return the refreshed InvoiceForKRA row.
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';

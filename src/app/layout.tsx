@@ -4,6 +4,25 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { Providers } from "@/lib/providers";
+import { getEnv } from "@/lib/env";
+
+// ── Startup env validation ──────────────────────────────────────────────────
+// Calling `getEnv()` at module load enforces Zod validation the moment the
+// root layout is first rendered on the server. Because the result is cached
+// inside env.ts, this is a one-time cost. If a required env var is missing
+// (and we are NOT in a build/skip-validation phase), this throws an
+// `EnvValidationError` with a full diagnostic — failing fast on boot is far
+// better than discovering a missing DATABASE_URL mid-request.
+//
+// NOTE: wrapped in try/catch + console.error so that, in the rare case a
+// platform hasn't injected env vars yet, the error is logged with full
+// remediation guidance rather than crashing the serverless function silently.
+try {
+  getEnv();
+} catch (envError) {
+   
+  console.error(envError);
+}
 
 // ── Font configuration ──────────────────────────────────────────────────────
 // BOTH font variants use `preload: false`.

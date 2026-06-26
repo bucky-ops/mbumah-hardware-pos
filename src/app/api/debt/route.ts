@@ -1,6 +1,6 @@
 // GET/POST /api/debt
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateJournalEntryNumber, calculateAgingBucket } from '@/lib/helpers';

@@ -574,7 +574,7 @@ export default function TaxTab() {
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {cat.taxRates.map((rate) => (
+                                {cat.taxRates.map((rate: { id: string; name: string; rate: number }) => (
                                   <TableRow key={rate.id}>
                                     <TableCell className="text-xs py-2">{rate.name}</TableCell>
                                     <TableCell className="text-xs py-2 font-mono">{rate.rate}%</TableCell>

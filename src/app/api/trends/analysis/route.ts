@@ -10,9 +10,9 @@
 //   - storeId : REQUIRED — scope to a store
 //   - range   : 7d | 30d | 90d (default 30d)
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { requireAuth, AuthSession } from '@/lib/auth';
+import { requireAuth, type AuthSession } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -318,7 +318,7 @@ async function trendsAnalysisHandler(
   }
 
   // Least-squares linear fit: y = a + b*x
-  let forecast: Array<{ label: string; predicted: number; lower: number; upper: number }> = [];
+  const forecast: Array<{ label: string; predicted: number; lower: number; upper: number }> = [];
   let forecastAvgDaily = 0;
   if (seriesPoints.length >= 2) {
     const n = seriesPoints.length;

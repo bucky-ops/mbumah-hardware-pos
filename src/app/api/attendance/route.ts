@@ -9,7 +9,7 @@
 //   • If a record exists with checkOut = null → set checkOut = now, compute workingHours
 //   • If a record exists with checkOut set → return error (already clocked out)
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';

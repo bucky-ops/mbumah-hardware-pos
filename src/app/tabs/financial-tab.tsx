@@ -7,10 +7,8 @@ import {
   TrendingUp, ShoppingBag, CircleDollarSign, KeyRound,
   ChevronDown, ChevronRight, CalendarDays, Wallet,
   ArrowUpRight, ArrowDownRight, Minus, Landmark,
-  FileText, FileCheck, Clock, Download, Printer,
-  DollarSign, CreditCard, Receipt, Plus,
-  Send, Banknote, Eye, Scale, PiggyBank,
-  AlertCircle, CheckCircle2, Loader2, Trash2, Edit2,
+  FileText, FileCheck, Clock, Download, Printer, CreditCard, Receipt, Plus,
+  Send, Banknote, Scale, PiggyBank, CheckCircle2, Loader2, Trash2, Edit2,
   MoreHorizontal, Ban,
 } from 'lucide-react';
 
@@ -21,7 +19,7 @@ import {
   type JournalEntryItem, type AccountItem, type ExpenseItem,
 } from '@/lib/api';
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,9 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import {
-  Collapsible, CollapsibleContent, CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -42,14 +38,11 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  PieChart, Pie, Cell, BarChart, Bar, AreaChart, Area,
-  ResponsiveContainer, Legend, ComposedChart,
+import { Line, XAxis, YAxis, CartesianGrid,
+  PieChart, Pie, Cell, BarChart, Bar, AreaChart, Area, ComposedChart,
 } from 'recharts';
 
 import {
@@ -497,7 +490,7 @@ export default function FinancialTab() {
     setDateRange(getDatePreset(preset));
   };
 
-  const { data: dashboardData, isLoading: dashboardLoading } = useQuery({
+  const { data: dashboardData, isLoading: _dashboardLoading } = useQuery({
     queryKey: ['dashboard', currentStoreId],
     queryFn: () => dashboardApi.getStats(currentStoreId),
   });
@@ -782,7 +775,7 @@ export default function FinancialTab() {
   }, 0);
 
   const grossProfit = totalRevenue - totalExpenses;
-  const profitMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+  const _profitMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 
   // P&L detailed breakdowns
   const plBreakdown = useMemo(() => {
@@ -928,7 +921,7 @@ export default function FinancialTab() {
 
   const accountTypeOrder = ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'];
 
-  const accountGroupTotals = useMemo(() => {
+  const _accountGroupTotals = useMemo(() => {
     const totals: Record<string, number> = {};
     accountTypeOrder.forEach((type) => {
       const group = groupedAccounts[type] || [];

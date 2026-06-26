@@ -28,8 +28,8 @@ export async function GET() {
 
   // 2. Data presence check (count key tables)
   // Distinguish "missing table" (schema not pushed) from "empty table" (not seeded).
-  let counts: Record<string, number> = {};
-  let missingTables: string[] = [];
+  const counts: Record<string, number> = {};
+  const missingTables: string[] = [];
   let countsError: string | null = null;
 
   const tablesToCount: Array<[string, 'organization' | 'store' | 'user' | 'product' | 'productCategory' | 'customer' | 'salesTransaction' | 'rolePermission']> = [
@@ -46,7 +46,7 @@ export async function GET() {
   try {
     for (const [label, model] of tablesToCount) {
       try {
-        counts[label] = await (db as Record<string, { count: () => Promise<number> }>)[model].count();
+        counts[label] = await (db as unknown as Record<string, { count: () => Promise<number> }>)[model].count();
       } catch {
         missingTables.push(model);
         counts[label] = -1;

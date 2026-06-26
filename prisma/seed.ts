@@ -222,7 +222,7 @@ async function seedBody() {
 
   // 4. Seed additional demo users
   const done4 = stage(4, TOTAL_STAGES, 'Seed demo users (11)');
-  const cashier = await prisma.user.create({
+  const _cashier = await prisma.user.create({
     data: {
       id: 'user_cashier_1',
       organizationId: org.id,
@@ -236,7 +236,7 @@ async function seedBody() {
     },
   });
 
-  const accountant = await prisma.user.create({
+  const _accountant = await prisma.user.create({
     data: {
       id: 'user_accountant_1',
       organizationId: org.id,
@@ -251,7 +251,7 @@ async function seedBody() {
   });
 
   // 4b. Seed Branch Managers
-  const thikaManager = await prisma.user.create({
+  const _thikaManager = await prisma.user.create({
     data: {
       id: 'user_thika_manager',
       organizationId: org.id,
@@ -265,7 +265,7 @@ async function seedBody() {
     },
   });
 
-  const ruiruManager = await prisma.user.create({
+  const _ruiruManager = await prisma.user.create({
     data: {
       id: 'user_ruiru_manager',
       organizationId: org.id,
@@ -279,7 +279,7 @@ async function seedBody() {
     },
   });
 
-  const nairobiManager = await prisma.user.create({
+  const _nairobiManager = await prisma.user.create({
     data: {
       id: 'user_nairobi_manager',
       organizationId: org.id,
@@ -293,7 +293,7 @@ async function seedBody() {
     },
   });
 
-  const nakuruManager = await prisma.user.create({
+  const _nakuruManager = await prisma.user.create({
     data: {
       id: 'user_nakuru_manager',
       organizationId: org.id,
@@ -308,7 +308,7 @@ async function seedBody() {
   });
 
   // 4c. Seed Branch Cashiers
-  const thikaCashier = await prisma.user.create({
+  const _thikaCashier = await prisma.user.create({
     data: {
       id: 'user_thika_cashier',
       organizationId: org.id,
@@ -322,7 +322,7 @@ async function seedBody() {
     },
   });
 
-  const ruiruCashier = await prisma.user.create({
+  const _ruiruCashier = await prisma.user.create({
     data: {
       id: 'user_ruiru_cashier',
       organizationId: org.id,
@@ -336,7 +336,7 @@ async function seedBody() {
     },
   });
 
-  const nairobiCashier = await prisma.user.create({
+  const _nairobiCashier = await prisma.user.create({
     data: {
       id: 'user_nairobi_cashier',
       organizationId: org.id,
@@ -350,7 +350,7 @@ async function seedBody() {
     },
   });
 
-  const nakuruCashier = await prisma.user.create({
+  const _nakuruCashier = await prisma.user.create({
     data: {
       id: 'user_nakuru_cashier',
       organizationId: org.id,
@@ -365,7 +365,7 @@ async function seedBody() {
   });
 
   // 4d. Seed Store Owner
-  const storeOwner = await prisma.user.create({
+  const _storeOwner = await prisma.user.create({
     data: {
       id: 'user_store_owner',
       organizationId: org.id,
@@ -1397,7 +1397,7 @@ async function seedBody() {
     },
   });
 
-  const gc2 = await prisma.giftCard.create({
+  const _gc2 = await prisma.giftCard.create({
     data: {
       id: 'gc_active_0002',
       storeId: store.id,
@@ -1433,7 +1433,7 @@ async function seedBody() {
     },
   });
 
-  const gc4 = await prisma.giftCard.create({
+  const _gc4 = await prisma.giftCard.create({
     data: {
       id: 'gc_gift_0001',
       storeId: store.id,
@@ -1471,7 +1471,7 @@ async function seedBody() {
     },
   });
 
-  const gc6 = await prisma.giftCard.create({
+  const _gc6 = await prisma.giftCard.create({
     data: {
       id: 'gc_thk_0002',
       storeId: storeThika.id,
@@ -1488,7 +1488,7 @@ async function seedBody() {
   });
 
   // -- Ruiru --
-  const gc7 = await prisma.giftCard.create({
+  const _gc7 = await prisma.giftCard.create({
     data: {
       id: 'gc_rur_0001',
       storeId: storeRuiru.id,
@@ -1506,7 +1506,7 @@ async function seedBody() {
     },
   });
 
-  const gc8 = await prisma.giftCard.create({
+  const _gc8 = await prisma.giftCard.create({
     data: {
       id: 'gc_rur_0002',
       storeId: storeRuiru.id,
@@ -1541,7 +1541,7 @@ async function seedBody() {
     },
   });
 
-  const gc10 = await prisma.giftCard.create({
+  const _gc10 = await prisma.giftCard.create({
     data: {
       id: 'gc_nbi_0002',
       storeId: storeNairobiCbd.id,
@@ -1596,7 +1596,7 @@ async function seedBody() {
     },
   });
 
-  const gc13 = await prisma.giftCard.create({
+  const _gc13 = await prisma.giftCard.create({
     data: {
       id: 'gc_nkr_0002',
       storeId: storeNakuru.id,
@@ -1613,7 +1613,7 @@ async function seedBody() {
     },
   });
 
-  const gc14 = await prisma.giftCard.create({
+  const _gc14 = await prisma.giftCard.create({
     data: {
       id: 'gc_nkr_0003',
       storeId: storeNakuru.id,

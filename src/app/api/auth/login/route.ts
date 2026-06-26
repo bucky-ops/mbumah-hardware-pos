@@ -25,7 +25,7 @@
 //   table (best-effort) and includes the full stack trace in the response
 //   when EXPOSE_ERRORS=true.
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env'; // Lazy env validation — fails at call site, not import

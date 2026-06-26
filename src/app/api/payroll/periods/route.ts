@@ -4,7 +4,7 @@
 //   GET  — list periods for a store (optionally filtered by status)
 //   POST — create a new payroll period (DRAFT status)
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';

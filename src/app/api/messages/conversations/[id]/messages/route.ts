@@ -13,7 +13,7 @@
 //              paginating backward in time / infinite scroll)
 //   order    — asc | desc (default asc, oldest-first for chat UX)
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';

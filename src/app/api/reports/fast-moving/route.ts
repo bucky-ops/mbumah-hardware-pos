@@ -1,6 +1,6 @@
 // GET /api/reports/fast-moving
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 
@@ -98,7 +98,7 @@ async function getFastMovingProductsHandler(...args: unknown[]): Promise<Respons
 
   // Filter by category if specified
   if (categoryId) {
-    fastMovingProducts = fastMovingProducts.filter((p) => {
+    fastMovingProducts = fastMovingProducts.filter((_p) => {
       // We need to check the product's categoryId; the aggregated data doesn't have it
       // This is handled below with a secondary filter
       return true; // We'll filter after

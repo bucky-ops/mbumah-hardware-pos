@@ -11,7 +11,7 @@
 //     production use, swap to AES-256-GCM via src/lib/crypto-helpers.ts.
 //   • The password is NEVER returned in GET responses — only a "configured" boolean.
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';

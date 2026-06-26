@@ -1,21 +1,17 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Sparkles, Plus, Search, Star, Crown, Award, Users,
-  Eye, Loader2, Settings2, TrendingUp, Calendar,
-  ArrowUpDown, Filter, Gift, Zap, ChevronUp, Clock,
+  Sparkles, Plus, Search, Crown, Award, Users, Loader2, Settings2, TrendingUp, Calendar, Gift, Zap, ChevronUp, Clock,
   HandCoins, Target, Megaphone, Edit, History,
-  ChevronRight, CheckCircle2, XCircle, Play, Pause,
-  Trophy, Gem, Medal, Shield, Palette, Save, X,
+  Trophy, Gem, Medal, Shield, Palette,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
-  loyaltyApi, customersApi,
-  formatKES, formatDate, formatDateTime,
+  loyaltyApi, customersApi, formatDate, formatDateTime,
   type LoyaltyTierItem,
   type LoyaltyTransactionItem,
   type LoyaltyCampaignItem,
@@ -23,7 +19,7 @@ import {
 } from '@/lib/api';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -133,7 +129,7 @@ export default function LoyaltyTab() {
   const [txTypeFilter, setTxTypeFilter] = useState<string>('all');
   const [txDateFrom, setTxDateFrom] = useState('');
   const [txDateTo, setTxDateTo] = useState('');
-  const [txSearch, setTxSearch] = useState('');
+  const [_txSearch, _setTxSearch] = useState('');
   const [manualAdjustOpen, setManualAdjustOpen] = useState(false);
   const [manualAdjustForm, setManualAdjustForm] = useState({
     customerId: '',
@@ -757,7 +753,7 @@ export default function LoyaltyTab() {
                         </span>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground max-w-[120px] truncate">
-                        {tx.reference ?? '—'}
+                        {tx.referenceId ?? '—'}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground max-w-[160px] truncate">
                         {tx.description ?? '—'}
@@ -1310,7 +1306,7 @@ export default function LoyaltyTab() {
                   customerId: manualAdjustForm.customerId,
                   points: Number(manualAdjustForm.points),
                   transactionType: manualAdjustForm.transactionType,
-                  reference: manualAdjustForm.reference || undefined,
+                  referenceId: manualAdjustForm.reference || undefined,
                   description: manualAdjustForm.description || undefined,
                 });
               }}

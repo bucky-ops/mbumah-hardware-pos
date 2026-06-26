@@ -51,7 +51,7 @@
 // holds at most one connection, and PgBouncer multiplexes it.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { Prisma, PrismaClient } from "@prisma/client";
+import { type Prisma, PrismaClient } from "@prisma/client";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 // ── 1. Eager environment validation ──────────────────────────────────────────
@@ -524,8 +524,25 @@ function assertMutable(model: string, operation: string): void {
  *
  * Multi-tenancy and immutability guards are applied automatically. To opt out
  * of tenancy for a cross-store scope, wrap the call in `runWithoutTenant`.
+ *
+ * ── TYPE NOTE ──────────────────────────────────────────────────────────────
+ * `hardenedClient` is the result of `baseClient.$extends({ query: {...} })`.
+ * Prisma's `$extends` returns a `DynamicClientExtensionThis<...>` type which,
+ * because we build the `query` interceptors dynamically via
+ * `Object.fromEntries(...)`, does NOT statically expose the per-model
+ * accessors (`db.product`, `db.bankAccount`, …) — even though they exist at
+ * runtime. This would produce ~170 `TS2339: Property does not exist` errors
+ * under `tsc --noEmit --strict`.
+ *
+ * The extension adds ONLY runtime query interceptors (tenancy injection +
+ * immutability guards); it introduces NO new typed API surface (no `model`,
+ * `client`, or `result` extensions). It is therefore semantically correct —
+ * and type-safe — to treat `db` as a plain `PrismaClient` for static typing:
+ * every model accessor and method that exists on `PrismaClient` exists on the
+ * extended client at runtime. The double cast (`as unknown as PrismaClient`)
+ * is the standard Prisma pattern for this situation.
  */
-export const db = hardenedClient;
+export const db = hardenedClient as unknown as PrismaClient;
 
 // Re-export Prisma namespace + types for convenience in route handlers.
 export type { Prisma };

@@ -14,7 +14,7 @@
 //   sortBy       — sentAt | status | reminderType (default sentAt)
 //   sortOrder    — asc | desc (default desc)
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { requireStoreAccess } from '@/lib/auth';

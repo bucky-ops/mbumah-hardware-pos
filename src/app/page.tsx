@@ -4,7 +4,7 @@
  * MBUMAH HARDWARE - Main Application
  */
 
-import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef, createContext, useContext, useSyncExternalStore } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef, createContext, useSyncExternalStore } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
@@ -21,7 +21,7 @@ import {
   BellRing, PackageX, AlertOctagon, CircleDollarSign, CheckCheck,
   Truck, UserPlus, Receipt, Filter, Info, Tag,
   LayoutGrid, List, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Pause, MessageSquare, PartyPopper, Sparkles, Zap, Ticket, Landmark, Award, Gift,
-  Lightbulb, Send, ExternalLink, RefreshCw, Split, ChevronRight,
+  Lightbulb, Send, ExternalLink, RefreshCw, Split,
   Wifi, WifiOff, CloudOff, CloudLightning,
   Building2, BadgeDollarSign, MessagesSquare,
 } from 'lucide-react';
@@ -42,13 +42,11 @@ import {
 } from '@/lib/offline-sync';
 import {
   productsApi, categoriesApi, customersApi, transactionsApi,
-  paymentsApi, dashboardApi,
-  rentalsApi, debtApi, notificationsApi,
+  paymentsApi, dashboardApi, notificationsApi,
   giftCardsApi, vouchersApi, whatsappApi,
-  formatKES, formatDate, formatDateTime, formatRelativeTime,
+  formatKES, formatDateTime, formatRelativeTime,
   type ProductListItem, type CustomerItem,
   type CategoryItem, type TransactionItem,
-  type RentalItem, type DebtLedgerItem,
   type NotificationItem, type GiftCardItem, type VoucherItem,
 } from '@/lib/api';
 import type { PaymentMethod, CartItem, UnitType, DashboardStats, CheckoutPayload } from '@/lib/types';
@@ -62,7 +60,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -70,7 +68,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Progress } from '@/components/ui/progress';
 
 // LAZY-LOADED TAB COMPONENTS
 
@@ -206,7 +203,7 @@ interface ShortcutCallbacks {
   onShowShortcuts?: () => void;
 }
 
-const ShortcutCallbacksContext = createContext<ShortcutCallbacks>({});
+const _ShortcutCallbacksContext = createContext<ShortcutCallbacks>({});
 
 
 function ConfettiOverlay({ active }: { active: boolean }) {
@@ -2795,7 +2792,7 @@ function POSTab() {
   // voucher discount math so we don't double-count the cart-level discount.
   const preDiscountTotal = subtotal + tax;
   // Cart total after the cashier's flat discount has been applied.
-  const total = cart.getTotal();
+  const _total = cart.getTotal();
 
   // Listen for keyboard shortcut events from MainApp
   useEffect(() => {
@@ -3492,7 +3489,7 @@ function POSTab() {
           phone,
         });
         result = r?.data;
-      } catch (e) {
+      } catch (_e) {
         // Fall back to direct fetch
         const res = await fetch('/api/whatsapp/send-document', {
           method: 'POST',

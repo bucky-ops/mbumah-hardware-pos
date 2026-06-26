@@ -1,9 +1,8 @@
 // POST /api/payments/mpesa/callback
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db, withImmutabilityBypass } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
-import { generateJournalEntryNumber } from '@/lib/helpers';
 import { getAccountId, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, PaymentStatus } from '@/lib/types';
 

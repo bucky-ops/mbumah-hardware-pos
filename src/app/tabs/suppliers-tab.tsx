@@ -8,18 +8,17 @@ import {
   Phone, Mail, MapPin, Building2, User, FileText,
   ChevronRight, Download, Package, CalendarDays,
   ClipboardCheck, AlertTriangle, Hash, Clock, CheckCircle2,
-  Circle, ArrowRight, TrendingUp, Award, Timer, MessageSquare,
+  Circle, Award, Timer, MessageSquare,
   Send, MoreVertical,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
   suppliersApi, purchaseOrdersApi, productsApi,
-  formatKES, formatDate, formatDateTime,
+  formatKES, formatDate,
   openWhatsApp, openEmail, openSMS,
   type SupplierItem,
   type PurchaseOrderListItem,
-  type PurchaseOrderItemDetail,
   type ProductListItem,
   type SupplierSendOrderResult,
 } from '@/lib/api';
@@ -36,7 +35,6 @@ import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
@@ -69,7 +67,7 @@ function getAvatarGradient(name: string): string {
   return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
 }
 
-function getPOStatusBadge(status: string) {
+function _getPOStatusBadge(status: string) {
   switch (status) {
     case 'DRAFT': return 'bg-gray-100 text-gray-700 dark:bg-gray-800/50 dark:text-gray-300';
     case 'SENT': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
@@ -124,7 +122,7 @@ function POStatusTimeline({ status }: { status: string }) {
   return (
     <div className="flex items-center gap-1">
       {steps.map((step, i) => {
-        const isCompleted = !isCancelled && i <= currentIndex;
+        const _isCompleted = !isCancelled && i <= currentIndex;
         const isCurrent = !isCancelled && i === currentIndex;
         const isPast = !isCancelled && i < currentIndex;
 
@@ -235,7 +233,7 @@ function SupplierPerformanceCard({ purchaseOrders }: { purchaseOrders: PurchaseO
     return new Date(po.createdAt).getTime() <= new Date(po.expectedDate).getTime();
   });
   const fulfilledPOs = purchaseOrders.filter(po => po.status !== 'CANCELLED');
-  const totalPOValue = purchaseOrders.filter(po => po.status !== 'CANCELLED').reduce((s, po) => s + po.totalAmount, 0);
+  const _totalPOValue = purchaseOrders.filter(po => po.status !== 'CANCELLED').reduce((s, po) => s + po.totalAmount, 0);
 
   const onTimeRate = receivedPOs.length > 0 ? Math.round((onTimePOs.length / receivedPOs.length) * 100) : 0;
   const fulfillmentRate = purchaseOrders.length > 0 ? Math.round((fulfilledPOs.length / purchaseOrders.length) * 100) : 100;
@@ -544,7 +542,7 @@ function CreatePODialog({
       }));
       setPoItems([...poItems, ...newItems]);
       toast.success(`Added ${newItems.length} low-stock item${newItems.length > 1 ? 's' : ''}`);
-    } catch (err) {
+    } catch (_err) {
       toast.error('Failed to load low-stock products');
     } finally {
       setLowStockLoading(false);
@@ -1277,7 +1275,7 @@ function SupplierDetailView({
   );
 }
 
-function POActions({ po, storeId }: { po: PurchaseOrderListItem; storeId: string }) {
+function POActions({ po, storeId: _storeId }: { po: PurchaseOrderListItem; storeId: string }) {
   const queryClient = useQueryClient();
   const [receiveOpen, setReceiveOpen] = useState(false);
 
@@ -1586,7 +1584,7 @@ function SendOrderDialog({
 
 export default function SuppliersTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
-  const queryClient = useQueryClient();
+  const _queryClient = useQueryClient();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -1635,7 +1633,7 @@ export default function SuppliersTab() {
 
   const activeSuppliers = suppliers.filter((s) => s.isActive).length;
   const pendingPOs = purchaseOrders.filter((po) => ['DRAFT', 'SENT', 'CONFIRMED'].includes(po.status)).length;
-  const totalPOValue = purchaseOrders
+  const _totalPOValue = purchaseOrders
     .filter((po) => po.status !== 'CANCELLED')
     .reduce((sum, po) => sum + po.totalAmount, 0);
   const avgRating = suppliers.length > 0

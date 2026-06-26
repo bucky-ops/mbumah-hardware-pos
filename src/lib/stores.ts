@@ -1,7 +1,7 @@
 // Zustand state stores
 
 import { create } from 'zustand';
-import type { AuthUser, CartItem, UnitType } from './types';
+import type { AuthUser, CartItem } from './types';
 import { authApi } from './api';
 
 interface AuthState {

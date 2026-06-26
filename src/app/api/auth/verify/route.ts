@@ -2,7 +2,7 @@
 // Used by the middleware and other services that need to verify tokens
 // without duplicating the DB lookup logic.
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { getSessionFromRequest } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
 

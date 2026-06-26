@@ -20,23 +20,19 @@ import { toast } from 'sonner';
 import {
   AlertTriangle, AlertOctagon, Clock, CheckCircle, XCircle,
   Loader2, RefreshCw, Send, Zap, Users, DollarSign,
-  Mail, MessageSquare, Smartphone, Bell, ChevronDown, ChevronRight,
-  Calendar, Phone, TrendingDown, Activity, History, Play,
+  Mail, MessageSquare, Smartphone, Bell, ChevronDown, ChevronRight, Phone, TrendingDown, Activity, History, Play,
 } from 'lucide-react';
 
 import { useAppStore, useAuthStore } from '@/lib/stores';
 import {
   debtRemindersApi,
   type OverdueCustomerItem,
-  type DebtReminderItem,
   type ReminderScheduleResult,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
@@ -49,7 +45,6 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
@@ -713,7 +708,7 @@ function HistorySection({ storeId }: { storeId: string }) {
 
   const reminders = data?.data ?? [];
   const pagination = data?.pagination;
-  const summary = data?.summary;
+  const _summary = data?.summary;
 
   return (
     <Card>

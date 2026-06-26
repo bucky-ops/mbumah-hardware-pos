@@ -1,6 +1,5 @@
 // GET /api/receipts/[id]
 
-import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 

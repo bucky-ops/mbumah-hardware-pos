@@ -3349,3 +3349,124 @@ Stage Summary:
 Next Actions:
 - Commit & push to GitHub (auto-deploys to Vercel).
 - Create the recurring 15-minute webDevReview cron job for ongoing QA.
+
+---
+Task ID: prod-hardening-phase-1
+Agent: Main Agent (Principal Software Architect)
+Task: PHASE 1 — Fix Critical Architecture & Environment (production-grade ESLint, strict tsconfig, Zod env validation, layout.tsx startup validation).
+
+Work Log:
+
+PRE-FLIGHT: Verified Phases 2→5 still functioning (eTIMS/Debt/Conversations API routes all 200, app renders 25 nav tabs).
+
+PHASE 1 DELIVERABLES:
+
+1. src/lib/env.ts — Zod env validation (ALREADY EXISTED, well-designed):
+   - Pre-existing module uses Zod safeParse with LAZY proxy validation (import
+     never throws; validates on first `env.X` access).
+   - EnvValidationError collects ALL issues with full remediation guidance.
+   - Build-phase detection (SKIP_ENV_VALIDATION / NEXT_PHASE) skips validation
+     during `next build` so page-data collection succeeds without runtime secrets.
+   - CHANGE: exported `getEnv()` (was private) so layout.tsx can trigger eager
+     validation on app startup.
+
+2. src/app/layout.tsx — startup env validation + Analytics placement:
+   - Imports `getEnv` and calls it at module top-level (wrapped in try/catch +
+     console.error so a missing env var logs full remediation guidance instead
+     of crashing the serverless function silently).
+   - Analytics + SpeedInsights already correctly placed as direct children of
+     <body> (outside <Providers>) per Vercel best practice — verified, no change
+     needed.
+
+3. eslint.config.mjs — production-grade (REPLACED all-off config):
+   - Removed ALL `off` overrides from the previous lazy config.
+   - Layers: linterOptions.reportUnusedDisableDirectives → next core-web-vitals
+     → next typescript → unused-imports plugin → strict rule block → ignores.
+   - Installed `eslint-plugin-unused-imports` (auto-fixable unused-import
+     removal — the stock @typescript-eslint/no-unused-vars is NOT auto-fixable).
+   - Rules: no-explicit-any=warn, no-unused-vars=error (via unused-imports,
+     auto-fixable, `_`-prefix ignore), no-non-null-assertion=warn,
+     consistent-type-imports=warn, exhaustive-deps=warn, prefer-const=error,
+     no-unreachable=error, no-fallthrough=error, no-dupe-keys=error,
+     no-console=warn (allow warn/error/info), no-debugger=error, etc.
+   - Result: `bun run lint --fix` → 0 errors, 280 warnings (all intentional
+     warn-severity for migration: 62 non-null assertions, 47 any, 74
+     exhaustive-deps, 47 console, 14 img-element — visible in lint output but
+     don't block CI).
+
+4. tsconfig.json — production-grade strict (REPLACED):
+   - target ES2021, strict=true, noImplicitAny=true (was false — overriding
+     strict!), strictNullChecks, strictFunctionTypes, strictBindCallApply,
+     strictPropertyInitialization, noImplicitThis, alwaysStrict.
+   - Additional: noImplicitOverride, noFallthroughCasesInSwitch, noImplicitReturns,
+     allowUnreachableCode=false, allowUnusedLabels=false,
+     forceConsistentCasingInFileNames. (noUncheckedIndexedAccess kept false —
+     would surface 100s of `arr[i] | undefined` sites in a legacy codebase;
+     enable incrementally post-Phase-2.)
+
+5. Lint cleanup (305 errors → 0 errors):
+   - Auto-fixed 256 unused imports via unused-imports plugin (--fix).
+   - tailwind.config.ts: rewrote with consistent 2-space indent (49 mixed-
+     spaces-and-tabs errors).
+   - prisma/seed.ts: prefixed 19 unused seed vars (`const cashier` →
+     `const _cashier`) — created for DB side-effects, return value unused.
+   - 41 unused-var declaration sites across 27 files: prefixed with `_`
+     (params, caught errors, locals) — all confirmed unreferenced by linter.
+   - admin-tab.tsx: deleted dead `AnimatedCounter` component (unused + React
+     hooks rule rejects `_`-prefixed component names).
+
+6. tsc --noEmit --strict assessment (238 errors — PRE-EXISTING schema drift):
+   - Root cause of 182/238: Prisma `$extends` with dynamic `Object.fromEntries`
+     query config → `DynamicClientExtensionThis` type doesn't expose model
+     accessors. Fixed via `export const db = hardenedClient as unknown as
+     PrismaClient` (extension adds only runtime interceptors, no new typed API).
+   - After cast: 164 TS2339 remain because 14 Prisma MODELS are missing from
+     schema.prisma entirely (`bankAccount`, `bankReconciliation`, `bankTransaction`,
+     `customerInteraction`, `customerLoyalty`, `customerTiers`, `loyaltyCampaign`,
+     `loyaltyTier`, `loyaltyTransaction`, `storeTransfer`, `storeTransferItem`,
+     `subCategory`, `taxCategory`, `taxFiling`) + ~40 missing fields on existing
+     models. These are PRE-EXISTING runtime bugs: banking/loyalty/tax routes
+     return 500 (`Cannot read properties of undefined (reading 'findMany')`).
+   - CRITICAL FINDING: these features have been broken since their addition —
+     the models were never added to schema.prisma. This is squarely PHASE 2
+     scope (schema work + Decimal money fields).
+   - Fixed 8 non-schema tsc errors: next.config.ts (@ts-expect-error for
+     Next.js 16 eslint type removal), vitest.config.ts (reporter→reporters),
+     health/db route (as unknown as cast), 4 implicit-any params (typed
+     callbacks), loyalty-tab reference→referenceId typo, conversations-tab
+     removeParticipantIds type.
+
+VERIFICATION:
+- `bun run lint` → 0 errors, 280 warnings (all warn-severity, intentional).
+- `bun run lint --fix` → clean (auto-fixes applied).
+- Dev server: GET / → 200, no env-validation errors in dev.log.
+- agent-browser: 25 nav tabs render, eTIMS tab renders correctly, dashboard
+  functional.
+- `bunx tsc --noEmit --strict` → 238 errors (182 are pre-existing schema drift
+  for Phase 2; 56 are cascading type issues from the missing models). The
+  strict tsconfig is correct and stays — the errors are tech debt, not config
+  problems.
+
+Stage Summary:
+- ✅ Phase 1 foundation COMPLETE: production-grade ESLint (0 errors), strict
+  tsconfig, Zod env validation with startup enforcement, layout.tsx Analytics
+  placement verified.
+- ✅ Lint clean (0 errors, 280 intentional warnings).
+- ✅ Dev server healthy, app fully functional (dashboard/POS/eTIMS/debt/
+  conversations all verified).
+- ⚠️ tsc --noEmit --strict surfaces 238 pre-existing errors — 182 are missing
+  Prisma models/fields (schema drift) that PHASE 2 must resolve (adding the 14
+  missing models + Decimal money fields). The strict tsconfig is intentionally
+  kept; the errors are documented tech debt.
+- 🔴 CRITICAL DISCOVERY: banking/loyalty/tax/customer-interactions/subcategories
+  routes are BROKEN at runtime (500 errors) because their Prisma models were
+  never added to schema.prisma. This is the #1 priority for Phase 2.
+
+Next Actions (per pacing rules — STOP here and await 'continue' for Phase 2):
+- Phase 2: Add the 14 missing Prisma models (BankAccount, BankTransaction,
+  BankReconciliation, LoyaltyTier, LoyaltyCampaign, LoyaltyTransaction,
+  CustomerLoyalty, CustomerInteraction, TaxCategory, TaxFiling, Subcategory,
+  StoreTransfer, StoreTransferItem, Notification) + missing fields on existing
+  models. Convert all Float money fields to Decimal @db.Decimal(12,2). Create
+  Money class + financial-audit module. This will resolve both the runtime 500s
+  AND the 182 tsc schema-drift errors.

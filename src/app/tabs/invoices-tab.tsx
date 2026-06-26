@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   FileText, Search, Plus, Eye, Loader2, Printer,
   ArrowRightLeft, XCircle, DollarSign, Clock,
-  TrendingUp, AlertCircle, ShoppingCart, Receipt,
+  TrendingUp, AlertCircle, Receipt,
   FileCheck, FileMinus, FilePlus, ChevronDown,
   Trash2, ArrowUpDown, Send, CheckCircle2, Phone,
 } from 'lucide-react';
@@ -15,7 +15,6 @@ import { useAppStore } from '@/lib/stores';
 import {
   invoicesApi, productsApi, customersApi, whatsappApi,
   formatKES, formatDate, formatDateTime,
-  openWhatsApp,
   type InvoiceItem,
   type InvoiceItemDetail,
   type ProductListItem,
@@ -25,7 +24,7 @@ import { handleError } from '@/lib/error-handler';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -35,13 +34,13 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 // ─── Types ───────────────────────────────────────────────────────────────────

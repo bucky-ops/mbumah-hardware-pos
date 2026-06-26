@@ -39,7 +39,7 @@ async function withRollback<T>(
   let result: T;
   try {
     result = await db.$transaction(async (tx) => {
-      const r = await fn(tx);
+      const _r = await fn(tx);
       throw ROLLBACK; // force rollback
     });
     return result;
@@ -62,11 +62,12 @@ const CASHIER_ID = 'user_super_admin';
 describe('recordSaleJournalEntry — double-entry accounting', () => {
   // Ensure all required accounts exist (auto-creates if missing) before the
   // tests run. This warms the in-memory cache so in-tx lookups are cache hits.
-  let accounts: Record<string, string>;
+  // The return value is intentionally discarded — the call is for its
+  // side effect (populating the account-id cache inside account-helper).
   let cashierOrgId: string;
 
   beforeAll(async () => {
-    accounts = await getAccountIds(ORG_ID, [
+    await getAccountIds(ORG_ID, [
       ACCOUNT_CODES.CASH_ON_HAND,
       ACCOUNT_CODES.MPESA_ACCOUNT,
       ACCOUNT_CODES.ACCOUNTS_RECEIVABLE,

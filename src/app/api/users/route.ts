@@ -1,11 +1,11 @@
 // GET/POST /api/users
 // Requires SUPER_ADMIN or STORE_OWNER role
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
-import { requireAuth, AuthSession } from '@/lib/auth';
+import { requireAuth, type AuthSession } from '@/lib/auth';
 import { createUserSchema, validateInput } from '@/lib/validations';
 
 export const dynamic = 'force-dynamic';

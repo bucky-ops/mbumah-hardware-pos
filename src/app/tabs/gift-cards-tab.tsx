@@ -5,15 +5,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Gift, Search, Plus, Copy, Eye, EyeOff, Loader2,
-  ArrowUpDown, Filter, CreditCard, Calendar, Phone,
-  Mail, User, FileText, AlertTriangle, CheckCircle2,
-  XCircle, Clock, ChevronDown, Settings2, Sparkles,
+  ArrowUpDown, Filter, CreditCard, Calendar,
+  Mail, User, FileText, AlertTriangle, CheckCircle2, Clock, ChevronDown, Settings2, Sparkles,
   TrendingDown, TrendingUp, Ban, RefreshCw, Wallet,
   MoreHorizontal, Pencil, Trash2, ShieldAlert, Info,
   MessageCircle,
 } from 'lucide-react';
 
-import { useAppStore } from '@/lib/stores';
 import {
   giftCardsApi,
   customersApi,
@@ -29,13 +27,11 @@ import type {
   GiftCardReason,
   GiftCardStatus,
 } from '@/lib/types';
-import {
-  GiftCardReason as GiftCardReasonEnum,
-  GiftCardStatus as GiftCardStatusEnum,
-} from '@/lib/types';
+
+
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -53,7 +49,6 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Progress } from '@/components/ui/progress';
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip';
@@ -200,7 +195,7 @@ function canAdjust(role: string): boolean {
 function canHardDelete(role: string): boolean {
   return role === 'SUPER_ADMIN';
 }
-function canViewDetails(role: string): boolean {
+function canViewDetails(_role: string): boolean {
   return true; // All roles can view
 }
 
@@ -343,7 +338,7 @@ function EmptyState({ onCreateClick, canCreateCards }: { onCreateClick: () => vo
 }
 
 // ─── Main Component ────────────────────────────────────────────────
-export default function GiftCardsTab({ storeId, userRole, userId }: GiftCardsTabProps) {
+export default function GiftCardsTab({ storeId, userRole, userId: _userId }: GiftCardsTabProps) {
   const queryClient = useQueryClient();
 
   // ── State ──

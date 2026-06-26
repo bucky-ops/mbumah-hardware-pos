@@ -5,14 +5,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ArrowUpDown, Package, CheckCircle, ArrowRight, Plus, Search,
-  Truck, Clock, X, Eye, Send, Check, AlertCircle, Loader2,
-  ChevronRight, MapPin, Store,
+  Truck, Clock, X, Eye, Send, Check, AlertCircle, Loader2, MapPin, Store,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
   storeTransfersApi, productsApi, formatKES, formatDate, formatDateTime,
-  type StoreTransferItem, type StoreTransferItemDetail,
+  type StoreTransferItem,
 } from '@/lib/api';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';

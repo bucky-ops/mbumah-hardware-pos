@@ -5,11 +5,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Tag, Search, Plus, Loader2,
-  Percent, DollarSign, Package, Gift,
-  TrendingUp, Clock, CalendarDays, Megaphone,
-  Eye, Pencil, Trash2, Copy, CheckCircle2,
-  ChevronDown, Filter, ArrowUpDown, Users,
-  BarChart3, Receipt, Ticket, ShoppingBag,
+  Percent, DollarSign, Package, Gift, Clock, CalendarDays, Megaphone, Pencil, Trash2, Copy, CheckCircle2,
+  ChevronDown, Filter, Users,
+  BarChart3, Receipt, Ticket,
   AlertCircle, Phone, Mail, MessageSquare, Send, RefreshCw,
 } from 'lucide-react';
 

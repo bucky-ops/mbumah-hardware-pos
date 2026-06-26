@@ -1,7 +1,7 @@
 // Brute Force Protection Module
 // Tracks failed login attempts and implements progressive delays and account lockout
 
-import { isRateLimited, blockKey, resetRateLimit, RATE_LIMIT_TIERS } from './rate-limit';
+import { blockKey, resetRateLimit } from './rate-limit';
 import { db } from './db';
 import { systemLog } from './logger';
 import { LogSeverity, LogComponent } from './types';

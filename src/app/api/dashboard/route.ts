@@ -1,6 +1,6 @@
 // GET /api/dashboard
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env'; // Eager env validation — fails fast on missing DATABASE_URL
 import { withErrorBoundary } from '@/lib/logger';

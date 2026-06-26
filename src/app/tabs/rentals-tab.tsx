@@ -1,14 +1,13 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   KeyRound, AlertTriangle, DollarSign, Layers, Plus,
   CheckCircle, Loader2, Clock, ArrowRight, Wrench,
-  ShieldAlert, ShieldCheck, ShieldOff, CalendarDays,
-  TrendingUp, Activity, Package, Search, LayoutGrid,
-  List, Eye, Camera, FileText, Settings2,
+  ShieldAlert, ShieldCheck, ShieldOff, CalendarDays, Activity, Package, Search, LayoutGrid,
+  List, Camera,
   Phone, Printer, Pencil, Trash2,
 } from 'lucide-react';
 
@@ -31,7 +30,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Progress } from '@/components/ui/progress';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,

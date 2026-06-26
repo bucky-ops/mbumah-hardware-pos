@@ -18,19 +18,18 @@ import { toast } from 'sonner';
 import {
   Building2, KeyRound, ShieldCheck, Loader2, RefreshCw, Plus,
   CheckCircle, Clock, AlertCircle, XCircle, FileText, Search,
-  Send, Eye, ExternalLink, Database, Activity, AlertTriangle,
-  Hash, Calendar, Receipt, TrendingUp, Settings2,
+  Send, Eye, Database, Activity, AlertTriangle,
+  Hash, Calendar, Receipt, Settings2,
 } from 'lucide-react';
 
 import { useAppStore, useAuthStore } from '@/lib/stores';
 import {
   kraApi,
-  type KraBusinessProfileItem,
   type InvoiceForKraItem,
   type KraSubmissionItem,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
-import { formatKES, formatDateTime } from '@/lib/api';
+import { formatDateTime } from '@/lib/api';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -50,7 +49,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
 
 // ── Status badge config ──────────────────────────────────────────────────────
 
@@ -882,7 +880,7 @@ function InvoiceDetailDialog({
               </div>
               <ScrollArea className="max-h-48">
                 <div className="divide-y">
-                  {submissions.map((sub) => (
+                  {submissions.map((sub: { id: string; kraReferenceNumber: string | null; status: string; createdAt: string }) => (
                     <SubmissionHistoryRow key={sub.id} submission={sub} />
                   ))}
                 </div>
@@ -1005,7 +1003,7 @@ function AuditLogSection({ storeId }: { storeId: string }) {
         ) : (
           <ScrollArea className="max-h-[600px]">
             <div className="space-y-2">
-              {submissions.map((sub) => {
+              {submissions.map((sub: { id: string; kraReferenceNumber: string | null; status: string; createdAt: string }) => {
                 const statusCfg = SUBMISSION_STATUS_CONFIG[sub.status] || SUBMISSION_STATUS_CONFIG.PENDING;
                 const StatusIcon = statusCfg.icon;
                 return (

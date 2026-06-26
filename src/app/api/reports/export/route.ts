@@ -1,10 +1,9 @@
 // GET /api/reports/export (CSV: sales, inventory, debt, rentals)
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
-import { formatKES } from '@/lib/helpers';
 
 export const dynamic = 'force-dynamic';
 

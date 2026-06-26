@@ -11,9 +11,9 @@
 //   - storeId      : scope the mining to a single store (recommended)
 //   - limit        : default 8, max 20
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { requireAuth, AuthSession } from '@/lib/auth';
+import { requireAuth, type AuthSession } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';

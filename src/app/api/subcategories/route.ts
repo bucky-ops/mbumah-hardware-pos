@@ -1,6 +1,6 @@
 // GET/POST /api/subcategories
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
@@ -57,7 +57,7 @@ async function getSubCategoriesHandler(...args: unknown[]): Promise<Response> {
     db.subCategory.count({ where }),
   ]);
 
-  const result = subCategories.map((sub) => {
+  const result = subCategories.map((sub: { id: string; name: string }) => {
     const { _count, ...subData } = sub;
     return {
       ...subData,

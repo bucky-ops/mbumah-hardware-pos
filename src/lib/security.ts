@@ -2,7 +2,7 @@
 // Input sanitization, CSRF validation, IP extraction, sensitive data masking,
 // content-type validation, security event logging, request size validation
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { systemLog } from './logger';
 import { LogSeverity, LogComponent } from './types';
 

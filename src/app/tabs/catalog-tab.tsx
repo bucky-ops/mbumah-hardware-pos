@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Package, Search, LayoutGrid, List, ShoppingCart,
-  Plus, Minus, Tag, ChevronDown, X, SlidersHorizontal,
+  Plus, Minus, Tag, X, SlidersHorizontal,
   Pencil, Trash2, MessageCircle, AlertTriangle, MoreVertical,
   Loader2, Copy,
 } from 'lucide-react';
@@ -19,7 +19,7 @@ import { handleError } from '@/lib/error-handler';
 import { ProductImageUpload } from '@/components/product-image-upload';
 import { Button } from '@/components/ui/button';
 import {
-  Card, CardContent, CardFooter, CardHeader, CardTitle,
+  Card, CardContent, CardFooter,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';

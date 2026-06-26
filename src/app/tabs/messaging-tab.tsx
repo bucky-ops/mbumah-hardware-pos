@@ -6,8 +6,8 @@ import { toast } from 'sonner';
 import {
   MessageSquare, Send, Phone, Clock, CheckCircle, AlertCircle,
   Loader2, Plus, Search, Filter, Smartphone, Mail,
-  FileText, Bell, ChevronDown, RefreshCw,
-  PartyPopper, Heart, Gift, Sparkles,
+  FileText, Bell, RefreshCw,
+  PartyPopper, Sparkles,
   Calendar, Users, ExternalLink,
 } from 'lucide-react';
 import { useAppStore, useAuthStore } from '@/lib/stores';
@@ -27,7 +27,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -38,7 +38,6 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 
 // ── Badge Configs ──────────────────────────────────────────
 
@@ -236,7 +235,7 @@ const AUDIENCE_LABELS: Record<BulkAudience, string> = {
 
 export default function MessagingTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
-  const authUser = useAuthStore((s) => s.user);
+  const _authUser = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
   const [activeSubTab, setActiveSubTab] = useState('dashboard');
 
@@ -545,7 +544,7 @@ export default function MessagingTab() {
     }
   }
 
-  function handleSendMessage() {
+  function _handleSendMessage() {
     if (!sendForm.phone.trim()) {
       toast.error('Phone number is required');
       return;

@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   Truck, Search, Plus, Eye, Loader2,
   Phone, MapPin, User, FileText, Clock,
-  Package, CheckCircle2, AlertTriangle, ArrowRight,
+  Package, CheckCircle2, AlertTriangle,
   Printer, CalendarDays, Hash, Navigation,
   ChevronRight, CircleDot, MessageSquare,
 } from 'lucide-react';
@@ -14,8 +14,7 @@ import {
 import { useAppStore } from '@/lib/stores';
 import {
   deliveryNotesApi, whatsappApi,
-  formatDate, formatDateTime, formatKES,
-  openWhatsApp,
+  formatDate, formatDateTime,
   type DeliveryNoteItem,
   type DeliveryNoteItemDetail,
 } from '@/lib/api';
@@ -23,14 +22,14 @@ import { handleError } from '@/lib/error-handler';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -128,7 +127,7 @@ function DeliveryTimeline({ status }: { status: string }) {
   return (
     <div className="flex items-center gap-1">
       {steps.map((step, i) => {
-        const isCompleted = !isCancelled && i <= currentIndex;
+        const _isCompleted = !isCancelled && i <= currentIndex;
         const isCurrent = !isCancelled && i === currentIndex;
         const isPast = !isCancelled && i < currentIndex;
 

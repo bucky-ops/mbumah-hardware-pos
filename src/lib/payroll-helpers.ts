@@ -54,7 +54,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { db, withImmutabilityBypass, runWithoutTenant } from '@/lib/db';
-import { Prisma } from '@prisma/client';
 import { systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 

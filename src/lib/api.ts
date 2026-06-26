@@ -2,12 +2,10 @@
 
 import type {
   AuthUser,
-  CartItem,
   CheckoutPayload,
   MpesaSTKRequest,
   MpesaCallbackResult,
   DashboardStats,
-  DebtAgingSummary,
   ReportFilter,
   JournalEntryDTO,
   PaymentMethod,

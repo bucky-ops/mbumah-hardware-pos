@@ -1,6 +1,6 @@
 // GET/PUT /api/store-transfers/[id]
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
@@ -184,7 +184,7 @@ async function updateStoreTransferHandler(...args: unknown[]): Promise<Response>
     }
 
     // Check for partial receipt
-    const allItemsReceived = existing.items.every((item) => {
+    const allItemsReceived = existing.items.every((item: { receivedQty?: number; quantity?: number }) => {
       const receivedItem = receivedItems.find(
         (ri: { productId: string }) => ri.productId === item.productId
       );

@@ -1,6 +1,6 @@
 // GET/PUT/DELETE /api/products/[id]
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
@@ -12,7 +12,7 @@ interface RouteContext {
 }
 
 async function getProductHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+  const _request = args[0] as NextRequest;
   const context = args[1] as RouteContext;
   const { id } = await context.params;
 
@@ -120,7 +120,7 @@ async function updateProductHandler(...args: unknown[]): Promise<Response> {
 }
 
 async function deleteProductHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+  const _request = args[0] as NextRequest;
   const context = args[1] as RouteContext;
   const { id } = await context.params;
 

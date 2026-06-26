@@ -4,7 +4,7 @@
 // IMPORTANT: This runs in Edge Runtime. NO imports that touch Prisma/Node.js APIs.
 // All security logic is self-contained here.
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 // ── In-Memory Rate Limiter (Edge-compatible) ─────────────────────────────────
 

@@ -1,6 +1,6 @@
 // PUT/DELETE /api/rentals/[id]
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent, RentalStatus, StockMovementType } from '@/lib/types';
@@ -76,7 +76,7 @@ async function updateRentalHandler(...args: unknown[]): Promise<Response> {
 }
 
 async function deleteRentalHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+  const _request = args[0] as NextRequest;
   const context = args[1] as RouteContext;
   const { id } = await context.params;
 

@@ -4,7 +4,7 @@
 //   GET  — list employees for a store (filter by status, employmentType)
 //   POST — create a new employee record
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';

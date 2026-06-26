@@ -1,13 +1,12 @@
 'use client';
 
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ShoppingBag, Search, Download, ChevronDown, ChevronUp,
   CalendarDays, TrendingUp, Hash, CreditCard, Smartphone, Banknote, Wallet,
-  Filter, FileText, RotateCcw, Ban, Eye, Printer, AlertTriangle,
-  ArrowUpRight, ArrowDownRight, Minus, Receipt, X, MessageCircle,
+  Filter, FileText, RotateCcw, Ban, Eye, Printer, AlertTriangle, Receipt, X, MessageCircle,
 } from 'lucide-react';
 
 import { transactionsApi, whatsappApi, formatKES, formatDateTime, type TransactionItem, type SaleItemDetail } from '@/lib/api';

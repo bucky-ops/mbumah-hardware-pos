@@ -7,7 +7,7 @@
 //     storeId        — tenant scoping (required for non-admin)
 //     paymentStatus  — filter by PENDING / PAID / FAILED / HELD
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { requireStoreAccess } from '@/lib/auth';

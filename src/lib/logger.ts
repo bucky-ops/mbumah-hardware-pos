@@ -1,7 +1,7 @@
 // System logger & API error boundary
 
 import { db } from './db';
-import { LogSeverity, LogComponent } from './types';
+import { LogSeverity } from './types';
 
 interface LogEntry {
   storeId?: string;

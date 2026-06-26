@@ -10,7 +10,7 @@
 // present on protected routes. These helpers perform the full DB-backed
 // validation.
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db, runWithTenant, runWithoutTenant } from '@/lib/db';
 import { systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';

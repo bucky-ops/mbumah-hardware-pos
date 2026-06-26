@@ -4,7 +4,7 @@
 //   GET  — list all leave types (optionally only active)
 //   POST — create a new leave type (SUPER_ADMIN / STORE_OWNER only)
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic';
 // ── GET: List leave types ────────────────────────────────────────────────────
 async function listLeaveTypesHandler(
   request: NextRequest,
-  session: { userId: string; role: string; storeId: string | null }
+  _session: { userId: string; role: string; storeId: string | null }
 ): Promise<Response> {
   const { searchParams } = new URL(request.url);
   const activeOnly = searchParams.get('active') !== 'false'; // default true

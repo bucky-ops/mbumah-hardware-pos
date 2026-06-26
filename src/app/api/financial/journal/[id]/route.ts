@@ -1,6 +1,5 @@
 // PUT /api/financial/journal/[id] - Void a journal entry
 
-import { NextRequest } from 'next/server';
 import { db, withImmutabilityBypass } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
