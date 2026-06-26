@@ -2297,3 +2297,32 @@ Stage Summary:
 - ✅ layout.tsx: both fonts `preload: false` (resolves Chrome console warning). Analytics + SpeedInsights already injected. Packages already in deps.
 - ✅ Lint clean. Dev server healthy. Browser E2E clean (login page fully rendered, no console warnings).
 - ⏸️ STOPPING HERE per instructions. Awaiting user to type 'continue' for PHASE 2 (10/10 README + GitHub meta-files) and PHASE 3 (git push + manual Vercel/Neon DB instructions).
+
+---
+Task ID: cycle-f-phase-2-seed-verification-commit
+Agent: Main Agent (Principal DevOps Engineer)
+Task: Phase 2 — Seed Neon DB, verify login, create VERCEL_NEON_VERIFICATION.md, commit/push. Merged with remote cron-job changes (build fixes, offline-sync module).
+
+Work Log:
+- Phase 1 (prior turn): env.ts NEXT_PHASE detection, package.json vercel-build, db.ts pgbouncer comment, schema.prisma postgresql, layout.tsx preload:false, .env Neon URLs, 43 tables pushed to Neon.
+- Phase 2a: Seeded Neon DB. Root cause of seed timeout: 236 individual RBAC permission upserts × 2s/call = ~8min over Neon+PgBouncer. Fixed by converting to createMany (single INSERT, ~2s). Also converted products (28) + customers (8) to createMany, and stage 6 categories from Promise.all to sequential loop (Neon+PgBouncer can't handle concurrent transactions on same connection).
+- Phase 2b: Login verified via agent-browser E2E. Dashboard renders "Karibu, System 👋" with zero 4xx/5xx. "Loading..." hang RESOLVED.
+- Phase 2c: Created VERCEL_NEON_VERIFICATION.md (7-step checklist: Vercel env vars → Neon branch → push schema/seed → redeploy → verify app → verify DB → verify Analytics).
+- Phase 2d: Merged with remote. Remote cron job had implemented similar fixes (provider=postgresql, SKIP_ENV_VALIDATION, preload:false) + added offline-sync.ts (required idb package install). Hard-reset to remote, re-applied unique changes (seed createMany optimizations, NEXT_PHASE detection, verification doc), removed .env from tracking.
+- Committed and pushed to GitHub main branch (commit f9c80a0).
+
+Neon Database State:
+  - 43 tables created (schema pushed)
+  - 12 users (including SUPER_ADMIN: admin@mbumahhardware.co.ke)
+  - 236 RBAC permissions
+  - 26 product categories, 51 products, 4 product bundles
+  - 15 customers
+  - Stages 10-22 (accounts, sales transactions, suppliers, gift cards) NOT seeded (process killed by tool timeout). App functions without them.
+
+Stage Summary:
+- ✅ Neon DB seeded with foundation data. Login works. "Loading..." hang RESOLVED.
+- ✅ VERCEL_NEON_VERIFICATION.md created (7-step checklist).
+- ✅ All changes committed and pushed to GitHub (f9c80a0).
+- ⚠️ SECURITY: .env was accidentally committed in an earlier commit — now removed from tracking. Recommend rotating Neon password (npg_aRfWJIn8Neq9) since it was briefly in git history.
+- ⚠️ PARTIAL SEED: Demo data stages 10-22 not seeded. App is functional; dashboards show 0 for historical data.
+- ✅ Lint clean (0/0). Dev server healthy. E2E green.
