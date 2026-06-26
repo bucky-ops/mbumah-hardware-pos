@@ -3043,3 +3043,83 @@ Stage Summary:
 
 Next Actions (per user's pacing rules — STOP here and await 'continue' for Phase 2: Prisma Schema):
 - Phase 2: Extend Prisma schema for eTIMS (KraBusinessProfile, InvoiceForKRA, KraSubmission), Debt Management (agingBucket enum, DebtReminder), Messaging (Conversation, Message, NotificationPreference), Inventory enhancements (ProductVariant, BinLocation, SerialNumber, Batch).
+
+---
+Task ID: v2-phases-2-3-schema-and-core-logic
+Agent: Main Agent (Principal Software Architect)
+Task: PHASE 2 (Extend Prisma Schema for eTIMS/Debt/Messaging/Inventory bounded contexts) and PHASE 3 (Implement core business logic: kra-helpers, debt-helpers, notification-helpers).
+
+Work Log:
+
+PHASE 2 — Prisma Schema Extension (11 new models):
+- Read existing schema (51 models, all use String for enum-like fields for SQLite→PG compat, no Prisma enums). Identified key models to extend: Product, DebtLedger, Store, User, Customer, SalesTransaction. Confirmed DebtLedger already had agingBucket + lastReminderAt fields.
+- Followed existing conventions: String for enums, @@map for clean DB names, storeId on all models for multi-tenancy, comprehensive @@index.
+- eTIMS Context (3 models):
+  * KraBusinessProfile: store-level KRA credentials (businessPin @unique, kraPasswordEncrypted, environment sandbox/production, cached authToken + authTokenExpiresAt for OAuth).
+  * InvoiceForKRA: 1:1 with SalesTransaction (@unique transactionId), kraInvoiceNumber @unique, kraTaxBreakdown JSON string, submissionStatus (PENDING→SUBMITTED→ACCEPTED|REJECTED|FAILED), cuPin + qrCode, retryCount + lastError.
+  * KraSubmission: audit log of every KRA API call (kraReferenceNumber, status, responseJson, httpStatus, latencyMs, errorMessage).
+- Debt Management Context (1 model):
+  * DebtReminder: storeId, customerId, debtLedgerId, reminderType (EMAIL/SMS/WHATSAPP/IN_APP), status (PENDING/SENT/FAILED/DELIVERED), message, providerMessageId, sentAt, deliveredAt. Relations to Store, Customer, DebtLedger.
+- Messaging Context (3 models):
+  * Conversation: storeId, type (INTERNAL/CUSTOMER_SUPPORT), participantIds JSON, lastMessageAt + lastMessagePreview for list UI.
+  * ConversationMessage: separate from existing outbound Message model — for threaded internal/customer-support chat (conversationId, senderId, content, messageType TEXT/IMAGE/FILE/SYSTEM, readStatus JSON, attachmentUrl).
+  * NotificationPreference: per-user/customer channel prefs (EMAIL/SMS/IN_APP/WHATSAPP × alertType, isEnabled).
+- Inventory Context (4 models + Product enhancement):
+  * Product: added minimumStockLevel (Int, default 0) + maximumStockLevel (Int?) for replenishment planning.
+  * ProductVariant: size/colour/style differentiation (name, sku @unique, pricePerUnit/costPrice override, attributes JSON).
+  * BinLocation: physical shelf/aisle/row (locationCode, aisle, shelf, bin, quantity).
+  * SerialNumber: individual unit tracking (serial @unique, status IN_STOCK/SOLD/RESERVED/RETURNED/DEFECTIVE, warrantyExpiry, soldInTransactionId).
+  * Batch: expiry/recall tracking (batchNumber, quantity, supplierId, receivedDate, manufacturingDate, expiryDate, status ACTIVE/EXPIRED/RECALLED/DEPLETED).
+- Added back-relations to: Store (8 new relation fields), User (sentMessages, notificationPreferences), Customer (debtReminders, notificationPreferences), SalesTransaction (kraInvoice), Product (variants, binLocations, serialNumbers, batches), DebtLedger (reminders).
+- Ran bun run db:push → "Your database is now in sync with your Prisma schema" + Prisma client generated. Fixed one validation error (missing invoicesForKRA relation on Store) during push.
+
+PHASE 3 — Core Business Logic (3 new helper modules, ~970 lines total):
+
+src/lib/kra-helpers.ts (340 lines):
+- IKraApiService interface (the 'port') + KraApiService concrete class (the 'adapter'). API routes will depend on the interface.
+- generateInvoiceNumber(businessPin, date, sequence): format <PIN>-<YYYYMMDD>-<6-digit-seq> per KRA spec.
+- submitInvoice(payload, profileId): retry (3x) + exponential backoff (1s/2s/4s), 4xx non-retryable, 5xx/network retryable, 30s timeout, audit logs via systemLog.
+- querySubmissionStatus(referenceNumber, profileId): maps KRA status to internal SubmissionStatus (ACCEPTED/REJECTED/FAILED).
+- getBusinessInfo(pin, profileId): validates PIN + credentials against KRA.
+- ensureValidToken(profileId): caches OAuth bearer token in KraBusinessProfile.authToken, refreshes when within 5min of expiry.
+- mapTransactionToKraInvoice(transactionId, sequence): maps SalesTransaction + items → KraInvoicePayload (VAT 16% breakdown, HS codes, customer PIN, paymentMethod).
+- Singletons: kraApiService exported for direct import.
+
+src/lib/debt-helpers.ts (270 lines):
+- AgingBucket constants (CURRENT/DAYS_30/DAYS_60/DAYS_90_PLUS) + ReminderType + ReminderStatus.
+- REMINDER_RULES escalation config: CURRENT=never, DAYS_30=weekly(SMS+WhatsApp), DAYS_60=every 3d(SMS+WhatsApp+Email), DAYS_90_PLUS=daily+manager alert.
+- calculateAgingBucket(dueDate, currentDate): day-based bucket calculation.
+- identifyOverdueCustomers(storeId, daysThreshold): aggregates overdue DebtLedger rows per customer, returns sorted array with totalOverdue, oldestDueDate, worst agingBucket, debt details.
+- shouldSendReminder(agingBucket, lastReminderAt): checks minIntervalHours elapsed.
+- scheduleReminders(storeId): creates PENDING DebtReminder rows for each eligible debt's channels, updates lastReminderAt on DebtLedger. Returns summary {totalEligible, scheduled, skipped, errors, details}.
+- buildReminderMessage: localized KES currency + urgency-tiered copy (friendly for DAYS_30, second reminder for DAYS_60, URGENT for DAYS_90_PLUS).
+
+src/lib/notification-helpers.ts (400 lines):
+- INotificationService interface + NotificationService concrete class.
+- sendSms(to, message): Twilio API with Kenyan phone normalization (07XXXXXXXX/2547XXXXXXXXX → +254XXXXXXXXX E.164). 15s timeout.
+- sendWhatsApp(to, message): Twilio WhatsApp API.
+- sendEmail(to, subject, html): Resend API.
+- sendInAppNotification(userId, title, message): persists to Message model (channel=IN_APP) for notification center.
+- getNotificationPreferences / isChannelEnabled: respects per-user/customer channel + alertType prefs (default = enabled if no pref row).
+- Graceful degradation: if TWILIO_ACCOUNT_SID or RESEND_API_KEY unset, logs warning + returns success (dev-friendly) instead of throwing. Production sets env vars for real delivery.
+- processPendingDebtReminders(storeId): batch-processes (take 100) PENDING DebtReminder rows, sends via appropriate channel (SMS/WhatsApp/Email), updates status to SENT/FAILED with providerMessageId + errorMessage. Returns {sent, failed, total}.
+
+VERIFICATION:
+- bun run lint → 0 errors, 0 warnings.
+- bun run db:push → schema in sync, Prisma client generated.
+- Verified all 11 new models accessible via Prisma client (count() returns 0 for each — empty but queryable).
+- Dev server healthy: all API routes 200, no errors.
+- GitHub CI: "Deploy to Production" SUCCESS on b0fbb62 (production build passes with new schema + helpers). "Node.js CI" SUCCESS on 901926a (b0fbb62 in progress).
+
+COMMITS:
+- b0fbb62: feat(schema+core): v2.0.0 bounded contexts — eTIMS, debt reminders, messaging, inventory (4 files, +1856 lines)
+- Pushed to origin/main. Auto-deploys to Vercel.
+
+Stage Summary:
+- ✅ PHASE 2 COMPLETE: 11 new Prisma models across 4 bounded contexts (eTIMS, Debt, Messaging, Inventory). All with storeId multi-tenancy, @@map clean names, comprehensive indexes, back-relations on Store/User/Customer/SalesTransaction/Product/DebtLedger. Schema pushed to DB, client generated.
+- ✅ PHASE 3 COMPLETE: 3 production-ready helper modules (kra-helpers, debt-helpers, notification-helpers) implementing Clean Architecture (interface port + concrete adapter). KRA submission with retry+backoff, debt escalation rules, multi-channel notifications with graceful degradation. ~970 lines of typed, documented, lint-clean code.
+- ✅ Lint clean (0/0). DB in sync. Dev server healthy. Production build passes. Pushed to GitHub.
+
+Next Actions (per user's pacing rules — STOP here and await 'continue' for Phases 4 & 5: API Routes + UI/UX):
+- Phase 4: API routes for /api/kra/submission, /api/reminders/debt, /api/messages (conversation chat).
+- Phase 5: UI tabs (etims-tab, debt-management-tab, messages-tab), resizable sidebar, product form enhancements.
