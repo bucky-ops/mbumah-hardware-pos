@@ -99,6 +99,31 @@ export async function GET() {
     checks.account_security = { status: 'ok', detail: 'Account security check skipped' };
   }
 
+  // Check financial ledger integrity (lightweight — last 24h only)
+  try {
+    const { quickIntegrityCheck } = await import('@/lib/financial-audit');
+    const integrity = await quickIntegrityCheck();
+    checks.financial_integrity = {
+      status: integrity.healthy ? 'ok' : 'error',
+      detail: integrity.healthy
+        ? `Ledger balanced (last 24h)`
+        : `${integrity.unbalancedEntryCount} unbalanced entries in last 24h`,
+    };
+  } catch {
+    checks.financial_integrity = {
+      status: 'warning',
+      detail: 'Financial integrity check skipped (module unavailable)',
+    };
+  }
+
+  // Check Sentry configuration
+  checks.sentry = {
+    status: process.env.SENTRY_DSN ? 'ok' : 'warning',
+    detail: process.env.SENTRY_DSN
+      ? 'Configured'
+      : 'Not configured — errors will not be sent to Sentry',
+  };
+
   const totalResponseTime = Date.now() - startTime;
   const allOk = Object.values(checks).every(c => c.status === 'ok' || c.status === 'warning');
   const hasErrors = Object.values(checks).some(c => c.status === 'error');

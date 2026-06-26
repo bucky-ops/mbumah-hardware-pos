@@ -14,7 +14,9 @@
 //
 // Notes:
 //   - IDs use cuid() for cross-DB compat
-//   - Monetary fields are Float; migrate to Decimal for production
+//   - Monetary fields use Decimal @db.Decimal(12,2) (banker's rounding)
+//   - Quantity fields use Decimal @db.Decimal(10,3); rates @db.Decimal(5,2)
+//   - Hours/days fields use Decimal @db.Decimal(8,2) for payroll precision
 //   - JSON metadata stored as String; switch to Json type on PostgreSQL
 
 generator client {
@@ -32,83 +34,95 @@ datasource db {
 
 // ── TENANCY & ORGANIZATION
 model Organization {
-  id          String   @id @default(cuid())
-  name        String
-  taxPin      String?  // KRA PIN for Kenyan businesses
-  status      String   @default("ACTIVE") // ACTIVE, SUSPENDED, ARCHIVED
-  logoUrl     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  taxPin    String? // KRA PIN for Kenyan businesses
+  status    String   @default("ACTIVE") // ACTIVE, SUSPENDED, ARCHIVED
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  stores      Store[]
-  users       User[]
-  accounts    Account[]
+  stores   Store[]
+  users    User[]
+  accounts Account[]
 
   @@map("organizations")
 }
 
 model Store {
-  id              String   @id @default(cuid())
-  organizationId  String
-  name            String
-  location        String?
-  address         String?
-  phone           String?
-  email           String?
-  taxPin          String?  // Store-level KRA PIN
-  status          String   @default("ACTIVE") // ACTIVE, CLOSED, RENOVATING
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  location       String?
+  address        String?
+  phone          String?
+  email          String?
+  taxPin         String? // Store-level KRA PIN
+  status         String   @default("ACTIVE") // ACTIVE, CLOSED, RENOVATING
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  users           User[]
-  products        Product[]
-  categories      ProductCategory[]
-  customerCredits CustomerCredit[]
-  customers       Customer[]
-  transactions    SalesTransaction[]
-  payments        Payment[]
-  debtLedgers     DebtLedger[]
-  debtPayments    DebtPayment[]
-  rentals         EquipmentRental[]
-  stockMovements  StockMovement[]
-  warehouseStocks WarehouseStock[]
-  journalEntries  JournalEntry[]
-  systemLogs      SystemLog[]
-  cashDrawerLogs  CashDrawerLog[]
-  receipts        Receipt[]
-  suppliers       Supplier[]
-  purchaseOrders  PurchaseOrder[]
-  expenses        Expense[]
-  shifts          Shift[]
-  giftCards       GiftCard[]
-  vouchers        Voucher[]
+  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users            User[]
+  products         Product[]
+  categories       ProductCategory[]
+  customerCredits  CustomerCredit[]
+  customers        Customer[]
+  transactions     SalesTransaction[]
+  payments         Payment[]
+  debtLedgers      DebtLedger[]
+  debtPayments     DebtPayment[]
+  rentals          EquipmentRental[]
+  stockMovements   StockMovement[]
+  warehouseStocks  WarehouseStock[]
+  journalEntries   JournalEntry[]
+  systemLogs       SystemLog[]
+  cashDrawerLogs   CashDrawerLog[]
+  receipts         Receipt[]
+  suppliers        Supplier[]
+  purchaseOrders   PurchaseOrder[]
+  expenses         Expense[]
+  shifts           Shift[]
+  giftCards        GiftCard[]
+  vouchers         Voucher[]
   voucherCampaigns VoucherCampaign[]
-  messages        Message[]
-  invoices        Invoice[]
-  deliveryNotes   DeliveryNote[]
+  messages         Message[]
+  invoices         Invoice[]
+  deliveryNotes    DeliveryNote[]
 
   // ── Payroll & HR (Phase 1 — ERP enhancement) ──
   // NOTE: LeaveType and EmployeeLeaveBalance are NOT directly related to Store:
   //   • LeaveType is organisation-wide policy (not tenant data)
   //   • EmployeeLeaveBalance resolves via Employee.storeId
   // Only the store-scoped payroll models have a direct Store relation here.
-  employees           Employee[]
-  payrollPeriods      PayrollPeriod[]
-  payrollRuns         PayrollRun[]
-  payrollDetails      PayrollDetail[]
-  leaveRequests       LeaveRequest[]
-  attendanceRecords   AttendanceRecord[]
+  employees            Employee[]
+  payrollPeriods       PayrollPeriod[]
+  payrollRuns          PayrollRun[]
+  payrollDetails       PayrollDetail[]
+  leaveRequests        LeaveRequest[]
+  attendanceRecords    AttendanceRecord[]
   // ── v2.0.0 module relations ────────────────────────────────────────────
-  kraBusinessProfiles KraBusinessProfile[]
-  invoicesForKRA     InvoiceForKRA[]
-  kraSubmissions      KraSubmission[]
-  debtReminders       DebtReminder[]
-  conversations       Conversation[]
-  productVariants     ProductVariant[]
-  binLocations       BinLocation[]
-  serialNumbers      SerialNumber[]
-  batches            Batch[]
+  kraBusinessProfiles  KraBusinessProfile[]
+  invoicesForKRA       InvoiceForKRA[]
+  kraSubmissions       KraSubmission[]
+  debtReminders        DebtReminder[]
+  conversations        Conversation[]
+  productVariants      ProductVariant[]
+  binLocations         BinLocation[]
+  serialNumbers        SerialNumber[]
+  batches              Batch[]
+  // ── Phase 2 production-grade module relations ──────────────────────────
+  bankAccounts         BankAccount[]
+  loyaltyTiers         LoyaltyTier[]
+  loyaltyCampaigns     LoyaltyCampaign[]
+  loyaltyTransactions  LoyaltyTransaction[]
+  customerInteractions CustomerInteraction[]
+  taxCategories        TaxCategory[]
+  taxFilings           TaxFiling[]
+  storeTransfersFrom   StoreTransfer[]       @relation("TransferFromStore")
+  storeTransfersTo     StoreTransfer[]       @relation("TransferToStore")
+  inventories          Inventory[]
+  notifications        Notification[]
 
   @@index([organizationId])
   @@map("stores")
@@ -117,39 +131,39 @@ model Store {
 // AUTHENTICATION & RBAC
 
 model User {
-  id              String   @id @default(cuid())
-  organizationId  String
-  storeId         String?
-  email           String   @unique
-  name            String
-  passwordHash    String
-  role            String   @default("CASHIER") // SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER, CASHIER, ACCOUNTANT
-  phone           String?
-  avatarUrl       String?
-  isActive        Boolean  @default(true)
-  lastLoginAt     DateTime?
-  lockedUntil      DateTime?  // Account locked until this time
-  failedLoginAttempts Int     @default(0)
-  lastFailedLoginAt DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                  String    @id @default(cuid())
+  organizationId      String
+  storeId             String?
+  email               String    @unique
+  name                String
+  passwordHash        String
+  role                String    @default("CASHIER") // SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER, CASHIER, ACCOUNTANT
+  phone               String?
+  avatarUrl           String?
+  isActive            Boolean   @default(true)
+  lastLoginAt         DateTime?
+  lockedUntil         DateTime? // Account locked until this time
+  failedLoginAttempts Int       @default(0)
+  lastFailedLoginAt   DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  store           Store?       @relation(fields: [storeId], references: [id])
-  sessions           Session[]
-  systemLogs         SystemLog[]
-  transactions       SalesTransaction[]
-  cashDrawerLogs     CashDrawerLog[]
-  shifts             Shift[]
-  issuedGiftCards    GiftCard[]         @relation("IssuedByUser")
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  store           Store?             @relation(fields: [storeId], references: [id])
+  sessions        Session[]
+  systemLogs      SystemLog[]
+  transactions    SalesTransaction[]
+  cashDrawerLogs  CashDrawerLog[]
+  shifts          Shift[]
+  issuedGiftCards GiftCard[]         @relation("IssuedByUser")
 
   // Employee profile (optional — an employee may exist without a user account,
   // e.g. casual labourers; a user may exist without an employee profile, e.g.
   // an org-level SUPER_ADMIN who isn't on any store payroll).
-  employee           Employee?
+  employee Employee?
 
   // ── v2.0.0 messaging relations ─────────────────────────────────────────
-  sentMessages       ConversationMessage[]
+  sentMessages            ConversationMessage[]
   notificationPreferences NotificationPreference[]
 
   @@index([organizationId])
@@ -166,11 +180,11 @@ model Session {
   ipAddress    String?
   userAgent    String?
   expiresAt    DateTime
-  lastActiveAt    DateTime  @default(now()) // Track session activity
-  isSuspicious    Boolean   @default(false) // Flag suspicious sessions
+  lastActiveAt DateTime @default(now()) // Track session activity
+  isSuspicious Boolean  @default(false) // Flag suspicious sessions
   createdAt    DateTime @default(now())
 
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([token])
@@ -179,11 +193,11 @@ model Session {
 }
 
 model RolePermission {
-  id           String   @id @default(cuid())
-  role         String   // SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER, CASHIER, ACCOUNTANT
-  resource     String   // products, transactions, customers, financials, rentals, admin, reports
-  action       String   // create, read, update, delete, approve, refund, export
-  createdAt    DateTime @default(now())
+  id        String   @id @default(cuid())
+  role      String // SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER, CASHIER, ACCOUNTANT
+  resource  String // products, transactions, customers, financials, rentals, admin, reports
+  action    String // create, read, update, delete, approve, refund, export
+  createdAt DateTime @default(now())
 
   @@unique([role, resource, action])
   @@map("role_permissions")
@@ -192,19 +206,20 @@ model RolePermission {
 // PRODUCT & INVENTORY
 
 model ProductCategory {
-  id              String   @id @default(cuid())
-  storeId         String
-  name            String
-  description     String?
-  icon            String?
-  color           String?
-  sortOrder       Int      @default(0)
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id          String   @id @default(cuid())
+  storeId     String
+  name        String
+  description String?
+  icon        String?
+  color       String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  products        Product[]
+  store         Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  products      Product[]
+  subcategories SubCategory[]
 
   @@index([storeId])
   @@map("product_categories")
@@ -214,16 +229,17 @@ model Product {
   id                String   @id @default(cuid())
   storeId           String
   categoryId        String?
+  subcategoryId     String? // Phase 2: finer-grained classification
   sku               String   @unique
   barcode           String?  @unique
   name              String
   description       String?
   unitType          String   @default("PIECE") // PIECE, KILOGRAM, METER, LITER, BAG, BOX, SET
-  quantityInStock   Float    @default(0)
-  reorderLevel      Float    @default(10)
-  pricePerUnit      Float    // Selling price
-  costPrice         Float    // Purchase/cost price
-  taxRate           Float    @default(16) // Kenya VAT 16%
+  quantityInStock   Decimal  @default(0) @db.Decimal(10, 3)
+  reorderLevel      Decimal  @default(10) @db.Decimal(10, 3)
+  pricePerUnit      Decimal  @db.Decimal(12, 2) // Selling price
+  costPrice         Decimal  @db.Decimal(12, 2) // Purchase/cost price
+  taxRate           Decimal  @default(16) @db.Decimal(5, 2) // Kenya VAT 16%
   isRental          Boolean  @default(false)
   isBundle          Boolean  @default(false)
   isActive          Boolean  @default(true)
@@ -238,14 +254,15 @@ model Product {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  store             Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  category          ProductCategory? @relation(fields: [categoryId], references: [id])
-  bundleItems       ProductBundle[]  @relation("BundleParent")
-  parentBundles     ProductBundle[]  @relation("BundleChild")
-  saleItems         SaleItem[]
-  stockMovements    StockMovement[]
-  warehouseStocks   WarehouseStock[]
-  rentals           EquipmentRental[]
+  store              Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  category           ProductCategory?    @relation(fields: [categoryId], references: [id])
+  subcategory        SubCategory?        @relation(fields: [subcategoryId], references: [id])
+  bundleItems        ProductBundle[]     @relation("BundleParent")
+  parentBundles      ProductBundle[]     @relation("BundleChild")
+  saleItems          SaleItem[]
+  stockMovements     StockMovement[]
+  warehouseStocks    WarehouseStock[]
+  rentals            EquipmentRental[]
   purchaseOrderItems PurchaseOrderItem[]
   invoiceItems       InvoiceItem[]
   deliveryNoteItems  DeliveryNoteItem[]
@@ -254,12 +271,16 @@ model Product {
   binLocations       BinLocation[]
   serialNumbers      SerialNumber[]
   batches            Batch[]
+  // ── Phase 2 production-grade relations ──────────────────────────────────
+  storeTransferItems StoreTransferItem[]
+  inventories        Inventory[]
 
   @@index([storeId])
   @@index([sku])
   @@index([barcode])
   @@index([name])
   @@index([categoryId])
+  @@index([subcategoryId])
   @@index([isActive])
   // Composite multi-tenant performance index (ISO 27001: scoped storeId + time range)
   @@index([storeId, createdAt])
@@ -267,13 +288,13 @@ model Product {
 }
 
 model ProductBundle {
-  id                String   @id @default(cuid())
-  parentProductId   String   // The bundle product
-  childProductId    String   // The constituent product
-  quantityRequired  Float    @default(1) // How many of child in one bundle
+  id               String  @id @default(cuid())
+  parentProductId  String // The bundle product
+  childProductId   String // The constituent product
+  quantityRequired Decimal @default(1) @db.Decimal(10, 3) // How many of child in one bundle
 
-  parentProduct     Product  @relation("BundleParent", fields: [parentProductId], references: [id], onDelete: Cascade)
-  childProduct      Product  @relation("BundleChild", fields: [childProductId], references: [id], onDelete: Cascade)
+  parentProduct Product @relation("BundleParent", fields: [parentProductId], references: [id], onDelete: Cascade)
+  childProduct  Product @relation("BundleChild", fields: [childProductId], references: [id], onDelete: Cascade)
 
   @@unique([parentProductId, childProductId])
   @@index([parentProductId])
@@ -281,15 +302,15 @@ model ProductBundle {
 }
 
 model WarehouseStock {
-  id          String   @id @default(cuid())
-  storeId     String
-  productId   String
-  warehouse   String   @default("MAIN") // MAIN, BACKUP, RECEIVING
-  quantity    Float    @default(0)
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  storeId   String
+  productId String
+  warehouse String   @default("MAIN") // MAIN, BACKUP, RECEIVING
+  quantity  Decimal  @default(0) @db.Decimal(10, 3)
+  updatedAt DateTime @updatedAt
 
-  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([storeId, productId, warehouse])
   @@index([storeId])
@@ -297,18 +318,18 @@ model WarehouseStock {
 }
 
 model StockMovement {
-  id              String   @id @default(cuid())
-  storeId         String
-  productId       String
-  movementType    String   // PURCHASE, SALE, ADJUSTMENT, TRANSFER, RETURN, RENTAL_OUT, RENTAL_RETURN
-  quantity        Float    // Positive for in, negative for out
-  referenceId     String?  // Transaction ID, PO ID, etc.
-  notes           String?
-  performedBy     String?  // User ID
-  createdAt       DateTime @default(now())
+  id           String   @id @default(cuid())
+  storeId      String
+  productId    String
+  movementType String // PURCHASE, SALE, ADJUSTMENT, TRANSFER, RETURN, RENTAL_OUT, RENTAL_RETURN
+  quantity     Decimal  @db.Decimal(10, 3) // Positive for in, negative for out
+  referenceId  String? // Transaction ID, PO ID, etc.
+  notes        String?
+  performedBy  String? // User ID
+  createdAt    DateTime @default(now())
 
-  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([storeId])
   @@index([productId])
@@ -320,31 +341,35 @@ model StockMovement {
 // CUSTOMERS & CRM
 
 model Customer {
-  id                  String   @id @default(cuid())
-  storeId             String
-  name                String
-  phone               String?
-  email               String?
-  address             String?
-  idNumber            String?  // Kenyan National ID
-  currentDebtBalance  Float    @default(0)
-  debtLimit           Float    @default(50000) // KES default limit
-  loyaltyPoints       Int      @default(0)
-  preferredChannel    String   @default("SMS") // SMS, EMAIL, WHATSAPP, PRINT
-  isActive            Boolean  @default(true)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  storeId            String
+  name               String
+  phone              String?
+  email              String?
+  address            String?
+  idNumber           String? // Kenyan National ID
+  currentDebtBalance Decimal  @default(0) @db.Decimal(12, 2)
+  debtLimit          Decimal  @default(50000) @db.Decimal(12, 2) // KES default limit
+  loyaltyPoints      Int      @default(0)
+  preferredChannel   String   @default("SMS") // SMS, EMAIL, WHATSAPP, PRINT
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  store               Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  debtLedgers         DebtLedger[]
-  transactions        SalesTransaction[]
-  rentals             EquipmentRental[]
-  giftCards           GiftCard[]         @relation("IssuedToCustomer")
+  store        Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  debtLedgers  DebtLedger[]
+  transactions SalesTransaction[]
+  rentals      EquipmentRental[]
+  giftCards    GiftCard[]         @relation("IssuedToCustomer")
 
-  customerCredits     CustomerCredit[]
+  customerCredits         CustomerCredit[]
   // ── v2.0.0 debt-management + messaging relations ───────────────────────
-  debtReminders       DebtReminder[]
+  debtReminders           DebtReminder[]
   notificationPreferences NotificationPreference[]
+  // ── Phase 2 production-grade relations ──────────────────────────────────
+  loyalty                 CustomerLoyalty?
+  loyaltyTransactions     LoyaltyTransaction[]
+  customerInteractions    CustomerInteraction[]
 
   @@index([storeId])
   @@index([phone])
@@ -353,24 +378,24 @@ model Customer {
 }
 
 model CustomerCredit {
-  id              String   @id @default(cuid())
-  storeId         String
-  customerId      String
-  amount          Float
-  creditType      String   @default("CREDIT") // CREDIT, DEBIT, ADJUSTMENT, REFUND
-  balance         Float    @default(0)         // Running balance after this entry
-  reference       String?                      // e.g. INV-001, PAY-2024-03
-  description     String?
-  status          String   @default("ACTIVE")  // ACTIVE, VOIDED
-  voidedAt        DateTime?
-  voidedBy        String?                      // User ID who voided
-  voidReason      String?
-  createdBy       String?                      // User ID
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id          String    @id @default(cuid())
+  storeId     String
+  customerId  String
+  amount      Decimal   @db.Decimal(12, 2)
+  creditType  String    @default("CREDIT") // CREDIT, DEBIT, ADJUSTMENT, REFUND
+  balance     Decimal   @default(0) @db.Decimal(12, 2) // Running balance after this entry
+  reference   String? // e.g. INV-001, PAY-2024-03
+  description String?
+  status      String    @default("ACTIVE") // ACTIVE, VOIDED
+  voidedAt    DateTime?
+  voidedBy    String? // User ID who voided
+  voidReason  String?
+  createdBy   String? // User ID
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  customer        Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([storeId])
   @@index([customerId])
@@ -383,36 +408,36 @@ model CustomerCredit {
 // SALES & TRANSACTIONS
 
 model SalesTransaction {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   storeId         String
-  receiptNumber   String   @unique
+  receiptNumber   String    @unique
   customerId      String?
   cashierId       String
-  subtotal        Float
-  taxAmount       Float
-  discountAmount  Float    @default(0)
-  totalAmount     Float
-  paymentMethod   String   // CASH, MPESA, DEBT, SPLIT
-  paymentStatus   String   @default("COMPLETED") // PENDING, COMPLETED, FAILED, REFUNDED, PARTIAL
-  transactionType String   @default("SALE") // SALE, REFUND, VOID
+  subtotal        Decimal   @db.Decimal(12, 2)
+  taxAmount       Decimal   @db.Decimal(12, 2)
+  discountAmount  Decimal   @default(0) @db.Decimal(12, 2)
+  totalAmount     Decimal   @db.Decimal(12, 2)
+  paymentMethod   String // CASH, MPESA, DEBT, SPLIT
+  paymentStatus   String    @default("COMPLETED") // PENDING, COMPLETED, FAILED, REFUNDED, PARTIAL
+  transactionType String    @default("SALE") // SALE, REFUND, VOID
   notes           String?
-  isOffline       Boolean  @default(false)
+  isOffline       Boolean   @default(false)
   syncedAt        DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  store           Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  customer        Customer?   @relation(fields: [customerId], references: [id])
-  cashier         User        @relation(fields: [cashierId], references: [id])
-  items           SaleItem[]
-  payments             Payment[]
-  debtLedgers          DebtLedger[]
-  receipt              Receipt?
-  giftCardRedemptions  GiftCardRedemption[]
-  voucherRedemptions   VoucherRedemption[]
-  deliveryNote         DeliveryNote?
+  store               Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer            Customer?            @relation(fields: [customerId], references: [id])
+  cashier             User                 @relation(fields: [cashierId], references: [id])
+  items               SaleItem[]
+  payments            Payment[]
+  debtLedgers         DebtLedger[]
+  receipt             Receipt?
+  giftCardRedemptions GiftCardRedemption[]
+  voucherRedemptions  VoucherRedemption[]
+  deliveryNote        DeliveryNote?
   // ── v2.0.0 eTIMS relation ──────────────────────────────────────────────
-  kraInvoice           InvoiceForKRA?
+  kraInvoice          InvoiceForKRA?
 
   @@index([storeId])
   @@index([cashierId])
@@ -427,21 +452,21 @@ model SalesTransaction {
 }
 
 model SaleItem {
-  id              String   @id @default(cuid())
+  id              String  @id @default(cuid())
   transactionId   String
   productId       String
-  productName     String   // Snapshot at time of sale
-  quantity        Float
+  productName     String // Snapshot at time of sale
+  quantity        Decimal @db.Decimal(10, 3)
   unitType        String
-  pricePerUnit    Float
-  costPrice       Float    // Snapshot for profit calculation
-  discountPercent Float    @default(0)
-  taxRate         Float    @default(16)
-  lineTotal       Float
-  isRentalItem    Boolean  @default(false)
+  pricePerUnit    Decimal @db.Decimal(12, 2)
+  costPrice       Decimal @db.Decimal(12, 2) // Snapshot for profit calculation
+  discountPercent Decimal @default(0) @db.Decimal(5, 2)
+  taxRate         Decimal @default(16) @db.Decimal(5, 2)
+  lineTotal       Decimal @db.Decimal(12, 2)
+  isRentalItem    Boolean @default(false)
 
-  transaction     SalesTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  product         Product          @relation(fields: [productId], references: [id])
+  transaction SalesTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  product     Product          @relation(fields: [productId], references: [id])
 
   @@index([transactionId])
   @@index([productId])
@@ -451,20 +476,20 @@ model SaleItem {
 // PAYMENTS
 
 model Payment {
-  id              String   @id @default(cuid())
-  storeId         String
-  transactionId   String
-  paymentMethod   String   // CASH, MPESA, DEBT
-  amount          Float
-  currency        String   @default("KES")
-  status          String   @default("COMPLETED") // PENDING, COMPLETED, FAILED, REFUNDED
-  reference       String?  // M-Pesa CheckoutRequestID, receipt number, etc.
-  metadata        String?  // JSON string for additional payment details
-  processedAt     DateTime @default(now())
-  createdAt       DateTime @default(now())
+  id            String   @id @default(cuid())
+  storeId       String
+  transactionId String
+  paymentMethod String // CASH, MPESA, DEBT
+  amount        Decimal  @db.Decimal(12, 2)
+  currency      String   @default("KES")
+  status        String   @default("COMPLETED") // PENDING, COMPLETED, FAILED, REFUNDED
+  reference     String? // M-Pesa CheckoutRequestID, receipt number, etc.
+  metadata      String? // JSON string for additional payment details
+  processedAt   DateTime @default(now())
+  createdAt     DateTime @default(now())
 
-  store           Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  transaction     SalesTransaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  store       Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  transaction SalesTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
   @@index([storeId])
   @@index([transactionId])
@@ -474,20 +499,20 @@ model Payment {
 }
 
 model MpesaTransaction {
-  id                    String   @id @default(cuid())
-  storeId               String
-  checkoutRequestId     String?
-  merchantRequestId     String?
-  mpesaReceiptNumber    String?
-  phoneNumber           String?
-  amount                Float
-  status                String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED
-  resultCode            String?
-  resultDesc            String?
-  callbackReceived      Boolean  @default(false)
-  transactionId         String?  // Link to SalesTransaction
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  storeId            String
+  checkoutRequestId  String?
+  merchantRequestId  String?
+  mpesaReceiptNumber String?
+  phoneNumber        String?
+  amount             Decimal  @db.Decimal(12, 2)
+  status             String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED
+  resultCode         String?
+  resultDesc         String?
+  callbackReceived   Boolean  @default(false)
+  transactionId      String? // Link to SalesTransaction
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@index([storeId])
   @@index([checkoutRequestId])
@@ -498,27 +523,27 @@ model MpesaTransaction {
 // DEBT / CREDIT MANAGEMENT
 
 model DebtLedger {
-  id              String   @id @default(cuid())
-  storeId         String
-  customerId      String
-  transactionId   String?
-  amountOwed      Float
-  amountPaid      Float    @default(0)
-  balance         Float    // amountOwed - amountPaid
-  dueDate         DateTime
-  status          String   @default("OUTSTANDING") // OUTSTANDING, PARTIAL, SETTLED, OVERDUE, WRITTEN_OFF
-  agingBucket     String   @default("CURRENT") // CURRENT, DAYS_30, DAYS_60, DAYS_90_PLUS
-  lastReminderAt  DateTime?
-  notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String    @id @default(cuid())
+  storeId        String
+  customerId     String
+  transactionId  String?
+  amountOwed     Decimal   @db.Decimal(12, 2)
+  amountPaid     Decimal   @default(0) @db.Decimal(12, 2)
+  balance        Decimal   @db.Decimal(12, 2) // amountOwed - amountPaid
+  dueDate        DateTime
+  status         String    @default("OUTSTANDING") // OUTSTANDING, PARTIAL, SETTLED, OVERDUE, WRITTEN_OFF
+  agingBucket    String    @default("CURRENT") // CURRENT, DAYS_30, DAYS_60, DAYS_90_PLUS
+  lastReminderAt DateTime?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  store           Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  customer        Customer          @relation(fields: [customerId], references: [id])
-  transaction     SalesTransaction? @relation(fields: [transactionId], references: [id])
-  debtPayments    DebtPayment[]
+  store        Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer     Customer          @relation(fields: [customerId], references: [id])
+  transaction  SalesTransaction? @relation(fields: [transactionId], references: [id])
+  debtPayments DebtPayment[]
   // ── v2.0.0 debt-management relation ────────────────────────────────────
-  reminders       DebtReminder[]
+  reminders    DebtReminder[]
 
   @@index([storeId])
   @@index([customerId])
@@ -529,17 +554,17 @@ model DebtLedger {
 }
 
 model DebtPayment {
-  id              String   @id @default(cuid())
-  storeId         String
-  debtLedgerId    String
-  amount          Float
-  paymentMethod   String   // CASH, MPESA
-  reference       String?
-  receivedBy      String?  // User ID
-  createdAt       DateTime @default(now())
+  id            String   @id @default(cuid())
+  storeId       String
+  debtLedgerId  String
+  amount        Decimal  @db.Decimal(12, 2)
+  paymentMethod String // CASH, MPESA
+  reference     String?
+  receivedBy    String? // User ID
+  createdAt     DateTime @default(now())
 
-  store           Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  debtLedger      DebtLedger  @relation(fields: [debtLedgerId], references: [id], onDelete: Cascade)
+  store      Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  debtLedger DebtLedger @relation(fields: [debtLedgerId], references: [id], onDelete: Cascade)
 
   @@index([storeId])
   @@index([debtLedgerId])
@@ -549,29 +574,29 @@ model DebtPayment {
 // EQUIPMENT RENTAL
 
 model EquipmentRental {
-  id                  String   @id @default(cuid())
-  storeId             String
-  productId           String
-  customerId          String
-  status              String   @default("ACTIVE") // ACTIVE, RETURNED, OVERDUE, DAMAGED, LOST
-  rentalStartDate     DateTime @default(now())
-  expectedReturnDate  DateTime
-  actualReturnDate    DateTime?
-  securityDeposit     Float
-  ratePerDay          Float
-  ratePerWeek         Float?
-  ratePerMonth        Float?
-  totalRentalCharge   Float    @default(0)
-  lateFeeAccumulated  Float    @default(0)
-  damageAssessment    String?  // NONE, MINOR, MODERATE, SEVERE
-  damageCharge        Float    @default(0)
-  notes               String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                 String    @id @default(cuid())
+  storeId            String
+  productId          String
+  customerId         String
+  status             String    @default("ACTIVE") // ACTIVE, RETURNED, OVERDUE, DAMAGED, LOST
+  rentalStartDate    DateTime  @default(now())
+  expectedReturnDate DateTime
+  actualReturnDate   DateTime?
+  securityDeposit    Decimal   @db.Decimal(12, 2)
+  ratePerDay         Decimal   @db.Decimal(12, 2)
+  ratePerWeek        Decimal?  @db.Decimal(12, 2)
+  ratePerMonth       Decimal?  @db.Decimal(12, 2)
+  totalRentalCharge  Decimal   @default(0) @db.Decimal(12, 2)
+  lateFeeAccumulated Decimal   @default(0) @db.Decimal(12, 2)
+  damageAssessment   String? // NONE, MINOR, MODERATE, SEVERE
+  damageCharge       Decimal   @default(0) @db.Decimal(12, 2)
+  notes              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  store               Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  product             Product  @relation(fields: [productId], references: [id])
-  customer            Customer @relation(fields: [customerId], references: [id])
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
 
   @@index([storeId])
   @@index([customerId])
@@ -584,18 +609,18 @@ model EquipmentRental {
 // FINANCIAL ACCOUNTING - DOUBLE-ENTRY BOOKKEEPING
 
 model Account {
-  id              String   @id @default(cuid())
-  organizationId  String
-  code            String   // Account code e.g. 1000, 2000, 3000
-  name            String
-  type            String   // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
-  subType         String?  // CURRENT_ASSET, FIXED_ASSET, CURRENT_LIABILITY, etc.
-  normalBalance   String   @default("DEBIT") // DEBIT, CREDIT
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(cuid())
+  organizationId String
+  code           String // Account code e.g. 1000, 2000, 3000
+  name           String
+  type           String // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+  subType        String? // CURRENT_ASSET, FIXED_ASSET, CURRENT_LIABILITY, etc.
+  normalBalance  String   @default("DEBIT") // DEBIT, CREDIT
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   journalEntryLines JournalEntryLine[]
 
   @@unique([organizationId, code])
@@ -605,26 +630,26 @@ model Account {
 }
 
 model JournalEntry {
-  id              String   @id @default(cuid())
-  storeId         String
-  entryNumber     String   @unique
-  entryDate       DateTime @default(now())
-  description     String
-  referenceType   String?  // SALE, PAYMENT, REFUND, RENTAL, ADJUSTMENT
-  referenceId     String?  // Transaction ID, Payment ID, etc.
-  totalDebit      Float
-  totalCredit     Float
-  isPosted        Boolean  @default(false)
-  isVoided        Boolean  @default(false)
-  postedAt        DateTime?
-  voidedAt        DateTime?
-  voidedBy        String?
-  createdBy       String?  // User ID
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String    @id @default(cuid())
+  storeId       String
+  entryNumber   String    @unique
+  entryDate     DateTime  @default(now())
+  description   String
+  referenceType String? // SALE, PAYMENT, REFUND, RENTAL, ADJUSTMENT
+  referenceId   String? // Transaction ID, Payment ID, etc.
+  totalDebit    Decimal   @db.Decimal(12, 2)
+  totalCredit   Decimal   @db.Decimal(12, 2)
+  isPosted      Boolean   @default(false)
+  isVoided      Boolean   @default(false)
+  postedAt      DateTime?
+  voidedAt      DateTime?
+  voidedBy      String?
+  createdBy     String? // User ID
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  store           Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  lines           JournalEntryLine[]
+  store Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  lines JournalEntryLine[]
 
   @@index([storeId])
   @@index([entryDate])
@@ -635,16 +660,16 @@ model JournalEntry {
 }
 
 model JournalEntryLine {
-  id              String   @id @default(cuid())
-  journalEntryId  String
-  accountId       String
-  debit           Float    @default(0)
-  credit          Float    @default(0)
-  description     String?
-  createdAt       DateTime @default(now())
+  id             String   @id @default(cuid())
+  journalEntryId String
+  accountId      String
+  debit          Decimal  @default(0) @db.Decimal(12, 2)
+  credit         Decimal  @default(0) @db.Decimal(12, 2)
+  description    String?
+  createdAt      DateTime @default(now())
 
-  journalEntry    JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
-  account         Account      @relation(fields: [accountId], references: [id])
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account      Account      @relation(fields: [accountId], references: [id])
 
   @@index([journalEntryId])
   @@index([accountId])
@@ -654,17 +679,17 @@ model JournalEntryLine {
 // CASH DRAWER MANAGEMENT
 
 model CashDrawerLog {
-  id              String   @id @default(cuid())
-  storeId         String
-  userId          String
-  action          String   // OPEN, CLOSE, CASH_IN, CASH_OUT, SALE, REFUND
-  amount          Float
-  balance         Float    // Running balance
-  notes           String?
-  createdAt       DateTime @default(now())
+  id        String   @id @default(cuid())
+  storeId   String
+  userId    String
+  action    String // OPEN, CLOSE, CASH_IN, CASH_OUT, SALE, REFUND
+  amount    Decimal  @db.Decimal(12, 2)
+  balance   Decimal  @db.Decimal(12, 2) // Running balance
+  notes     String?
+  createdAt DateTime @default(now())
 
-  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  user            User     @relation(fields: [userId], references: [id])
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
 
   @@index([storeId])
   @@index([userId])
@@ -675,17 +700,17 @@ model CashDrawerLog {
 // RECEIPTS
 
 model Receipt {
-  id              String   @id @default(cuid())
-  storeId         String
-  transactionId   String   @unique
-  receiptNumber   String   @unique
-  receiptType     String   @default("DIGITAL") // DIGITAL, PRINTED, EMAIL, SMS, WHATSAPP
-  sentTo          String?  // Phone or email
-  sentAt          DateTime?
-  createdAt       DateTime @default(now())
+  id            String    @id @default(cuid())
+  storeId       String
+  transactionId String    @unique
+  receiptNumber String    @unique
+  receiptType   String    @default("DIGITAL") // DIGITAL, PRINTED, EMAIL, SMS, WHATSAPP
+  sentTo        String? // Phone or email
+  sentAt        DateTime?
+  createdAt     DateTime  @default(now())
 
-  store           Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  transaction     SalesTransaction  @relation(fields: [transactionId], references: [id])
+  store       Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  transaction SalesTransaction @relation(fields: [transactionId], references: [id])
 
   @@index([storeId])
   @@index([transactionId])
@@ -721,22 +746,22 @@ model Supplier {
 }
 
 model PurchaseOrder {
-  id              String   @id @default(cuid())
-  storeId         String
-  poNumber        String   @unique
-  supplierId      String
-  status          String   @default("DRAFT") // DRAFT, SENT, CONFIRMED, RECEIVED, CANCELLED
-  orderDate       DateTime @default(now())
-  expectedDate    DateTime?
-  totalAmount     Float    @default(0)
-  notes           String?
-  createdBy       String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id           String    @id @default(cuid())
+  storeId      String
+  poNumber     String    @unique
+  supplierId   String
+  status       String    @default("DRAFT") // DRAFT, SENT, CONFIRMED, RECEIVED, CANCELLED
+  orderDate    DateTime  @default(now())
+  expectedDate DateTime?
+  totalAmount  Decimal   @default(0) @db.Decimal(12, 2)
+  notes        String?
+  createdBy    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  store           Store           @relation(fields: [storeId], references: [id])
-  supplier        Supplier        @relation(fields: [supplierId], references: [id])
-  items           PurchaseOrderItem[]
+  store    Store               @relation(fields: [storeId], references: [id])
+  supplier Supplier            @relation(fields: [supplierId], references: [id])
+  items    PurchaseOrderItem[]
 
   @@index([storeId])
   @@index([supplierId])
@@ -745,17 +770,17 @@ model PurchaseOrder {
 }
 
 model PurchaseOrderItem {
-  id              String   @id @default(cuid())
+  id              String  @id @default(cuid())
   purchaseOrderId String
   productId       String
-  quantity        Float
-  unitPrice       Float
-  totalPrice      Float
-  receivedQty     Float    @default(0)
+  quantity        Decimal @db.Decimal(10, 3)
+  unitPrice       Decimal @db.Decimal(12, 2)
+  totalPrice      Decimal @db.Decimal(12, 2)
+  receivedQty     Decimal @default(0) @db.Decimal(10, 3)
   notes           String?
 
-  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-  product         Product      @relation(fields: [productId], references: [id])
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id])
 
   @@index([purchaseOrderId])
   @@index([productId])
@@ -765,22 +790,22 @@ model PurchaseOrderItem {
 // EXPENSES
 
 model Expense {
-  id              String   @id @default(cuid())
-  storeId         String
-  description     String
-  amount          Float
-  category        String   // RENT, SALARIES, UTILITIES, TRANSPORT, MAINTENANCE, SUPPLIES, OTHER
-  paidBy          String   // User ID who paid
-  paymentMethod   String   @default("CASH") // CASH, MPESA
-  status          String   @default("ACTIVE") // ACTIVE, VOIDED
-  journalEntryId  String?  // Reference to the created journal entry
-  notes           String?
-  voidedAt        DateTime?
-  voidedBy        String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String    @id @default(cuid())
+  storeId        String
+  description    String
+  amount         Decimal   @db.Decimal(12, 2)
+  category       String // RENT, SALARIES, UTILITIES, TRANSPORT, MAINTENANCE, SUPPLIES, OTHER
+  paidBy         String // User ID who paid
+  paymentMethod  String    @default("CASH") // CASH, MPESA
+  status         String    @default("ACTIVE") // ACTIVE, VOIDED
+  journalEntryId String? // Reference to the created journal entry
+  notes          String?
+  voidedAt       DateTime?
+  voidedBy       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@index([storeId])
   @@index([category])
@@ -793,21 +818,21 @@ model Expense {
 // MESSAGING
 
 model Message {
-  id              String    @id @default(cuid())
-  storeId         String
-  customerId      String?
-  channel         String    @default("WHATSAPP")  // WHATSAPP, SMS, EMAIL, BOTH
-  messageType     String    @default("CUSTOM")    // DEBT_REMINDER, PAYMENT_CONFIRMATION, BALANCE_UPDATE, PROMOTION, CUSTOM
-  subject         String?
-  content         String
-  status          String    @default("PENDING")   // PENDING, SENT, DELIVERED, FAILED, READ
-  waLink          String?
-  sentAt          DateTime?
-  createdBy       String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id          String    @id @default(cuid())
+  storeId     String
+  customerId  String?
+  channel     String    @default("WHATSAPP") // WHATSAPP, SMS, EMAIL, BOTH
+  messageType String    @default("CUSTOM") // DEBT_REMINDER, PAYMENT_CONFIRMATION, BALANCE_UPDATE, PROMOTION, CUSTOM
+  subject     String?
+  content     String
+  status      String    @default("PENDING") // PENDING, SENT, DELIVERED, FAILED, READ
+  waLink      String?
+  sentAt      DateTime?
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@index([storeId])
   @@index([customerId])
@@ -821,20 +846,20 @@ model Message {
 // SYSTEM LOGGING & AUDIT
 
 model SystemLog {
-  id              String   @id @default(cuid())
-  storeId         String?
-  userId          String?
-  action          String
-  component       String   // POS, INVENTORY, FINANCIAL, AUTH, PAYMENT, RENTAL
-  severity        String   @default("INFO") // DEBUG, INFO, WARN, ERROR, CRITICAL
-  message         String
-  metadata        String?  // JSON string for additional context
-  stackTrace      String?
-  ipAddress       String?
-  createdAt       DateTime @default(now())
+  id         String   @id @default(cuid())
+  storeId    String?
+  userId     String?
+  action     String
+  component  String // POS, INVENTORY, FINANCIAL, AUTH, PAYMENT, RENTAL
+  severity   String   @default("INFO") // DEBUG, INFO, WARN, ERROR, CRITICAL
+  message    String
+  metadata   String? // JSON string for additional context
+  stackTrace String?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
 
-  store           Store?   @relation(fields: [storeId], references: [id])
-  user            User?    @relation(fields: [userId], references: [id])
+  store Store? @relation(fields: [storeId], references: [id])
+  user  User?  @relation(fields: [userId], references: [id])
 
   @@index([storeId])
   @@index([userId])
@@ -848,21 +873,21 @@ model SystemLog {
 // SYSTEM CONFIGURATION
 
 model SystemConfig {
-  id              String   @id @default(cuid())
-  key             String   @unique
-  value           String
-  description     String?
-  isEncrypted     Boolean  @default(false)
-  updatedAt       DateTime @updatedAt
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  isEncrypted Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
 
   @@map("system_configs")
 }
 
 model InitializationLog {
-  id              String   @id @default(cuid())
-  event           String
-  details         String?
-  executedAt      DateTime @default(now())
+  id         String   @id @default(cuid())
+  event      String
+  details    String?
+  executedAt DateTime @default(now())
 
   @@map("initialization_logs")
 }
@@ -870,31 +895,31 @@ model InitializationLog {
 // GIFT CARDS & VOUCHERS
 
 model GiftCard {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   storeId         String
-  code            String   @unique
-  reason          String   // CUSTOMER_LOYALTY, PROMOTION, REFUND_CREDIT, STORE_CREDIT, GIFT, EMPLOYEE_AWARD, COMPLAINT_RESOLUTION, OTHER
-  initialBalance  Float
-  currentBalance  Float
-  currency        String   @default("KES")
-  status          String   @default("ACTIVE") // ACTIVE, REDEEMED, EXPIRED, CANCELLED, PARTIALLY_REDEEMED
+  code            String    @unique
+  reason          String // CUSTOMER_LOYALTY, PROMOTION, REFUND_CREDIT, STORE_CREDIT, GIFT, EMPLOYEE_AWARD, COMPLAINT_RESOLUTION, OTHER
+  initialBalance  Decimal   @db.Decimal(12, 2)
+  currentBalance  Decimal   @db.Decimal(12, 2)
+  currency        String    @default("KES")
+  status          String    @default("ACTIVE") // ACTIVE, REDEEMED, EXPIRED, CANCELLED, PARTIALLY_REDEEMED
   recipientName   String?
   recipientPhone  String?
   recipientEmail  String?
   notes           String?
-  issuedBy        String?  // User ID who issued the card
-  issuedTo        String?  // Customer ID if linked
+  issuedBy        String? // User ID who issued the card
+  issuedTo        String? // Customer ID if linked
   expiresAt       DateTime?
   lastRedeemedAt  DateTime?
-  autoAdjustItems Boolean  @default(false) // When true, items visibility auto-adjusts based on balance
-  isVisible       Boolean  @default(true) // Visibility toggle - auto-adjusts when balance reaches 0
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  autoAdjustItems Boolean   @default(false) // When true, items visibility auto-adjusts based on balance
+  isVisible       Boolean   @default(true) // Visibility toggle - auto-adjusts when balance reaches 0
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  issuedByUser    User?     @relation("IssuedByUser", fields: [issuedBy], references: [id])
-  issuedToCustomer Customer? @relation("IssuedToCustomer", fields: [issuedTo], references: [id])
-  redemptions     GiftCardRedemption[]
+  store            Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  issuedByUser     User?                @relation("IssuedByUser", fields: [issuedBy], references: [id])
+  issuedToCustomer Customer?            @relation("IssuedToCustomer", fields: [issuedTo], references: [id])
+  redemptions      GiftCardRedemption[]
 
   @@index([storeId])
   @@index([code])
@@ -905,16 +930,16 @@ model GiftCard {
 }
 
 model GiftCardRedemption {
-  id              String   @id @default(cuid())
-  giftCardId      String
-  transactionId   String?  // Link to sales transaction if redeemed against a sale
-  amount          Float
-  redeemedBy      String?  // User ID who processed the redemption
-  notes           String?
-  createdAt       DateTime @default(now())
+  id            String   @id @default(cuid())
+  giftCardId    String
+  transactionId String? // Link to sales transaction if redeemed against a sale
+  amount        Decimal  @db.Decimal(12, 2)
+  redeemedBy    String? // User ID who processed the redemption
+  notes         String?
+  createdAt     DateTime @default(now())
 
-  giftCard        GiftCard          @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
-  transaction     SalesTransaction? @relation(fields: [transactionId], references: [id])
+  giftCard    GiftCard          @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
+  transaction SalesTransaction? @relation(fields: [transactionId], references: [id])
 
   @@index([giftCardId])
   @@index([transactionId])
@@ -924,30 +949,30 @@ model GiftCardRedemption {
 // VOUCHERS & CAMPAIGNS
 
 model Voucher {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   storeId         String
-  code            String   @unique
+  code            String    @unique
   name            String
-  voucherType     String   @default("FIXED") // FIXED, PERCENTAGE, FREE_PRODUCT, BUNDLE
-  value           Float
+  voucherType     String    @default("FIXED") // FIXED, PERCENTAGE, FREE_PRODUCT, BUNDLE
+  value           Decimal   @db.Decimal(12, 2)
   description     String?
-  minimumPurchase Float    @default(0)
-  maxDiscount     Float?
+  minimumPurchase Decimal   @default(0) @db.Decimal(12, 2)
+  maxDiscount     Decimal?  @db.Decimal(12, 2)
   freeProductId   String?
-  maxUses         Int      @default(1)
-  currentUses     Int      @default(0)
-  maxUsesPerUser  Int      @default(1)
-  startDate       DateTime @default(now())
+  maxUses         Int       @default(1)
+  currentUses     Int       @default(0)
+  maxUsesPerUser  Int       @default(1)
+  startDate       DateTime  @default(now())
   endDate         DateTime?
-  status          String   @default("ACTIVE") // ACTIVE, PAUSED, EXPIRED, CANCELLED
+  status          String    @default("ACTIVE") // ACTIVE, PAUSED, EXPIRED, CANCELLED
   campaignId      String?
   createdBy       String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  store           Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  campaign        VoucherCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  redemptions     VoucherRedemption[]
+  store       Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  campaign    VoucherCampaign?    @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  redemptions VoucherRedemption[]
 
   @@index([storeId])
   @@index([code])
@@ -957,25 +982,25 @@ model Voucher {
 }
 
 model VoucherCampaign {
-  id              String   @id @default(cuid())
-  storeId         String
-  name            String
-  campaignType    String   @default("PROMOTION") // PROMOTION, SEASONAL, LOYALTY, REFERRAL, FLASH_SALE
-  description     String?
-  startDate       DateTime @default(now())
-  endDate         DateTime?
-  budget          Float    @default(0)
-  spentAmount     Float    @default(0)
-  targetAudience  String?
-  status          String   @default("DRAFT") // DRAFT, ACTIVE, COMPLETED, CANCELLED
-  totalRedemptions Int    @default(0)
-  totalRevenue    Float    @default(0)
-  createdBy       String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id               String    @id @default(cuid())
+  storeId          String
+  name             String
+  campaignType     String    @default("PROMOTION") // PROMOTION, SEASONAL, LOYALTY, REFERRAL, FLASH_SALE
+  description      String?
+  startDate        DateTime  @default(now())
+  endDate          DateTime?
+  budget           Decimal   @default(0) @db.Decimal(12, 2)
+  spentAmount      Decimal   @default(0) @db.Decimal(12, 2)
+  targetAudience   String?
+  status           String    @default("DRAFT") // DRAFT, ACTIVE, COMPLETED, CANCELLED
+  totalRedemptions Int       @default(0)
+  totalRevenue     Decimal   @default(0) @db.Decimal(12, 2)
+  createdBy        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  vouchers        Voucher[]
+  store    Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  vouchers Voucher[]
 
   @@index([storeId])
   @@index([status])
@@ -983,17 +1008,17 @@ model VoucherCampaign {
 }
 
 model VoucherRedemption {
-  id              String   @id @default(cuid())
-  voucherId       String
-  transactionId   String?
-  redeemedBy      String?  // Customer name or ID
-  originalTotal   Float    @default(0)
-  discountAmount  Float    @default(0)
-  finalTotal      Float    @default(0)
-  createdAt       DateTime @default(now())
+  id             String   @id @default(cuid())
+  voucherId      String
+  transactionId  String?
+  redeemedBy     String? // Customer name or ID
+  originalTotal  Decimal  @default(0) @db.Decimal(12, 2)
+  discountAmount Decimal  @default(0) @db.Decimal(12, 2)
+  finalTotal     Decimal  @default(0) @db.Decimal(12, 2)
+  createdAt      DateTime @default(now())
 
-  voucher         Voucher           @relation(fields: [voucherId], references: [id], onDelete: Cascade)
-  transaction     SalesTransaction? @relation(fields: [transactionId], references: [id])
+  voucher     Voucher           @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  transaction SalesTransaction? @relation(fields: [transactionId], references: [id])
 
   @@index([voucherId])
   @@index([transactionId])
@@ -1008,18 +1033,18 @@ model Shift {
   user              User      @relation(fields: [userId], references: [id])
   storeId           String    @map("store_id")
   store             Store     @relation(fields: [storeId], references: [id])
-  startedAt         DateTime  @map("started_at") @default(now())
+  startedAt         DateTime  @default(now()) @map("started_at")
   endedAt           DateTime? @map("ended_at")
-  startingCash      Float     @map("starting_cash") @default(0)
-  endingCash        Float?    @map("ending_cash")
-  countedCash       Float?    @map("counted_cash")
-  cashDifference    Float?    @map("cash_difference")
-  totalSales        Float     @map("total_sales") @default(0)
-  totalTransactions Int       @map("total_transactions") @default(0)
+  startingCash      Decimal   @default(0) @map("starting_cash") @db.Decimal(12, 2)
+  endingCash        Decimal?  @map("ending_cash") @db.Decimal(12, 2)
+  countedCash       Decimal?  @map("counted_cash") @db.Decimal(12, 2)
+  cashDifference    Decimal?  @map("cash_difference") @db.Decimal(12, 2)
+  totalSales        Decimal   @default(0) @map("total_sales") @db.Decimal(12, 2)
+  totalTransactions Int       @default(0) @map("total_transactions")
   status            String    @default("ACTIVE") // ACTIVE, ENDED
   notes             String?
-  createdAt         DateTime  @map("created_at") @default(now())
-  updatedAt         DateTime  @map("updated_at") @updatedAt
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   @@index([storeId])
   @@index([userId])
@@ -1032,30 +1057,30 @@ model Shift {
 // INVOICES & QUOTATIONS
 
 model Invoice {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   storeId         String
-  invoiceNumber   String   @unique
-  invoiceType     String   @default("INVOICE") // INVOICE, QUOTATION, PROFORMA, CREDIT_NOTE, DEBIT_NOTE
+  invoiceNumber   String    @unique
+  invoiceType     String    @default("INVOICE") // INVOICE, QUOTATION, PROFORMA, CREDIT_NOTE, DEBIT_NOTE
   customerId      String?
   customerName    String
   customerPhone   String?
   customerEmail   String?
   customerAddress String?
-  issueDate       DateTime @default(now())
+  issueDate       DateTime  @default(now())
   dueDate         DateTime?
-  subtotal        Float    @default(0)
-  taxAmount       Float    @default(0)
-  discountAmount  Float    @default(0)
-  totalAmount     Float    @default(0)
-  status          String   @default("DRAFT") // DRAFT, SENT, ACCEPTED, INVOICED, PAID, CANCELLED, EXPIRED
+  subtotal        Decimal   @default(0) @db.Decimal(12, 2)
+  taxAmount       Decimal   @default(0) @db.Decimal(12, 2)
+  discountAmount  Decimal   @default(0) @db.Decimal(12, 2)
+  totalAmount     Decimal   @default(0) @db.Decimal(12, 2)
+  status          String    @default("DRAFT") // DRAFT, SENT, ACCEPTED, INVOICED, PAID, CANCELLED, EXPIRED
   notes           String?
   terms           String?
   createdBy       String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  items           InvoiceItem[]
+  store Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  items InvoiceItem[]
 
   @@index([storeId])
   @@index([invoiceNumber])
@@ -1067,20 +1092,20 @@ model Invoice {
 }
 
 model InvoiceItem {
-  id              String   @id @default(cuid())
+  id              String  @id @default(cuid())
   invoiceId       String
   productId       String?
   productName     String
   description     String?
-  quantity        Float
-  unitType        String   @default("PIECE")
-  pricePerUnit    Float
-  discountPercent Float    @default(0)
-  taxRate         Float    @default(16)
-  lineTotal       Float    @default(0)
+  quantity        Decimal @db.Decimal(10, 3)
+  unitType        String  @default("PIECE")
+  pricePerUnit    Decimal @db.Decimal(12, 2)
+  discountPercent Decimal @default(0) @db.Decimal(5, 2)
+  taxRate         Decimal @default(16) @db.Decimal(5, 2)
+  lineTotal       Decimal @default(0) @db.Decimal(12, 2)
 
-  invoice         Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  product         Product? @relation(fields: [productId], references: [id])
+  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
 
   @@index([invoiceId])
   @@index([productId])
@@ -1108,9 +1133,9 @@ model DeliveryNote {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  store           Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  transaction     SalesTransaction? @relation(fields: [transactionId], references: [id])
-  items           DeliveryNoteItem[]
+  store       Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  transaction SalesTransaction?  @relation(fields: [transactionId], references: [id])
+  items       DeliveryNoteItem[]
 
   @@index([storeId])
   @@index([status])
@@ -1120,16 +1145,16 @@ model DeliveryNote {
 }
 
 model DeliveryNoteItem {
-  id              String   @id @default(cuid())
-  deliveryNoteId  String
-  productId       String?
-  productName     String
-  quantity        Float
-  unitType        String   @default("PIECE")
-  notes           String?
+  id             String  @id @default(cuid())
+  deliveryNoteId String
+  productId      String?
+  productName    String
+  quantity       Decimal @db.Decimal(10, 3)
+  unitType       String  @default("PIECE")
+  notes          String?
 
-  deliveryNote    DeliveryNote @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
-  product         Product?     @relation(fields: [productId], references: [id])
+  deliveryNote DeliveryNote @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
+  product      Product?     @relation(fields: [productId], references: [id])
 
   @@index([deliveryNoteId])
   @@index([productId])
@@ -1138,18 +1163,18 @@ model DeliveryNoteItem {
 
 // ── SECURITY & AUDIT ──────────────────────────────────────────────────────────
 model SecurityEvent {
-  id            String   @id @default(cuid())
-  eventType     String   // RATE_LIMITED, CSRF_FAILED, BRUTE_FORCE, INVALID_INPUT, SUSPICIOUS_ACTIVITY, ACCOUNT_LOCKED, SESSION_HIJACK_ATTEMPT, UNAUTHORIZED_ACCESS
-  severity      String   @default("WARN") // DEBUG, INFO, WARN, ERROR, CRITICAL
-  ipAddress     String?
-  userId        String?
-  storeId       String?
-  resource      String?  // Which resource was targeted
-  action        String?  // What action was attempted
-  details       String?  // JSON string with additional context
-  userAgent     String?
-  blocked       Boolean  @default(false) // Was the request blocked?
-  createdAt     DateTime @default(now())
+  id        String   @id @default(cuid())
+  eventType String // RATE_LIMITED, CSRF_FAILED, BRUTE_FORCE, INVALID_INPUT, SUSPICIOUS_ACTIVITY, ACCOUNT_LOCKED, SESSION_HIJACK_ATTEMPT, UNAUTHORIZED_ACCESS
+  severity  String   @default("WARN") // DEBUG, INFO, WARN, ERROR, CRITICAL
+  ipAddress String?
+  userId    String?
+  storeId   String?
+  resource  String? // Which resource was targeted
+  action    String? // What action was attempted
+  details   String? // JSON string with additional context
+  userAgent String?
+  blocked   Boolean  @default(false) // Was the request blocked?
+  createdAt DateTime @default(now())
 
   @@index([eventType])
   @@index([ipAddress])
@@ -1177,11 +1202,12 @@ model SecurityEvent {
 //     defined once and referenced by every store. EmployeeLeaveBalance,
 //     LeaveRequest, etc. resolve via employee.storeId.
 //
-//   • Monetary fields use Float for consistency with the existing schema
-//     (Product.pricePerUnit, SalesTransaction.total, etc. are all Float).
-//     A future task will migrate ALL monetary fields to Decimal @db.Decimal(10,2)
-//     for KRA eTIMS compliance — but that is a schema-wide change, not
-//     payroll-specific, so we keep parity here.
+//   • Monetary fields now use Decimal @db.Decimal(12,2) (banker's rounding)
+//     across the entire schema — Product.pricePerUnit, SalesTransaction.total,
+//     PayrollDetail.netPay, etc. This Phase 2 migration ensures KRA eTIMS
+//     compliance and eliminates IEEE-754 float rounding errors. Payroll
+//     fields (basicSalary, grossPay, paye, nssf, nhif, etc.) follow the
+//     same convention.
 //
 //   • PAYSLIP immutability: PayrollDetail is append-only (a payslip, once
 //     generated, must never be silently edited — corrections are made via
@@ -1204,76 +1230,76 @@ model SecurityEvent {
 /// but does not HAVE to be — casual labourers and contractors without system
 /// access still need payroll records.
 model Employee {
-  id                  String   @id @default(cuid())
-  storeId             String
+  id      String @id @default(cuid())
+  storeId String
 
   // Optional link to a system User account. When set, the employee can log in
   // and access the self-service portal (view payslips, request leave, clock in).
   // CASCADE on User delete: if the user account is removed, the employee record
   // is preserved (set to null) so historical payroll is never orphaned.
-  userId              String?  @unique
+  userId String? @unique
 
   // Identity
-  firstName           String
-  lastName            String
-  email               String?  // Unique per store (not globally) — two stores
-                               // could legitimately have employees with the
-                               // same personal email.
-  phone               String?
-  nationalId          String?  // Kenyan National ID — required for KRA PAYE
-  kraPin              String?  // KRA PIN — required for PAYE returns
-  nssfNumber          String?  // National Social Security Fund
-  nhifNumber          String?  // National Hospital Insurance Fund (now SHIF)
-  photoUrl            String?
+  firstName  String
+  lastName   String
+  email      String? // Unique per store (not globally) — two stores
+  // could legitimately have employees with the
+  // same personal email.
+  phone      String?
+  nationalId String? // Kenyan National ID — required for KRA PAYE
+  kraPin     String? // KRA PIN — required for PAYE returns
+  nssfNumber String? // National Social Security Fund
+  nhifNumber String? // National Hospital Insurance Fund (now SHIF)
+  photoUrl   String?
 
   // Employment
-  jobTitle            String?  // e.g. "Senior Cashier", "Store Supervisor"
-  role                String   @default("STAFF") // STAFF, SUPERVISOR, MANAGER, CASHIER, ACCOUNTANT
-  employmentType      String   @default("PERMANENT") // PERMANENT, CONTRACT, CASUAL, PROBATION, INTERN
-  hireDate            DateTime
-  terminationDate     DateTime? // null = active; set when employment ends
-  status              String   @default("ACTIVE") // ACTIVE, SUSPENDED, TERMINATED, ON_LEAVE
+  jobTitle        String? // e.g. "Senior Cashier", "Store Supervisor"
+  role            String    @default("STAFF") // STAFF, SUPERVISOR, MANAGER, CASHIER, ACCOUNTANT
+  employmentType  String    @default("PERMANENT") // PERMANENT, CONTRACT, CASUAL, PROBATION, INTERN
+  hireDate        DateTime
+  terminationDate DateTime? // null = active; set when employment ends
+  status          String    @default("ACTIVE") // ACTIVE, SUSPENDED, TERMINATED, ON_LEAVE
 
   // Compensation (monthly figures in KES)
-  basicSalary         Float    @default(0)   // Gross basic before allowances/deductions
-  hourlyRate          Float?                  // For casual/overtime calculation
-  houseAllowance      Float    @default(0)
-  transportAllowance  Float    @default(0)
-  medicalAllowance    Float    @default(0)
-  otherAllowances     Float    @default(0)
+  basicSalary        Decimal  @default(0) @db.Decimal(12, 2) // Gross basic before allowances/deductions
+  hourlyRate         Decimal? @db.Decimal(12, 2) // For casual/overtime calculation
+  houseAllowance     Decimal  @default(0) @db.Decimal(12, 2)
+  transportAllowance Decimal  @default(0) @db.Decimal(12, 2)
+  medicalAllowance   Decimal  @default(0) @db.Decimal(12, 2)
+  otherAllowances    Decimal  @default(0) @db.Decimal(12, 2)
 
   // Statutory deduction config (computed at payroll time; stored here as the
   // employee's current configuration). Actual per-run amounts live in
   // PayrollDetail.deductionsBreakdown.
-  payeExempt          Boolean  @default(false) // KRA PAYE exemption (e.g. disabled persons)
-  nssfExempt          Boolean  @default(false)
-  nhifExempt          Boolean  @default(false)
+  payeExempt Boolean @default(false) // KRA PAYE exemption (e.g. disabled persons)
+  nssfExempt Boolean @default(false)
+  nhifExempt Boolean @default(false)
 
   // Bank details for salary disbursement (NEVER store raw account numbers in
   // logs — mask in UI). Encrypted at rest by Neon TLS; application-layer
   // encryption can be layered on later if required.
-  bankName            String?
-  bankAccountName     String?
-  bankAccountNumber   String?
-  bankBranchCode      String?
-  bankSwift           String?  // For international wires (rare in Kenya)
+  bankName          String?
+  bankAccountName   String?
+  bankAccountNumber String?
+  bankBranchCode    String?
+  bankSwift         String? // For international wires (rare in Kenya)
 
   // Emergency contact
-  emergencyContactName  String?
-  emergencyContactPhone String?
+  emergencyContactName     String?
+  emergencyContactPhone    String?
   emergencyContactRelation String?
 
   // Metadata
-  notes               String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  store               Store                 @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  user                User?                 @relation(fields: [userId], references: [id])
-  payrollDetails      PayrollDetail[]
-  leaveBalances       EmployeeLeaveBalance[]
-  leaveRequests       LeaveRequest[]
-  attendanceRecords   AttendanceRecord[]
+  store             Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user              User?                  @relation(fields: [userId], references: [id])
+  payrollDetails    PayrollDetail[]
+  leaveBalances     EmployeeLeaveBalance[]
+  leaveRequests     LeaveRequest[]
+  attendanceRecords AttendanceRecord[]
 
   @@unique([storeId, email])
   @@index([storeId])
@@ -1288,28 +1314,28 @@ model Employee {
 /// A payroll cycle (e.g. "January 2026", "Week 5 2026"). A store creates one
 /// PayrollPeriod per cycle; a PayrollRun is then generated against it.
 model PayrollPeriod {
-  id          String   @id @default(cuid())
-  storeId     String
-  name        String   // e.g. "January 2026" or "2026-W05"
-  startDate   DateTime
-  endDate     DateTime
-  payDate     DateTime? // Scheduled disbursement date
-  status      String   @default("DRAFT") // DRAFT, PROCESSING, PAID, VOIDED
-  periodType  String   @default("MONTHLY") // MONTHLY, WEEKLY, BI_WEEKLY
+  id         String    @id @default(cuid())
+  storeId    String
+  name       String // e.g. "January 2026" or "2026-W05"
+  startDate  DateTime
+  endDate    DateTime
+  payDate    DateTime? // Scheduled disbursement date
+  status     String    @default("DRAFT") // DRAFT, PROCESSING, PAID, VOIDED
+  periodType String    @default("MONTHLY") // MONTHLY, WEEKLY, BI_WEEKLY
 
   // Aggregate totals (computed when the run is processed). Stored on the
   // period for fast dashboard rendering without joining PayrollDetail.
-  totalGross    Float    @default(0)
-  totalDeductions Float  @default(0)
-  totalNet      Float    @default(0)
-  employeeCount Int      @default(0)
+  totalGross      Decimal @default(0) @db.Decimal(12, 2)
+  totalDeductions Decimal @default(0) @db.Decimal(12, 2)
+  totalNet        Decimal @default(0) @db.Decimal(12, 2)
+  employeeCount   Int     @default(0)
 
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  store       Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  runs        PayrollRun[]
+  store Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  runs  PayrollRun[]
 
   @@unique([storeId, name])
   @@index([storeId])
@@ -1324,31 +1350,31 @@ model PayrollPeriod {
 /// multiple runs (e.g. initial run + a supplementary run for late hires),
 /// though typically just one. Each run produces a PayrollDetail per employee.
 model PayrollRun {
-  id              String   @id @default(cuid())
+  id              String @id @default(cuid())
   payrollPeriodId String
-  storeId         String   // Denormalised from PayrollPeriod for tenant-scoping
+  storeId         String // Denormalised from PayrollPeriod for tenant-scoping
 
-  runType         String   @default("REGULAR") // REGULAR, SUPPLEMENTARY, OFF_CYCLE, BONUS
-  status          String   @default("DRAFT") // DRAFT, PROCESSING, COMPLETED, PAID, VOIDED, FAILED
-  initiatedBy     String?  // User ID of the manager who initiated the run
-  processedAt     DateTime?
-  paidAt          DateTime?
+  runType     String    @default("REGULAR") // REGULAR, SUPPLEMENTARY, OFF_CYCLE, BONUS
+  status      String    @default("DRAFT") // DRAFT, PROCESSING, COMPLETED, PAID, VOIDED, FAILED
+  initiatedBy String? // User ID of the manager who initiated the run
+  processedAt DateTime?
+  paidAt      DateTime?
 
   // Aggregate totals for THIS run (sum of PayrollDetail rows)
-  totalGross      Float    @default(0)
-  totalDeductions Float    @default(0)
-  totalNet        Float    @default(0)
-  employeeCount   Int      @default(0)
+  totalGross      Decimal @default(0) @db.Decimal(12, 2)
+  totalDeductions Decimal @default(0) @db.Decimal(12, 2)
+  totalNet        Decimal @default(0) @db.Decimal(12, 2)
+  employeeCount   Int     @default(0)
 
   // Failure context (if status = FAILED)
-  errorMessage    String?
+  errorMessage String?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  payrollPeriod   PayrollPeriod  @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
-  store           Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  details         PayrollDetail[]
+  payrollPeriod PayrollPeriod   @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
+  store         Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  details       PayrollDetail[]
 
   @@index([payrollPeriodId])
   @@index([storeId])
@@ -1362,40 +1388,40 @@ model PayrollRun {
 /// run. This is the IMMUTABLE financial record — once a run is COMPLETED, the
 /// PayrollDetail rows must never be edited (corrections go in the next run).
 model PayrollDetail {
-  id              String   @id @default(cuid())
-  payrollRunId    String
-  employeeId      String
-  storeId         String   // Denormalised for tenant-scoping
+  id           String @id @default(cuid())
+  payrollRunId String
+  employeeId   String
+  storeId      String // Denormalised for tenant-scoping
 
   // Earnings breakdown (KES)
-  basicSalary     Float    @default(0)
-  houseAllowance  Float    @default(0)
-  transportAllowance Float @default(0)
-  medicalAllowance Float   @default(0)
-  otherAllowances Float    @default(0)
-  overtimePay     Float    @default(0)
-  grossPay        Float    @default(0) // Sum of all earnings
+  basicSalary        Decimal @default(0) @db.Decimal(12, 2)
+  houseAllowance     Decimal @default(0) @db.Decimal(12, 2)
+  transportAllowance Decimal @default(0) @db.Decimal(12, 2)
+  medicalAllowance   Decimal @default(0) @db.Decimal(12, 2)
+  otherAllowances    Decimal @default(0) @db.Decimal(12, 2)
+  overtimePay        Decimal @default(0) @db.Decimal(12, 2)
+  grossPay           Decimal @default(0) @db.Decimal(12, 2) // Sum of all earnings
 
   // Statutory deductions (KES) — computed per Kenyan law in payroll-helpers.ts
-  paye            Float    @default(0) // Pay As You Earn income tax
-  nssf            Float    @default(0) // National Social Security Fund
-  nhif            Float    @default(0) // National Hospital Insurance Fund / SHIF
-  housingLevy     Float    @default(0) // Affordable Housing Levy (1.5%)
+  paye        Decimal @default(0) @db.Decimal(12, 2) // Pay As You Earn income tax
+  nssf        Decimal @default(0) @db.Decimal(12, 2) // National Social Security Fund
+  nhif        Decimal @default(0) @db.Decimal(12, 2) // National Hospital Insurance Fund / SHIF
+  housingLevy Decimal @default(0) @db.Decimal(12, 2) // Affordable Housing Levy (1.5%)
 
   // Other deductions
-  payeArrears     Float    @default(0)
-  loanDeduction   Float    @default(0) // Salary advance / staff loan recovery
-  otherDeductions Float    @default(0)
-  totalDeductions Float    @default(0) // Sum of all deductions
+  payeArrears     Decimal @default(0) @db.Decimal(12, 2)
+  loanDeduction   Decimal @default(0) @db.Decimal(12, 2) // Salary advance / staff loan recovery
+  otherDeductions Decimal @default(0) @db.Decimal(12, 2)
+  totalDeductions Decimal @default(0) @db.Decimal(12, 2) // Sum of all deductions
 
-  netPay          Float    @default(0) // grossPay - totalDeductions
+  netPay Decimal @default(0) @db.Decimal(12, 2) // grossPay - totalDeductions
 
   // Working stats for the period (used in calculation + payslip display)
-  daysWorked      Int      @default(0)
-  daysPresent     Int      @default(0)
-  daysAbsent      Int      @default(0)
-  daysOnLeave     Int      @default(0)
-  overtimeHours   Float    @default(0)
+  daysWorked    Int     @default(0)
+  daysPresent   Int     @default(0)
+  daysAbsent    Int     @default(0)
+  daysOnLeave   Int     @default(0)
+  overtimeHours Decimal @default(0) @db.Decimal(8, 2)
 
   // JSON breakdown for audit / payslip rendering. Stored as String for SQLite
   // compat; PostgreSQL could use Json type. Contains the full calc trace:
@@ -1403,17 +1429,17 @@ model PayrollDetail {
   deductionsBreakdown String?
 
   // Payment status & reference
-  paymentStatus   String   @default("PENDING") // PENDING, PAID, FAILED, HELD
-  paymentRef      String?  // Bank transfer reference / M-Pesa B2B ref
-  paymentDate     DateTime?
-  payslipPdfUrl   String?  // Generated PDF path (S3/Vercel Blob)
+  paymentStatus String    @default("PENDING") // PENDING, PAID, FAILED, HELD
+  paymentRef    String? // Bank transfer reference / M-Pesa B2B ref
+  paymentDate   DateTime?
+  payslipPdfUrl String? // Generated PDF path (S3/Vercel Blob)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  payrollRun      PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
-  employee        Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  store           Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  payrollRun PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employee   Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  store      Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@unique([payrollRunId, employeeId])
   @@index([payrollRunId])
@@ -1432,17 +1458,17 @@ model LeaveType {
   name                String   @unique // Annual, Sick, Maternity, Paternity, Compassionate, Study, Sabbatical
   code                String   @unique // ANNUAL, SICK, MATERNITY, etc.
   description         String?
-  defaultDaysPerYear  Float    @default(0) // 0 = unlimited (e.g. Compassionate)
+  defaultDaysPerYear  Decimal  @default(0) @db.Decimal(8, 2) // 0 = unlimited (e.g. Compassionate)
   isPaid              Boolean  @default(true)
   isStatutory         Boolean  @default(false) // True for leave mandated by Kenyan law
   carryForwardAllowed Boolean  @default(true)
-  maxCarryForwardDays Float    @default(0)
+  maxCarryForwardDays Decimal  @default(0) @db.Decimal(8, 2)
   isActive            Boolean  @default(true)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  balances            EmployeeLeaveBalance[]
-  requests            LeaveRequest[]
+  balances EmployeeLeaveBalance[]
+  requests LeaveRequest[]
 
   @@index([isActive])
   @@index([isStatutory])
@@ -1453,30 +1479,30 @@ model LeaveType {
 /// Updated when a LeaveRequest is approved (usedDays += requested) and on the
 /// start of a new leave year (availableDays resets, carryForward applied).
 model EmployeeLeaveBalance {
-  id                  String   @id @default(cuid())
-  employeeId          String
-  leaveTypeId         String
+  id          String @id @default(cuid())
+  employeeId  String
+  leaveTypeId String
 
   // The leave "year" this balance applies to (an employee may have multiple
   // rows per leaveType across years). For most orgs this aligns with the
   // calendar year, but some use a hire-anniversary cycle.
-  leaveYear           Int      // e.g. 2026
+  leaveYear Int // e.g. 2026
 
-  allocatedDays       Float    @default(0) // Days granted for this year
-  usedDays            Float    @default(0) // Days already taken / approved
-  pendingDays         Float    @default(0) // Days in PENDING leave requests
-  carryForwardDays    Float    @default(0) // Brought forward from prior year
-  encashedDays        Float    @default(0) // Days paid out in lieu
+  allocatedDays    Decimal @default(0) @db.Decimal(8, 2) // Days granted for this year
+  usedDays         Decimal @default(0) @db.Decimal(8, 2) // Days already taken / approved
+  pendingDays      Decimal @default(0) @db.Decimal(8, 2) // Days in PENDING leave requests
+  carryForwardDays Decimal @default(0) @db.Decimal(8, 2) // Brought forward from prior year
+  encashedDays     Decimal @default(0) @db.Decimal(8, 2) // Days paid out in lieu
 
   // available = allocated + carryForward - used - pending
   // (Computed at read time to avoid drift; not stored.)
 
-  notes               String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  employee            Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  leaveType           LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+  employee  Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
 
   @@unique([employeeId, leaveTypeId, leaveYear])
   @@index([employeeId])
@@ -1490,35 +1516,35 @@ model EmployeeLeaveBalance {
 /// On APPROVED: EmployeeLeaveBalance.usedDays += (endDate - startDate + 1) days
 /// On REJECTED/CANCELLED: EmployeeLeaveBalance.pendingDays -= same
 model LeaveRequest {
-  id              String   @id @default(cuid())
-  employeeId      String
-  leaveTypeId     String
-  storeId         String   // Denormalised from Employee for tenant-scoping
+  id          String @id @default(cuid())
+  employeeId  String
+  leaveTypeId String
+  storeId     String // Denormalised from Employee for tenant-scoping
 
-  startDate       DateTime
-  endDate         DateTime
-  returnDate      DateTime? // Expected return (defaults to endDate + 1 day)
-  workingDays     Float    @default(0) // Computed: count of working days in range
-  halfDay         Boolean  @default(false)
+  startDate   DateTime
+  endDate     DateTime
+  returnDate  DateTime? // Expected return (defaults to endDate + 1 day)
+  workingDays Decimal   @default(0) @db.Decimal(8, 2) // Computed: count of working days in range
+  halfDay     Boolean   @default(false)
 
-  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED, CANCELLED, TAKEN
-  reason          String?  // Employee's stated reason
-  rejectionReason String?  // Manager's reason if rejected
-  attachmentUrl   String?  // e.g. medical certificate for sick leave
+  status          String  @default("PENDING") // PENDING, APPROVED, REJECTED, CANCELLED, TAKEN
+  reason          String? // Employee's stated reason
+  rejectionReason String? // Manager's reason if rejected
+  attachmentUrl   String? // e.g. medical certificate for sick leave
 
   // Approval chain
-  approvedBy      String?  // User ID of approver
-  approvedAt      DateTime?
+  approvedBy String? // User ID of approver
+  approvedAt DateTime?
 
   // Emergency contact during leave (optional)
   emergencyContact String?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  leaveType       LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
-  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  employee  Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+  store     Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@index([employeeId])
   @@index([leaveTypeId])
@@ -1533,42 +1559,42 @@ model LeaveRequest {
 /// Daily attendance / time-tracking record. One row per employee per day.
 /// Supports both simple clock-in/out and shift-based attendance.
 model AttendanceRecord {
-  id              String   @id @default(cuid())
-  employeeId      String
-  storeId         String   // Denormalised for tenant-scoping
+  id         String   @id @default(cuid())
+  employeeId String
+  storeId    String // Denormalised for tenant-scoping
   // NOTE: stored as DateTime (not @db.Date) for SQLite/dev compatibility.
   // The application layer enforces date-only semantics (midnight UTC).
   // On PostgreSQL a future migration can switch this to @db.Date.
-  date            DateTime // The calendar day (no time component)
+  date       DateTime // The calendar day (no time component)
 
   // Clock times (nullable for manual entries / absent days)
-  checkIn         DateTime?
-  checkOut        DateTime?
-  breakStart      DateTime?
-  breakEnd        DateTime?
-  breakHours      Float    @default(0) // Total break time in hours
+  checkIn    DateTime?
+  checkOut   DateTime?
+  breakStart DateTime?
+  breakEnd   DateTime?
+  breakHours Decimal   @default(0) @db.Decimal(8, 2) // Total break time in hours
 
   // Computed totals
-  workingHours    Float    @default(0) // (checkOut - checkIn) - breakHours
-  overtimeHours   Float    @default(0) // Hours beyond the standard shift
-  expectedHours   Float    @default(8) // Standard shift length
+  workingHours  Decimal @default(0) @db.Decimal(8, 2) // (checkOut - checkIn) - breakHours
+  overtimeHours Decimal @default(0) @db.Decimal(8, 2) // Hours beyond the standard shift
+  expectedHours Decimal @default(8) @db.Decimal(8, 2) // Standard shift length
 
-  status          String   @default("PRESENT") // PRESENT, ABSENT, LATE, HALF_DAY, LEAVE, HOLIDAY, WEEKEND, REMOTE
-  lateMinutes     Int      @default(0) // Minutes late past shift start
+  status            String @default("PRESENT") // PRESENT, ABSENT, LATE, HALF_DAY, LEAVE, HOLIDAY, WEEKEND, REMOTE
+  lateMinutes       Int    @default(0) // Minutes late past shift start
   earlyLeaveMinutes Int    @default(0)
 
   // Source / verification
-  source          String   @default("MANUAL") // MANUAL, BIOMETRIC, MOBILE, RFID
-  location        String?  // GPS / IP at clock-in (for remote verification)
-  verified        Boolean  @default(false) // Verified by a supervisor?
+  source   String  @default("MANUAL") // MANUAL, BIOMETRIC, MOBILE, RFID
+  location String? // GPS / IP at clock-in (for remote verification)
+  verified Boolean @default(false) // Verified by a supervisor?
 
-  notes           String?
-  approvedBy      String?  // Supervisor who approved manual entries
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  notes      String?
+  approvedBy String? // Supervisor who approved manual entries
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@unique([employeeId, date])
   @@index([employeeId])
@@ -1600,23 +1626,23 @@ model AttendanceRecord {
 /// One per store (a store may have its own KRA PIN). Credentials are stored
 /// AES-encrypted at rest (see src/lib/crypto-helpers.ts).
 model KraBusinessProfile {
-  id                    String   @id @default(cuid())
-  storeId               String
-  businessPin           String   @unique // KRA PIN, e.g. "P051234567X"
-  businessName          String
-  registrationDate      DateTime
-  kraUsername           String   // eTIMS portal username
-  kraPasswordEncrypted  String   // AES-encrypted (NEVER plaintext)
+  id                   String    @id @default(cuid())
+  storeId              String
+  businessPin          String    @unique // KRA PIN, e.g. "P051234567X"
+  businessName         String
+  registrationDate     DateTime
+  kraUsername          String // eTIMS portal username
+  kraPasswordEncrypted String // AES-encrypted (NEVER plaintext)
   // Sandbox vs production — KRA provides a test environment.
-  environment           String   @default("sandbox") // sandbox, production
-  isActive              Boolean  @default(true)
+  environment          String    @default("sandbox") // sandbox, production
+  isActive             Boolean   @default(true)
   // Cached OAuth token (eTIMS uses bearer tokens with expiry).
-  authToken             String?
-  authTokenExpiresAt    DateTime?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  authToken            String?
+  authTokenExpiresAt   DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  store                 Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@index([storeId])
   @@index([businessPin])
@@ -1627,31 +1653,31 @@ model KraBusinessProfile {
 /// A sales invoice mapped to KRA's eTIMS format. One per SalesTransaction.
 /// Links back to the originating transaction; tracks submission lifecycle.
 model InvoiceForKRA {
-  id                  String   @id @default(cuid())
-  storeId             String
-  transactionId       String   @unique // 1:1 with SalesTransaction
+  id               String    @id @default(cuid())
+  storeId          String
+  transactionId    String    @unique // 1:1 with SalesTransaction
   // KRA invoice number format: <PIN>-<YYYYMMDD>-<seq>. Generated per KRA spec.
-  kraInvoiceNumber    String   @unique
+  kraInvoiceNumber String    @unique
   // JSON blob: item-level tax breakdown (VAT 16%, exempt, zero-rated), HS
   // codes, discounts, totals. Flexible schema for evolving KRA requirements.
-  kraTaxBreakdown     String   // JSON string (SQLite-compatible; Json on PG)
+  kraTaxBreakdown  String // JSON string (SQLite-compatible; Json on PG)
   // PENDING → SUBMITTED → ACCEPTED | REJECTED | FAILED
-  submissionStatus    String   @default("PENDING")
+  submissionStatus String    @default("PENDING")
   // KRA returns a CU (Communication Unit) reference after acceptance.
-  kraSubmissionId     String?
-  cuPin               String?  // CU PIN returned by KRA (for QR code)
-  qrCode              String?  // Base64 QR code data
-  submittedAt         DateTime?
-  acceptedAt          DateTime?
+  kraSubmissionId  String?
+  cuPin            String? // CU PIN returned by KRA (for QR code)
+  qrCode           String? // Base64 QR code data
+  submittedAt      DateTime?
+  acceptedAt       DateTime?
   // Retry tracking for transient failures.
-  retryCount          Int      @default(0)
-  lastError           String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  retryCount       Int       @default(0)
+  lastError        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  store               Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  transaction         SalesTransaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  submissions         KraSubmission[]
+  store       Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  transaction SalesTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  submissions KraSubmission[]
 
   @@index([storeId])
   @@index([submissionStatus])
@@ -1663,23 +1689,23 @@ model InvoiceForKRA {
 /// Audit log of every KRA API call (submit, status query, business info).
 /// One InvoiceForKRA may have many KraSubmission rows (retries, status polls).
 model KraSubmission {
-  id                  String   @id @default(cuid())
-  storeId             String
-  invoiceForKraId     String
+  id                 String    @id @default(cuid())
+  storeId            String
+  invoiceForKraId    String
   // KRA reference number returned after submission.
-  kraReferenceNumber  String?
+  kraReferenceNumber String?
   // PENDING, SUBMITTED, ACCEPTED, REJECTED, FAILED
-  status              String   @default("PENDING")
+  status             String    @default("PENDING")
   // Full API response JSON for debugging / dispute resolution.
-  responseJson        String?  // JSON string
-  httpStatus          Int?
-  latencyMs           Int?
-  errorMessage        String?
-  submittedAt         DateTime @default(now())
-  processedAt         DateTime?
+  responseJson       String? // JSON string
+  httpStatus         Int?
+  latencyMs          Int?
+  errorMessage       String?
+  submittedAt        DateTime  @default(now())
+  processedAt        DateTime?
 
-  store               Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  invoiceForKra       InvoiceForKRA   @relation(fields: [invoiceForKraId], references: [id], onDelete: Cascade)
+  store         Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  invoiceForKra InvoiceForKRA @relation(fields: [invoiceForKraId], references: [id], onDelete: Cascade)
 
   @@index([storeId])
   @@index([invoiceForKraId])
@@ -1698,25 +1724,25 @@ model KraSubmission {
 
 /// A single debt-reminder event. One DebtLedger may have many reminders.
 model DebtReminder {
-  id              String   @id @default(cuid())
-  storeId         String
-  customerId      String
-  debtLedgerId    String
+  id                String    @id @default(cuid())
+  storeId           String
+  customerId        String
+  debtLedgerId      String
   // EMAIL, SMS, WHATSAPP, IN_APP
-  reminderType    String
+  reminderType      String
   // PENDING, SENT, FAILED, DELIVERED
-  status          String   @default("PENDING")
+  status            String    @default("PENDING")
   // Template / message content used (for audit).
-  message         String
+  message           String
   // External provider message ID (Twilio/Resend) for delivery tracking.
   providerMessageId String?
-  errorMessage    String?
-  sentAt          DateTime @default(now())
-  deliveredAt     DateTime?
+  errorMessage      String?
+  sentAt            DateTime  @default(now())
+  deliveredAt       DateTime?
 
-  store           Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  customer        Customer    @relation(fields: [customerId], references: [id])
-  debtLedger      DebtLedger  @relation(fields: [debtLedgerId], references: [id], onDelete: Cascade)
+  store      Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer   Customer   @relation(fields: [customerId], references: [id])
+  debtLedger DebtLedger @relation(fields: [debtLedgerId], references: [id], onDelete: Cascade)
 
   @@index([storeId])
   @@index([customerId])
@@ -1738,21 +1764,21 @@ model DebtReminder {
 
 /// A conversation thread — internal staff chat or customer-support chat.
 model Conversation {
-  id              String   @id @default(cuid())
-  storeId         String
+  id                 String    @id @default(cuid())
+  storeId            String
   // INTERNAL (staff-to-staff), CUSTOMER_SUPPORT (staff-to-customer)
-  type            String   @default("INTERNAL")
-  title           String?  // Optional human-readable title
+  type               String    @default("INTERNAL")
+  title              String? // Optional human-readable title
   // JSON array of participant user IDs (and customer ID for support chats).
   // Stored as String for SQLite compat; parsed in the application layer.
-  participantIds  String   @default("[]")
-  lastMessageAt   DateTime?
+  participantIds     String    @default("[]")
+  lastMessageAt      DateTime?
   lastMessagePreview String? // First ~100 chars of latest message (for list UI)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  store           Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  messages        ConversationMessage[]
+  store    Store                 @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  messages ConversationMessage[]
 
   @@index([storeId])
   @@index([type])
@@ -1763,20 +1789,20 @@ model Conversation {
 /// A single message in a conversation. Separate from the outbound `Message`
 /// model — this is for threaded internal/customer-support chat.
 model ConversationMessage {
-  id              String   @id @default(cuid())
-  conversationId  String
-  senderId        String   // User ID of the sender
-  content         String
+  id             String   @id @default(cuid())
+  conversationId String
+  senderId       String // User ID of the sender
+  content        String
   // TEXT, IMAGE, FILE, SYSTEM (join/leave notifications)
-  messageType     String   @default("TEXT")
+  messageType    String   @default("TEXT")
   // JSON: { userId: "2026-06-26T12:00:00Z" } per-recipient read timestamps.
-  readStatus      String   @default("{}")
+  readStatus     String   @default("{}")
   // Optional attachment URL (for IMAGE/FILE types).
-  attachmentUrl   String?
-  sentAt          DateTime @default(now())
+  attachmentUrl  String?
+  sentAt         DateTime @default(now())
 
-  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender          User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
   @@index([senderId])
@@ -1787,20 +1813,20 @@ model ConversationMessage {
 /// Per-user / per-customer notification channel preferences. Drives which
 /// channels (EMAIL, SMS, IN_APP) receive which alert types.
 model NotificationPreference {
-  id          String   @id @default(cuid())
-  userId      String?  // For staff users
-  customerId  String?  // For customers
+  id         String   @id @default(cuid())
+  userId     String? // For staff users
+  customerId String? // For customers
   // EMAIL, SMS, IN_APP, WHATSAPP
-  channel     String
+  channel    String
   // Alert categories this preference applies to (e.g. LOW_STOCK, OVERDUE_RENTAL,
   // DEBT_REMINDER, NEW_SALE). Use "ALL" for a blanket preference.
-  alertType   String   @default("ALL")
-  isEnabled   Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  alertType  String   @default("ALL")
+  isEnabled  Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  user     User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([customerId])
@@ -1828,18 +1854,18 @@ model ProductVariant {
   sku             String   @unique
   barcode         String?
   // Variant-specific pricing/stock (overrides parent if set).
-  pricePerUnit    Float?
-  costPrice       Float?
-  quantityInStock Float    @default(0)
-  reorderLevel    Float    @default(10)
+  pricePerUnit    Decimal? @db.Decimal(12, 2)
+  costPrice       Decimal? @db.Decimal(12, 2)
+  quantityInStock Decimal  @default(0) @db.Decimal(10, 3)
+  reorderLevel    Decimal  @default(10) @db.Decimal(10, 3)
   isActive        Boolean  @default(true)
   // Variant attributes as JSON (e.g. {"size":"50kg","color":"grey"}).
   attributes      String   @default("{}")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@index([productId])
   @@index([storeId])
@@ -1851,22 +1877,22 @@ model ProductVariant {
 /// Bin location — physical shelf/aisle/row where stock is stored. Enables
 /// pick-path optimization and multi-location tracking within one store.
 model BinLocation {
-  id              String   @id @default(cuid())
-  productId       String
-  storeId         String
+  id           String   @id @default(cuid())
+  productId    String
+  storeId      String
   // E.g. "Aisle A, Shelf 3, Bin 12"
-  locationCode    String
-  aisle           String?
-  shelf           String?
-  bin             String?
+  locationCode String
+  aisle        String?
+  shelf        String?
+  bin          String?
   // Quantity stored at this specific bin (sum across bins = Product.quantityInStock).
-  quantity        Float    @default(0)
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  quantity     Decimal  @default(0) @db.Decimal(10, 3)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@index([productId])
   @@index([storeId])
@@ -1878,21 +1904,21 @@ model BinLocation {
 /// Serial number — tracks individual units of a product (for warranty,
 /// returns, high-value items). One product may have many serials.
 model SerialNumber {
-  id              String   @id @default(cuid())
-  productId       String
-  storeId         String
-  serial          String   @unique
+  id                  String    @id @default(cuid())
+  productId           String
+  storeId             String
+  serial              String    @unique
   // IN_STOCK, SOLD, RESERVED, RETURNED, DEFECTIVE
-  status          String   @default("IN_STOCK")
+  status              String    @default("IN_STOCK")
   // Link to the sale that sold this unit (for warranty tracking).
   soldInTransactionId String?
-  warrantyExpiry  DateTime?
-  notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  warrantyExpiry      DateTime?
+  notes               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@index([productId])
   @@index([storeId])
@@ -1905,25 +1931,25 @@ model SerialNumber {
 /// recall management, supplier traceability). Common for construction
 /// chemicals, paints, adhesives.
 model Batch {
-  id              String   @id @default(cuid())
-  productId       String
-  storeId         String
-  batchNumber     String
+  id                String    @id @default(cuid())
+  productId         String
+  storeId           String
+  batchNumber       String
   // Quantity remaining in this batch (decremented on sale).
-  quantity        Float    @default(0)
+  quantity          Decimal   @default(0) @db.Decimal(10, 3)
   // Supplier who provided this batch (for recall traceability).
-  supplierId      String?
-  receivedDate    DateTime @default(now())
+  supplierId        String?
+  receivedDate      DateTime  @default(now())
   manufacturingDate DateTime?
-  expiryDate      DateTime?
+  expiryDate        DateTime?
   // ACTIVE, EXPIRED, RECALLED, DEPLETED
-  status          String   @default("ACTIVE")
-  notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  status            String    @default("ACTIVE")
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@index([productId])
   @@index([storeId])
@@ -1931,4 +1957,431 @@ model Batch {
   @@index([expiryDate])
   @@index([status])
   @@map("batches")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PHASE 2 — Production-grade schema completion + Decimal money migration.
+//
+// The 14 models below were referenced by API routes + UI tabs but were never
+// declared in schema.prisma — causing `db.<model>` to be `undefined` at
+// runtime (500 errors) and TS2339 at compile time. They are added here using
+// the same conventions as the rest of the schema:
+//   • String @id @default(cuid()) for cross-DB compatibility
+//   • storeId on all store-scoped models (multi-tenancy)
+//   • String for enum-like fields (SQLite compat — no Prisma enums)
+//   • Decimal for monetary fields (arbitrary precision; works on SQLite
+//     NUMERIC and PostgreSQL DECIMAL). NOTE: no @db.Decimal annotation so
+//     the schema compiles on BOTH providers.
+//   • @@map for clean DB table names
+//   • Comprehensive @@index for query performance
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── BANKING (3 models) ───────────────────────────────────────────────────────
+// Tracks real-world bank / M-Pesa / petty-cash accounts per store, their
+// transactions, and statement reconciliations.
+
+model BankAccount {
+  id             String   @id @default(cuid())
+  storeId        String
+  bankName       String
+  accountName    String
+  accountNumber  String
+  branch         String?
+  swiftCode      String?
+  currency       String   @default("KES")
+  accountType    String   @default("CHECKING") // CHECKING, SAVINGS, MPESA, PETTY_CASH
+  openingBalance Decimal  @default(0)
+  currentBalance Decimal  @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  store           Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  transactions    BankTransaction[]
+  reconciliations BankReconciliation[]
+
+  @@index([storeId])
+  @@index([accountType])
+  @@index([isActive])
+  @@index([bankName])
+  @@map("bank_accounts")
+}
+
+model BankTransaction {
+  id              String    @id @default(cuid())
+  bankAccountId   String
+  transactionType String // DEPOSIT, WITHDRAWAL, TRANSFER_IN, TRANSFER_OUT, FEE, INTEREST, MPESA_IN, MPESA_OUT
+  amount          Decimal // Positive for inflow, negative for outflow
+  balanceAfter    Decimal // Running balance after this transaction
+  reference       String?
+  description     String?
+  transactionDate DateTime  @default(now())
+  isReconciled    Boolean   @default(false)
+  reconciledAt    DateTime?
+  createdAt       DateTime  @default(now())
+
+  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  @@index([bankAccountId])
+  @@index([transactionType])
+  @@index([transactionDate])
+  @@index([isReconciled])
+  @@map("bank_transactions")
+}
+
+model BankReconciliation {
+  id               String   @id @default(cuid())
+  bankAccountId    String
+  statementDate    DateTime
+  statementBalance Decimal
+  bookBalance      Decimal
+  difference       Decimal  @default(0)
+  status           String   @default("DRAFT") // DRAFT, MATCHED, DISCREPANCY, RESOLVED
+  notes            String?
+  createdBy        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  @@index([bankAccountId])
+  @@index([statementDate])
+  @@index([status])
+  @@map("bank_reconciliations")
+}
+
+// ── LOYALTY (3 models + CustomerLoyalty) ─────────────────────────────────────
+// Tiered loyalty program: customers earn points per purchase, tiers unlock
+// discounts. Campaigns provide time-limited bonus-point promotions.
+
+model LoyaltyTier {
+  id               String   @id @default(cuid())
+  storeId          String
+  name             String
+  minPoints        Int      @default(0)
+  maxPoints        Int?
+  discountPercent  Decimal  @default(0)
+  pointsMultiplier Decimal  @default(1) // E.g. 1.5 = earn 50% extra points
+  benefits         String? // JSON string of benefit descriptors
+  color            String   @default("#6B7280")
+  icon             String?
+  isActive         Boolean  @default(true)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  store               Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customerTiers       CustomerLoyalty[] // back-relation: customers currently at this tier
+  loyaltyCampaigns    LoyaltyCampaign[]
+  loyaltyTransactions LoyaltyTransaction[]
+
+  @@index([storeId])
+  @@index([isActive])
+  @@index([sortOrder])
+  @@map("loyalty_tiers")
+}
+
+model LoyaltyCampaign {
+  id                 String    @id @default(cuid())
+  storeId            String
+  name               String
+  campaignType       String // BONUS_MULTIPLIER, BONUS_FIXED, DOUBLE_POINTS, TARGET_REWARD
+  description        String?
+  bonusPoints        Int       @default(0)
+  multiplier         Decimal   @default(1)
+  startDate          DateTime  @default(now())
+  endDate            DateTime?
+  targetTierId       String?
+  status             String    @default("DRAFT") // DRAFT, ACTIVE, PAUSED, COMPLETED, CANCELLED
+  totalPointsAwarded Int       @default(0)
+  totalParticipants  Int       @default(0)
+  createdBy          String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  store      Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  targetTier LoyaltyTier? @relation(fields: [targetTierId], references: [id])
+
+  @@index([storeId])
+  @@index([campaignType])
+  @@index([status])
+  @@index([startDate])
+  @@index([endDate])
+  @@map("loyalty_campaigns")
+}
+
+model LoyaltyTransaction {
+  id              String   @id @default(cuid())
+  storeId         String
+  customerId      String
+  tierId          String?
+  points          Int // Positive = earned, negative = redeemed
+  transactionType String // EARN, REDEEM, ADJUST, BONUS, EXPIRE
+  reference       String?
+  referenceId     String? // FK to originating SalesTransaction etc. (not enforced)
+  referenceType   String? // SALE, REDEMPTION, MANUAL_ADJUST, CAMPAIGN
+  description     String?
+  createdBy       String?
+  createdAt       DateTime @default(now())
+
+  store    Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tier     LoyaltyTier? @relation(fields: [tierId], references: [id])
+
+  @@index([storeId])
+  @@index([customerId])
+  @@index([transactionType])
+  @@index([referenceId])
+  @@index([createdAt])
+  @@map("loyalty_transactions")
+}
+
+model CustomerLoyalty {
+  id             String    @id @default(cuid())
+  customerId     String    @unique
+  tierId         String?
+  pointsBalance  Int       @default(0)
+  lifetimePoints Int       @default(0)
+  totalRedeemed  Int       @default(0)
+  tierAchievedAt DateTime?
+  lastActivityAt DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  customer Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tier     LoyaltyTier? @relation(fields: [tierId], references: [id])
+
+  @@index([customerId])
+  @@index([tierId])
+  @@map("customer_loyalty")
+}
+
+// ── CUSTOMER INTERACTIONS (CRM) ──────────────────────────────────────────────
+// Logs every interaction with a customer (call, visit, complaint, follow-up)
+// for CRM visibility. Linked to Customer for a 360-degree view.
+
+model CustomerInteraction {
+  id              String    @id @default(cuid())
+  storeId         String
+  customerId      String
+  interactionType String // CALL, EMAIL, VISIT, MEETING, COMPLAINT, FOLLOW_UP, NOTE
+  subject         String?
+  content         String
+  followUpDate    DateTime?
+  status          String    @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+  priority        String    @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  assignedTo      String?
+  createdBy       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([customerId])
+  @@index([interactionType])
+  @@index([status])
+  @@index([priority])
+  @@index([followUpDate])
+  @@map("customer_interactions")
+}
+
+// ── TAX (2 models) ───────────────────────────────────────────────────────────
+// Tax categories (rate + eTIMS code) and tax filings (period returns).
+
+model TaxCategory {
+  id            String    @id @default(cuid())
+  storeId       String
+  name          String
+  rate          Decimal   @default(0) // Percentage, e.g. 16 for 16% VAT
+  description   String?
+  etimsCode     String? // KRA eTIMS tax-type code
+  isActive      Boolean   @default(true)
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  store    Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  taxRates TaxRate[]
+
+  @@index([storeId])
+  @@index([isActive])
+  @@index([etimsCode])
+  @@map("tax_categories")
+}
+
+// TaxRate is a child of TaxCategory, allowing a single category (e.g. "VAT")
+// to have multiple rate bands over time or by product class.
+model TaxRate {
+  id            String    @id @default(cuid())
+  taxCategoryId String
+  name          String
+  rate          Decimal   @default(0)
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+
+  taxCategory TaxCategory @relation(fields: [taxCategoryId], references: [id], onDelete: Cascade)
+
+  @@index([taxCategoryId])
+  @@index([isActive])
+  @@map("tax_rates")
+}
+
+model TaxFiling {
+  id             String    @id @default(cuid())
+  storeId        String
+  filingPeriod   String // e.g. "2026-06" (YYYY-MM)
+  filingType     String // VAT, WHT, PAYE, CORPORATE_INCOME, TURNOVER
+  totalSales     Decimal   @default(0)
+  totalTax       Decimal   @default(0)
+  totalWht       Decimal   @default(0) // Withholding tax
+  status         String    @default("DRAFT") // DRAFT, FILED, ACCEPTED, REJECTED, AMENDED
+  filingDate     DateTime?
+  dueDate        DateTime?
+  etimsReference String?
+  notes          String?
+  filedBy        String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([filingPeriod])
+  @@index([filingType])
+  @@index([status])
+  @@index([dueDate])
+  @@map("tax_filings")
+}
+
+// ── SUBCATEGORY (Product sub-classification) ─────────────────────────────────
+model SubCategory {
+  id          String   @id @default(cuid())
+  categoryId  String
+  name        String
+  description String?
+  icon        String?
+  color       String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@index([categoryId])
+  @@index([isActive])
+  @@map("subcategories")
+}
+
+// ── STORE TRANSFERS (2 models) ───────────────────────────────────────────────
+// Inter-branch stock transfers: a StoreTransfer has many StoreTransferItems;
+// each item moves a quantity of a Product from one store to another. Status
+// flows PENDING → IN_TRANSIT → PARTIAL → COMPLETED | CANCELLED.
+
+model StoreTransfer {
+  id             String    @id @default(cuid())
+  transferNumber String    @unique
+  fromStoreId    String
+  toStoreId      String
+  status         String    @default("PENDING") // PENDING, IN_TRANSIT, PARTIAL, COMPLETED, CANCELLED
+  requestedBy    String?
+  approvedBy     String?
+  shippedAt      DateTime?
+  receivedAt     DateTime?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  fromStore Store               @relation("TransferFromStore", fields: [fromStoreId], references: [id])
+  toStore   Store               @relation("TransferToStore", fields: [toStoreId], references: [id])
+  items     StoreTransferItem[]
+
+  @@index([fromStoreId])
+  @@index([toStoreId])
+  @@index([status])
+  @@index([transferNumber])
+  @@map("store_transfers")
+}
+
+model StoreTransferItem {
+  id          String   @id @default(cuid())
+  transferId  String
+  productId   String
+  quantity    Decimal  @default(0)
+  unitType    String   @default("PIECE")
+  receivedQty Decimal  @default(0)
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  transfer StoreTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  product  Product       @relation(fields: [productId], references: [id])
+
+  @@index([transferId])
+  @@index([productId])
+  @@map("store_transfer_items")
+}
+
+// ── INVENTORY (per-store stock ledger) ───────────────────────────────────────
+// A separate per-store stock record (productId + storeId + quantityInStock)
+// used by store transfers and inventory reconciliation. Distinct from
+// Product.quantityInStock (which is the aggregate default-store quantity).
+
+model Inventory {
+  id              String    @id @default(cuid())
+  productId       String
+  storeId         String
+  quantityInStock Decimal   @default(0)
+  reorderLevel    Decimal   @default(10)
+  lastStockCount  DateTime?
+  status          String    @default("ACTIVE") // ACTIVE, DISCONTINUED, OUT_OF_STOCK
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, storeId])
+  @@index([productId])
+  @@index([storeId])
+  @@index([status])
+  @@map("inventories")
+}
+
+// ── NOTIFICATION (user-facing alerts) ────────────────────────────────────────
+// In-app notification centre entries. Distinct from Message (which is
+// outbound messaging) and ConversationMessage (staff chat).
+
+model Notification {
+  id          String    @id @default(cuid())
+  storeId     String?
+  userId      String? // null = broadcast to all users in store
+  title       String
+  message     String
+  type        String    @default("INFO") // INFO, SUCCESS, WARNING, ERROR, SALE, STOCK, SYSTEM
+  category    String? // SALES, INVENTORY, PAYMENTS, SECURITY, etc.
+  priority    String    @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+  isRead      Boolean   @default(false)
+  readAt      DateTime?
+  actionUrl   String? // Deep link to act on the notification
+  actionLabel String?
+  metadata    String? // JSON string for extra context
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([userId])
+  @@index([isRead])
+  @@index([type])
+  @@index([priority])
+  @@index([createdAt])
+  @@map("notifications")
 }

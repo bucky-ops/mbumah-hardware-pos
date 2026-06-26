@@ -15,7 +15,10 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/tests/setup.ts'],
-    include: ['src/tests/**/*.test.{ts,tsx}'],
+    include: [
+      'src/tests/**/*.test.{ts,tsx}',
+      'src/__tests__/**/*.test.{ts,tsx}',
+    ],
     // Financial tests touch the filesystem SQLite DB; allow generous time.
     testTimeout: 30000,
     hookTimeout: 30000,

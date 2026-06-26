@@ -21,6 +21,16 @@
 //   says `provider = "sqlite"` but the runtime DATABASE_URL is a PostgreSQL
 //   URL, every query throws: "the URL must start with the protocol `file:`".
 //   This was the root cause of the Vercel production 500 on /api/auth/login.
+//
+// SQLITE @db.Decimal STRIPPING (Phase 2 addition):
+//   The committed schema uses PostgreSQL-specific `@db.Decimal(12, 2)` type
+//   modifiers for monetary / quantity / rate fields (KRA eTIMS compliance).
+//   SQLite does NOT understand `@db.Decimal(p, s)` — Prisma validation fails
+//   with "This line is not a valid field or attribute definition" on every
+//   such field. This script strips the `@db.Decimal(N, M)` attribute (keeping
+//   the base `Decimal` type, which SQLite stores as REAL/TEXT) when the
+//   provider is sqlite. The committed schema always retains the full
+//   `@db.Decimal(...)` for PostgreSQL production.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -51,7 +61,23 @@ if (databaseUrl.startsWith('postgresql:') || databaseUrl.startsWith('postgres:')
   provider = 'sqlite';
 }
 
-const schema = readFileSync(schemaPath, 'utf8');
+let schema = readFileSync(schemaPath, 'utf8');
+
+// ── Strip @db.Decimal(N, M) for SQLite ──────────────────────────────────────
+// SQLite doesn't support native Decimal types — Prisma's `Decimal` (without
+// the @db modifier) stores as REAL. We strip the `@db.Decimal(N, M)` attribute
+// (and any immediately preceding redundant whitespace) so SQLite generation
+// succeeds. The base `Decimal` type is preserved.
+//
+// Pattern matches: " @db.Decimal(12, 2)" or "@db.Decimal(10,3)" etc.
+// We remove the attribute and collapse the double space that remains.
+if (provider === 'sqlite') {
+  const before = schema;
+  schema = schema.replace(/\s+@db\.Decimal\(\s*\d+\s*,\s*\d+\s*\)/g, '');
+  if (schema !== before) {
+    console.log('✓  Stripped @db.Decimal(...) attributes for SQLite compatibility.');
+  }
+}
 
 // Match the provider line inside the datasource block.
 //   datasource db {
@@ -70,10 +96,17 @@ if (!match) {
 const currentProvider = match[2];
 
 if (currentProvider === provider) {
-  console.log(`ℹ  Prisma provider already "${provider}" — no change needed.`);
+  // Provider is already correct, but we may have stripped @db.Decimal above.
+  // Write back only if the schema content changed.
+  if (schema !== readFileSync(schemaPath, 'utf8')) {
+    writeFileSync(schemaPath, schema);
+    console.log(`ℹ  Prisma provider already "${provider}" — wrote @db.Decimal stripped version.`);
+  } else {
+    console.log(`ℹ  Prisma provider already "${provider}" — no change needed.`);
+  }
 } else {
-  const updated = schema.replace(providerRegex, `$1${provider}$3`);
-  writeFileSync(schemaPath, updated);
+  const updatedSchema = schema.replace(providerRegex, `$1${provider}$3`);
+  writeFileSync(schemaPath, updatedSchema);
   console.log(`✓  Prisma provider updated: "${currentProvider}" → "${provider}"`);
-  console.log(`   (detected from DATABASE_URL: ${databaseUrl ? databaseUrl.slice(0, 40) + '…' : '(unset, defaulted to sqlite)'})`);
+  console.log(`   (detected from DATABASE_URL: ${databaseUrl ? databaseUrl.slice(0, 40) + '…' : '(unset, defaulted to postgresql)'})`);
 }

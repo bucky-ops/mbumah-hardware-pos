@@ -128,6 +128,8 @@ export const LogComponent = {
   PAYMENT: 'PAYMENT',
   RENTAL: 'RENTAL',
   SYSTEM: 'SYSTEM',
+  API: 'API',
+  AUDIT: 'AUDIT',
 } as const;
 
 export type LogComponent = (typeof LogComponent)[keyof typeof LogComponent];

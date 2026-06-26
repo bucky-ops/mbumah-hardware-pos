@@ -11,14 +11,10 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // eslint is still supported at runtime by Next.js for `next build`'s lint
-  // step, but was removed from the `NextConfig` type in Next.js 16. The
-  // ignoreDuringBuilds flag keeps CI green while the codebase is migrated to
-  // the new standalone ESLint config (see eslint.config.mjs).
-  // @ts-expect-error — `eslint` removed from NextConfig type in Next.js 16
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // NOTE: `eslint.ignoreDuringBuilds` was removed from NextConfig in Next.js 16.
+  // Linting is now handled standalone via `bun run lint` (see eslint.config.mjs)
+  // and is NOT part of `next build`. The GitHub Actions CI workflow runs lint
+  // as a separate job.
 
   // Ensure Prisma Client is bundled correctly for serverless (Vercel)
   serverExternalPackages: ["@prisma/client"],

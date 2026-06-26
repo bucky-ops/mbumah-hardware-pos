@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
@@ -9,20 +9,19 @@ import {
 } from 'recharts';
 import {
   TrendingUp, TrendingDown, ShoppingCart, AlertTriangle,
-  CreditCard, Smartphone, Wallet, Package, Plus, BarChart3,
-  FileText, Receipt, Bell, BellRing, AlertCircle, AlertOctagon,
-  Clock, ArrowRight, Activity, CheckCircle2,
-  PackageX, CircleDollarSign, KeyRound, ChevronRight,
+  Wallet, Package, Plus, BarChart3,
+  FileText, Receipt,
+  Clock, ArrowRight, Activity,
+  CircleDollarSign, KeyRound,
   Banknote, Zap, Timer, Play, Square, Calculator, LogOut,
   ArrowUpRight, Sparkles,
 } from 'lucide-react';
 
 import { useAppStore, useAuthStore, type AppTab } from '@/lib/stores';
 import {
-  dashboardApi, transactionsApi, notificationsApi,
-  rentalsApi, debtApi, financialApi, productsApi,
+  dashboardApi, debtApi, financialApi, productsApi,
   shiftsApi,
-  formatKES, formatDateTime, formatRelativeTime,
+  formatKES, formatDateTime,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
 import { toast } from 'sonner';
@@ -43,6 +42,15 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
+
+// Extracted sub-components (see ./dashboard/ directory)
+import { DashboardStats } from './dashboard/DashboardStats';
+import { RecentTransactions } from './dashboard/RecentTransactions';
+import { LowStockAlerts } from './dashboard/LowStockAlerts';
+// Shared types — kept in a separate module to avoid circular imports
+import type { KpiMetricKey, KpiDetail } from './dashboard/types';
+// Re-export for backwards compatibility with any external consumers
+export type { KpiMetricKey, KpiDetail } from './dashboard/types';
 
 /**
  * Authenticated fetch helper — mirrors the Authorization header logic in
@@ -84,58 +92,8 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   SPLIT: 'Split',
 };
 
-// Animated counter hook
-function useAnimatedCounter(target: number, duration = 800) {
-  const [count, setCount] = useState(0);
-  const prevTarget = useRef(0);
-
-  useEffect(() => {
-    if (target === prevTarget.current) return;
-    const start = prevTarget.current;
-    const diff = target - start;
-    const startTime = performance.now();
-
-    const animate = (now: number) => {
-      const elapsed = now - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setCount(Math.round(start + diff * eased));
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        prevTarget.current = target;
-      }
-    };
-
-    requestAnimationFrame(animate);
-  }, [target, duration]);
-
-  return count;
-}
-
-// Mini sparkline SVG component
-function MiniSparkline({ data, color, height = 28 }: { data: number[]; color: string; height?: number }) {
-  if (data.length < 2) return null;
-  const max = Math.max(...data);
-  const min = Math.min(...data);
-  const range = max - min || 1;
-  const width = 64;
-  const points = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * width;
-    const y = height - ((v - min) / range) * (height - 4) - 2;
-    return `${x},${y}`;
-  }).join(' ');
-
-  // Area fill path
-  const areaPoints = points + ` ${width},${height} 0,${height}`;
-
-  return (
-    <svg width={width} height={height} className="opacity-60 shrink-0" aria-hidden="true">
-      <polygon fill={color} fillOpacity={0.1} points={areaPoints} />
-      <polyline fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" points={points} />
-    </svg>
-  );
-}
+// Animated counter hook + mini sparkline component were extracted into
+// ./dashboard/DashboardStats.tsx (only used there).
 
 // Aging breakdown mini bars
 function AgingBars({ current, days30, days60, days90Plus }: {
@@ -194,207 +152,8 @@ function ChartTooltipContent({ active, payload, label, valuePrefix = '' }: {
   );
 }
 
-type KpiMetricKey = 'revenue' | 'transactions' | 'lowStock' | 'debt';
-
-export interface KpiDetail {
-  metricKey: KpiMetricKey;
-  label: string;
-  value: number;
-  formattedValue: string;
-  icon: React.ElementType;
-  color: string;
-  iconBg: string;
-  trend: string;
-  trendUp: boolean;
-}
-
-function KpiCards({ storeId, onCardClick }: { storeId: string; onCardClick: (kpi: KpiDetail) => void }) {
-  const { data, isLoading } = useQuery({
-    queryKey: ['dashboard', storeId],
-    queryFn: async () => {
-      const res = await dashboardApi.getStats(storeId);
-      return res.data;
-    },
-    refetchInterval: 30000,
-  });
-
-  const animatedRevenue = useAnimatedCounter(data?.todayRevenue ?? 0);
-  const animatedTransactions = useAnimatedCounter(data?.todayTransactions ?? 0);
-  const animatedLowStock = useAnimatedCounter(data?.lowStockProducts ?? 0);
-  const animatedDebt = useAnimatedCounter(data?.outstandingDebt ?? 0);
-
-  const sparkData = useMemo(() => {
-    if (data?.salesByHour && data.salesByHour.length > 1) {
-      return data.salesByHour.map(h => h.amount);
-    }
-    return [20, 40, 30, 60, 50, 80, 70, 90];
-  }, [data]);
-
-  const kpis = [
-    {
-      label: "Today's Revenue",
-      value: data?.todayRevenue ?? 0,
-      animatedValue: animatedRevenue,
-      format: 'kes' as const,
-      icon: TrendingUp,
-      color: 'text-green-600 dark:text-green-400',
-      iconBg: 'bg-green-100 dark:bg-green-900/40',
-      gradient: 'from-green-50/80 to-emerald-50/50 dark:from-green-950/30 dark:to-emerald-950/20',
-      borderColor: 'border-l-green-500',
-      sparkColor: '#16a34a',
-      trend: '+12.5%',
-      trendUp: true,
-      metricKey: 'revenue' as KpiMetricKey,
-    },
-    {
-      label: "Today's Transactions",
-      value: data?.todayTransactions ?? 0,
-      animatedValue: animatedTransactions,
-      format: 'number' as const,
-      icon: ShoppingCart,
-      color: 'text-emerald-600 dark:text-emerald-400',
-      iconBg: 'bg-emerald-100 dark:bg-emerald-900/40',
-      gradient: 'from-emerald-50/80 to-teal-50/50 dark:from-emerald-950/30 dark:to-teal-950/20',
-      borderColor: 'border-l-emerald-500',
-      sparkColor: '#059669',
-      trend: '+8.2%',
-      trendUp: true,
-      metricKey: 'transactions' as KpiMetricKey,
-    },
-    {
-      label: 'Low Stock (Action Needed)',
-      value: data?.lowStockProducts ?? 0,
-      animatedValue: animatedLowStock,
-      format: 'number' as const,
-      icon: AlertTriangle,
-      color: 'text-amber-600 dark:text-amber-400',
-      iconBg: 'bg-amber-100 dark:bg-amber-900/40',
-      gradient: 'from-amber-50/80 to-yellow-50/50 dark:from-amber-950/30 dark:to-yellow-950/20',
-      borderColor: 'border-l-amber-500',
-      sparkColor: '#d97706',
-      trend: '-3.1%',
-      trendUp: false,
-      metricKey: 'lowStock' as KpiMetricKey,
-    },
-    {
-      label: 'Outstanding Debt',
-      value: data?.outstandingDebt ?? 0,
-      animatedValue: animatedDebt,
-      format: 'kes' as const,
-      icon: CircleDollarSign,
-      color: 'text-red-600 dark:text-red-400',
-      iconBg: 'bg-red-100 dark:bg-red-900/40',
-      gradient: 'from-red-50/80 to-rose-50/50 dark:from-red-950/30 dark:to-rose-950/20',
-      borderColor: 'border-l-red-500',
-      sparkColor: '#dc2626',
-      trend: '+5.4%',
-      trendUp: true,
-      metricKey: 'debt' as KpiMetricKey,
-    },
-  ];
-
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i} className="overflow-hidden">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-10 w-10 rounded-lg" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-3 w-20" />
-                  <Skeleton className="h-6 w-28" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      {kpis.map((kpi, index) => {
-        const Icon = kpi.icon;
-        return (
-          <Card
-            key={kpi.label}
-            className={`border-l-4 ${kpi.borderColor} py-0 bg-gradient-to-br ${kpi.gradient} backdrop-blur-sm hover:shadow-md transition-all duration-200 animate-fade-in cursor-pointer hover:-translate-y-0.5 active:translate-y-0 group ${
-              kpi.metricKey === 'lowStock' && kpi.value > 0
-                ? 'ring-2 ring-red-400/50 animate-pulse-slow'
-                : ''
-            }`}
-            style={{ animationDelay: `${index * 100}ms` }}
-            onClick={() => onCardClick({
-              metricKey: kpi.metricKey,
-              label: kpi.label,
-              value: kpi.value,
-              formattedValue: kpi.format === 'kes' ? formatKES(kpi.value) : kpi.value.toLocaleString(),
-              icon: kpi.icon,
-              color: kpi.color,
-              iconBg: kpi.iconBg,
-              trend: kpi.trend,
-              trendUp: kpi.trendUp,
-            })}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onCardClick({
-                  metricKey: kpi.metricKey,
-                  label: kpi.label,
-                  value: kpi.value,
-                  formattedValue: kpi.format === 'kes' ? formatKES(kpi.value) : kpi.value.toLocaleString(),
-                  icon: kpi.icon,
-                  color: kpi.color,
-                  iconBg: kpi.iconBg,
-                  trend: kpi.trend,
-                  trendUp: kpi.trendUp,
-                });
-              }
-            }}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-start gap-3">
-                <div className={`shrink-0 p-2.5 rounded-xl ${kpi.iconBg} backdrop-blur-sm`}>
-                  <Icon className={`h-5 w-5 ${kpi.color}`} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-muted-foreground mb-0.5">{kpi.label}</p>
-                  <div className="flex items-center gap-2">
-                    <p className={`text-xl font-bold ${kpi.color} animate-count-up`}>
-                      {kpi.format === 'kes' ? formatKES(kpi.animatedValue) : kpi.animatedValue.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between mt-2">
-                    <div className={`flex items-center gap-0.5 text-xs font-medium ${
-                      kpi.trendUp ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                    }`}>
-                      {kpi.trendUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                      {kpi.trend}
-                    </div>
-                    <MiniSparkline data={sparkData} color={kpi.sparkColor} />
-                  </div>
-                  {kpi.metricKey === 'debt' && kpi.value > 0 && (
-                    <p className="text-[10px] text-red-600/80 dark:text-red-400/80 mt-1.5 font-medium flex items-center gap-0.5">
-                      <ArrowRight className="h-2.5 w-2.5" />
-                      Tap to view debtors
-                    </p>
-                  )}
-                  <p className="text-[10px] text-muted-foreground/70 mt-1.5 text-right opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-                    Click for details ↓
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
-    </div>
-  );
-}
+// KpiCards / RecentActivity / AlertsPanel were extracted into ./dashboard/
+// DashboardStats.tsx, RecentTransactions.tsx, LowStockAlerts.tsx.
 
 // SALES OVERVIEW SECTION (Charts)
 
@@ -950,414 +709,7 @@ function QuickActions({ onTabSwitch }: { onTabSwitch: (tab: AppTab) => void }) {
   );
 }
 
-function RecentActivity({ storeId }: { storeId: string }) {
-  const { data: dashboardData, isLoading: dashLoading } = useQuery({
-    queryKey: ['dashboard', storeId],
-    queryFn: async () => {
-      const res = await dashboardApi.getStats(storeId);
-      return res.data;
-    },
-    refetchInterval: 30000,
-  });
 
-  const { data: transactions, isLoading: txLoading } = useQuery({
-    queryKey: ['recent-transactions', storeId],
-    queryFn: async () => {
-      const res = await transactionsApi.list({ storeId, limit: 5 });
-      return res.data;
-    },
-    refetchInterval: 30000,
-  });
-
-  const isLoading = dashLoading || txLoading;
-
-  const getPaymentIcon = (method: string) => {
-    switch (method?.toUpperCase()) {
-      case 'CASH': return <Banknote className="h-3.5 w-3.5 text-green-600" />;
-      case 'MPESA': return <Smartphone className="h-3.5 w-3.5 text-amber-600" />;
-      case 'DEBT': return <CircleDollarSign className="h-3.5 w-3.5 text-red-600" />;
-      case 'SPLIT': return <CreditCard className="h-3.5 w-3.5 text-purple-600" />;
-      default: return <Wallet className="h-3.5 w-3.5" />;
-    }
-  };
-
-  // Map activity action types to icons and colors
-  const getActivityIcon = (action: string) => {
-    const actionUpper = action?.toUpperCase() || '';
-    if (actionUpper.includes('LOGIN')) return { icon: Activity, bg: 'bg-blue-100 dark:bg-blue-900/30', color: 'text-blue-600' };
-    if (actionUpper.includes('PURCHASE_ORDER') || actionUpper.includes('PO_')) return { icon: Package, bg: 'bg-purple-100 dark:bg-purple-900/30', color: 'text-purple-600' };
-    if (actionUpper.includes('SUPPLIER')) return { icon: BarChart3, bg: 'bg-teal-100 dark:bg-teal-900/30', color: 'text-teal-600' };
-    if (actionUpper.includes('BUNDLE')) return { icon: Package, bg: 'bg-cyan-100 dark:bg-cyan-900/30', color: 'text-cyan-600' };
-    if (actionUpper.includes('CASH_DRAWER') || actionUpper.includes('EXPENSE')) return { icon: Banknote, bg: 'bg-amber-100 dark:bg-amber-900/30', color: 'text-amber-600' };
-    return { icon: Activity, bg: 'bg-gray-100 dark:bg-gray-900/30', color: 'text-gray-600' };
-  };
-
-  // Recent activities from dashboard API
-  const recentActivities = (dashboardData as unknown as Record<string, unknown>)?.recentActivities as Array<{
-    id: string; action: string; component: string; severity: string;
-    message: string; createdAt: string; user?: { name: string; role: string } | null;
-  }> | undefined;
-
-  return (
-    <Card className="backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-all duration-200">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-semibold flex items-center gap-2">
-          <Activity className="h-4 w-4 text-green-600" />
-          Recent Activity
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pb-4">
-        {isLoading ? (
-          <div className="space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <Skeleton className="h-8 w-8 rounded-full" />
-                <div className="flex-1 space-y-1.5">
-                  <Skeleton className="h-3 w-40" />
-                  <Skeleton className="h-2 w-24" />
-                </div>
-                <Skeleton className="h-4 w-16" />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <ScrollArea className="max-h-96">
-            <div className="space-y-1">
-              {/* Recent Transactions */}
-              {transactions && transactions.length > 0 && (
-                <>
-                  <div className="flex items-center gap-2 px-2 py-1">
-                    <ShoppingCart className="h-3.5 w-3.5 text-green-600" />
-                    <span className="text-xs font-semibold text-green-600">Recent Sales</span>
-                  </div>
-                  {transactions.slice(0, 5).map((tx) => (
-                    <div
-                      key={tx.id}
-                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="shrink-0 p-1.5 rounded-full bg-green-100 dark:bg-green-900/30">
-                        <ShoppingCart className="h-3.5 w-3.5 text-green-600" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium truncate">
-                            {tx.receiptNumber || `TX-${tx.id.slice(-6)}`}
-                          </span>
-                          <span className="flex items-center gap-0.5">
-                            {getPaymentIcon(tx.paymentMethod)}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {tx.paymentMethod} • {formatRelativeTime(tx.createdAt)}
-                        </p>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className="text-sm font-semibold">{formatKES(tx.totalAmount)}</p>
-                        <Badge
-                          variant={tx.paymentStatus === 'COMPLETED' ? 'default' : 'secondary'}
-                          className="text-[9px] px-1.5 py-0"
-                        >
-                          {tx.paymentStatus}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
-
-              {/* Separator */}
-              {transactions && transactions.length > 0 && recentActivities && recentActivities.length > 0 && (
-                <Separator className="my-2" />
-              )}
-
-              {/* Other Recent Activities */}
-              {recentActivities && recentActivities.length > 0 && (
-                <>
-                  <div className="flex items-center gap-2 px-2 py-1">
-                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-xs font-semibold text-muted-foreground">System Activity</span>
-                  </div>
-                  {recentActivities.slice(0, 8).map((activity) => {
-                    const iconConfig = getActivityIcon(activity.action);
-                    const Icon = iconConfig.icon;
-                    return (
-                      <div
-                        key={activity.id}
-                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
-                      >
-                        <div className={`shrink-0 p-1.5 rounded-full ${iconConfig.bg}`}>
-                          <Icon className={`h-3.5 w-3.5 ${iconConfig.color}`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium truncate">{activity.message}</p>
-                          <p className="text-[10px] text-muted-foreground">
-                            {activity.user?.name || 'System'} • {formatRelativeTime(activity.createdAt)}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </>
-              )}
-
-              {/* Empty state */}
-              {(!transactions || transactions.length === 0) && (!recentActivities || recentActivities.length === 0) && (
-                <div className="text-center py-6 text-muted-foreground text-sm">
-                  <Activity className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                  No recent activity
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// ALERTS & NOTIFICATIONS PANEL
-
-function AlertsPanel({ storeId, onTabSwitch }: { storeId: string; onTabSwitch: (tab: AppTab) => void }) {
-  const { data: notifications, isLoading: notifLoading } = useQuery({
-    queryKey: ['notifications', storeId],
-    queryFn: async () => {
-      const res = await notificationsApi.list(storeId);
-      return Array.isArray(res.data) ? res.data : [];
-    },
-    refetchInterval: 30000,
-  });
-
-  const { data: debtData, isLoading: debtLoading } = useQuery({
-    queryKey: ['overdue-debt', storeId],
-    queryFn: async () => {
-      const res = await debtApi.list({ storeId, status: 'OVERDUE', limit: 5 });
-      return Array.isArray(res.data) ? res.data : [];
-    },
-    refetchInterval: 60000,
-  });
-
-  const { data: rentalsData, isLoading: rentLoading } = useQuery({
-    queryKey: ['overdue-rentals-alert', storeId],
-    queryFn: async () => {
-      const res = await rentalsApi.list({ storeId, status: 'OVERDUE', limit: 5 });
-      return Array.isArray(res.data) ? res.data : [];
-    },
-    refetchInterval: 60000,
-  });
-
-  const isLoading = notifLoading || debtLoading || rentLoading;
-
-  // Aggregate alerts
-  const alerts = useMemo(() => {
-    const items: Array<{
-      id: string;
-      type: 'low_stock' | 'overdue_rental' | 'overdue_debt' | 'notification';
-      severity: 'critical' | 'warning' | 'info';
-      title: string;
-      description: string;
-      icon: React.ElementType;
-      color: string;
-      badgeVariant: 'destructive' | 'secondary' | 'default';
-      targetTab?: AppTab;
-      count?: number;
-    }> = [];
-
-    // Low stock notifications
-    const lowStockNotifs = notifications?.filter(n => n.type === 'low_stock' || n.type === 'out_of_stock') ?? [];
-    if (lowStockNotifs.length > 0) {
-      items.push({
-        id: 'low-stock',
-        type: 'low_stock',
-        severity: 'warning',
-        title: 'Low Stock Products',
-        description: `${lowStockNotifs.length} product${lowStockNotifs.length > 1 ? 's' : ''} below reorder level`,
-        icon: PackageX,
-        color: 'text-amber-600',
-        badgeVariant: 'secondary',
-        targetTab: 'inventory',
-        count: lowStockNotifs.length,
-      });
-    }
-
-    // Out of stock
-    const outOfStockNotifs = notifications?.filter(n => n.type === 'out_of_stock') ?? [];
-    if (outOfStockNotifs.length > 0) {
-      items.push({
-        id: 'out-of-stock',
-        type: 'low_stock',
-        severity: 'critical',
-        title: 'Out of Stock',
-        description: `${outOfStockNotifs.length} product${outOfStockNotifs.length > 1 ? 's' : ''} completely out of stock`,
-        icon: AlertOctagon,
-        color: 'text-red-600',
-        badgeVariant: 'destructive',
-        targetTab: 'inventory',
-        count: outOfStockNotifs.length,
-      });
-    }
-
-    // Overdue rentals
-    if (rentalsData && rentalsData.length > 0) {
-      items.push({
-        id: 'overdue-rentals',
-        type: 'overdue_rental',
-        severity: 'warning',
-        title: 'Overdue Rentals',
-        description: `${rentalsData.length} rental${rentalsData.length > 1 ? 's' : ''} past due date`,
-        icon: KeyRound,
-        color: 'text-amber-600',
-        badgeVariant: 'secondary',
-        targetTab: 'rentals',
-        count: rentalsData.length,
-      });
-    }
-
-    // Overdue debt
-    if (debtData && debtData.length > 0) {
-      items.push({
-        id: 'overdue-debt',
-        type: 'overdue_debt',
-        severity: 'critical',
-        title: 'Overdue Debt Payments',
-        description: `${debtData.length} debt record${debtData.length > 1 ? 's' : ''} past due`,
-        icon: CircleDollarSign,
-        color: 'text-red-600',
-        badgeVariant: 'destructive',
-        targetTab: 'financial',
-        count: debtData.length,
-      });
-    }
-
-    // Other notifications
-    const otherNotifs = notifications?.filter(
-      n => n.type !== 'low_stock' && n.type !== 'out_of_stock'
-    )?.slice(0, 3) ?? [];
-    otherNotifs.forEach((n) => {
-      items.push({
-        id: n.id,
-        type: 'notification',
-        severity: n.severity as 'critical' | 'warning' | 'info',
-        title: n.title,
-        description: n.description,
-        icon: n.severity === 'info' ? Bell : AlertCircle,
-        color: n.severity === 'critical' ? 'text-red-600' : n.severity === 'warning' ? 'text-amber-600' : 'text-blue-600',
-        badgeVariant: n.severity === 'critical' ? 'destructive' : 'secondary',
-        targetTab: (n.targetTab as AppTab) || undefined,
-      });
-    });
-
-    return items;
-  }, [notifications, debtData, rentalsData]);
-
-  if (isLoading) {
-    return (
-      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <BellRing className="h-4 w-4 text-amber-500" />
-            Alerts & Notifications
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pb-4">
-          <div className="space-y-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <Skeleton className="h-8 w-8 rounded-full" />
-                <div className="flex-1 space-y-1.5">
-                  <Skeleton className="h-3 w-32" />
-                  <Skeleton className="h-2 w-48" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-all duration-200">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <BellRing className="h-4 w-4 text-amber-500" />
-            Alerts & Notifications
-          </CardTitle>
-          {alerts.length > 0 && (
-            <Badge variant="destructive" className="text-[10px] px-2">
-              {alerts.length}
-            </Badge>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="pb-4">
-        {alerts.length === 0 ? (
-          <div className="text-center py-6 text-muted-foreground">
-            <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-green-500 opacity-50" />
-            <p className="text-sm">All clear! No active alerts.</p>
-          </div>
-        ) : (
-          <ScrollArea className="max-h-80">
-            <div className="space-y-2">
-              {alerts.map((alert) => {
-                const Icon = alert.icon;
-                return (
-                  <div
-                    key={alert.id}
-                    className={`flex items-start gap-3 p-2.5 rounded-lg border transition-colors ${
-                      alert.severity === 'critical'
-                        ? 'border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20'
-                        : alert.severity === 'warning'
-                        ? 'border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20'
-                        : 'border-border/50 bg-muted/30'
-                    } ${alert.targetTab ? 'cursor-pointer hover:bg-muted/60' : ''}`}
-                    onClick={alert.targetTab ? () => onTabSwitch(alert.targetTab!) : undefined}
-                    role={alert.targetTab ? 'button' : undefined}
-                    tabIndex={alert.targetTab ? 0 : undefined}
-                  >
-                    <div className={`shrink-0 p-1.5 rounded-full ${
-                      alert.severity === 'critical' ? 'bg-red-100 dark:bg-red-900/30' :
-                      alert.severity === 'warning' ? 'bg-amber-100 dark:bg-amber-900/30' :
-                      'bg-muted'
-                    }`}>
-                      <Icon className={`h-4 w-4 ${alert.color}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">{alert.title}</span>
-                        {alert.count !== undefined && (
-                          <Badge variant={alert.badgeVariant} className="text-[9px] px-1.5 py-0">
-                            {alert.count}
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">{alert.description}</p>
-                    </div>
-                    {alert.targetTab && (
-                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </ScrollArea>
-        )}
-
-        {/* System Health Indicator */}
-        <Separator className="my-3" />
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-            <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            System Healthy
-          </span>
-          <span className="text-[10px] text-muted-foreground">
-            Last sync: just now
-          </span>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 function TopProductsTable({ storeId }: { storeId: string }) {
   const { data, isLoading } = useQuery({
@@ -2398,7 +1750,7 @@ export default function DashboardTab() {
       <WelcomeHero />
 
       {/* Top KPI Cards Row */}
-      <KpiCards storeId={currentStoreId} onCardClick={handleKpiCardClick} />
+      <DashboardStats storeId={currentStoreId} onCardClick={handleKpiCardClick} />
 
       {/* Shift Status Card */}
       <ShiftStatusCard storeId={currentStoreId} />
@@ -2413,14 +1765,14 @@ export default function DashboardTab() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Left Column */}
         <div className="space-y-4">
-          <RecentActivity storeId={currentStoreId} />
+          <RecentTransactions storeId={currentStoreId} />
           <TopProductsTable storeId={currentStoreId} />
         </div>
 
         {/* Right Column */}
         <div className="space-y-4">
           <SalesTrendsWidget storeId={currentStoreId} onSeeMore={() => handleTabSwitch('reports')} />
-          <AlertsPanel storeId={currentStoreId} onTabSwitch={handleTabSwitch} />
+          <LowStockAlerts storeId={currentStoreId} onTabSwitch={handleTabSwitch} />
           <DebtAgingCard storeId={currentStoreId} />
         </div>
       </div>

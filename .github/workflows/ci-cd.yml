@@ -1,0 +1,273 @@
+# ============================================================================
+# MBUMAH HARDWARE POS & ERP — Unified CI/CD Pipeline
+# ============================================================================
+#
+# This workflow replaces the fragmented node.js.yml / deploy.yml / pages.yml
+# with a single, linear pipeline that runs on every push and pull request.
+#
+# Stages:
+#   1. install      — Bun install with cache
+#   2. lint         — ESLint (0 errors required)
+#   3. typecheck    — tsc --noEmit (strict mode)
+#   4. test         — Vitest unit + integration tests
+#   5. build        — next build (only on main / PR to main)
+#   6. deploy       — Vercel deployment (only on main, after all checks pass)
+#
+# Concurrency: a new push to the same branch cancels any in-progress run.
+# ============================================================================
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main, development, update]
+  pull_request:
+    branches: [main, development]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_ENV: test
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mbumah_pos_test?schema=public
+  DIRECT_URL: postgresql://postgres:postgres@localhost:5432/mbumah_pos_test?schema=public
+  JWT_SECRET: ci-test-secret-do-not-use-in-production
+  NEXTAUTH_SECRET: ci-test-nextauth-secret-do-not-use
+  NEXT_PUBLIC_APP_URL: http://localhost:3000
+  NEXT_PUBLIC_CURRENCY: KES
+  SKIP_ENV_VALIDATION: '1'
+
+jobs:
+  # ── Stage 1: Install dependencies ──────────────────────────────────────────
+  install:
+    name: Install
+    runs-on: ubuntu-latest
+    outputs:
+      cache-hit: ${{ steps.cache-bun.outputs.cache-hit }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache Bun dependencies
+        id: cache-bun
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: bunx prisma generate
+
+      - name: Upload node_modules artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deps-${{ github.sha }}
+          path: node_modules
+          retention-days: 1
+
+  # ── Stage 2: Lint ──────────────────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Download dependencies artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deps-${{ github.sha }}
+          path: node_modules
+
+      - name: Run ESLint
+        run: bun run lint
+        env:
+          SKIP_ENV_VALIDATION: '1'
+
+  # ── Stage 3: TypeScript type-check ─────────────────────────────────────────
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Download dependencies artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deps-${{ github.sha }}
+          path: node_modules
+
+      - name: Run TypeScript compiler (strict, no emit)
+        run: bunx tsc --noEmit --strict
+        env:
+          SKIP_ENV_VALIDATION: '1'
+
+  # ── Stage 4: Tests ─────────────────────────────────────────────────────────
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: install
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mbumah_pos_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Download dependencies artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deps-${{ github.sha }}
+          path: node_modules
+
+      - name: Push Prisma schema to test database
+        run: bunx prisma db push --skip-generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mbumah_pos_test?schema=public
+          DIRECT_URL: postgresql://postgres:postgres@localhost:5432/mbumah_pos_test?schema=public
+
+      - name: Run Vitest
+        run: bun run test
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mbumah_pos_test?schema=public
+          DIRECT_URL: postgresql://postgres:postgres@localhost:5432/mbumah_pos_test?schema=public
+
+      - name: Upload test coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.sha }}
+          path: |
+            coverage/
+            test-results/
+          retention-days: 7
+
+  # ── Stage 5: Build (only on main / PR to main) ─────────────────────────────
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+    if: github.ref == 'refs/heads/main' || github.base_ref == 'main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Download dependencies artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deps-${{ github.sha }}
+          path: node_modules
+
+      - name: Build Next.js application
+        run: bun run build
+        env:
+          SKIP_ENV_VALIDATION: '1'
+          NEXT_PUBLIC_APP_URL: https://mbumah-pos.vercel.app
+          NEXT_PUBLIC_CURRENCY: KES
+          DATABASE_URL: postgresql://placeholder@localhost:5432/db
+          DIRECT_URL: postgresql://placeholder@localhost:5432/db
+          JWT_SECRET: build-time-placeholder
+          NEXTAUTH_SECRET: build-time-placeholder
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ github.sha }}
+          path: .next
+          retention-days: 3
+
+  # ── Stage 6: Deploy to Vercel (only on main) ───────────────────────────────
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: https://mbumah-pos.vercel.app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: bunx vercel@latest --version
+
+      - name: Deploy to Vercel (Production)
+        run: bunx vercel@latest --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Health check after deploy
+        run: |
+          sleep 10
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://mbumah-pos.vercel.app/api/health || echo "000")
+          echo "Health check status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "::warning::Production health check returned $STATUS — investigate immediately."
+          fi
+
+  # ── Summary job (for branch protection status checks) ──────────────────────
+  ci-pass:
+    name: CI Pass
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+    if: always()
+    steps:
+      - name: Check CI status
+        run: |
+          if [ "${{ needs.lint.result }}" != "success" ] || \
+             [ "${{ needs.typecheck.result }}" != "success" ] || \
+             [ "${{ needs.test.result }}" != "success" ]; then
+            echo "CI failed: lint=${{ needs.lint.result }} typecheck=${{ needs.typecheck.result }} test=${{ needs.test.result }}"
+            exit 1
+          fi
+          echo "All CI checks passed."
