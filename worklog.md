@@ -3562,3 +3562,42 @@ Stage Summary:
 - DB in sync, client regenerated, lint clean, dev server healthy.
 - NOTE for Phase 2: src/lib/accounting-helpers.ts does NOT yet exist (must be created). The existing src/lib/account-helper.ts (recordSaleJournalEntry) is the legacy sale-path helper and should be preserved; the new accounting-helpers.ts will house the general-purpose journal CRUD (validateJournalEntryBalancing, validateEntryAgainstPeriod, postJournalEntry, approveJournalEntry, voidJournalEntry, account balance calculation).
 - STOPPING here per pacing rules. Awaiting "continue" to proceed to Phase 2 (Business Logic).
+
+---
+Task ID: Phase2-Accounting
+Agent: Principal Software Architect (Financial Systems)
+Task: Phase 2 — Create src/lib/accounting-helpers.ts (Business Logic: balance validation, period validation, posting/approval/voiding, account balance calculation) for world-class Accounting Module
+
+Work Log:
+- Read existing context: account-helper.ts (legacy sale-path helper — preserved), financial-audit.ts (read-only integrity checks — imported), money.ts (Money class), db.ts (immutability + withImmutabilityBypass), api-error.ts (APIError), types.ts (Phase 1 domain types: AccountSubType, NormalBalance, FinancialPeriodStatus, AuditAction, JournalEntryStatus, AuditEntityType, ReferenceDocumentType), helpers.ts (generateJournalEntryNumber), logger.ts (systemLog).
+- Verified Phase 1 schema models (Account, JournalEntry, JournalEntryLine, FinancialPeriod, TrialBalanceSnapshot, Budget, AuditLog) and their exact field names, relations, unique constraints, and indexes.
+- Created src/lib/accounting-helpers.ts (~960 LOC) with 11 sections:
+  1. Pure balance validation — computeEntryTotals, validateJournalEntryBalancing (Money-based, half-cent tolerance, blocks negative/both-debit-credit/zero entries)
+  2. Period validation — findPeriodForDate, assertPeriodOpen (400/409/403 error ladder), validateEntryAgainstPeriod (date-range + status)
+  3. Account balance calculation — calculateAccountBalance (respects normalBalance, supports asOfDate/periodId/postedOnly/includeVoided filters, optional tx client)
+  4. Journal-entry lifecycle — createJournalEntry (3-layer validation + audit), approveJournalEntry (segregation-of-duties: creator≠approver), postJournalEntry (defence-in-depth re-validation), voidJournalEntry (reversing-entry pattern, never deletes)
+  5. Account CRUD — createAccount (normalBalance defaults by type, contra-account override), updateAccount (deactivation blocked on non-zero balance, code/type/normalBalance immutable)
+  6. Period lifecycle — createFinancialPeriod (overlap check), closeFinancialPeriod (unposted-count + verifyPeriodClose audit gate), lockFinancialPeriod (terminal state), reopenFinancialPeriod (reason mandatory, LOCKED irreversible)
+  7. Trial-balance snapshot — captureTrialBalanceSnapshot (reuses generateTrialBalance, stores Json blob, CRITICAL systemLog if unbalanced)
+  8. Budget management — setBudget (upsert by [periodId,accountId], variance auto-computed), recalculateBudgetActuals (sums posted journal lines per account per period)
+  9. Reconciliation — reconcileJournalEntryLine (immutable timestamp, voided-entry guard)
+  10. Audit trail — listAuditTrail (filtered query with user join, AuditLogWithUser type), recordAuditLog (low-level writer for custom paths)
+  11. Status derivation — deriveJournalEntryStatus (DRAFT/APPROVED/POSTED/VOIDED computed from flags)
+- Added writeAuditLog() internal helper that centralises Prisma JSON-null handling (Prisma.DbNull for absent values) and accepts plain objects (no double-encoding from JSON.stringify). Added toJsonInput() cast bridge for Record<string,unknown> → Prisma.InputJsonValue.
+- All monetary operations use the Money class (decimal.js, banker's rounding) — zero floating-point. Prisma Decimal ↔ Money via toMoney() funnel.
+- All state mutations on immutable models (JournalEntry, JournalEntryLine, AuditLog, TrialBalanceSnapshot) run inside withImmutabilityBypass() with explicit per-entry reason strings.
+- Every state-changing operation writes an AuditLog record with old/new values, userId, ipAddress, userAgent, and (where relevant) reason — satisfying ISO 27001 A.12.4.1/A.12.4.2.
+- Fixed 2 lint errors (unused KES/ErrorCode imports) → 0 errors.
+- Fixed 9 TypeScript errors (Prisma.JsonNull/DbNull + Record<string,unknown> → InputJsonValue cast + Prisma value import + listAuditTrail return type) → 0 errors in accounting-helpers.ts.
+- Verified bun run lint → 0 errors (330 pre-existing warnings, none in new file).
+- Verified bunx tsc --noEmit --strict → 0 errors in accounting-helpers.ts (459 total errors are all pre-existing schema-drift in prisma/seed.ts and src/tests/, unrelated to Phase 2).
+- Verified dev server → 200 on / and /api/health (status=healthy, database=ok).
+
+Stage Summary:
+- Phase 2 (Accounting Business Logic) is COMPLETE and verified. The accounting-helpers.ts module is the single source of truth for general-purpose journal CRUD, balance/period validation, posting/approval/voiding lifecycle, account-balance calculation, financial-period management, trial-balance snapshots, budgets, reconciliation, and audit-trail queries.
+- 25 exported functions + 7 exported types/interfaces covering the full accounting controller layer.
+- ISO 9001 (process control, traceability) and ISO 27001 (immutability, audit trail, segregation of duties) principles enforced throughout.
+- The existing account-helper.ts (sale path) and financial-audit.ts (read-only checks) are preserved unchanged; accounting-helpers.ts IMPORTS from financial-audit.ts (verifyPeriodClose, generateTrialBalance) for the period-close and snapshot flows.
+- DB in sync (no schema changes needed — Phase 1 already added all models), lint clean, typecheck clean for new file, dev server healthy.
+- NOTE for Phase 3: The financial-tab.tsx UI should call these helpers via new API routes under /api/financial/** (accounts, journal-entries, periods, trial-balance, budgets, audit-trail). The helpers are ready to be wired into route handlers.
+- STOPPING here per pacing rules. Awaiting "continue" to proceed to Phase 3 (UI CRUD).
