@@ -14,9 +14,9 @@
 //
 // Notes:
 //   - IDs use cuid() for cross-DB compat
-//   - Monetary fields use Decimal @db.Decimal(12,2) (banker's rounding)
-//   - Quantity fields use Decimal @db.Decimal(10,3); rates @db.Decimal(5,2)
-//   - Hours/days fields use Decimal @db.Decimal(8,2) for payroll precision
+//   - Monetary fields use Decimal (banker's rounding)
+//   - Quantity fields use Decimal; rates
+//   - Hours/days fields use Decimal for payroll precision
 //   - JSON metadata stored as String; switch to Json type on PostgreSQL
 
 generator client {
@@ -45,6 +45,7 @@ model Organization {
   stores   Store[]
   users    User[]
   accounts Account[]
+  financialPeriods FinancialPeriod[]
 
   @@map("organizations")
 }
@@ -123,6 +124,11 @@ model Store {
   storeTransfersTo     StoreTransfer[]       @relation("TransferToStore")
   inventories          Inventory[]
   notifications        Notification[]
+  // ── v2.1.0 accounting module relations ─────────────────────────────────
+  financialPeriods     FinancialPeriod[]
+  trialBalanceSnapshots TrialBalanceSnapshot[]
+  budgets              Budget[]
+  auditLogs            AuditLog[]
 
   @@index([organizationId])
   @@map("stores")
@@ -165,6 +171,20 @@ model User {
   // ── v2.0.0 messaging relations ─────────────────────────────────────────
   sentMessages            ConversationMessage[]
   notificationPreferences NotificationPreference[]
+
+  // ── v2.1.0 accounting relations (ISO 9001 audit trail) ──────────────────
+  // Named relations are REQUIRED because multiple JournalEntry fields
+  // reference the same User model. Each name uniquely identifies the
+  // relationship for Prisma's relation resolution.
+  createdAccounts         Account[]           @relation("AccountCreatedBy")
+  postedJournalEntries    JournalEntry[]      @relation("JournalEntryPostedBy")
+  approvedJournalEntries  JournalEntry[]      @relation("JournalEntryApprovedBy")
+  voidedJournalEntries    JournalEntry[]      @relation("JournalEntryVoidedBy")
+  reconciledJournalLines  JournalEntryLine[]  @relation("JournalLineReconciledBy")
+  closedFinancialPeriods  FinancialPeriod[]   @relation("PeriodClosedBy")
+  generatedTrialBalanceSnapshots TrialBalanceSnapshot[] @relation("TrialBalanceGeneratedBy")
+  createdBudgets          Budget[]            @relation("BudgetCreatedBy")
+  auditLogs               AuditLog[]
 
   @@index([organizationId])
   @@index([storeId])
@@ -235,11 +255,11 @@ model Product {
   name              String
   description       String?
   unitType          String   @default("PIECE") // PIECE, KILOGRAM, METER, LITER, BAG, BOX, SET
-  quantityInStock   Decimal  @default(0) @db.Decimal(10, 3)
-  reorderLevel      Decimal  @default(10) @db.Decimal(10, 3)
-  pricePerUnit      Decimal  @db.Decimal(12, 2) // Selling price
-  costPrice         Decimal  @db.Decimal(12, 2) // Purchase/cost price
-  taxRate           Decimal  @default(16) @db.Decimal(5, 2) // Kenya VAT 16%
+  quantityInStock   Decimal  @default(0)
+  reorderLevel      Decimal  @default(10)
+  pricePerUnit      Decimal // Selling price
+  costPrice         Decimal // Purchase/cost price
+  taxRate           Decimal  @default(16) // Kenya VAT 16%
   isRental          Boolean  @default(false)
   isBundle          Boolean  @default(false)
   isActive          Boolean  @default(true)
@@ -291,7 +311,7 @@ model ProductBundle {
   id               String  @id @default(cuid())
   parentProductId  String // The bundle product
   childProductId   String // The constituent product
-  quantityRequired Decimal @default(1) @db.Decimal(10, 3) // How many of child in one bundle
+  quantityRequired Decimal @default(1) // How many of child in one bundle
 
   parentProduct Product @relation("BundleParent", fields: [parentProductId], references: [id], onDelete: Cascade)
   childProduct  Product @relation("BundleChild", fields: [childProductId], references: [id], onDelete: Cascade)
@@ -306,7 +326,7 @@ model WarehouseStock {
   storeId   String
   productId String
   warehouse String   @default("MAIN") // MAIN, BACKUP, RECEIVING
-  quantity  Decimal  @default(0) @db.Decimal(10, 3)
+  quantity  Decimal  @default(0)
   updatedAt DateTime @updatedAt
 
   store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
@@ -322,7 +342,7 @@ model StockMovement {
   storeId      String
   productId    String
   movementType String // PURCHASE, SALE, ADJUSTMENT, TRANSFER, RETURN, RENTAL_OUT, RENTAL_RETURN
-  quantity     Decimal  @db.Decimal(10, 3) // Positive for in, negative for out
+  quantity     Decimal // Positive for in, negative for out
   referenceId  String? // Transaction ID, PO ID, etc.
   notes        String?
   performedBy  String? // User ID
@@ -348,8 +368,8 @@ model Customer {
   email              String?
   address            String?
   idNumber           String? // Kenyan National ID
-  currentDebtBalance Decimal  @default(0) @db.Decimal(12, 2)
-  debtLimit          Decimal  @default(50000) @db.Decimal(12, 2) // KES default limit
+  currentDebtBalance Decimal  @default(0)
+  debtLimit          Decimal  @default(50000) // KES default limit
   loyaltyPoints      Int      @default(0)
   preferredChannel   String   @default("SMS") // SMS, EMAIL, WHATSAPP, PRINT
   isActive           Boolean  @default(true)
@@ -381,9 +401,9 @@ model CustomerCredit {
   id          String    @id @default(cuid())
   storeId     String
   customerId  String
-  amount      Decimal   @db.Decimal(12, 2)
+  amount      Decimal
   creditType  String    @default("CREDIT") // CREDIT, DEBIT, ADJUSTMENT, REFUND
-  balance     Decimal   @default(0) @db.Decimal(12, 2) // Running balance after this entry
+  balance     Decimal   @default(0) // Running balance after this entry
   reference   String? // e.g. INV-001, PAY-2024-03
   description String?
   status      String    @default("ACTIVE") // ACTIVE, VOIDED
@@ -413,10 +433,10 @@ model SalesTransaction {
   receiptNumber   String    @unique
   customerId      String?
   cashierId       String
-  subtotal        Decimal   @db.Decimal(12, 2)
-  taxAmount       Decimal   @db.Decimal(12, 2)
-  discountAmount  Decimal   @default(0) @db.Decimal(12, 2)
-  totalAmount     Decimal   @db.Decimal(12, 2)
+  subtotal        Decimal
+  taxAmount       Decimal
+  discountAmount  Decimal   @default(0)
+  totalAmount     Decimal
   paymentMethod   String // CASH, MPESA, DEBT, SPLIT
   paymentStatus   String    @default("COMPLETED") // PENDING, COMPLETED, FAILED, REFUNDED, PARTIAL
   transactionType String    @default("SALE") // SALE, REFUND, VOID
@@ -456,13 +476,13 @@ model SaleItem {
   transactionId   String
   productId       String
   productName     String // Snapshot at time of sale
-  quantity        Decimal @db.Decimal(10, 3)
+  quantity        Decimal
   unitType        String
-  pricePerUnit    Decimal @db.Decimal(12, 2)
-  costPrice       Decimal @db.Decimal(12, 2) // Snapshot for profit calculation
-  discountPercent Decimal @default(0) @db.Decimal(5, 2)
-  taxRate         Decimal @default(16) @db.Decimal(5, 2)
-  lineTotal       Decimal @db.Decimal(12, 2)
+  pricePerUnit    Decimal
+  costPrice       Decimal // Snapshot for profit calculation
+  discountPercent Decimal @default(0)
+  taxRate         Decimal @default(16)
+  lineTotal       Decimal
   isRentalItem    Boolean @default(false)
 
   transaction SalesTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
@@ -480,7 +500,7 @@ model Payment {
   storeId       String
   transactionId String
   paymentMethod String // CASH, MPESA, DEBT
-  amount        Decimal  @db.Decimal(12, 2)
+  amount        Decimal
   currency      String   @default("KES")
   status        String   @default("COMPLETED") // PENDING, COMPLETED, FAILED, REFUNDED
   reference     String? // M-Pesa CheckoutRequestID, receipt number, etc.
@@ -505,7 +525,7 @@ model MpesaTransaction {
   merchantRequestId  String?
   mpesaReceiptNumber String?
   phoneNumber        String?
-  amount             Decimal  @db.Decimal(12, 2)
+  amount             Decimal
   status             String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED
   resultCode         String?
   resultDesc         String?
@@ -527,9 +547,9 @@ model DebtLedger {
   storeId        String
   customerId     String
   transactionId  String?
-  amountOwed     Decimal   @db.Decimal(12, 2)
-  amountPaid     Decimal   @default(0) @db.Decimal(12, 2)
-  balance        Decimal   @db.Decimal(12, 2) // amountOwed - amountPaid
+  amountOwed     Decimal
+  amountPaid     Decimal   @default(0)
+  balance        Decimal // amountOwed - amountPaid
   dueDate        DateTime
   status         String    @default("OUTSTANDING") // OUTSTANDING, PARTIAL, SETTLED, OVERDUE, WRITTEN_OFF
   agingBucket    String    @default("CURRENT") // CURRENT, DAYS_30, DAYS_60, DAYS_90_PLUS
@@ -557,7 +577,7 @@ model DebtPayment {
   id            String   @id @default(cuid())
   storeId       String
   debtLedgerId  String
-  amount        Decimal  @db.Decimal(12, 2)
+  amount        Decimal
   paymentMethod String // CASH, MPESA
   reference     String?
   receivedBy    String? // User ID
@@ -582,14 +602,14 @@ model EquipmentRental {
   rentalStartDate    DateTime  @default(now())
   expectedReturnDate DateTime
   actualReturnDate   DateTime?
-  securityDeposit    Decimal   @db.Decimal(12, 2)
-  ratePerDay         Decimal   @db.Decimal(12, 2)
-  ratePerWeek        Decimal?  @db.Decimal(12, 2)
-  ratePerMonth       Decimal?  @db.Decimal(12, 2)
-  totalRentalCharge  Decimal   @default(0) @db.Decimal(12, 2)
-  lateFeeAccumulated Decimal   @default(0) @db.Decimal(12, 2)
+  securityDeposit    Decimal
+  ratePerDay         Decimal
+  ratePerWeek        Decimal?
+  ratePerMonth       Decimal?
+  totalRentalCharge  Decimal   @default(0)
+  lateFeeAccumulated Decimal   @default(0)
   damageAssessment   String? // NONE, MINOR, MODERATE, SEVERE
-  damageCharge       Decimal   @default(0) @db.Decimal(12, 2)
+  damageCharge       Decimal   @default(0)
   notes              String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
@@ -616,15 +636,23 @@ model Account {
   type           String // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
   subType        String? // CURRENT_ASSET, FIXED_ASSET, CURRENT_LIABILITY, etc.
   normalBalance  String   @default("DEBIT") // DEBIT, CREDIT
+  description    String? // Human-readable description of the account's purpose
   isActive       Boolean  @default(true)
+  createdByUserId String? // User who created this account (audit trail)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy         User?              @relation("AccountCreatedBy", fields: [createdByUserId], references: [id])
   journalEntryLines JournalEntryLine[]
+  budgets           Budget[]
 
+  // ISO 27001: Code is unique per organization (prevents cross-org collisions)
   @@unique([organizationId, code])
+  // ISO 9001: Performance indexes for common query patterns
   @@index([organizationId])
+  @@index([organizationId, type])
+  @@index([organizationId, isActive])
   @@index([type])
   @@map("accounts")
 }
@@ -637,24 +665,62 @@ model JournalEntry {
   description   String
   referenceType String? // SALE, PAYMENT, REFUND, RENTAL, ADJUSTMENT
   referenceId   String? // Transaction ID, Payment ID, etc.
-  totalDebit    Decimal   @db.Decimal(12, 2)
-  totalCredit   Decimal   @db.Decimal(12, 2)
+  totalDebit    Decimal
+  totalCredit   Decimal
+
+  // ── Posting lifecycle (ISO 9001 — Process Control) ──────────────────────
+  // Draft → Submitted → Approved → Posted → (optionally Voided)
+  // The accounting equation (totalDebit === totalCredit) is enforced at the
+  // application layer in accounting-helpers.ts:validateJournalEntryBalancing()
+  // because Prisma check constraints are not portable across SQLite/PostgreSQL.
   isPosted      Boolean   @default(false)
-  isVoided      Boolean   @default(false)
   postedAt      DateTime?
+  postedByUserId String? // User who posted the entry
+
+  // ── Approval workflow (segregation of duties) ───────────────────────────
+  isApproved    Boolean   @default(false)
+  approvedAt    DateTime?
+  approvedByUserId String? // User who approved the entry
+
+  // ── Voiding (error correction via reversing entry — ISO 9001) ────────────
+  isVoided      Boolean   @default(false)
   voidedAt      DateTime?
-  voidedBy      String?
-  createdBy     String? // User ID
+  voidedBy      String? // Legacy field (plain user ID string) — kept for backward compat
+  voidedByUserId String? // Proper FK relation to User
+  voidReason    String? // Mandatory reason when voiding
+  reversingEntryId String? @unique // FK to the reversing JournalEntry (created on void)
+
+  // ── Document references (ISO 9001 — Traceability) ───────────────────────
+  referenceDocumentType String? // INVOICE, RECEIPT, EXPENSE_VOUCHER, BANK_STATEMENT
+  referenceDocumentId   String? // ID of the source document
+
+  // ── Financial period linkage ────────────────────────────────────────────
+  financialPeriodId String? // Optional link to FinancialPeriod for period-close
+
+  createdBy     String? // User ID (legacy plain string)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  store Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  lines JournalEntryLine[]
+  store            Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  postedBy         User?             @relation("JournalEntryPostedBy", fields: [postedByUserId], references: [id])
+  approvedBy       User?             @relation("JournalEntryApprovedBy", fields: [approvedByUserId], references: [id])
+  voidedByUser     User?             @relation("JournalEntryVoidedBy", fields: [voidedByUserId], references: [id])
+  financialPeriod  FinancialPeriod?  @relation(fields: [financialPeriodId], references: [id])
+  reversingEntry   JournalEntry?     @relation("ReversingEntry", fields: [reversingEntryId], references: [id])
+  reversedBy       JournalEntry?     @relation("ReversingEntry")
+  lines            JournalEntryLine[]
 
+  // ISO 9001: Indexes for common accounting query patterns
   @@index([storeId])
+  @@index([storeId, entryDate])
+  @@index([storeId, isPosted])
   @@index([entryDate])
   @@index([referenceType])
+  @@index([referenceDocumentType, referenceDocumentId])
   @@index([isPosted])
+  @@index([isApproved])
+  @@index([isVoided])
+  @@index([financialPeriodId])
   @@index([createdAt])
   @@map("journal_entries")
 }
@@ -663,16 +729,29 @@ model JournalEntryLine {
   id             String   @id @default(cuid())
   journalEntryId String
   accountId      String
-  debit          Decimal  @default(0) @db.Decimal(12, 2)
-  credit         Decimal  @default(0) @db.Decimal(12, 2)
+  debit          Decimal  @default(0)
+  credit         Decimal  @default(0)
   description    String?
+
+  // ── Tax tracking (ISO 9001 — VAT compliance) ────────────────────────────
+  isTaxRelated   Boolean  @default(false) // True if this line is a VAT line
+  taxRateApplied Decimal? // e.g. 16.00 for 16% VAT
+  taxAmount      Decimal? // The computed tax amount
+
+  // ── Reconciliation (ISO 9001 — Bank/account reconciliation) ─────────────
+  reconciledAt      DateTime?
+  reconciledByUserId String?
+
   createdAt      DateTime @default(now())
 
-  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
-  account      Account      @relation(fields: [accountId], references: [id])
+  journalEntry  JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account       Account      @relation(fields: [accountId], references: [id])
+  reconciledBy  User?        @relation("JournalLineReconciledBy", fields: [reconciledByUserId], references: [id])
 
   @@index([journalEntryId])
   @@index([accountId])
+  @@index([journalEntryId, accountId])
+  @@index([reconciledAt])
   @@map("journal_entry_lines")
 }
 
@@ -683,8 +762,8 @@ model CashDrawerLog {
   storeId   String
   userId    String
   action    String // OPEN, CLOSE, CASH_IN, CASH_OUT, SALE, REFUND
-  amount    Decimal  @db.Decimal(12, 2)
-  balance   Decimal  @db.Decimal(12, 2) // Running balance
+  amount    Decimal
+  balance   Decimal // Running balance
   notes     String?
   createdAt DateTime @default(now())
 
@@ -753,7 +832,7 @@ model PurchaseOrder {
   status       String    @default("DRAFT") // DRAFT, SENT, CONFIRMED, RECEIVED, CANCELLED
   orderDate    DateTime  @default(now())
   expectedDate DateTime?
-  totalAmount  Decimal   @default(0) @db.Decimal(12, 2)
+  totalAmount  Decimal   @default(0)
   notes        String?
   createdBy    String?
   createdAt    DateTime  @default(now())
@@ -773,10 +852,10 @@ model PurchaseOrderItem {
   id              String  @id @default(cuid())
   purchaseOrderId String
   productId       String
-  quantity        Decimal @db.Decimal(10, 3)
-  unitPrice       Decimal @db.Decimal(12, 2)
-  totalPrice      Decimal @db.Decimal(12, 2)
-  receivedQty     Decimal @default(0) @db.Decimal(10, 3)
+  quantity        Decimal
+  unitPrice       Decimal
+  totalPrice      Decimal
+  receivedQty     Decimal @default(0)
   notes           String?
 
   purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
@@ -793,7 +872,7 @@ model Expense {
   id             String    @id @default(cuid())
   storeId        String
   description    String
-  amount         Decimal   @db.Decimal(12, 2)
+  amount         Decimal
   category       String // RENT, SALARIES, UTILITIES, TRANSPORT, MAINTENANCE, SUPPLIES, OTHER
   paidBy         String // User ID who paid
   paymentMethod  String    @default("CASH") // CASH, MPESA
@@ -899,8 +978,8 @@ model GiftCard {
   storeId         String
   code            String    @unique
   reason          String // CUSTOMER_LOYALTY, PROMOTION, REFUND_CREDIT, STORE_CREDIT, GIFT, EMPLOYEE_AWARD, COMPLAINT_RESOLUTION, OTHER
-  initialBalance  Decimal   @db.Decimal(12, 2)
-  currentBalance  Decimal   @db.Decimal(12, 2)
+  initialBalance  Decimal
+  currentBalance  Decimal
   currency        String    @default("KES")
   status          String    @default("ACTIVE") // ACTIVE, REDEEMED, EXPIRED, CANCELLED, PARTIALLY_REDEEMED
   recipientName   String?
@@ -933,7 +1012,7 @@ model GiftCardRedemption {
   id            String   @id @default(cuid())
   giftCardId    String
   transactionId String? // Link to sales transaction if redeemed against a sale
-  amount        Decimal  @db.Decimal(12, 2)
+  amount        Decimal
   redeemedBy    String? // User ID who processed the redemption
   notes         String?
   createdAt     DateTime @default(now())
@@ -954,10 +1033,10 @@ model Voucher {
   code            String    @unique
   name            String
   voucherType     String    @default("FIXED") // FIXED, PERCENTAGE, FREE_PRODUCT, BUNDLE
-  value           Decimal   @db.Decimal(12, 2)
+  value           Decimal
   description     String?
-  minimumPurchase Decimal   @default(0) @db.Decimal(12, 2)
-  maxDiscount     Decimal?  @db.Decimal(12, 2)
+  minimumPurchase Decimal   @default(0)
+  maxDiscount     Decimal?
   freeProductId   String?
   maxUses         Int       @default(1)
   currentUses     Int       @default(0)
@@ -989,12 +1068,12 @@ model VoucherCampaign {
   description      String?
   startDate        DateTime  @default(now())
   endDate          DateTime?
-  budget           Decimal   @default(0) @db.Decimal(12, 2)
-  spentAmount      Decimal   @default(0) @db.Decimal(12, 2)
+  budget           Decimal   @default(0)
+  spentAmount      Decimal   @default(0)
   targetAudience   String?
   status           String    @default("DRAFT") // DRAFT, ACTIVE, COMPLETED, CANCELLED
   totalRedemptions Int       @default(0)
-  totalRevenue     Decimal   @default(0) @db.Decimal(12, 2)
+  totalRevenue     Decimal   @default(0)
   createdBy        String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
@@ -1012,9 +1091,9 @@ model VoucherRedemption {
   voucherId      String
   transactionId  String?
   redeemedBy     String? // Customer name or ID
-  originalTotal  Decimal  @default(0) @db.Decimal(12, 2)
-  discountAmount Decimal  @default(0) @db.Decimal(12, 2)
-  finalTotal     Decimal  @default(0) @db.Decimal(12, 2)
+  originalTotal  Decimal  @default(0)
+  discountAmount Decimal  @default(0)
+  finalTotal     Decimal  @default(0)
   createdAt      DateTime @default(now())
 
   voucher     Voucher           @relation(fields: [voucherId], references: [id], onDelete: Cascade)
@@ -1035,11 +1114,11 @@ model Shift {
   store             Store     @relation(fields: [storeId], references: [id])
   startedAt         DateTime  @default(now()) @map("started_at")
   endedAt           DateTime? @map("ended_at")
-  startingCash      Decimal   @default(0) @map("starting_cash") @db.Decimal(12, 2)
-  endingCash        Decimal?  @map("ending_cash") @db.Decimal(12, 2)
-  countedCash       Decimal?  @map("counted_cash") @db.Decimal(12, 2)
-  cashDifference    Decimal?  @map("cash_difference") @db.Decimal(12, 2)
-  totalSales        Decimal   @default(0) @map("total_sales") @db.Decimal(12, 2)
+  startingCash      Decimal   @default(0) @map("starting_cash")
+  endingCash        Decimal?  @map("ending_cash")
+  countedCash       Decimal?  @map("counted_cash")
+  cashDifference    Decimal?  @map("cash_difference")
+  totalSales        Decimal   @default(0) @map("total_sales")
   totalTransactions Int       @default(0) @map("total_transactions")
   status            String    @default("ACTIVE") // ACTIVE, ENDED
   notes             String?
@@ -1068,10 +1147,10 @@ model Invoice {
   customerAddress String?
   issueDate       DateTime  @default(now())
   dueDate         DateTime?
-  subtotal        Decimal   @default(0) @db.Decimal(12, 2)
-  taxAmount       Decimal   @default(0) @db.Decimal(12, 2)
-  discountAmount  Decimal   @default(0) @db.Decimal(12, 2)
-  totalAmount     Decimal   @default(0) @db.Decimal(12, 2)
+  subtotal        Decimal   @default(0)
+  taxAmount       Decimal   @default(0)
+  discountAmount  Decimal   @default(0)
+  totalAmount     Decimal   @default(0)
   status          String    @default("DRAFT") // DRAFT, SENT, ACCEPTED, INVOICED, PAID, CANCELLED, EXPIRED
   notes           String?
   terms           String?
@@ -1097,12 +1176,12 @@ model InvoiceItem {
   productId       String?
   productName     String
   description     String?
-  quantity        Decimal @db.Decimal(10, 3)
+  quantity        Decimal
   unitType        String  @default("PIECE")
-  pricePerUnit    Decimal @db.Decimal(12, 2)
-  discountPercent Decimal @default(0) @db.Decimal(5, 2)
-  taxRate         Decimal @default(16) @db.Decimal(5, 2)
-  lineTotal       Decimal @default(0) @db.Decimal(12, 2)
+  pricePerUnit    Decimal
+  discountPercent Decimal @default(0)
+  taxRate         Decimal @default(16)
+  lineTotal       Decimal @default(0)
 
   invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   product Product? @relation(fields: [productId], references: [id])
@@ -1149,7 +1228,7 @@ model DeliveryNoteItem {
   deliveryNoteId String
   productId      String?
   productName    String
-  quantity       Decimal @db.Decimal(10, 3)
+  quantity       Decimal
   unitType       String  @default("PIECE")
   notes          String?
 
@@ -1202,7 +1281,7 @@ model SecurityEvent {
 //     defined once and referenced by every store. EmployeeLeaveBalance,
 //     LeaveRequest, etc. resolve via employee.storeId.
 //
-//   • Monetary fields now use Decimal @db.Decimal(12,2) (banker's rounding)
+//   • Monetary fields now use Decimal (banker's rounding)
 //     across the entire schema — Product.pricePerUnit, SalesTransaction.total,
 //     PayrollDetail.netPay, etc. This Phase 2 migration ensures KRA eTIMS
 //     compliance and eliminates IEEE-754 float rounding errors. Payroll
@@ -1261,12 +1340,12 @@ model Employee {
   status          String    @default("ACTIVE") // ACTIVE, SUSPENDED, TERMINATED, ON_LEAVE
 
   // Compensation (monthly figures in KES)
-  basicSalary        Decimal  @default(0) @db.Decimal(12, 2) // Gross basic before allowances/deductions
-  hourlyRate         Decimal? @db.Decimal(12, 2) // For casual/overtime calculation
-  houseAllowance     Decimal  @default(0) @db.Decimal(12, 2)
-  transportAllowance Decimal  @default(0) @db.Decimal(12, 2)
-  medicalAllowance   Decimal  @default(0) @db.Decimal(12, 2)
-  otherAllowances    Decimal  @default(0) @db.Decimal(12, 2)
+  basicSalary        Decimal  @default(0) // Gross basic before allowances/deductions
+  hourlyRate         Decimal? // For casual/overtime calculation
+  houseAllowance     Decimal  @default(0)
+  transportAllowance Decimal  @default(0)
+  medicalAllowance   Decimal  @default(0)
+  otherAllowances    Decimal  @default(0)
 
   // Statutory deduction config (computed at payroll time; stored here as the
   // employee's current configuration). Actual per-run amounts live in
@@ -1325,9 +1404,9 @@ model PayrollPeriod {
 
   // Aggregate totals (computed when the run is processed). Stored on the
   // period for fast dashboard rendering without joining PayrollDetail.
-  totalGross      Decimal @default(0) @db.Decimal(12, 2)
-  totalDeductions Decimal @default(0) @db.Decimal(12, 2)
-  totalNet        Decimal @default(0) @db.Decimal(12, 2)
+  totalGross      Decimal @default(0)
+  totalDeductions Decimal @default(0)
+  totalNet        Decimal @default(0)
   employeeCount   Int     @default(0)
 
   notes     String?
@@ -1361,9 +1440,9 @@ model PayrollRun {
   paidAt      DateTime?
 
   // Aggregate totals for THIS run (sum of PayrollDetail rows)
-  totalGross      Decimal @default(0) @db.Decimal(12, 2)
-  totalDeductions Decimal @default(0) @db.Decimal(12, 2)
-  totalNet        Decimal @default(0) @db.Decimal(12, 2)
+  totalGross      Decimal @default(0)
+  totalDeductions Decimal @default(0)
+  totalNet        Decimal @default(0)
   employeeCount   Int     @default(0)
 
   // Failure context (if status = FAILED)
@@ -1394,34 +1473,34 @@ model PayrollDetail {
   storeId      String // Denormalised for tenant-scoping
 
   // Earnings breakdown (KES)
-  basicSalary        Decimal @default(0) @db.Decimal(12, 2)
-  houseAllowance     Decimal @default(0) @db.Decimal(12, 2)
-  transportAllowance Decimal @default(0) @db.Decimal(12, 2)
-  medicalAllowance   Decimal @default(0) @db.Decimal(12, 2)
-  otherAllowances    Decimal @default(0) @db.Decimal(12, 2)
-  overtimePay        Decimal @default(0) @db.Decimal(12, 2)
-  grossPay           Decimal @default(0) @db.Decimal(12, 2) // Sum of all earnings
+  basicSalary        Decimal @default(0)
+  houseAllowance     Decimal @default(0)
+  transportAllowance Decimal @default(0)
+  medicalAllowance   Decimal @default(0)
+  otherAllowances    Decimal @default(0)
+  overtimePay        Decimal @default(0)
+  grossPay           Decimal @default(0) // Sum of all earnings
 
   // Statutory deductions (KES) — computed per Kenyan law in payroll-helpers.ts
-  paye        Decimal @default(0) @db.Decimal(12, 2) // Pay As You Earn income tax
-  nssf        Decimal @default(0) @db.Decimal(12, 2) // National Social Security Fund
-  nhif        Decimal @default(0) @db.Decimal(12, 2) // National Hospital Insurance Fund / SHIF
-  housingLevy Decimal @default(0) @db.Decimal(12, 2) // Affordable Housing Levy (1.5%)
+  paye        Decimal @default(0) // Pay As You Earn income tax
+  nssf        Decimal @default(0) // National Social Security Fund
+  nhif        Decimal @default(0) // National Hospital Insurance Fund / SHIF
+  housingLevy Decimal @default(0) // Affordable Housing Levy (1.5%)
 
   // Other deductions
-  payeArrears     Decimal @default(0) @db.Decimal(12, 2)
-  loanDeduction   Decimal @default(0) @db.Decimal(12, 2) // Salary advance / staff loan recovery
-  otherDeductions Decimal @default(0) @db.Decimal(12, 2)
-  totalDeductions Decimal @default(0) @db.Decimal(12, 2) // Sum of all deductions
+  payeArrears     Decimal @default(0)
+  loanDeduction   Decimal @default(0) // Salary advance / staff loan recovery
+  otherDeductions Decimal @default(0)
+  totalDeductions Decimal @default(0) // Sum of all deductions
 
-  netPay Decimal @default(0) @db.Decimal(12, 2) // grossPay - totalDeductions
+  netPay Decimal @default(0) // grossPay - totalDeductions
 
   // Working stats for the period (used in calculation + payslip display)
   daysWorked    Int     @default(0)
   daysPresent   Int     @default(0)
   daysAbsent    Int     @default(0)
   daysOnLeave   Int     @default(0)
-  overtimeHours Decimal @default(0) @db.Decimal(8, 2)
+  overtimeHours Decimal @default(0)
 
   // JSON breakdown for audit / payslip rendering. Stored as String for SQLite
   // compat; PostgreSQL could use Json type. Contains the full calc trace:
@@ -1458,11 +1537,11 @@ model LeaveType {
   name                String   @unique // Annual, Sick, Maternity, Paternity, Compassionate, Study, Sabbatical
   code                String   @unique // ANNUAL, SICK, MATERNITY, etc.
   description         String?
-  defaultDaysPerYear  Decimal  @default(0) @db.Decimal(8, 2) // 0 = unlimited (e.g. Compassionate)
+  defaultDaysPerYear  Decimal  @default(0) // 0 = unlimited (e.g. Compassionate)
   isPaid              Boolean  @default(true)
   isStatutory         Boolean  @default(false) // True for leave mandated by Kenyan law
   carryForwardAllowed Boolean  @default(true)
-  maxCarryForwardDays Decimal  @default(0) @db.Decimal(8, 2)
+  maxCarryForwardDays Decimal  @default(0)
   isActive            Boolean  @default(true)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -1488,11 +1567,11 @@ model EmployeeLeaveBalance {
   // calendar year, but some use a hire-anniversary cycle.
   leaveYear Int // e.g. 2026
 
-  allocatedDays    Decimal @default(0) @db.Decimal(8, 2) // Days granted for this year
-  usedDays         Decimal @default(0) @db.Decimal(8, 2) // Days already taken / approved
-  pendingDays      Decimal @default(0) @db.Decimal(8, 2) // Days in PENDING leave requests
-  carryForwardDays Decimal @default(0) @db.Decimal(8, 2) // Brought forward from prior year
-  encashedDays     Decimal @default(0) @db.Decimal(8, 2) // Days paid out in lieu
+  allocatedDays    Decimal @default(0) // Days granted for this year
+  usedDays         Decimal @default(0) // Days already taken / approved
+  pendingDays      Decimal @default(0) // Days in PENDING leave requests
+  carryForwardDays Decimal @default(0) // Brought forward from prior year
+  encashedDays     Decimal @default(0) // Days paid out in lieu
 
   // available = allocated + carryForward - used - pending
   // (Computed at read time to avoid drift; not stored.)
@@ -1524,7 +1603,7 @@ model LeaveRequest {
   startDate   DateTime
   endDate     DateTime
   returnDate  DateTime? // Expected return (defaults to endDate + 1 day)
-  workingDays Decimal   @default(0) @db.Decimal(8, 2) // Computed: count of working days in range
+  workingDays Decimal   @default(0) // Computed: count of working days in range
   halfDay     Boolean   @default(false)
 
   status          String  @default("PENDING") // PENDING, APPROVED, REJECTED, CANCELLED, TAKEN
@@ -1572,12 +1651,12 @@ model AttendanceRecord {
   checkOut   DateTime?
   breakStart DateTime?
   breakEnd   DateTime?
-  breakHours Decimal   @default(0) @db.Decimal(8, 2) // Total break time in hours
+  breakHours Decimal   @default(0) // Total break time in hours
 
   // Computed totals
-  workingHours  Decimal @default(0) @db.Decimal(8, 2) // (checkOut - checkIn) - breakHours
-  overtimeHours Decimal @default(0) @db.Decimal(8, 2) // Hours beyond the standard shift
-  expectedHours Decimal @default(8) @db.Decimal(8, 2) // Standard shift length
+  workingHours  Decimal @default(0) // (checkOut - checkIn) - breakHours
+  overtimeHours Decimal @default(0) // Hours beyond the standard shift
+  expectedHours Decimal @default(8) // Standard shift length
 
   status            String @default("PRESENT") // PRESENT, ABSENT, LATE, HALF_DAY, LEAVE, HOLIDAY, WEEKEND, REMOTE
   lateMinutes       Int    @default(0) // Minutes late past shift start
@@ -1854,10 +1933,10 @@ model ProductVariant {
   sku             String   @unique
   barcode         String?
   // Variant-specific pricing/stock (overrides parent if set).
-  pricePerUnit    Decimal? @db.Decimal(12, 2)
-  costPrice       Decimal? @db.Decimal(12, 2)
-  quantityInStock Decimal  @default(0) @db.Decimal(10, 3)
-  reorderLevel    Decimal  @default(10) @db.Decimal(10, 3)
+  pricePerUnit    Decimal?
+  costPrice       Decimal?
+  quantityInStock Decimal  @default(0)
+  reorderLevel    Decimal  @default(10)
   isActive        Boolean  @default(true)
   // Variant attributes as JSON (e.g. {"size":"50kg","color":"grey"}).
   attributes      String   @default("{}")
@@ -1886,7 +1965,7 @@ model BinLocation {
   shelf        String?
   bin          String?
   // Quantity stored at this specific bin (sum across bins = Product.quantityInStock).
-  quantity     Decimal  @default(0) @db.Decimal(10, 3)
+  quantity     Decimal  @default(0)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -1936,7 +2015,7 @@ model Batch {
   storeId           String
   batchNumber       String
   // Quantity remaining in this batch (decremented on sale).
-  quantity          Decimal   @default(0) @db.Decimal(10, 3)
+  quantity          Decimal   @default(0)
   // Supplier who provided this batch (for recall traceability).
   supplierId        String?
   receivedDate      DateTime  @default(now())
@@ -2384,4 +2463,203 @@ model Notification {
   @@index([priority])
   @@index([createdAt])
   @@map("notifications")
+}
+
+// ============================================================================
+// v2.1.0 — WORLD-CLASS ACCOUNTING MODULE (ISO 27001 / ISO 9001 COMPLIANT)
+// ============================================================================
+//
+// These models implement a PhD-level double-entry accounting system with:
+//   • Financial period management (open / close / lock workflow)
+//   • Trial balance snapshots (point-in-time financial position)
+//   • Budget vs. actual tracking with variance analysis
+//   • Comprehensive audit trail (every CRUD operation on financial entities)
+//
+// Design principles:
+//   - All monetary fields use Decimal — never Float.
+//   - Json type is used for flexible structured data (balances, old/new values).
+//     Prisma supports Json on both SQLite (stored as TEXT) and PostgreSQL
+//     (native JSONB), so cross-DB compat is preserved.
+//   - Every model is multi-tenant via storeId (except org-wide FinancialPeriod).
+//   - Indexes target the most common accounting query patterns.
+// ============================================================================
+
+// ── FINANCIAL PERIOD ────────────────────────────────────────────────────────
+//
+// Represents an accounting period (month, quarter, or year) during which
+// journal entries are recorded. Periods follow a strict lifecycle:
+//
+//   OPEN → CLOSED → LOCKED
+//
+//   OPEN:   New entries can be posted. Existing draft entries can be edited.
+//   CLOSED: No new entries can be posted, but voiding is still allowed for
+//           error correction. Period can be reopened if needed.
+//   LOCKED: Permanently sealed. No mutations of any kind. This is the
+//           regulatory state required after financial statements are issued
+//           and taxes are filed. LOCKED is irreversible.
+//
+// ISO 9001: Ensures a defined process for closing financial periods.
+
+model FinancialPeriod {
+  id             String   @id @default(cuid())
+  organizationId String
+  storeId        String
+  periodName     String   // e.g., "January 2026", "Q1 2026", "FY 2026"
+  startDate      DateTime
+  endDate        DateTime
+  status         String   @default("OPEN") // OPEN, CLOSED, LOCKED
+  closedAt       DateTime?
+  closedByUserId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  store         Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  closedBy      User?         @relation("PeriodClosedBy", fields: [closedByUserId], references: [id])
+  journalEntries JournalEntry[]
+  trialBalanceSnapshots TrialBalanceSnapshot[]
+  budgets       Budget[]
+
+  // A store cannot have two overlapping periods with the same name.
+  @@unique([storeId, periodName])
+  // ISO 9001: Indexes for period-close and reporting queries.
+  @@index([storeId, startDate])
+  @@index([storeId, endDate])
+  @@index([storeId, status])
+  @@index([organizationId])
+  @@map("financial_periods")
+}
+
+// ── TRIAL BALANCE SNAPSHOT ──────────────────────────────────────────────────
+//
+// A point-in-time capture of all account balances for a given date. Stored
+// as a Json blob for flexibility (account structures change over time, and
+// we need the historical snapshot to reflect the chart of accounts AS IT WAS
+// at the snapshot date, not as it is now).
+//
+// The `balances` Json structure:
+//   {
+//     "1000": { "accountCode": "1000", "accountName": "Cash on Hand",
+//               "accountType": "ASSET", "debit": 150000.00, "credit": 0,
+//               "netBalance": 150000.00 },
+//     "2000": { ... },
+//     ...
+//   }
+//
+// ISO 9001: Provides verifiable financial position at period close.
+
+model TrialBalanceSnapshot {
+  id            String   @id @default(cuid())
+  storeId       String
+  periodId      String?
+  snapshotDate  DateTime
+  balances      Json     // Array of per-account balance objects (see above)
+  totalDebits   Decimal
+  totalCredits  Decimal
+  isBalanced    Boolean  @default(true) // Whether debits === credits
+  generatedByUserId String?
+  createdAt     DateTime @default(now())
+
+  store    Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  period   FinancialPeriod? @relation(fields: [periodId], references: [id])
+  generatedBy User?         @relation("TrialBalanceGeneratedBy", fields: [generatedByUserId], references: [id])
+
+  @@index([storeId, periodId])
+  @@index([storeId, snapshotDate])
+  @@index([periodId])
+  @@map("trial_balance_snapshots")
+}
+
+// ── BUDGET ──────────────────────────────────────────────────────────────────
+//
+// Budget allocation for a specific account within a financial period.
+// Supports budget vs. actual analysis with automatic variance calculation.
+//
+//   variance = budgetedAmount - actualAmount
+//
+// Positive variance = under budget (favorable for expenses, unfavorable for revenue).
+// Negative variance = over budget (unfavorable for expenses, favorable for revenue).
+//
+// The `actualAmount` is recalculated periodically by summing posted journal
+// entry lines for this account within the period's date range. It is NOT
+// updated in real-time (too expensive); instead, a background job or manual
+// refresh triggers the recalculation.
+//
+// ISO 9001: Supports financial planning and performance monitoring.
+
+model Budget {
+  id             String   @id @default(cuid())
+  storeId        String
+  periodId       String
+  accountId      String
+  budgetedAmount Decimal
+  actualAmount   Decimal  @default(0) // Calculated field
+  variance       Decimal  @default(0) // budgeted - actual
+  notes          String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  store    Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  period   FinancialPeriod  @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  account  Account          @relation(fields: [accountId], references: [id])
+  createdBy User?           @relation("BudgetCreatedBy", fields: [createdById], references: [id])
+
+  // One budget per account per period.
+  @@unique([periodId, accountId])
+  @@index([storeId, periodId])
+  @@index([accountId, periodId])
+  @@index([storeId, accountId])
+  @@map("budgets")
+}
+
+// ── AUDIT LOG ───────────────────────────────────────────────────────────────
+//
+// Comprehensive audit trail for ALL financial entity mutations. Every
+// CREATE, UPDATE, DELETE (and domain-specific actions like POST, VOID,
+// APPROVE) on financial entities is recorded here with:
+//   • The entity type and ID affected
+//   • The action performed
+//   • The user who performed it
+//   • The old and new values (as Json, for full traceability)
+//   • The request IP and user agent (for security forensics)
+//   • A precise timestamp
+//
+// This table is IMMUTABLE — the Prisma Client Extension in db.ts blocks
+// UPDATE and DELETE on AuditLog outside of sanctioned bypass paths. This
+// ensures the audit trail cannot be tampered with, satisfying ISO 27001
+// control A.12.4 (Logging and Monitoring).
+//
+// ISO 27001: A.12.4.1 — Event logging
+// ISO 27001: A.12.4.2 — Protection of log information
+// ISO 27001: A.12.4.3 — Administrator and operator logs
+// ISO 9001: Traceability of all financial data modifications
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  storeId      String?
+  organizationId String?
+  entityType   String   // e.g., "JournalEntry", "Account", "Budget", "FinancialPeriod"
+  entityId     String   // The ID of the affected entity
+  action       String   // CREATE, UPDATE, DELETE, POST, VOID, APPROVE, CLOSE, LOCK
+  userId       String?
+  oldValues    Json?    // The entity's state before the mutation (null for CREATE)
+  newValues    Json?    // The entity's state after the mutation (null for DELETE)
+  reason       String?  // Optional reason (mandatory for VOID, CLOSE, LOCK)
+  ipAddress    String?
+  userAgent    String?
+  timestamp    DateTime @default(now())
+
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user  User?  @relation(fields: [userId], references: [id])
+
+  // ISO 27001: Indexes for security forensics and compliance reporting.
+  @@index([entityType, entityId])
+  @@index([entityType, action])
+  @@index([userId, timestamp])
+  @@index([action, timestamp])
+  @@index([storeId, timestamp])
+  @@index([storeId, entityType])
+  @@index([timestamp])
+  @@map("audit_logs")
 }

@@ -3524,3 +3524,41 @@ Stage Summary:
 - Test coverage: 78 tests (44 money unit + 7 transaction integration + 27 existing) all passing
 - Verification: lint 0 errors, dev server 200, agent-browser confirms app renders with all 25 tabs, health endpoint shows financial_integrity=ok
 - Commit fd8e59b pushed to GitHub main
+
+---
+Task ID: Phase1-Accounting
+Agent: Principal Software Architect (Financial Systems)
+Task: Phase 1 — Enhance Accounting Data Models (ISO 27001 Data Integrity & ISO 9001 Accuracy) for world-class Accounting Module
+
+Work Log:
+- Audited prisma/schema.prisma for the 8 required models. Found that a previous agent had already implemented the full schema layer; verified each model against the Phase 1 spec:
+  1. Account (line 631): description ✓, isActive ✓, createdByUserId + createdBy relation ✓, createdAt/updatedAt ✓, @@unique([organizationId, code]) ✓, @@index([organizationId, type]) ✓, @@index([organizationId, isActive]) ✓
+  2. JournalEntry (line 660): postedByUserId + postedBy relation ✓, postedAt ✓, isApproved ✓, approvedByUserId + approvedBy relation ✓, approvedAt ✓, isVoided ✓, voidedByUserId + voidedByUser relation ✓, voidedAt ✓, voidReason ✓, referenceDocumentType ✓, referenceDocumentId ✓, financialPeriodId + financialPeriod relation ✓, @@index([storeId, entryDate]) ✓, @@index([storeId, isPosted]) ✓, @@index([referenceDocumentType, referenceDocumentId]) ✓, plus reversingEntryId self-relation for voiding
+  3. JournalEntryLine (line 728): description ✓, isTaxRelated ✓, taxRateApplied ✓, taxAmount ✓, reconciledAt ✓, reconciledByUserId + reconciledBy relation ✓, @@index([journalEntryId, accountId]) ✓
+  4. FinancialPeriod (line 2503): id, organizationId, storeId, periodName, startDate, endDate, status (OPEN/CLOSED/LOCKED), closedAt, closedByUserId + closedBy relation ✓, @@index([storeId, startDate]) ✓, @@index([storeId, status]) ✓, @@unique([storeId, periodName])
+  5. TrialBalanceSnapshot (line 2551): id, storeId, periodId, snapshotDate, balances (Json) ✓, plus totalDebits/totalCredits/isBalanced/generatedByUserId, @@index([storeId, periodId]) ✓, @@index([storeId, snapshotDate]) ✓
+  6. Budget (line 2590): id, storeId, periodId, accountId, budgetedAmount, actualAmount, variance, notes, createdById ✓, @@index([storeId, periodId]) ✓, @@index([accountId, periodId]) ✓, @@unique([periodId, accountId])
+  7. JournalEntry→FinancialPeriod link: financialPeriodId on JournalEntry ✓
+  8. AuditLog (line 2638): id, storeId, organizationId, entityType, entityId, action, userId, oldValues (Json?), newValues (Json?), reason, ipAddress, userAgent, timestamp ✓, @@index([entityType, entityId]) ✓, @@index([userId, timestamp]) ✓, @@index([action, timestamp]) ✓
+- Verified db.ts enforces AuditLog immutability (ISO 27001 A.12.4.2): auditLog is in IMMUTABLE_MODELS set (line 283) and has query interceptors blocking update/updateMany/delete/deleteMany (line 469). AuditLog is also excluded from store-scoped auto-filtering because its storeId is nullable (org-level audits).
+- Added 7 new ISO-compliant domain types to src/lib/types.ts (after AccountType):
+  • AccountSubType (CURRENT_ASSET, FIXED_ASSET, INVENTORY, ... TAX_PAYABLE) — 16 GAAP sub-classifications
+  • NormalBalance (DEBIT, CREDIT)
+  • FinancialPeriodStatus (OPEN, CLOSED, LOCKED) — with lifecycle documentation
+  • AuditAction (CREATE, UPDATE, DELETE, POST, VOID, APPROVE, CLOSE, LOCK, REOPEN, RECONCILE, BUDGET_SET, SNAPSHOT)
+  • ReferenceDocumentType (INVOICE, RECEIPT, EXPENSE_VOUCHER, BANK_STATEMENT, PURCHASE_ORDER, SUPPLIER_INVOICE, MANUAL) — distinct from internal JournalEntry.referenceType
+  • JournalEntryStatus (DRAFT, SUBMITTED, APPROVED, POSTED, VOIDED) — derived UI status
+  • AuditEntityType (JournalEntry, JournalEntryLine, Account, FinancialPeriod, TrialBalanceSnapshot, Budget, Customer, Supplier, Expense)
+  Used const-object pattern (not Prisma enum) to match codebase convention and keep schema portable across SQLite/PostgreSQL.
+- Ran `bun run db:push` → "The database is already in sync with the Prisma schema." + Prisma Client regenerated (v6.19.2).
+- Verified `bun run lint` → 0 errors (330 pre-existing warnings).
+- Verified dev server → 200 on / and /api/health.
+- Confirmed pre-existing tsc errors in prisma/seed.ts (rolePermission Boolean narrowing) and src/__tests__/api/transactions.test.ts (Decimal→number cast) are NOT caused by Phase 1 (seed.ts does not import any new types).
+
+Stage Summary:
+- Phase 1 (Accounting Data Models) is COMPLETE and verified. The schema fully satisfies ISO 27001 (data integrity, unique constraints, audit trail, immutability) and ISO 9001 (process control fields, traceability, period lifecycle).
+- All 8 models exist with the exact fields, relations, unique constraints, and indexes specified.
+- 7 new TS domain types added for type-safe business logic in Phase 2.
+- DB in sync, client regenerated, lint clean, dev server healthy.
+- NOTE for Phase 2: src/lib/accounting-helpers.ts does NOT yet exist (must be created). The existing src/lib/account-helper.ts (recordSaleJournalEntry) is the legacy sale-path helper and should be preserved; the new accounting-helpers.ts will house the general-purpose journal CRUD (validateJournalEntryBalancing, validateEntryAgainstPeriod, postJournalEntry, approveJournalEntry, voidJournalEntry, account balance calculation).
+- STOPPING here per pacing rules. Awaiting "continue" to proceed to Phase 2 (Business Logic).

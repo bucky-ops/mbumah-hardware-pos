@@ -101,6 +101,128 @@ export const AccountType = {
 
 export type AccountType = (typeof AccountType)[keyof typeof AccountType];
 
+// ── ISO 9001 / GAAP Accounting domain types (Phase 1 — Accounting Module) ────
+//
+// These string-union types mirror the Prisma schema models (Account,
+// JournalEntry, JournalEntryLine, FinancialPeriod, TrialBalanceSnapshot,
+// Budget, AuditLog) and are used throughout the accounting business logic
+// (accounting-helpers.ts), the financial UI (financial-tab.tsx), and the
+// API routes under /api/financial/**. Using const-objects (rather than
+// Prisma `enum`) keeps the schema portable across SQLite (dev) and
+// PostgreSQL (prod) and matches the existing codebase convention
+// (PaymentMethod, StockMovementType, etc.).
+
+/** Account sub-classification per GAAP. Optional on Account.subType. */
+export const AccountSubType = {
+  CURRENT_ASSET: 'CURRENT_ASSET',
+  FIXED_ASSET: 'FIXED_ASSET',
+  INVENTORY: 'INVENTORY',
+  CASH_EQUIVALENT: 'CASH_EQUIVALENT',
+  ACCOUNTS_RECEIVABLE: 'ACCOUNTS_RECEIVABLE',
+  CURRENT_LIABILITY: 'CURRENT_LIABILITY',
+  LONG_TERM_LIABILITY: 'LONG_TERM_LIABILITY',
+  ACCOUNTS_PAYABLE: 'ACCOUNTS_PAYABLE',
+  OWNERS_EQUITY: 'OWNERS_EQUITY',
+  RETAINED_EARNINGS: 'RETAINED_EARNINGS',
+  OPERATING_REVENUE: 'OPERATING_REVENUE',
+  OTHER_REVENUE: 'OTHER_REVENUE',
+  COGS: 'COGS',
+  OPERATING_EXPENSE: 'OPERATING_EXPENSE',
+  ADMIN_EXPENSE: 'ADMIN_EXPENSE',
+  TAX_PAYABLE: 'TAX_PAYABLE',
+} as const;
+export type AccountSubType = (typeof AccountSubType)[keyof typeof AccountSubType];
+
+/** Whether an account's normal balance is a debit or a credit. */
+export const NormalBalance = {
+  DEBIT: 'DEBIT',
+  CREDIT: 'CREDIT',
+} as const;
+export type NormalBalance = (typeof NormalBalance)[keyof typeof NormalBalance];
+
+/**
+ * Financial period lifecycle.
+ *   OPEN   — entries can be posted into this period.
+ *   CLOSED — no new entries; period is being reviewed / audited. Existing
+ *            posted entries remain visible and reportable.
+ *   LOCKED — frozen permanently. No mutations of any kind permitted. This is
+ *            the terminal state for a closed-and-audited period (ISO 9001).
+ */
+export const FinancialPeriodStatus = {
+  OPEN: 'OPEN',
+  CLOSED: 'CLOSED',
+  LOCKED: 'LOCKED',
+} as const;
+export type FinancialPeriodStatus = (typeof FinancialPeriodStatus)[keyof typeof FinancialPeriodStatus];
+
+/**
+ * Actions recorded in the AuditLog. These are the verbatim values stored in
+ * AuditLog.action and used for compliance reporting (ISO 27001 A.12.4.1).
+ */
+export const AuditAction = {
+  CREATE: 'CREATE',
+  UPDATE: 'UPDATE',
+  DELETE: 'DELETE',
+  POST: 'POST',
+  VOID: 'VOID',
+  APPROVE: 'APPROVE',
+  CLOSE: 'CLOSE',
+  LOCK: 'LOCK',
+  REOPEN: 'REOPEN',
+  RECONCILE: 'RECONCILE',
+  BUDGET_SET: 'BUDGET_SET',
+  SNAPSHOT: 'SNAPSHOT',
+} as const;
+export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];
+
+/**
+ * The type of external source document referenced by a JournalEntry. Distinct
+ * from JournalEntry.referenceType (which is the internal system reference:
+ * SALE, PAYMENT, REFUND, RENTAL, ADJUSTMENT).
+ */
+export const ReferenceDocumentType = {
+  INVOICE: 'INVOICE',
+  RECEIPT: 'RECEIPT',
+  EXPENSE_VOUCHER: 'EXPENSE_VOUCHER',
+  BANK_STATEMENT: 'BANK_STATEMENT',
+  PURCHASE_ORDER: 'PURCHASE_ORDER',
+  SUPPLIER_INVOICE: 'SUPPLIER_INVOICE',
+  MANUAL: 'MANUAL',
+} as const;
+export type ReferenceDocumentType = (typeof ReferenceDocumentType)[keyof typeof ReferenceDocumentType];
+
+/**
+ * Derived journal-entry status for UI presentation. Computed from the
+ * isPosted / isApproved / isVoided flags, NOT stored directly.
+ *   DRAFT     — created, not submitted, not posted.
+ *   SUBMITTED — created and saved pending approval (isApproved = false).
+ *   APPROVED  — approved by an authorized user, ready to post.
+ *   POSTED    — posted to the ledger (isPosted = true).
+ *   VOIDED    — voided via a reversing entry (isVoided = true).
+ */
+export const JournalEntryStatus = {
+  DRAFT: 'DRAFT',
+  SUBMITTED: 'SUBMITTED',
+  APPROVED: 'APPROVED',
+  POSTED: 'POSTED',
+  VOIDED: 'VOIDED',
+} as const;
+export type JournalEntryStatus = (typeof JournalEntryStatus)[keyof typeof JournalEntryStatus];
+
+/** The entity types tracked by the AuditLog. */
+export const AuditEntityType = {
+  JOURNAL_ENTRY: 'JournalEntry',
+  JOURNAL_ENTRY_LINE: 'JournalEntryLine',
+  ACCOUNT: 'Account',
+  FINANCIAL_PERIOD: 'FinancialPeriod',
+  TRIAL_BALANCE_SNAPSHOT: 'TrialBalanceSnapshot',
+  BUDGET: 'Budget',
+  CUSTOMER: 'Customer',
+  SUPPLIER: 'Supplier',
+  EXPENSE: 'Expense',
+} as const;
+export type AuditEntityType = (typeof AuditEntityType)[keyof typeof AuditEntityType];
+
 export const NotificationChannel = {
   SMS: 'SMS',
   EMAIL: 'EMAIL',

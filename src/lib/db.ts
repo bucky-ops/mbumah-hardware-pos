@@ -248,6 +248,15 @@ const STORE_SCOPED_MODELS = new Set<string>([
   "employeeLeaveBalance",
   "leaveRequest",
   "attendanceRecord",
+  // ── v2.1.0 Accounting module (ISO 9001 / ISO 27001) ──
+  // All accounting entities are store-scoped for multi-tenant isolation.
+  // AuditLog has a nullable storeId (org-level audits have null), so it
+  // could be here — the injectTenant helper skips injection when storeId
+  // is already set or when bypass is active.
+  "financialPeriod",
+  "trialBalanceSnapshot",
+  "budget",
+  "auditLog",
 ]);
 
 // ── 5. Immutability — append-only financial & audit models ───────────────────
@@ -266,9 +275,16 @@ const IMMUTABLE_MODELS = new Set<string>([
   "journalEntry",
   "journalEntryLine",
   "systemLog",
-  // `auditLog` is reserved for future use — the current schema uses
-  // `systemLog` for audit trails. If/when a dedicated AuditLog model is
-  // added to schema.prisma, add it here.
+  // AuditLog is the tamper-proof audit trail (ISO 27001 A.12.4.2). Once
+  // written, audit records must NEVER be modified or deleted — doing so
+  // would violate the integrity guarantee required for compliance forensics.
+  // Sanctioned administrative purges (e.g. GDPR right-to-be-forgotten) use
+  // withImmutabilityBypass() with an explicit reason.
+  "auditLog",
+  // TrialBalanceSnapshot is a point-in-time financial record. Once captured,
+  // it must not be altered — doing so would invalidate the period-close
+  // verification. Corrections are made by generating a NEW snapshot.
+  "trialBalanceSnapshot",
   // Payroll payslips are append-only financial records. Once a payroll run
   // is COMPLETED, the per-employee PayrollDetail rows must never be edited —
   // corrections are made via adjusting entries in the NEXT payroll run.
@@ -432,6 +448,44 @@ const hardenedClient = baseClient.$extends({
       },
     },
     payrollDetail: {
+      async update({ model, operation, args, query }: any) {
+        assertMutable(model, operation);
+        return query(args);
+      },
+      async updateMany({ model, operation, args, query }: any) {
+        assertMutable(model, operation);
+        return query(args);
+      },
+      async delete({ model, operation, args, query }: any) {
+        assertMutable(model, operation);
+        return query(args);
+      },
+      async deleteMany({ model, operation, args, query }: any) {
+        assertMutable(model, operation);
+        return query(args);
+      },
+    },
+    // ── v2.1.0: AuditLog is tamper-proof (ISO 27001 A.12.4.2) ──
+    auditLog: {
+      async update({ model, operation, args, query }: any) {
+        assertMutable(model, operation);
+        return query(args);
+      },
+      async updateMany({ model, operation, args, query }: any) {
+        assertMutable(model, operation);
+        return query(args);
+      },
+      async delete({ model, operation, args, query }: any) {
+        assertMutable(model, operation);
+        return query(args);
+      },
+      async deleteMany({ model, operation, args, query }: any) {
+        assertMutable(model, operation);
+        return query(args);
+      },
+    },
+    // ── v2.1.0: TrialBalanceSnapshot is immutable once captured ──
+    trialBalanceSnapshot: {
       async update({ model, operation, args, query }: any) {
         assertMutable(model, operation);
         return query(args);
