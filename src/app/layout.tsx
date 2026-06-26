@@ -81,13 +81,13 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
-        <Providers>
-          {children}
-          {/* Vercel Analytics — resolves /_vercel/insights/script.js 404s */}
-          <Analytics />
-          {/* Vercel Speed Insights — real-user performance monitoring */}
-          <SpeedInsights />
-        </Providers>
+        <Providers>{children}</Providers>
+        {/* Vercel Analytics & Speed Insights — placed as direct children of
+            <body> (outside <Providers>) per Vercel best practice. They don't
+            need React Query / Theme context, and isolating them here avoids
+            any provider-level hydration timing from affecting analytics init. */}
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

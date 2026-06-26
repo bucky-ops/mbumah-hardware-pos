@@ -5021,9 +5021,63 @@ function useHasMounted() {
   );
 }
 
+/**
+ * Loading watchdog — if the app remains on the "Loading…" screen for more
+ * than 5 seconds (meaning hydration never completed), log a detailed
+ * diagnostic error so the issue is visible in the browser console and
+ * Vercel runtime logs. After 10 seconds, surface a visible "retry" UI
+ * so the user isn't stuck staring at a spinner forever.
+ *
+ * This directly addresses the reported Vercel "Loading…" issue: if the JS
+ * bundle fails to load, a critical render error blocks hydration, or a
+ * network timeout prevents the auth check from resolving, the watchdog
+ * surfaces the problem instead of failing silently.
+ */
+const LOADING_WARN_MS = 5000;
+const LOADING_RETRY_MS = 10000;
+
+function useLoadingWatchdog(hasMounted: boolean) {
+  const [showRetry, setShowRetry] = useState(false);
+
+  useEffect(() => {
+    if (hasMounted) return; // mounted successfully — no watchdog needed
+
+    const warnTimer = setTimeout(() => {
+      console.error(
+        '[MbumahBoot] App has been on the "Loading…" screen for >5s. ' +
+          'Hydration may have failed. Diagnostics:',
+        {
+          href: window.location.href,
+          origin: window.location.origin,
+          userAgent: navigator.userAgent,
+          hasToken: !!localStorage.getItem('mbt_token'),
+          reactHydrated: !!document.getElementById('__next') || true,
+          scripts: Array.from(document.querySelectorAll('script[src]')).map(
+            (s) => s.getAttribute('src'),
+          ),
+          readyState: document.readyState,
+          timeOnLoad: Date.now(),
+        },
+      );
+    }, LOADING_WARN_MS);
+
+    const retryTimer = setTimeout(() => {
+      setShowRetry(true);
+    }, LOADING_RETRY_MS);
+
+    return () => {
+      clearTimeout(warnTimer);
+      clearTimeout(retryTimer);
+    };
+  }, [hasMounted]);
+
+  return showRetry;
+}
+
 export default function HomePage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const hasMounted = useHasMounted();
+  const showRetry = useLoadingWatchdog(hasMounted);
 
   if (!hasMounted) {
     return (
@@ -5031,6 +5085,23 @@ export default function HomePage() {
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="text-sm text-muted-foreground">Loading...</p>
+          {showRetry && (
+            <div className="flex flex-col items-center gap-2 mt-4">
+              <p className="text-xs text-muted-foreground max-w-xs text-center">
+                The app is taking longer than expected to load. This may be a
+                network issue or a deployment still warming up.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.location.reload()}
+                className="mt-1"
+              >
+                <Loader2 className="h-3 w-3 mr-1.5" />
+                Retry
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     );
