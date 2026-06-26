@@ -91,6 +91,7 @@ const LazyTransfersTab = lazy(() => import('./tabs/transfers-tab'));
 const LazyBankingTab = lazy(() => import('./tabs/banking-tab'));
 const LazyLoyaltyTab = lazy(() => import('./tabs/loyalty-tab'));
 const LazySecurityTab = lazy(() => import('./tabs/security-tab'));
+const LazyPayrollTab = lazy(() => import('./tabs/payroll-tab'));
 
 function TabLoadingFallback() {
   return (
@@ -105,29 +106,48 @@ function TabLoadingFallback() {
 }
 
 
-const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType }[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: Home },
-  { id: 'pos', label: 'POS', icon: ShoppingCart },
-  { id: 'catalog', label: 'Catalog', icon: Tag },
-  { id: 'inventory', label: 'Inventory', icon: Package },
-  { id: 'customers', label: 'Customers', icon: Users },
-  { id: 'rentals', label: 'Rentals', icon: KeyRound },
-  { id: 'financial', label: 'Financial', icon: BarChart3 },
-  { id: 'reports', label: 'Reports', icon: FileText },
-  { id: 'transactions', label: 'Transactions', icon: ShoppingBag },
-  { id: 'suppliers', label: 'Suppliers', icon: Truck },
-  { id: 'gift-cards', label: 'Gift Cards', icon: CreditCard },
-  { id: 'vouchers', label: 'Vouchers', icon: Ticket },
-  { id: 'invoices', label: 'Invoices', icon: Receipt },
-  { id: 'delivery', label: 'Delivery', icon: Truck },
-  { id: 'credits', label: 'Credits', icon: CircleDollarSign },
-  { id: 'messaging', label: 'Messaging', icon: MessageSquare },
-  { id: 'transfers', label: 'Transfers', icon: ArrowUpDown },
-  { id: 'banking', label: 'Banking', icon: Landmark },
-  { id: 'loyalty', label: 'Loyalty', icon: Award },
-  { id: 'security', label: 'Security', icon: Shield },
-  { id: 'admin', label: 'Admin', icon: Settings },
+// Role-based access: every tab declares which roles may see it.
+// SUPER_ADMIN implicitly has access to ALL tabs (enforced in filterTabsByRole).
+// Roles: SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER, CASHIER, ACCOUNTANT
+const ALL_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'CASHIER', 'ACCOUNTANT'];
+const MGMT_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'];
+const SENIOR_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'];
+const ADMIN_ROLES = ['SUPER_ADMIN', 'STORE_OWNER'];
+
+const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType; roles: string[] }[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: Home, roles: ALL_ROLES },
+  { id: 'pos', label: 'POS', icon: ShoppingCart, roles: ALL_ROLES },
+  { id: 'catalog', label: 'Catalog', icon: Tag, roles: MGMT_ROLES },
+  { id: 'inventory', label: 'Inventory', icon: Package, roles: MGMT_ROLES },
+  { id: 'customers', label: 'Customers', icon: Users, roles: ALL_ROLES },
+  { id: 'transactions', label: 'Transactions', icon: ShoppingBag, roles: ALL_ROLES },
+  { id: 'rentals', label: 'Rentals', icon: KeyRound, roles: SENIOR_ROLES },
+  { id: 'suppliers', label: 'Suppliers', icon: Truck, roles: SENIOR_ROLES },
+  { id: 'financial', label: 'Financial', icon: BarChart3, roles: MGMT_ROLES },
+  { id: 'reports', label: 'Reports', icon: FileText, roles: MGMT_ROLES },
+  { id: 'gift-cards', label: 'Gift Cards', icon: CreditCard, roles: SENIOR_ROLES },
+  { id: 'vouchers', label: 'Vouchers', icon: Ticket, roles: SENIOR_ROLES },
+  { id: 'invoices', label: 'Invoices', icon: Receipt, roles: MGMT_ROLES },
+  { id: 'delivery', label: 'Delivery', icon: Truck, roles: SENIOR_ROLES },
+  { id: 'credits', label: 'Credits', icon: CircleDollarSign, roles: MGMT_ROLES },
+  { id: 'messaging', label: 'Messaging', icon: MessageSquare, roles: ALL_ROLES },
+  { id: 'transfers', label: 'Transfers', icon: ArrowUpDown, roles: SENIOR_ROLES },
+  { id: 'banking', label: 'Banking', icon: Landmark, roles: ['SUPER_ADMIN', 'STORE_OWNER', 'ACCOUNTANT'] },
+  { id: 'loyalty', label: 'Loyalty', icon: Award, roles: SENIOR_ROLES },
+  { id: 'payroll', label: 'Payroll', icon: Wallet, roles: MGMT_ROLES },
+  { id: 'security', label: 'Security', icon: Shield, roles: ADMIN_ROLES },
+  { id: 'admin', label: 'Admin', icon: Settings, roles: ADMIN_ROLES },
 ];
+
+/**
+ * Returns the tabs visible to the given role. SUPER_ADMIN sees everything;
+ * every other role sees only tabs whose `roles` array includes them.
+ */
+function filterTabsByRole(role: string | undefined): typeof TAB_CONFIG {
+  if (!role) return [];
+  if (role === 'SUPER_ADMIN') return TAB_CONFIG;
+  return TAB_CONFIG.filter((t) => t.roles.includes(role));
+}
 
 const DEMO_ACCOUNTS = [
   { email: 'admin@mbumahhardware.co.ke', password: 'password123', role: 'Super Admin', icon: ShieldCheck, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900 hover:bg-red-100 dark:hover:bg-red-950/50' },
@@ -1022,9 +1042,11 @@ function AppSidebar() {
     toast.success('Logged out successfully');
   };
 
-  // Navigation groups
-  const mainNavItems = TAB_CONFIG.filter(t => ['pos', 'catalog', 'inventory', 'customers', 'transactions'].includes(t.id));
-  const managementNavItems = TAB_CONFIG.filter(t => ['rentals', 'suppliers', 'financial', 'reports', 'gift-cards', 'admin'].includes(t.id));
+  // Role-based tab visibility — SUPER_ADMIN sees all; others see only their allowed tabs
+  const visibleTabs = filterTabsByRole(user?.role);
+  // Navigation groups (filtered by role)
+  const mainNavItems = visibleTabs.filter(t => ['pos', 'catalog', 'inventory', 'customers', 'transactions'].includes(t.id));
+  const managementNavItems = visibleTabs.filter(t => ['rentals', 'suppliers', 'financial', 'reports', 'gift-cards', 'payroll', 'admin'].includes(t.id));
 
   const renderNavItem = ({ id, label, icon: Icon }: { id: AppTab; label: string; icon: React.ElementType }) => (
     <button
@@ -4928,6 +4950,7 @@ function MainApp() {
       case 'banking': return <Suspense fallback={<TabLoadingFallback />}><LazyBankingTab /></Suspense>;
       case 'loyalty': return <Suspense fallback={<TabLoadingFallback />}><LazyLoyaltyTab /></Suspense>;
       case 'security': return <Suspense fallback={<TabLoadingFallback />}><LazySecurityTab /></Suspense>;
+      case 'payroll': return <Suspense fallback={<TabLoadingFallback />}><LazyPayrollTab /></Suspense>;
       default: return <POSTab />;
     }
   };
