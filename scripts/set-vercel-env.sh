@@ -48,6 +48,11 @@ DIRECT_URL="postgresql://${NEON_USER}:${NEON_PASS}@${NEON_HOST}/${NEON_DB}?sslmo
 NEXTAUTH_SECRET="${NEXTAUTH_SECRET:-$(openssl rand -base64 32)}"
 JWT_SECRET="${JWT_SECRET:-$(openssl rand -base64 32)}"
 NEXTAUTH_URL="https://${PROJECT_NAME}.vercel.app"
+# EXPOSE_ERRORS=true lets the login route's inner DB try/catch include the
+# full Prisma error (name/message/code/stack) in the JSON 500 response body,
+# so you can diagnose DB issues from the browser Network tab without digging
+# through Vercel function logs. Disable in stable production if desired.
+EXPOSE_ERRORS="true"
 
 # ── Validate token ───────────────────────────────────────────────────────────
 
@@ -148,11 +153,12 @@ create_env_var() {
 echo ""
 echo "=== Setting env vars (Production environment) ==="
 
-create_env_var "DATABASE_URL"   "$DATABASE_URL"     "production"
-create_env_var "DIRECT_URL"     "$DIRECT_URL"       "production"
-create_env_var "NEXTAUTH_SECRET" "$NEXTAUTH_SECRET" "production"
-create_env_var "JWT_SECRET"     "$JWT_SECRET"       "production"
-create_env_var "NEXTAUTH_URL"   "$NEXTAUTH_URL"     "production"
+create_env_var "DATABASE_URL"    "$DATABASE_URL"      "production"
+create_env_var "DIRECT_URL"      "$DIRECT_URL"        "production"
+create_env_var "NEXTAUTH_SECRET" "$NEXTAUTH_SECRET"   "production"
+create_env_var "JWT_SECRET"      "$JWT_SECRET"        "production"
+create_env_var "NEXTAUTH_URL"    "$NEXTAUTH_URL"      "production"
+create_env_var "EXPOSE_ERRORS"   "$EXPOSE_ERRORS"     "production"
 
 # ── Trigger redeploy ─────────────────────────────────────────────────────────
 
@@ -161,7 +167,7 @@ echo "=== Triggering production redeploy ==="
 
 # Get the latest production deployment
 LATEST_DEPLOY=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
-  "$VERCEL_API/v6/deployments?projectId=${PROJECT_ID}&limit=1&production=true${TEAM_PARAM/&/?}" \
+  "$VERCEL_API/v6/deployments?projectId=${PROJECT_ID}&limit=1&production=true${TEAM_PARAM/?/&}" \
   --max-time 15)
 DEPLOY_ID=$(echo "$LATEST_DEPLOY" | jq -r '.deployments[0].uid // empty')
 
@@ -197,6 +203,7 @@ echo " DIRECT_URL       → $NEON_HOST (pooled, pgbouncer=true)"
 echo " NEXTAUTH_SECRET  → ${NEXTAUTH_SECRET:0:8}... (${#NEXTAUTH_SECRET} chars)"
 echo " JWT_SECRET       → ${JWT_SECRET:0:8}... (${#JWT_SECRET} chars)"
 echo " NEXTAUTH_URL     → $NEXTAUTH_URL"
+echo " EXPOSE_ERRORS    → $EXPOSE_ERRORS (full Prisma error in JSON 500 responses)"
 echo "═══════════════════════════════════════════════════════════════"
 echo ""
 echo " VERIFY (wait ~2 min for build, then):"
