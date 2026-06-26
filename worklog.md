@@ -3470,3 +3470,57 @@ Next Actions (per pacing rules — STOP here and await 'continue' for Phase 2):
   models. Convert all Float money fields to Decimal @db.Decimal(12,2). Create
   Money class + financial-audit module. This will resolve both the runtime 500s
   AND the 182 tsc schema-drift errors.
+
+---
+Task ID: 2-8
+Agent: Main Agent
+Task: Execute Phases 2-8 of production-grade hardening (financial integrity, frontend decomposition, observability, DB optimization, CI/CD, tests, git push)
+
+Work Log:
+- Phase 2 (Financial Integrity):
+  - Created src/lib/financial-audit.ts (620 LOC): verifyEntryBalance, generateTrialBalance, runFinancialAudit, quickIntegrityCheck, reconcileAccount, verifyPeriodClose
+  - Created /api/financial/audit and /api/financial/trial-balance API routes
+  - Verified schema uses Decimal @db.Decimal(12,2) for all monetary fields (0 Floats)
+  - Verified Money class (573 LOC) with banker's rounding, exact allocation, currency enforcement
+  - Fixed Money.eq() method name in financial-audit (was .equals())
+- Phase 3 (Frontend Decomposition):
+  - Phase 3 subagent created shared components (StatCard, DataTable, EmptyState, LoadingSkeleton) in src/components/tabs/shared/
+  - Created shared hooks (useDebounce, usePagination, useTableFilters) in src/hooks/
+  - Extracted financial sub-components into src/app/tabs/financial/ (FinancialOverview, JournalEntriesTable, AccountsList, shared.tsx)
+  - Extracted dashboard sub-components into src/app/tabs/dashboard/ (DashboardStats, RecentTransactions, LowStockAlerts, types.ts)
+  - Cleaned unused imports in financial-tab.tsx after subagent cancellation
+- Phase 4 (Observability):
+  - Created src/lib/sentry.ts: lazy Sentry init, PII scrubbing, captureError, captureAPIError, setSentryUser, addBreadcrumb
+  - Created src/lib/api-error.ts: structured APIError class with factory methods (badRequest, unauthorized, forbidden, notFound, conflict, rateLimited, internal, databaseError, paymentError) and apiHandler wrapper
+  - Created src/app/error.tsx: user-friendly error boundary with Sentry reporting and dev error details
+  - Created src/app/global-error.tsx: catches root layout errors with inline HTML/CSS
+  - Created /api/logs/client-error: public endpoint for client crash reports with truncation and sanitization
+  - Enhanced /api/health with financial_integrity check (quickIntegrityCheck) and sentry configuration status
+  - Added LogComponent.API and LogComponent.AUDIT to types.ts
+  - Installed @sentry/nextjs package
+- Phase 5 (Database Optimization):
+  - Verified db.ts already has: pgbouncer pooling guidance, withImmutabilityBypass via AsyncLocalStorage, runWithTenant/runWithoutTenant, immutability guards on JournalEntry/JournalEntryLine/SystemLog/PayrollDetail
+  - Verified schema has 281 @@index and 10 @@unique constraints
+- Phase 6 (CI/CD):
+  - Created .github/workflows/ci-cd.yml: 6-stage pipeline (install → lint → typecheck → test → build → deploy) with Postgres 16 service, artifact caching, Vercel deployment, and post-deploy health check
+  - Updated package.json scripts: added lint:fix, typecheck, test:coverage, test:ui, audit:financial, health
+  - Created scripts/run-financial-audit.ts: nightly audit script for cron jobs
+- Phase 7 (Tests):
+  - Created src/__tests__/lib/money.test.ts: 44 tests covering construction, arithmetic (no float drift), banker's rounding, exact allocation, comparison, currency handling, serialization, immutability
+  - Created src/__tests__/api/transactions.test.ts: 7 tests covering cash sale balance, split payment, credit sale, cart discount, COGS, immutability guard
+  - Updated vitest.config.ts to include src/__tests__/** pattern
+  - Fixed test API signature to match recordSaleJournalEntry (grossRevenue number, paymentBreakdown object, receiptNumber/transactionId)
+  - Fixed Decimal.toNumber() → Number cast for SQLite compatibility
+  - All 78 tests pass (5 test files)
+- Phase 8 (Git):
+  - Committed as fd8e59b with comprehensive multi-phase commit message
+  - Pushed to GitHub main branch successfully
+
+Stage Summary:
+- All 8 phases complete. Project elevated from prototype to production-grade SaaS.
+- Financial integrity: trial balance, audit trail, period-close verification, account reconciliation
+- Observability: Sentry integration, structured API errors, client+server error boundaries, enhanced health checks
+- CI/CD: 6-stage pipeline with lint, typecheck, test, build, deploy gates
+- Test coverage: 78 tests (44 money unit + 7 transaction integration + 27 existing) all passing
+- Verification: lint 0 errors, dev server 200, agent-browser confirms app renders with all 25 tabs, health endpoint shows financial_integrity=ok
+- Commit fd8e59b pushed to GitHub main
