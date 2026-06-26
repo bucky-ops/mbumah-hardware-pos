@@ -99,6 +99,16 @@ model Store {
   payrollDetails      PayrollDetail[]
   leaveRequests       LeaveRequest[]
   attendanceRecords   AttendanceRecord[]
+  // ── v2.0.0 module relations ────────────────────────────────────────────
+  kraBusinessProfiles KraBusinessProfile[]
+  invoicesForKRA     InvoiceForKRA[]
+  kraSubmissions      KraSubmission[]
+  debtReminders       DebtReminder[]
+  conversations       Conversation[]
+  productVariants     ProductVariant[]
+  binLocations       BinLocation[]
+  serialNumbers      SerialNumber[]
+  batches            Batch[]
 
   @@index([organizationId])
   @@map("stores")
@@ -137,6 +147,10 @@ model User {
   // e.g. casual labourers; a user may exist without an employee profile, e.g.
   // an org-level SUPER_ADMIN who isn't on any store payroll).
   employee           Employee?
+
+  // ── v2.0.0 messaging relations ─────────────────────────────────────────
+  sentMessages       ConversationMessage[]
+  notificationPreferences NotificationPreference[]
 
   @@index([organizationId])
   @@index([storeId])
@@ -214,6 +228,13 @@ model Product {
   isBundle          Boolean  @default(false)
   isActive          Boolean  @default(true)
   imageUrl          String?
+  // ── v2.0.0 inventory enhancements ──────────────────────────────────────
+  // minimumStockLevel is the absolute floor below which the product is
+  // considered out-of-stock for alerting (distinct from reorderLevel, which
+  // is the threshold that triggers a reorder). maximumStockLevel caps the
+  // shelf capacity for replenishment planning (null = unlimited).
+  minimumStockLevel Int      @default(0)
+  maximumStockLevel Int?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -228,6 +249,11 @@ model Product {
   purchaseOrderItems PurchaseOrderItem[]
   invoiceItems       InvoiceItem[]
   deliveryNoteItems  DeliveryNoteItem[]
+  // ── v2.0.0 inventory relations ─────────────────────────────────────────
+  variants           ProductVariant[]
+  binLocations       BinLocation[]
+  serialNumbers      SerialNumber[]
+  batches            Batch[]
 
   @@index([storeId])
   @@index([sku])
@@ -316,6 +342,9 @@ model Customer {
   giftCards           GiftCard[]         @relation("IssuedToCustomer")
 
   customerCredits     CustomerCredit[]
+  // ── v2.0.0 debt-management + messaging relations ───────────────────────
+  debtReminders       DebtReminder[]
+  notificationPreferences NotificationPreference[]
 
   @@index([storeId])
   @@index([phone])
@@ -382,6 +411,8 @@ model SalesTransaction {
   giftCardRedemptions  GiftCardRedemption[]
   voucherRedemptions   VoucherRedemption[]
   deliveryNote         DeliveryNote?
+  // ── v2.0.0 eTIMS relation ──────────────────────────────────────────────
+  kraInvoice           InvoiceForKRA?
 
   @@index([storeId])
   @@index([cashierId])
@@ -486,6 +517,8 @@ model DebtLedger {
   customer        Customer          @relation(fields: [customerId], references: [id])
   transaction     SalesTransaction? @relation(fields: [transactionId], references: [id])
   debtPayments    DebtPayment[]
+  // ── v2.0.0 debt-management relation ────────────────────────────────────
+  reminders       DebtReminder[]
 
   @@index([storeId])
   @@index([customerId])
@@ -1545,4 +1578,357 @@ model AttendanceRecord {
   @@index([storeId, date])
   @@index([employeeId, date])
   @@map("attendance_records")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// v2.0.0 — eTIMS / KRA INTEGRATION CONTEXT
+// ════════════════════════════════════════════════════════════════════════════
+//
+// These models support Kenya Revenue Authority's electronic Tax Invoice
+// Management System (eTIMS). Every sales invoice must be submitted to KRA and
+// a CU/QR code returned. The flow:
+//   1. Sale completes → InvoiceForKRA row created (PENDING)
+//   2. KraApiService.submitInvoice() calls the KRA endpoint
+//   3. KraSubmission row records the API call (request/response/latency)
+//   4. InvoiceForKRA.kraSubmissionId + submissionStatus updated
+//
+// Enum-like fields use String (not Prisma enum) to stay consistent with the
+// rest of the schema and compatible with the SQLite→PostgreSQL provider
+// switch. Values are documented inline.
+
+/// KRA business profile — org/store-level credentials & registration details.
+/// One per store (a store may have its own KRA PIN). Credentials are stored
+/// AES-encrypted at rest (see src/lib/crypto-helpers.ts).
+model KraBusinessProfile {
+  id                    String   @id @default(cuid())
+  storeId               String
+  businessPin           String   @unique // KRA PIN, e.g. "P051234567X"
+  businessName          String
+  registrationDate      DateTime
+  kraUsername           String   // eTIMS portal username
+  kraPasswordEncrypted  String   // AES-encrypted (NEVER plaintext)
+  // Sandbox vs production — KRA provides a test environment.
+  environment           String   @default("sandbox") // sandbox, production
+  isActive              Boolean  @default(true)
+  // Cached OAuth token (eTIMS uses bearer tokens with expiry).
+  authToken             String?
+  authTokenExpiresAt    DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  store                 Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([businessPin])
+  @@index([isActive])
+  @@map("kra_business_profiles")
+}
+
+/// A sales invoice mapped to KRA's eTIMS format. One per SalesTransaction.
+/// Links back to the originating transaction; tracks submission lifecycle.
+model InvoiceForKRA {
+  id                  String   @id @default(cuid())
+  storeId             String
+  transactionId       String   @unique // 1:1 with SalesTransaction
+  // KRA invoice number format: <PIN>-<YYYYMMDD>-<seq>. Generated per KRA spec.
+  kraInvoiceNumber    String   @unique
+  // JSON blob: item-level tax breakdown (VAT 16%, exempt, zero-rated), HS
+  // codes, discounts, totals. Flexible schema for evolving KRA requirements.
+  kraTaxBreakdown     String   // JSON string (SQLite-compatible; Json on PG)
+  // PENDING → SUBMITTED → ACCEPTED | REJECTED | FAILED
+  submissionStatus    String   @default("PENDING")
+  // KRA returns a CU (Communication Unit) reference after acceptance.
+  kraSubmissionId     String?
+  cuPin               String?  // CU PIN returned by KRA (for QR code)
+  qrCode              String?  // Base64 QR code data
+  submittedAt         DateTime?
+  acceptedAt          DateTime?
+  // Retry tracking for transient failures.
+  retryCount          Int      @default(0)
+  lastError           String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  store               Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  transaction         SalesTransaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  submissions         KraSubmission[]
+
+  @@index([storeId])
+  @@index([submissionStatus])
+  @@index([kraInvoiceNumber])
+  @@index([submittedAt])
+  @@map("invoices_for_kra")
+}
+
+/// Audit log of every KRA API call (submit, status query, business info).
+/// One InvoiceForKRA may have many KraSubmission rows (retries, status polls).
+model KraSubmission {
+  id                  String   @id @default(cuid())
+  storeId             String
+  invoiceForKraId     String
+  // KRA reference number returned after submission.
+  kraReferenceNumber  String?
+  // PENDING, SUBMITTED, ACCEPTED, REJECTED, FAILED
+  status              String   @default("PENDING")
+  // Full API response JSON for debugging / dispute resolution.
+  responseJson        String?  // JSON string
+  httpStatus          Int?
+  latencyMs           Int?
+  errorMessage        String?
+  submittedAt         DateTime @default(now())
+  processedAt         DateTime?
+
+  store               Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  invoiceForKra       InvoiceForKRA   @relation(fields: [invoiceForKraId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([invoiceForKraId])
+  @@index([status])
+  @@index([submittedAt])
+  @@map("kra_submissions")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// v2.0.0 — DEBT MANAGEMENT CONTEXT (reminders)
+// ════════════════════════════════════════════════════════════════════════════
+//
+// DebtLedger (existing) already has agingBucket + lastReminderAt fields.
+// This model tracks each individual reminder sent, for audit + escalation
+// rules (frequency increases with aging bucket).
+
+/// A single debt-reminder event. One DebtLedger may have many reminders.
+model DebtReminder {
+  id              String   @id @default(cuid())
+  storeId         String
+  customerId      String
+  debtLedgerId    String
+  // EMAIL, SMS, WHATSAPP, IN_APP
+  reminderType    String
+  // PENDING, SENT, FAILED, DELIVERED
+  status          String   @default("PENDING")
+  // Template / message content used (for audit).
+  message         String
+  // External provider message ID (Twilio/Resend) for delivery tracking.
+  providerMessageId String?
+  errorMessage    String?
+  sentAt          DateTime @default(now())
+  deliveredAt     DateTime?
+
+  store           Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer        Customer    @relation(fields: [customerId], references: [id])
+  debtLedger      DebtLedger  @relation(fields: [debtLedgerId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([customerId])
+  @@index([debtLedgerId])
+  @@index([reminderType])
+  @@index([status])
+  @@index([sentAt])
+  @@map("debt_reminders")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// v2.0.0 — MESSAGING CONTEXT (internal staff chat + notifications)
+// ════════════════════════════════════════════════════════════════════════════
+//
+// NOTE: The existing `Message` model (above) handles OUTBOUND customer
+// notifications (WhatsApp/SMS/Email blasts). This new Conversation +
+// ConversationMessage pair handles INTERNAL staff chat (real-time, threaded).
+// They are deliberately separate to avoid conflating two distinct domains.
+
+/// A conversation thread — internal staff chat or customer-support chat.
+model Conversation {
+  id              String   @id @default(cuid())
+  storeId         String
+  // INTERNAL (staff-to-staff), CUSTOMER_SUPPORT (staff-to-customer)
+  type            String   @default("INTERNAL")
+  title           String?  // Optional human-readable title
+  // JSON array of participant user IDs (and customer ID for support chats).
+  // Stored as String for SQLite compat; parsed in the application layer.
+  participantIds  String   @default("[]")
+  lastMessageAt   DateTime?
+  lastMessagePreview String? // First ~100 chars of latest message (for list UI)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  messages        ConversationMessage[]
+
+  @@index([storeId])
+  @@index([type])
+  @@index([lastMessageAt])
+  @@map("conversations")
+}
+
+/// A single message in a conversation. Separate from the outbound `Message`
+/// model — this is for threaded internal/customer-support chat.
+model ConversationMessage {
+  id              String   @id @default(cuid())
+  conversationId  String
+  senderId        String   // User ID of the sender
+  content         String
+  // TEXT, IMAGE, FILE, SYSTEM (join/leave notifications)
+  messageType     String   @default("TEXT")
+  // JSON: { userId: "2026-06-26T12:00:00Z" } per-recipient read timestamps.
+  readStatus      String   @default("{}")
+  // Optional attachment URL (for IMAGE/FILE types).
+  attachmentUrl   String?
+  sentAt          DateTime @default(now())
+
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender          User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([sentAt])
+  @@map("conversation_messages")
+}
+
+/// Per-user / per-customer notification channel preferences. Drives which
+/// channels (EMAIL, SMS, IN_APP) receive which alert types.
+model NotificationPreference {
+  id          String   @id @default(cuid())
+  userId      String?  // For staff users
+  customerId  String?  // For customers
+  // EMAIL, SMS, IN_APP, WHATSAPP
+  channel     String
+  // Alert categories this preference applies to (e.g. LOW_STOCK, OVERDUE_RENTAL,
+  // DEBT_REMINDER, NEW_SALE). Use "ALL" for a blanket preference.
+  alertType   String   @default("ALL")
+  isEnabled   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([customerId])
+  @@index([channel])
+  @@index([alertType])
+  @@map("notification_preferences")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// v2.0.0 — INVENTORY CONTEXT ENHANCEMENTS
+// ════════════════════════════════════════════════════════════════════════════
+//
+// Optional physical-tracking models for warehouses that need finer-grained
+// inventory control. All are optional (a product need not have variants,
+// serials, batches, or bin locations).
+
+/// A product variant — e.g. "Cement 50kg" vs "Cement 25kg" under one parent.
+/// Enables size/colour/style differentiation without duplicating the parent.
+model ProductVariant {
+  id              String   @id @default(cuid())
+  productId       String
+  storeId         String
+  // Variant descriptor, e.g. "50kg", "Red", "Type-A"
+  name            String
+  sku             String   @unique
+  barcode         String?
+  // Variant-specific pricing/stock (overrides parent if set).
+  pricePerUnit    Float?
+  costPrice       Float?
+  quantityInStock Float    @default(0)
+  reorderLevel    Float    @default(10)
+  isActive        Boolean  @default(true)
+  // Variant attributes as JSON (e.g. {"size":"50kg","color":"grey"}).
+  attributes      String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([storeId])
+  @@index([sku])
+  @@index([isActive])
+  @@map("product_variants")
+}
+
+/// Bin location — physical shelf/aisle/row where stock is stored. Enables
+/// pick-path optimization and multi-location tracking within one store.
+model BinLocation {
+  id              String   @id @default(cuid())
+  productId       String
+  storeId         String
+  // E.g. "Aisle A, Shelf 3, Bin 12"
+  locationCode    String
+  aisle           String?
+  shelf           String?
+  bin             String?
+  // Quantity stored at this specific bin (sum across bins = Product.quantityInStock).
+  quantity        Float    @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([storeId])
+  @@index([locationCode])
+  @@index([isActive])
+  @@map("bin_locations")
+}
+
+/// Serial number — tracks individual units of a product (for warranty,
+/// returns, high-value items). One product may have many serials.
+model SerialNumber {
+  id              String   @id @default(cuid())
+  productId       String
+  storeId         String
+  serial          String   @unique
+  // IN_STOCK, SOLD, RESERVED, RETURNED, DEFECTIVE
+  status          String   @default("IN_STOCK")
+  // Link to the sale that sold this unit (for warranty tracking).
+  soldInTransactionId String?
+  warrantyExpiry  DateTime?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([storeId])
+  @@index([serial])
+  @@index([status])
+  @@map("serial_numbers")
+}
+
+/// Batch — tracks groups of items received together (for expiry tracking,
+/// recall management, supplier traceability). Common for construction
+/// chemicals, paints, adhesives.
+model Batch {
+  id              String   @id @default(cuid())
+  productId       String
+  storeId         String
+  batchNumber     String
+  // Quantity remaining in this batch (decremented on sale).
+  quantity        Float    @default(0)
+  // Supplier who provided this batch (for recall traceability).
+  supplierId      String?
+  receivedDate    DateTime @default(now())
+  manufacturingDate DateTime?
+  expiryDate      DateTime?
+  // ACTIVE, EXPIRED, RECALLED, DEPLETED
+  status          String   @default("ACTIVE")
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([storeId])
+  @@index([batchNumber])
+  @@index([expiryDate])
+  @@index([status])
+  @@map("batches")
 }
