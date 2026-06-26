@@ -4,6 +4,63 @@ This document walks you through verifying that your Vercel deployment is correct
 
 ---
 
+## ⚡ Current State (as of 2026-06-26)
+
+The production health endpoints reveal the **exact** issues blocking login:
+
+### What's ✅ Working
+- **Code fix is LIVE** — commit `5f0b314` (schema.prisma permanently `postgresql` + NEXT_PHASE detection + new health endpoints) was auto-deployed via the GitHub-Vercel integration.
+- **`/api/health/db`** and **`/api/health/env`** endpoints are live (middleware now allows `/api/health/*` prefix).
+- **`NEXTAUTH_SECRET`** ✅ set (42 chars, strong)
+- **`JWT_SECRET`** ✅ set (32 chars, strong)
+- **`NEXTAUTH_URL`** ✅ set (but see issue #3 below)
+
+### What's ❌ Broken (3 issues to fix)
+
+| # | Env Var | Current (WRONG) Value on Vercel | Correct Value |
+|---|---|---|---|
+| 1 | `DATABASE_URL` | `…@ep-winter-waterfall-a25wj37w-pooler…/neondb?sslmode=require` (OLD, unreachable endpoint + missing `pgbouncer=true`) | `postgresql://neondb_owner:npg_aRfWJIn8Neq9@ep-calm-butterfly-aivj6kzm-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&pgbouncer=true&connect_timeout=15` |
+| 2 | `DIRECT_URL` | `…@ep-winter-waterfall-a25wj37w…/neondb?sslmode=require` (OLD, unreachable, AND non-pooler!) | `postgresql://neondb_owner:npg_aRfWJIn8Neq9@ep-calm-butterfly-aivj6kzm-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&pgbouncer=true&connect_timeout=30` |
+| 3 | `NEXTAUTH_URL` | `Gt5mW8xK2pR7vN4bQ9fL6jY1cZ3aH0dS` (a random string — NOT a URL!) | `https://mbumah-hardware-pos-one.vercel.app` |
+
+### How to Fix (2 options)
+
+#### Option A: Automated script (recommended)
+```bash
+# Requires a Vercel token from the account that OWNS the project
+# (the vck_ token from muchiricollins98@gmail.com does NOT have access —
+#  the project is under a different account, likely the bucky-ops account
+#  that owns the GitHub repo bucky-ops/mbumah-hardware-pos).
+#
+# Create a properly-scoped token at:
+#   https://vercel.com/account/tokens  (needs project + env write scopes)
+# from the account that owns the project.
+
+VERCEL_TOKEN=<properly-scoped-token> bash scripts/set-vercel-env.sh
+```
+The script will: find the project → delete old env vars → set all 5 correct values → trigger a production redeploy.
+
+#### Option B: Manual (Vercel Dashboard)
+1. Go to **Vercel Dashboard** → `mbumah-hardware-pos-one` → **Settings** → **Environment Variables**
+2. Update `DATABASE_URL`, `DIRECT_URL`, and `NEXTAUTH_URL` to the Correct Values above
+3. Keep `NEXTAUTH_SECRET` and `JWT_SECRET` as-is (they're already strong)
+4. Go to **Deployments** → latest → ⋯ → **Redeploy** (uncheck "Use existing Build Cache")
+
+### Verify After Fix
+```bash
+# 1. Env vars correct (DATABASE_URL should show ep-calm-butterfly + pgbouncer=true)
+curl -s https://mbumah-hardware-pos-one.vercel.app/api/health/env | jq
+
+# 2. DB reachable + seed data present (12 users, 51+ products, 5 stores)
+curl -s https://mbumah-hardware-pos-one.vercel.app/api/health/db | jq
+
+# 3. Login works
+#    Visit https://mbumah-hardware-pos-one.vercel.app
+#    Login: admin@mbumahhardware.co.ke / password123
+```
+
+---
+
 ## Step 1: Check Vercel Environment Variables
 
 Go to **Vercel Dashboard** → Your Project (`mbumah-hardware-pos-one`) → **Settings** → **Environment Variables**.
@@ -238,26 +295,89 @@ curl -s https://mbumah-hardware-pos-one.vercel.app/api/health/db | python3 -m js
 |---|---|---|
 | "Loading..." hang on page load | DB not seeded (0 users → login 500) | Run `npx prisma db seed` with the Neon `DATABASE_URL` |
 | Login returns 500 | `DATABASE_URL` not set in Vercel env | Add `DATABASE_URL` to Vercel → Settings → Environment Variables |
+| "Can't reach database server at `ep-winter-waterfall…`" | `DATABASE_URL` on Vercel still points to the OLD Neon endpoint | Update `DATABASE_URL` to `ep-calm-butterfly-aivj6kzm-pooler` (see "Current State" table at top) |
+| `DATABASE_URL` missing `pgbouncer=true` | Vercel env var has bare URL without query params | Append `?sslmode=require&pgbouncer=true&connect_timeout=15` |
+| `NEXTAUTH_URL` set to a random string (not a URL) | Env var misconfigured | Set to `https://mbumah-hardware-pos-one.vercel.app` |
 | Build crashes on `prisma generate` | `SKIP_ENV_VALIDATION` not propagating | Verify `vercel-build` script in `package.json` |
 | Build crashes on `next build` | Missing `NEXT_PHASE` detection | Verify `src/lib/env.ts` has the two-layer build-time detection |
+| Prisma error "URL must start with protocol `file:`" | schema.prisma has `provider = "sqlite"` but DATABASE_URL is postgresql | Fixed in commit `5f0b314` — schema.prisma now permanently `postgresql` |
 | Intermittent 500s under load | `DATABASE_URL` is non-pooled (no `-pooler`) | Use the pooled Neon URL with `?pgbouncer=true` |
 | "no such table" errors | Schema not pushed to Neon | Run `npx prisma db push` with the Neon `DATABASE_URL` |
 | Seed fails at RBAC permissions | Using individual upserts (slow) | Already fixed — seed uses `createMany` with `skipDuplicates` |
 | Login 401 (not 500) | DB seeded but wrong password | Verify seed credentials: `admin@mbumahhardware.co.ke` / `password123` |
+| `/api/health/db` returns 401 "Authentication required" | Old code still live (middleware only allowed exact `/api/health`) | Fixed in commit `5f0b314` — middleware now allows `/api/health/*` prefix |
+
+---
+
+## Appendix: Neon REST API (PostgREST)
+
+Neon provides a REST API (powered by PostgREST) for direct HTTP access to the database. This is an **alternative** to the Prisma-based app endpoints — useful for quick ad-hoc queries without the app layer.
+
+**Base URL:**
+```
+https://ep-calm-butterfly-aivj6kzm.apirest.c-4.us-east-1.aws.neon.tech/neondb/rest/v1
+```
+
+**Authentication:** Requires a JWT bearer token. Generate one in the **Neon Console** → your project → **API** → **Create API key**. The JWT is scoped to the project.
+
+**Example queries:**
+```bash
+# Get all SUPER_ADMIN users (select specific columns)
+curl -s \
+  -H "Authorization: Bearer <NEON_JWT>" \
+  "https://ep-calm-butterfly-aivj6kzm.apirest.c-4.us-east-1.aws.neon.tech/neondb/rest/v1/User?role=eq.SUPER_ADMIN&select=email,name,role"
+
+# Count products
+curl -s \
+  -H "Authorization: Bearer <NEON_JWT>" \
+  -H "Prefer: count=exact" \
+  -H "Range: 0-0" \
+  "https://ep-calm-butterfly-aivj6kzm.apirest.c-4.us-east-1.aws.neon.tech/neondb/rest/v1/Product?select=id"
+
+# Verify seed data counts
+curl -s \
+  -H "Authorization: Bearer <NEON_JWT>" \
+  "https://ep-calm-butterfly-aivj6kzm.apirest.c-4.us-east-1.aws.neon.tech/neondb/rest/v1/User?select=id" | jq length
+# Expected: 12
+```
+
+> **Note:** Table names in the REST API are case-sensitive and match the Prisma model names (e.g., `User`, `Product`, `ProductCategory`). Column filters use PostgREST syntax (`column=eq.value`).
+
+---
+
+## Appendix: Automated Env Var Setup Script
+
+The script `scripts/set-vercel-env.sh` automates the entire Step 1 + Step 4 process:
+
+```bash
+VERCEL_TOKEN=<token-from-project-owner-account> bash scripts/set-vercel-env.sh
+```
+
+**What it does:**
+1. Verifies the token (calls `/v2/user`)
+2. Finds the project ID for `mbumah-hardware-pos-one`
+3. Deletes any existing env vars with the same keys (idempotent)
+4. Creates fresh env vars: `DATABASE_URL`, `DIRECT_URL`, `NEXTAUTH_SECRET`, `JWT_SECRET`, `NEXTAUTH_URL` (all targeting Production)
+5. Triggers a production redeploy
+6. Prints verification URLs
+
+**Token requirements:** The token must belong to the Vercel account that OWNS the project and have `project:write` + `env:write` scopes. Create one at https://vercel.com/account/tokens.
 
 ---
 
 ## Verification Checklist Summary
 
-- [ ] **Step 1:** `DATABASE_URL` in Vercel contains `-pooler` and `pgbouncer=true`
-- [ ] **Step 1:** `NEXTAUTH_SECRET` and `JWT_SECRET` set in Vercel (≥ 32 chars)
+- [ ] **Step 1:** `DATABASE_URL` in Vercel contains `ep-calm-butterfly-aivj6kzm-pooler` and `pgbouncer=true`
+- [ ] **Step 1:** `DIRECT_URL` in Vercel contains `ep-calm-butterfly-aivj6kzm-pooler` and `pgbouncer=true`
+- [ ] **Step 1:** `NEXTAUTH_URL` is `https://mbumah-hardware-pos-one.vercel.app` (NOT a random string)
+- [ ] **Step 1:** `NEXTAUTH_SECRET` and `JWT_SECRET` set in Vercel (≥ 32 chars) — ✅ already done
 - [ ] **Step 2:** Neon production branch identified (`ep-calm-butterfly-aivj6kzm`)
 - [ ] **Step 3:** Schema pushed (43 tables) — ✅ already done
-- [ ] **Step 3:** Database seeded (12 users, 51 products, 15 customers) — ✅ already done
+- [ ] **Step 3:** Database seeded (12 users, 51+ products, 15 customers) — ✅ already done
 - [ ] **Step 4:** Vercel redeployed successfully (build status = Ready)
 - [ ] **Step 5:** App loads at `https://mbumah-hardware-pos-one.vercel.app` (no "Loading..." hang)
 - [ ] **Step 5:** Login succeeds with `admin@mbumahhardware.co.ke` / `password123`
-- [ ] **Step 6:** Neon SQL Editor confirms seed data counts
-- [ ] **Step 6:** `/api/health/env` returns `status: "ok"` with no missing vars
+- [ ] **Step 6:** Neon SQL Editor / REST API confirms seed data counts
+- [ ] **Step 6:** `/api/health/env` returns `status: "ok"` with `ep-calm-butterfly` in DATABASE_URL preview
 - [ ] **Step 6:** `/api/health/db` returns `status: "ok"` with non-zero counts
 - [ ] **Step 7:** `/_vercel/insights/view` request visible in DevTools Network tab
