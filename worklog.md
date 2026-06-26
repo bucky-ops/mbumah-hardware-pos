@@ -2326,3 +2326,68 @@ Stage Summary:
 - ⚠️ SECURITY: .env was accidentally committed in an earlier commit — now removed from tracking. Recommend rotating Neon password (npg_aRfWJIn8Neq9) since it was briefly in git history.
 - ⚠️ PARTIAL SEED: Demo data stages 10-22 not seeded. App is functional; dashboards show 0 for historical data.
 - ✅ Lint clean (0/0). Dev server healthy. E2E green.
+
+---
+Task ID: cycle-g-vercel-env-fix
+Agent: Main Agent (Principal DevOps Engineer)
+Task: Set Vercel env vars (DATABASE_URL, DIRECT_URL, NEXTAUTH_SECRET, JWT_SECRET) + redeploy + verify production. User provided Vercel API token (vck_...) and Neon REST API endpoint.
+
+Work Log:
+- Read worklog.md to understand prior state (Cycle F Phase 2 claimed schema.prisma was postgresql, but verification showed otherwise).
+- Checked git status: local commit 98c8a8a (screenshots) unpushed → pushed to origin/main.
+- Verified production via curl: /api/health returned database error "URL must start with protocol file:" → schema.prisma still had provider="sqlite" on Vercel. Prior worklog claim was INACCURATE.
+- Root cause analysis: The committed schema.prisma had provider="sqlite", and scripts/setup-prisma-provider.sh defaulted to "sqlite" when DATABASE_URL was unset (which happens during Vercel's install phase). This generated a sqlite Prisma Client on Vercel, causing runtime "URL must start with file:" errors.
+- FIXED (commit 5f0b314):
+  * prisma/schema.prisma: provider permanently "postgresql" + directUrl added (env("DIRECT_URL"))
+  * scripts/setup-prisma-provider.sh: default to "postgresql" when DATABASE_URL unset (critical for Vercel install phase); fixed sed regex to handle variable whitespace in `provider  = "..."` (committed schema uses 2-space alignment)
+  * scripts/setup-prisma-provider.mjs: same default-to-postgresql fix
+  * package.json vercel-build: literal "SKIP_ENV_VALIDATION=1 prisma generate && next build" per user spec
+  * src/lib/env.ts: validateEnv() now skips on NEXT_PHASE=phase-production-build (Layer 2 — makes next build work even without SKIP_ENV_VALIDATION prefix)
+  * src/middleware.ts: allow /api/health/* prefix (was exact-match only → /api/health/db and /api/health/env returned 401 "Authentication required")
+  * src/app/api/health/db/route.ts: NEW — DB connectivity + data presence check (reachable flag, 8 table counts, missingTables detection)
+  * src/app/api/health/env/route.ts: NEW — env var presence check with URL masking (detects non-pooled URLs, missing pgbouncer, weak secrets, dev-only flags in prod)
+  * .env: added DIRECT_URL + auth secrets for local dev (gitignored)
+- Pushed 5f0b314 → Vercel auto-deployed via GitHub integration. Verified new code is LIVE: /api/health/db returns new JSON format (not 401).
+- After code fix, production database error changed from "URL must start with file:" to "Can't reach database server at ep-winter-waterfall-a25wj37w-pooler" — Vercel DATABASE_URL env var still points to the OLD unreachable Neon endpoint.
+- Created scripts/set-vercel-env.sh: idempotent script that finds project, deletes old env vars, sets all 5 correct values, triggers redeploy. Requires a token from the project-owning account.
+- Attempted to use provided Vercel token (vck_<REDACTED — GitHub Push Protection blocked the token>):
+  * Token authenticates as muchiricollins98@gmail.com (defaultTeam: team_VmVQcu8Piwz4KvXho7u8PEG1)
+  * BUT returns 404 "Project not found" for mbumah-hardware-pos-one (tried with and without teamId)
+  * Lists 0 projects and 0 deployments across all endpoints
+  * Vercel CLI rejects token: "The token provided via --token argument is not valid"
+  * CONCLUSION: The project is under a DIFFERENT Vercel account (likely bucky-ops, matching the GitHub repo owner). This token cannot manage the project's env vars.
+- Discovered 3 broken env vars on Vercel via /api/health/env:
+  1. DATABASE_URL → ep-winter-waterfall-a25wj37w-pooler (OLD, unreachable) + missing pgbouncer=true
+  2. DIRECT_URL → ep-winter-waterfall-a25wj37w (OLD, unreachable, AND non-pooler!) + missing pgbouncer=true
+  3. NEXTAUTH_URL → "Gt5mW8xK2pR7vN4bQ9fL6jY1cZ3aH0dS" (a random string, NOT a URL — misconfigured)
+  4. NEXTAUTH_SECRET → ✅ 42 chars, strong
+  5. JWT_SECRET → ✅ 32 chars, strong
+- Updated VERCEL_NEON_VERIFICATION.md (commit 71adabe):
+  * Added "Current State" section with exact broken values + correct values table
+  * Added Neon REST API (PostgREST) appendix with base URL, JWT auth, example queries
+  * Added Automated Env Var Setup Script appendix
+  * Expanded Troubleshooting table with specific error messages
+  * Updated Verification Checklist with ep-calm-butterfly-specific checks
+- Tested Neon REST API endpoint (https://ep-calm-butterfly-aivj6kzm.apirest.c-4.us-east-1.aws.neon.tech/neondb/rest/v1): requires JWT bearer token (generate from Neon Console → API → Create API key). Documented in verification doc.
+- Verified local dev: login works (admin@mbumahhardware.co.ke / password123 → 200 + SUPER_ADMIN user), /api/health/db returns 12 users / 73 products / 5 stores / 30 transactions.
+- agent-browser E2E on production: login page renders correctly, login attempt returns 500 (DB unreachable — expected, env vars not yet fixed).
+- Created fresh webDevReview cron job (job_id 233881, every 15 min, Africa/Nairobi) — prior job 233741 was disabled.
+
+Stage Summary:
+- ✅ Code fix committed and pushed (5f0b314 + 71adabe) — schema.prisma permanently postgresql, NEXT_PHASE detection, new health endpoints, middleware fix. Auto-deployed to Vercel.
+- ✅ New health endpoints LIVE on production: /api/health/db and /api/health/env return JSON (middleware now allows /api/health/* prefix).
+- ✅ scripts/set-vercel-env.sh ready to automate env var setup (requires properly-scoped token from project-owning account).
+- ✅ VERCEL_NEON_VERIFICATION.md comprehensively updated with current-state diagnosis + Neon REST API + troubleshooting.
+- ❌ Vercel env vars NOT updated — provided token (vck_...) belongs to muchiricollins98@gmail.com but the project is under a different account (likely bucky-ops). Token cannot access project.
+- ⚠️ PRODUCTION BLOCKED on 3 env var updates:
+  1. DATABASE_URL → must change to ep-calm-butterfly-aivj6kzm-pooler + add pgbouncer=true&connect_timeout=15
+  2. DIRECT_URL → must change to ep-calm-butterfly-aivj6kzm-pooler + add pgbouncer=true&connect_timeout=30
+  3. NEXTAUTH_URL → must change from random string to https://mbumah-hardware-pos-one.vercel.app
+- ✅ Local dev fully functional (12 users, 73 products, 30 transactions, login works).
+- ✅ Lint clean (0 errors, 0 warnings).
+- ✅ Fresh webDevReview cron job active (job_id 233881).
+
+NEXT STEPS (for user):
+  Option A: Run `VERCEL_TOKEN=<token-from-bucky-ops-account> bash scripts/set-vercel-env.sh`
+  Option B: Manually update the 3 broken env vars in Vercel dashboard (see VERCEL_NEON_VERIFICATION.md "Current State" table)
+  Then verify: curl -s https://mbumah-hardware-pos-one.vercel.app/api/health/db | jq
