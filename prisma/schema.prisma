@@ -25,7 +25,7 @@ datasource db {
   // Committed as "postgresql" for Vercel. Auto-switched to "sqlite" by
   // scripts/setup-prisma-provider.sh during postinstall when DATABASE_URL
   // starts with "file:" (local dev). Do not edit manually.
-  provider  = "postgresql"
+  provider  = "sqlite"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
