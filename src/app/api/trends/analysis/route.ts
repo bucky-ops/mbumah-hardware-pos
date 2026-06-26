@@ -288,6 +288,74 @@ async function trendsAnalysisHandler(
   const totalProjectedNext7dQty =
     Math.round((totalRecentQty / days) * 7 * 100) / 100;
 
+  // ---- Store-wide 7-day forward forecast (revenue) ----
+  // Build a daily revenue series over the recent window, fit a simple least-
+  // squares linear trend, and project 7 days forward with confidence bands
+  // derived from the residual standard deviation. This lights up the
+  // dashboard "Sales Trend (7d)" forecast widget AND the reports forecast chart.
+  const dailyRevenue = new Map<string, number>(); // yyyy-mm-dd -> revenue
+  for (const sale of sales) {
+    if (sale.createdAt < recentStart) continue;
+    const dayKey = sale.createdAt.toISOString().slice(0, 10);
+    const dayRevenue = sale.items.reduce((s, it) => s + it.lineTotal, 0);
+    dailyRevenue.set(dayKey, (dailyRevenue.get(dayKey) || 0) + dayRevenue);
+  }
+
+  // Build an ordered series of [dayIndex, revenue] for the recent window.
+  // dayIndex = 0 for the oldest day in the window, increments by 1 per day.
+  const seriesPoints: Array<{ x: number; y: number }> = [];
+  const dayMs = 24 * 60 * 60 * 1000;
+  const windowStartDay = new Date(recentStart);
+  windowStartDay.setHours(0, 0, 0, 0);
+  const todayFloor = new Date(now);
+  todayFloor.setHours(0, 0, 0, 0);
+  for (let d = new Date(windowStartDay); d <= todayFloor; d = new Date(d.getTime() + dayMs)) {
+    const key = d.toISOString().slice(0, 10);
+    seriesPoints.push({
+      x: Math.round((d.getTime() - windowStartDay.getTime()) / dayMs),
+      y: dailyRevenue.get(key) || 0,
+    });
+  }
+
+  // Least-squares linear fit: y = a + b*x
+  let forecast: Array<{ label: string; predicted: number; lower: number; upper: number }> = [];
+  let forecastAvgDaily = 0;
+  if (seriesPoints.length >= 2) {
+    const n = seriesPoints.length;
+    const sumX = seriesPoints.reduce((s, p) => s + p.x, 0);
+    const sumY = seriesPoints.reduce((s, p) => s + p.y, 0);
+    const sumXY = seriesPoints.reduce((s, p) => s + p.x * p.y, 0);
+    const sumXX = seriesPoints.reduce((s, p) => s + p.x * p.x, 0);
+    const denom = n * sumXX - sumX * sumX;
+    const b = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0; // slope
+    const a = sumY / n - b * (sumX / n); // intercept
+
+    // Residual std dev for confidence band width
+    const residuals = seriesPoints.map((p) => p.y - (a + b * p.x));
+    const residualVariance =
+      residuals.reduce((s, r) => s + r * r, 0) / Math.max(n - 2, 1);
+    const residualStd = Math.sqrt(residualVariance);
+    // Band width: 1.5 sigma, floored to 5% of mean to avoid zero-width bands
+    const meanY = sumY / n;
+    const bandWidth = Math.max(residualStd * 1.5, meanY * 0.05);
+    forecastAvgDaily = meanY;
+
+    // Project 7 days forward starting tomorrow
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const lastX = seriesPoints[seriesPoints.length - 1].x;
+    for (let i = 1; i <= 7; i++) {
+      const x = lastX + i;
+      const predicted = Math.max(0, a + b * x);
+      const projected = new Date(todayFloor.getTime() + i * dayMs);
+      forecast.push({
+        label: dayNames[projected.getDay()],
+        predicted: Math.round(predicted),
+        lower: Math.round(Math.max(0, predicted - bandWidth)),
+        upper: Math.round(predicted + bandWidth),
+      });
+    }
+  }
+
   return Response.json({
     success: true,
     data: {
@@ -311,11 +379,14 @@ async function trendsAnalysisHandler(
           productTrends.reduce((s, t) => s + t.previousRevenue, 0),
         ),
         projectedNext7dQty: totalProjectedNext7dQty,
+        forecastAvgDailyRevenue: Math.round(forecastAvgDaily),
+        forecast7dTotalRevenue: forecast.reduce((s, f) => s + f.predicted, 0),
       },
       topGrowing,
       topDeclining,
       categoryTrends,
       allProducts: productTrends,
+      forecast,
     },
   });
 }

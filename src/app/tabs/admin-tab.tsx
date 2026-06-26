@@ -43,6 +43,18 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
+/**
+ * Authenticated fetch helper for health-check pings. Adds the JWT token
+ * (localStorage `mbt_token`) so protected endpoints return 200 instead of
+ * 401, giving an accurate API response-time measurement.
+ */
+async function authedFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null;
+  const headers = new Headers(init.headers || {});
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  return fetch(input, { ...init, headers, credentials: 'same-origin' });
+}
+
 function HealthIndicator({ label, value, max, unit, colorClass, lastUpdated }: {
   label: string; value: number; max: number; unit: string; colorClass?: string; lastUpdated?: string;
 }) {
@@ -1544,7 +1556,7 @@ export default function AdminTab() {
     const measure = async () => {
       const start = Date.now();
       try {
-        await fetch('/api/products?storeId=store_juju_main&limit=1');
+        await authedFetch('/api/products?storeId=store_juju_main&limit=1');
         const elapsed = Date.now() - start;
         setApiResponseTime(elapsed);
         setApiHistory(prev => [...prev.slice(-11), elapsed]);
@@ -1564,7 +1576,7 @@ export default function AdminTab() {
     setIsRefreshing(true);
     const start = Date.now();
     try {
-      await fetch('/api/products?storeId=store_juju_main&limit=1');
+      await authedFetch('/api/products?storeId=store_juju_main&limit=1');
       const elapsed = Date.now() - start;
       setApiResponseTime(elapsed);
       setApiHistory(prev => [...prev.slice(-11), elapsed]);

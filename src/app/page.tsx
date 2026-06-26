@@ -1229,6 +1229,7 @@ function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonEle
   const cartItems = useCartStore((s) => s.items);
   const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const currentStoreId = useAppStore((s) => s.currentStoreId);
+  const queryClient = useQueryClient();
   const currentTab = TAB_CONFIG.find(t => t.id === activeTab);
   const TabIcon = currentTab?.icon || Home;
   const now = useLiveClock();
@@ -1236,6 +1237,31 @@ function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonEle
   const [searchQuery, setSearchQuery] = useState('');
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
   const notificationCount = useNotificationCount(currentStoreId);
+
+  // Mark all notifications as read: fetch the full list, persist every ID to
+  // localStorage `mbt_read_notifications`, then invalidate the count query so
+  // the badge clears immediately. Replaces the previous no-op stub.
+  const handleMarkAllRead = async () => {
+    try {
+      const res = await notificationsApi.list(currentStoreId);
+      const all = Array.isArray(res?.data) ? res.data : [];
+      if (all.length === 0) {
+        setNotifDropdownOpen(false);
+        return;
+      }
+      const stored = localStorage.getItem('mbt_read_notifications');
+      const existing: string[] = stored ? JSON.parse(stored) : [];
+      const merged = Array.from(new Set([...existing, ...all.map((n) => n.id)]));
+      localStorage.setItem('mbt_read_notifications', JSON.stringify(merged));
+      // Invalidate both the count and the full list so all UI syncs.
+      await queryClient.invalidateQueries({ queryKey: ['notification-count', currentStoreId] });
+      await queryClient.invalidateQueries({ queryKey: ['notifications', currentStoreId] });
+      setNotifDropdownOpen(false);
+      toast.success('All notifications marked as read');
+    } catch {
+      toast.error('Could not mark notifications as read. Please try again.');
+    }
+  };
 
   // Global search with Ctrl+K
   useEffect(() => {
@@ -1365,14 +1391,7 @@ function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonEle
                 <div className="p-3 border-b flex items-center justify-between">
                   <span className="text-sm font-semibold">Notifications</span>
                   {notificationCount.unread > 0 && (
-                    <Button variant="ghost" size="sm" className="text-xs h-6" onClick={() => {
-                      try {
-                        const stored = localStorage.getItem('mbt_read_notifications');
-                        const existing = stored ? new Set(JSON.parse(stored)) : new Set();
-                        // We can't easily mark all as read from here without fetching,
-                        // so we just dismiss the dropdown and tell user to use notification center
-                      } catch { /* ignore */ }
-                    }}>
+                    <Button variant="ghost" size="sm" className="text-xs h-6" onClick={handleMarkAllRead}>
                       <CheckCheck className="h-3 w-3 mr-1" />
                       Mark all read
                     </Button>

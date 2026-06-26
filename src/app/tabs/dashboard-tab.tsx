@@ -44,6 +44,24 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 
+/**
+ * Authenticated fetch helper — mirrors the Authorization header logic in
+ * src/lib/api.ts so raw fetch() calls in this tab include the JWT token
+ * (stored in localStorage as `mbt_token`). Without this, protected
+ * endpoints return 401 and dashboard widgets silently fall back to empty
+ * states.
+ */
+async function authedFetch(
+  input: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const token =
+    typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null;
+  const headers = new Headers(init.headers || {});
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  return fetch(input, { ...init, headers, credentials: 'same-origin' });
+}
+
 const CHART_COLORS = [
   'hsl(var(--chart-1))',
   'hsl(var(--chart-2))',
@@ -683,7 +701,7 @@ function QuickActions({ onTabSwitch }: { onTabSwitch: (tab: AppTab) => void }) {
 
     setExpenseSubmitting(true);
     try {
-      const res = await fetch('/api/expenses', {
+      const res = await authedFetch('/api/expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -717,7 +735,7 @@ function QuickActions({ onTabSwitch }: { onTabSwitch: (tab: AppTab) => void }) {
     setCashDrawerOpen(true);
     setCashDrawerLoading(true);
     try {
-      const res = await fetch('/api/cash-drawer?storeId=store_juja_main');
+      const res = await authedFetch('/api/cash-drawer?storeId=store_juja_main');
       const data = await res.json();
       if (data.success && data.summary) {
         setCashDrawerData(data.summary);
@@ -2115,7 +2133,7 @@ interface DashboardTrendsPayload {
 
 async function fetchDashboardTrends(storeId: string): Promise<DashboardTrendsPayload> {
   const params = new URLSearchParams({ storeId, range: '7d' });
-  const res = await fetch(`/api/trends/analysis?${params.toString()}`, { credentials: 'same-origin' });
+  const res = await authedFetch(`/api/trends/analysis?${params.toString()}`);
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
     throw new Error(txt || `Trends API returned ${res.status}`);

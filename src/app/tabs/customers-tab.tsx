@@ -268,6 +268,7 @@ function CustomerHistoryDialog({
       const res = await whatsappApi.sendDocument({
         type: 'statement',
         documentId: customer.id,
+        customerId: customer.id,
         storeId,
         phone,
       });

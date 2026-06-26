@@ -71,15 +71,25 @@ async function getRentalsHandler(...args: unknown[]): Promise<Response> {
     (r) => r.status === RentalStatus.ACTIVE && new Date(r.expectedReturnDate) < now
   );
 
+  // Non-blocking status sync: update overdue rentals in the background.
+  // Wrapped in try/catch so a write failure (concurrent update, constraint)
+  // never breaks the list read — the response still returns the rentals
+  // with corrected in-memory status below.
   if (overdueRentals.length > 0) {
-    await Promise.all(
+    Promise.all(
       overdueRentals.map((rental) =>
-        db.equipmentRental.update({
-          where: { id: rental.id },
-          data: { status: RentalStatus.OVERDUE },
-        })
+        db.equipmentRental
+          .update({
+            where: { id: rental.id },
+            data: { status: RentalStatus.OVERDUE },
+          })
+          .catch(() => {
+            /* ignore — best-effort status sync */
+          })
       )
-    );
+    ).catch(() => {
+      /* ignore — best-effort status sync */
+    });
   }
 
     const rentalSummary = await db.equipmentRental.aggregate({
