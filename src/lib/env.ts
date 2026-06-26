@@ -129,7 +129,14 @@ export type Env = z.infer<typeof envSchema>;
 export const isBuildTime =
   typeof process.env.NEXT_RUNTIME === 'undefined' ||
   process.env.SKIP_ENV_VALIDATION === '1' ||
-  process.env.SKIP_ENV_VALIDATION === 'true';
+  process.env.SKIP_ENV_VALIDATION === 'true' ||
+  process.env.SKIP_ENV_VALIDATION === 'yes' ||
+  // Layer 2: Next.js sets NEXT_PHASE automatically during `next build`
+  // (value: 'phase-production-build') and instrumentation. This makes
+  // `next build` work even if SKIP_ENV_VALIDATION=1 isn't prefixed on
+  // the command line — Next.js itself signals the build phase.
+  process.env.NEXT_PHASE === 'phase-production-build' ||
+  process.env.NEXT_PHASE === 'phase-instrumentation';
 
 // ── Validation (eager, runs at import time — runtime only) ───────────────────
 

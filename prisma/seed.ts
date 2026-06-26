@@ -1,9 +1,39 @@
 // Database seed script - runs on first boot if no users exist
+//
+// ROBUSTNESS CONTRACT (Cycle E Phase 2):
+//   - Foundation records (Organization, Stores, Super Admin) use `upsert` with
+//     hardcoded IDs so re-running the seed on a partially-initialized database
+//     is idempotent (no duplicate-key crash).
+//   - The entire seed body is wrapped in a try/catch so a failure in any
+//     non-foundation stage logs the error and exits gracefully (exit 0) rather
+//     than crashing the build/deploy. The DB retains whatever was seeded
+//     before the failure, and a re-run will skip already-seeded foundation
+//     records via upsert.
+//   - Progress is logged before each numbered stage via `stage()` so the
+//     Vercel build log shows exactly how far the seed progressed.
 
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
+
+// Track stage progress for the final summary.
+const stageResults: { name: string; status: 'ok' | 'skipped' | 'failed'; detail?: string }[] = [];
+
+/**
+ * Log the start of a numbered stage. Returns a function that logs the
+ * stage's completion status. Used for progress visibility in Vercel build logs.
+ */
+function stage(n: number, total: number, name: string): (status: 'ok' | 'skipped' | 'failed', detail?: string) => void {
+  console.log(`\n[seed ${n}/${total}] Starting: ${name}`);
+  return (status, detail) => {
+    const icon = status === 'ok' ? '✅' : status === 'skipped' ? '⏭️' : '⚠️';
+    console.log(`[seed ${n}/${total}] ${icon} ${name} — ${status}${detail ? ` (${detail})` : ''}`);
+    stageResults.push({ name, status, detail });
+  };
+}
+
+const TOTAL_STAGES = 22;
 
 // Generate date N days ago
 function daysAgo(n: number): Date {
@@ -32,28 +62,67 @@ function daysAgoAtHour(n: number, hour: number): Date {
 async function main() {
   console.log('MBUMAH HARDWARE POS - Checking initialization status...');
 
-    const userCount = await prisma.user.count();
+  const userCount = await prisma.user.count().catch((e: unknown) => {
+    // If the users table doesn't exist yet (schema not pushed), count() throws.
+    // Treat that as "0 users" so the seed proceeds (and the upserts below will
+    // create the foundation records).
+    console.log('   ⚠️ user.count() failed (table may not exist yet):', e instanceof Error ? e.message : String(e));
+    return 0;
+  });
 
   if (userCount > 0) {
-    console.log('Database already initialized. Skipping seed.');
+    console.log(`Database already initialized (${userCount} users found). Skipping seed.`);
     return;
   }
 
-  console.log('First boot detected. Initializing system...');
+  console.log('First boot detected (0 users). Initializing system...');
 
-  // 1. Create Organization
-  const org = await prisma.organization.create({
-    data: {
+  // The entire seed body is wrapped so a partial failure doesn't crash the
+  // Vercel build. Foundation records (stages 1-3) use upsert for idempotency;
+  // the remaining stages use create inside try/catch boundaries.
+  try {
+    await seedBody();
+  } catch (error) {
+    console.error('\n❌ Seed completed with errors (DB retains partial data):');
+    console.error('   ', error instanceof Error ? error.message : String(error));
+    if (error instanceof Error && error.stack) {
+      console.error('   Stack:', error.stack.split('\n').slice(0, 5).join('\n   '));
+    }
+  } finally {
+    console.log('\n========== SEED STAGE SUMMARY ==========');
+    const ok = stageResults.filter(s => s.status === 'ok').length;
+    const skipped = stageResults.filter(s => s.status === 'skipped').length;
+    const failed = stageResults.filter(s => s.status === 'failed').length;
+    for (const r of stageResults) {
+      const icon = r.status === 'ok' ? '✅' : r.status === 'skipped' ? '⏭️' : '⚠️';
+      console.log(`  ${icon} ${r.name} — ${r.status}${r.detail ? ` (${r.detail})` : ''}`);
+    }
+    console.log(`\n  Total: ${ok} ok, ${skipped} skipped, ${failed} failed of ${stageResults.length} stages reached.`);
+    console.log('========================================\n');
+  }
+}
+
+async function seedBody() {
+  // 1. Create Organization (upsert — idempotent on re-run)
+  const done1 = stage(1, TOTAL_STAGES, 'Create Organization');
+  const org = await prisma.organization.upsert({
+    where: { id: 'org_mbumah' },
+    update: { name: 'MBUMAH HARDWARE', taxPin: 'P051234567A', status: 'ACTIVE' },
+    create: {
       id: 'org_mbumah',
       name: 'MBUMAH HARDWARE',
       taxPin: 'P051234567A',
       status: 'ACTIVE',
     },
   });
+  done1('ok', org.id);
 
-  // 2. Create Stores
-  const store = await prisma.store.create({
-    data: {
+  // 2. Create Stores (upsert — idempotent on re-run)
+  const done2 = stage(2, TOTAL_STAGES, 'Create Stores (5 branches)');
+  const store = await prisma.store.upsert({
+    where: { id: 'store_juja_main' },
+    update: { organizationId: org.id, name: 'MBUMAH HARDWARE - Juja Main', status: 'ACTIVE' },
+    create: {
       id: 'store_juja_main',
       organizationId: org.id,
       name: 'MBUMAH HARDWARE - Juja Main',
@@ -66,8 +135,10 @@ async function main() {
     },
   });
 
-  const storeThika = await prisma.store.create({
-    data: {
+  const storeThika = await prisma.store.upsert({
+    where: { id: 'store_thika' },
+    update: { organizationId: org.id, name: 'MBUMAH HARDWARE - Thika Branch', status: 'ACTIVE' },
+    create: {
       id: 'store_thika',
       organizationId: org.id,
       name: 'MBUMAH HARDWARE - Thika Branch',
@@ -80,8 +151,10 @@ async function main() {
     },
   });
 
-  const storeRuiru = await prisma.store.create({
-    data: {
+  const storeRuiru = await prisma.store.upsert({
+    where: { id: 'store_ruiru' },
+    update: { organizationId: org.id, name: 'MBUMAH HARDWARE - Ruiru Branch', status: 'ACTIVE' },
+    create: {
       id: 'store_ruiru',
       organizationId: org.id,
       name: 'MBUMAH HARDWARE - Ruiru Branch',
@@ -94,8 +167,10 @@ async function main() {
     },
   });
 
-  const storeNairobiCbd = await prisma.store.create({
-    data: {
+  const storeNairobiCbd = await prisma.store.upsert({
+    where: { id: 'store_nairobi_cbd' },
+    update: { organizationId: org.id, name: 'MBUMAH HARDWARE - Nairobi CBD Branch', status: 'ACTIVE' },
+    create: {
       id: 'store_nairobi_cbd',
       organizationId: org.id,
       name: 'MBUMAH HARDWARE - Nairobi CBD Branch',
@@ -108,8 +183,10 @@ async function main() {
     },
   });
 
-  const storeNakuru = await prisma.store.create({
-    data: {
+  const storeNakuru = await prisma.store.upsert({
+    where: { id: 'store_nakuru' },
+    update: { organizationId: org.id, name: 'MBUMAH HARDWARE - Nakuru Branch', status: 'ACTIVE' },
+    create: {
       id: 'store_nakuru',
       organizationId: org.id,
       name: 'MBUMAH HARDWARE - Nakuru Branch',
@@ -121,11 +198,15 @@ async function main() {
       status: 'ACTIVE',
     },
   });
+  done2('ok', '5 stores');
 
-  // 3. Seed Super Admin
+  // 3. Seed Super Admin (upsert — idempotent on re-run)
+  const done3 = stage(3, TOTAL_STAGES, 'Seed Super Admin');
   const adminPasswordHash = await bcrypt.hash('password123', 12);
-  const superAdmin = await prisma.user.create({
-    data: {
+  const superAdmin = await prisma.user.upsert({
+    where: { email: 'admin@mbumahhardware.co.ke' },
+    update: { organizationId: org.id, storeId: store.id, role: 'SUPER_ADMIN', isActive: true },
+    create: {
       id: 'user_super_admin',
       organizationId: org.id,
       storeId: store.id,
@@ -137,8 +218,10 @@ async function main() {
       isActive: true,
     },
   });
+  done3('ok', superAdmin.id);
 
   // 4. Seed additional demo users
+  const done4 = stage(4, TOTAL_STAGES, 'Seed demo users (11)');
   const cashier = await prisma.user.create({
     data: {
       id: 'user_cashier_1',
@@ -295,8 +378,14 @@ async function main() {
       isActive: true,
     },
   });
+  done4('ok', '11 demo users');
 
   // 5. Seed RBAC Permissions
+  const done5 = stage(5, TOTAL_STAGES, 'Seed RBAC permissions (236)');
+  // Uses createMany with skipDuplicates for performance: 236 individual upserts
+  // over Neon+PgBouncer take ~8 minutes (2s per round-trip). createMany issues
+  // a single INSERT statement that completes in <2s. skipDuplicates makes it
+  // idempotent on re-run (won't crash on the @@unique([role,resource,action])).
   const permissions = [
     // SUPER_ADMIN has all
     ...['products', 'transactions', 'customers', 'financials', 'rentals', 'admin', 'reports', 'debt'].flatMap(resource =>
@@ -347,29 +436,43 @@ async function main() {
     { role: 'ACCOUNTANT', resource: 'debt', action: 'update' },
   ];
 
-  for (const perm of permissions) {
-    await prisma.rolePermission.upsert({
-      where: { role_resource_action: { role: perm.role, resource: perm.resource, action: perm.action } },
-      update: {},
-      create: perm,
-    });
-  }
+  await prisma.rolePermission.createMany({
+    data: permissions,
+    skipDuplicates: true,
+  });
+  done5('ok', permissions.length + ' permissions');
 
   // 6. Seed Product Categories
-  const categories = await Promise.all([
-    prisma.productCategory.create({ data: { id: 'cat_cement', storeId: store.id, name: 'Cement', description: 'All types of cement', icon: 'building', color: '#8B7355', sortOrder: 1 } }),
-    prisma.productCategory.create({ data: { id: 'cat_iron_sheets', storeId: store.id, name: 'Iron Sheets', description: 'Roofing iron sheets', icon: 'layout-grid', color: '#4A5568', sortOrder: 2 } }),
-    prisma.productCategory.create({ data: { id: 'cat_paints', storeId: store.id, name: 'Paints', description: 'Interior and exterior paints', icon: 'palette', color: '#E53E3E', sortOrder: 3 } }),
-    prisma.productCategory.create({ data: { id: 'cat_iron_bars', storeId: store.id, name: 'Iron Bars', description: 'Reinforcement iron bars', icon: 'minus', color: '#718096', sortOrder: 4 } }),
-    prisma.productCategory.create({ data: { id: 'cat_wheelbarrows', storeId: store.id, name: 'Wheelbarrows', description: 'Wheelbarrows and carts', icon: 'shopping-cart', color: '#DD6B20', sortOrder: 5 } }),
-    prisma.productCategory.create({ data: { id: 'cat_mesh_wires', storeId: store.id, name: 'Mesh Wires', description: 'Chain link and mesh wires', icon: 'grid-3x3', color: '#A0AEC0', sortOrder: 6 } }),
-    prisma.productCategory.create({ data: { id: 'cat_tools', storeId: store.id, name: 'Tools', description: 'Construction tools and equipment', icon: 'wrench', color: '#2D3748', sortOrder: 7 } }),
-    prisma.productCategory.create({ data: { id: 'cat_plumbing', storeId: store.id, name: 'Plumbing', description: 'Pipes, fittings, and plumbing supplies', icon: 'droplets', color: '#3182CE', sortOrder: 8 } }),
-    prisma.productCategory.create({ data: { id: 'cat_electrical', storeId: store.id, name: 'Electrical', description: 'Wiring, switches, and electrical supplies', icon: 'zap', color: '#ECC94B', sortOrder: 9 } }),
-    prisma.productCategory.create({ data: { id: 'cat_nails_screws', storeId: store.id, name: 'Nails & Screws', description: 'Fasteners, nails, and screws', icon: 'pin', color: '#38A169', sortOrder: 10 } }),
-  ]);
+  const done6 = stage(6, TOTAL_STAGES, 'Seed product categories (10)');
+  // NOTE: Uses a sequential loop (NOT Promise.all) because Neon's PgBouncer
+  // runs in transaction-mode pooling, which cannot handle concurrent queries
+  // on the same Prisma client connection — Promise.all would open 10
+  // concurrent transactions that interfere with each other's session state
+  // and fail with "relation does not exist" or connection errors. SQLite
+  // tolerated this; PostgreSQL via PgBouncer does not.
+  const categoryData = [
+    { id: 'cat_cement', storeId: store.id, name: 'Cement', description: 'All types of cement', icon: 'building', color: '#8B7355', sortOrder: 1 },
+    { id: 'cat_iron_sheets', storeId: store.id, name: 'Iron Sheets', description: 'Roofing iron sheets', icon: 'layout-grid', color: '#4A5568', sortOrder: 2 },
+    { id: 'cat_paints', storeId: store.id, name: 'Paints', description: 'Interior and exterior paints', icon: 'palette', color: '#E53E3E', sortOrder: 3 },
+    { id: 'cat_iron_bars', storeId: store.id, name: 'Iron Bars', description: 'Reinforcement iron bars', icon: 'minus', color: '#718096', sortOrder: 4 },
+    { id: 'cat_wheelbarrows', storeId: store.id, name: 'Wheelbarrows', description: 'Wheelbarrows and carts', icon: 'shopping-cart', color: '#DD6B20', sortOrder: 5 },
+    { id: 'cat_mesh_wires', storeId: store.id, name: 'Mesh Wires', description: 'Chain link and mesh wires', icon: 'grid-3x3', color: '#A0AEC0', sortOrder: 6 },
+    { id: 'cat_tools', storeId: store.id, name: 'Tools', description: 'Construction tools and equipment', icon: 'wrench', color: '#2D3748', sortOrder: 7 },
+    { id: 'cat_plumbing', storeId: store.id, name: 'Plumbing', description: 'Pipes, fittings, and plumbing supplies', icon: 'droplets', color: '#3182CE', sortOrder: 8 },
+    { id: 'cat_electrical', storeId: store.id, name: 'Electrical', description: 'Wiring, switches, and electrical supplies', icon: 'zap', color: '#ECC94B', sortOrder: 9 },
+    { id: 'cat_nails_screws', storeId: store.id, name: 'Nails & Screws', description: 'Fasteners, nails, and screws', icon: 'pin', color: '#38A169', sortOrder: 10 },
+  ];
+  const categories = [];
+  for (const cat of categoryData) {
+    categories.push(await prisma.productCategory.create({ data: cat }));
+  }
+  done6('ok', categories.length + ' categories');
 
   // 7. Seed Products
+  const done7 = stage(7, TOTAL_STAGES, 'Seed products (28 + 1 bundle)');
+  // Uses createMany for the flat product data (single INSERT, ~2s instead of
+  // 28 individual creates × 2s = 56s over Neon). The bundle product is created
+  // separately because it needs to be referenced by the ProductBundle relation.
   const products = [
     // Cement
     { id: 'prod_cement_bamburi', sku: 'MBM-CEM-0001', name: 'Bamburi Cement 50kg', categoryId: 'cat_cement', unitType: 'BAG', quantityInStock: 200, pricePerUnit: 750, costPrice: 680, reorderLevel: 50 },
@@ -411,9 +514,12 @@ async function main() {
     { id: 'prod_screws_wood', sku: 'MBM-NAS-0004', name: 'Wood Screws Assorted (Box)', categoryId: 'cat_nails_screws', unitType: 'BOX', quantityInStock: 80, pricePerUnit: 500, costPrice: 380, reorderLevel: 20 },
   ];
 
-  for (const product of products) {
-    await prisma.product.create({ data: { ...product, storeId: store.id } as any });
-  }
+  // Batch-insert all products via createMany (single INSERT, idempotent on re-run
+  // via skipDuplicates on the @id field).
+  await prisma.product.createMany({
+    data: products.map(p => ({ ...p, storeId: store.id })) as any,
+    skipDuplicates: true,
+  });
 
   // 8. Seed Product Bundle - "Construction Starter Kit"
   const bundleProduct = await prisma.product.create({
@@ -441,8 +547,10 @@ async function main() {
       { parentProductId: bundleProduct.id, childProductId: 'prod_wheelbarrow_std', quantityRequired: 1 },
     ],
   });
+  done7('ok', (products.length + 1) + ' products + bundle');
 
   // 9. Seed Demo Customers (expanded with more variety)
+  const done9 = stage(9, TOTAL_STAGES, 'Seed demo customers (8)');
   const customers = [
     { id: 'cust_1', storeId: store.id, name: 'John Kamau', phone: '0722123456', email: 'john.kamau@email.com', idNumber: '12345678', debtLimit: 100000, currentDebtBalance: 0 },
     { id: 'cust_2', storeId: store.id, name: 'Mary Njeri', phone: '0733234567', email: 'mary.njeri@email.com', idNumber: '23456789', debtLimit: 50000, currentDebtBalance: 15000 },
@@ -455,9 +563,8 @@ async function main() {
     { id: 'cust_8', storeId: store.id, name: 'Nairobi Contractors Co.', phone: '0733445566', email: 'info@nairobiddeners.co.ke', idNumber: '89012345', debtLimit: 750000, currentDebtBalance: 250000 },
   ];
 
-  for (const cust of customers) {
-    await prisma.customer.create({ data: cust });
-  }
+  await prisma.customer.createMany({ data: customers, skipDuplicates: true });
+  done9('ok', customers.length + ' customers');
 
   // 9b. Seed Branch-Specific Product Categories, Products, and Customers
   console.log('Seeding branch-specific data...');
