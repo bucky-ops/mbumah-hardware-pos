@@ -168,7 +168,13 @@ export async function middleware(request: NextRequest) {
   }
 
   // Health & CSRF token endpoints: allow without any checks
-  if (pathname === '/api/health' || pathname === '/api/security/csrf-token') {
+  // Health endpoints (/api/health, /api/health/db, /api/health/env) are public
+  // so they can be curl'd from VERCEL_NEON_VERIFICATION.md without auth.
+  if (
+    pathname === '/api/health' ||
+    pathname.startsWith('/api/health/') ||
+    pathname === '/api/security/csrf-token'
+  ) {
     return NextResponse.next();
   }
 

@@ -36,10 +36,15 @@ if (!existsSync(schemaPath)) {
 const databaseUrl = process.env.DATABASE_URL || '';
 
 // Detect the provider from the DATABASE_URL scheme.
-// Default to "sqlite" when DATABASE_URL is unset (e.g. during a fresh
-// `bun install` before .env exists) — this matches the committed schema
-// and the local dev workflow.
-let provider = 'sqlite';
+// Default to "postgresql" when DATABASE_URL is unset. This happens during
+// Vercel's install phase (before build env vars are injected) and during
+// fresh `bun install` before .env exists. Defaulting to postgresql ensures
+// the committed schema (provider=postgresql) is used as-is on Vercel,
+// preventing the "URL must start with file:" runtime error that occurs
+// when sqlite provider meets a postgresql DATABASE_URL. Local dev with
+// SQLite MUST set DATABASE_URL=file:./... in .env so postinstall switches
+// the provider correctly.
+let provider = 'postgresql';
 if (databaseUrl.startsWith('postgresql:') || databaseUrl.startsWith('postgres:')) {
   provider = 'postgresql';
 } else if (databaseUrl.startsWith('file:')) {

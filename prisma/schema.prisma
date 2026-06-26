@@ -6,9 +6,11 @@
 // `postinstall` and detects the DATABASE_URL scheme:
 //   • file:./...        → switches to sqlite      (local dev)
 //   • postgresql://...  → stays postgresql         (Vercel / Neon / Supabase)
+//   • unset             → stays postgresql         (Vercel install phase)
 //
-// The `build` script is just `next build` — no provider manipulation at
-// build time. The correct Prisma client is generated during `postinstall`.
+// The `vercel-build` script is `SKIP_ENV_VALIDATION=1 prisma generate && next build`
+// — no provider manipulation at build time. The correct Prisma client is
+// generated during `postinstall` (which runs the setup script for local dev).
 //
 // Notes:
 //   - IDs use cuid() for cross-DB compat
@@ -23,8 +25,9 @@ datasource db {
   // Committed as "postgresql" for Vercel. Auto-switched to "sqlite" by
   // scripts/setup-prisma-provider.sh during postinstall when DATABASE_URL
   // starts with "file:" (local dev). Do not edit manually.
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ── TENANCY & ORGANIZATION

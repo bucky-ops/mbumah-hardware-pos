@@ -150,7 +150,8 @@ function validateEnv(): Env {
     } as unknown as Env;
   }
 
-  // ── BUILD PHASE: skip validation when SKIP_ENV_VALIDATION is truthy. ──────
+  // ── BUILD PHASE: skip validation when SKIP_ENV_VALIDATION is truthy OR ──
+  // ── when Next.js signals the build phase via NEXT_PHASE. ──────────────────
   //
   // The `vercel-build` npm script sets `SKIP_ENV_VALIDATION=1`, so during
   // `next build` we skip the Zod parse entirely and export `process.env`
@@ -158,12 +159,21 @@ function validateEnv(): Env {
   // page data for /api/auth/login (and every other route that transitively
   // imports this module) WITHOUT crashing on missing runtime secrets.
   //
-  // At runtime (Vercel serverless, `bun run dev`) the flag is absent, so
+  // Layer 2: Next.js automatically sets `NEXT_PHASE=phase-production-build`
+  // during `next build` and `phase-instrumentation` during instrumentation.
+  // Detecting these makes `next build` work EVEN IF the caller forgets to
+  // prefix `SKIP_ENV_VALIDATION=1` — Next.js itself signals the build phase.
+  //
+  // At runtime (Vercel serverless, `bun run dev`) both flags are absent, so
   // the full Zod `safeParse` runs and throws on any gap.
+  const NEXT_PHASE_BUILD = 'phase-production-build';
+  const NEXT_PHASE_INSTRUMENT = 'phase-instrumentation';
   if (
     process.env.SKIP_ENV_VALIDATION === '1' ||
     process.env.SKIP_ENV_VALIDATION === 'true' ||
-    process.env.SKIP_ENV_VALIDATION === 'yes'
+    process.env.SKIP_ENV_VALIDATION === 'yes' ||
+    process.env.NEXT_PHASE === NEXT_PHASE_BUILD ||
+    process.env.NEXT_PHASE === NEXT_PHASE_INSTRUMENT
   ) {
     return process.env as unknown as Env;
   }

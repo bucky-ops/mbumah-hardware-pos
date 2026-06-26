@@ -16,7 +16,7 @@
     "db:migrate:deploy": "node scripts/setup-prisma-provider.mjs && prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset",
-    "vercel-build": "node scripts/setup-prisma-provider.mjs && SKIP_ENV_VALIDATION=1 prisma generate && SKIP_ENV_VALIDATION=1 next build"
+    "vercel-build": "SKIP_ENV_VALIDATION=1 prisma generate && next build"
   },
   "prisma": {
     "seed": "bun prisma/seed.ts"
