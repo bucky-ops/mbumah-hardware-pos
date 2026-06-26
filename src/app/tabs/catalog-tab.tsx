@@ -16,6 +16,7 @@ import {
   type ProductListItem, type CategoryItem, type CreateProductPayload,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
+import { ProductImageUpload } from '@/components/product-image-upload';
 import { Button } from '@/components/ui/button';
 import {
   Card, CardContent, CardFooter, CardHeader, CardTitle,
@@ -487,9 +488,15 @@ export default function CatalogTab() {
           isLow ? 'ring-1 ring-amber-300 dark:ring-amber-700/60' : ''
         }`}
       >
-        {/* Image / placeholder */}
+        {/* Image / placeholder — prefer product photo, fall back to category image */}
         <div className="relative h-40 bg-muted/30 overflow-hidden">
-          {catImg ? (
+          {product.imageUrl ? (
+            <img
+              src={product.imageUrl}
+              alt={product.name}
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            />
+          ) : catImg ? (
             <img
               src={catImg}
               alt={product.category?.name || product.name}
@@ -1120,11 +1127,10 @@ export default function CatalogTab() {
                 />
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <Label>Image URL</Label>
-                <Input
+                <ProductImageUpload
                   value={form.imageUrl}
-                  onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-                  placeholder="https://... (leave blank to use category default)"
+                  onChange={(url) => setForm({ ...form, imageUrl: url })}
+                  productName={form.name}
                 />
               </div>
             </div>

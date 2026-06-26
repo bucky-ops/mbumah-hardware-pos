@@ -12,6 +12,7 @@ import {
 
 import { transactionsApi, whatsappApi, formatKES, formatDateTime, type TransactionItem, type SaleItemDetail } from '@/lib/api';
 import { useAppStore } from '@/lib/stores';
+import { getStoreInfo, getLogoUrl, COMPANY } from '@/lib/store-info';
 import { handleError } from '@/lib/error-handler';
 
 import { Button } from '@/components/ui/button';
@@ -237,6 +238,8 @@ function ReceiptModal({
   onOpenChange: (open: boolean) => void;
   transaction: TransactionItem | null;
 }) {
+  const currentStoreId = useAppStore((s) => s.currentStoreId);
+
   if (!transaction) return null;
 
   const items = transaction.items || [];
@@ -244,6 +247,8 @@ function ReceiptModal({
   const handlePrint = () => {
     const printContent = document.getElementById('receipt-print-area');
     if (!printContent) return;
+    const store = getStoreInfo(currentStoreId);
+    const logoUrl = getLogoUrl();
     const printWindow = window.open('', '_blank', 'width=400,height=600');
     if (!printWindow) return;
     printWindow.document.write(`
@@ -257,12 +262,24 @@ function ReceiptModal({
           table { width: 100%; }
           td { padding: 2px 0; }
           .right { text-align: right; }
+          .logo { max-width: 140px; max-height: 60px; margin: 0 auto 4px; display: block; }
         </style></head>
-        <body>${printContent.innerHTML}</body>
+        <body>
+          <div class="center">
+            <img src="${logoUrl}" alt="${COMPANY.legalName}" class="logo" />
+            <h2 class="bold" style="margin:0">${COMPANY.legalName}</h2>
+            <p style="margin:2px 0">${store.name}</p>
+            <p style="margin:2px 0">${store.location}</p>
+            <p style="margin:2px 0">Tel: ${store.phone}</p>
+          </div>
+          <div class="line"></div>
+          ${printContent.innerHTML}
+        </body>
       </html>
     `);
     printWindow.document.close();
-    printWindow.print();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 200);
   };
 
   return (
@@ -275,9 +292,14 @@ function ReceiptModal({
           <DialogDescription>Receipt #{transaction.receiptNumber}</DialogDescription>
         </DialogHeader>
         <div id="receipt-print-area" className="space-y-4">
-          {/* Store Header */}
+          {/* Store Header with logo */}
           <div className="text-center space-y-1">
-            <h3 className="font-bold text-lg">MBUMAH HARDWARE</h3>
+            <img src={COMPANY.logoPath} alt="MBUMAH HARDWARE" className="max-w-[140px] max-h-[60px] mx-auto" />
+            <h3 className="font-bold text-lg">{COMPANY.legalName}</h3>
+            <p className="text-xs text-muted-foreground">{getStoreInfo(currentStoreId).name}</p>
+            <p className="text-xs text-muted-foreground">{getStoreInfo(currentStoreId).location}</p>
+            <p className="text-xs text-muted-foreground">Tel: {getStoreInfo(currentStoreId).phone}</p>
+            <Separator className="my-2" />
             <p className="text-xs text-muted-foreground">Receipt #{transaction.receiptNumber}</p>
             <p className="text-xs text-muted-foreground">{formatDateTime(transaction.createdAt)}</p>
           </div>
@@ -675,6 +697,8 @@ export default function TransactionsTab() {
 
   const handlePrintReceipt = useCallback((transaction: TransactionItem) => {
     const items = transaction.items || [];
+    const store = getStoreInfo(currentStoreId);
+    const logoUrl = getLogoUrl();
     const printWindow = window.open('', '_blank', 'width=400,height=600');
     if (!printWindow) {
       toast.error('Pop-up blocked. Please allow pop-ups to print.');
@@ -700,12 +724,16 @@ export default function TransactionsTab() {
         th { border-bottom: 1px solid #999; text-align: left; }
         .right { text-align: right; }
         .muted { color: #555; }
+        .logo { max-width: 150px; max-height: 70px; margin: 0 auto 6px; display: block; }
       </style></head>
       <body>
         <div class="center">
-          <h2 class="bold" style="margin:0">MBUMAH HARDWARE</h2>
-          <p class="muted" style="margin:2px 0">Juja, Kiambu County</p>
-          <p class="muted" style="margin:2px 0">+254 700 000 000</p>
+          <img src="${logoUrl}" alt="${COMPANY.legalName}" class="logo" />
+          <h2 class="bold" style="margin:0">${COMPANY.legalName}</h2>
+          <p class="muted" style="margin:2px 0">${store.name}</p>
+          <p class="muted" style="margin:2px 0">${store.location}</p>
+          <p class="muted" style="margin:2px 0">Tel: ${store.phone}${store.email ? ' | ' + store.email : ''}</p>
+          ${store.taxPin ? `<p class="muted" style="margin:2px 0">PIN: ${store.taxPin}</p>` : ''}
         </div>
         <hr>
         <p class="bold">Receipt #: ${transaction.receiptNumber}</p>
@@ -728,14 +756,15 @@ export default function TransactionsTab() {
         <div class="center">
           <p>Paid via ${transaction.paymentMethod}</p>
           <p>Status: ${transaction.paymentStatus}</p>
-          <p class="muted">Thank you for your business!</p>
+          <p class="bold">Thank you for your business!</p>
+          <p class="muted">${COMPANY.website} | ${COMPANY.email}</p>
         </div>
       </body></html>
     `);
     printWindow.document.close();
     printWindow.focus();
     setTimeout(() => printWindow.print(), 250);
-  }, []);
+  }, [currentStoreId]);
 
   return (
     <div className="space-y-6">

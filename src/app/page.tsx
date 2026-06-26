@@ -26,7 +26,9 @@ import {
 } from 'lucide-react';
 
 import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
+import { STORE_LIST } from '@/lib/store-info';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { FloatingHomeButton } from '@/components/floating-home-button';
 import {
   saveOfflineTransaction,
   buildOfflineReceipt,
@@ -154,15 +156,6 @@ const DEMO_ACCOUNTS = [
   { email: 'thika.manager@mbumahhardware.co.ke', password: 'password123', role: 'Branch Mgr (Thika)', icon: Store, color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900 hover:bg-purple-100 dark:hover:bg-purple-950/50' },
   { email: 'cashier@mbumahhardware.co.ke', password: 'password123', role: 'Cashier', icon: ShoppingCart, color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900 hover:bg-green-100 dark:hover:bg-green-950/50' },
   { email: 'accountant@mbumahhardware.co.ke', password: 'password123', role: 'Accountant', icon: BarChart3, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900 hover:bg-amber-100 dark:hover:bg-amber-950/50' },
-];
-
-// Store list for branch selector
-const STORE_LIST = [
-  { id: 'store_juja_main', shortName: 'Juja Main', location: 'Salama M-Store, Juja', phone: '0795191909' },
-  { id: 'store_thika', shortName: 'Thika', location: 'Thika Town Center, Kiambu County', phone: '0795191909' },
-  { id: 'store_ruiru', shortName: 'Ruiru', location: 'Ruiru Town, Kiambu County', phone: '0795191909' },
-  { id: 'store_nairobi_cbd', shortName: 'Nairobi CBD', location: 'Kenyatta Avenue, Nairobi', phone: '0795191909' },
-  { id: 'store_nakuru', shortName: 'Nakuru', location: 'Nakuru Town, Nakuru County', phone: '0795191909' },
 ];
 
 // Category image mapping
@@ -4992,6 +4985,7 @@ function MainApp() {
           </footer>
         </div>
         <KeyboardShortcutsHelp open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+        <FloatingHomeButton />
       </div>
     </ErrorBoundary>
   );

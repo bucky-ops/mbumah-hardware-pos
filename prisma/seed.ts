@@ -475,43 +475,43 @@ async function seedBody() {
   // separately because it needs to be referenced by the ProductBundle relation.
   const products = [
     // Cement
-    { id: 'prod_cement_bamburi', sku: 'MBM-CEM-0001', name: 'Bamburi Cement 50kg', categoryId: 'cat_cement', unitType: 'BAG', quantityInStock: 200, pricePerUnit: 750, costPrice: 680, reorderLevel: 50 },
-    { id: 'prod_cement_simba', sku: 'MBM-CEM-0002', name: 'Simba Cement 50kg', categoryId: 'cat_cement', unitType: 'BAG', quantityInStock: 150, pricePerUnit: 720, costPrice: 650, reorderLevel: 50 },
-    { id: 'prod_cement_savanna', sku: 'MBM-CEM-0003', name: 'Savanna Cement 50kg', categoryId: 'cat_cement', unitType: 'BAG', quantityInStock: 100, pricePerUnit: 700, costPrice: 620, reorderLevel: 30 },
+    { id: 'prod_cement_bamburi', sku: 'MBM-CEM-0001', name: 'Bamburi Cement 50kg', categoryId: 'cat_cement', unitType: 'BAG', quantityInStock: 200, pricePerUnit: 750, costPrice: 680, reorderLevel: 50, imageUrl: '/categories/cat_cement.png' },
+    { id: 'prod_cement_simba', sku: 'MBM-CEM-0002', name: 'Simba Cement 50kg', categoryId: 'cat_cement', unitType: 'BAG', quantityInStock: 150, pricePerUnit: 720, costPrice: 650, reorderLevel: 50, imageUrl: '/categories/cat_cement.png' },
+    { id: 'prod_cement_savanna', sku: 'MBM-CEM-0003', name: 'Savanna Cement 50kg', categoryId: 'cat_cement', unitType: 'BAG', quantityInStock: 100, pricePerUnit: 700, costPrice: 620, reorderLevel: 30, imageUrl: '/categories/cat_cement.png' },
     // Iron Sheets
-    { id: 'prod_mabati_30', sku: 'MBM-IRS-0001', name: 'Mabati 30-Gauge (8ft)', categoryId: 'cat_iron_sheets', unitType: 'PIECE', quantityInStock: 500, pricePerUnit: 650, costPrice: 580, reorderLevel: 100 },
-    { id: 'prod_mabati_28', sku: 'MBM-IRS-0002', name: 'Mabati 28-Gauge (8ft)', categoryId: 'cat_iron_sheets', unitType: 'PIECE', quantityInStock: 300, pricePerUnit: 800, costPrice: 720, reorderLevel: 80 },
-    { id: 'prod_mabati_26', sku: 'MBM-IRS-0003', name: 'Mabati 26-Gauge (8ft)', categoryId: 'cat_iron_sheets', unitType: 'PIECE', quantityInStock: 200, pricePerUnit: 950, costPrice: 860, reorderLevel: 50 },
+    { id: 'prod_mabati_30', sku: 'MBM-IRS-0001', name: 'Mabati 30-Gauge (8ft)', categoryId: 'cat_iron_sheets', unitType: 'PIECE', quantityInStock: 500, pricePerUnit: 650, costPrice: 580, reorderLevel: 100, imageUrl: '/categories/cat_iron.png' },
+    { id: 'prod_mabati_28', sku: 'MBM-IRS-0002', name: 'Mabati 28-Gauge (8ft)', categoryId: 'cat_iron_sheets', unitType: 'PIECE', quantityInStock: 300, pricePerUnit: 800, costPrice: 720, reorderLevel: 80, imageUrl: '/categories/cat_iron.png' },
+    { id: 'prod_mabati_26', sku: 'MBM-IRS-0003', name: 'Mabati 26-Gauge (8ft)', categoryId: 'cat_iron_sheets', unitType: 'PIECE', quantityInStock: 200, pricePerUnit: 950, costPrice: 860, reorderLevel: 50, imageUrl: '/categories/cat_iron.png' },
     // Paints
-    { id: 'prod_dulux_20l', sku: 'MBM-PNT-0001', name: 'Dulux Weathershield 20L', categoryId: 'cat_paints', unitType: 'PIECE', quantityInStock: 30, pricePerUnit: 8500, costPrice: 7200, reorderLevel: 10 },
-    { id: 'prod_crown_20l', sku: 'MBM-PNT-0002', name: 'Crown Vinyl Silk 20L', categoryId: 'cat_paints', unitType: 'PIECE', quantityInStock: 25, pricePerUnit: 6500, costPrice: 5500, reorderLevel: 8 },
-    { id: 'prod_dulux_4l', sku: 'MBM-PNT-0003', name: 'Dulux Weathershield 4L', categoryId: 'cat_paints', unitType: 'PIECE', quantityInStock: 60, pricePerUnit: 2400, costPrice: 2000, reorderLevel: 20 },
+    { id: 'prod_dulux_20l', sku: 'MBM-PNT-0001', name: 'Dulux Weathershield 20L', categoryId: 'cat_paints', unitType: 'PIECE', quantityInStock: 30, pricePerUnit: 8500, costPrice: 7200, reorderLevel: 10, imageUrl: '/categories/cat_paints.png' },
+    { id: 'prod_crown_20l', sku: 'MBM-PNT-0002', name: 'Crown Vinyl Silk 20L', categoryId: 'cat_paints', unitType: 'PIECE', quantityInStock: 25, pricePerUnit: 6500, costPrice: 5500, reorderLevel: 8, imageUrl: '/categories/cat_paints.png' },
+    { id: 'prod_dulux_4l', sku: 'MBM-PNT-0003', name: 'Dulux Weathershield 4L', categoryId: 'cat_paints', unitType: 'PIECE', quantityInStock: 60, pricePerUnit: 2400, costPrice: 2000, reorderLevel: 20, imageUrl: '/categories/cat_paints.png' },
     // Iron Bars
-    { id: 'prod_rebar_12mm', sku: 'MBM-IRB-0001', name: 'Rebar 12mm x 12m', categoryId: 'cat_iron_bars', unitType: 'PIECE', quantityInStock: 400, pricePerUnit: 1200, costPrice: 1050, reorderLevel: 100 },
-    { id: 'prod_rebar_10mm', sku: 'MBM-IRB-0002', name: 'Rebar 10mm x 12m', categoryId: 'cat_iron_bars', unitType: 'PIECE', quantityInStock: 350, pricePerUnit: 900, costPrice: 780, reorderLevel: 100 },
-    { id: 'prod_rebar_8mm', sku: 'MBM-IRB-0003', name: 'Rebar 8mm x 12m', categoryId: 'cat_iron_bars', unitType: 'PIECE', quantityInStock: 500, pricePerUnit: 650, costPrice: 560, reorderLevel: 150 },
+    { id: 'prod_rebar_12mm', sku: 'MBM-IRB-0001', name: 'Rebar 12mm x 12m', categoryId: 'cat_iron_bars', unitType: 'PIECE', quantityInStock: 400, pricePerUnit: 1200, costPrice: 1050, reorderLevel: 100, imageUrl: '/categories/cat_rebar.png' },
+    { id: 'prod_rebar_10mm', sku: 'MBM-IRB-0002', name: 'Rebar 10mm x 12m', categoryId: 'cat_iron_bars', unitType: 'PIECE', quantityInStock: 350, pricePerUnit: 900, costPrice: 780, reorderLevel: 100, imageUrl: '/categories/cat_rebar.png' },
+    { id: 'prod_rebar_8mm', sku: 'MBM-IRB-0003', name: 'Rebar 8mm x 12m', categoryId: 'cat_iron_bars', unitType: 'PIECE', quantityInStock: 500, pricePerUnit: 650, costPrice: 560, reorderLevel: 150, imageUrl: '/categories/cat_rebar.png' },
     // Wheelbarrows
-    { id: 'prod_wheelbarrow_std', sku: 'MBM-WHL-0001', name: 'Standard Wheelbarrow', categoryId: 'cat_wheelbarrows', unitType: 'PIECE', quantityInStock: 15, pricePerUnit: 5500, costPrice: 4500, reorderLevel: 5 },
-    { id: 'prod_wheelbarrow_heavy', sku: 'MBM-WHL-0002', name: 'Heavy Duty Wheelbarrow', categoryId: 'cat_wheelbarrows', unitType: 'PIECE', quantityInStock: 10, pricePerUnit: 7500, costPrice: 6000, reorderLevel: 3 },
+    { id: 'prod_wheelbarrow_std', sku: 'MBM-WHL-0001', name: 'Standard Wheelbarrow', categoryId: 'cat_wheelbarrows', unitType: 'PIECE', quantityInStock: 15, pricePerUnit: 5500, costPrice: 4500, reorderLevel: 5, imageUrl: '/categories/cat_wheelbarrow.png' },
+    { id: 'prod_wheelbarrow_heavy', sku: 'MBM-WHL-0002', name: 'Heavy Duty Wheelbarrow', categoryId: 'cat_wheelbarrows', unitType: 'PIECE', quantityInStock: 10, pricePerUnit: 7500, costPrice: 6000, reorderLevel: 3, imageUrl: '/categories/cat_wheelbarrow.png' },
     // Mesh Wires
-    { id: 'prod_chainlink_6ft', sku: 'MBM-MSH-0001', name: 'Chain Link 6ft x 50m', categoryId: 'cat_mesh_wires', unitType: 'PIECE', quantityInStock: 40, pricePerUnit: 4500, costPrice: 3800, reorderLevel: 10 },
-    { id: 'prod_welded_mesh', sku: 'MBM-MSH-0002', name: 'Welded Mesh 8x4ft', categoryId: 'cat_mesh_wires', unitType: 'PIECE', quantityInStock: 60, pricePerUnit: 1800, costPrice: 1500, reorderLevel: 20 },
+    { id: 'prod_chainlink_6ft', sku: 'MBM-MSH-0001', name: 'Chain Link 6ft x 50m', categoryId: 'cat_mesh_wires', unitType: 'PIECE', quantityInStock: 40, pricePerUnit: 4500, costPrice: 3800, reorderLevel: 10, imageUrl: '/categories/cat_mesh.png' },
+    { id: 'prod_welded_mesh', sku: 'MBM-MSH-0002', name: 'Welded Mesh 8x4ft', categoryId: 'cat_mesh_wires', unitType: 'PIECE', quantityInStock: 60, pricePerUnit: 1800, costPrice: 1500, reorderLevel: 20, imageUrl: '/categories/cat_mesh.png' },
     // Tools (Rental Items)
-    { id: 'prod_concrete_mixer', sku: 'MBM-TL-0001', name: 'Concrete Mixer', categoryId: 'cat_tools', unitType: 'PIECE', quantityInStock: 5, pricePerUnit: 85000, costPrice: 65000, isRental: true, reorderLevel: 1 },
-    { id: 'prod_vibrator', sku: 'MBM-TL-0002', name: 'Poker Vibrator', categoryId: 'cat_tools', unitType: 'PIECE', quantityInStock: 4, pricePerUnit: 35000, costPrice: 25000, isRental: true, reorderLevel: 1 },
-    { id: 'prod_scaffolding', sku: 'MBM-TL-0003', name: 'Scaffolding Set', categoryId: 'cat_tools', unitType: 'SET', quantityInStock: 10, pricePerUnit: 25000, costPrice: 18000, isRental: true, reorderLevel: 2 },
-    { id: 'prod_spade', sku: 'MBM-TL-0004', name: 'Spade (Heavy Duty)', categoryId: 'cat_tools', unitType: 'PIECE', quantityInStock: 50, pricePerUnit: 1200, costPrice: 900, reorderLevel: 15 },
-    { id: 'prod_pickaxe', sku: 'MBM-TL-0005', name: 'Pickaxe', categoryId: 'cat_tools', unitType: 'PIECE', quantityInStock: 30, pricePerUnit: 1000, costPrice: 750, reorderLevel: 10 },
+    { id: 'prod_concrete_mixer', sku: 'MBM-TL-0001', name: 'Concrete Mixer', categoryId: 'cat_tools', unitType: 'PIECE', quantityInStock: 5, pricePerUnit: 85000, costPrice: 65000, isRental: true, reorderLevel: 1, imageUrl: '/categories/cat_tools.png' },
+    { id: 'prod_vibrator', sku: 'MBM-TL-0002', name: 'Poker Vibrator', categoryId: 'cat_tools', unitType: 'PIECE', quantityInStock: 4, pricePerUnit: 35000, costPrice: 25000, isRental: true, reorderLevel: 1, imageUrl: '/categories/cat_tools.png' },
+    { id: 'prod_scaffolding', sku: 'MBM-TL-0003', name: 'Scaffolding Set', categoryId: 'cat_tools', unitType: 'SET', quantityInStock: 10, pricePerUnit: 25000, costPrice: 18000, isRental: true, reorderLevel: 2, imageUrl: '/categories/cat_tools.png' },
+    { id: 'prod_spade', sku: 'MBM-TL-0004', name: 'Spade (Heavy Duty)', categoryId: 'cat_tools', unitType: 'PIECE', quantityInStock: 50, pricePerUnit: 1200, costPrice: 900, reorderLevel: 15, imageUrl: '/categories/cat_tools.png' },
+    { id: 'prod_pickaxe', sku: 'MBM-TL-0005', name: 'Pickaxe', categoryId: 'cat_tools', unitType: 'PIECE', quantityInStock: 30, pricePerUnit: 1000, costPrice: 750, reorderLevel: 10, imageUrl: '/categories/cat_tools.png' },
     // Plumbing
-    { id: 'prod_pvc_4inch', sku: 'MBM-PLM-0001', name: 'PVC Pipe 4-inch x 3m', categoryId: 'cat_plumbing', unitType: 'PIECE', quantityInStock: 100, pricePerUnit: 800, costPrice: 600, reorderLevel: 30 },
-    { id: 'prod_pvc_2inch', sku: 'MBM-PLM-0002', name: 'PVC Pipe 2-inch x 3m', categoryId: 'cat_plumbing', unitType: 'PIECE', quantityInStock: 150, pricePerUnit: 400, costPrice: 300, reorderLevel: 40 },
+    { id: 'prod_pvc_4inch', sku: 'MBM-PLM-0001', name: 'PVC Pipe 4-inch x 3m', categoryId: 'cat_plumbing', unitType: 'PIECE', quantityInStock: 100, pricePerUnit: 800, costPrice: 600, reorderLevel: 30, imageUrl: '/categories/cat_plumbing.png' },
+    { id: 'prod_pvc_2inch', sku: 'MBM-PLM-0002', name: 'PVC Pipe 2-inch x 3m', categoryId: 'cat_plumbing', unitType: 'PIECE', quantityInStock: 150, pricePerUnit: 400, costPrice: 300, reorderLevel: 40, imageUrl: '/categories/cat_plumbing.png' },
     // Electrical
-    { id: 'prod_cable_2_5mm', sku: 'MBM-ELC-0001', name: 'Cable 2.5mm x 100m', categoryId: 'cat_electrical', unitType: 'PIECE', quantityInStock: 30, pricePerUnit: 8500, costPrice: 7000, reorderLevel: 10 },
+    { id: 'prod_cable_2_5mm', sku: 'MBM-ELC-0001', name: 'Cable 2.5mm x 100m', categoryId: 'cat_electrical', unitType: 'PIECE', quantityInStock: 30, pricePerUnit: 8500, costPrice: 7000, reorderLevel: 10, imageUrl: '/categories/cat_electrical.png' },
     // Nails & Screws (fractional quantity items)
-    { id: 'prod_nails_4inch', sku: 'MBM-NAS-0001', name: '4-inch Nails', categoryId: 'cat_nails_screws', unitType: 'KILOGRAM', quantityInStock: 500, pricePerUnit: 150, costPrice: 110, reorderLevel: 100 },
-    { id: 'prod_nails_3inch', sku: 'MBM-NAS-0002', name: '3-inch Nails', categoryId: 'cat_nails_screws', unitType: 'KILOGRAM', quantityInStock: 450, pricePerUnit: 140, costPrice: 100, reorderLevel: 100 },
-    { id: 'prod_nails_2inch', sku: 'MBM-NAS-0003', name: '2-inch Nails', categoryId: 'cat_nails_screws', unitType: 'KILOGRAM', quantityInStock: 400, pricePerUnit: 130, costPrice: 95, reorderLevel: 100 },
-    { id: 'prod_screws_wood', sku: 'MBM-NAS-0004', name: 'Wood Screws Assorted (Box)', categoryId: 'cat_nails_screws', unitType: 'BOX', quantityInStock: 80, pricePerUnit: 500, costPrice: 380, reorderLevel: 20 },
+    { id: 'prod_nails_4inch', sku: 'MBM-NAS-0001', name: '4-inch Nails', categoryId: 'cat_nails_screws', unitType: 'KILOGRAM', quantityInStock: 500, pricePerUnit: 150, costPrice: 110, reorderLevel: 100, imageUrl: '/categories/cat_nails.png' },
+    { id: 'prod_nails_3inch', sku: 'MBM-NAS-0002', name: '3-inch Nails', categoryId: 'cat_nails_screws', unitType: 'KILOGRAM', quantityInStock: 450, pricePerUnit: 140, costPrice: 100, reorderLevel: 100, imageUrl: '/categories/cat_nails.png' },
+    { id: 'prod_nails_2inch', sku: 'MBM-NAS-0003', name: '2-inch Nails', categoryId: 'cat_nails_screws', unitType: 'KILOGRAM', quantityInStock: 400, pricePerUnit: 130, costPrice: 95, reorderLevel: 100, imageUrl: '/categories/cat_nails.png' },
+    { id: 'prod_screws_wood', sku: 'MBM-NAS-0004', name: 'Wood Screws Assorted (Box)', categoryId: 'cat_nails_screws', unitType: 'BOX', quantityInStock: 80, pricePerUnit: 500, costPrice: 380, reorderLevel: 20, imageUrl: '/categories/cat_nails.png' },
   ];
 
   // Batch-insert all products via createMany (single INSERT, idempotent on re-run
@@ -1658,6 +1658,99 @@ async function seedBody() {
   for (const redemption of giftCardRedemptions) {
     await prisma.giftCardRedemption.create({ data: redemption });
   }
+
+  // ==========================================================================
+  // 21b. Seed Employees for Payroll & HR (Juja Main store)
+  // ==========================================================================
+  // Kenyan staff with realistic names, KRA/NSSF/SHIF numbers, and compensation
+  // aligned to hardware-store roles. Provides demo data for the Payroll tab.
+  const employees = [
+    {
+      id: 'emp_john_mwangi', storeId: store.id,
+      firstName: 'John', lastName: 'Mwangi',
+      email: 'john.mwangi@mbumahhardware.co.ke', phone: '+254712345678',
+      nationalId: '29876543', kraPin: 'A009876543X',
+      nssfNumber: 'NSSF-001-001-001', nhifNumber: 'NHIF-100001',
+      jobTitle: 'Store Manager', role: 'MANAGER', employmentType: 'PERMANENT',
+      hireDate: new Date('2021-03-15'), status: 'ACTIVE',
+      basicSalary: 85000, houseAllowance: 15000, transportAllowance: 8000, medicalAllowance: 5000,
+      bankName: 'Equity Bank', bankAccountName: 'John Mwangi', bankAccountNumber: '011019451234', bankBranchCode: '001',
+      emergencyContactName: 'Grace Mwangi', emergencyContactPhone: '+254722345678',
+    },
+    {
+      id: 'emp_mary_wanjiku', storeId: store.id,
+      firstName: 'Mary', lastName: 'Wanjiku',
+      email: 'mary.wanjiku@mbumahhardware.co.ke', phone: '+254723456789',
+      nationalId: '30123456', kraPin: 'A010123456Y',
+      nssfNumber: 'NSSF-001-001-002', nhifNumber: 'NHIF-100002',
+      jobTitle: 'Senior Cashier', role: 'CASHIER', employmentType: 'PERMANENT',
+      hireDate: new Date('2022-06-01'), status: 'ACTIVE',
+      basicSalary: 55000, houseAllowance: 10000, transportAllowance: 6000, medicalAllowance: 4000,
+      bankName: 'KCB Bank', bankAccountName: 'Mary Wanjiku', bankAccountNumber: '1122334455', bankBranchCode: '002',
+      emergencyContactName: 'Peter Wanjiku', emergencyContactPhone: '+254733456789',
+    },
+    {
+      id: 'emp_peter_kamau', storeId: store.id,
+      firstName: 'Peter', lastName: 'Kamau',
+      email: 'peter.kamau@mbumahhardware.co.ke', phone: '+254734567890',
+      nationalId: '31234567', kraPin: 'A011234567Z',
+      nssfNumber: 'NSSF-001-001-003', nhifNumber: 'NHIF-100003',
+      jobTitle: 'Inventory Clerk', role: 'STAFF', employmentType: 'PERMANENT',
+      hireDate: new Date('2023-01-10'), status: 'ACTIVE',
+      basicSalary: 42000, houseAllowance: 8000, transportAllowance: 5000, medicalAllowance: 3000,
+      bankName: 'Co-operative Bank', bankAccountName: 'Peter Kamau', bankAccountNumber: '0114567890', bankBranchCode: '003',
+      emergencyContactName: 'Jane Kamau', emergencyContactPhone: '+254744567890',
+    },
+    {
+      id: 'emp_grace_achieng', storeId: store.id,
+      firstName: 'Grace', lastName: 'Achieng',
+      email: 'grace.achieng@mbumahhardware.co.ke', phone: '+254745678901',
+      nationalId: '32345678', kraPin: 'A012345678A',
+      nssfNumber: 'NSSF-001-001-004', nhifNumber: 'NHIF-100004',
+      jobTitle: 'Accounts Assistant', role: 'ACCOUNTANT', employmentType: 'PROBATION',
+      hireDate: new Date('2024-02-01'), status: 'ACTIVE',
+      basicSalary: 48000, houseAllowance: 8000, transportAllowance: 5000, medicalAllowance: 3000,
+      bankName: 'Equity Bank', bankAccountName: 'Grace Achieng', bankAccountNumber: '0117890123', bankBranchCode: '001',
+      emergencyContactName: 'Samuel Achieng', emergencyContactPhone: '+254755678901',
+    },
+    {
+      id: 'emp_david_otieno', storeId: store.id,
+      firstName: 'David', lastName: 'Otieno',
+      email: 'david.otieno@mbumahhardware.co.ke', phone: '+254756789012',
+      nationalId: '33345678', kraPin: 'A013456789B',
+      nssfNumber: 'NSSF-001-001-005', nhifNumber: 'NHIF-100005',
+      jobTitle: 'Loader / Store Hand', role: 'STAFF', employmentType: 'CASUAL',
+      hireDate: new Date('2024-09-15'), status: 'ACTIVE',
+      basicSalary: 28000, houseAllowance: 3000, transportAllowance: 2000, medicalAllowance: 2000,
+      bankName: 'Equity Bank', bankAccountName: 'David Otieno', bankAccountNumber: '0123456789', bankBranchCode: '001',
+      emergencyContactName: 'Rose Otieno', emergencyContactPhone: '+254766789012',
+    },
+  ];
+
+  await prisma.employee.createMany({ data: employees as any, skipDuplicates: true });
+
+  // Seed one payroll period + run for the current month (demo)
+  const now = new Date();
+  const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const payDate = new Date(periodEnd.getTime() + 2 * 24 * 60 * 60 * 1000);
+
+  const payrollPeriod = await prisma.payrollPeriod.create({
+    data: {
+      storeId: store.id,
+      name: `${periodStart.toLocaleString('en', { month: 'long' })} ${periodStart.getFullYear()}`,
+      startDate: periodStart,
+      endDate: periodEnd,
+      payDate,
+      status: 'OPEN',
+      periodType: 'MONTHLY',
+      employeeCount: employees.length,
+      notes: 'Demo payroll period — seeded for testing.',
+    },
+  });
+
+  console.log('   👔 Employees seeded: ' + employees.length + ' (Juja Main)');
+  console.log('   💵 Payroll period seeded: ' + payrollPeriod.name + ' (OPEN)');
 
   // ==========================================================================
   // 22. Log the initialization event
