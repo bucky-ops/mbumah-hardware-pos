@@ -2391,3 +2391,89 @@ NEXT STEPS (for user):
   Option A: Run `VERCEL_TOKEN=<token-from-bucky-ops-account> bash scripts/set-vercel-env.sh`
   Option B: Manually update the 3 broken env vars in Vercel dashboard (see VERCEL_NEON_VERIFICATION.md "Current State" table)
   Then verify: curl -s https://mbumah-hardware-pos-one.vercel.app/api/health/db | jq
+
+---
+Task ID: phase1-diagnose-auth-500
+Agent: Main Agent (Principal DevOps Engineer)
+Task: PHASE 1 — Diagnose root cause of /api/auth/login 500 error on production. Examine login route, db.ts, env.ts. Add robust error handling with full stack logging. Verify force-dynamic. Then STOP and ask user to type 'continue' for Phases 2 & 3.
+
+Work Log:
+- Read worklog.md (last 200 lines) to understand Cycle G state: code fixes committed (5f0b314, 71adabe), Vercel auto-deployed, health endpoints live, but production 500 persists.
+- Examined src/app/api/auth/login/route.ts (376 lines):
+  * ✅ `export const dynamic = 'force-dynamic'` present (line 44)
+  * ✅ Inner DB try/catch (lines 152-205) returns JSON 500 with full Prisma error detail (name/message/code/stack/hint) when EXPOSE_ERRORS=true. Includes specific remediation hints for P1003 (table missing), P1001 (connection lost), P1009 (db missing).
+  * ✅ Outer catch-all (lines 344-372) logs `[AUTH_LOGIN_FATAL_ERROR]` with name/message/code/stack/durationMs/timestamp to console.error (guarantees Vercel function logs show full error even if systemLog() fails).
+  * ✅ Uses `withErrorBoundary` wrapper (line 375) for final HTTP response formatting.
+  * ✅ Env validation triggered early via `void env.DATABASE_URL` (line 91) inside the try/catch so EnvValidationError is caught and formatted properly.
+  * ✅ Brute force protection, rate limiting, bcrypt + legacy password verification, session creation, system logging — all intact.
+  * CONCLUSION: Login route code is production-grade. NO CHANGES NEEDED.
+- Examined src/lib/db.ts (499 lines):
+  * ✅ `resolveDatabaseUrl()` (lines 64-110) eagerly validates DATABASE_URL at module load — throws descriptive error if missing or wrong scheme.
+  * ✅ globalForPrisma singleton pattern (lines 118-143) — survives HMR in dev, warm Lambda invocations on Vercel.
+  * ✅ `datasourceUrl: DATABASE_URL` passed to PrismaClient (line 124) — uses the resolved URL.
+  * ✅ Production logs: `["error"]` only; Dev logs: `["error", "warn"]` — minimizes cold-start log noise.
+  * ✅ Prisma Client Extension (lines 315-420) — multi-tenancy (AsyncLocalStorage + storeId injection) + financial immutability (JournalEntry/JournalEntryLine/SystemLog append-only). PRESERVED, not stripped.
+  * ✅ pgbouncer documentation in header comments (lines 34-52).
+  * CONCLUSION: db.ts is serverless-optimized and production-grade. NO CHANGES NEEDED.
+- Examined src/lib/env.ts (263 lines):
+  * ✅ Lazy Proxy validation (lines 219-229) — importing @/lib/env NEVER throws; validation runs on first env.X property access.
+  * ✅ SKIP_ENV_VALIDATION pattern (lines 172-180) — build phase skips Zod validation entirely.
+  * ✅ NEXT_PHASE detection (lines 170-180) — `phase-production-build` and `phase-instrumentation` also skip validation (Layer 2 — makes `next build` work even without SKIP_ENV_VALIDATION prefix).
+  * ✅ `validateEnv()` runs Zod `safeParse` and collects ALL issues into a single `EnvValidationError` (not one-by-one).
+  * ✅ `requireEnv(key)` for lazy per-key enforcement.
+  * ✅ `isProduction`, `isTest`, `isBuildTime` exports for downstream branching.
+  * CONCLUSION: env.ts is production-grade. NO CHANGES NEEDED.
+- Tested new Vercel token `vck_8N7S...`:
+  * Token authenticates as `muchiricollins98@gmail.com` (defaultTeam: `team_VmVQcu8Piwz4KvXho7u8PEG1`, `limited: true`).
+  * This is the SAME account as the prior token `vck_13tr...` — both belong to muchiricollins98@gmail.com.
+  * Lists 0 projects (with and without explicit teamId).
+  * Direct project lookup `GET /v9/projects/mbumah-hardware-pos-one` → 404 "Project not found".
+  * `GET /v2/teams` → 403 "You don't have permission to list the team" (account is `limited: true`).
+  * CONCLUSION: The project is owned by a DIFFERENT Vercel account (likely `bucky-ops`, matching the GitHub repo owner `bucky-ops/mbumah-hardware-pos`). Tokens from muchiricollins98@gmail.com CANNOT manage this project's env vars.
+- Checked production env var state via /api/health/env:
+  * DATABASE_URL → `ep-winter-waterfall-a25wj37w-pooler.eu-central-1.aws.neon.tech` (OLD, UNREACHABLE) + MISSING `pgbouncer=true`
+  * DIRECT_URL → `ep-winter-waterfall-a25wj37w.eu-central-1.aws.neon.tech` (OLD, UNREACHABLE, NON-pooler) + MISSING `pgbouncer=true`
+  * NEXTAUTH_URL → `Gt5mW8xK2pR7vN4bQ9fL6jY1cZ3aH0dS` (RANDOM STRING, NOT A URL!)
+  * NEXTAUTH_SECRET → ✅ 42 chars, strong
+  * JWT_SECRET → ✅ 32 chars, strong
+  * EXPOSE_ERRORS → NOT SET (debugging blind in production)
+- Checked production DB state via /api/health/db:
+  * `reachable: false`
+  * Error: "Can't reach database server at `ep-winter-waterfall-a25wj37w-pooler.eu-central-1.aws.neon.tech:5432`"
+  * Response time: 1683ms (connection timeout)
+  * CONFIRMS: Production 500 is caused by env vars pointing to dead Neon endpoint.
+- Enhanced scripts/set-vercel-env.sh:
+  * Added `EXPOSE_ERRORS=true` to env vars set by the script (lets login route's inner DB try/catch include full Prisma error in JSON 500 response for browser-side diagnosis).
+  * Fixed bash parameter expansion bug on line 170: `${TEAM_PARAM/&/?}` → `${TEAM_PARAM/?/&}`. The old form was a no-op (TEAM_PARAM has no `&`), producing malformed URLs like `?projectId=X&limit=1&production=true?teamId=Y` (two `?`). The new form correctly converts `?teamId=Y` → `&teamId=Y` when appending to an existing query string.
+  * Updated summary block to display EXPOSE_ERRORS value.
+  * Verified script syntax with `bash -n` → OK.
+- Ran `bun run lint` → 0 errors, 0 warnings.
+
+ROOT CAUSE CONFIRMED (Phase 1 Complete):
+  The production /api/auth/login 500 error is NOT a code bug. The code in login/route.ts, db.ts, and env.ts is already fully hardened with robust try/catch, full stack logging, force-dynamic, lazy env validation, and serverless-optimized Prisma singleton. The 500 is caused SOLELY by Vercel env var misconfiguration:
+    1. DATABASE_URL → points to OLD unreachable Neon endpoint (ep-winter-waterfall) + missing pgbouncer=true
+    2. DIRECT_URL → points to OLD unreachable Neon endpoint + non-pooler hostname
+    3. NEXTAUTH_URL → set to a random string instead of the app URL
+    4. EXPOSE_ERRORS → not set (production debugging is blind)
+  The user's Vercel token (vck_8N7S...) belongs to muchiricollins98@gmail.com, but the project is owned by a different account. Programmatic env var update is BLOCKED until a token from the project-owning account is provided.
+
+Stage Summary:
+- ✅ Phase 1 diagnosis COMPLETE. All three target files (login/route.ts, db.ts, env.ts) verified production-grade. No code changes required.
+- ✅ Root cause 100% confirmed: Vercel env vars point to dead Neon endpoint (ep-winter-waterfall-a25wj37w-pooler). Must be updated to ep-calm-butterfly-aivj6kzm-pooler.
+- ✅ scripts/set-vercel-env.sh enhanced: added EXPOSE_ERRORS=true, fixed bash parameter expansion bug on line 170, updated summary.
+- ✅ Lint clean (0/0). Script syntax valid.
+- ❌ Cannot programmatically fix Vercel env vars — provided token is from wrong account (muchiricollins98@gmail.com). Need token from project-owning account (likely bucky-ops).
+- ⏸️ STOPPING HERE per Phase 1 pacing. Awaiting user to type 'continue' for Phase 2 (Vercel build compatibility) and Phase 3 (VERCEL_DEPLOY_FIXES.md with 5-step manual instructions).
+
+NEXT STEPS (for user):
+  Option A (preferred): Provide a Vercel API token from the project-owning account. Then run:
+    VERCEL_TOKEN=<correct-token> bash scripts/set-vercel-env.sh
+  Option B (manual dashboard): Update these 4 env vars in Vercel dashboard → Project Settings → Environment Variables:
+    DATABASE_URL = postgresql://neondb_owner:npg_aRfWJIn8Neq9@ep-calm-butterfly-aivj6kzm-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&pgbouncer=true&connect_timeout=15
+    DIRECT_URL   = postgresql://neondb_owner:npg_aRfWJIn8Neq9@ep-calm-butterfly-aivj6kzm-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&pgbouncer=true&connect_timeout=30
+    NEXTAUTH_URL = https://mbumah-hardware-pos-one.vercel.app
+    EXPOSE_ERRORS = true
+  Then trigger a Redeploy in Vercel dashboard (without build cache).
+  Then verify:
+    curl -s https://mbumah-hardware-pos-one.vercel.app/api/health/env | jq
+    curl -s https://mbumah-hardware-pos-one.vercel.app/api/health/db  | jq
