@@ -6,6 +6,8 @@ import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { requireAuth, AuthSession } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 async function getSystemConfigHandler(
   request: NextRequest,
   _session: AuthSession

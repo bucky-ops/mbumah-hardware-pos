@@ -19,6 +19,8 @@ import { requireAuth, AuthSession } from '@/lib/auth';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 interface RedeemBody {
   code: string;
   storeId: string;

@@ -14,6 +14,8 @@ import { db } from '@/lib/db';
 import { requireAuth, AuthSession } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
 
+export const dynamic = 'force-dynamic';
+
 interface RouteContext {
   params: Promise<{ id: string }>;
 }

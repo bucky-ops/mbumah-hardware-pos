@@ -29,6 +29,8 @@ import { recordSaleJournalEntry, getAccountIds, ACCOUNT_CODES } from '@/lib/acco
 import { LogSeverity, LogComponent, PaymentMethod, PaymentStatus } from '@/lib/types';
 import { checkoutSchema, validateInput } from '@/lib/validations';
 
+export const dynamic = 'force-dynamic';
+
 async function getTransactionsHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const { searchParams } = new URL(request.url);

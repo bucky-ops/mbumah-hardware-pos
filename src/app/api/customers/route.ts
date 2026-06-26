@@ -6,6 +6,8 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { createCustomerSchema, validateInput } from '@/lib/validations';
 
+export const dynamic = 'force-dynamic';
+
 async function getCustomersHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const { searchParams } = new URL(request.url);

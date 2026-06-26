@@ -8,6 +8,8 @@ import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { blockKey, resetRateLimit } from '@/lib/rate-limit';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 async function blockIPHandler(
   request: NextRequest,
   session: AuthSession

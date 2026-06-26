@@ -7,6 +7,8 @@ import { generateJournalEntryNumber } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 const VALID_DRAWER_ACTIONS = ['OPEN', 'CLOSE', 'CASH_IN', 'CASH_OUT'];
 
 async function getCashDrawerHandler(...args: unknown[]): Promise<Response> {

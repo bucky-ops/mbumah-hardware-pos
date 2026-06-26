@@ -4,6 +4,8 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 
+export const dynamic = 'force-dynamic';
+
 async function getSalesReportHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const { searchParams } = new URL(request.url);

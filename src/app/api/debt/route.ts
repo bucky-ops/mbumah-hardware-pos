@@ -7,6 +7,8 @@ import { generateJournalEntryNumber, calculateAgingBucket } from '@/lib/helpers'
 import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, DebtStatus } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 async function getDebtHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const { searchParams } = new URL(request.url);

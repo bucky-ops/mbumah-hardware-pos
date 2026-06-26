@@ -22,6 +22,8 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 interface StkPushBody {
   phone?: string;
   phoneNumber?: string;

@@ -6,6 +6,8 @@ import { NextRequest } from 'next/server';
 import { getSessionFromRequest } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
 
+export const dynamic = 'force-dynamic';
+
 async function verifyHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const session = await getSessionFromRequest(request);

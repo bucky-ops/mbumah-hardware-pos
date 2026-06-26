@@ -15,6 +15,8 @@ import { db } from '@/lib/db';
 import { requireAuth, AuthSession } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
 
+export const dynamic = 'force-dynamic';
+
 type RangeKey = '7d' | '30d' | '90d';
 
 interface ProductTrend {

@@ -3,6 +3,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 function generateCSRFToken(): string {
   const array = new Uint8Array(32);
   crypto.getRandomValues(array);

@@ -7,6 +7,8 @@ import { generateJournalEntryNumber } from '@/lib/helpers';
 import { getAccountId, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, PaymentStatus } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 interface MpesaCallbackBody {
   Body?: {
     stkCallback?: {

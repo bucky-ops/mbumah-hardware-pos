@@ -6,6 +6,8 @@ import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { formatKES } from '@/lib/helpers';
 
+export const dynamic = 'force-dynamic';
+
 function escapeCSV(value: unknown): string {
   const str = String(value ?? '');
   if (str.includes(',') || str.includes('"') || str.includes('\n')) {

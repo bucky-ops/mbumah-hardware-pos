@@ -7,6 +7,8 @@ import { generateGiftCardCode } from '@/lib/helpers';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { createGiftCardSchema, validateInput } from '@/lib/validations';
 
+export const dynamic = 'force-dynamic';
+
 const VALID_STATUSES = ['ACTIVE', 'REDEEMED', 'EXPIRED', 'CANCELLED', 'PARTIALLY_REDEEMED'];
 const VALID_REASONS = [
   'CUSTOMER_LOYALTY', 'PROMOTION', 'REFUND_CREDIT', 'STORE_CREDIT',

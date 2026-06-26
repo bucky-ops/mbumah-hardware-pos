@@ -5,6 +5,8 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 async function endShiftHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const id = args[1] as { params: Promise<{ id: string }> };

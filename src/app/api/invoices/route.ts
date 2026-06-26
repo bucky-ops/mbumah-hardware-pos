@@ -5,6 +5,8 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 const INVOICE_PREFIXES: Record<string, string> = {
   INVOICE: 'INV',
   QUOTATION: 'QUO',

@@ -15,6 +15,8 @@ import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 interface RouteContext {
   params: Promise<{ checkoutRequestId: string }>;
 }

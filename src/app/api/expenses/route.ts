@@ -8,6 +8,8 @@ import { getAccountIds, ACCOUNT_CODES, type AccountCode } from '@/lib/account-he
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { createExpenseSchema, validateInput } from '@/lib/validations';
 
+export const dynamic = 'force-dynamic';
+
 // Expense category -> account code mapping
 const CATEGORY_ACCOUNT_MAP: Record<string, string> = {
   RENT: ACCOUNT_CODES.RENT_EXPENSE,

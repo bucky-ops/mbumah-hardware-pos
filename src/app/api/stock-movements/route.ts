@@ -6,6 +6,8 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent, StockMovementType } from '@/lib/types';
 import { calculateWeightedAverageCost } from '@/lib/account-helper';
 
+export const dynamic = 'force-dynamic';
+
 async function getStockMovementsHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const { searchParams } = new URL(request.url);

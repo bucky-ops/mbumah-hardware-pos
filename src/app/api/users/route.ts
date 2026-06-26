@@ -8,6 +8,8 @@ import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { requireAuth, AuthSession } from '@/lib/auth';
 import { createUserSchema, validateInput } from '@/lib/validations';
 
+export const dynamic = 'force-dynamic';
+
 async function getUsersHandler(
   request: NextRequest,
   session: AuthSession

@@ -4,6 +4,8 @@
 
 import { db } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+
 interface HealthCheck {
   status: 'ok' | 'error' | 'warning';
   detail?: string;
