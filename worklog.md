@@ -2628,3 +2628,105 @@ Stage Summary:
 
 PRODUCTION URL: https://mbumah-hardware-pos-one.vercel.app
 LOGIN CREDENTIALS: admin@mbumahhardware.co.ke / password123 (SUPER_ADMIN)
+
+---
+Task ID: recheck-1
+Agent: DevOps/QA Helper
+Task: Restart dev server and test payroll APIs (leave-types, employees, payroll/periods, payroll/runs) to verify previous "Cannot read properties of undefined (reading 'leaveType'/'employee')" 500 errors are gone.
+
+Work Log:
+- Read worklog.md (last 100 lines) for context — production was fully fixed (env vars + redeploy), local dev known to be healthy.
+- Task 1 — Killed lingering dev processes: `pkill -9 -f "next dev"; pkill -9 -f "bun run dev"; sleep 2`. Confirmed all bun/next processes terminated.
+- Task 2 — Verified port 3000 is free: `ss -tlnp | grep 3000` → "port 3000 free".
+- Task 3 — Initial attempt with `nohup setsid bun run dev > /tmp/dev-out.log 2>&1 < /dev/null & disown; echo "PID: $!"` returned PID 19168 but the process immediately detached and died (PID 19168 was the nohup wrapper shell, not bun itself; /tmp/dev-out.log stayed empty at 0 bytes). This matches the user's report that the prior `setsid bun run dev ... &` invocation appeared to block/die.
+- Task 3 (retry) — Used a clean subshell pattern that survives session end: `(setsid bun run dev > /tmp/dev-out.log 2>&1 < /dev/null &)`. This successfully detached the bun process group. PIDs spawned:
+    * 19232 — `bun run dev`
+    * 19234 — `/usr/bin/bash -c next dev -p 3000 2>&1 | tee dev.log`
+    * 19235 — `node .../node_modules/.bin/next dev -p 3000`
+    * 19248 — `next-server (v16.1.3)`
+- Task 4 — After `sleep 15` (allowed for Turbopack compile): 
+    * `pgrep -af "next dev"` returned 2 processes (19234, 19235) ✓
+    * `curl http://localhost:3000/api/security/csrf-token` → HTTP 200 ✓
+    * /tmp/dev-out.log shows: "Next.js 16.1.3 (Turbopack)", "✓ Ready in 1323ms", "GET /api/security/csrf-token 200 in 150ms"
+- Task 5 — Server IS running; no errors to investigate. (Sanity grep for error|cannot read|undefined|null in /tmp/dev-out.log → empty.)
+- Task 6 — Authenticated API test flow (admin@mbumahhardware.co.ke / password123):
+    * CSRF token fetched from /api/security/csrf-token (cookie jar /tmp/qa-cookies.txt)
+    * POST /api/auth/login → 200, JWT issued (token prefix: f59ed1a66a622232857b...)
+    * GET /api/leave-types → 200, returns full leave-type array (Annual Leave, Compassionate Leave, etc.) — data NOT empty, proving db.leaveType is defined and querying successfully.
+    * GET /api/employees?storeId=store_juja_main → 200, returns `{"success":true,"data":[]}` (empty array — store has no employees seeded yet, but the route works and db.employee is defined).
+    * GET /api/payroll/periods → 200, returns `{"success":true,"data":[]}` (empty array — no payroll periods seeded yet).
+    * GET /api/payroll/runs → 200, returns `{"success":true,"data":[]}` (empty array — no payroll runs seeded yet).
+- Task 7 — Reported results below.
+
+Stage Summary:
+- ✅ Dev server IS running: `next-server (v16.1.3)` on port 3000 (http://localhost:3000). Process group detached via `setsid`, will survive shell session end.
+- ✅ All 4 payroll-related API endpoints return HTTP 200:
+    | Endpoint                    | HTTP | Response (first chars)                                                   |
+    |-----------------------------|------|--------------------------------------------------------------------------|
+    | /api/leave-types            | 200  | `{"success":true,"data":[{"id":"cmquuctjm0004tquovx8vgabq","name":"Annual Leave","code":"ANNUAL",...}]}` (multiple records) |
+    | /api/employees?storeId=...  | 200  | `{"success":true,"data":[]}`                                             |
+    | /api/payroll/periods        | 200  | `{"success":true,"data":[]}`                                             |
+    | /api/payroll/runs           | 200  | `{"success":true,"data":[]}`                                             |
+- ✅ The previous "Cannot read properties of undefined (reading 'leaveType'/'employee')" 500 errors are GONE. db.leaveType and db.employee are now defined and queryable (leave-types returns real rows; employees/periods/runs return clean empty arrays, not 500s).
+- ✅ /tmp/dev-out.log contains NO errors — only standard Next.js 16 warnings (`eslint` config key deprecated, `middleware` → `proxy` rename) which are informational only.
+- ✅ No code files modified (diagnostic + restart task only, as instructed).
+- Note: Initial `nohup setsid bun run dev ... & disown` pattern did NOT start the server (PID 19168 died immediately, log stayed empty). Retry with `(setsid bun run dev > /tmp/dev-out.log 2>&1 < /dev/null &)` subshell pattern worked. If future restarts are needed, prefer the subshell pattern.
+
+Next Actions (suggested, not performed):
+- Seed employees for store_juja_main so /api/employees returns real data (optional — route already works).
+- Seed at least one payroll period + run to fully exercise the payroll UI (optional — routes already work).
+- Consider a `bun run dev` wrapper script that uses the working `(setsid ... &)` pattern to avoid the nohup/disown foot-gun in future.
+
+---
+Task ID: recheck-2
+Agent: QA & Cleanup engineer (subagent)
+Task: Recheck previous stage — verify production fix intact, fix local payroll API regression, commit untracked payroll files, run E2E.
+
+Work Log:
+- Read last 80 lines of worklog.md for context (production env vars fixed in previous stage; local payroll APIs returning 200 after Prisma Client regen via `bun run db:push`).
+- Task 1 — Searched src/app/page.tsx for "payroll", "Payroll", "employees", "Employee" references → NO MATCHES. Confirmed no `payroll-tab.tsx` or `employees-tab.tsx` files exist in `src/app/tabs/`. Dashboard currently registers 20 tabs: dashboard, inventory, customers, rentals, financial, reports, admin, transactions, suppliers, catalog, gift-cards, vouchers, invoices, delivery-notes, credits, messaging, transfers, banking, loyalty, security. **Payroll/Employee UI tab does NOT exist** (only backend API routes exist).
+- Task 2 — Production health checks (https://mbumah-hardware-pos-one.vercel.app):
+    * /api/health/db → HTTP 200, reachable: True, counts: {organizations:1, stores:5, users:12, products:51, categories:26, customers:16, salesTransactions:3, permissions:236}
+    * /api/health/env → HTTP 200
+    * Production DB shows growth since prior stage (customers 15→16, salesTransactions 0→3) confirming live, healthy system.
+- Task 3 — Local dev authenticated smoke test (admin@mbumahhardware.co.ke / password123, store_juja_main). Login returned JWT token (prefix 0af41824b00f1808...). All 7 endpoints HTTP 200:
+    | Endpoint                    | HTTP |
+    |-----------------------------|------|
+    | /api/dashboard              | 200  |
+    | /api/products?limit=5       | 200  |
+    | /api/customers?limit=5      | 200  |
+    | /api/leave-types            | 200  |
+    | /api/employees              | 200  |
+    | /api/payroll/periods        | 200  |
+    | /api/payroll/runs           | 200  |
+- Task 4 — `bun run lint` → clean. Output: just `$ eslint .` with no errors or warnings reported.
+- Task 5 — Git commit + push:
+    * Staged 9 new files: src/app/api/{attendance,employees,leave-types,leaves,payroll/details,payroll/periods,payroll/runs,payroll/runs/[id]/process}/route.ts + src/lib/payroll-helpers.ts
+    * Also staged prisma/schema.prisma (modified — adds Employee/LeaveType/Leave/PayrollPeriod/PayrollRun/PayrollDetail/Attendance models)
+    * Commit: c7c42277b695cd908408677b565ca6459951e17b (10 files changed, 2609 insertions, 1 deletion)
+    * Push: `d7bae0b..c7c4227 main -> main` ✓ pushed to origin/main successfully
+    * Note: intentionally left worklog.md unstaged (we are appending to it separately).
+- Task 6 — agent-browser E2E on local dev:
+    * `agent-browser open http://localhost:3000` → navigated successfully.
+    * Browser session was already authenticated (persistent profile from prior tests) → landed directly on the Dashboard (not the login page).
+    * Dashboard rendered fully: title "MBUMAH HARDWARE - POS & ERP System", user greeting "Karibu, System 👋", subtitle "Here's what's happening at Juja Main today · Friday, 26 June 2026", store selector "Juja Main", notification badge "12", live clock "11:26:34", "System Healthy / Last sync: just now" status.
+    * Full left navigation visible: POS (F2), Catalog, Inventory (F3), Customers (F4), Transactions, Rentals, Financial (F5), Reports, Suppliers, Gift Cards, Admin — confirms NO Payroll/Employees tab in the UI.
+    * Main content: Debt Aging Summary (Total outstanding Ksh200,340: Current Ksh31,340, 30d Ksh114,000, 60d Ksh15,000, 90d+ Ksh40,000), notification cards (1 rental past due, 1 debt record past due, Akinyi Builders Ltd owes KES 90,000, recent sale Akinyi Builders Ltd KES 50,200 MPESA 12m ago).
+    * Footer: "MBUMAH HARDWARE POS & ERP © 2026, v1.0.0, Connected".
+    * No error toasts, no "Loading..." hang, no 500s. App is fully functional.
+- Task 7 — This worklog entry appended (using `cat >>` heredoc as instructed).
+
+Stage Summary:
+- ✅ **No Payroll/Employees UI tab exists.** The dashboard registers 20 tabs but Payroll is not among them. Backend API routes exist (`/api/attendance`, `/api/employees`, `/api/leave-types`, `/api/leaves`, `/api/payroll/{periods,runs,details}`) but no UI surface has been built yet. Next stage (if desired) would be to scaffold `src/app/tabs/payroll-tab.tsx` + `employees-tab.tsx` and register them in page.tsx.
+- ✅ **Production is healthy and intact.** Both `/api/health/db` (reachable: True, full counts) and `/api/health/env` return HTTP 200. Live data shows customers grew 15→16 and salesTransactions 0→3 since the prior stage, confirming the previous env-var fix is holding.
+- ✅ **Local dev smoke test clean.** All 7 critical endpoints (dashboard, products, customers, leave-types, employees, payroll/periods, payroll/runs) return HTTP 200. No 500s. Login JWT issues correctly.
+- ✅ **Lint clean.** `bun run lint` reports zero errors, zero warnings.
+- ✅ **Payroll files committed and pushed.** Commit c7c4227 (10 files, +2609/-1) pushed to origin/main. Includes all 9 new payroll/employee/leave/attendance API route files + payroll-helpers.ts + schema.prisma update.
+- ✅ **agent-browser E2E confirms dashboard renders fully** with real data (Ksh200,340 outstanding debt, 4 notification cards, live clock, store selector). No errors.
+- ✅ **No code files modified** (verify + commit + document only, as instructed).
+- Note: agent-browser session landed on the dashboard directly because its persistent profile retained auth cookies from prior E2E runs — this is expected behavior and does not indicate any issue.
+
+Next Actions (suggested, not performed):
+- Build a `payroll-tab.tsx` (and optionally `employees-tab.tsx`) UI tab and register it in src/app/page.tsx so the payroll API routes become accessible from the dashboard. Suggested tab label: "Payroll" / "HR".
+- Seed at least one Employee + PayrollPeriod + PayrollRun for store_juja_main so the (eventual) UI has data to render.
+- Consider adding the new payroll models to the admin-tab schema/permissions management UI.
