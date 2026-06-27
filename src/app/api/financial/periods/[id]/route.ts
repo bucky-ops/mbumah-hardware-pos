@@ -6,6 +6,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { LogComponent } from '@/lib/types';
+import { withFinancialAuth, FINANCIAL_ROLES } from '@/lib/auth';
 import {
   closeFinancialPeriod,
   lockFinancialPeriod,
@@ -117,5 +118,11 @@ async function periodActionHandler(...args: unknown[]): Promise<Response> {
   }
 }
 
-export const GET = withErrorBoundary(getPeriodHandler, LogComponent.FINANCIAL);
-export const PUT = withErrorBoundary(periodActionHandler, LogComponent.FINANCIAL);
+export const GET = withFinancialAuth(
+  withErrorBoundary(getPeriodHandler, LogComponent.FINANCIAL),
+  FINANCIAL_ROLES.READ,
+);
+export const PUT = withFinancialAuth(
+  withErrorBoundary(periodActionHandler, LogComponent.FINANCIAL),
+  FINANCIAL_ROLES.WRITE,
+);

@@ -3,6 +3,7 @@
 import { db, withImmutabilityBypass } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withFinancialAuth, FINANCIAL_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -86,4 +87,7 @@ async function voidJournalEntryHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const PUT = withErrorBoundary(voidJournalEntryHandler, 'JOURNAL_ENTRY_VOID');
+export const PUT = withFinancialAuth(
+  withErrorBoundary(voidJournalEntryHandler, 'JOURNAL_ENTRY_VOID'),
+  FINANCIAL_ROLES.WRITE,
+);

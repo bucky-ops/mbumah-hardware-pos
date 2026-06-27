@@ -7,6 +7,7 @@
 import { type NextRequest } from 'next/server';
 import { withErrorBoundary } from '@/lib/logger';
 import { LogComponent } from '@/lib/types';
+import { withFinancialAuth, FINANCIAL_ROLES } from '@/lib/auth';
 import { recalculateBudgetActuals } from '@/lib/accounting-helpers';
 import { APIError } from '@/lib/api-error';
 
@@ -52,4 +53,7 @@ async function recalculateHandler(...args: unknown[]): Promise<Response> {
   }
 }
 
-export const POST = withErrorBoundary(recalculateHandler, LogComponent.FINANCIAL);
+export const POST = withFinancialAuth(
+  withErrorBoundary(recalculateHandler, LogComponent.FINANCIAL),
+  FINANCIAL_ROLES.WRITE,
+);

@@ -5,6 +5,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { LogComponent } from '@/lib/types';
+import { withFinancialAuth, FINANCIAL_ROLES } from '@/lib/auth';
 import { setBudget } from '@/lib/accounting-helpers';
 import { APIError } from '@/lib/api-error';
 
@@ -143,5 +144,11 @@ async function deleteBudgetHandler(..._args: unknown[]): Promise<Response> {
   });
 }
 
-export const PUT = withErrorBoundary(updateBudgetHandler, LogComponent.FINANCIAL);
-export const DELETE = withErrorBoundary(deleteBudgetHandler, LogComponent.FINANCIAL);
+export const PUT = withFinancialAuth(
+  withErrorBoundary(updateBudgetHandler, LogComponent.FINANCIAL),
+  FINANCIAL_ROLES.WRITE,
+);
+export const DELETE = withFinancialAuth(
+  withErrorBoundary(deleteBudgetHandler, LogComponent.FINANCIAL),
+  FINANCIAL_ROLES.WRITE,
+);

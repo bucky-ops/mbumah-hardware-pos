@@ -6,6 +6,7 @@
 import { type NextRequest } from 'next/server';
 import { withErrorBoundary } from '@/lib/logger';
 import { LogComponent } from '@/lib/types';
+import { withFinancialAuth, FINANCIAL_ROLES } from '@/lib/auth';
 import { listAuditTrail } from '@/lib/accounting-helpers';
 
 export const dynamic = 'force-dynamic';
@@ -66,4 +67,7 @@ async function listAuditTrailHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const GET = withErrorBoundary(listAuditTrailHandler, LogComponent.FINANCIAL);
+export const GET = withFinancialAuth(
+  withErrorBoundary(listAuditTrailHandler, LogComponent.FINANCIAL),
+  FINANCIAL_ROLES.AUDIT,
+);

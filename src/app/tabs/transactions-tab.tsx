@@ -7,9 +7,10 @@ import {
   ShoppingBag, Search, Download, ChevronDown, ChevronUp,
   CalendarDays, TrendingUp, Hash, CreditCard, Smartphone, Banknote, Wallet,
   Filter, FileText, RotateCcw, Ban, Eye, Printer, AlertTriangle, Receipt, X, MessageCircle,
+  Mail, Send, Loader2,
 } from 'lucide-react';
 
-import { transactionsApi, whatsappApi, formatKES, formatDateTime, type TransactionItem, type SaleItemDetail } from '@/lib/api';
+import { transactionsApi, whatsappApi, formatKES, formatDateTime, type TransactionItem, type SaleItemDetail, type ReceiptDistributionResult } from '@/lib/api';
 import { useAppStore } from '@/lib/stores';
 import { getStoreInfo, getLogoUrl, COMPANY } from '@/lib/store-info';
 import { handleError } from '@/lib/error-handler';
@@ -232,16 +233,53 @@ function ReceiptModal({
   open,
   onOpenChange,
   transaction,
+  onDistribute,
+  distributing,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   transaction: TransactionItem | null;
+  onDistribute: (channel: 'EMAIL' | 'WHATSAPP', recipient: string) => void;
+  distributing: 'EMAIL' | 'WHATSAPP' | null;
 }) {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
+
+  // Recipient input state (email or phone) — prefilled from the customer record
+  // when the user picks a channel. State is reset via `onOpenChange` when the
+  // modal closes (see the wrapped handler below).
+  const [distChannel, setDistChannel] = useState<'EMAIL' | 'WHATSAPP' | null>(null);
+  const [recipient, setRecipient] = useState('');
+
+  // Reset distribution state when the modal closes.
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      setDistChannel(null);
+      setRecipient('');
+    }
+    onOpenChange(open);
+  };
 
   if (!transaction) return null;
 
   const items = transaction.items || [];
+
+  const handleStartEmail = () => {
+    setDistChannel('EMAIL');
+    setRecipient(transaction.customer?.email || '');
+  };
+
+  const handleStartWhatsApp = () => {
+    setDistChannel('WHATSAPP');
+    setRecipient(transaction.customer?.phone || '');
+  };
+
+  const handleConfirmDistribute = () => {
+    if (!recipient.trim()) {
+      toast.error(distChannel === 'EMAIL' ? 'Email address is required.' : 'Phone number is required.');
+      return;
+    }
+    onDistribute(distChannel!, recipient.trim());
+  };
 
   const handlePrint = () => {
     const printContent = document.getElementById('receipt-print-area');
@@ -282,7 +320,7 @@ function ReceiptModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -349,12 +387,46 @@ function ReceiptModal({
           </div>
           <div className="text-center text-[10px] text-muted-foreground pt-2">Thank you for your business!</div>
         </div>
-        <DialogFooter className="gap-2">
-          <Button variant="outline" size="sm" onClick={handlePrint}>
-            <Printer className="h-4 w-4 mr-1.5" /> Print
-          </Button>
-          <Button size="sm" onClick={() => onOpenChange(false)}>Close</Button>
-        </DialogFooter>
+
+        {/* Distribution controls (Phase 4 — Email via Resend + WhatsApp via Twilio) */}
+        {distChannel ? (
+          <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+            <p className="text-xs font-medium flex items-center gap-1.5">
+              {distChannel === 'EMAIL' ? <Mail className="h-3.5 w-3.5" /> : <MessageCircle className="h-3.5 w-3.5" />}
+              Send receipt via {distChannel === 'EMAIL' ? 'Email' : 'WhatsApp'}
+            </p>
+            <Input
+              type={distChannel === 'EMAIL' ? 'email' : 'tel'}
+              placeholder={distChannel === 'EMAIL' ? 'customer@example.com' : '+254712345678'}
+              value={recipient}
+              onChange={(e) => setRecipient(e.target.value)}
+              className="h-8 text-xs"
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <Button size="sm" className="h-7 text-xs flex-1" onClick={handleConfirmDistribute} disabled={distributing !== null}>
+                {distributing === distChannel ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Send className="h-3 w-3 mr-1" />}
+                Send {distChannel === 'EMAIL' ? 'Email' : 'WhatsApp'}
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setDistChannel(null)} disabled={distributing !== null}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <DialogFooter className="gap-2 flex-wrap sm:flex-nowrap">
+            <Button variant="outline" size="sm" onClick={handlePrint}>
+              <Printer className="h-4 w-4 mr-1.5" /> Print
+            </Button>
+            <Button variant="outline" size="sm" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30" onClick={handleStartEmail} disabled={distributing !== null}>
+              <Mail className="h-4 w-4 mr-1.5" /> Email
+            </Button>
+            <Button variant="outline" size="sm" className="text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30" onClick={handleStartWhatsApp} disabled={distributing !== null}>
+              <MessageCircle className="h-4 w-4 mr-1.5" /> WhatsApp
+            </Button>
+            <Button size="sm" onClick={() => onOpenChange(false)}>Close</Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -571,6 +643,8 @@ export default function TransactionsTab() {
   // Receipt modal state
   const [receiptTransaction, setReceiptTransaction] = useState<TransactionItem | null>(null);
   const [receiptOpen, setReceiptOpen] = useState(false);
+  // Receipt distribution state (Phase 4 — Email/WhatsApp)
+  const [distributing, setDistributing] = useState<'EMAIL' | 'WHATSAPP' | null>(null);
 
   // Refund/Void dialog state
   const [refundTransaction, setRefundTransaction] = useState<TransactionItem | null>(null);
@@ -693,6 +767,37 @@ export default function TransactionsTab() {
       toast.error(msg);
     }
   }, [currentStoreId]);
+
+  /**
+   * Distribute the currently-open receipt via Email (Resend) or WhatsApp (Twilio).
+   * Calls POST /api/reports/export with the transaction ID and channel. The
+   * backend gracefully simulates the send when provider API keys are absent,
+   * returning `simulated: true` so we can inform the user.
+   */
+  const handleDistributeReceipt = useCallback(async (channel: 'EMAIL' | 'WHATSAPP', recipient: string) => {
+    if (!receiptTransaction) return;
+    setDistributing(channel);
+    try {
+      const res = await transactionsApi.distributeReceipt({
+        transactionId: receiptTransaction.id,
+        channel,
+        email: channel === 'EMAIL' ? recipient : undefined,
+        phone: channel === 'WHATSAPP' ? recipient : undefined,
+        storeId: currentStoreId || undefined,
+      });
+      const result: ReceiptDistributionResult = (res as unknown as { data: ReceiptDistributionResult }).data ?? (res as unknown as ReceiptDistributionResult);
+      if (result.simulated) {
+        toast.info(result.message);
+      } else {
+        toast.success(result.message);
+      }
+    } catch (err) {
+      const msg = handleError(err, `Send receipt via ${channel === 'EMAIL' ? 'email' : 'WhatsApp'}`);
+      toast.error(msg);
+    } finally {
+      setDistributing(null);
+    }
+  }, [receiptTransaction, currentStoreId]);
 
   const handlePrintReceipt = useCallback((transaction: TransactionItem) => {
     const items = transaction.items || [];
@@ -1029,6 +1134,8 @@ export default function TransactionsTab() {
         open={receiptOpen}
         onOpenChange={setReceiptOpen}
         transaction={receiptTransaction}
+        onDistribute={handleDistributeReceipt}
+        distributing={distributing}
       />
 
       {/* Refund Confirmation */}

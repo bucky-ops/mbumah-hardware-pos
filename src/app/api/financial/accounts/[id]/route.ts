@@ -4,6 +4,7 @@
 import { type NextRequest } from 'next/server';
 import { withErrorBoundary } from '@/lib/logger';
 import { LogComponent } from '@/lib/types';
+import { withFinancialAuth, FINANCIAL_ROLES } from '@/lib/auth';
 import { updateAccount } from '@/lib/accounting-helpers';
 import { APIError } from '@/lib/api-error';
 
@@ -115,5 +116,11 @@ async function deactivateAccountHandler(...args: unknown[]): Promise<Response> {
   }
 }
 
-export const PUT = withErrorBoundary(updateAccountHandler, LogComponent.FINANCIAL);
-export const DELETE = withErrorBoundary(deactivateAccountHandler, LogComponent.FINANCIAL);
+export const PUT = withFinancialAuth(
+  withErrorBoundary(updateAccountHandler, LogComponent.FINANCIAL),
+  FINANCIAL_ROLES.WRITE,
+);
+export const DELETE = withFinancialAuth(
+  withErrorBoundary(deactivateAccountHandler, LogComponent.FINANCIAL),
+  FINANCIAL_ROLES.WRITE,
+);

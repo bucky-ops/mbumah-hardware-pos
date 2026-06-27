@@ -5,6 +5,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { LogComponent } from '@/lib/types';
+import { withFinancialAuth, FINANCIAL_ROLES } from '@/lib/auth';
 import { createAccount } from '@/lib/accounting-helpers';
 import { APIError } from '@/lib/api-error';
 
@@ -130,7 +131,10 @@ async function getAccountsHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const GET = withErrorBoundary(getAccountsHandler, LogComponent.FINANCIAL);
+export const GET = withFinancialAuth(
+  withErrorBoundary(getAccountsHandler, LogComponent.FINANCIAL),
+  FINANCIAL_ROLES.READ,
+);
 
 // ── POST /api/financial/accounts ────────────────────────────────────────────
 //
@@ -210,4 +214,7 @@ async function createAccountHandler(...args: unknown[]): Promise<Response> {
   }
 }
 
-export const POST = withErrorBoundary(createAccountHandler, LogComponent.FINANCIAL);
+export const POST = withFinancialAuth(
+  withErrorBoundary(createAccountHandler, LogComponent.FINANCIAL),
+  FINANCIAL_ROLES.WRITE,
+);

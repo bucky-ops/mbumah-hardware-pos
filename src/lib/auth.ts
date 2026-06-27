@@ -266,3 +266,88 @@ export function requireStoreAccess(handler: StoreScopedHandler) {
     );
   };
 }
+
+// ── Financial-route auth wrapper ─────────────────────────────────────────────
+//
+// Composable auth + role guard for financial API routes. Wraps an existing
+// handler (typically already wrapped by `withErrorBoundary`) and enforces:
+//   1. Authentication — a valid Bearer session must be present (401 otherwise).
+//   2. Role membership — the user's role must be in `allowedRoles` (403 otherwise).
+//
+// Unlike `requireAuth`, this wrapper does NOT change the handler's signature —
+// the wrapped handler keeps its `(...args: unknown[]) => Promise<Response>`
+// shape, so it composes cleanly with the existing financial route handlers
+// that extract `request = args[0]` and `context = args[1]`.
+//
+// Usage:
+//   export const GET = withFinancialAuth(
+//     withErrorBoundary(handler, LogComponent.FINANCIAL),
+//     FINANCIAL_ROLES.READ,
+//   );
+//
+// ISO 27001: A.9.4.1 — Access restriction (users can only access financial
+//                       data appropriate to their role)
+// ISO 27001: A.9.2.5 — Review of user access rights (role matrix is explicit)
+
+/** Roles permitted to READ financial data (trial balance, accounts, reports). */
+export const FINANCIAL_ROLES = {
+  READ: ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'],
+  WRITE: ['SUPER_ADMIN', 'STORE_OWNER', 'ACCOUNTANT'],
+  AUDIT: ['SUPER_ADMIN', 'STORE_OWNER', 'ACCOUNTANT'],
+} as const;
+
+type FinancialHandler = (...args: unknown[]) => Promise<Response>;
+
+export function withFinancialAuth(
+  handler: FinancialHandler,
+  allowedRoles: readonly string[],
+): FinancialHandler {
+  return async (...args: unknown[]): Promise<Response> => {
+    const request = args[0] as NextRequest;
+    const session = await getSessionFromRequest(request);
+
+    if (!session) {
+      return Response.json(
+        { success: false, error: 'Authentication required.' },
+        { status: 401 },
+      );
+    }
+
+    if (!allowedRoles.includes(session.role)) {
+      // Log the unauthorized access attempt for the security audit trail.
+      try {
+        await systemLog({
+          action: 'FINANCIAL_ACCESS_DENIED',
+          component: LogComponent.AUTH,
+          severity: LogSeverity.WARN,
+          message: `User ${session.email} (role: ${session.role}) attempted financial access requiring: ${allowedRoles.join(', ')}`,
+          userId: session.userId,
+          storeId: session.storeId || undefined,
+          metadata: {
+            requiredRoles: allowedRoles,
+            actualRole: session.role,
+            path: new URL(request.url).pathname,
+            method: request.method,
+          },
+        });
+      } catch {
+        /* logging must never block the auth decision */
+      }
+
+      return Response.json(
+        {
+          success: false,
+          error: 'Insufficient permissions for financial operations.',
+        },
+        { status: 403 },
+      );
+    }
+
+    // Authorized — delegate to the wrapped handler. The handler keeps its
+    // original signature and is responsible for its own storeId filtering
+    // (financial routes accept storeId as a query param, and SUPER_ADMIN can
+    // query cross-store).
+    return handler(...args);
+  };
+}
+

@@ -5,6 +5,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { LogComponent } from '@/lib/types';
+import { withFinancialAuth, FINANCIAL_ROLES } from '@/lib/auth';
 import { captureTrialBalanceSnapshot } from '@/lib/accounting-helpers';
 import { APIError } from '@/lib/api-error';
 
@@ -112,5 +113,11 @@ async function captureSnapshotHandler(...args: unknown[]): Promise<Response> {
   }
 }
 
-export const GET = withErrorBoundary(listSnapshotsHandler, LogComponent.FINANCIAL);
-export const POST = withErrorBoundary(captureSnapshotHandler, LogComponent.FINANCIAL);
+export const GET = withFinancialAuth(
+  withErrorBoundary(listSnapshotsHandler, LogComponent.FINANCIAL),
+  FINANCIAL_ROLES.AUDIT,
+);
+export const POST = withFinancialAuth(
+  withErrorBoundary(captureSnapshotHandler, LogComponent.FINANCIAL),
+  FINANCIAL_ROLES.AUDIT,
+);

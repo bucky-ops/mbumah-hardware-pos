@@ -561,7 +561,32 @@ export const transactionsApi = {
       body: JSON.stringify(data),
     });
   },
+
+  distributeReceipt: async (params: {
+    transactionId: string;
+    channel: 'EMAIL' | 'WHATSAPP';
+    email?: string;
+    phone?: string;
+    customMessage?: string;
+    storeId?: string;
+  }) => {
+    return request<ReceiptDistributionResult>(`/reports/export`, {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  },
 };
+
+// ── Receipt Distribution (Phase 4 — Email via Resend + WhatsApp via Twilio) ──
+
+export interface ReceiptDistributionResult {
+  success: boolean;
+  channel: 'EMAIL' | 'WHATSAPP';
+  recipient: string; // masked for PII
+  simulated: boolean; // true when provider API key was absent
+  providerId: string | null;
+  message: string;
+}
 
 
 export const paymentsApi = {

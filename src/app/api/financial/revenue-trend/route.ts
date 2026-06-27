@@ -3,6 +3,7 @@
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
+import { withFinancialAuth, FINANCIAL_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -168,4 +169,7 @@ async function getRevenueTrendHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const GET = withErrorBoundary(getRevenueTrendHandler, 'REVENUE_TREND');
+export const GET = withFinancialAuth(
+  withErrorBoundary(getRevenueTrendHandler, 'REVENUE_TREND'),
+  FINANCIAL_ROLES.READ,
+);

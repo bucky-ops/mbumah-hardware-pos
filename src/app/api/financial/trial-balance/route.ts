@@ -13,6 +13,7 @@ import { generateTrialBalance } from '@/lib/financial-audit';
 import { runWithoutTenant, runWithTenant } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { LogComponent } from '@/lib/types';
+import { withFinancialAuth, FINANCIAL_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,4 +66,7 @@ async function handler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const GET = withErrorBoundary(handler, LogComponent.FINANCIAL);
+export const GET = withFinancialAuth(
+  withErrorBoundary(handler, LogComponent.FINANCIAL),
+  FINANCIAL_ROLES.AUDIT,
+);

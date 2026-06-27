@@ -5,6 +5,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { LogComponent } from '@/lib/types';
+import { withFinancialAuth, FINANCIAL_ROLES } from '@/lib/auth';
 import { setBudget } from '@/lib/accounting-helpers';
 import { APIError } from '@/lib/api-error';
 
@@ -125,5 +126,11 @@ async function setBudgetHandler(...args: unknown[]): Promise<Response> {
   }
 }
 
-export const GET = withErrorBoundary(listBudgetsHandler, LogComponent.FINANCIAL);
-export const POST = withErrorBoundary(setBudgetHandler, LogComponent.FINANCIAL);
+export const GET = withFinancialAuth(
+  withErrorBoundary(listBudgetsHandler, LogComponent.FINANCIAL),
+  FINANCIAL_ROLES.READ,
+);
+export const POST = withFinancialAuth(
+  withErrorBoundary(setBudgetHandler, LogComponent.FINANCIAL),
+  FINANCIAL_ROLES.WRITE,
+);

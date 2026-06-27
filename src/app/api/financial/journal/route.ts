@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateJournalEntryNumber } from '@/lib/helpers';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withFinancialAuth, FINANCIAL_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -196,5 +197,11 @@ async function createJournalEntryHandler(...args: unknown[]): Promise<Response> 
   return Response.json({ success: true, data: entry }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getJournalEntriesHandler, 'JOURNAL_LIST');
-export const POST = withErrorBoundary(createJournalEntryHandler, 'JOURNAL_CREATE');
+export const GET = withFinancialAuth(
+  withErrorBoundary(getJournalEntriesHandler, 'JOURNAL_LIST'),
+  FINANCIAL_ROLES.READ,
+);
+export const POST = withFinancialAuth(
+  withErrorBoundary(createJournalEntryHandler, 'JOURNAL_CREATE'),
+  FINANCIAL_ROLES.WRITE,
+);

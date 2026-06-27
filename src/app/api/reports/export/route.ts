@@ -1,9 +1,13 @@
-// GET /api/reports/export (CSV: sales, inventory, debt, rentals)
+// GET  /api/reports/export (CSV: sales, inventory, debt, rentals)
+// POST /api/reports/export (Receipt distribution — Email via Resend / WhatsApp via Twilio)
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { requireAuth } from '@/lib/auth';
+import { distributeReceipt } from '@/lib/receipt-distribution';
+import { APIError } from '@/lib/api-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -234,3 +238,97 @@ async function getExportHandler(...args: unknown[]): Promise<Response> {
 }
 
 export const GET = withErrorBoundary(getExportHandler, 'REPORTS_EXPORT');
+
+// ── POST /api/reports/export ────────────────────────────────────────────────
+//
+// Receipt distribution endpoint. Accepts a transaction ID and channel
+// ('EMAIL' or 'WHATSAPP') and sends the branded receipt to the customer via
+// Resend (email) or Twilio (WhatsApp). See src/lib/receipt-distribution.ts
+// for the full implementation, provider config, and graceful-degradation
+// behaviour when API keys are absent.
+//
+// Body:
+//   {
+//     "transactionId": "clx...",
+//     "channel": "EMAIL" | "WHATSAPP",
+//     "email"?:    "customer@example.com",
+//     "phone"?:    "+254712345678",
+//     "customMessage"?: "Thank you for your purchase!"
+//   }
+
+async function distributeReceiptHandler(
+  request: NextRequest,
+  session: { userId: string; storeId: string | null; role: string; email: string },
+): Promise<Response> {
+  const body = await request.json();
+  const {
+    transactionId,
+    channel,
+    email,
+    phone,
+    customMessage,
+    storeId: bodyStoreId,
+  } = body as {
+    transactionId?: string;
+    channel?: 'EMAIL' | 'WHATSAPP';
+    email?: string;
+    phone?: string;
+    customMessage?: string;
+    storeId?: string;
+  };
+
+  if (!transactionId) {
+    return Response.json(
+      { success: false, error: 'transactionId is required.' },
+      { status: 400 },
+    );
+  }
+  if (!channel || (channel !== 'EMAIL' && channel !== 'WHATSAPP')) {
+    return Response.json(
+      { success: false, error: "channel must be 'EMAIL' or 'WHATSAPP'." },
+      { status: 400 },
+    );
+  }
+
+  // Resolve storeId: session.storeId for store-scoped users, body.storeId
+  // for SUPER_ADMIN cross-store access.
+  const storeId = session.storeId ?? bodyStoreId;
+  if (!storeId) {
+    return Response.json(
+      { success: false, error: 'storeId could not be determined from the session.' },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const result = await distributeReceipt({
+      transactionId,
+      channel,
+      email,
+      phone,
+      customMessage,
+      userId: session.userId,
+      storeId,
+      ipAddress: request.headers.get('x-forwarded-for') ?? undefined,
+      userAgent: request.headers.get('user-agent') ?? undefined,
+    });
+
+    return Response.json({ success: true, data: result });
+  } catch (error) {
+    if (error instanceof APIError) {
+      return Response.json(
+        { success: false, error: error.message },
+        { status: error.statusCode },
+      );
+    }
+    const msg = error instanceof Error ? error.message : String(error);
+    const status = /not found/i.test(msg) ? 404 : 500;
+    return Response.json({ success: false, error: msg }, { status });
+  }
+}
+
+export const POST = withErrorBoundary(
+  requireAuth(distributeReceiptHandler),
+  LogComponent.FINANCIAL,
+);
+
