@@ -1,8 +1,12 @@
 // GET /api/financial/accounts
+// POST /api/financial/accounts — create a new account in the chart of accounts.
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
+import { LogComponent } from '@/lib/types';
+import { createAccount } from '@/lib/accounting-helpers';
+import { APIError } from '@/lib/api-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -126,4 +130,84 @@ async function getAccountsHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const GET = withErrorBoundary(getAccountsHandler, 'ACCOUNTS_LIST');
+export const GET = withErrorBoundary(getAccountsHandler, LogComponent.FINANCIAL);
+
+// ── POST /api/financial/accounts ────────────────────────────────────────────
+//
+// Create a new account in the chart of accounts via `createAccount()`. The
+// normalBalance defaults by type (DEBIT for ASSET/EXPENSE, CREDIT for others)
+// but can be overridden for contra accounts (e.g. Accumulated Depreciation).
+
+async function createAccountHandler(...args: unknown[]): Promise<Response> {
+  const request = args[0] as NextRequest;
+  const body = await request.json();
+
+  const {
+    organizationId,
+    code,
+    name,
+    type,
+    subType,
+    normalBalance,
+    description,
+    isActive,
+    createdByUserId,
+  } = body as {
+    organizationId?: string;
+    code?: string;
+    name?: string;
+    type?: string;
+    subType?: string;
+    normalBalance?: string;
+    description?: string;
+    isActive?: boolean;
+    createdByUserId?: string;
+  };
+
+  if (!organizationId) {
+    return Response.json(
+      { success: false, error: 'organizationId is required.' },
+      { status: 400 },
+    );
+  }
+  if (!code || !name || !type) {
+    return Response.json(
+      { success: false, error: 'code, name, and type are required.' },
+      { status: 400 },
+    );
+  }
+  if (!createdByUserId) {
+    return Response.json(
+      { success: false, error: 'createdByUserId is required for the audit trail.' },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const account = await createAccount({
+      organizationId,
+      code,
+      name,
+      type,
+      subType,
+      normalBalance,
+      description,
+      isActive,
+      createdByUserId,
+      ipAddress: request.headers.get('x-forwarded-for') ?? undefined,
+      userAgent: request.headers.get('user-agent') ?? undefined,
+    });
+
+    return Response.json({ success: true, data: account }, { status: 201 });
+  } catch (error) {
+    if (error instanceof APIError) {
+      return Response.json(
+        { success: false, error: error.message },
+        { status: error.statusCode },
+      );
+    }
+    throw error;
+  }
+}
+
+export const POST = withErrorBoundary(createAccountHandler, LogComponent.FINANCIAL);

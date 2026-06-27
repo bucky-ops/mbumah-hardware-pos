@@ -883,6 +883,98 @@ export interface AccountItem {
   isActive: boolean;
 }
 
+// ── Phase 3 — Accounting Module types ───────────────────────────────────────
+//
+// These mirror the Phase 1 Prisma models (FinancialPeriod, Budget,
+// TrialBalanceSnapshot, AuditLog) for use in the financial-tab UI sub-tabs.
+
+export interface FinancialPeriodItem {
+  id: string;
+  organizationId: string;
+  storeId: string;
+  periodName: string;
+  startDate: string;
+  endDate: string;
+  status: 'OPEN' | 'CLOSED' | 'LOCKED';
+  closedAt: string | null;
+  closedByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  // Enriched counts (added by /api/financial/periods GET handler).
+  entryCount?: number;
+  budgetCount?: number;
+  snapshotCount?: number;
+  postedEntryCount?: number;
+  postedTotalDebit?: number;
+  postedTotalCredit?: number;
+}
+
+export interface BudgetItem {
+  id: string;
+  storeId: string;
+  periodId: string;
+  accountId: string;
+  budgetedAmount: number;
+  actualAmount: number;
+  variance: number;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdById?: string | null;
+  account?: {
+    id: string;
+    code: string;
+    name: string;
+    type: string;
+    normalBalance: string;
+    subType?: string | null;
+  };
+  period?: {
+    id: string;
+    periodName: string;
+    startDate: string;
+    endDate: string;
+    status: string;
+  };
+}
+
+export interface TrialBalanceSnapshotItem {
+  id: string;
+  storeId: string;
+  periodId: string | null;
+  snapshotDate: string;
+  balances: unknown;
+  totalDebits: number;
+  totalCredits: number;
+  isBalanced: boolean;
+  generatedByUserId: string | null;
+  createdAt: string;
+  period?: {
+    id: string;
+    periodName: string;
+    startDate: string;
+    endDate: string;
+    status: string;
+  } | null;
+}
+
+export interface AuditLogItem {
+  id: string;
+  storeId: string | null;
+  organizationId: string | null;
+  entityType: string;
+  entityId: string;
+  action: string;
+  userId: string | null;
+  oldValues: unknown;
+  newValues: unknown;
+  reason: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  timestamp: string;
+  user?: { id: string; name: string | null; email: string | null } | null;
+}
+
 export const financialApi = {
   listJournalEntries: async (params?: { storeId?: string; page?: number; limit?: number; dateFrom?: string; dateTo?: string }) => {
     const query = new URLSearchParams();
@@ -938,6 +1030,168 @@ export const financialApi = {
         isDemo: boolean;
       };
     }>(`/financial/revenue-trend?${query.toString()}`);
+  },
+
+  // ── Phase 3 — Accounting Module CRUD ──────────────────────────────────────
+
+  createAccount: async (data: {
+    organizationId: string;
+    code: string;
+    name: string;
+    type: string;
+    subType?: string;
+    normalBalance?: string;
+    description?: string;
+    isActive?: boolean;
+    createdByUserId: string;
+  }) => {
+    return request<AccountItem>('/financial/accounts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateAccount: async (id: string, data: {
+    name?: string;
+    description?: string;
+    subType?: string;
+    isActive?: boolean;
+    updatedByUserId: string;
+  }) => {
+    return request<AccountItem>(`/financial/accounts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deactivateAccount: async (id: string, userId: string) => {
+    return request<AccountItem>(`/financial/accounts/${id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ userId }),
+    });
+  },
+
+  listPeriods: async (storeId: string) => {
+    const query = new URLSearchParams();
+    query.set('storeId', storeId);
+    return request<FinancialPeriodItem[]>(`/financial/periods?${query.toString()}`);
+  },
+
+  createPeriod: async (data: {
+    organizationId: string;
+    storeId: string;
+    periodName: string;
+    startDate: string;
+    endDate: string;
+    createdByUserId: string;
+  }) => {
+    return request<FinancialPeriodItem>('/financial/periods', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updatePeriodAction: async (id: string, data: {
+    action: 'CLOSE' | 'LOCK' | 'REOPEN';
+    userId: string;
+    reason?: string;
+  }) => {
+    return request<FinancialPeriodItem>(`/financial/periods/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  listBudgets: async (storeId: string, periodId?: string) => {
+    const params = new URLSearchParams();
+    params.set('storeId', storeId);
+    if (periodId) params.set('periodId', periodId);
+    return request<BudgetItem[]>(`/financial/budgets?${params.toString()}`);
+  },
+
+  setBudget: async (data: {
+    storeId: string;
+    periodId: string;
+    accountId: string;
+    budgetedAmount: number | string;
+    notes?: string;
+    createdById: string;
+  }) => {
+    return request<BudgetItem>('/financial/budgets', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateBudget: async (id: string, data: {
+    budgetedAmount?: number | string;
+    notes?: string;
+    updatedById: string;
+  }) => {
+    return request<BudgetItem>(`/financial/budgets/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteBudget: async (id: string) => {
+    return request<{ success: boolean; message: string }>(`/financial/budgets/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  recalculateBudgets: async (storeId: string, periodId: string) => {
+    return request<{ updated: number; budgets: BudgetItem[] }>(
+      '/financial/budgets/recalculate',
+      {
+        method: 'POST',
+        body: JSON.stringify({ storeId, periodId }),
+      },
+    );
+  },
+
+  captureSnapshot: async (data: {
+    storeId: string;
+    periodId?: string;
+    generatedByUserId: string;
+    snapshotDate?: string;
+  }) => {
+    return request<TrialBalanceSnapshotItem>('/financial/trial-balance/snapshot', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  listSnapshots: async (storeId: string) => {
+    const query = new URLSearchParams();
+    query.set('storeId', storeId);
+    return request<TrialBalanceSnapshotItem[]>(
+      `/financial/trial-balance/snapshot?${query.toString()}`,
+    );
+  },
+
+  listAuditTrail: async (params: {
+    storeId?: string;
+    entityType?: string;
+    entityId?: string;
+    action?: string;
+    userId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    page?: number;
+    limit?: number;
+  } = {}) => {
+    const query = new URLSearchParams();
+    if (params.storeId) query.set('storeId', params.storeId);
+    if (params.entityType) query.set('entityType', params.entityType);
+    if (params.entityId) query.set('entityId', params.entityId);
+    if (params.action) query.set('action', params.action);
+    if (params.userId) query.set('userId', params.userId);
+    if (params.dateFrom) query.set('dateFrom', params.dateFrom);
+    if (params.dateTo) query.set('dateTo', params.dateTo);
+    if (params.page) query.set('page', String(params.page));
+    if (params.limit) query.set('limit', String(params.limit));
+    return request<AuditLogItem[]>(`/financial/audit-trail?${query.toString()}`);
   },
 };
 

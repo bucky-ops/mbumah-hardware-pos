@@ -9,7 +9,7 @@ import {
   ArrowUpRight, ArrowDownRight, Minus, Landmark,
   FileText, FileCheck, Clock, Download, Printer, CreditCard, Receipt, Plus,
   Send, Banknote, Scale, PiggyBank, CheckCircle2, Loader2, Trash2, Edit2,
-  MoreHorizontal, Ban,
+  MoreHorizontal, Ban, PowerOff,
 } from 'lucide-react';
 
 import { useAppStore, useAuthStore } from '@/lib/stores';
@@ -27,9 +27,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -61,6 +63,12 @@ import {
   exportToCSV,
   printReport,
 } from './financial/shared';
+
+// Phase 3 — new sub-tab panels.
+import FinancialPeriodsPanel from './financial/FinancialPeriodsPanel';
+import TrialBalancePanel from './financial/TrialBalancePanel';
+import BudgetsPanel from './financial/BudgetsPanel';
+import ReportsPanel from './financial/ReportsPanel';
 
 // Helpers `getDatePreset`, `formatRangeLabel`, `AnimatedCounter`,
 // `accountTypeColors`, `accountTypeLabels`, `exportToCSV`, and `printReport`
@@ -328,6 +336,31 @@ export default function FinancialTab() {
     ],
   });
 
+  // Phase 3 — Chart of Accounts CRUD state
+  const [showAccountDialog, setShowAccountDialog] = useState(false);
+  const [editAccountTarget, setEditAccountTarget] = useState<AccountItem | null>(null);
+  const [deactivateAccountTarget, setDeactivateAccountTarget] = useState<AccountItem | null>(null);
+  const [accountForm, setAccountForm] = useState<{
+    code: string;
+    name: string;
+    type: string;
+    subType: string;
+    normalBalance: string;
+    description: string;
+    isActive: boolean;
+  }>({
+    code: '',
+    name: '',
+    type: 'ASSET',
+    subType: '',
+    normalBalance: 'DEBIT',
+    description: '',
+    isActive: true,
+  });
+
+  // Phase 3 — sub-tab navigation
+  const [activeSubTab, setActiveSubTab] = useState<string>('overview');
+
   const toggleJournal = (id: string) => {
     setExpandedJournals((prev) => {
       const next = new Set(prev);
@@ -488,6 +521,148 @@ export default function FinancialTab() {
       toast.error(`Failed to void journal entry: ${error.message}`);
     },
   });
+
+  // Phase 3 — Account CRUD mutations
+  const createAccountMutation = useMutation({
+    mutationFn: (data: {
+      organizationId: string;
+      code: string;
+      name: string;
+      type: string;
+      subType?: string;
+      normalBalance?: string;
+      description?: string;
+      isActive?: boolean;
+      createdByUserId: string;
+    }) => financialApi.createAccount(data),
+    onSuccess: () => {
+      toast.success('Account created successfully');
+      queryClient.invalidateQueries({ queryKey: ['accounts', currentStoreId] });
+      setShowAccountDialog(false);
+      setAccountForm({
+        code: '', name: '', type: 'ASSET', subType: '', normalBalance: 'DEBIT',
+        description: '', isActive: true,
+      });
+    },
+    onError: (error: Error) => toast.error(`Failed to create account: ${error.message}`),
+  });
+
+  const updateAccountMutation = useMutation({
+    mutationFn: (vars: {
+      id: string;
+      data: {
+        name?: string;
+        description?: string;
+        subType?: string;
+        isActive?: boolean;
+        updatedByUserId: string;
+      };
+    }) => financialApi.updateAccount(vars.id, vars.data),
+    onSuccess: () => {
+      toast.success('Account updated successfully');
+      queryClient.invalidateQueries({ queryKey: ['accounts', currentStoreId] });
+      setEditAccountTarget(null);
+    },
+    onError: (error: Error) => toast.error(`Failed to update account: ${error.message}`),
+  });
+
+  const deactivateAccountMutation = useMutation({
+    mutationFn: (vars: { id: string; userId: string }) =>
+      financialApi.deactivateAccount(vars.id, vars.userId),
+    onSuccess: () => {
+      toast.success('Account deactivated');
+      queryClient.invalidateQueries({ queryKey: ['accounts', currentStoreId] });
+      setDeactivateAccountTarget(null);
+    },
+    onError: (error: Error) => toast.error(`Failed to deactivate account: ${error.message}`),
+  });
+
+  // ── Phase 3 — Account CRUD handlers ───────────────────────────────────────
+  const openAddAccount = () => {
+    setEditAccountTarget(null);
+    setAccountForm({
+      code: '', name: '', type: 'ASSET', subType: '', normalBalance: 'DEBIT',
+      description: '', isActive: true,
+    });
+    setShowAccountDialog(true);
+  };
+
+  const openEditAccount = (account: AccountItem) => {
+    setEditAccountTarget(account);
+    setAccountForm({
+      code: account.code,
+      name: account.name,
+      type: account.type,
+      subType: account.subType || '',
+      normalBalance: account.normalBalance,
+      description: '',
+      isActive: account.isActive,
+    });
+    setShowAccountDialog(true);
+  };
+
+  const handleSaveAccount = () => {
+    if (!authUser) {
+      toast.error('You must be logged in to manage accounts');
+      return;
+    }
+    if (!accountForm.code.trim() || !accountForm.name.trim()) {
+      toast.error('Account code and name are required');
+      return;
+    }
+    // Auto-derive normalBalance from type if the user hasn't explicitly changed it.
+    const derivedNormal = accountForm.type === 'ASSET' || accountForm.type === 'EXPENSE'
+      ? 'DEBIT'
+      : 'CREDIT';
+
+    if (editAccountTarget) {
+      // Edit: code, type, normalBalance are immutable. Only name/description/subType/isActive update.
+      updateAccountMutation.mutate({
+        id: editAccountTarget.id,
+        data: {
+          name: accountForm.name,
+          description: accountForm.description || undefined,
+          subType: accountForm.subType || undefined,
+          isActive: accountForm.isActive,
+          updatedByUserId: authUser.id,
+        },
+      });
+    } else {
+      createAccountMutation.mutate({
+        organizationId: authUser.organizationId,
+        code: accountForm.code.trim(),
+        name: accountForm.name.trim(),
+        type: accountForm.type,
+        subType: accountForm.subType || undefined,
+        normalBalance: accountForm.normalBalance || derivedNormal,
+        description: accountForm.description || undefined,
+        isActive: accountForm.isActive,
+        createdByUserId: authUser.id,
+      });
+    }
+  };
+
+  const handleAccountTypeChange = (newType: string) => {
+    // Auto-update normalBalance when the type changes (DEBIT for ASSET/EXPENSE).
+    const newNormal = newType === 'ASSET' || newType === 'EXPENSE' ? 'DEBIT' : 'CREDIT';
+    setAccountForm((prev) => ({ ...prev, type: newType, normalBalance: newNormal }));
+  };
+
+  const handleDeactivateAccount = () => {
+    if (!deactivateAccountTarget || !authUser) return;
+    deactivateAccountMutation.mutate({
+      id: deactivateAccountTarget.id,
+      userId: authUser.id,
+    });
+  };
+
+  // ── Phase 3 — Journal entry status derivation (frontend) ──────────────────
+  const deriveJournalStatus = (je: { isPosted: boolean; isApproved: boolean; isVoided: boolean }): 'DRAFT' | 'APPROVED' | 'POSTED' | 'VOIDED' => {
+    if (je.isVoided) return 'VOIDED';
+    if (je.isPosted) return 'POSTED';
+    if (je.isApproved) return 'APPROVED';
+    return 'DRAFT';
+  };
 
   // Handlers
   const handleCreateExpense = () => {
@@ -875,6 +1050,24 @@ export default function FinancialTab() {
 
   return (
     <div className="space-y-4">
+      {/* ================================================================== */}
+      {/* Phase 3 — Sub-tab navigation                                        */}
+      {/* ================================================================== */}
+      <Tabs value={activeSubTab} onValueChange={setActiveSubTab} className="space-y-4">
+        <TabsList className="h-9 w-fit flex-wrap">
+          <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
+          <TabsTrigger value="accounts" className="text-xs">Chart of Accounts</TabsTrigger>
+          <TabsTrigger value="journal" className="text-xs">Journal Entries</TabsTrigger>
+          <TabsTrigger value="periods" className="text-xs">Periods</TabsTrigger>
+          <TabsTrigger value="trial-balance" className="text-xs">Trial Balance</TabsTrigger>
+          <TabsTrigger value="budgets" className="text-xs">Budgets</TabsTrigger>
+          <TabsTrigger value="reports" className="text-xs">Reports</TabsTrigger>
+        </TabsList>
+
+        {/* ================================================================== */}
+        {/* OVERVIEW sub-tab                                                    */}
+        {/* ================================================================== */}
+        <TabsContent value="overview" className="space-y-4">
       {/* ================================================================== */}
       {/* Gradient Accent Banner - Key Financial Metrics                     */}
       {/* ================================================================== */}
@@ -1736,6 +1929,113 @@ export default function FinancialTab() {
       )}
 
       {/* ================================================================== */}
+      {/* Recent Expenses (kept in Overview sub-tab)                          */}
+      {/* ================================================================== */}
+      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Wallet className="h-4 w-4" /> Recent Expenses
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs">{expenses.length} records</Badge>
+              {expenses.length > 0 && (
+                <span className="text-xs font-medium text-orange-600">
+                  Total: {formatKES(expenses.filter(e => e.status !== 'VOIDED').reduce((s, e) => s + e.amount, 0))}
+                </span>
+              )}
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowExpenseDialog(true)}>
+                <Plus className="mr-1 h-3 w-3" /> Add
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {expenses.length === 0 ? (
+            <div className="py-8 text-center">
+              <Wallet className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-30" />
+              <p className="text-sm text-muted-foreground">No expenses recorded</p>
+              <p className="text-xs text-muted-foreground mt-1">Click "Record Expense" to add one</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Payment</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-[40px]" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {expenses.map((exp) => (
+                    <TableRow key={exp.id} className={exp.status === 'VOIDED' ? 'opacity-50' : ''}>
+                      <TableCell className="text-sm">{formatDate(exp.createdAt)}</TableCell>
+                      <TableCell className="text-sm max-w-[200px] truncate">{exp.description}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-[9px]">{exp.category}</Badge>
+                      </TableCell>
+                      <TableCell className="text-sm">{exp.paymentMethod}</TableCell>
+                      <TableCell className="text-right font-medium text-sm text-orange-600 dark:text-orange-400">
+                        {formatKES(exp.amount)}
+                      </TableCell>
+                      <TableCell>
+                        {exp.status === 'VOIDED' ? (
+                          <Badge className="text-[9px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800 gap-1">
+                            <Ban className="h-2.5 w-2.5" /> VOIDED
+                          </Badge>
+                        ) : (
+                          <Badge className="text-[9px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800 gap-1">
+                            <CheckCircle2 className="h-2.5 w-2.5" /> Active
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()}>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            {exp.status !== 'VOIDED' && (
+                              <DropdownMenuItem onClick={() => openEditExpense(exp)} className="gap-2 cursor-pointer">
+                                <Edit2 className="h-4 w-4" /> Edit Expense
+                              </DropdownMenuItem>
+                            )}
+                            {exp.status !== 'VOIDED' && (
+                              <DropdownMenuItem onClick={() => setVoidExpenseTarget(exp)} className="gap-2 cursor-pointer text-orange-600 focus:text-orange-600">
+                                <Ban className="h-4 w-4" /> Void Expense
+                              </DropdownMenuItem>
+                            )}
+                            {exp.status === 'VOIDED' && (
+                              <DropdownMenuItem onClick={() => setDeleteExpenseTarget(exp)} className="gap-2 cursor-pointer text-red-600 focus:text-red-600">
+                                <Trash2 className="h-4 w-4" /> Delete Permanently
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      </TabsContent>
+
+      {/* ================================================================== */}
+      {/* CHART OF ACCOUNTS sub-tab                                           */}
+      {/* ================================================================== */}
+      <TabsContent value="accounts" className="space-y-4">
+      {/* ================================================================== */}
       {/* Chart of Accounts (Balances + Trial Balance)         */}
       {/* ================================================================== */}
       <Card className="backdrop-blur-sm bg-card/80 border-border/50">
@@ -1744,7 +2044,12 @@ export default function FinancialTab() {
             <CardTitle className="text-base flex items-center gap-2">
               <Landmark className="h-4 w-4" /> Chart of Accounts
             </CardTitle>
-            <Badge variant="outline" className="text-xs">{accounts.length} accounts</Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs">{accounts.length} accounts</Badge>
+              <Button size="sm" className="h-7 text-xs" onClick={openAddAccount}>
+                <Plus className="mr-1 h-3 w-3" /> Add Account
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -1834,6 +2139,43 @@ export default function FinancialTab() {
                               >
                                 {account.isActive ? 'Active' : 'Inactive'}
                               </Badge>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => e.stopPropagation()}>
+                                    <MoreHorizontal className="h-3.5 w-3.5" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-44">
+                                  <DropdownMenuItem
+                                    onClick={() => openEditAccount(account)}
+                                    className="gap-2 cursor-pointer"
+                                  >
+                                    <Edit2 className="h-4 w-4" /> Edit Account
+                                  </DropdownMenuItem>
+                                  {account.isActive && (
+                                    <DropdownMenuItem
+                                      onClick={() => setDeactivateAccountTarget(account)}
+                                      className="gap-2 cursor-pointer text-red-600 focus:text-red-600"
+                                    >
+                                      <PowerOff className="h-4 w-4" /> Deactivate
+                                    </DropdownMenuItem>
+                                  )}
+                                  {!account.isActive && (
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        if (!authUser) return;
+                                        updateAccountMutation.mutate({
+                                          id: account.id,
+                                          data: { isActive: true, updatedByUserId: authUser.id },
+                                        });
+                                      }}
+                                      className="gap-2 cursor-pointer text-green-600 focus:text-green-600"
+                                    >
+                                      <PowerOff className="h-4 w-4" /> Reactivate
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           );
                         })}
@@ -1887,7 +2229,12 @@ export default function FinancialTab() {
           )}
         </CardContent>
       </Card>
+      </TabsContent>
 
+      {/* ================================================================== */}
+      {/* JOURNAL ENTRIES sub-tab                                             */}
+      {/* ================================================================== */}
+      <TabsContent value="journal" className="space-y-4">
       {/* Journal Entries */}
       <Card className="backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader>
@@ -1966,19 +2313,35 @@ export default function FinancialTab() {
                           {formatKES(je.totalCredit)}
                         </TableCell>
                         <TableCell>
-                          {je.isVoided ? (
-                            <Badge className="text-[10px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800 gap-1">
-                              <Ban className="h-2.5 w-2.5" /> VOIDED
-                            </Badge>
-                          ) : je.isPosted ? (
-                            <Badge className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800 gap-1">
-                              <FileCheck className="h-2.5 w-2.5" /> Posted
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-[10px] gap-1">
-                              <Clock className="h-2.5 w-2.5" /> Draft
-                            </Badge>
-                          )}
+                          {(() => {
+                            const status = deriveJournalStatus(je);
+                            if (status === 'VOIDED') {
+                              return (
+                                <Badge className="text-[10px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800 gap-1">
+                                  <Ban className="h-2.5 w-2.5" /> VOIDED
+                                </Badge>
+                              );
+                            }
+                            if (status === 'POSTED') {
+                              return (
+                                <Badge className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800 gap-1">
+                                  <FileCheck className="h-2.5 w-2.5" /> Posted
+                                </Badge>
+                              );
+                            }
+                            if (status === 'APPROVED') {
+                              return (
+                                <Badge className="text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800 gap-1">
+                                  <CheckCircle2 className="h-2.5 w-2.5" /> Approved
+                                </Badge>
+                              );
+                            }
+                            return (
+                              <Badge variant="outline" className="text-[10px] gap-1">
+                                <Clock className="h-2.5 w-2.5" /> Draft
+                              </Badge>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
@@ -2046,6 +2409,36 @@ export default function FinancialTab() {
           )}
         </CardContent>
       </Card>
+      </TabsContent>
+
+      {/* ================================================================== */}
+      {/* FINANCIAL PERIODS sub-tab                                           */}
+      {/* ================================================================== */}
+      <TabsContent value="periods" className="space-y-4">
+        <FinancialPeriodsPanel />
+      </TabsContent>
+
+      {/* ================================================================== */}
+      {/* TRIAL BALANCE sub-tab                                               */}
+      {/* ================================================================== */}
+      <TabsContent value="trial-balance" className="space-y-4">
+        <TrialBalancePanel />
+      </TabsContent>
+
+      {/* ================================================================== */}
+      {/* BUDGETS sub-tab                                                     */}
+      {/* ================================================================== */}
+      <TabsContent value="budgets" className="space-y-4">
+        <BudgetsPanel />
+      </TabsContent>
+
+      {/* ================================================================== */}
+      {/* REPORTS sub-tab                                                     */}
+      {/* ================================================================== */}
+      <TabsContent value="reports" className="space-y-4">
+        <ReportsPanel />
+      </TabsContent>
+      </Tabs>
 
       {/* ================================================================== */}
       {/* Drill-down Dialogs                                                  */}
@@ -2489,104 +2882,165 @@ export default function FinancialTab() {
         </DialogContent>
       </Dialog>
 
-      {/* Expenses List Section */}
-      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Wallet className="h-4 w-4" /> Recent Expenses
-            </CardTitle>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-xs">{expenses.length} records</Badge>
-              {expenses.length > 0 && (
-                <span className="text-xs font-medium text-orange-600">
-                  Total: {formatKES(expenses.filter(e => e.status !== 'VOIDED').reduce((s, e) => s + e.amount, 0))}
-                </span>
-              )}
-              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowExpenseDialog(true)}>
-                <Plus className="mr-1 h-3 w-3" /> Add
-              </Button>
+      {/* ================================================================== */}
+      {/* Phase 3 — Add / Edit Account Dialog                                 */}
+      {/* ================================================================== */}
+      <Dialog open={showAccountDialog} onOpenChange={setShowAccountDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {editAccountTarget ? <Edit2 className="h-5 w-5 text-orange-600" /> : <Plus className="h-5 w-5 text-green-600" />}
+              {editAccountTarget ? 'Edit Account' : 'Add Account'}
+            </DialogTitle>
+            <DialogDescription>
+              {editAccountTarget
+                ? 'Update name, sub-type, description, or active status. Code, type, and normal balance are immutable (create a new account to change them).'
+                : 'Create a new account in the chart of accounts. The normal balance defaults by type (DEBIT for assets/expenses).'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Code</Label>
+                <Input
+                  placeholder="e.g. 1010"
+                  value={accountForm.code}
+                  onChange={(e) => setAccountForm((prev) => ({ ...prev, code: e.target.value }))}
+                  disabled={!!editAccountTarget}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Type</Label>
+                <Select
+                  value={accountForm.type}
+                  onValueChange={handleAccountTypeChange}
+                  disabled={!!editAccountTarget}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ASSET">Asset</SelectItem>
+                    <SelectItem value="LIABILITY">Liability</SelectItem>
+                    <SelectItem value="EQUITY">Equity</SelectItem>
+                    <SelectItem value="REVENUE">Revenue</SelectItem>
+                    <SelectItem value="EXPENSE">Expense</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Name</Label>
+              <Input
+                placeholder="e.g. Cash on Hand"
+                value={accountForm.name}
+                onChange={(e) => setAccountForm((prev) => ({ ...prev, name: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Sub-Type (optional)</Label>
+                <Select
+                  value={accountForm.subType || 'NONE'}
+                  onValueChange={(v) => setAccountForm((prev) => ({ ...prev, subType: v === 'NONE' ? '' : v }))}
+                >
+                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NONE">— None —</SelectItem>
+                    <SelectItem value="CURRENT_ASSET">Current Asset</SelectItem>
+                    <SelectItem value="FIXED_ASSET">Fixed Asset</SelectItem>
+                    <SelectItem value="INVENTORY">Inventory</SelectItem>
+                    <SelectItem value="CASH_EQUIVALENT">Cash Equivalent</SelectItem>
+                    <SelectItem value="ACCOUNTS_RECEIVABLE">Accounts Receivable</SelectItem>
+                    <SelectItem value="CURRENT_LIABILITY">Current Liability</SelectItem>
+                    <SelectItem value="LONG_TERM_LIABILITY">Long-Term Liability</SelectItem>
+                    <SelectItem value="ACCOUNTS_PAYABLE">Accounts Payable</SelectItem>
+                    <SelectItem value="OWNERS_EQUITY">Owners Equity</SelectItem>
+                    <SelectItem value="RETAINED_EARNINGS">Retained Earnings</SelectItem>
+                    <SelectItem value="OPERATING_REVENUE">Operating Revenue</SelectItem>
+                    <SelectItem value="OTHER_REVENUE">Other Revenue</SelectItem>
+                    <SelectItem value="COGS">COGS</SelectItem>
+                    <SelectItem value="OPERATING_EXPENSE">Operating Expense</SelectItem>
+                    <SelectItem value="ADMIN_EXPENSE">Admin Expense</SelectItem>
+                    <SelectItem value="TAX_PAYABLE">Tax Payable</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Normal Balance</Label>
+                <Select
+                  value={accountForm.normalBalance}
+                  onValueChange={(v) => setAccountForm((prev) => ({ ...prev, normalBalance: v }))}
+                  disabled={!!editAccountTarget}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="DEBIT">Debit</SelectItem>
+                    <SelectItem value="CREDIT">Credit</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Description (optional)</Label>
+              <Textarea
+                placeholder="e.g. Operating cash drawer — front-of-house."
+                value={accountForm.description}
+                onChange={(e) => setAccountForm((prev) => ({ ...prev, description: e.target.value }))}
+                rows={2}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <Label>Active</Label>
+                <p className="text-xs text-muted-foreground">Inactive accounts are excluded from new journal entries.</p>
+              </div>
+              <Switch
+                checked={accountForm.isActive}
+                onCheckedChange={(v) => setAccountForm((prev) => ({ ...prev, isActive: v }))}
+              />
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {expenses.length === 0 ? (
-            <div className="py-8 text-center">
-              <Wallet className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-30" />
-              <p className="text-sm text-muted-foreground">No expenses recorded</p>
-              <p className="text-xs text-muted-foreground mt-1">Click "Record Expense" to add one</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Payment</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-[40px]" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {expenses.map((exp) => (
-                    <TableRow key={exp.id} className={exp.status === 'VOIDED' ? 'opacity-50' : ''}>
-                      <TableCell className="text-sm">{formatDate(exp.createdAt)}</TableCell>
-                      <TableCell className="text-sm max-w-[200px] truncate">{exp.description}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-[9px]">{exp.category}</Badge>
-                      </TableCell>
-                      <TableCell className="text-sm">{exp.paymentMethod}</TableCell>
-                      <TableCell className="text-right font-medium text-sm text-orange-600 dark:text-orange-400">
-                        {formatKES(exp.amount)}
-                      </TableCell>
-                      <TableCell>
-                        {exp.status === 'VOIDED' ? (
-                          <Badge className="text-[9px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800 gap-1">
-                            <Ban className="h-2.5 w-2.5" /> VOIDED
-                          </Badge>
-                        ) : (
-                          <Badge className="text-[9px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800 gap-1">
-                            <CheckCircle2 className="h-2.5 w-2.5" /> Active
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()}>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            {exp.status !== 'VOIDED' && (
-                              <DropdownMenuItem onClick={() => openEditExpense(exp)} className="gap-2 cursor-pointer">
-                                <Edit2 className="h-4 w-4" /> Edit Expense
-                              </DropdownMenuItem>
-                            )}
-                            {exp.status !== 'VOIDED' && (
-                              <DropdownMenuItem onClick={() => setVoidExpenseTarget(exp)} className="gap-2 cursor-pointer text-orange-600 focus:text-orange-600">
-                                <Ban className="h-4 w-4" /> Void Expense
-                              </DropdownMenuItem>
-                            )}
-                            {exp.status === 'VOIDED' && (
-                              <DropdownMenuItem onClick={() => setDeleteExpenseTarget(exp)} className="gap-2 cursor-pointer text-red-600 focus:text-red-600">
-                                <Trash2 className="h-4 w-4" /> Delete Permanently
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAccountDialog(false)}>Cancel</Button>
+            <Button
+              onClick={handleSaveAccount}
+              disabled={createAccountMutation.isPending || updateAccountMutation.isPending}
+              className={editAccountTarget ? 'bg-orange-600 hover:bg-orange-700' : 'bg-green-600 hover:bg-green-700'}
+            >
+              {(createAccountMutation.isPending || updateAccountMutation.isPending) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+              {editAccountTarget ? 'Update Account' : 'Create Account'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ================================================================== */}
+      {/* Phase 3 — Deactivate Account Confirmation                           */}
+      {/* ================================================================== */}
+      <AlertDialog open={!!deactivateAccountTarget} onOpenChange={(open) => { if (!open) setDeactivateAccountTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <PowerOff className="h-5 w-5 text-red-600" /> Deactivate Account
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Deactivate account &ldquo;{deactivateAccountTarget?.code} — {deactivateAccountTarget?.name}&rdquo;?
+              Deactivation is blocked if the account has a non-zero balance (would corrupt historical reports).
+              The account remains in the ledger for historical reporting but cannot be used on new entries.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeactivateAccount}
+              disabled={deactivateAccountMutation.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deactivateAccountMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Deactivate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Edit Expense Dialog */}
       <Dialog open={!!editExpense} onOpenChange={(open) => { if (!open) setEditExpense(null); }}>
