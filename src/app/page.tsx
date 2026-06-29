@@ -5092,8 +5092,18 @@ function useLoadingWatchdog(hasMounted: boolean) {
 
 export default function HomePage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const hydrateFromStorage = useAuthStore((s) => s.hydrateFromStorage);
   const hasMounted = useHasMounted();
   const showRetry = useLoadingWatchdog(hasMounted);
+
+  // Hydrate auth state from localStorage on first client mount.
+  // This is necessary because the store initializes with server-safe
+  // defaults (null/false) to avoid hydration mismatches during SSR.
+  // Once the component mounts on the client, we read localStorage
+  // to restore the persisted session.
+  useEffect(() => {
+    hydrateFromStorage();
+  }, [hydrateFromStorage]);
 
   if (!hasMounted) {
     return (
@@ -5123,5 +5133,5 @@ export default function HomePage() {
     );
   }
 
-  return isAuthenticated ? <MainApp /> : <LoginScreen />;
+  return isAuthenticated ? <MainApp /> : <ErrorBoundary><LoginScreen /></ErrorBoundary>;
 }

@@ -13,21 +13,19 @@ interface AuthState {
   logout: () => Promise<void>;
   fetchUser: () => Promise<void>;
   setUser: (user: AuthUser | null) => void;
+  /** Hydrate auth state from localStorage (called once on client mount). */
+  hydrateFromStorage: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
-  user: typeof window !== 'undefined'
-    ? (() => {
-        try {
-          const stored = localStorage.getItem('mbt_user');
-          return stored ? JSON.parse(stored) : null;
-        } catch {
-          return null;
-        }
-      })()
-    : null,
-  token: typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null,
-  isAuthenticated: typeof window !== 'undefined' ? !!localStorage.getItem('mbt_token') : false,
+  // Initialize with server-safe defaults (null/false) to avoid hydration
+  // mismatch. The store is hydrated from localStorage in the first
+  // client-side useEffect (see page.tsx useHasMounted pattern).
+  // Previously, reading localStorage at module level caused SSR/client
+  // state divergence and React hydration warnings.
+  user: null,
+  token: null,
+  isAuthenticated: false,
   isLoading: false,
 
   login: async (email: string, password: string) => {
@@ -73,6 +71,24 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   setUser: (user) => set({ user, isAuthenticated: !!user }),
+
+  hydrateFromStorage: () => {
+    try {
+      const token = localStorage.getItem('mbt_token');
+      const storedUser = localStorage.getItem('mbt_user');
+      if (token) {
+        set({
+          token,
+          user: storedUser ? JSON.parse(storedUser) : null,
+          isAuthenticated: true,
+        });
+      }
+    } catch {
+      // Corrupted localStorage — clear and start fresh
+      localStorage.removeItem('mbt_token');
+      localStorage.removeItem('mbt_user');
+    }
+  },
 }));
 
 interface CartState {

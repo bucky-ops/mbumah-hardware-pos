@@ -35,7 +35,21 @@ export function RecentTransactions({ storeId }: RecentTransactionsProps) {
     queryKey: ['dashboard', storeId],
     queryFn: async () => {
       const res = await dashboardApi.getStats(storeId);
-      return res.data;
+      const d = res.data;
+      if (d && typeof d === 'object' && !Array.isArray(d)) {
+        return {
+          ...d,
+          salesByHour: Array.isArray(d.salesByHour) ? d.salesByHour : [],
+          paymentMethodBreakdown: Array.isArray(d.paymentMethodBreakdown) ? d.paymentMethodBreakdown : [],
+          recentTransactions: Array.isArray(d.recentTransactions) ? d.recentTransactions : [],
+          topProducts: Array.isArray(d.topProducts) ? d.topProducts : [],
+          topSellingCategories: Array.isArray(d.topSellingCategories) ? d.topSellingCategories : [],
+          hourlySalesBreakdown: Array.isArray(d.hourlySalesBreakdown) ? d.hourlySalesBreakdown : [],
+          lowStockItems: Array.isArray(d.lowStockItems) ? d.lowStockItems : [],
+          recentActivities: Array.isArray(d.recentActivities) ? d.recentActivities : [],
+        };
+      }
+      return d ?? null;
     },
     refetchInterval: 30000,
   });
@@ -44,7 +58,7 @@ export function RecentTransactions({ storeId }: RecentTransactionsProps) {
     queryKey: ['recent-transactions', storeId],
     queryFn: async () => {
       const res = await transactionsApi.list({ storeId, limit: 5 });
-      return res.data;
+      return Array.isArray(res.data) ? res.data : [];
     },
     refetchInterval: 30000,
   });

@@ -293,7 +293,25 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   render() {
-    if (this.state.hasError && !this.state.dismissed) {
+    if (this.state.hasError) {
+      // If the error overlay was dismissed, show a safe minimal fallback
+      // instead of re-rendering children (which would crash again and
+      // cause React to unmount the entire tree — the root cause of the
+      // permanent "Loading..." screen on Vercel).
+      if (this.state.dismissed) {
+        return (
+          <div className="flex flex-col items-center justify-center min-h-[200px] gap-3 p-6">
+            <AlertTriangle className="h-8 w-8 text-amber-500" />
+            <p className="text-sm text-muted-foreground text-center">
+              An error occurred in this section.
+            </p>
+            <Button variant="outline" size="sm" onClick={this.handleRetry}>
+              <RefreshCw className="h-3 w-3 mr-1.5" /> Retry
+            </Button>
+          </div>
+        );
+      }
+
       if (this.props.fallback) {
         return this.props.fallback;
       }

@@ -839,7 +839,7 @@ function DebtAgingCard({ storeId }: { storeId: string }) {
     queryKey: ['debt-aging', storeId],
     queryFn: async () => {
       const res = await debtApi.list({ storeId, limit: 100 });
-      return res.data;
+      return Array.isArray(res.data) ? res.data : [];
     },
     refetchInterval: 60000,
   });

@@ -159,7 +159,7 @@ async function request<T>(
       }
       const retryJson = await retryResponse.json();
       if (retryJson && retryJson.success && retryJson.data === undefined) {
-        retryJson.data = ([] as unknown) as T;
+        retryJson.data = null as unknown as T;
       }
       return retryJson;
     }
@@ -176,8 +176,10 @@ async function request<T>(
   // Defensive: ensure data field exists and matches expected type
   // If T is array type and data is not an array, wrap or default
   if (json && json.success && json.data === undefined) {
-    // API returned success but no data field - common with some endpoints
-    json.data = ([] as unknown) as T;
+    // API returned success but no data field — return null instead of []
+    // because T may be an object type (e.g. DashboardStats). Components
+    // must use null checks / Array.isArray() before .map() calls.
+    json.data = null as unknown as T;
   }
 
   return json;
