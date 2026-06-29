@@ -3885,3 +3885,28 @@ Stage Summary:
   - Full status transition flow: DRAFT → PENDING_APPROVAL → APPROVED → SENT → CONFIRMED → RECEIVED
 - RBAC permissions seeded for all 5 roles
 - All changes pushed to GitHub main branch
+
+---
+Task ID: 1
+Agent: Main Agent (DevOps Phase 1)
+Task: Diagnose and fix Vercel deployment failure ("Loading..." stuck screen)
+
+Work Log:
+- Analyzed dashboard-tab.tsx, DashboardStats.tsx, RecentTransactions.tsx for .map() crashes
+- Identified 7 critical bugs causing the Vercel "Loading..." crash
+- Root cause chain: API response shape mismatch → .map() crash → ErrorBoundary dismiss → crash loop → React tree unmount → permanent "Loading..."
+- Fixed DashboardStats.tsx: Added Array.isArray() defensive checks for all array fields in queryFn
+- Fixed RecentTransactions.tsx: Same defensive array checks + Array.isArray() on transactions query
+- Fixed ErrorBoundary: When dismissed=true and hasError=true, now renders safe minimal fallback instead of re-rendering children (which crashes again)
+- Fixed api.ts: Changed `json.data = ([] as unknown) as T` to `null as unknown as T` for undefined data
+- Fixed page.tsx: Wrapped LoginScreen in ErrorBoundary
+- Fixed stores.ts: Removed localStorage reads at module init time (caused SSR/client hydration mismatch); added hydrateFromStorage() method called in useEffect
+- Fixed dashboard-tab.tsx: Added Array.isArray() guard in DebtAgingCard queryFn
+- All changes lint-clean (0 errors, 341 pre-existing warnings)
+- Committed and pushed: 2b3b543
+
+Stage Summary:
+- 7 critical client-side crash bugs fixed across 7 files
+- Vercel deployment should now render properly instead of stuck "Loading..."
+- The ErrorBoundary crash loop fix is the most impactful: it prevents the permanent white screen
+- Store hydration now SSR-safe with client-side useEffect pattern
