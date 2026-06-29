@@ -103,7 +103,7 @@ async function sendSupplierOrderHandler(
     for (const item of po.items) {
       const productName = item.product?.name || 'Item';
       lines.push(
-        `\u2022 ${productName} (SKU: ${item.product?.sku || '-'}) x${item.quantity} @ KES ${item.unitPrice.toLocaleString()} = KES ${item.totalPrice.toLocaleString()}`,
+        `\u2022 ${productName} (SKU: ${item.product?.sku || '-'}) x${item.quantity} @ KES ${item.unitCost.toLocaleString()} = KES ${item.totalCost.toLocaleString()}`,
       );
     }
     lines.push('\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501');

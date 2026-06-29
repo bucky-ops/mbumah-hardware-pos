@@ -185,6 +185,11 @@ model User {
   generatedTrialBalanceSnapshots TrialBalanceSnapshot[] @relation("TrialBalanceGeneratedBy")
   createdBudgets          Budget[]            @relation("BudgetCreatedBy")
   auditLogs               AuditLog[]
+  // ── Purchase Order relations ──────────────────────────────────────────────
+  createdPOs              PurchaseOrder[]     @relation("POCreatedBy")
+  approvedPOs             PurchaseOrder[]     @relation("POApprovedBy")
+  receivedPOs             PurchaseOrder[]     @relation("POReceivedBy")
+  cancelledPOs            PurchaseOrder[]     @relation("POCancelledBy")
 
   @@index([organizationId])
   @@index([storeId])
@@ -825,37 +830,52 @@ model Supplier {
 }
 
 model PurchaseOrder {
-  id           String    @id @default(cuid())
-  storeId      String
-  poNumber     String    @unique
-  supplierId   String
-  status       String    @default("DRAFT") // DRAFT, SENT, CONFIRMED, RECEIVED, CANCELLED
-  orderDate    DateTime  @default(now())
-  expectedDate DateTime?
-  totalAmount  Decimal   @default(0)
-  notes        String?
-  createdBy    String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  storeId             String
+  poNumber            String    @unique
+  supplierId          String
+  status              String    @default("DRAFT") // DRAFT, PENDING_APPROVAL, APPROVED, SENT, CONFIRMED, PARTIALLY_RECEIVED, RECEIVED, CANCELLED
+  orderDate           DateTime  @default(now())
+  expectedDate        DateTime?
+  subTotal            Decimal   @default(0) // Sum of item totalPrices before tax
+  taxAmount           Decimal   @default(0) // Computed tax on items
+  totalAmount         Decimal   @default(0) // subTotal + taxAmount
+  notes               String?
+  createdById         String?   // User who created the PO
+  approvedById        String?   // User who approved the PO
+  approvedAt          DateTime? // When the PO was approved
+  receivedById        String?   // User who received the goods
+  receivedAt          DateTime? // When the goods were fully received
+  cancelledAt         DateTime? // When the PO was cancelled
+  cancelledById       String?   // User who cancelled the PO
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  store    Store               @relation(fields: [storeId], references: [id])
-  supplier Supplier            @relation(fields: [supplierId], references: [id])
-  items    PurchaseOrderItem[]
+  store       Store               @relation(fields: [storeId], references: [id])
+  supplier    Supplier            @relation(fields: [supplierId], references: [id])
+  items       PurchaseOrderItem[]
+  createdBy   User?               @relation("POCreatedBy", fields: [createdById], references: [id])
+  approvedBy  User?               @relation("POApprovedBy", fields: [approvedById], references: [id])
+  receivedBy  User?               @relation("POReceivedBy", fields: [receivedById], references: [id])
+  cancelledBy User?               @relation("POCancelledBy", fields: [cancelledById], references: [id])
 
   @@index([storeId])
   @@index([supplierId])
   @@index([status])
+  @@index([storeId, status])
+  @@index([orderDate])
   @@map("purchase_orders")
 }
 
 model PurchaseOrderItem {
-  id              String  @id @default(cuid())
+  id              String   @id @default(cuid())
   purchaseOrderId String
   productId       String
-  quantity        Decimal
-  unitPrice       Decimal
-  totalPrice      Decimal
-  receivedQty     Decimal @default(0)
+  productName     String   // Snapshot of product name at PO creation time
+  quantity        Decimal  // Quantity ordered
+  unitCost        Decimal  // Cost per unit from supplier
+  totalCost       Decimal  // quantity * unitCost
+  receivedQty     Decimal  @default(0) // Cumulative received quantity
   notes           String?
 
   purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)

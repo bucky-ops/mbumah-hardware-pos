@@ -489,7 +489,7 @@ function CreatePODialog({
   const [supplierId, setSupplierId] = useState('');
   const [expectedDate, setExpectedDate] = useState('');
   const [notes, setNotes] = useState('');
-  const [poItems, setPoItems] = useState<{ productId: string; name: string; sku: string; quantity: string; unitPrice: string; currentStock: number }[]>([]);
+  const [poItems, setPoItems] = useState<{ productId: string; name: string; sku: string; quantity: string; unitCost: string; currentStock: number }[]>([]);
   const [productSearch, setProductSearch] = useState('');
   const [lowStockLoading, setLowStockLoading] = useState(false);
 
@@ -513,7 +513,7 @@ function CreatePODialog({
       name: product.name,
       sku: product.sku,
       quantity: '1',
-      unitPrice: String(product.costPrice),
+      unitCost: String(product.costPrice),
       currentStock: product.quantityInStock,
     }]);
     setProductSearch('');
@@ -537,7 +537,7 @@ function CreatePODialog({
         name: p.name,
         sku: p.sku,
         quantity: String(Math.max(Math.ceil(p.reorderLevel * 2 - p.quantityInStock), 1)),
-        unitPrice: String(p.costPrice),
+        unitCost: String(p.costPrice),
         currentStock: p.quantityInStock,
       }));
       setPoItems([...poItems, ...newItems]);
@@ -553,14 +553,14 @@ function CreatePODialog({
     setPoItems(poItems.filter((_, i) => i !== index));
   };
 
-  const updateItem = (index: number, field: 'quantity' | 'unitPrice', value: string) => {
+  const updateItem = (index: number, field: 'quantity' | 'unitCost', value: string) => {
     const updated = [...poItems];
     updated[index] = { ...updated[index], [field]: value };
     setPoItems(updated);
   };
 
   const totalAmount = poItems.reduce((sum, item) => {
-    return sum + (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
+    return sum + (parseFloat(item.quantity) || 0) * (parseFloat(item.unitCost) || 0);
   }, 0);
 
   const createMutation = useMutation({
@@ -574,7 +574,7 @@ function CreatePODialog({
         .map((item) => ({
           productId: item.productId,
           quantity: parseFloat(item.quantity),
-          unitPrice: parseFloat(item.unitPrice),
+          unitCost: parseFloat(item.unitCost),
         })),
     }),
     onSuccess: () => {
@@ -720,15 +720,15 @@ function CreatePODialog({
                           type="number"
                           min="0"
                           step="0.01"
-                          value={item.unitPrice}
-                          onChange={(e) => updateItem(index, 'unitPrice', e.target.value)}
+                          value={item.unitCost}
+                          onChange={(e) => updateItem(index, 'unitCost', e.target.value)}
                           className="h-7 text-xs text-center"
                         />
                       </div>
                       <div className="text-right w-20">
                         <Label className="text-[10px] text-muted-foreground">Total</Label>
                         <p className="text-xs font-medium">
-                          {formatKES((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0))}
+                          {formatKES((parseFloat(item.quantity) || 0) * (parseFloat(item.unitCost) || 0))}
                         </p>
                       </div>
                       <Button

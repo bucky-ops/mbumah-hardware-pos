@@ -1,4 +1,4 @@
-// GET/PUT /api/purchase-orders/[id]
+// GET/PUT/DELETE /api/purchase-orders/[id]
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -34,6 +34,10 @@ async function getPurchaseOrderHandler(...args: unknown[]): Promise<Response> {
           },
         },
       },
+      createdBy: { select: { id: true, name: true } },
+      approvedBy: { select: { id: true, name: true } },
+      receivedBy: { select: { id: true, name: true } },
+      cancelledBy: { select: { id: true, name: true } },
     },
   });
 
@@ -65,8 +69,9 @@ async function updatePurchaseOrderHandler(...args: unknown[]): Promise<Response>
     );
   }
 
-    if (body.status) {
-    const validStatuses = ['DRAFT', 'SENT', 'CONFIRMED', 'RECEIVED', 'CANCELLED'];
+  // ── Status change (approve, send, confirm, cancel) ──────────────────────
+  if (body.status) {
+    const validStatuses = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT', 'CONFIRMED', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CANCELLED'];
     if (!validStatuses.includes(body.status)) {
       return Response.json(
         { success: false, error: 'Invalid status. Valid statuses: ' + validStatuses.join(', ') },
@@ -74,12 +79,52 @@ async function updatePurchaseOrderHandler(...args: unknown[]): Promise<Response>
       );
     }
 
+    // Enforce status transition rules
+    const statusTransitions: Record<string, string[]> = {
+      DRAFT: ['PENDING_APPROVAL', 'CANCELLED'],
+      PENDING_APPROVAL: ['APPROVED', 'DRAFT', 'CANCELLED'],
+      APPROVED: ['SENT', 'CANCELLED'],
+      SENT: ['CONFIRMED', 'CANCELLED'],
+      CONFIRMED: ['PARTIALLY_RECEIVED', 'RECEIVED', 'CANCELLED'],
+      PARTIALLY_RECEIVED: ['RECEIVED'],
+      RECEIVED: [],
+      CANCELLED: [],
+    };
+
+    const allowed = statusTransitions[existing.status] || [];
+    if (!allowed.includes(body.status)) {
+      return Response.json(
+        { success: false, error: `Cannot transition from ${existing.status} to ${body.status}. Allowed: ${allowed.join(', ') || 'none'}` },
+        { status: 400 }
+      );
+    }
+
+    // Build update data
+    const updateData: Record<string, unknown> = {
+      status: body.status,
+      notes: body.notes || existing.notes,
+    };
+
+    // Track approval
+    if (body.status === 'APPROVED') {
+      updateData.approvedById = body.approvedById || null;
+      updateData.approvedAt = new Date();
+    }
+
+    // Track cancellation
+    if (body.status === 'CANCELLED') {
+      updateData.cancelledById = body.cancelledById || null;
+      updateData.cancelledAt = new Date();
+    }
+
     const purchaseOrder = await db.purchaseOrder.update({
       where: { id },
-      data: { status: body.status, notes: body.notes || existing.notes },
+      data: updateData,
       include: {
         supplier: { select: { id: true, name: true } },
         items: { include: { product: { select: { id: true, name: true, sku: true } } } },
+        createdBy: { select: { id: true, name: true } },
+        approvedBy: { select: { id: true, name: true } },
       },
     });
 
@@ -89,13 +134,14 @@ async function updatePurchaseOrderHandler(...args: unknown[]): Promise<Response>
       severity: LogSeverity.INFO,
       message: `Purchase Order ${existing.poNumber} status changed to ${body.status}`,
       storeId: existing.storeId,
-      metadata: { poId: id, poNumber: existing.poNumber, newStatus: body.status },
+      metadata: { poId: id, poNumber: existing.poNumber, newStatus: body.status, previousStatus: existing.status },
     });
 
     return Response.json({ success: true, data: purchaseOrder });
   }
 
-    if (body.action === 'receive' && body.receivedItems) {
+  // ── Receive items (Goods Receipt Note) ──────────────────────────────────
+  if (body.action === 'receive' && body.receivedItems) {
     if (existing.status === 'CANCELLED') {
       return Response.json(
         { success: false, error: 'Cannot receive items for a cancelled purchase order.' },
@@ -103,14 +149,29 @@ async function updatePurchaseOrderHandler(...args: unknown[]): Promise<Response>
       );
     }
 
-    const receivedItems: { itemId: string; receivedQty: number }[] = body.receivedItems;
+    if (existing.status !== 'CONFIRMED' && existing.status !== 'PARTIALLY_RECEIVED') {
+      return Response.json(
+        { success: false, error: 'Can only receive items for CONFIRMED or PARTIALLY_RECEIVED orders.' },
+        { status: 400 }
+      );
+    }
 
-        const result = await db.$transaction(async (tx) => {
-            for (const recv of receivedItems) {
+    const receivedItems: { itemId: string; receivedQty: number }[] = body.receivedItems;
+    const receivedById = body.receivedById || null;
+
+    const result = await db.$transaction(async (tx) => {
+      for (const recv of receivedItems) {
         const item = existing.items.find((i) => i.id === recv.itemId);
         if (!item) continue;
 
-        const newReceivedQty = item.receivedQty + recv.receivedQty;
+        if (recv.receivedQty <= 0) continue;
+
+        const newReceivedQty = Number(item.receivedQty) + recv.receivedQty;
+
+        // Validate not over-receiving
+        if (newReceivedQty > Number(item.quantity)) {
+          throw new Error(`Cannot receive more than ordered for item ${item.productName}. Ordered: ${item.quantity}, Already received: ${item.receivedQty}, Attempting: ${recv.receivedQty}`);
+        }
 
         await tx.purchaseOrderItem.update({
           where: { id: recv.itemId },
@@ -118,12 +179,6 @@ async function updatePurchaseOrderHandler(...args: unknown[]): Promise<Response>
         });
 
         // ── Weighted Average Cost (WAC) recompute ──
-        // IAS 2 mandates WAC for interchangeable inventory. Each reception
-        // blends the incoming per-unit cost with the on-hand WAC, producing
-        // a new per-unit cost that is used for COGS at checkout and balance-
-        // sheet valuation. We read the current stock + costPrice, compute
-        // the new WAC, then update BOTH fields in a single write so the
-        // books stay consistent.
         const productBefore = await tx.product.findUnique({
           where: { id: item.productId },
           select: { quantityInStock: true, costPrice: true, name: true, sku: true },
@@ -137,21 +192,19 @@ async function updatePurchaseOrderHandler(...args: unknown[]): Promise<Response>
           currentStock: productBefore.quantityInStock,
           currentWac: productBefore.costPrice,
           incomingStock: recv.receivedQty,
-          incomingUnitCost: item.unitPrice,
+          incomingUnitCost: item.unitCost,
         });
 
-                await tx.product.update({
+        await tx.product.update({
           where: { id: item.productId },
           data: {
             quantityInStock: { increment: recv.receivedQty },
-            // Persist the new blended WAC so the next checkout / valuation
-            // uses the correct per-unit cost. Rounded to 4 DP inside the
-            // helper (KRA eTIMS precision).
             costPrice: wac.newWac,
           },
         });
 
-                const warehouseStock = await tx.warehouseStock.findUnique({
+        // Update warehouse stock
+        const warehouseStock = await tx.warehouseStock.findUnique({
           where: {
             storeId_productId_warehouse: {
               storeId: existing.storeId,
@@ -177,7 +230,8 @@ async function updatePurchaseOrderHandler(...args: unknown[]): Promise<Response>
           });
         }
 
-                await tx.stockMovement.create({
+        // Create stock movement
+        await tx.stockMovement.create({
           data: {
             storeId: existing.storeId,
             productId: item.productId,
@@ -189,24 +243,41 @@ async function updatePurchaseOrderHandler(...args: unknown[]): Promise<Response>
         });
       }
 
-            const allItems = await tx.purchaseOrderItem.findMany({
+      // Check if all items are fully received
+      const allItems = await tx.purchaseOrderItem.findMany({
         where: { purchaseOrderId: id },
       });
 
-      const allReceived = allItems.every((item) => item.receivedQty >= item.quantity);
+      const allReceived = allItems.every((item) => Number(item.receivedQty) >= Number(item.quantity));
+      const anyReceived = allItems.some((item) => Number(item.receivedQty) > 0);
 
-      if (allReceived && existing.status !== 'RECEIVED') {
-        await tx.purchaseOrder.update({
-          where: { id },
-          data: { status: 'RECEIVED' },
-        });
+      let newStatus = existing.status;
+      if (allReceived) {
+        newStatus = 'RECEIVED';
+      } else if (anyReceived) {
+        newStatus = 'PARTIALLY_RECEIVED';
       }
+
+      const updatePayload: Record<string, unknown> = { status: newStatus };
+
+      if (allReceived) {
+        updatePayload.receivedById = receivedById;
+        updatePayload.receivedAt = new Date();
+      }
+
+      await tx.purchaseOrder.update({
+        where: { id },
+        data: updatePayload,
+      });
 
       return tx.purchaseOrder.findUnique({
         where: { id },
         include: {
           supplier: { select: { id: true, name: true } },
           items: { include: { product: { select: { id: true, name: true, sku: true, unitType: true } } } },
+          createdBy: { select: { id: true, name: true } },
+          approvedBy: { select: { id: true, name: true } },
+          receivedBy: { select: { id: true, name: true } },
         },
       });
     });
@@ -227,11 +298,35 @@ async function updatePurchaseOrderHandler(...args: unknown[]): Promise<Response>
     return Response.json({ success: true, data: result });
   }
 
+  // ── Delete (only DRAFT or CANCELLED) ────────────────────────────────────
+  if (body.action === 'delete') {
+    if (existing.status !== 'DRAFT' && existing.status !== 'CANCELLED') {
+      return Response.json(
+        { success: false, error: 'Can only delete DRAFT or CANCELLED purchase orders.' },
+        { status: 400 }
+      );
+    }
+
+    await db.purchaseOrder.delete({ where: { id } });
+
+    await systemLog({
+      action: 'PURCHASE_ORDER_DELETED',
+      component: LogComponent.INVENTORY,
+      severity: LogSeverity.INFO,
+      message: `Purchase Order ${existing.poNumber} deleted`,
+      storeId: existing.storeId,
+      metadata: { poId: id, poNumber: existing.poNumber },
+    });
+
+    return Response.json({ success: true, data: { id, deleted: true } });
+  }
+
   return Response.json(
-    { success: false, error: 'No valid action specified. Use "status" or "action: receive".' },
+    { success: false, error: 'No valid action specified. Use "status", "action: receive", or "action: delete".' },
     { status: 400 }
   );
 }
 
 export const GET = withErrorBoundary(getPurchaseOrderHandler, 'PURCHASE_ORDER_DETAIL');
 export const PUT = withErrorBoundary(updatePurchaseOrderHandler, 'PURCHASE_ORDER_UPDATE');
+export const DELETE = withErrorBoundary(updatePurchaseOrderHandler, 'PURCHASE_ORDER_DELETE');

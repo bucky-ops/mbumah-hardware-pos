@@ -1699,12 +1699,23 @@ export interface PurchaseOrderListItem {
   status: string;
   orderDate: string;
   expectedDate: string | null;
+  subTotal: number;
+  taxAmount: number;
   totalAmount: number;
   notes: string | null;
-  createdBy: string | null;
+  createdById: string | null;
+  approvedById: string | null;
+  approvedAt: string | null;
+  receivedById: string | null;
+  receivedAt: string | null;
+  cancelledAt: string | null;
   createdAt: string;
   updatedAt: string;
   supplier?: { id: string; name: string; phone?: string | null; email?: string | null };
+  createdBy?: { id: string; name: string } | null;
+  approvedBy?: { id: string; name: string } | null;
+  receivedBy?: { id: string; name: string } | null;
+  cancelledBy?: { id: string; name: string } | null;
   items?: PurchaseOrderItemDetail[];
   itemCount?: number;
 }
@@ -1713,9 +1724,10 @@ export interface PurchaseOrderItemDetail {
   id: string;
   purchaseOrderId: string;
   productId: string;
+  productName: string;
   quantity: number;
-  unitPrice: number;
-  totalPrice: number;
+  unitCost: number;
+  totalCost: number;
   receivedQty: number;
   notes: string | null;
   product?: { id: string; name: string; sku: string; unitType: string; quantityInStock?: number; costPrice?: number };
@@ -1796,11 +1808,13 @@ export interface SupplierSendOrderResult {
 }
 
 export const purchaseOrdersApi = {
-  list: async (params?: { storeId?: string; supplierId?: string; status?: string; page?: number; limit?: number }) => {
+  list: async (params?: { storeId?: string; supplierId?: string; status?: string; dateFrom?: string; dateTo?: string; page?: number; limit?: number }) => {
     const query = new URLSearchParams();
     if (params?.storeId) query.set('storeId', params.storeId);
     if (params?.supplierId) query.set('supplierId', params.supplierId);
     if (params?.status) query.set('status', params.status);
+    if (params?.dateFrom) query.set('dateFrom', params.dateFrom);
+    if (params?.dateTo) query.set('dateTo', params.dateTo);
     if (params?.page) query.set('page', String(params.page));
     if (params?.limit) query.set('limit', String(params.limit));
     const qs = query.toString();
@@ -1814,10 +1828,10 @@ export const purchaseOrdersApi = {
   create: async (data: {
     storeId: string;
     supplierId: string;
-    items: { productId: string; quantity: number; unitPrice: number; notes?: string }[];
+    items: { productId: string; quantity: number; unitCost: number; notes?: string }[];
     notes?: string;
     expectedDate?: string;
-    createdBy?: string;
+    createdById?: string;
   }) => {
     return request<PurchaseOrderListItem>('/purchase-orders', {
       method: 'POST',
@@ -1825,17 +1839,24 @@ export const purchaseOrdersApi = {
     });
   },
 
-  updateStatus: async (id: string, status: string, notes?: string) => {
+  updateStatus: async (id: string, status: string, data?: { notes?: string; approvedById?: string; cancelledById?: string }) => {
     return request<PurchaseOrderListItem>(`/purchase-orders/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ status, notes }),
+      body: JSON.stringify({ status, ...data }),
     });
   },
 
-  receiveItems: async (id: string, receivedItems: { itemId: string; receivedQty: number }[]) => {
+  receiveItems: async (id: string, receivedItems: { itemId: string; receivedQty: number }[], receivedById?: string) => {
     return request<PurchaseOrderListItem>(`/purchase-orders/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ action: 'receive', receivedItems }),
+      body: JSON.stringify({ action: 'receive', receivedItems, receivedById }),
+    });
+  },
+
+  delete: async (id: string) => {
+    return request<{ id: string; deleted: boolean }>(`/purchase-orders/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ action: 'delete' }),
     });
   },
 };
