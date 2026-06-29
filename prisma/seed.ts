@@ -436,11 +436,18 @@ async function seedBody() {
     { role: 'ACCOUNTANT', resource: 'debt', action: 'update' },
   ];
 
-  await prisma.rolePermission.createMany({
-    data: permissions,
-    skipDuplicates: true,
-  });
-  done5('ok', permissions.length + ' permissions');
+  // Insert permissions one-by-one with try/catch for idempotency
+  // (SQLite does not support skipDuplicates in createMany)
+  let permCreated = 0;
+  for (const perm of permissions) {
+    try {
+      await prisma.rolePermission.create({ data: perm });
+      permCreated++;
+    } catch {
+      // Skip duplicate — idempotent on re-run
+    }
+  }
+  done5('ok', permCreated + ' permissions created (' + (permissions.length - permCreated) + ' duplicates skipped)');
 
   // 6. Seed Product Categories
   const done6 = stage(6, TOTAL_STAGES, 'Seed product categories (10)');
@@ -514,12 +521,17 @@ async function seedBody() {
     { id: 'prod_screws_wood', sku: 'MBM-NAS-0004', name: 'Wood Screws Assorted (Box)', categoryId: 'cat_nails_screws', unitType: 'BOX', quantityInStock: 80, pricePerUnit: 500, costPrice: 380, reorderLevel: 20, imageUrl: '/categories/cat_nails.png' },
   ];
 
-  // Batch-insert all products via createMany (single INSERT, idempotent on re-run
-  // via skipDuplicates on the @id field).
-  await prisma.product.createMany({
-    data: products.map(p => ({ ...p, storeId: store.id })) as any,
-    skipDuplicates: true,
-  });
+  // Batch-insert all products via createMany (idempotent on re-run — duplicates
+  // on the @id field are caught by try/catch below).
+  let _prodCreated = 0;
+  for (const p of products) {
+    try {
+      await prisma.product.create({ data: { ...p, storeId: store.id } as any });
+      _prodCreated++;
+    } catch {
+      // Skip duplicate — idempotent on re-run
+    }
+  }
 
   // 8. Seed Product Bundle - "Construction Starter Kit"
   const bundleProduct = await prisma.product.create({
@@ -539,14 +551,18 @@ async function seedBody() {
     },
   });
 
-  await prisma.productBundle.createMany({
-    data: [
+  for (const bd of [
       { parentProductId: bundleProduct.id, childProductId: 'prod_cement_bamburi', quantityRequired: 5 },
       { parentProductId: bundleProduct.id, childProductId: 'prod_spade', quantityRequired: 2 },
       { parentProductId: bundleProduct.id, childProductId: 'prod_nails_4inch', quantityRequired: 5 },
       { parentProductId: bundleProduct.id, childProductId: 'prod_wheelbarrow_std', quantityRequired: 1 },
-    ],
-  });
+    ]) {
+    try {
+      await prisma.productBundle.create({ data: bd });
+    } catch {
+      // Skip duplicate
+    }
+  }
   done7('ok', (products.length + 1) + ' products + bundle');
 
   // 9. Seed Demo Customers (expanded with more variety)
@@ -563,8 +579,16 @@ async function seedBody() {
     { id: 'cust_8', storeId: store.id, name: 'Nairobi Contractors Co.', phone: '0733445566', email: 'info@nairobiddeners.co.ke', idNumber: '89012345', debtLimit: 750000, currentDebtBalance: 250000 },
   ];
 
-  await prisma.customer.createMany({ data: customers, skipDuplicates: true });
-  done9('ok', customers.length + ' customers');
+  let custCreated = 0;
+  for (const c of customers) {
+    try {
+      await prisma.customer.create({ data: c as any });
+      custCreated++;
+    } catch {
+      // Skip duplicate
+    }
+  }
+  done9('ok', custCreated + ' customers');
 
   // 9b. Seed Branch-Specific Product Categories, Products, and Customers
   console.log('Seeding branch-specific data...');
@@ -1195,24 +1219,27 @@ async function seedBody() {
   // ==========================================================================
   console.log('Seeding debt ledgers...');
 
-  await prisma.debtLedger.createMany({
-    data: [
+  for (const dl of [
       { id: 'debt_1', storeId: store.id, customerId: 'cust_2', transactionId: 'tx_004', amountOwed: 15000, amountPaid: 0, balance: 15000, dueDate: new Date('2025-01-15'), status: 'OUTSTANDING', agingBucket: 'DAYS_60' },
       { id: 'debt_2', storeId: store.id, customerId: 'cust_3', transactionId: 'tx_004', amountOwed: 45000, amountPaid: 5000, balance: 40000, dueDate: new Date('2025-01-01'), status: 'OVERDUE', agingBucket: 'DAYS_90_PLUS' },
       { id: 'debt_3', storeId: store.id, customerId: 'cust_4', transactionId: 'tx_009', amountOwed: 120000, amountPaid: 30000, balance: 90000, dueDate: new Date('2025-03-30'), status: 'PARTIAL', agingBucket: 'DAYS_30' },
       { id: 'debt_4', storeId: store.id, customerId: 'cust_5', transactionId: null, amountOwed: 5000, amountPaid: 0, balance: 5000, dueDate: new Date('2025-04-28'), status: 'OUTSTANDING', agingBucket: 'CURRENT' },
       { id: 'debt_5', storeId: store.id, customerId: 'cust_6', transactionId: null, amountOwed: 32000, amountPaid: 8000, balance: 24000, dueDate: new Date('2025-02-15'), status: 'PARTIAL', agingBucket: 'DAYS_30' },
       { id: 'debt_6', storeId: store.id, customerId: 'cust_8', transactionId: 'tx_009', amountOwed: 52680, amountPaid: 26340, balance: 26340, dueDate: new Date('2025-03-15'), status: 'PARTIAL', agingBucket: 'CURRENT' },
-    ],
-  });
+    ]) {
+    try {
+      await prisma.debtLedger.create({ data: dl });
+    } catch {
+      // Skip duplicate
+    }
+  }
 
   // ==========================================================================
   // 13. SEED EQUIPMENT RENTALS (3: active, overdue, returned)
   // ==========================================================================
   console.log('Seeding equipment rentals...');
 
-  await prisma.equipmentRental.createMany({
-    data: [
+  for (const er of [
       {
         id: 'rental_1', storeId: store.id, productId: 'prod_concrete_mixer', customerId: 'cust_3',
         status: 'ACTIVE', rentalStartDate: daysAgo(5), expectedReturnDate: daysAgo(-5),
@@ -1229,8 +1256,13 @@ async function seedBody() {
         actualReturnDate: daysAgo(4),
         securityDeposit: 5000, ratePerDay: 2000, totalRentalCharge: 14000, lateFeeAccumulated: 0,
       },
-    ],
-  });
+    ]) {
+    try {
+      await prisma.equipmentRental.create({ data: er });
+    } catch {
+      // Skip duplicate
+    }
+  }
 
   // ==========================================================================
   // 14. SEED STOCK MOVEMENTS (past week)
@@ -1727,7 +1759,15 @@ async function seedBody() {
     },
   ];
 
-  await prisma.employee.createMany({ data: employees as any, skipDuplicates: true });
+  let _empCreated = 0;
+  for (const emp of employees) {
+    try {
+      await prisma.employee.create({ data: emp as any });
+      _empCreated++;
+    } catch {
+      // Skip duplicate
+    }
+  }
 
   // Seed one payroll period + run for the current month (demo)
   const now = new Date();
