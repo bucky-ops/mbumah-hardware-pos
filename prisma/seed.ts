@@ -388,8 +388,8 @@ async function seedBody() {
   // idempotent on re-run (won't crash on the @@unique([role,resource,action])).
   const permissions = [
     // SUPER_ADMIN has all
-    ...['products', 'transactions', 'customers', 'financials', 'rentals', 'admin', 'reports', 'debt'].flatMap(resource =>
-      ['create', 'read', 'update', 'delete', 'approve', 'refund', 'export', 'void', 'manage_users', 'manage_stores', 'system_config', 'write_off', 'remind', 'adjust'].map(action => ({
+    ...['products', 'transactions', 'customers', 'financials', 'rentals', 'admin', 'reports', 'debt', 'purchase_orders'].flatMap(resource =>
+      ['create', 'read', 'update', 'delete', 'approve', 'refund', 'export', 'void', 'manage_users', 'manage_stores', 'system_config', 'write_off', 'remind', 'adjust', 'receive'].map(action => ({
         role: 'SUPER_ADMIN' as string,
         resource,
         action,
@@ -400,6 +400,7 @@ async function seedBody() {
     { role: 'CASHIER', resource: 'transactions', action: 'create' },
     { role: 'CASHIER', resource: 'transactions', action: 'read' },
     { role: 'CASHIER', resource: 'customers', action: 'read' },
+    { role: 'CASHIER', resource: 'purchase_orders', action: 'read' },
     // BRANCH_MANAGER permissions
     { role: 'BRANCH_MANAGER', resource: 'products', action: 'create' },
     { role: 'BRANCH_MANAGER', resource: 'products', action: 'read' },
@@ -420,9 +421,13 @@ async function seedBody() {
     { role: 'BRANCH_MANAGER', resource: 'reports', action: 'export' },
     { role: 'BRANCH_MANAGER', resource: 'debt', action: 'read' },
     { role: 'BRANCH_MANAGER', resource: 'debt', action: 'remind' },
+    { role: 'BRANCH_MANAGER', resource: 'purchase_orders', action: 'create' },
+    { role: 'BRANCH_MANAGER', resource: 'purchase_orders', action: 'read' },
+    { role: 'BRANCH_MANAGER', resource: 'purchase_orders', action: 'update' },
+    { role: 'BRANCH_MANAGER', resource: 'purchase_orders', action: 'receive' },
     // STORE_OWNER permissions (full access like SUPER_ADMIN but scoped to store)
-    ...['products', 'transactions', 'customers', 'financials', 'rentals', 'admin', 'reports', 'debt'].flatMap(resource =>
-      ['create', 'read', 'update', 'delete', 'approve', 'refund', 'export', 'void', 'manage_users', 'write_off', 'remind', 'adjust'].map(action => ({
+    ...['products', 'transactions', 'customers', 'financials', 'rentals', 'admin', 'reports', 'debt', 'purchase_orders'].flatMap(resource =>
+      ['create', 'read', 'update', 'delete', 'approve', 'refund', 'export', 'void', 'manage_users', 'write_off', 'remind', 'adjust', 'receive'].map(action => ({
         role: 'STORE_OWNER' as string,
         resource,
         action,
@@ -434,6 +439,8 @@ async function seedBody() {
     { role: 'ACCOUNTANT', resource: 'reports', action: 'read' },
     { role: 'ACCOUNTANT', resource: 'debt', action: 'read' },
     { role: 'ACCOUNTANT', resource: 'debt', action: 'update' },
+    { role: 'ACCOUNTANT', resource: 'purchase_orders', action: 'read' },
+    { role: 'ACCOUNTANT', resource: 'purchase_orders', action: 'approve' },
   ];
 
   // Insert permissions one-by-one with try/catch for idempotency

@@ -24,6 +24,7 @@ import {
   Lightbulb, Send, ExternalLink, RefreshCw, Split,
   Wifi, WifiOff, CloudOff, CloudLightning,
   Building2, BadgeDollarSign, MessagesSquare,
+  ClipboardList,
 } from 'lucide-react';
 
 import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
@@ -95,6 +96,7 @@ const LazyPayrollTab = lazy(() => import('./tabs/payroll-tab'));
 const LazyEtimsTab = lazy(() => import('./tabs/etims-tab'));
 const LazyDebtManagementTab = lazy(() => import('./tabs/debt-management-tab'));
 const LazyConversationsTab = lazy(() => import('./tabs/conversations-tab'));
+const LazyPurchaseOrdersTab = lazy(() => import('./tabs/purchase-orders-tab'));
 
 function TabLoadingFallback() {
   return (
@@ -126,6 +128,7 @@ const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType; roles: s
   { id: 'transactions', label: 'Transactions', icon: ShoppingBag, roles: ALL_ROLES },
   { id: 'rentals', label: 'Rentals', icon: KeyRound, roles: SENIOR_ROLES },
   { id: 'suppliers', label: 'Suppliers', icon: Truck, roles: SENIOR_ROLES },
+  { id: 'purchase-orders', label: 'Purchase Orders', icon: ClipboardList, roles: SENIOR_ROLES },
   { id: 'financial', label: 'Financial', icon: BarChart3, roles: MGMT_ROLES },
   { id: 'reports', label: 'Reports', icon: FileText, roles: MGMT_ROLES },
   { id: 'gift-cards', label: 'Gift Cards', icon: CreditCard, roles: SENIOR_ROLES },
@@ -4975,6 +4978,7 @@ function MainApp() {
       case 'etims': return <Suspense fallback={<TabLoadingFallback />}><LazyEtimsTab /></Suspense>;
       case 'debt-management': return <Suspense fallback={<TabLoadingFallback />}><LazyDebtManagementTab /></Suspense>;
       case 'conversations': return <Suspense fallback={<TabLoadingFallback />}><LazyConversationsTab /></Suspense>;
+      case 'purchase-orders': return <Suspense fallback={<TabLoadingFallback />}><LazyPurchaseOrdersTab /></Suspense>;
       default: return <POSTab />;
     }
   };

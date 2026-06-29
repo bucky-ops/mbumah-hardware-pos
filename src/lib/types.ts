@@ -421,6 +421,7 @@ export const PERMISSION_MATRIX: Record<UserRole, Record<string, string[]>> = {
     admin: ['read', 'update', 'manage_users', 'manage_stores', 'system_config'],
     reports: ['read', 'export'],
     debt: ['create', 'read', 'update', 'write_off', 'remind'],
+    purchase_orders: ['create', 'read', 'update', 'delete', 'approve', 'receive'],
   },
   STORE_OWNER: {
     products: ['create', 'read', 'update', 'delete'],
@@ -431,6 +432,7 @@ export const PERMISSION_MATRIX: Record<UserRole, Record<string, string[]>> = {
     admin: ['read', 'manage_users'],
     reports: ['read', 'export'],
     debt: ['create', 'read', 'update', 'write_off', 'remind'],
+    purchase_orders: ['create', 'read', 'update', 'delete', 'approve', 'receive'],
   },
   BRANCH_MANAGER: {
     products: ['create', 'read', 'update'],
@@ -441,6 +443,7 @@ export const PERMISSION_MATRIX: Record<UserRole, Record<string, string[]>> = {
     admin: ['read'],
     reports: ['read', 'export'],
     debt: ['read', 'remind'],
+    purchase_orders: ['create', 'read', 'update', 'receive'],
   },
   CASHIER: {
     products: ['read'],
@@ -451,6 +454,7 @@ export const PERMISSION_MATRIX: Record<UserRole, Record<string, string[]>> = {
     admin: [],
     reports: [],
     debt: [],
+    purchase_orders: ['read'],
   },
   ACCOUNTANT: {
     products: ['read'],
@@ -461,6 +465,7 @@ export const PERMISSION_MATRIX: Record<UserRole, Record<string, string[]>> = {
     admin: ['read'],
     reports: ['read', 'export'],
     debt: ['read', 'update', 'remind'],
+    purchase_orders: ['read', 'approve'],
   },
 };
 
