@@ -2,15 +2,15 @@
 // Multi-tenant via storeId discriminator. PostgreSQL for prod, SQLite for dev.
 //
 // The committed provider is "postgresql" (for Vercel production).
-// For local dev with SQLite, `scripts/setup-prisma-provider.sh` runs in
+// For local dev with SQLite, `scripts/setup-prisma-provider.mjs` runs in
 // `postinstall` and detects the DATABASE_URL scheme:
 //   • file:./...        → switches to sqlite      (local dev)
 //   • postgresql://...  → stays postgresql         (Vercel / Neon / Supabase)
 //   • unset             → stays postgresql         (Vercel install phase)
 //
-// The `vercel-build` script is `SKIP_ENV_VALIDATION=1 prisma generate && next build`
-// — no provider manipulation at build time. The correct Prisma client is
-// generated during `postinstall` (which runs the setup script for local dev).
+// The `vercel-build` script runs `setup-prisma-provider.mjs && prisma generate`
+// before `next build` to ensure the correct client is generated even when
+// Vercel caches node_modules and skips the postinstall hook.
 //
 // Notes:
 //   - IDs use cuid() for cross-DB compat
@@ -25,7 +25,7 @@ generator client {
 
 datasource db {
   // Committed as "postgresql" for Vercel. Auto-switched to "sqlite" by
-  // scripts/setup-prisma-provider.sh during postinstall when DATABASE_URL
+  // scripts/setup-prisma-provider.mjs during postinstall when DATABASE_URL
   // starts with "file:" (local dev). Do not edit manually.
   provider  = "sqlite"
   url       = env("DATABASE_URL")

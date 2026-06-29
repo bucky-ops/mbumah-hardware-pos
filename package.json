@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
     "build": "next build",
-    "postinstall": "bash scripts/setup-prisma-provider.sh && prisma generate",
+    "postinstall": "node scripts/setup-prisma-provider.mjs && prisma generate",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -22,7 +22,7 @@
     "db:reset": "prisma migrate reset",
     "audit:financial": "bun run scripts/run-financial-audit.ts",
     "health": "curl -s http://localhost:3000/api/health | bun -e 'process.stdin.on(\"data\",d=>console.log(JSON.stringify(JSON.parse(d.toString()),null,2)))'",
-    "vercel-build": "SKIP_ENV_VALIDATION=1 prisma generate && next build"
+    "vercel-build": "SKIP_ENV_VALIDATION=1 node scripts/setup-prisma-provider.mjs && prisma generate && next build"
   },
   "prisma": {
     "seed": "bun prisma/seed.ts"

@@ -109,9 +109,20 @@ function resolveDatabaseUrl(): string {
   return url;
 }
 
-// Resolve once at module load — a missing URL will crash the process loudly
-// during the first request rather than producing silent per-query failures.
-const DATABASE_URL = resolveDatabaseUrl();
+// Resolve once at module load — if DATABASE_URL is missing, we DON'T throw
+// here anymore. Instead, we defer the error to the first actual Prisma query,
+// where withErrorBoundary can catch it and return a proper JSON error response.
+// Previously, throwing at module evaluation caused opaque 500s on Vercel
+// because the error occurred before the route handler was defined.
+let DATABASE_URL: string | null = null;
+let DATABASE_URL_ERROR: Error | null = null;
+
+try {
+  DATABASE_URL = resolveDatabaseUrl();
+} catch (err) {
+  DATABASE_URL = null;
+  DATABASE_URL_ERROR = err instanceof Error ? err : new Error(String(err));
+}
 
 // ── 2. Singleton PrismaClient (serverless-friendly) ──────────────────────────
 
@@ -120,8 +131,16 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createBaseClient(): PrismaClient {
+  // If DATABASE_URL resolution failed, we still create a PrismaClient but
+  // the first query will fail with a descriptive error. This is better than
+  // crashing at module import time because the error can be caught by
+  // withErrorBoundary in the route handler.
+  if (DATABASE_URL_ERROR) {
+    // Log the configuration error loudly so it's visible in Vercel logs
+    console.error(DATABASE_URL_ERROR.message);
+  }
   return new PrismaClient({
-    datasourceUrl: DATABASE_URL,
+    datasourceUrl: DATABASE_URL || undefined,
     // In production (Vercel serverless) keep logs to `error` only to avoid
     // cold-start log spam and Lambda log volume charges. In dev we surface
     // `warn` too so we catch N+1 / missing-index issues locally.
