@@ -119,3 +119,46 @@ Stage Summary:
 3. Seed production Neon database with Purchase Order data
 4. Migrate middleware.ts → proxy convention per Next.js 16 deprecation
 5. Rotate Neon database credentials
+
+---
+Task ID: sidebar-1-4
+Agent: Main Agent
+Task: Sidebar Feature - Phases 1-4 (State Management, Component, Layout, UX/Accessibility)
+
+Work Log:
+- Migrated useAppStore from manual localStorage to Zustand persist middleware
+- Added SidebarState type ('expanded' | 'collapsed' | 'mobile-overlay')
+- Added getSidebarState(isDesktop) computed method for clean state derivation
+- Updated persist to only store isSidebarCollapsed, activeTab, currentStoreId (not sidebarOpen)
+- Added skipHydration: true with explicit useAppStore.persist.rehydrate() on mount
+- SSR-safe createJSONStorage with no-op fallback for server rendering
+- Updated AppSidebar to use getSidebarState() instead of manual collapsed computation
+- Added sidebarRef with useRef for focus management
+- Added Escape key handler to close mobile overlay
+- Added focus trap: auto-focus sidebar when mobile overlay opens
+- Enhanced ARIA attributes: role="navigation", aria-label, aria-expanded, aria-collapsed, data-sidebar-state
+- Added Ctrl+B / Cmd+B keyboard shortcut for sidebar toggle
+- Added sidebar toggle shortcut to keyboard shortcuts dialog
+- Added sidebar toggle to Help & Tips dropdown
+- Removed unused hydrateAppFromStorage selector
+
+Stage Summary:
+- Sidebar now has proper 3-state model with clean state derivation
+- Zustand persist middleware handles localStorage automatically
+- Keyboard accessibility: Ctrl+B toggle, Escape to close mobile, focus management
+- ARIA attributes for screen reader support
+- Tagged as v2.2.0 and pushed to GitHub
+
+---
+Task ID: sidebar-5
+Agent: Main Agent
+Task: Sidebar Phase 5 — Git Push & Verification
+
+Work Log:
+- Committed: d075daa pushed to origin/main
+- Tagged: v2.2.0 pushed to GitHub
+- Lint: 0 errors, 353 warnings (pre-existing)
+
+Stage Summary:
+- Release v2.2.0 deployed
+- All sidebar enhancement phases complete
