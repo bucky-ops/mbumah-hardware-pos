@@ -53,7 +53,7 @@ async function recalculateHandler(...args: unknown[]): Promise<Response> {
   }
 }
 
-export const POST = withFinancialAuth(
-  withErrorBoundary(recalculateHandler, LogComponent.FINANCIAL),
-  FINANCIAL_ROLES.WRITE,
+export const POST = withErrorBoundary(
+  withFinancialAuth(recalculateHandler, FINANCIAL_ROLES.WRITE),
+  LogComponent.FINANCIAL,
 );

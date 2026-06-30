@@ -178,6 +178,7 @@ function OverdueBoardSection({ storeId }: { storeId: string }) {
 
   const customers = data?.data ?? [];
   const summary = data?.summary;
+  const byBucket = summary?.byBucket ?? {};
 
   const summaryCards = useMemo(() => {
     if (!summary) return [];
@@ -196,13 +197,13 @@ function OverdueBoardSection({ storeId }: { storeId: string }) {
       },
       {
         label: '1–60 days',
-        value: (summary.byBucket.DAYS_30 ?? 0) + (summary.byBucket.DAYS_60 ?? 0),
+        value: (byBucket.DAYS_30 ?? 0) + (byBucket.DAYS_60 ?? 0),
         color: 'text-amber-600 dark:text-amber-400',
         icon: Clock,
       },
       {
         label: '61+ days',
-        value: summary.byBucket.DAYS_90_PLUS ?? 0,
+        value: byBucket.DAYS_90_PLUS ?? 0,
         color: 'text-rose-600 dark:text-rose-400',
         icon: AlertOctagon,
       },

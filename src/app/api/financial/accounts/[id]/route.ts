@@ -116,11 +116,11 @@ async function deactivateAccountHandler(...args: unknown[]): Promise<Response> {
   }
 }
 
-export const PUT = withFinancialAuth(
-  withErrorBoundary(updateAccountHandler, LogComponent.FINANCIAL),
-  FINANCIAL_ROLES.WRITE,
+export const PUT = withErrorBoundary(
+  withFinancialAuth(updateAccountHandler, FINANCIAL_ROLES.WRITE),
+  LogComponent.FINANCIAL,
 );
-export const DELETE = withFinancialAuth(
-  withErrorBoundary(deactivateAccountHandler, LogComponent.FINANCIAL),
-  FINANCIAL_ROLES.WRITE,
+export const DELETE = withErrorBoundary(
+  withFinancialAuth(deactivateAccountHandler, FINANCIAL_ROLES.WRITE),
+  LogComponent.FINANCIAL,
 );

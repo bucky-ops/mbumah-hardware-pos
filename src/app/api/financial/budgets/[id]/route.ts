@@ -144,11 +144,11 @@ async function deleteBudgetHandler(..._args: unknown[]): Promise<Response> {
   });
 }
 
-export const PUT = withFinancialAuth(
-  withErrorBoundary(updateBudgetHandler, LogComponent.FINANCIAL),
-  FINANCIAL_ROLES.WRITE,
+export const PUT = withErrorBoundary(
+  withFinancialAuth(updateBudgetHandler, FINANCIAL_ROLES.WRITE),
+  LogComponent.FINANCIAL,
 );
-export const DELETE = withFinancialAuth(
-  withErrorBoundary(deleteBudgetHandler, LogComponent.FINANCIAL),
-  FINANCIAL_ROLES.WRITE,
+export const DELETE = withErrorBoundary(
+  withFinancialAuth(deleteBudgetHandler, FINANCIAL_ROLES.WRITE),
+  LogComponent.FINANCIAL,
 );

@@ -113,11 +113,11 @@ async function captureSnapshotHandler(...args: unknown[]): Promise<Response> {
   }
 }
 
-export const GET = withFinancialAuth(
-  withErrorBoundary(listSnapshotsHandler, LogComponent.FINANCIAL),
-  FINANCIAL_ROLES.AUDIT,
+export const GET = withErrorBoundary(
+  withFinancialAuth(listSnapshotsHandler, FINANCIAL_ROLES.AUDIT),
+  LogComponent.FINANCIAL,
 );
-export const POST = withFinancialAuth(
-  withErrorBoundary(captureSnapshotHandler, LogComponent.FINANCIAL),
-  FINANCIAL_ROLES.AUDIT,
+export const POST = withErrorBoundary(
+  withFinancialAuth(captureSnapshotHandler, FINANCIAL_ROLES.AUDIT),
+  LogComponent.FINANCIAL,
 );

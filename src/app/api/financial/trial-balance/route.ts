@@ -66,7 +66,7 @@ async function handler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const GET = withFinancialAuth(
-  withErrorBoundary(handler, LogComponent.FINANCIAL),
-  FINANCIAL_ROLES.AUDIT,
+export const GET = withErrorBoundary(
+  withFinancialAuth(handler, FINANCIAL_ROLES.AUDIT),
+  LogComponent.FINANCIAL,
 );

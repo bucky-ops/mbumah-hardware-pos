@@ -87,7 +87,7 @@ async function voidJournalEntryHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const PUT = withFinancialAuth(
-  withErrorBoundary(voidJournalEntryHandler, 'JOURNAL_ENTRY_VOID'),
-  FINANCIAL_ROLES.WRITE,
+export const PUT = withErrorBoundary(
+  withFinancialAuth(voidJournalEntryHandler, FINANCIAL_ROLES.WRITE),
+  'JOURNAL_ENTRY_VOID',
 );

@@ -118,11 +118,11 @@ async function periodActionHandler(...args: unknown[]): Promise<Response> {
   }
 }
 
-export const GET = withFinancialAuth(
-  withErrorBoundary(getPeriodHandler, LogComponent.FINANCIAL),
-  FINANCIAL_ROLES.READ,
+export const GET = withErrorBoundary(
+  withFinancialAuth(getPeriodHandler, FINANCIAL_ROLES.READ),
+  LogComponent.FINANCIAL,
 );
-export const PUT = withFinancialAuth(
-  withErrorBoundary(periodActionHandler, LogComponent.FINANCIAL),
-  FINANCIAL_ROLES.WRITE,
+export const PUT = withErrorBoundary(
+  withFinancialAuth(periodActionHandler, FINANCIAL_ROLES.WRITE),
+  LogComponent.FINANCIAL,
 );

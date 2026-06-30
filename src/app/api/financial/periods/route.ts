@@ -131,11 +131,11 @@ async function createPeriodHandler(...args: unknown[]): Promise<Response> {
   }
 }
 
-export const GET = withFinancialAuth(
-  withErrorBoundary(listPeriodsHandler, LogComponent.FINANCIAL),
-  FINANCIAL_ROLES.READ,
+export const GET = withErrorBoundary(
+  withFinancialAuth(listPeriodsHandler, FINANCIAL_ROLES.READ),
+  LogComponent.FINANCIAL,
 );
-export const POST = withFinancialAuth(
-  withErrorBoundary(createPeriodHandler, LogComponent.FINANCIAL),
-  FINANCIAL_ROLES.WRITE,
+export const POST = withErrorBoundary(
+  withFinancialAuth(createPeriodHandler, FINANCIAL_ROLES.WRITE),
+  LogComponent.FINANCIAL,
 );

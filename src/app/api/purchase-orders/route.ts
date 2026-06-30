@@ -4,14 +4,17 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { requireStoreAccess, type AuthSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 // Default VAT rate for Kenya
 const KENYA_VAT_RATE = 16;
 
-async function getPurchaseOrdersHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function getPurchaseOrdersHandler(
+  request: NextRequest,
+  _session: AuthSession,
+): Promise<Response> {
   const { searchParams } = new URL(request.url);
 
   const storeId = searchParams.get('storeId');
@@ -84,8 +87,10 @@ async function getPurchaseOrdersHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-async function createPurchaseOrderHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function createPurchaseOrderHandler(
+  request: NextRequest,
+  _session: AuthSession,
+): Promise<Response> {
   const body = await request.json();
 
   const { storeId, supplierId, items, notes, expectedDate, createdById } = body;
@@ -199,5 +204,11 @@ async function createPurchaseOrderHandler(...args: unknown[]): Promise<Response>
   return Response.json({ success: true, data: purchaseOrder }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getPurchaseOrdersHandler, 'PURCHASE_ORDERS_LIST');
-export const POST = withErrorBoundary(createPurchaseOrderHandler, 'PURCHASE_ORDERS_CREATE');
+export const GET = withErrorBoundary(
+  requireStoreAccess(getPurchaseOrdersHandler),
+  'PURCHASE_ORDERS_LIST',
+);
+export const POST = withErrorBoundary(
+  requireStoreAccess(createPurchaseOrderHandler),
+  'PURCHASE_ORDERS_CREATE',
+);

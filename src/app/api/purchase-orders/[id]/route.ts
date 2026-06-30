@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { calculateWeightedAverageCost } from '@/lib/account-helper';
+import { requireStoreAccess, type AuthSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,8 +13,11 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-async function getPurchaseOrderHandler(...args: unknown[]): Promise<Response> {
-  const context = args[1] as RouteContext;
+async function getPurchaseOrderHandler(
+  _request: NextRequest,
+  _session: AuthSession,
+  context: RouteContext,
+): Promise<Response> {
   const { id } = await context.params;
 
   const purchaseOrder = await db.purchaseOrder.findUnique({
@@ -51,9 +55,11 @@ async function getPurchaseOrderHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: purchaseOrder });
 }
 
-async function updatePurchaseOrderHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
-  const context = args[1] as RouteContext;
+async function updatePurchaseOrderHandler(
+  request: NextRequest,
+  _session: AuthSession,
+  context: RouteContext,
+): Promise<Response> {
   const { id } = await context.params;
   const body = await request.json();
 
@@ -327,6 +333,15 @@ async function updatePurchaseOrderHandler(...args: unknown[]): Promise<Response>
   );
 }
 
-export const GET = withErrorBoundary(getPurchaseOrderHandler, 'PURCHASE_ORDER_DETAIL');
-export const PUT = withErrorBoundary(updatePurchaseOrderHandler, 'PURCHASE_ORDER_UPDATE');
-export const DELETE = withErrorBoundary(updatePurchaseOrderHandler, 'PURCHASE_ORDER_DELETE');
+export const GET = withErrorBoundary(
+  requireStoreAccess(getPurchaseOrderHandler),
+  'PURCHASE_ORDER_DETAIL',
+);
+export const PUT = withErrorBoundary(
+  requireStoreAccess(updatePurchaseOrderHandler),
+  'PURCHASE_ORDER_UPDATE',
+);
+export const DELETE = withErrorBoundary(
+  requireStoreAccess(updatePurchaseOrderHandler),
+  'PURCHASE_ORDER_DELETE',
+);

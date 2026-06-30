@@ -126,11 +126,11 @@ async function setBudgetHandler(...args: unknown[]): Promise<Response> {
   }
 }
 
-export const GET = withFinancialAuth(
-  withErrorBoundary(listBudgetsHandler, LogComponent.FINANCIAL),
-  FINANCIAL_ROLES.READ,
+export const GET = withErrorBoundary(
+  withFinancialAuth(listBudgetsHandler, FINANCIAL_ROLES.READ),
+  LogComponent.FINANCIAL,
 );
-export const POST = withFinancialAuth(
-  withErrorBoundary(setBudgetHandler, LogComponent.FINANCIAL),
-  FINANCIAL_ROLES.WRITE,
+export const POST = withErrorBoundary(
+  withFinancialAuth(setBudgetHandler, FINANCIAL_ROLES.WRITE),
+  LogComponent.FINANCIAL,
 );

@@ -169,7 +169,7 @@ async function getRevenueTrendHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const GET = withFinancialAuth(
-  withErrorBoundary(getRevenueTrendHandler, 'REVENUE_TREND'),
-  FINANCIAL_ROLES.READ,
+export const GET = withErrorBoundary(
+  withFinancialAuth(getRevenueTrendHandler, FINANCIAL_ROLES.READ),
+  'REVENUE_TREND',
 );

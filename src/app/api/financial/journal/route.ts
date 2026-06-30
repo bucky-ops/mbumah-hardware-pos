@@ -197,11 +197,11 @@ async function createJournalEntryHandler(...args: unknown[]): Promise<Response> 
   return Response.json({ success: true, data: entry }, { status: 201 });
 }
 
-export const GET = withFinancialAuth(
-  withErrorBoundary(getJournalEntriesHandler, 'JOURNAL_LIST'),
-  FINANCIAL_ROLES.READ,
+export const GET = withErrorBoundary(
+  withFinancialAuth(getJournalEntriesHandler, FINANCIAL_ROLES.READ),
+  'JOURNAL_LIST',
 );
-export const POST = withFinancialAuth(
-  withErrorBoundary(createJournalEntryHandler, 'JOURNAL_CREATE'),
-  FINANCIAL_ROLES.WRITE,
+export const POST = withErrorBoundary(
+  withFinancialAuth(createJournalEntryHandler, FINANCIAL_ROLES.WRITE),
+  'JOURNAL_CREATE',
 );

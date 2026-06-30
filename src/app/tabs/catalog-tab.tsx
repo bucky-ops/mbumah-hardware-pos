@@ -295,6 +295,10 @@ export default function CatalogTab() {
     return result;
   }, [products, debouncedSearch, selectedCategory, stockFilter, priceMin, priceMax, sortKey]);
 
+  // Safe array guards — prevent .map() crashes when API returns unexpected shapes
+  const safeCategories = Array.isArray(categories) ? categories : [];
+  const safeFilteredProducts = Array.isArray(filteredProducts) ? filteredProducts : [];
+
   // ---------------------------------------------------------------------------
   // Handlers
   // ---------------------------------------------------------------------------
@@ -451,10 +455,10 @@ export default function CatalogTab() {
     } catch (err) {
       // Fallback: build a wa.me link with the current filtered product list
       try {
-        const lines = filteredProducts.slice(0, 40).map(
+        const lines = safeFilteredProducts.slice(0, 40).map(
           (p, i) => `${i + 1}. ${p.name} — ${formatKES(p.pricePerUnit)} (${p.sku})`,
         );
-        const header = `*Mbumah Hardware — Product Catalog*\n${filteredProducts.length} item(s) available:\n\n`;
+        const header = `*Mbumah Hardware — Product Catalog*\n${safeFilteredProducts.length} item(s) available:\n\n`;
         const footer = `\n\nReply to order. Thank you!`;
         const message = header + lines.join('\n') + footer;
         openWhatsApp(phone, message);
@@ -878,7 +882,7 @@ export default function CatalogTab() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
-                  {categories.map((c) => (
+                  {safeCategories.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.name}
                     </SelectItem>
@@ -965,7 +969,7 @@ export default function CatalogTab() {
           <Tag className="h-3.5 w-3.5 mr-1.5" />
           All
         </Button>
-        {categories.map((c) => (
+        {safeCategories.map((c) => (
           <Button
             key={c.id}
             variant={selectedCategory === c.id ? 'default' : 'outline'}
@@ -985,7 +989,7 @@ export default function CatalogTab() {
       {/* ---- Results count ---- */}
       <div className="flex items-center justify-between text-sm text-muted-foreground flex-wrap gap-2">
         <span>
-          {filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''} found
+          {safeFilteredProducts.length} product{safeFilteredProducts.length !== 1 ? 's' : ''} found
           {debouncedSearch && ` for "${debouncedSearch}"`}
         </span>
         {cart.items.length > 0 && (
@@ -1010,7 +1014,7 @@ export default function CatalogTab() {
           >
             {renderSkeletons()}
           </div>
-        ) : filteredProducts.length === 0 ? (
+        ) : safeFilteredProducts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Package className="h-16 w-16 text-muted-foreground/30 mb-4" />
             <h3 className="text-lg font-semibold mb-1">No products found</h3>
@@ -1033,10 +1037,10 @@ export default function CatalogTab() {
           </div>
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {filteredProducts.map(renderProductCard)}
+            {safeFilteredProducts.map(renderProductCard)}
           </div>
         ) : (
-          <div className="space-y-3">{filteredProducts.map(renderProductListItem)}</div>
+          <div className="space-y-3">{safeFilteredProducts.map(renderProductListItem)}</div>
         )}
       </div>
 
@@ -1106,7 +1110,7 @@ export default function CatalogTab() {
                 <Select value={form.categoryId} onValueChange={(v) => setForm({ ...form, categoryId: v })}>
                   <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                   <SelectContent>
-                    {categories.map((c) => (
+                    {safeCategories.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         <div className="flex items-center gap-2">
                           <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: c.color || '#6B7280' }} />
@@ -1318,7 +1322,7 @@ export default function CatalogTab() {
             </p>
           </div>
           <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
-            <strong className="text-foreground">{filteredProducts.length}</strong> product(s) will be included
+            <strong className="text-foreground">{safeFilteredProducts.length}</strong> product(s) will be included
             {debouncedSearch && <> (matching &quot;{debouncedSearch}&quot;)</>}
             {selectedCategory !== 'all' && <> in the selected category</>}.
           </div>

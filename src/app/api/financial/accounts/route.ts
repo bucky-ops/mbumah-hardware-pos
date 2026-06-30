@@ -131,9 +131,9 @@ async function getAccountsHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const GET = withFinancialAuth(
-  withErrorBoundary(getAccountsHandler, LogComponent.FINANCIAL),
-  FINANCIAL_ROLES.READ,
+export const GET = withErrorBoundary(
+  withFinancialAuth(getAccountsHandler, FINANCIAL_ROLES.READ),
+  LogComponent.FINANCIAL,
 );
 
 // ── POST /api/financial/accounts ────────────────────────────────────────────
@@ -214,7 +214,7 @@ async function createAccountHandler(...args: unknown[]): Promise<Response> {
   }
 }
 
-export const POST = withFinancialAuth(
-  withErrorBoundary(createAccountHandler, LogComponent.FINANCIAL),
-  FINANCIAL_ROLES.WRITE,
+export const POST = withErrorBoundary(
+  withFinancialAuth(createAccountHandler, FINANCIAL_ROLES.WRITE),
+  LogComponent.FINANCIAL,
 );

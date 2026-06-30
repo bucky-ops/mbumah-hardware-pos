@@ -130,6 +130,27 @@ const globalForPrisma = globalThis as unknown as {
   __mbumahPrisma?: PrismaClient;
 };
 
+/**
+ * Append `connect_timeout=15` to the datasource URL when connecting to Neon
+ * (or any Postgres provider that may have cold starts). Neon serverless
+ * cold starts can take 5–10 seconds, and Prisma's default connect timeout
+ * is too short, causing premature `P1001` / `P1002` errors.
+ *
+ * The parameter is only appended when:
+ *   • The URL starts with `postgresql:` or `postgres:` (not SQLite `file:`)
+ *   • The URL does not already contain `connect_timeout`
+ */
+function appendConnectTimeout(url: string): string {
+  if (
+    (url.startsWith('postgresql:') || url.startsWith('postgres:')) &&
+    !url.includes('connect_timeout')
+  ) {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}connect_timeout=15`;
+  }
+  return url;
+}
+
 function createBaseClient(): PrismaClient {
   // If DATABASE_URL resolution failed, we still create a PrismaClient but
   // the first query will fail with a descriptive error. This is better than
@@ -139,8 +160,9 @@ function createBaseClient(): PrismaClient {
     // Log the configuration error loudly so it's visible in Vercel logs
     console.error(DATABASE_URL_ERROR.message);
   }
+  const resolvedUrl = DATABASE_URL ? appendConnectTimeout(DATABASE_URL) : undefined;
   return new PrismaClient({
-    datasourceUrl: DATABASE_URL || undefined,
+    datasourceUrl: resolvedUrl,
     // In production (Vercel serverless) keep logs to `error` only to avoid
     // cold-start log spam and Lambda log volume charges. In dev we surface
     // `warn` too so we catch N+1 / missing-index issues locally.

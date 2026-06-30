@@ -1,7 +1,7 @@
 # Release Verification Checklist
 
-**Version:** v2.1.0
-**Date:** $(date +%Y-%m-%d)
+**Version:** v2.2.0
+**Date:** 2026-06-30
 **Verifier:** _______________
 
 ---
@@ -157,6 +157,32 @@ Verify all tabs load without crashes:
 - [ ] No React hydration warnings
 - [ ] No `Failed to fetch` errors on critical APIs
 - [ ] No `Warning: Each child in a list should have a unique "key"` warnings
+
+## 13. Backend API Health
+
+- [ ] `/api/health` returns 200 with `env_DATABASE_URL: "SET"`
+- [ ] `/api/products?storeId=XXX` returns 200 (not 500)
+- [ ] `/api/purchase-orders?storeId=XXX` returns 200 (not 500)
+- [ ] `/api/financial/accounts?storeId=XXX` returns 200 (not 500)
+- [ ] `/api/kra/invoices?storeId=XXX` returns 200 (not 500)
+- [ ] Financial routes return structured JSON errors (not HTML 500) when DB is unavailable
+- [ ] Products and Purchase Orders routes require store access authentication
+- [ ] PrismaClient uses `connect_timeout=15` for Neon cold starts
+
+## 14. Backend Error Handling
+
+- [ ] `withErrorBoundary` wraps `withFinancialAuth` (not vice versa) in all financial routes
+- [ ] API errors return structured JSON `{ success: false, error: "..." }` with proper status codes
+- [ ] 500 errors are reported to Sentry (check Sentry dashboard)
+- [ ] `APIError` class is used for structured error responses
+- [ ] `apiHandler` wrapper is available for new routes
+
+## 15. Frontend Error Resilience
+
+- [ ] Debt Management tab does not crash when `summary.byBucket` is undefined
+- [ ] Catalog tab does not crash when API returns non-array data
+- [ ] Inventory tab shows error state with Retry button on API failure
+- [ ] All tabs wrapped in `SectionErrorBoundary` — single tab crash doesn't take down the app
 
 ---
 

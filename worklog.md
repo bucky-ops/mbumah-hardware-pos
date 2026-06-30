@@ -4109,3 +4109,55 @@ Stage Summary:
 - Total defensive guards: Array.isArray() on 28+ tab components, 3-layer API defense, SectionErrorBoundary on all tabs
 - Purchase Orders module fully functional with seed data
 - RELEASE_VERIFICATION.md created for post-deployment QA
+
+---
+Task ID: 2
+Agent: Bugfix Agent
+Task: Fix two critical frontend crashes — DAYS_30 in debt-management-tab.tsx and .map() in catalog-tab.tsx
+
+Work Log:
+- Read debt-management-tab.tsx and identified summary.byBucket.DAYS_30, DAYS_60, DAYS_90_PLUS accesses without null guards (lines 199, 205)
+- Added `const byBucket = summary?.byBucket ?? {};` guard variable after line 180
+- Replaced `summary.byBucket.DAYS_30` → `byBucket.DAYS_30`, `summary.byBucket.DAYS_60` → `byBucket.DAYS_60`, `summary.byBucket.DAYS_90_PLUS` → `byBucket.DAYS_90_PLUS`
+- Verified no other `summary.byBucket` references remain in the file
+- Second `summary` (line 401, reminders pipeline) already had `byStatus`/`byChannel` properly guarded — no change needed
+
+- Read catalog-tab.tsx and identified 6 `.map()` call sites on `categories` and `filteredProducts` without Array.isArray guards
+- Added safe variables after filteredProducts useMemo:
+  - `const safeCategories = Array.isArray(categories) ? categories : [];`
+  - `const safeFilteredProducts = Array.isArray(filteredProducts) ? filteredProducts : [];`
+- Replaced all 3 `categories.map` → `safeCategories.map` (lines 881, 968, 1109)
+- Replaced all 2 `filteredProducts.map` → `safeFilteredProducts.map` (lines 1036, 1039)
+- Replaced `filteredProducts.slice(0, 40).map` → `safeFilteredProducts.slice(0, 40).map` (line 454)
+- Replaced all `filteredProducts.length` → `safeFilteredProducts.length` (lines 461, 992, 1017, 1325)
+- Verified zero remaining `categories.map` or `filteredProducts.` references (only definition lines remain)
+- Lint passes: 0 errors, 350 warnings (all pre-existing)
+
+Stage Summary:
+- debt-management-tab.tsx: No longer crashes when API returns undefined byBucket — falls back to empty object
+- catalog-tab.tsx: No longer crashes when API returns non-array data — falls back to empty arrays at all .map() call sites
+- Both fixes are minimal, surgical edits with no file rewrites
+
+---
+Task ID: 1
+Agent: Z.ai Code (Backend Fixes)
+Task: Fix critical backend issues causing 500 errors on ALL API routes
+
+Work Log:
+- Read auth.ts to understand withFinancialAuth function signature and composition bug
+- Read db.ts to understand PrismaClient creation and connection string handling
+- Identified all 14 financial route files using withFinancialAuth(withErrorBoundary(...))
+- Fixed composition order in all 14 financial route files (22 export statements total):
+  withFinancialAuth(withErrorBoundary(handler, component), role) → withErrorBoundary(withFinancialAuth(handler, role), component)
+- Added appendConnectTimeout() helper to db.ts that appends connect_timeout=15 to Postgres URLs for Neon cold start resilience
+- Added requireStoreAccess auth wrapper to products/route.ts (GET, POST)
+- Added requireStoreAccess auth wrapper to purchase-orders/route.ts (GET, POST)
+- Added requireStoreAccess auth wrapper to purchase-orders/[id]/route.ts (GET, PUT, DELETE)
+- Updated handler signatures from (...args: unknown[]) to (request, session, context) to match StoreScopedHandler type
+- Lint passes: 0 errors, 350 warnings (pre-existing)
+
+Stage Summary:
+- Critical withFinancialAuth composition bug fixed — DB errors during auth now caught by error boundary, returning proper JSON 500s instead of opaque HTML
+- Neon cold start resilience added via connect_timeout=15 in PrismaClient
+- Products and purchase-orders routes now require authentication via requireStoreAccess
+- All changes are surgical edits, no full file rewrites

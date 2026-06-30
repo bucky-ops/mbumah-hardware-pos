@@ -67,7 +67,7 @@ async function listAuditTrailHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const GET = withFinancialAuth(
-  withErrorBoundary(listAuditTrailHandler, LogComponent.FINANCIAL),
-  FINANCIAL_ROLES.AUDIT,
+export const GET = withErrorBoundary(
+  withFinancialAuth(listAuditTrailHandler, FINANCIAL_ROLES.AUDIT),
+  LogComponent.FINANCIAL,
 );
