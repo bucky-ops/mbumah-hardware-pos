@@ -3910,3 +3910,44 @@ Stage Summary:
 - Vercel deployment should now render properly instead of stuck "Loading..."
 - The ErrorBoundary crash loop fix is the most impactful: it prevents the permanent white screen
 - Store hydration now SSR-safe with client-side useEffect pattern
+
+---
+Task ID: 2-a
+Agent: Main Agent (DevOps Phase 2)
+Task: Update CONTRIBUTING.md with Gitflow branch model, deployment troubleshooting, security section
+
+Work Log:
+- Updated branch strategy from v2.0.0-dev to Gitflow model (main/develop/feat/fix/hotfix)
+- Added hotfix workflow: branch from main, PR to both main + develop
+- Updated PR Lifecycle steps to reference develop instead of v2.0.0-dev
+- Added Section 8: Deployment Troubleshooting (Vercel Loading... diagnosis, build failure codes, DB pooling)
+- Added Section 9: Security (required secrets table, security checklist for every PR)
+- All existing sections (1-7) preserved
+
+Stage Summary:
+- CONTRIBUTING.md now covers complete Gitflow branch model
+- Deployment troubleshooting section captures Phase 1 learnings
+- Security section documents all required secrets and per-PR checklist
+
+---
+Task ID: 2-b
+Agent: Main Agent (DevOps Phase 3)
+Task: Enhance CI/CD pipeline and consolidate redundant workflows
+
+Work Log:
+- Enhanced ci-cd.yml with new stages:
+  - Stage 4: Security & Schema validation (dependency audit, prisma validate, hardcoded secrets scan, API route force-dynamic check)
+  - Stage 8: Preview deployment on PRs to main/develop (auto-deploy + PR comment with URL)
+- Updated build stage to use vercel-build script from package.json
+- Updated deploy URL to actual Vercel app URL
+- Added deployment summary in GitHub Step Summary
+- Consolidated 5 fragmented workflows into single unified pipeline
+- Removed: deploy.yml, node.js.yml, pages.yml, vercel-deploy.yml, vercel-preview.yml
+- Pushed as commit 777f5f6
+
+Stage Summary:
+- Single unified ci-cd.yml with 9 stages: install, lint, typecheck, security, test, build, deploy, preview, ci-pass
+- Security scanning prevents secrets from being committed
+- Schema validation catches Prisma errors before build
+- Preview deployments on every PR for visual review
+- 5 redundant workflows eliminated
