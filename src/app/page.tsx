@@ -266,6 +266,7 @@ function ConfettiOverlay({ active }: { active: boolean }) {
 function KeyboardShortcutsHelp({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const shortcuts = [
     { keys: '⌘K / Ctrl+K', description: 'Focus search bar', icon: Search },
+    { keys: '⌘B / Ctrl+B', description: 'Toggle sidebar', icon: PanelLeftClose },
     { keys: 'F2', description: 'Switch to POS tab', icon: ShoppingCart },
     { keys: 'F3', description: 'Switch to Inventory tab', icon: Package },
     { keys: 'F4', description: 'Switch to Customers tab', icon: Users },
@@ -1032,12 +1033,13 @@ function LowStockAlertDialog({
 
 
 function AppSidebar() {
-  const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen, currentStoreId, setCurrentStoreId, isSidebarCollapsed, toggleSidebarCollapse, setSidebarCollapsed } = useAppStore();
+  const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen, currentStoreId, setCurrentStoreId, isSidebarCollapsed, toggleSidebarCollapse, setSidebarCollapsed, getSidebarState } = useAppStore();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { theme, setTheme } = useTheme();
   const [notificationOpen, setNotificationOpen] = useState(false);
   const notificationCount = useNotificationCount(currentStoreId);
+  const sidebarRef = useRef<HTMLElement>(null);
 
   // Track whether viewport is desktop (≥ lg breakpoint) — useSyncExternalStore
   // to avoid the "setState inside effect" lint error.
@@ -1051,6 +1053,10 @@ function AppSidebar() {
     () => false, // server snapshot — assume mobile to avoid hydration mismatch
   );
 
+  // Derive the sidebar visual state
+  const sidebarState = getSidebarState(isDesktop);
+  const collapsed = sidebarState === 'collapsed';
+
   // Auto-expand sidebar when transitioning from mobile to desktop while collapsed
   useEffect(() => {
     if (isDesktop && isSidebarCollapsed) {
@@ -1058,8 +1064,26 @@ function AppSidebar() {
     }
   }, [isDesktop, isSidebarCollapsed, setSidebarCollapsed]);
 
-  // Collapsed state only applies on desktop; mobile always shows full sidebar
-  const collapsed = isDesktop && isSidebarCollapsed;
+  // Close mobile overlay on Escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && sidebarOpen && !isDesktop) {
+        setSidebarOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [sidebarOpen, isDesktop, setSidebarOpen]);
+
+  // Trap focus inside sidebar when mobile overlay is open
+  useEffect(() => {
+    if (sidebarState !== 'mobile-overlay') return;
+    // Focus the sidebar when it opens as mobile overlay
+    const timer = setTimeout(() => {
+      sidebarRef.current?.focus();
+    }, 300); // wait for transition
+    return () => clearTimeout(timer);
+  }, [sidebarState]);
 
   const handleNav = (tab: AppTab) => {
     setActiveTab(tab);
@@ -1137,9 +1161,15 @@ function AppSidebar() {
 
       {/* Sidebar */}
       <aside
+        ref={sidebarRef}
+        role="navigation"
+        aria-label="Main navigation"
         aria-expanded={!collapsed}
-        className={`fixed top-0 left-0 z-50 h-full bg-sidebar/95 backdrop-blur-md text-sidebar-foreground transform transition-all duration-300 ease-in-out lg:translate-x-0 lg:static lg:z-auto border-r border-sidebar-border shadow-lg lg:shadow-none w-64 ${
-          collapsed ? 'lg:w-16' : 'lg:w-64'
+        aria-collapsed={collapsed}
+        data-sidebar-state={sidebarState}
+        tabIndex={sidebarState === 'mobile-overlay' ? -1 : undefined}
+        className={`fixed top-0 left-0 z-50 h-full bg-sidebar/95 backdrop-blur-md text-sidebar-foreground transform transition-all duration-300 ease-in-out lg:translate-x-0 lg:static lg:z-auto border-r border-sidebar-border shadow-lg lg:shadow-none ${
+          sidebarState === 'expanded' ? 'w-64' : sidebarState === 'collapsed' ? 'lg:w-16 w-64' : 'w-64'
         } ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
@@ -1486,6 +1516,9 @@ function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonEle
                   Top Shortcuts
                 </DropdownMenuLabel>
                 <div className="px-2 py-1 space-y-1 text-xs">
+                  <div className="flex items-center justify-between px-2 py-1 rounded hover:bg-muted/50">
+                    <span>Toggle sidebar</span><kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">⌘B</kbd>
+                  </div>
                   <div className="flex items-center justify-between px-2 py-1 rounded hover:bg-muted/50">
                     <span>Open POS</span><kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">F2</kbd>
                   </div>
@@ -5063,6 +5096,13 @@ function MainApp() {
         return;
       }
 
+      // Ctrl+B or Cmd+B: Toggle sidebar collapse/expand
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+        e.preventDefault();
+        toggleSidebarCollapse();
+        return;
+      }
+
       // F2-F5: Switch tabs (prevent default)
       if (e.key === 'F2') { e.preventDefault(); setActiveTab('pos'); return; }
       if (e.key === 'F3') { e.preventDefault(); setActiveTab('inventory'); return; }
@@ -5093,7 +5133,7 @@ function MainApp() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [setActiveTab]);
+  }, [setActiveTab, toggleSidebarCollapse]);
 
   const renderTab = () => {
     switch (activeTab) {
@@ -5237,7 +5277,6 @@ function useLoadingWatchdog(hasMounted: boolean) {
 export default function HomePage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const hydrateFromStorage = useAuthStore((s) => s.hydrateFromStorage);
-  const hydrateAppFromStorage = useAppStore((s) => s.hydrateFromStorage);
   const hasMounted = useHasMounted();
   const showRetry = useLoadingWatchdog(hasMounted);
 
@@ -5248,8 +5287,10 @@ export default function HomePage() {
   // to restore the persisted session.
   useEffect(() => {
     hydrateFromStorage();
-    hydrateAppFromStorage();
-  }, [hydrateFromStorage, hydrateAppFromStorage]);
+    // Hydrate the Zustand persist store — rehydrate reads from localStorage
+    // and merges the persisted fields into the store.
+    useAppStore.persist.rehydrate();
+  }, [hydrateFromStorage]);
 
   if (!hasMounted) {
     return (
