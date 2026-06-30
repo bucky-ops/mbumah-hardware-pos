@@ -2,9 +2,13 @@
 
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
+import { withFinancialAuth } from '@/lib/auth';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
+
+// Only senior roles may void/refund payments
+const FINANCIAL_WRITE_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'] as const;
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -62,4 +66,7 @@ async function voidPaymentHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const PUT = withErrorBoundary(voidPaymentHandler, 'PAYMENT_VOID');
+export const PUT = withErrorBoundary(
+  withFinancialAuth(voidPaymentHandler, FINANCIAL_WRITE_ROLES),
+  'PAYMENT_VOID',
+);

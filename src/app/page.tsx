@@ -3426,10 +3426,10 @@ function POSTab() {
         sku: product.sku,
         quantity: qty ?? 1,
         unitType: product.unitType as UnitType,
-        pricePerUnit: product.pricePerUnit,
-        costPrice: product.costPrice,
+        pricePerUnit: Number(product.pricePerUnit) || 0,
+        costPrice: Number(product.costPrice) || 0,
         discountPercent: 0,
-        taxRate: product.taxRate,
+        taxRate: Number(product.taxRate) || 16,
         isRentalItem: product.isRental,
         isBundle: product.isBundle,
       });
@@ -3568,7 +3568,17 @@ function POSTab() {
       storeId: currentStoreId,
       customerId: selectedCustomer || undefined,
       cashierId: useAuthStore.getState().user?.id || '',
-      items: cart.items,
+      // Ensure all numeric fields are properly typed as numbers before sending
+      // to the API — prevents 400 validation errors from string-type values.
+      items: cart.items.map(item => ({
+        ...item,
+        pricePerUnit: Number(item.pricePerUnit) || 0,
+        costPrice: Number(item.costPrice) || 0,
+        quantity: Number(item.quantity) || 1,
+        discountPercent: Number(item.discountPercent) || 0,
+        taxRate: Number(item.taxRate) || 16,
+        lineTotal: Number(item.lineTotal) || 0,
+      })),
       paymentMethod,
       // Cart-level flat discount (from the discount input in the cart footer).
       // This is separate from line-level discounts (which are baked into each

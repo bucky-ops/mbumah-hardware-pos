@@ -300,14 +300,14 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     let totalTransactionAmount = 0;
     for (const item of items) {
       const calc = calculateLineTotal(
-        parseFloat(String(item.pricePerUnit)),
-        parseFloat(String(item.quantity)),
-        parseFloat(String(item.discountPercent || 0)),
-        parseFloat(String(item.taxRate || 16))
+        Number(item.pricePerUnit) || 0,
+        Number(item.quantity) || 0,
+        Number(item.discountPercent) || 0,
+        Number(item.taxRate) || 16
       );
       totalTransactionAmount += calc.total;
     }
-    totalTransactionAmount -= parseFloat(String(discountAmount || 0));
+    totalTransactionAmount -= Number(discountAmount) || 0;
 
     const availableCredit = customer.debtLimit - customer.currentDebtBalance;
     if (totalTransactionAmount > availableCredit) {
@@ -325,13 +325,30 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
   let taxAmount = 0;
   let totalDiscount = 0;
 
-  const saleItemsData = items.map((item: { productId: string; productName: string; sku: string; quantity: number; unitType: string; pricePerUnit: number; costPrice: number; discountPercent: number; taxRate: number; isRentalItem: boolean; isBundle: boolean }) => {
-    const calc = calculateLineTotal(
-      parseFloat(String(item.pricePerUnit)),
-      parseFloat(String(item.quantity)),
-      parseFloat(String(item.discountPercent || 0)),
-      parseFloat(String(item.taxRate || 16))
-    );
+  const saleItemsData = items.map((item: { productId: string; productName: string; sku: string; quantity: number; unitType: string; pricePerUnit: number; costPrice: number; discountPercent: number; taxRate: number; isRentalItem: boolean; isBundle: boolean }, index: number) => {
+    // Safe numeric coercion with NaN guard — prevents silent NaN propagation
+    // into the database. If any numeric field cannot be parsed, we reject the
+    // entire checkout with a clear 400 error.
+    const safePrice = parseFloat(String(item.pricePerUnit));
+    const safeCost  = parseFloat(String(item.costPrice));
+    const safeQty   = parseFloat(String(item.quantity));
+    const safeDisc  = parseFloat(String(item.discountPercent || 0));
+    const safeTax   = parseFloat(String(item.taxRate || 16));
+
+    if (Number.isNaN(safePrice) || safePrice < 0) {
+      throw new Error(`items[${index}].pricePerUnit: Invalid value "${item.pricePerUnit}" — expected a non-negative number.`);
+    }
+    if (Number.isNaN(safeCost) || safeCost < 0) {
+      throw new Error(`items[${index}].costPrice: Invalid value "${item.costPrice}" — expected a non-negative number.`);
+    }
+    if (Number.isNaN(safeQty) || safeQty <= 0) {
+      throw new Error(`items[${index}].quantity: Invalid value "${item.quantity}" — expected a positive number.`);
+    }
+    if (Number.isNaN(safeTax) || safeTax < 0 || safeTax > 100) {
+      throw new Error(`items[${index}].taxRate: Invalid value "${item.taxRate}" — expected a number between 0 and 100.`);
+    }
+
+    const calc = calculateLineTotal(safePrice, safeQty, safeDisc, safeTax);
     subtotal += calc.subtotal;
     taxAmount += calc.tax;
     totalDiscount += calc.discount;
@@ -339,19 +356,19 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     return {
       productId: item.productId,
       productName: item.productName,
-      quantity: parseFloat(String(item.quantity)),
+      quantity: safeQty,
       unitType: item.unitType || 'PIECE',
-      pricePerUnit: parseFloat(String(item.pricePerUnit)),
-      costPrice: parseFloat(String(item.costPrice)),
-      discountPercent: parseFloat(String(item.discountPercent || 0)),
-      taxRate: parseFloat(String(item.taxRate || 16)),
+      pricePerUnit: safePrice,
+      costPrice: safeCost,
+      discountPercent: safeDisc,
+      taxRate: safeTax,
       lineTotal: calc.total,
       isRentalItem: item.isRentalItem || false,
     };
   });
 
   const totalAmount = subtotal - totalDiscount + taxAmount;
-  const appliedDiscount = parseFloat(String(discountAmount || 0));
+  const appliedDiscount = Number(discountAmount) || 0;
   const finalTotal = totalAmount - appliedDiscount;
 
   // ── Pre-validate gift card payments (fail fast with 400) ──────────────

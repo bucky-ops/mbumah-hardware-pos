@@ -682,7 +682,7 @@ export default function SecurityTab() {
             </CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4">
-            {!dashboard?.topIPs?.length ? (
+            {!Array.isArray(dashboard?.topIPs) || !dashboard.topIPs.length ? (
               <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
                 No suspicious IPs detected
               </div>
@@ -734,7 +734,7 @@ export default function SecurityTab() {
             </CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4">
-            {!dashboard?.recentCritical?.length ? (
+            {!Array.isArray(dashboard?.recentCritical) || !dashboard.recentCritical.length ? (
               <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
                 <div className="flex flex-col items-center gap-2">
                   <Shield className="h-6 w-6 text-green-500 opacity-50" />
