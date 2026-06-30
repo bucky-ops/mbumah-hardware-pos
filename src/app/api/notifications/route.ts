@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, runWithTenant } from '@/lib/db';
+import { withErrorBoundary } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,15 +15,15 @@ export interface NotificationData {
   targetTab: string;
 }
 
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const storeId = searchParams.get('storeId');
+async function getHandler(request: NextRequest): Promise<Response> {
+  const { searchParams } = new URL(request.url);
+  const storeId = searchParams.get('storeId');
 
-    if (!storeId) {
-      return NextResponse.json({ success: false, error: 'storeId is required' }, { status: 400 });
-    }
+  if (!storeId) {
+    return NextResponse.json({ success: false, error: 'storeId is required' }, { status: 400 });
+  }
 
+  return runWithTenant(storeId, async () => {
     const notifications: NotificationData[] = [];
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -234,11 +235,7 @@ export async function GET(request: NextRequest) {
         info: notifications.filter((n) => n.severity === 'info').length,
       },
     });
-  } catch (error) {
-    console.error('[Notifications API] Error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch notifications' },
-      { status: 500 }
-    );
-  }
+  });
 }
+
+export const GET = withErrorBoundary(getHandler, 'NOTIFICATIONS');

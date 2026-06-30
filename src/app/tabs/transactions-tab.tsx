@@ -261,7 +261,7 @@ function ReceiptModal({
 
   if (!transaction) return null;
 
-  const items = transaction.items || [];
+  const items = Array.isArray(transaction.items) ? transaction.items : [];
 
   const handleStartEmail = () => {
     setDistChannel('EMAIL');
@@ -492,7 +492,7 @@ function TransactionRow({
   onSendWhatsApp: () => void;
   onPrint: () => void;
 }) {
-  const items = transaction.items || [];
+  const items = Array.isArray(transaction.items) ? transaction.items : [];
   const txType = getTransactionType(transaction);
 
   return (
@@ -679,7 +679,7 @@ export default function TransactionsTab() {
     },
   });
 
-  const transactions = transactionsData || [];
+  const transactions = Array.isArray(transactionsData) ? transactionsData : [];
 
   // Filter by search query, type, and amount
   const filteredTransactions = useMemo(() => {
@@ -800,7 +800,7 @@ export default function TransactionsTab() {
   }, [receiptTransaction, currentStoreId]);
 
   const handlePrintReceipt = useCallback((transaction: TransactionItem) => {
-    const items = transaction.items || [];
+    const items = Array.isArray(transaction.items) ? transaction.items : [];
     const store = getStoreInfo(currentStoreId);
     const logoUrl = getLogoUrl();
     const printWindow = window.open('', '_blank', 'width=400,height=600');

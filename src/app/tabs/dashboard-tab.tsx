@@ -1739,7 +1739,7 @@ export default function DashboardTab() {
     queryFn: async () => {
       const res = await productsApi.list({ storeId: currentStoreId, limit: 200 });
       // Filter low stock client-side: products below reorder level
-      return (res.data || []).filter(p => p.quantityInStock <= p.reorderLevel && p.isActive);
+      return (Array.isArray(res.data) ? res.data : []).filter(p => p.quantityInStock <= p.reorderLevel && p.isActive);
     },
     enabled: lowStockDialogOpen,
   });

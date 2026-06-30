@@ -282,3 +282,15 @@ export function apiHandler(
     }
   };
 }
+
+/**
+ * Convenience alias for `apiHandler` — provides a more descriptive name
+ * for the common pattern of wrapping route handlers with error handling.
+ *
+ * @example
+ *   export const GET = withErrorHandling(async (req) => {
+ *     const data = await db.product.findMany();
+ *     return Response.json({ data });
+ *   }, { route: '/api/products' });
+ */
+export const withErrorHandling = apiHandler;

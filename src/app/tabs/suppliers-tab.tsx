@@ -836,7 +836,7 @@ function ReceivePODialog({
           <DialogDescription>Enter quantities received for each item. Stock will be updated automatically.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3 max-h-80 overflow-y-auto custom-scrollbar">
-          {purchaseOrder.items.map((item) => {
+          {(Array.isArray(purchaseOrder.items) ? purchaseOrder.items : []).map((item) => {
             const remaining = item.quantity - item.receivedQty;
             const product = item.product;
             return (

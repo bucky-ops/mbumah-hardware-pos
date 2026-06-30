@@ -1069,8 +1069,8 @@ export default function ReportsTab() {
     return { prevRevenue, revenueChange, prevTransactions, transactionChange };
   }, [salesReport]);
 
-  const topProducts = inventoryReport?.topSelling || [];
-  const categoryBreakdown = inventoryReport?.categories || [];
+  const topProducts = Array.isArray(inventoryReport?.topSelling) ? inventoryReport.topSelling : [];
+  const categoryBreakdown = Array.isArray(inventoryReport?.categories) ? inventoryReport.categories : [];
   const maxCategoryValue = Math.max(...categoryBreakdown.map((c) => c.totalValue), 1);
 
   const pieSegments = useMemo(() => {
@@ -1241,7 +1241,7 @@ export default function ReportsTab() {
       csvContent += `Total Tax,${salesReport.totalTax}\n`;
       csvContent += `Total Discount,${salesReport.totalDiscount}\n`;
       csvContent += '\nPayment Method,Count,Amount\n';
-      for (const pm of salesReport.byPaymentMethod || []) {
+      for (const pm of (Array.isArray(salesReport.byPaymentMethod) ? salesReport.byPaymentMethod : [])) {
         csvContent += `${pm.method},${pm.count},${pm.amount}\n`;
       }
     } else if ((reportType === 'inventory' || reportType === 'valuation') && inventoryReport) {
@@ -1668,7 +1668,7 @@ export default function ReportsTab() {
                 </div>
 
                 {/* Sales by Payment Method */}
-                {(salesReport.byPaymentMethod || []).length > 0 && (
+                {(Array.isArray(salesReport.byPaymentMethod) ? salesReport.byPaymentMethod : []).length > 0 && (
                   <Card className="backdrop-blur-sm bg-card/80 border-border/50">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base flex items-center gap-2">
@@ -1677,7 +1677,7 @@ export default function ReportsTab() {
                     </CardHeader>
                     <CardContent>
                       {(() => {
-                        const byPM = salesReport.byPaymentMethod || [];
+                        const byPM = Array.isArray(salesReport.byPaymentMethod) ? salesReport.byPaymentMethod : [];
                         const totalAmount = byPM.reduce((s, p) => s + p.amount, 0) || 1;
                         const pmColors: Record<string, string> = {
                           CASH: 'bg-green-500', MPESA: 'bg-primary', DEBT: 'bg-orange-500', SPLIT: 'bg-purple-500',

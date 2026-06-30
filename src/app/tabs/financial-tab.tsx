@@ -772,10 +772,10 @@ export default function FinancialTab() {
   const revenueSummary = revenueTrendResponse?.data?.summary;
 
   // Payment breakdown
-  const paymentBreakdown = stats?.paymentMethodBreakdown || [];
+  const paymentBreakdown = Array.isArray(stats?.paymentMethodBreakdown) ? stats.paymentMethodBreakdown : [];
 
   // Revenue by hour bar chart data
-  const salesByHour = stats?.salesByHour || [];
+  const salesByHour = Array.isArray(stats?.salesByHour) ? stats.salesByHour : [];
   const maxHourAmount = Math.max(...salesByHour.map((h) => h.amount), 1);
 
   // Payment method pie chart data - with demo fallback

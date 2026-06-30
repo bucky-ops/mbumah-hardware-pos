@@ -1,15 +1,18 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, runWithoutTenant } from '@/lib/db';
+import { withErrorBoundary } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
 // GET /api/stores - List stores (query: organizationId, status)
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const organizationId = searchParams.get('organizationId') || 'org_mbumah';
-    const status = searchParams.get('status') || undefined;
+// Uses runWithoutTenant because store listing is a cross-tenant operation
+// (used before a specific store is selected for the current session).
+async function getHandler(request: NextRequest): Promise<Response> {
+  const { searchParams } = new URL(request.url);
+  const organizationId = searchParams.get('organizationId') || 'org_mbumah';
+  const status = searchParams.get('status') || undefined;
 
+  return runWithoutTenant(async () => {
     const stores = await db.store.findMany({
       where: {
         organizationId,
@@ -31,11 +34,7 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({ data: stores });
-  } catch (error) {
-    console.error('Error fetching stores:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch stores' },
-      { status: 500 }
-    );
-  }
+  });
 }
+
+export const GET = withErrorBoundary(getHandler, 'STORES');
