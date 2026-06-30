@@ -233,3 +233,74 @@ Stage Summary:
 3. Rotate Neon database credentials
 4. Add more features: receipt printing, email notifications, batch operations
 5. Enhance UI styling with more detail and animations
+
+---
+Task ID: sidebar-collapse-fix
+Agent: Main Agent
+Task: Fix Sidebar Minimization — Add collapse/expand functionality to sidebar navigation
+
+Work Log:
+- ROOT CAUSE: Sidebar had NO collapse/minimize functionality — only mobile slide-in/out via sidebarOpen
+- The sidebar was always w-64 on desktop with no way to minimize it
+- useAppStore had sidebarOpen (mobile) but no isSidebarCollapsed state
+- TopBar toggle button was lg:hidden (mobile only), no desktop collapse button
+- No dynamic width classes, no icon-only mode
+
+- PHASE 1: Added isSidebarCollapsed + toggleSidebarCollapse + setSidebarCollapsed to useAppStore
+- PHASE 2: Rewrote AppSidebar component with full collapse support:
+  - Sidebar width: w-64 (expanded) ↔ w-16 (collapsed) with 300ms transition
+  - Nav items: icon-only when collapsed with title tooltips
+  - ChevronLeft/ChevronRight toggle button in sidebar header (desktop)
+  - Compact bell + expand button row when collapsed
+  - Store selector hidden when collapsed
+  - Group labels hidden when collapsed, separators shown between groups
+  - User profile: compact avatar+dropdown when collapsed, full profile when expanded
+  - data-sidebar-state attribute for CSS targeting
+- PHASE 3: Added desktop collapse toggle in TopBar header
+  - Hidden lg:inline-flex button with ChevronLeft/ChevronRight
+  - ARIA labels and title attributes for accessibility
+- PHASE 4: Added Ctrl+B / Cmd+B keyboard shortcut for sidebar toggle
+- Re-applied middleware.ts fixes (PUBLIC_PATHS, CSRF_EXEMPT, CLIENT_ERROR rate limit)
+- Re-applied client-error route Zod validation fix
+- Resolved git rebase conflicts with remote
+- Lint: 0 errors, 351 warnings (pre-existing)
+- Verification: Page 200, client-error 204 (no auth), Zod validation 400
+
+Stage Summary:
+- Sidebar now fully minimizable with icon-only mode
+- Multiple toggle points: sidebar header button, TopBar button, Ctrl+B shortcut, user dropdown
+- Smooth 300ms width animation with proper content reflow
+- All previous fixes (client-error auth, Zod validation) re-applied and verified
+- Commit: 1279a2c, pushed to origin/main
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PROJECT STATUS SUMMARY (Updated)
+# ─────────────────────────────────────────────────────────────────────────────
+
+## Current Project Status
+- **Version**: v2.5.0 (commit 1279a2c, pushed to GitHub)
+- **Server**: Dev server functional, compiles and serves pages correctly
+- **Lint**: 0 errors, 351 warnings (pre-existing non-null assertions)
+- **Sidebar**: Fully collapsible with 3 entry points (button, TopBar, Ctrl+B)
+
+## Completed Modifications (This Session)
+1. **Sidebar Collapse**: Full minimize/expand with w-64 ↔ w-16 transition
+2. **Nav Items**: Icon-only mode with title tooltips when collapsed
+3. **Toggle Buttons**: ChevronLeft/Right in sidebar header + TopBar desktop button
+4. **Keyboard Shortcut**: Ctrl+B / Cmd+B to toggle sidebar collapse
+5. **User Profile**: Compact avatar+dropdown when collapsed
+6. **Client Error Fix (re-applied)**: middleware.ts + Zod validation in route handler
+7. **State Management**: isSidebarCollapsed in useAppStore
+
+## Unresolved Issues / Risks
+1. **Dev server memory**: Server dies under browser load, requires restart
+2. **Neon credentials exposed**: Database password should be rotated
+3. **Production seed**: Purchase Order data count is 0 on Neon production database
+4. **pos-tab.tsx size**: 3,600 lines — sub-components could be further extracted
+
+## Priority Recommendations for Next Phase
+1. Further split pos-tab.tsx into smaller modules
+2. Seed production Neon database with Purchase Order data
+3. Rotate Neon database credentials
+4. Add more features: receipt printing, email notifications, batch operations
+5. Enhance UI styling with more detail and animations
