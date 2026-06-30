@@ -4225,3 +4225,51 @@ Stage Summary:
 - Local dev uses SQLite; Vercel uses Neon PostgreSQL with -pooler URL
 - ⚠️ SECURITY: Database credentials were shared in chat — recommend rotating password
 - Purchase Orders count is 0 on Neon — seed needs to be run for PO data
+
+## Task: sidebar-impl — Retractable, Minimizable, Responsive Sidebar
+
+### Summary
+Implemented a fully retractable, minimizable, and responsive sidebar for the Mbumah Hardware POS application. The sidebar now supports expanded (w-64) and collapsed (w-16) states on desktop, with tooltips in collapsed mode, smooth transitions, and proper mobile/desktop behavior.
+
+### Changes Made
+
+#### 1. `src/lib/stores.ts` — Zustand Store Updates
+- Added `isSidebarCollapsed: boolean` (default: `false`) to `AppState`
+- Added `toggleSidebarCollapse()` — toggles collapsed state, persists to localStorage (`mbt_sidebar_collapsed`)
+- Added `setSidebarCollapsed(collapsed: boolean)` — sets collapsed state, persists to localStorage
+- Added `hydrateFromStorage()` — reads `mbt_sidebar_collapsed` from localStorage on client mount
+
+#### 2. `src/app/page.tsx` — AppSidebar Component Rewrite
+- Reads `isSidebarCollapsed`, `toggleSidebarCollapse`, `setSidebarCollapsed` from `useAppStore`
+- Uses `useSyncExternalStore` for responsive desktop detection (lg breakpoint)
+- Dynamic width: `w-64` expanded, `lg:w-16` collapsed (mobile always `w-64`)
+- Collapse/expand toggle button: circular button at top-right edge of sidebar with `ChevronLeft`/`ChevronRight` icons
+- Collapsed state hides: text labels, group headings, store name, user name/role, "MBUMAH HARDWARE" text
+- Collapsed state shows: centered icons only, store icon, user avatar only
+- Tooltips in collapsed state: each nav item icon wrapped with `Tooltip`/`TooltipTrigger`/`TooltipContent`
+- Collapsed notification bell with tooltip
+- Collapsed store selector with tooltip
+- Collapsed user avatar with tooltip showing name and role
+- Smooth transitions: `transition-all duration-300 ease-in-out` on `<aside>`
+- ARIA: `aria-expanded={!collapsed}` on `<aside>`, `aria-label` on toggle button
+- Auto-expand on mobile-to-desktop transition
+- Mobile always shows fully expanded sidebar (collapsed state only applies on desktop)
+
+#### 3. `src/app/page.tsx` — TopBar Component Updates
+- Added `isSidebarCollapsed` and `toggleSidebarCollapse` to useAppStore destructuring
+- Added desktop-only (`hidden lg:flex`) sidebar toggle button using `PanelLeftClose`/`PanelLeftOpen` icons
+- Button has `aria-label` for accessibility
+
+#### 4. `src/app/page.tsx` — Main Content Area
+- Added `transition-all duration-300 ease-in-out` to the content wrapper div for smooth resizing when sidebar toggles
+
+#### 5. `src/app/page.tsx` — Hydration
+- Added `hydrateAppFromStorage` call in `HomePage` component to restore sidebar collapsed state from localStorage
+
+#### 6. `src/app/page.tsx` — New Imports
+- Added `ChevronLeft`, `ChevronRight`, `PanelLeftClose`, `PanelLeftOpen` from `lucide-react`
+- Added `Tooltip`, `TooltipTrigger`, `TooltipContent`, `TooltipProvider` from `@/components/ui/tooltip`
+
+### Lint Results
+- 0 errors, 351 warnings (all pre-existing)
+- Dev server starts and compiles successfully

@@ -207,8 +207,13 @@ interface AppState {
   sidebarOpen: boolean;
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
+  isSidebarCollapsed: boolean;
+  toggleSidebarCollapse: () => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
   currentStoreId: string;
   setCurrentStoreId: (id: string) => void;
+  /** Hydrate app state from localStorage (called once on client mount). */
+  hydrateFromStorage: () => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -217,6 +222,24 @@ export const useAppStore = create<AppState>((set) => ({
   sidebarOpen: false,
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
+  isSidebarCollapsed: false,
+  toggleSidebarCollapse: () => set((state) => {
+    const next = !state.isSidebarCollapsed;
+    try { localStorage.setItem('mbt_sidebar_collapsed', JSON.stringify(next)); } catch { /* ignore */ }
+    return { isSidebarCollapsed: next };
+  }),
+  setSidebarCollapsed: (collapsed) => {
+    try { localStorage.setItem('mbt_sidebar_collapsed', JSON.stringify(collapsed)); } catch { /* ignore */ }
+    set({ isSidebarCollapsed: collapsed });
+  },
   currentStoreId: 'store_juja_main',
   setCurrentStoreId: (id) => set({ currentStoreId: id }),
+  hydrateFromStorage: () => {
+    try {
+      const stored = localStorage.getItem('mbt_sidebar_collapsed');
+      if (stored !== null) {
+        set({ isSidebarCollapsed: JSON.parse(stored) });
+      }
+    } catch { /* ignore corrupted value */ }
+  },
 }));

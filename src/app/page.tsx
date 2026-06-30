@@ -17,7 +17,7 @@ import {
   Home, Store, Mail, Shield, ShieldCheck, Eye, EyeOff,
   Banknote, Wallet,
   TrendingUp, ArrowDownRight, AlertTriangle, DollarSign, Wrench, Hammer,
-  CalendarDays, Printer, Bell, ChevronDown,
+  CalendarDays, Printer, Bell, ChevronDown, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen,
   BellRing, PackageX, AlertOctagon, CircleDollarSign, CheckCheck,
   Truck, UserPlus, Receipt, Filter, Info, Tag,
   LayoutGrid, List, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Pause, MessageSquare, PartyPopper, Sparkles, Zap, Ticket, Landmark, Award, Gift,
@@ -69,6 +69,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 
 // LAZY-LOADED TAB COMPONENTS
 
@@ -1031,12 +1032,34 @@ function LowStockAlertDialog({
 
 
 function AppSidebar() {
-  const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen, currentStoreId, setCurrentStoreId } = useAppStore();
+  const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen, currentStoreId, setCurrentStoreId, isSidebarCollapsed, toggleSidebarCollapse, setSidebarCollapsed } = useAppStore();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { theme, setTheme } = useTheme();
   const [notificationOpen, setNotificationOpen] = useState(false);
   const notificationCount = useNotificationCount(currentStoreId);
+
+  // Track whether viewport is desktop (≥ lg breakpoint) — useSyncExternalStore
+  // to avoid the "setState inside effect" lint error.
+  const isDesktop = useSyncExternalStore(
+    (callback) => {
+      const mql = window.matchMedia('(min-width: 1024px)');
+      mql.addEventListener('change', callback);
+      return () => mql.removeEventListener('change', callback);
+    },
+    () => window.matchMedia('(min-width: 1024px)').matches,
+    () => false, // server snapshot — assume mobile to avoid hydration mismatch
+  );
+
+  // Auto-expand sidebar when transitioning from mobile to desktop while collapsed
+  useEffect(() => {
+    if (isDesktop && isSidebarCollapsed) {
+      setSidebarCollapsed(false);
+    }
+  }, [isDesktop, isSidebarCollapsed, setSidebarCollapsed]);
+
+  // Collapsed state only applies on desktop; mobile always shows full sidebar
+  const collapsed = isDesktop && isSidebarCollapsed;
 
   const handleNav = (tab: AppTab) => {
     setActiveTab(tab);
@@ -1063,32 +1086,47 @@ function AppSidebar() {
     .map(g => ({ label: g.label, items: visibleTabs.filter(t => g.ids.includes(t.id)) }))
     .filter(g => g.items.length > 0);
 
-  const renderNavItem = ({ id, label, icon: Icon }: { id: AppTab; label: string; icon: React.ElementType }) => (
-    <button
-      key={id}
-      onClick={() => handleNav(id)}
-      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ease-out relative group ${
-        activeTab === id
-          ? 'bg-sidebar-primary/90 text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/25'
-          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground hover:translate-x-1'
-      }`}
-    >
-      {/* Active left border indicator with pulse */}
-      {activeTab === id && (
-        <div className="absolute left-0 top-0.5 bottom-0.5 w-1 rounded-r-full bg-sidebar-primary-foreground/90 transition-all duration-300 shadow-[0_0_6px] shadow-sidebar-primary-foreground/30" />
-      )}
-      <Icon className={`h-4 w-4 shrink-0 relative z-10 transition-transform duration-300 ${activeTab === id ? 'scale-110' : 'group-hover:scale-110'}`} />
-      <span className="relative z-10">{label}</span>
-      {/* Keyboard shortcut hint for main tabs */}
-      {id === 'pos' && <kbd className="ml-auto text-[8px] opacity-40 hidden xl:inline">F2</kbd>}
-      {id === 'inventory' && <kbd className="ml-auto text-[8px] opacity-40 hidden xl:inline">F3</kbd>}
-      {id === 'customers' && <kbd className="ml-auto text-[8px] opacity-40 hidden xl:inline">F4</kbd>}
-      {id === 'financial' && <kbd className="ml-auto text-[8px] opacity-40 hidden xl:inline">F5</kbd>}
-    </button>
-  );
+  const renderNavItem = ({ id, label, icon: Icon }: { id: AppTab; label: string; icon: React.ElementType }) => {
+    const btn = (
+      <button
+        key={id}
+        onClick={() => handleNav(id)}
+        className={`w-full flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-300 ease-out relative group ${
+          collapsed ? 'px-0 py-2.5 justify-center' : 'px-4 py-2.5'
+        } ${
+          activeTab === id
+            ? 'bg-sidebar-primary/90 text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/25'
+            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground hover:translate-x-1'
+        }`}
+      >
+        {/* Active left border indicator with pulse */}
+        {activeTab === id && (
+          <div className="absolute left-0 top-0.5 bottom-0.5 w-1 rounded-r-full bg-sidebar-primary-foreground/90 transition-all duration-300 shadow-[0_0_6px] shadow-sidebar-primary-foreground/30" />
+        )}
+        <Icon className={`h-4 w-4 shrink-0 relative z-10 transition-transform duration-300 ${activeTab === id ? 'scale-110' : 'group-hover:scale-110'}`} />
+        {!collapsed && <span className="relative z-10">{label}</span>}
+        {/* Keyboard shortcut hint for main tabs */}
+        {!collapsed && id === 'pos' && <kbd className="ml-auto text-[8px] opacity-40 hidden xl:inline">F2</kbd>}
+        {!collapsed && id === 'inventory' && <kbd className="ml-auto text-[8px] opacity-40 hidden xl:inline">F3</kbd>}
+        {!collapsed && id === 'customers' && <kbd className="ml-auto text-[8px] opacity-40 hidden xl:inline">F4</kbd>}
+        {!collapsed && id === 'financial' && <kbd className="ml-auto text-[8px] opacity-40 hidden xl:inline">F5</kbd>}
+      </button>
+    );
+
+    // In collapsed mode, wrap with tooltip
+    if (collapsed) {
+      return (
+        <Tooltip key={id}>
+          <TooltipTrigger asChild>{btn}</TooltipTrigger>
+          <TooltipContent side="right" sideOffset={8}>{label}</TooltipContent>
+        </Tooltip>
+      );
+    }
+    return btn;
+  };
 
   return (
-    <>
+    <TooltipProvider delayDuration={0}>
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -1099,52 +1137,107 @@ function AppSidebar() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 z-50 h-full w-64 bg-sidebar/95 backdrop-blur-md text-sidebar-foreground transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:z-auto border-r border-sidebar-border shadow-lg lg:shadow-none ${
+        aria-expanded={!collapsed}
+        className={`fixed top-0 left-0 z-50 h-full bg-sidebar/95 backdrop-blur-md text-sidebar-foreground transform transition-all duration-300 ease-in-out lg:translate-x-0 lg:static lg:z-auto border-r border-sidebar-border shadow-lg lg:shadow-none w-64 ${
+          collapsed ? 'lg:w-16' : 'lg:w-64'
+        } ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <div className="flex flex-col h-full">
-          {/* Logo + Notification Bell */}
-          <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
-            <div className="w-9 h-9 rounded-lg overflow-hidden bg-sidebar-primary flex items-center justify-center shrink-0">
+          {/* Logo + Collapse Toggle */}
+          <div className={`flex items-center gap-3 border-b border-sidebar-border relative ${collapsed ? 'px-2 py-4 justify-center' : 'px-4 py-5'}`}>
+            <div className={`rounded-lg overflow-hidden bg-sidebar-primary flex items-center justify-center shrink-0 ${collapsed ? 'w-8 h-8' : 'w-9 h-9'}`}>
               <img src="/logo.png" alt="MH" className="w-full h-full object-cover" />
             </div>
-            <div className="flex-1 min-w-0">
-              <h1 className="font-bold text-sm leading-tight">MBUMAH HARDWARE</h1>
-              <p className="text-xs text-sidebar-foreground/60">POS & ERP</p>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="shrink-0 text-sidebar-foreground/60 hover:text-sidebar-foreground relative"
-              onClick={() => setNotificationOpen(true)}
+            {!collapsed && (
+              <div className="flex-1 min-w-0">
+                <h1 className="font-bold text-sm leading-tight">MBUMAH HARDWARE</h1>
+                <p className="text-xs text-sidebar-foreground/60">POS & ERP</p>
+              </div>
+            )}
+            {!collapsed && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="shrink-0 text-sidebar-foreground/60 hover:text-sidebar-foreground relative"
+                onClick={() => setNotificationOpen(true)}
+              >
+                <Bell className="h-4 w-4" />
+                {notificationCount.unread > 0 ? (
+                  <span className={`absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[9px] font-bold text-white px-1 ${notificationCount.critical > 0 ? 'bg-red-500 animate-pulse' : 'bg-amber-500'}`}>
+                    {notificationCount.unread > 99 ? '99+' : notificationCount.unread}
+                  </span>
+                ) : null}
+              </Button>
+            )}
+            {/* Mobile close button */}
+            {!collapsed && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="shrink-0 lg:hidden text-sidebar-foreground/60 hover:text-sidebar-foreground"
+                onClick={() => setSidebarOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+            {/* Collapse/expand toggle button - visible on desktop */}
+            <button
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              onClick={toggleSidebarCollapse}
+              className="hidden lg:flex absolute -right-3 top-1/2 -translate-y-1/2 z-50 h-6 w-6 items-center justify-center rounded-full border border-sidebar-border bg-sidebar text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent shadow-sm transition-all duration-200"
             >
-              <Bell className="h-4 w-4" />
-              {notificationCount.unread > 0 ? (
-                <span className={`absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[9px] font-bold text-white px-1 ${notificationCount.critical > 0 ? 'bg-red-500 animate-pulse' : 'bg-amber-500'}`}>
-                  {notificationCount.unread > 99 ? '99+' : notificationCount.unread}
-                </span>
-              ) : null}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="shrink-0 lg:hidden text-sidebar-foreground/60 hover:text-sidebar-foreground"
-              onClick={() => setSidebarOpen(false)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
+              {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
+            </button>
           </div>
 
+          {/* Collapsed notification bell */}
+          {collapsed && (
+            <div className="flex justify-center px-2 pt-2 pb-0">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-sidebar-foreground/60 hover:text-sidebar-foreground relative h-8 w-8"
+                    onClick={() => setNotificationOpen(true)}
+                  >
+                    <Bell className="h-4 w-4" />
+                    {notificationCount.unread > 0 && (
+                      <span className={`absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 flex items-center justify-center rounded-full text-[8px] font-bold text-white px-0.5 ${notificationCount.critical > 0 ? 'bg-red-500 animate-pulse' : 'bg-amber-500'}`}>
+                        {notificationCount.unread > 99 ? '99+' : notificationCount.unread}
+                      </span>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>Notifications</TooltipContent>
+              </Tooltip>
+            </div>
+          )}
+
           {/* Store Selector */}
-          <div className="px-3 pt-3 pb-1">
+          <div className={`${collapsed ? 'px-1 pt-2 pb-1' : 'px-3 pt-3 pb-1'}`}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-sidebar-border bg-sidebar-accent/50 text-xs text-sidebar-foreground/80 hover:bg-sidebar-accent transition-colors">
-                  <Store className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate font-medium">{STORE_LIST.find(s => s.id === currentStoreId)?.shortName || 'Select Branch'}</span>
-                  <ChevronDown className="h-3 w-3 ml-auto shrink-0" />
-                </button>
+                {collapsed ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button className="w-full flex items-center justify-center px-2 py-2 rounded-lg border border-sidebar-border bg-sidebar-accent/50 text-sidebar-foreground/80 hover:bg-sidebar-accent transition-colors">
+                        <Store className="h-3.5 w-3.5 shrink-0" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" sideOffset={8}>
+                      {STORE_LIST.find(s => s.id === currentStoreId)?.shortName || 'Select Branch'}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-sidebar-border bg-sidebar-accent/50 text-xs text-sidebar-foreground/80 hover:bg-sidebar-accent transition-colors">
+                    <Store className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate font-medium">{STORE_LIST.find(s => s.id === currentStoreId)?.shortName || 'Select Branch'}</span>
+                    <ChevronDown className="h-3 w-3 ml-auto shrink-0" />
+                  </button>
+                )}
               </DropdownMenuTrigger>
               <DropdownMenuContent side="right" align="start" className="w-64">
                 <DropdownMenuLabel className="text-xs text-muted-foreground">Switch Branch</DropdownMenuLabel>
@@ -1168,38 +1261,63 @@ function AppSidebar() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto custom-scrollbar">
+          <nav className={`flex-1 py-2 space-y-1 overflow-y-auto overflow-x-hidden custom-scrollbar ${collapsed ? 'px-1' : 'px-3'}`}>
             {navGroups.map((group, idx) => (
               <div key={group.label}>
-                <div className={`px-4 ${idx === 0 ? 'pt-2' : 'pt-4'} pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 flex items-center gap-1.5`}>
-                  <span>{group.label}</span>
-                  <Separator className="flex-1 bg-sidebar-border/50" />
-                </div>
+                {!collapsed && (
+                  <div className={`px-4 ${idx === 0 ? 'pt-2' : 'pt-4'} pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 flex items-center gap-1.5`}>
+                    <span>{group.label}</span>
+                    <Separator className="flex-1 bg-sidebar-border/50" />
+                  </div>
+                )}
+                {collapsed && idx > 0 && (
+                  <Separator className="my-2 mx-2 bg-sidebar-border/50" />
+                )}
                 {group.items.map(renderNavItem)}
               </div>
             ))}
           </nav>
 
           {/* Footer - User Profile Dropdown */}
-          <div className="border-t border-sidebar-border px-3 py-3 space-y-2">
+          <div className={`border-t border-sidebar-border py-3 space-y-2 ${collapsed ? 'px-1' : 'px-3'}`}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <div className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors text-left cursor-pointer" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}>
-                  <div className="relative">
-                    <Avatar className="h-9 w-9 ring-2 ring-sidebar-primary/20">
-                      <AvatarFallback className="bg-gradient-to-br from-sidebar-primary to-sidebar-primary/70 text-sidebar-primary-foreground text-xs font-semibold">
-                        {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
-                      </AvatarFallback>
-                    </Avatar>
-                    {/* Online dot */}
-                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-sidebar rounded-full" />
+                {collapsed ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="w-full flex justify-center px-1 py-2 rounded-lg hover:bg-sidebar-accent transition-colors cursor-pointer" role="button" tabIndex={0}>
+                        <div className="relative">
+                          <Avatar className="h-8 w-8 ring-2 ring-sidebar-primary/20">
+                            <AvatarFallback className="bg-gradient-to-br from-sidebar-primary to-sidebar-primary/70 text-sidebar-primary-foreground text-[10px] font-semibold">
+                              {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 border-2 border-sidebar rounded-full" />
+                        </div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" sideOffset={8}>
+                      {user?.name || 'User'} &mdash; {user?.role === 'SUPER_ADMIN' ? 'Super Admin' : user?.role === 'CASHIER' ? 'Cashier' : user?.role || 'User'}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <div className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors text-left cursor-pointer" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}>
+                    <div className="relative">
+                      <Avatar className="h-9 w-9 ring-2 ring-sidebar-primary/20">
+                        <AvatarFallback className="bg-gradient-to-br from-sidebar-primary to-sidebar-primary/70 text-sidebar-primary-foreground text-xs font-semibold">
+                          {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
+                        </AvatarFallback>
+                      </Avatar>
+                      {/* Online dot */}
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-sidebar rounded-full" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
+                      <p className="text-xs text-sidebar-foreground/60 truncate">{user?.role === 'SUPER_ADMIN' ? 'Super Admin' : user?.role === 'CASHIER' ? 'Cashier' : user?.role || 'User'}</p>
+                    </div>
+                    <ChevronDown className="h-3.5 w-3.5 text-sidebar-foreground/40 shrink-0" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
-                    <p className="text-xs text-sidebar-foreground/60 truncate">{user?.role === 'SUPER_ADMIN' ? 'Super Admin' : user?.role === 'CASHIER' ? 'Cashier' : user?.role || 'User'}</p>
-                  </div>
-                  <ChevronDown className="h-3.5 w-3.5 text-sidebar-foreground/40 shrink-0" />
-                </div>
+                )}
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" className="w-56 mb-2">
                 <DropdownMenuLabel className="font-normal">
@@ -1236,14 +1354,14 @@ function AppSidebar() {
         onOpenChange={setNotificationOpen}
         storeId={currentStoreId}
       />
-    </>
+    </TooltipProvider>
   );
 }
 
 // TOP BAR (with live Date/Time)
 
 function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonElement | null> }) {
-  const { activeTab, toggleSidebar, setActiveTab } = useAppStore();
+  const { activeTab, toggleSidebar, setActiveTab, isSidebarCollapsed, toggleSidebarCollapse } = useAppStore();
   const cartItems = useCartStore((s) => s.items);
   const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const currentStoreId = useAppStore((s) => s.currentStoreId);
@@ -1320,6 +1438,16 @@ function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonEle
             onClick={toggleSidebar}
           >
             <Menu className="h-5 w-5" />
+          </Button>
+          {/* Desktop sidebar collapse/expand toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hidden lg:flex"
+            onClick={toggleSidebarCollapse}
+            aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {isSidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
           </Button>
           <div className="flex items-center gap-2">
             <TabIcon className="h-5 w-5 text-primary" />
@@ -4993,7 +5121,7 @@ function MainApp() {
     <ErrorBoundary>
       <div className="flex h-screen overflow-hidden">
         <AppSidebar />
-        <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+        <div className="flex-1 flex flex-col min-w-0 min-h-screen transition-all duration-300 ease-in-out">
           <TopBar searchBtnRef={searchBtnRef} />
           <main className="flex-1 overflow-y-auto p-4 custom-scrollbar">
             <div className="animate-tab-enter" key={activeTab}>
@@ -5099,6 +5227,7 @@ function useLoadingWatchdog(hasMounted: boolean) {
 export default function HomePage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const hydrateFromStorage = useAuthStore((s) => s.hydrateFromStorage);
+  const hydrateAppFromStorage = useAppStore((s) => s.hydrateFromStorage);
   const hasMounted = useHasMounted();
   const showRetry = useLoadingWatchdog(hasMounted);
 
@@ -5109,7 +5238,8 @@ export default function HomePage() {
   // to restore the persisted session.
   useEffect(() => {
     hydrateFromStorage();
-  }, [hydrateFromStorage]);
+    hydrateAppFromStorage();
+  }, [hydrateFromStorage, hydrateAppFromStorage]);
 
   if (!hasMounted) {
     return (
