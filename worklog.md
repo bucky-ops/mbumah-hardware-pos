@@ -4273,3 +4273,40 @@ Implemented a fully retractable, minimizable, and responsive sidebar for the Mbu
 ### Lint Results
 - 0 errors, 351 warnings (all pre-existing)
 - Dev server starts and compiles successfully
+
+---
+Task ID: sidebar-retractable
+Agent: Main Agent (Senior Frontend Engineer)
+Task: Implement retractable, minimizable, responsive sidebar with three states
+
+Work Log:
+- **Phase 1: State Management** — Added to useAppStore in `src/lib/stores.ts`:
+  — `isSidebarCollapsed: boolean` (default false)
+  — `toggleSidebarCollapse()` — toggles collapse, persists to localStorage
+  — `setSidebarCollapsed(collapsed)` — setter, persists to localStorage
+  — Hydration in `hydrateFromStorage()` reads `mbt_sidebar_collapsed` key
+- **Phase 2: Sidebar Component** — Updated AppSidebar in `src/app/page.tsx`:
+  — Dynamic width: w-64 (expanded) ↔ lg:w-16 (collapsed)
+  — Toggle button at sidebar edge: ChevronLeft (expanded) / ChevronRight (collapsed)
+  — Collapsed state: hides all text labels, group headings, store name, user name
+  — Shows only centered icons with tooltips in collapsed state
+  — Uses shadcn/ui TooltipProvider/Tooltip/TooltipTrigger/TooltipContent
+  — Smooth transition: transition-all duration-300 ease-in-out
+  — Auto-expand when viewport transitions mobile → desktop
+  — ARIA: aria-expanded on <aside>, aria-label on toggle button
+- **Phase 3: Main Content** — Content wrapper adjusts smoothly with transition-all duration-300
+- **Phase 4: UX & Accessibility**:
+  — Toggle button is native <button> (keyboard accessible)
+  — Active nav item highlighting works in both states
+  — Desktop detection via useSyncExternalStore for responsive behavior
+- **Phase 5: TopBar** — Added desktop sidebar toggle (PanelLeftClose/PanelLeftOpen) in TopBar
+  — hidden on mobile, flex on lg+ breakpoint
+- **Verification**: Lint 0 errors, dev server 200, Vercel deployment healthy
+
+Stage Summary:
+- Sidebar now supports 3 states: Expanded, Collapsed (icons+tooltips), Mobile Overlay
+- Collapse state persists to localStorage across sessions
+- Smooth 300ms CSS transitions on width changes
+- All nav items show tooltips when collapsed
+- Desktop toggle button in TopBar + edge toggle button on sidebar
+- Vercel deployment verified healthy
