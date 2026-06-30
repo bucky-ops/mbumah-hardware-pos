@@ -4082,3 +4082,30 @@ Stage Summary:
 - Added PO count to the final seed summary
 
 **Lint result**: 0 errors, 349 warnings (all pre-existing)
+
+---
+Task ID: release-v2.1.0
+Agent: Main Agent (Principal DevOps Engineer)
+Task: Execute Phases 1-7: Crash fix hardening, product display, PO seed data, CI/CD, git push, tag v2.1.0
+
+Work Log:
+- **Phase 1 Audit**: Comprehensive audit of ALL .map() calls across 28+ tab components. Found crash fix from v2.0.1 still in place. Identified 3 weak tabs using `?? []` instead of `Array.isArray()`.
+- **Phase 1 Fix**: Upgraded `?? []` to `Array.isArray()` in:
+  - conversations-tab.tsx: 4 sites (lines 127, 316, 598, 770)
+  - security-tab.tsx: 5 sites (lines 117-121: byType, bySeverity, ips, recentCritical, timeline)
+  - payroll-tab.tsx: 8 sites (employees, leaves, leaveTypes, periods, runs, periodsForDropdown, records, employeesForAttendance)
+- **Phase 2**: Added explicit `isError` + `refetch` to inventory tab products query. Added error UI with AlertCircle icon + Retry button.
+- **Phase 3 Audit**: Found Purchase Orders module fully implemented (Prisma schema, API routes, UI tab with 1808 lines). Only missing: seed data.
+- **Phase 4**: Added 5 sample PurchaseOrders to seed.ts: RECEIVED, APPROVED, PARTIALLY_RECEIVED, DRAFT, CANCELLED. Each with line items, 16% Kenya VAT, idempotent upsert.
+- **Phase 5 Audit**: CI/CD pipeline (.github/workflows/ci-cd.yml) and CONTRIBUTING.md both verified complete and passing.
+- **Phase 6**: Git committed, pushed to main, created and pushed tag v2.1.0.
+- **Phase 7**: Created RELEASE_VERIFICATION.md with 12 sections and 100+ checklist items.
+- **Vercel Verification**: Confirmed deployment at mbumah-hardware-pos-one.vercel.app — 200 OK, title "MBUMAH HARDWARE - POS & ERP System", no Loading state, no errors.
+
+Stage Summary:
+- All 7 phases COMPLETE
+- v2.1.0 tagged and pushed to GitHub
+- Vercel deployment verified working
+- Total defensive guards: Array.isArray() on 28+ tab components, 3-layer API defense, SectionErrorBoundary on all tabs
+- Purchase Orders module fully functional with seed data
+- RELEASE_VERIFICATION.md created for post-deployment QA
