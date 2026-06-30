@@ -1,7 +1,6 @@
 // Zustand state stores
 
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
 import type { AuthUser, CartItem } from './types';
 import { authApi } from './api';
 
@@ -202,77 +201,29 @@ export const useCartStore = create<CartState>((set, get) => ({
 
 export type AppTab = 'dashboard' | 'pos' | 'catalog' | 'inventory' | 'customers' | 'rentals' | 'financial' | 'reports' | 'transactions' | 'suppliers' | 'gift-cards' | 'admin' | 'vouchers' | 'invoices' | 'delivery' | 'credits' | 'messaging' | 'transfers' | 'banking' | 'loyalty' | 'security' | 'payroll' | 'etims' | 'debt-management' | 'conversations' | 'purchase-orders';
 
-/** Sidebar visual state — used for layout calculations and responsive behavior. */
-export type SidebarState = 'expanded' | 'collapsed' | 'mobile-overlay';
-
 interface AppState {
   activeTab: AppTab;
   setActiveTab: (tab: AppTab) => void;
-  /** Mobile sidebar overlay open/close */
   sidebarOpen: boolean;
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
-  /** Desktop sidebar collapsed state */
+  /** Desktop sidebar collapsed state — true = icon-only (w-16), false = full (w-64) */
   isSidebarCollapsed: boolean;
   toggleSidebarCollapse: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
-  /** Computed sidebar state (expanded / collapsed / mobile-overlay) */
-  getSidebarState: (isDesktop: boolean) => SidebarState;
-  /** Current store ID for multi-tenancy */
   currentStoreId: string;
   setCurrentStoreId: (id: string) => void;
-  /** Hydrate app state from localStorage (called once on client mount). */
-  hydrateFromStorage: () => void;
 }
 
-export const useAppStore = create<AppState>()(
-  persist(
-    (set, get) => ({
-      activeTab: 'dashboard',
-      setActiveTab: (tab) => set({ activeTab: tab }),
-      sidebarOpen: false,
-      toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
-      setSidebarOpen: (open) => set({ sidebarOpen: open }),
-      isSidebarCollapsed: false,
-      toggleSidebarCollapse: () => set((state) => ({
-        isSidebarCollapsed: !state.isSidebarCollapsed,
-      })),
-      setSidebarCollapsed: (collapsed) => set({ isSidebarCollapsed: collapsed }),
-      /** Derive the visual sidebar state from current store + viewport. */
-      getSidebarState: (isDesktop: boolean): SidebarState => {
-        const { sidebarOpen, isSidebarCollapsed } = get();
-        if (!isDesktop) return sidebarOpen ? 'mobile-overlay' : 'collapsed';
-        return isSidebarCollapsed ? 'collapsed' : 'expanded';
-      },
-      currentStoreId: 'store_juja_main',
-      setCurrentStoreId: (id) => set({ currentStoreId: id }),
-      hydrateFromStorage: () => {
-        // With persist middleware, hydration is automatic on the client.
-        // This method is kept for backward compatibility but is a no-op.
-      },
-    }),
-    {
-      name: 'mbt_app_state',
-      storage: createJSONStorage(() => {
-        // SSR-safe: return a no-op storage during server rendering.
-        if (typeof window === 'undefined') {
-          return {
-            getItem: () => null,
-            setItem: () => {},
-            removeItem: () => {},
-          };
-        }
-        return localStorage;
-      }),
-      // Only persist these fields — exclude transient state like sidebarOpen
-      // (mobile overlay should always start closed on page load).
-      partialize: (state) => ({
-        isSidebarCollapsed: state.isSidebarCollapsed,
-        activeTab: state.activeTab,
-        currentStoreId: state.currentStoreId,
-      }),
-      // Skip hydration on server to avoid mismatches.
-      skipHydration: true,
-    },
-  ),
-);
+export const useAppStore = create<AppState>((set) => ({
+  activeTab: 'dashboard',
+  setActiveTab: (tab) => set({ activeTab: tab }),
+  sidebarOpen: false,
+  toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+  setSidebarOpen: (open) => set({ sidebarOpen: open }),
+  isSidebarCollapsed: false,
+  toggleSidebarCollapse: () => set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
+  setSidebarCollapsed: (collapsed) => set({ isSidebarCollapsed: collapsed }),
+  currentStoreId: 'store_juja_main',
+  setCurrentStoreId: (id) => set({ currentStoreId: id }),
+}));

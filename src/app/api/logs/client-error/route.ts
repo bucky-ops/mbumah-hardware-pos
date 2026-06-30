@@ -7,7 +7,7 @@
 //
 // This endpoint is PUBLIC (no auth required) because client errors can happen
 // before / during authentication (e.g. a hydration crash on the login page).
-// The proxy.ts layer already rate-limits this endpoint (5 req/min/IP via the
+// The middleware.ts layer already rate-limits this endpoint (5 req/min/IP via the
 // CLIENT_ERROR tier) and exempts it from CSRF checks.
 //
 // To prevent abuse, the payload size is capped, strings are truncated, and
