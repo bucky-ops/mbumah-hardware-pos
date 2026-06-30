@@ -26,6 +26,8 @@ const RATE_LIMIT_TIERS: Record<string, { max: number; windowMs: number }> = {
   WRITE: { max: 30, windowMs: 60 * 1000 },
   SEARCH: { max: 30, windowMs: 60 * 1000 },
   MESSAGING: { max: 10, windowMs: 60 * 1000 },
+  // Client error logger — generous enough to catch burst errors but prevents abuse.
+  CLIENT_ERROR: { max: 5, windowMs: 60 * 1000 },
 };
 
 type RateLimitTier = keyof typeof RATE_LIMIT_TIERS;
@@ -138,10 +140,17 @@ const PUBLIC_PATHS = [
   '/api/auth/logout',
   '/api/payments/mpesa/callback',
   '/api/security/csrf-token',
+  // Client error logger — errors can happen before/during auth (e.g. hydration
+  // crashes on the login page). Must be public so the error boundary can
+  // report crashes even when the user is not authenticated.
+  '/api/logs/client-error',
 ];
 
 const CSRF_EXEMPT_PATHS = [
   '/api/payments/mpesa/callback',
+  // Client error logger — error boundaries use fire-and-forget fetch()
+  // which cannot include a CSRF token (the page may be in a broken state).
+  '/api/logs/client-error',
 ];
 
 // ── Rate Limit Tier Resolution ──────────────────────────────────────────────
@@ -153,6 +162,7 @@ function getRateLimitTier(pathname: string, method: string): RateLimitTier {
   if (pathname.startsWith('/api/products/search')) return 'SEARCH';
   if (pathname.startsWith('/api/whatsapp')) return 'MESSAGING';
   if (pathname.startsWith('/api/messages') && method !== 'GET') return 'MESSAGING';
+  if (pathname.startsWith('/api/logs/client-error')) return 'CLIENT_ERROR';
   if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return 'READ';
   return 'WRITE';
 }
