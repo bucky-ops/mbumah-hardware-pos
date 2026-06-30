@@ -154,12 +154,44 @@ async function request<T>(
         throw new Error('Session expired. Please login again.');
       }
       if (!retryResponse.ok) {
-        const retryErrorData = await retryResponse.json().catch(() => ({}));
-        throw new Error(retryErrorData.error || retryErrorData.message || `Request failed: ${retryResponse.status}`);
+        let retryServerError = '';
+        try {
+          const retryErrorData = await retryResponse.json();
+          retryServerError = retryErrorData.error || retryErrorData.message || '';
+        } catch {
+          // Non-JSON body — fall through
+        }
+        switch (retryResponse.status) {
+          case 404:
+            throw new Error(retryServerError || 'Resource not found');
+          case 429:
+            throw new Error(retryServerError || 'Too many requests. Please try again in a moment.');
+          case 500:
+            throw new Error(retryServerError || 'Server error. Please try again later.');
+          case 502:
+          case 503:
+          case 504:
+            throw new Error(retryServerError || 'Service temporarily unavailable. Please try again.');
+          default:
+            throw new Error(retryServerError || `Request failed: ${retryResponse.status}`);
+        }
       }
       const retryJson = await retryResponse.json();
-      if (retryJson && retryJson.success && retryJson.data === undefined) {
+      // Apply same response-shape validation and nested unwrap as the main path
+      if (retryJson && retryJson.success && retryJson.data === undefined && retryJson.error === undefined) {
         retryJson.data = null as unknown as T;
+      }
+      if (retryJson && retryJson.success && retryJson.data !== undefined && retryJson.data !== null) {
+        if (!Array.isArray(retryJson.data) && typeof retryJson.data === 'object') {
+          const d = retryJson.data as Record<string, unknown>;
+          if (d.data !== undefined && Array.isArray(d.data)) {
+            (retryJson as Record<string, unknown>).data = d.data;
+          } else if (d.items !== undefined && Array.isArray(d.items)) {
+            (retryJson as Record<string, unknown>).data = d.items;
+          } else if (d.products !== undefined && Array.isArray(d.products)) {
+            (retryJson as Record<string, unknown>).data = d.products;
+          }
+        }
       }
       return retryJson;
     }
@@ -167,19 +199,76 @@ async function request<T>(
   }
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || errorData.message || `Request failed: ${response.status}`);
+    let serverError = '';
+    try {
+      const errorData = await response.json();
+      serverError = errorData.error || errorData.message || '';
+    } catch {
+      // Response body is not JSON or empty — fall through to status-based messages
+    }
+
+    // Specific error messages for common HTTP status codes
+    switch (response.status) {
+      case 404:
+        throw new Error(serverError || 'Resource not found');
+      case 429:
+        throw new Error(serverError || 'Too many requests. Please try again in a moment.');
+      case 500:
+        throw new Error(serverError || 'Server error. Please try again later.');
+      case 502:
+      case 503:
+      case 504:
+        throw new Error(serverError || 'Service temporarily unavailable. Please try again.');
+      default:
+        throw new Error(serverError || `Request failed: ${response.status}`);
+    }
   }
 
   const json = await response.json();
 
-  // Defensive: ensure data field exists and matches expected type
-  // If T is array type and data is not an array, wrap or default
-  if (json && json.success && json.data === undefined) {
-    // API returned success but no data field — return null instead of []
-    // because T may be an object type (e.g. DashboardStats). Components
-    // must use null checks / Array.isArray() before .map() calls.
+  // Response-shape validation: ensure the response matches ApiResponse<T>
+  if (!json || typeof json !== 'object') {
+    // Response is not a valid object — return a safe default
+    return { success: false, error: 'Invalid response from server' } as ApiResponse<T>;
+  }
+
+  if (json.success === undefined) {
+    // `success` field is missing — attempt to infer from presence of data/error
+    if (json.data !== undefined) {
+      json.success = true;
+    } else if (json.error) {
+      json.success = false;
+    } else {
+      // Neither data nor error — treat as success with no data
+      json.success = true;
+    }
+    console.warn(
+      `[API] Response from ${endpoint} missing "success" field; inferred as ${json.success}`
+    );
+  }
+
+  if (json.success && json.data === undefined && json.error === undefined) {
+    // Successful response but no data field at all — set null
+    // Components must use null checks / Array.isArray() before .map() calls.
     json.data = null as unknown as T;
+  }
+
+  // Nested-structure unwrap: if the API wrapped the array inside an object
+  // (e.g. { data: { items: [...] } }), unwrap it to a flat array.
+  if (json.success && json.data !== undefined && json.data !== null) {
+    if (!Array.isArray(json.data) && typeof json.data === 'object') {
+      const d = json.data as Record<string, unknown>;
+      if (d.data !== undefined && Array.isArray(d.data)) {
+        // API returned { success: true, data: { data: [...items...] } }
+        (json as Record<string, unknown>).data = d.data;
+      } else if (d.items !== undefined && Array.isArray(d.items)) {
+        // API returned { success: true, data: { items: [...items...] } }
+        (json as Record<string, unknown>).data = d.items;
+      } else if (d.products !== undefined && Array.isArray(d.products)) {
+        // API returned { success: true, data: { products: [...items...] } }
+        (json as Record<string, unknown>).data = d.products;
+      }
+    }
   }
 
   return json;
@@ -193,6 +282,13 @@ async function request<T>(
 export function safeArray<T>(response: ApiResponse<T[]> | undefined | null): T[] {
   if (!response) return [];
   if (Array.isArray(response.data)) return response.data;
+  // Try to extract from nested structure
+  if (response.data && typeof response.data === 'object') {
+    const d = response.data as unknown as Record<string, unknown>;
+    if (Array.isArray(d.data)) return d.data as T[];
+    if (Array.isArray(d.items)) return d.items as T[];
+    if (Array.isArray(d.products)) return d.products as T[];
+  }
   return [];
 }
 
@@ -202,7 +298,42 @@ export function safeArray<T>(response: ApiResponse<T[]> | undefined | null): T[]
  */
 export function safeData<T>(response: ApiResponse<T> | undefined | null, fallback: T): T {
   if (!response) return fallback;
-  return response.data ?? fallback;
+  if (response.data !== undefined && response.data !== null) return response.data;
+  return fallback;
+}
+
+/**
+ * Perform an API request that is expected to return an array of items.
+ * Always returns the data as an array, even if the response shape is unexpected.
+ * Use this for all list endpoints to prevent "X.map is not a function" errors.
+ */
+export async function safeListRequest<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<ApiResponse<T[]>> {
+  try {
+    const res = await request<T[]>(endpoint, options);
+    // Ensure data is always an array
+    if (!res.data) {
+      return { ...res, data: [] };
+    }
+    if (!Array.isArray(res.data)) {
+      // Try to extract array from nested structure
+      const d = res.data as unknown as Record<string, unknown>;
+      if (Array.isArray(d.data)) return { ...res, data: d.data as T[] };
+      if (Array.isArray(d.items)) return { ...res, data: d.items as T[] };
+      if (Array.isArray(d.products)) return { ...res, data: d.products as T[] };
+      if (Array.isArray(d.customers)) return { ...res, data: d.customers as T[] };
+      if (Array.isArray(d.transactions)) return { ...res, data: d.transactions as T[] };
+      // Can't extract — return empty array
+      console.warn(`[safeListRequest] Expected array but got ${typeof res.data} from ${endpoint}`);
+      return { ...res, data: [] };
+    }
+    return res;
+  } catch (error) {
+    // Return safe empty response on error
+    return { success: false, data: [], error: error instanceof Error ? error.message : 'Unknown error' };
+  }
 }
 
 

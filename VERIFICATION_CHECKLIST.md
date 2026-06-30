@@ -4,7 +4,7 @@
 > post-deployment, and regression testing. Every item must be verified
 > before a production release is cut.
 >
-> **Last updated**: 2025-07-01 (Post Phase 1 Vercel crash fixes)
+> **Last updated**: 2026-06-30 (Post eL.map crash fix — 5-phase defensive hardening)
 > **Version**: v0.2.0
 
 ---
@@ -502,6 +502,49 @@ curl -s https://mbumah-hardware-pos-one.vercel.app/api/health/db
 #    - Login and verify dashboard loads
 #    - Click through 3-4 tabs to confirm no crashes
 ```
+
+---
+
+## 14. Defensive Coding & Crash Prevention (Phase 2 — eL.map Fix)
+
+### 14.1 `.map()` Safety Guards
+
+- [ ] All `.map()` calls on API-derived data use `safeMap()` or `Array.isArray()` guards
+- [ ] `searchResults.products` and `searchResults.customers` are guarded against `undefined` when query is disabled
+- [ ] `lastTransaction.items` uses `Array.isArray()` check before `.map()`
+- [ ] `MiniSparkline` component guards against non-array `data` prop
+- [ ] `data.salesByHour` in DashboardStats uses `Array.isArray()` before `.map()`
+
+### 14.2 Error Boundary Coverage
+
+- [ ] Each lazy-loaded tab is wrapped in `<SectionErrorBoundary sectionName="...">`
+- [ ] SectionErrorBoundary shows compact fallback UI (not full-page overlay)
+- [ ] SectionErrorBoundary logs errors to console with section name prefix
+- [ ] Main ErrorBoundary still wraps entire app for fatal errors
+- [ ] ErrorBoundary reports errors to Sentry (if available)
+- [ ] ErrorBoundary reports errors to Vercel Analytics (if available)
+- [ ] Dismissed error state shows safe retry button (no re-render of crashed children)
+
+### 14.3 API Response Hardening
+
+- [ ] `request<T>()` validates response shape (checks `success` field exists)
+- [ ] HTTP 404 returns "Resource not found" error message
+- [ ] HTTP 429 returns "Too many requests" error message
+- [ ] HTTP 500 returns "Server error" error message
+- [ ] HTTP 502/503/504 returns "Service temporarily unavailable" error message
+- [ ] Nested array unwrapping works: `{ data: { items: [...] } }` → `[...items]`
+- [ ] `safeListRequest<T>()` always returns an array (never null/undefined/object)
+- [ ] `safeArray()` extracts from nested structures (data, items, products keys)
+
+### 14.4 Runtime Crash Test Cases
+
+- [ ] **API returns `null`**: Component renders empty state, no TypeError
+- [ ] **API returns `{}`** (empty object): Component renders empty state, no TypeError
+- [ ] **API returns `{ data: { products: [...] } }`** (v2.0 nested): Products render correctly
+- [ ] **API returns `{ success: true }`** (missing data field): No crash, data defaults to null
+- [ ] **Network timeout on dashboard**: Loading skeleton persists, no crash
+- [ ] **Tab component throws during render**: SectionErrorBoundary catches, shows retry
+- [ ] **Entire app crashes**: ErrorBoundary catches, shows full overlay with retry
 
 ---
 

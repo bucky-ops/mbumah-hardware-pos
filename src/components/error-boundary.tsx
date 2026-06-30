@@ -55,6 +55,21 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       }));
     } catch { /* ignore */ }
 
+    // Report to Sentry (if available)
+    try {
+      const Sentry = (window as any).__SENTRY__;
+      if (Sentry?.captureException) {
+        Sentry.captureException(error, { contexts: { react: { componentStack: errorInfo.componentStack } } });
+      }
+    } catch { /* Sentry not loaded */ }
+
+    // Report to Vercel Analytics
+    try {
+      if (typeof window !== 'undefined' && (window as any).va) {
+        (window as any).va('track', 'error', { message: error.message, stack: error.stack?.substring(0, 500) });
+      }
+    } catch { /* analytics not loaded */ }
+
     // Call custom error handler
     this.props.onError?.(error, errorInfo);
 
@@ -375,5 +390,72 @@ export class ConflictError extends AppError {
   constructor(message: string) {
     super(message, 'CONFLICT', 409);
     this.name = 'ConflictError';
+  }
+}
+
+// ─── Section Error Boundary ────────────────────────────────────────────────
+// Lightweight error boundary for wrapping individual sections/tabs.
+// Shows a compact fallback instead of a full-page overlay, preventing one
+// tab's crash from taking down the entire app.
+
+interface SectionErrorBoundaryProps {
+  children: React.ReactNode;
+  /** Section name for debugging */
+  sectionName?: string;
+  /** Custom fallback UI */
+  fallback?: React.ReactNode;
+}
+
+interface SectionErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+export class SectionErrorBoundary extends React.Component<SectionErrorBoundaryProps, SectionErrorBoundaryState> {
+  constructor(props: SectionErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error(`[SectionErrorBoundary${this.props.sectionName ? `:${this.props.sectionName}` : ''}]`, error, errorInfo);
+
+    // Report to Sentry
+    try {
+      const Sentry = (window as any).__SENTRY__;
+      if (Sentry?.captureException) {
+        Sentry.captureException(error, {
+          tags: { section: this.props.sectionName || 'unknown' },
+          contexts: { react: { componentStack: errorInfo.componentStack } },
+        });
+      }
+    } catch { /* Sentry not loaded */ }
+  }
+
+  handleRetry = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
+  render() {
+    if (this.state.hasError) {
+      if (this.props.fallback) return this.props.fallback;
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[200px] gap-3 p-6 rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/10">
+          <AlertTriangle className="h-8 w-8 text-amber-500" />
+          <p className="text-sm text-muted-foreground text-center">
+            Unable to load{this.props.sectionName ? ` ${this.props.sectionName}` : ' this section'}.
+            Please refresh or contact support.
+          </p>
+          <Button variant="outline" size="sm" onClick={this.handleRetry}>
+            <RefreshCw className="h-3 w-3 mr-1.5" /> Retry
+          </Button>
+        </div>
+      );
+    }
+    return this.props.children;
   }
 }

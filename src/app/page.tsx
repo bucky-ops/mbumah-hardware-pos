@@ -29,7 +29,7 @@ import {
 
 import { useAuthStore, useCartStore, useAppStore, type AppTab } from '@/lib/stores';
 import { STORE_LIST } from '@/lib/store-info';
-import { ErrorBoundary } from '@/components/error-boundary';
+import { ErrorBoundary, SectionErrorBoundary } from '@/components/error-boundary';
 import { FloatingHomeButton } from '@/components/floating-home-button';
 import {
   saveOfflineTransaction,
@@ -97,6 +97,12 @@ const LazyEtimsTab = lazy(() => import('./tabs/etims-tab'));
 const LazyDebtManagementTab = lazy(() => import('./tabs/debt-management-tab'));
 const LazyConversationsTab = lazy(() => import('./tabs/conversations-tab'));
 const LazyPurchaseOrdersTab = lazy(() => import('./tabs/purchase-orders-tab'));
+
+/** Safely map over a value that should be an array. Returns [] if value is not an array. */
+function safeMap<T, U>(value: unknown, fn: (item: T, index: number) => U): U[] {
+  if (!Array.isArray(value)) return [];
+  return value.map(fn);
+}
 
 function TabLoadingFallback() {
   return (
@@ -1479,12 +1485,12 @@ function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonEle
                 <p className="text-sm text-muted-foreground">Type at least 2 characters to search</p>
                 <p className="text-xs text-muted-foreground/60 mt-1">Search across products and customers</p>
               </div>
-            ) : searchResults && (searchResults.products.length > 0 || searchResults.customers.length > 0) ? (
+            ) : searchResults && ((Array.isArray(searchResults.products) && searchResults.products.length > 0) || (Array.isArray(searchResults.customers) && searchResults.customers.length > 0)) ? (
               <div className="py-2">
-                {searchResults.products.length > 0 && (
+                {Array.isArray(searchResults.products) && searchResults.products.length > 0 && (
                   <div>
                     <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Products</p>
-                    {searchResults.products.map((p) => (
+                    {safeMap<ProductListItem, JSX.Element>(searchResults.products, (p) => (
                       <button
                         key={p.id}
                         className="w-full flex items-center gap-3 px-4 py-2 hover:bg-muted/50 transition-colors text-left"
@@ -1502,10 +1508,10 @@ function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonEle
                     ))}
                   </div>
                 )}
-                {searchResults.customers.length > 0 && (
+                {Array.isArray(searchResults.customers) && searchResults.customers.length > 0 && (
                   <div>
                     <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-t mt-1 pt-2">Customers</p>
-                    {searchResults.customers.map((c) => (
+                    {safeMap<CustomerItem, JSX.Element>(searchResults.customers, (c) => (
                       <button
                         key={c.id}
                         className="w-full flex items-center gap-3 px-4 py-2 hover:bg-muted/50 transition-colors text-left"
@@ -1573,7 +1579,7 @@ function useAnimatedCounter(target: number, duration = 800) {
 
 // Mini sparkline component
 function MiniSparkline({ data, color, height = 24 }: { data: number[]; color: string; height?: number }) {
-  if (data.length < 2) return null;
+  if (!Array.isArray(data) || data.length < 2) return null;
   const max = Math.max(...data);
   const min = Math.min(...data);
   const range = max - min || 1;
@@ -1621,8 +1627,8 @@ function DashboardStats({ storeId, onLowStockClick }: { storeId: string; onLowSt
 
   // Generate fake sparkline data from salesByHour or random
   const sparkData = useMemo(() => {
-    if (data && data.salesByHour && data.salesByHour.length > 1) {
-      return data.salesByHour.map(h => h.amount);
+    if (data && Array.isArray(data.salesByHour) && data.salesByHour.length > 1) {
+      return safeMap<{ amount: number }, number>(data.salesByHour, h => h.amount);
     }
     return [20, 40, 30, 60, 50, 80, 70, 90];
   }, [data]);
@@ -1815,7 +1821,7 @@ function CategoryChips({
         >
           All
         </button>
-        {categories.map((cat) => {
+        {safeMap<CategoryItem, JSX.Element>(categories, (cat) => {
           const catColor = cat.color || '#6b7280';
           const isActive = selected === cat.id;
           const catImage = getCategoryImage(cat.id);
@@ -3526,7 +3532,7 @@ function POSTab() {
   const handlePrintReceipt = () => {
     if (!lastTransaction) return;
     const store = STORE_LIST.find((s) => s.id === currentStoreId);
-    const itemsHtml = (lastTransaction.items || []).map((item) => `
+    const itemsHtml = safeMap<TransactionItem, string>(lastTransaction?.items, (item) => `
       <tr>
         <td class="name">${escapeHtml(item.productName)}</td>
         <td class="qty">${item.quantity}</td>
@@ -3790,7 +3796,7 @@ function POSTab() {
           <EmptyProductsState searchQuery={searchQuery} />
         ) : viewMode === 'grid' ? (
           <div className={`grid ${gridColsClass} items-stretch`}>
-            {sortedProducts.map((product) => (
+            {safeMap(sortedProducts, (product) => (
               <ProductCard
                 key={product.id}
                 product={product}
@@ -3815,7 +3821,7 @@ function POSTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedProducts.map((product) => {
+                  {safeMap(sortedProducts, (product) => {
                     const inCart = cart.items.find(i => i.productId === product.id);
                     const isLowStock = product.quantityInStock <= product.reorderLevel && product.quantityInStock > 0;
                     const isOutOfStock = product.quantityInStock <= 0;
@@ -3908,7 +3914,7 @@ function POSTab() {
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {visibleRecommendations.map((rec) => {
+                    {safeMap(visibleRecommendations, (rec) => {
                       const name = rec.product?.name || rec.productName || 'Product';
                       const price = rec.product?.pricePerUnit ?? rec.pricePerUnit ?? 0;
                       const unit = rec.product?.unitType || rec.unitType || 'PIECE';
@@ -4079,7 +4085,7 @@ function POSTab() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="walk-in">Walk-in Customer</SelectItem>
-                      {customers.map((c) => (
+                      {safeMap(customers, (c) => (
                         <SelectItem key={c.id} value={c.id}>{c.name}{c.phone ? ` - ${c.phone}` : ''}</SelectItem>
                       ))}
                     </SelectContent>
@@ -4123,7 +4129,7 @@ function POSTab() {
                         {Array.isArray(customerGiftCards) && customerGiftCards.length > 0 && (
                           <div className="space-y-1">
                             <p className="text-[10px] text-muted-foreground font-medium">Gift Cards</p>
-                            {customerGiftCards.map((gc) => (
+                            {safeMap<GiftCardItem, JSX.Element>(customerGiftCards, (gc) => (
                               <button
                                 key={gc.id}
                                 type="button"
@@ -4148,7 +4154,7 @@ function POSTab() {
                         {Array.isArray(customerVouchers) && customerVouchers.length > 0 && (
                           <div className="space-y-1">
                             <p className="text-[10px] text-muted-foreground font-medium">Vouchers</p>
-                            {customerVouchers.map((v) => (
+                            {safeMap<VoucherItem, JSX.Element>(customerVouchers, (v) => (
                               <button
                                 key={v.id}
                                 type="button"
@@ -4343,7 +4349,7 @@ function POSTab() {
                 <span className="col-span-2 text-center">Unit</span>
                 <span className="col-span-3 text-right">Total</span>
               </div>
-              {(lastTransaction.items || []).map((item) => (
+              {safeMap<TransactionItem, JSX.Element>(lastTransaction?.items, (item) => (
                 <div key={item.id} className="grid grid-cols-12 text-xs py-0.5">
                   <span className="col-span-5 break-words pr-1">{item.productName}</span>
                   <span className="col-span-2 text-center">{item.quantity}</span>
@@ -4753,7 +4759,7 @@ function POSTab() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="walk-in">Walk-in Customer</SelectItem>
-                      {customers.map((c) => (
+                      {safeMap(customers, (c) => (
                         <SelectItem key={c.id} value={c.id}>{c.name}{c.phone ? ` - ${c.phone}` : ''}</SelectItem>
                       ))}
                     </SelectContent>
@@ -4797,7 +4803,7 @@ function POSTab() {
                         {Array.isArray(customerGiftCards) && customerGiftCards.length > 0 && (
                           <div className="space-y-1">
                             <p className="text-[10px] text-muted-foreground font-medium">Gift Cards</p>
-                            {customerGiftCards.map((gc) => (
+                            {safeMap<GiftCardItem, JSX.Element>(customerGiftCards, (gc) => (
                               <button
                                 key={gc.id}
                                 type="button"
@@ -4822,7 +4828,7 @@ function POSTab() {
                         {Array.isArray(customerVouchers) && customerVouchers.length > 0 && (
                           <div className="space-y-1">
                             <p className="text-[10px] text-muted-foreground font-medium">Vouchers</p>
-                            {customerVouchers.map((v) => (
+                            {safeMap<VoucherItem, JSX.Element>(customerVouchers, (v) => (
                               <button
                                 key={v.id}
                                 type="button"
@@ -4953,33 +4959,33 @@ function MainApp() {
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'dashboard': return <Suspense fallback={<TabLoadingFallback />}><LazyDashboardTab /></Suspense>;
-      case 'pos': return <POSTab />;
-      case 'catalog': return <Suspense fallback={<TabLoadingFallback />}><LazyCatalogTab /></Suspense>;
-      case 'inventory': return <Suspense fallback={<TabLoadingFallback />}><LazyInventoryTab /></Suspense>;
-      case 'customers': return <Suspense fallback={<TabLoadingFallback />}><LazyCustomersTab /></Suspense>;
-      case 'rentals': return <Suspense fallback={<TabLoadingFallback />}><LazyRentalsTab /></Suspense>;
-      case 'financial': return <Suspense fallback={<TabLoadingFallback />}><LazyFinancialTab /></Suspense>;
-      case 'reports': return <Suspense fallback={<TabLoadingFallback />}><LazyReportsTab /></Suspense>;
-      case 'transactions': return <Suspense fallback={<TabLoadingFallback />}><LazyTransactionsTab /></Suspense>;
-      case 'admin': return <Suspense fallback={<TabLoadingFallback />}><LazyAdminTab /></Suspense>;
-      case 'suppliers': return <Suspense fallback={<TabLoadingFallback />}><LazySuppliersTab /></Suspense>;
-      case 'gift-cards': return <Suspense fallback={<TabLoadingFallback />}><LazyGiftCardsTab storeId={currentStoreId} userRole={user?.role || 'CASHIER'} userId={user?.id || ''} /></Suspense>;
-      case 'vouchers': return <Suspense fallback={<TabLoadingFallback />}><LazyVouchersTab /></Suspense>;
-      case 'invoices': return <Suspense fallback={<TabLoadingFallback />}><LazyInvoicesTab /></Suspense>;
-      case 'delivery': return <Suspense fallback={<TabLoadingFallback />}><LazyDeliveryTab /></Suspense>;
-      case 'credits': return <Suspense fallback={<TabLoadingFallback />}><LazyCreditsTab /></Suspense>;
-      case 'messaging': return <Suspense fallback={<TabLoadingFallback />}><LazyMessagingTab /></Suspense>;
-      case 'transfers': return <Suspense fallback={<TabLoadingFallback />}><LazyTransfersTab /></Suspense>;
-      case 'banking': return <Suspense fallback={<TabLoadingFallback />}><LazyBankingTab /></Suspense>;
-      case 'loyalty': return <Suspense fallback={<TabLoadingFallback />}><LazyLoyaltyTab /></Suspense>;
-      case 'security': return <Suspense fallback={<TabLoadingFallback />}><LazySecurityTab /></Suspense>;
-      case 'payroll': return <Suspense fallback={<TabLoadingFallback />}><LazyPayrollTab /></Suspense>;
-      case 'etims': return <Suspense fallback={<TabLoadingFallback />}><LazyEtimsTab /></Suspense>;
-      case 'debt-management': return <Suspense fallback={<TabLoadingFallback />}><LazyDebtManagementTab /></Suspense>;
-      case 'conversations': return <Suspense fallback={<TabLoadingFallback />}><LazyConversationsTab /></Suspense>;
-      case 'purchase-orders': return <Suspense fallback={<TabLoadingFallback />}><LazyPurchaseOrdersTab /></Suspense>;
-      default: return <POSTab />;
+      case 'dashboard': return <SectionErrorBoundary sectionName="Dashboard"><Suspense fallback={<TabLoadingFallback />}><LazyDashboardTab /></Suspense></SectionErrorBoundary>;
+      case 'pos': return <SectionErrorBoundary sectionName="POS"><POSTab /></SectionErrorBoundary>;
+      case 'catalog': return <SectionErrorBoundary sectionName="Catalog"><Suspense fallback={<TabLoadingFallback />}><LazyCatalogTab /></Suspense></SectionErrorBoundary>;
+      case 'inventory': return <SectionErrorBoundary sectionName="Inventory"><Suspense fallback={<TabLoadingFallback />}><LazyInventoryTab /></Suspense></SectionErrorBoundary>;
+      case 'customers': return <SectionErrorBoundary sectionName="Customers"><Suspense fallback={<TabLoadingFallback />}><LazyCustomersTab /></Suspense></SectionErrorBoundary>;
+      case 'rentals': return <SectionErrorBoundary sectionName="Rentals"><Suspense fallback={<TabLoadingFallback />}><LazyRentalsTab /></Suspense></SectionErrorBoundary>;
+      case 'financial': return <SectionErrorBoundary sectionName="Financial"><Suspense fallback={<TabLoadingFallback />}><LazyFinancialTab /></Suspense></SectionErrorBoundary>;
+      case 'reports': return <SectionErrorBoundary sectionName="Reports"><Suspense fallback={<TabLoadingFallback />}><LazyReportsTab /></Suspense></SectionErrorBoundary>;
+      case 'transactions': return <SectionErrorBoundary sectionName="Transactions"><Suspense fallback={<TabLoadingFallback />}><LazyTransactionsTab /></Suspense></SectionErrorBoundary>;
+      case 'admin': return <SectionErrorBoundary sectionName="Admin"><Suspense fallback={<TabLoadingFallback />}><LazyAdminTab /></Suspense></SectionErrorBoundary>;
+      case 'suppliers': return <SectionErrorBoundary sectionName="Suppliers"><Suspense fallback={<TabLoadingFallback />}><LazySuppliersTab /></Suspense></SectionErrorBoundary>;
+      case 'gift-cards': return <SectionErrorBoundary sectionName="Gift Cards"><Suspense fallback={<TabLoadingFallback />}><LazyGiftCardsTab storeId={currentStoreId} userRole={user?.role || 'CASHIER'} userId={user?.id || ''} /></Suspense></SectionErrorBoundary>;
+      case 'vouchers': return <SectionErrorBoundary sectionName="Vouchers"><Suspense fallback={<TabLoadingFallback />}><LazyVouchersTab /></Suspense></SectionErrorBoundary>;
+      case 'invoices': return <SectionErrorBoundary sectionName="Invoices"><Suspense fallback={<TabLoadingFallback />}><LazyInvoicesTab /></Suspense></SectionErrorBoundary>;
+      case 'delivery': return <SectionErrorBoundary sectionName="Delivery"><Suspense fallback={<TabLoadingFallback />}><LazyDeliveryTab /></Suspense></SectionErrorBoundary>;
+      case 'credits': return <SectionErrorBoundary sectionName="Credits"><Suspense fallback={<TabLoadingFallback />}><LazyCreditsTab /></Suspense></SectionErrorBoundary>;
+      case 'messaging': return <SectionErrorBoundary sectionName="Messaging"><Suspense fallback={<TabLoadingFallback />}><LazyMessagingTab /></Suspense></SectionErrorBoundary>;
+      case 'transfers': return <SectionErrorBoundary sectionName="Transfers"><Suspense fallback={<TabLoadingFallback />}><LazyTransfersTab /></Suspense></SectionErrorBoundary>;
+      case 'banking': return <SectionErrorBoundary sectionName="Banking"><Suspense fallback={<TabLoadingFallback />}><LazyBankingTab /></Suspense></SectionErrorBoundary>;
+      case 'loyalty': return <SectionErrorBoundary sectionName="Loyalty"><Suspense fallback={<TabLoadingFallback />}><LazyLoyaltyTab /></Suspense></SectionErrorBoundary>;
+      case 'security': return <SectionErrorBoundary sectionName="Security"><Suspense fallback={<TabLoadingFallback />}><LazySecurityTab /></Suspense></SectionErrorBoundary>;
+      case 'payroll': return <SectionErrorBoundary sectionName="Payroll"><Suspense fallback={<TabLoadingFallback />}><LazyPayrollTab /></Suspense></SectionErrorBoundary>;
+      case 'etims': return <SectionErrorBoundary sectionName="eTIMS"><Suspense fallback={<TabLoadingFallback />}><LazyEtimsTab /></Suspense></SectionErrorBoundary>;
+      case 'debt-management': return <SectionErrorBoundary sectionName="Debt Management"><Suspense fallback={<TabLoadingFallback />}><LazyDebtManagementTab /></Suspense></SectionErrorBoundary>;
+      case 'conversations': return <SectionErrorBoundary sectionName="Conversations"><Suspense fallback={<TabLoadingFallback />}><LazyConversationsTab /></Suspense></SectionErrorBoundary>;
+      case 'purchase-orders': return <SectionErrorBoundary sectionName="Purchase Orders"><Suspense fallback={<TabLoadingFallback />}><LazyPurchaseOrdersTab /></Suspense></SectionErrorBoundary>;
+      default: return <SectionErrorBoundary sectionName="POS"><POSTab /></SectionErrorBoundary>;
     }
   };
 
