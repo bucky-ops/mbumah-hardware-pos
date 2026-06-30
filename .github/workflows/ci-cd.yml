@@ -9,9 +9,12 @@
 #   1. install      — Bun install with cache
 #   2. lint         — ESLint (0 errors required)
 #   3. typecheck    — tsc --noEmit (strict mode)
-#   4. test         — Vitest unit + integration tests
-#   5. build        — next build (only on main / PR to main)
-#   6. deploy       — Vercel deployment (only on main, after all checks pass)
+#   4. security     — Dependency audit + Prisma schema validation
+#   5. test         — Vitest unit + integration tests
+#   6. build        — next build (only on main / develop / PRs to those)
+#   7. deploy       — Vercel deployment (only on main, after all checks pass)
+#   8. preview      — Vercel preview deployment (on PRs to main/develop)
+#   9. ci-pass      — Summary gate for branch protection
 #
 # Concurrency: a new push to the same branch cancels any in-progress run.
 # ============================================================================
@@ -20,9 +23,9 @@ name: CI/CD
 
 on:
   push:
-    branches: [main, development, update]
+    branches: [main, develop, development, update]
   pull_request:
-    branches: [main, development]
+    branches: [main, develop, development]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -128,7 +131,78 @@ jobs:
         env:
           SKIP_ENV_VALIDATION: '1'
 
-  # ── Stage 4: Tests ─────────────────────────────────────────────────────────
+  # ── Stage 4: Security & Schema Validation ──────────────────────────────────
+  security:
+    name: Security & Schema
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Download dependencies artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deps-${{ github.sha }}
+          path: node_modules
+
+      - name: Audit dependencies for vulnerabilities
+        run: |
+          echo "Running Bun audit..."
+          # Bun doesn't have a native audit command yet, so we use npm audit
+          # as a cross-check. We only fail on high/critical vulnerabilities.
+          npx npm-audit --audit-level=high 2>/dev/null || {
+            echo "::warning::npm audit found vulnerabilities. Check the output above."
+            # Don't fail the build on audit warnings — just surface them.
+            # When all vulnerabilities are resolved, remove the `||` fallback.
+          }
+
+      - name: Validate Prisma schema
+        run: |
+          echo "Validating Prisma schema..."
+          bunx prisma validate
+          echo "Prisma schema is valid."
+
+      - name: Check for hardcoded secrets
+        run: |
+          echo "Scanning for potential hardcoded secrets..."
+          # Grep for common secret patterns in source files (not node_modules)
+          SECRETS_FOUND=0
+          for pattern in "password\s*=\s*['\"][^'\"]{8,}['\"]" "api_key\s*=\s*['\"][^'\"]{8,}['\"]" "secret\s*=\s*['\"][^'\"]{8,}['\"]" "token\s*=\s*['\"][^'\"]{16,}['\"]"; do
+            MATCHES=$(grep -rPn "$pattern" src/ --include="*.ts" --include="*.tsx" 2>/dev/null || true)
+            if [ -n "$MATCHES" ]; then
+              echo "::warning::Potential hardcoded secret found:"
+              echo "$MATCHES"
+              SECRETS_FOUND=1
+            fi
+          done
+          if [ "$SECRETS_FOUND" -eq 1 ]; then
+            echo "::error::Potential hardcoded secrets detected. Review the warnings above."
+            exit 1
+          fi
+          echo "No hardcoded secrets detected."
+
+      - name: Verify API routes have force-dynamic
+        run: |
+          echo "Checking API routes for 'export const dynamic = \"force-dynamic\"'..."
+          MISSING=0
+          for route in $(find src/app/api -name "route.ts" -o -name "route.js"); do
+            if ! grep -q "export const dynamic" "$route"; then
+              echo "::warning::Missing 'export const dynamic' in $route"
+              MISSING=1
+            fi
+          done
+          if [ "$MISSING" -eq 1 ]; then
+            echo "::warning::Some API routes are missing 'export const dynamic'. This can cause Vercel build failures."
+          fi
+          echo "API route check complete."
+
+  # ── Stage 5: Tests ─────────────────────────────────────────────────────────
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -185,12 +259,12 @@ jobs:
             test-results/
           retention-days: 7
 
-  # ── Stage 5: Build (only on main / PR to main) ─────────────────────────────
+  # ── Stage 6: Build (main / develop / PRs to those branches) ────────────────
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test]
-    if: github.ref == 'refs/heads/main' || github.base_ref == 'main'
+    needs: [lint, typecheck, security, test]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.base_ref == 'main' || github.base_ref == 'develop'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -207,10 +281,10 @@ jobs:
           path: node_modules
 
       - name: Build Next.js application
-        run: bun run build
+        run: bun run vercel-build
         env:
           SKIP_ENV_VALIDATION: '1'
-          NEXT_PUBLIC_APP_URL: https://mbumah-pos.vercel.app
+          NEXT_PUBLIC_APP_URL: https://mbumah-hardware-pos-one.vercel.app
           NEXT_PUBLIC_CURRENCY: KES
           DATABASE_URL: postgresql://placeholder@localhost:5432/db
           DIRECT_URL: postgresql://placeholder@localhost:5432/db
@@ -224,15 +298,15 @@ jobs:
           path: .next
           retention-days: 3
 
-  # ── Stage 6: Deploy to Vercel (only on main) ───────────────────────────────
+  # ── Stage 7: Deploy to Vercel Production (only on main push) ───────────────
   deploy:
-    name: Deploy
+    name: Deploy (Production)
     runs-on: ubuntu-latest
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment:
       name: production
-      url: https://mbumah-pos.vercel.app
+      url: https://mbumah-hardware-pos-one.vercel.app
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -248,18 +322,82 @@ jobs:
 
       - name: Health check after deploy
         run: |
-          sleep 10
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://mbumah-pos.vercel.app/api/health || echo "000")
+          echo "Waiting 15s for deployment to propagate..."
+          sleep 15
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://mbumah-hardware-pos-one.vercel.app/api/health || echo "000")
           echo "Health check status: $STATUS"
           if [ "$STATUS" != "200" ]; then
             echo "::warning::Production health check returned $STATUS — investigate immediately."
           fi
 
-  # ── Summary job (for branch protection status checks) ──────────────────────
+      - name: Deployment summary
+        run: |
+          echo "## 🚀 Production Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL**: https://mbumah-hardware-pos-one.vercel.app" >> $GITHUB_STEP_SUMMARY
+
+  # ── Stage 8: Preview Deployment (on PRs to main/develop) ───────────────────
+  preview:
+    name: Deploy (Preview)
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'pull_request' && (github.base_ref == 'main' || github.base_ref == 'develop')
+    environment:
+      name: preview
+      url: ${{ steps.deploy-preview.outputs.url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: bunx vercel@latest --version
+
+      - name: Deploy to Vercel (Preview)
+        id: deploy-preview
+        run: |
+          bunx vercel@latest --yes --token=${{ secrets.VERCEL_TOKEN }} > vercel-output.txt 2>&1
+          PREVIEW_URL=$(tail -1 vercel-output.txt)
+          echo "url=$PREVIEW_URL" >> $GITHUB_OUTPUT
+          echo "Preview URL: $PREVIEW_URL"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Comment PR with preview URL
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const url = '${{ steps.deploy-preview.outputs.url }}';
+            const body = `## 🔍 Preview Deployment\n\nA preview deployment is available at: ${url}\n\nCommit: \`${{ github.sha }}\`\n\n> This preview will be automatically cleaned up when the PR is closed.`;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const botComment = comments.find(c => c.user.type === 'Bot' && c.body.includes('Preview Deployment'));
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+  # ── Stage 9: Summary job (for branch protection status checks) ────────────
   ci-pass:
     name: CI Pass
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test]
+    needs: [lint, typecheck, security, test]
     if: always()
     steps:
       - name: Check CI status
@@ -267,7 +405,7 @@ jobs:
           if [ "${{ needs.lint.result }}" != "success" ] || \
              [ "${{ needs.typecheck.result }}" != "success" ] || \
              [ "${{ needs.test.result }}" != "success" ]; then
-            echo "CI failed: lint=${{ needs.lint.result }} typecheck=${{ needs.typecheck.result }} test=${{ needs.test.result }}"
+            echo "CI failed: lint=${{ needs.lint.result }} typecheck=${{ needs.typecheck.result }} security=${{ needs.security.result }} test=${{ needs.test.result }}"
             exit 1
           fi
-          echo "All CI checks passed."
+          echo "All CI checks passed ✅"

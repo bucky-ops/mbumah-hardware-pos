@@ -11,22 +11,24 @@ especially for the **v2.0.0** development cycle.
 ### Branch Strategy
 
 ```
-main              ← production-ready, protected, only receives PRs from v2.0.0-dev
-  └── v2.0.0-dev  ← integration branch for v2.0.0; all feature PRs target this
+main              ← production-ready, protected
+  └── develop     ← integration branch; all feature PRs target this
         ├── feat/etims-integration
         ├── feat/responsive-sidebar
         ├── fix/dashboard-auth-headers
         └── ...
+  └── hotfix/critical-payment-bug  ← urgent fixes from main
 ```
 
-| Branch           | Purpose                                      | Can push directly? |
-| ---------------- | -------------------------------------------- | ------------------ |
-| `main`           | Production release branch                     | **No** — PR only   |
-| `v2.0.0-dev`     | v2.0.0 integration / staging                  | **No** — PR only   |
-| `feat/*`         | New features                                  | Yes (your own)     |
-| `fix/*`          | Bug fixes                                     | Yes (your own)     |
-| `chore/*`        | Tooling, deps, refactors (no behavior change) | Yes (your own)     |
-| `docs/*`         | Documentation only                            | Yes (your own)     |
+| Branch           | Purpose                                                | Can push directly? |
+| ---------------- | ------------------------------------------------------ | ------------------ |
+| `main`           | Production release branch                               | **No** — PR only   |
+| `develop`        | Integration / staging                                   | **No** — PR only   |
+| `feat/*`         | New features                                            | Yes (your own)     |
+| `fix/*`          | Bug fixes                                               | Yes (your own)     |
+| `hotfix/*`       | Urgent production fixes (branched from main)            | Yes (your own)     |
+| `chore/*`        | Tooling, deps, refactors (no behavior change)           | Yes (your own)     |
+| `docs/*`         | Documentation only                                      | Yes (your own)     |
 
 ### Branch Protection Rules (configured on GitHub)
 
@@ -38,18 +40,38 @@ main              ← production-ready, protected, only receives PRs from v2.0.0
 - ✅ Restrict direct pushes that bypass a pull request
 - ✅ Restrict force pushes
 
-**`v2.0.0-dev`:**
+**`develop`:**
 - ✅ Require a pull request before merging
 - ✅ Require at least **1 approving review**
 - ✅ Require status checks to pass (CI lint)
 - ⚠️ Force pushes allowed (for rebasing feature branches)
 
+### Hotfix Workflow
+
+Hotfix branches address urgent production bugs:
+
+1. **Branch from `main`** (not `develop`):
+   ```bash
+   git checkout main
+   git pull origin main
+   git checkout -b hotfix/critical-payment-bug
+   ```
+2. **Apply the fix** and commit using `fix(scope): ...` convention.
+3. **Open PRs to BOTH `main` and `develop`** — the fix must reach
+   production and the integration branch:
+   ```bash
+   git push -u origin hotfix/critical-payment-bug
+   # Open PR 1: base = main
+   # Open PR 2: base = develop
+   ```
+4. After both PRs are merged, delete the hotfix branch.
+
 ### PR Lifecycle
 
-1. **Create a feature branch** from `v2.0.0-dev`:
+1. **Create a feature branch** from `develop`:
    ```bash
-   git checkout v2.0.0-dev
-   git pull origin v2.0.0-dev
+   git checkout develop
+   git pull origin develop
    git checkout -b feat/etims-integration
    ```
 
@@ -57,10 +79,10 @@ main              ← production-ready, protected, only receives PRs from v2.0.0
 
 3. **Self-review** — run `bun run lint` locally; ensure zero warnings.
 
-4. **Open a PR** against `v2.0.0-dev` (not `main`):
+4. **Open a PR** against `develop` (not `main`):
    ```bash
    git push -u origin feat/etims-integration
-   # Open PR on GitHub: base = v2.0.0-dev
+   # Open PR on GitHub: base = develop
    ```
 
 5. **PR template** — fill in:
@@ -76,10 +98,10 @@ main              ← production-ready, protected, only receives PRs from v2.0.0
    - Database changes (Prisma schema + `bun run db:push`)
    - No secrets / hardcoded credentials
 
-7. **Merge** — squash-and-merge into `v2.0.0-dev`.
+7. **Merge** — squash-and-merge into `develop`.
 
-8. **Release to `main`** — when `v2.0.0-dev` is stable and all milestones are
-   met, open a final PR: `v2.0.0-dev` → `main`. This triggers the Vercel
+8. **Release to `main`** — when `develop` is stable and all milestones are
+   met, open a final PR: `develop` → `main`. This triggers the Vercel
    production deployment.
 
 ---
@@ -239,3 +261,72 @@ bun run lint || exit 1
 - **Audit status** — see the Phase 2 checklist in `PROJECT_PLAN_V2.md`.
 - **Worklog** — `/home/z/my-project/worklog.md` contains the full development
   history and handover notes.
+
+---
+
+## 8. Deployment Troubleshooting
+
+### Vercel "Loading..." White Screen
+
+If the Vercel deployment shows a permanent "Loading..." screen:
+
+1. **Check browser console** for `X.map is not a function` errors — this means
+   an API response field expected to be an array is `undefined`/`null`.
+2. **Ensure `Array.isArray()` guards** are in every `useQuery` `queryFn` that
+   receives array data from the dashboard API.
+3. **Check ErrorBoundary behavior** — if the error overlay is dismissed and
+   children re-render, the same crash recurs, React unmounts the tree, and
+   the server-rendered "Loading..." HTML persists. The ErrorBoundary must
+   render a safe fallback when `dismissed=true`.
+4. **Verify environment variables** in Vercel Dashboard → Settings →
+   Environment Variables: `DATABASE_URL` (Neon pooled connection string),
+   `JWT_SECRET`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`.
+5. **Check Prisma provider** — the `scripts/setup-prisma-provider.mjs` script
+   must detect `postgresql://` in `DATABASE_URL` and set the schema provider
+   to `postgresql` (not `sqlite`). The `vercel-build` script in `package.json`
+   runs this automatically.
+6. **Force-dynamic API routes** — every `src/app/api/**/route.ts` must export
+   `dynamic = 'force-dynamic'` to prevent static pre-rendering during build.
+
+### Vercel Build Failures
+
+- `P1003 table does not exist`: Run `npx prisma db push` against the production
+  `DATABASE_URL` to create the schema.
+- `P1001 connection lost`: Verify `DATABASE_URL` uses the Neon **pooled**
+  connection string (hostname ends in `-pooler.neon.tech`).
+- `NEXTAUTH_URL` error: Ensure it matches the Vercel deployment URL exactly.
+
+### Database Connection Pooling
+
+Serverless functions (Vercel) open a new connection per invocation. You MUST use
+the **pooled** PgBouncer connection string from Neon/Supabase:
+
+- Neon: append `-pooler` to hostname + `?pgbouncer=true&connection_limit=1`
+- Supabase: use port 6543 (Transaction pooler)
+
+---
+
+## 9. Security
+
+### Required Secrets (GitHub + Vercel)
+
+| Secret              | Where   | Purpose                                              |
+| ------------------- | ------- | ---------------------------------------------------- |
+| `DATABASE_URL`      | Vercel  | Neon/Supabase pooled connection string               |
+| `DIRECT_URL`        | Vercel  | Neon/Supabase direct connection (migrations)         |
+| `JWT_SECRET`        | Vercel  | Signs auth tokens (`openssl rand -base64 32`)        |
+| `NEXTAUTH_SECRET`   | Vercel  | Signs NextAuth sessions                              |
+| `NEXTAUTH_URL`      | Vercel  | Canonical app URL (e.g. `https://mbumah-pos.vercel.app`) |
+| `VERCEL_TOKEN`      | GitHub  | Vercel deployment from CI                            |
+| `VERCEL_ORG_ID`     | GitHub  | Vercel organization                                  |
+| `VERCEL_PROJECT_ID` | GitHub  | Vercel project                                       |
+
+### Security Checklist (every PR)
+
+- [ ] No hardcoded secrets, API keys, or M-Pesa passkeys
+- [ ] New API routes use `requireAuth()` or `withErrorBoundary()`
+- [ ] Financial model mutations go through `withImmutabilityBypass(fn, reason)`
+- [ ] Multi-tenancy enforced (every query scoped by `storeId`)
+- [ ] CSRF token sent on state-changing requests (POST/PUT/DELETE)
+- [ ] Rate limiting applied on auth endpoints
+- [ ] Input validation via Zod schemas (`validateInput()`)
