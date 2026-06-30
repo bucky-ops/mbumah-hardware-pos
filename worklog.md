@@ -162,3 +162,74 @@ Work Log:
 Stage Summary:
 - Release v2.2.0 deployed
 - All sidebar enhancement phases complete
+
+---
+Task ID: refactor-v2.3.0
+Agent: Main Agent
+Task: Major Refactoring — page.tsx Monolith Decomposition + Middleware → Proxy Migration
+
+Work Log:
+- Analyzed page.tsx (5,324 lines) and identified 13+ extractable components/hooks/utilities
+- Created `src/lib/app-config.ts` — Extracted: TAB_CONFIG, DEMO_ACCOUNTS, CATEGORY_IMAGES, NAV_GROUPS, role arrays, filterTabsByRole(), getCategoryImage(), safeMap()
+- Created `src/hooks/use-live-clock.ts` — Extracted useLiveClock hook
+- Created `src/hooks/use-animated-counter.ts` — Extracted useAnimatedCounter hook
+- Created `src/hooks/use-notification-count.ts` — Extracted useNotificationCount hook
+- Created `src/components/confetti-overlay.tsx` — Extracted ConfettiOverlay component
+- Created `src/components/keyboard-shortcuts-help.tsx` — Extracted KeyboardShortcutsHelp dialog
+- Created `src/components/login-screen.tsx` — Extracted LoginScreen component
+- Created `src/components/notification-center.tsx` — Extracted NotificationCenter component
+- Created `src/components/layout/app-sidebar.tsx` — Extracted AppSidebar component
+- Created `src/components/layout/top-bar.tsx` — Extracted TopBar component
+- Created `src/app/tabs/pos-tab.tsx` — Extracted POSTab + all sub-components (QuickAddPopup, LowStockAlertDialog, MiniSparkline, DashboardStats, CategoryChips, ProductCard, CartItemRow, EmptyCartState, EmptyProductsState, CheckoutDialog, StkStatusPanel, escapeHtml)
+- Rewrote `src/app/page.tsx` from 5,324 lines → 288 lines (95% reduction)
+- Migrated `src/middleware.ts` → `src/proxy.ts` per Next.js 16 deprecation (renamed export from `middleware` to `proxy`)
+- Fixed all lint errors (0 errors after fixes): removed unused imports, added missing icon imports
+- Updated footer version from v1.0.0 to v2.2.0
+- POSTab now lazy-loaded like other tabs
+- Verified app renders correctly: login screen, dashboard, sidebar, top bar, footer
+- All API routes working correctly through proxy.ts
+
+Stage Summary:
+- page.tsx reduced from 5,324 to 288 lines (95% reduction)
+- 11 new files created for better code organization
+- Middleware → Proxy migration completed (no more deprecation warning)
+- Lint: 0 errors
+- App verified working with agent-browser (login, dashboard, sidebar, API calls)
+- Cron job ID: 242093 (15-minute QA review)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PROJECT STATUS SUMMARY (Updated)
+# ─────────────────────────────────────────────────────────────────────────────
+
+## Current Project Status
+- **Version**: v2.3.0 (pending git push)
+- **Server**: Dev server functional with improved memory usage (page.tsx is now 288 lines)
+- **Lint**: 0 errors, warnings are pre-existing
+- **Architecture**: Major refactoring complete — monolith decomposed into 11+ files
+- **Proxy**: middleware.ts migrated to proxy.ts (Next.js 16 convention)
+
+## Completed Modifications
+1. **page.tsx Refactoring**: 5,324 → 288 lines (95% reduction)
+   - Constants → `src/lib/app-config.ts`
+   - Hooks → `src/hooks/use-live-clock.ts`, `use-animated-counter.ts`, `use-notification-count.ts`
+   - LoginScreen → `src/components/login-screen.tsx`
+   - AppSidebar → `src/components/layout/app-sidebar.tsx`
+   - TopBar → `src/components/layout/top-bar.tsx`
+   - NotificationCenter → `src/components/notification-center.tsx`
+   - ConfettiOverlay → `src/components/confetti-overlay.tsx`
+   - KeyboardShortcutsHelp → `src/components/keyboard-shortcuts-help.tsx`
+   - POSTab + sub-components → `src/app/tabs/pos-tab.tsx`
+2. **Middleware → Proxy**: `src/middleware.ts` deleted, `src/proxy.ts` created with `export async function proxy()`
+
+## Unresolved Issues / Risks
+1. **Dev server memory**: pos-tab.tsx is still 3,600 lines — could be further split
+2. **Neon credentials exposed**: Database password should be rotated
+3. **Production seed**: Purchase Order data count is 0 on Neon production database
+4. **pos-tab.tsx size**: 3,600 lines — sub-components (CheckoutDialog, ProductCard, etc.) could be further extracted into separate files under `src/components/pos/`
+
+## Priority Recommendations for Next Phase
+1. Further split pos-tab.tsx into smaller modules (CheckoutDialog, ProductCard, etc.)
+2. Seed production Neon database with Purchase Order data
+3. Rotate Neon database credentials
+4. Add more features: receipt printing, email notifications, batch operations
+5. Enhance UI styling with more detail and animations

@@ -1,4 +1,5 @@
-// Next.js Middleware — Comprehensive security layer for /api/* routes
+// Next.js 16 Proxy — Comprehensive security layer for /api/* routes
+// Migrated from deprecated "middleware" convention to "proxy" convention.
 // Layers: Rate limiting → Request size → CSRF → Content-Type → Auth → Response headers
 //
 // IMPORTANT: This runs in Edge Runtime. NO imports that touch Prisma/Node.js APIs.
@@ -158,7 +159,7 @@ function getRateLimitTier(pathname: string, method: string): RateLimitTier {
 
 // ── Main Middleware ─────────────────────────────────────────────────────────
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const method = request.method;
 
