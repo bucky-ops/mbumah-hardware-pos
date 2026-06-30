@@ -124,7 +124,7 @@ function ConversationList({
     refetchInterval: 10_000, // Poll for new conversations every 10s
   });
 
-  const conversations = data?.data ?? [];
+  const conversations = Array.isArray(data?.data) ? data.data : [];
 
   const filtered = useMemo(() => {
     if (!search) return conversations;
@@ -313,7 +313,7 @@ function ConversationThread({
     refetchInterval: 5_000, // Poll for new messages every 5s
   });
 
-  const messages = messagesData?.data ?? [];
+  const messages = Array.isArray(messagesData?.data) ? messagesData.data : [];
   const conversation = conversationData?.data;
 
   // Auto-scroll to bottom when new messages arrive.
@@ -595,7 +595,7 @@ function ConversationSettingsDialog({
     queryFn: () => usersApi.list(storeId),
     enabled: open && !!storeId,
   });
-  const storeUsers = usersData?.data ?? [];
+  const storeUsers = Array.isArray(usersData?.data) ? usersData.data : [];
   const eligibleUsers = storeUsers.filter(
     (u: { id: string; isActive: boolean }) =>
       u.isActive && !conversation.participantIds.includes(u.id),
@@ -767,7 +767,7 @@ function NewConversationDialog({
     queryFn: () => usersApi.list(storeId),
     enabled: open && !!storeId,
   });
-  const storeUsers = (usersData?.data ?? []).filter((u: { isActive: boolean }) => u.isActive);
+  const storeUsers = (Array.isArray(usersData?.data) ? usersData.data : []).filter((u: { isActive: boolean }) => u.isActive);
 
   // State defaults are already correct. The parent remounts this component
   // (via `key`) whenever the dialog opens, so state is always fresh — no

@@ -399,11 +399,12 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
   const [form, setForm] = useState<EmployeeFormState>(EMPTY_FORM);
   const [detailEmployee, setDetailEmployee] = useState<Employee | null>(null);
 
-  const { data: employees = [], isLoading, error } = useQuery<Employee[]>({
+  const { data: employeesData, isLoading, error } = useQuery<Employee[]>({
     queryKey: ['payroll-employees', storeId],
     queryFn: () => apiFetch(`/api/employees?storeId=${storeId}`),
     enabled: !!storeId,
   });
+  const employees = Array.isArray(employeesData) ? employeesData : [];
 
   const createMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
@@ -885,16 +886,18 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState('ALL');
 
-  const { data: leaves = [], isLoading, error } = useQuery<LeaveRequest[]>({
+  const { data: leavesData, isLoading, error } = useQuery<LeaveRequest[]>({
     queryKey: ['payroll-leaves', storeId],
     queryFn: () => apiFetch(`/api/leaves?storeId=${storeId}&balances=true`),
     enabled: !!storeId,
   });
+  const leaves = Array.isArray(leavesData) ? leavesData : [];
 
-  const { data: leaveTypes = [] } = useQuery<LeaveType[]>({
+  const { data: leaveTypesData } = useQuery<LeaveType[]>({
     queryKey: ['payroll-leave-types'],
     queryFn: () => apiFetch('/api/leave-types'),
   });
+  const leaveTypes = Array.isArray(leaveTypesData) ? leaveTypesData : [];
 
   const actionMutation = useMutation({
     mutationFn: ({ action, leaveRequestId }: { action: string; leaveRequestId: string }) =>
@@ -1049,11 +1052,12 @@ function PeriodsSubTab({ storeId }: { storeId: string }) {
     name: '', startDate: '', endDate: '', payDate: '', periodType: 'MONTHLY', notes: '',
   });
 
-  const { data: periods = [], isLoading, error } = useQuery<PayrollPeriod[]>({
+  const { data: periodsData, isLoading, error } = useQuery<PayrollPeriod[]>({
     queryKey: ['payroll-periods', storeId],
     queryFn: () => apiFetch(`/api/payroll/periods?storeId=${storeId}`),
     enabled: !!storeId,
   });
+  const periods = Array.isArray(periodsData) ? periodsData : [];
 
   const createMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
@@ -1210,19 +1214,21 @@ function RunsSubTab({ storeId }: { storeId: string }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<RunForm>({ payrollPeriodId: '', runType: 'FULL', processImmediately: true });
 
-  const { data: runs = [], isLoading, error } = useQuery<PayrollRun[]>({
+  const { data: runsData, isLoading, error } = useQuery<PayrollRun[]>({
     queryKey: ['payroll-runs', storeId],
     queryFn: () => apiFetch(`/api/payroll/runs?storeId=${storeId}`),
     enabled: !!storeId,
   });
+  const runs = Array.isArray(runsData) ? runsData : [];
 
-  const { data: periods = [] } = useQuery<PayrollPeriod[]>({
+  const { data: periodsForDropdownData } = useQuery<PayrollPeriod[]>({
     queryKey: ['payroll-periods', storeId],
     queryFn: () => apiFetch(`/api/payroll/periods?storeId=${storeId}`),
     enabled: !!storeId,
   });
+  const periodsForDropdown = Array.isArray(periodsForDropdownData) ? periodsForDropdownData : [];
 
-  const openPeriods = periods.filter((p) => p.status === 'OPEN' || p.status === 'DRAFT');
+  const openPeriods = periodsForDropdown.filter((p) => p.status === 'OPEN' || p.status === 'DRAFT');
 
   const createMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
@@ -1388,17 +1394,19 @@ function AttendanceSubTab({ storeId }: { storeId: string }) {
   const [endDate, setEndDate] = useState(today);
   const [clockEmpId, setClockEmpId] = useState('');
 
-  const { data: records = [], isLoading, error } = useQuery<AttendanceRecord[]>({
+  const { data: recordsData, isLoading, error } = useQuery<AttendanceRecord[]>({
     queryKey: ['payroll-attendance', storeId, startDate, endDate],
     queryFn: () => apiFetch(`/api/attendance?storeId=${storeId}&startDate=${startDate}&endDate=${endDate}`),
     enabled: !!storeId,
   });
+  const records = Array.isArray(recordsData) ? recordsData : [];
 
-  const { data: employees = [] } = useQuery<Employee[]>({
+  const { data: employeesForAttendanceData } = useQuery<Employee[]>({
     queryKey: ['payroll-employees', storeId],
     queryFn: () => apiFetch(`/api/employees?storeId=${storeId}`),
     enabled: !!storeId,
   });
+  const employeesForAttendance = Array.isArray(employeesForAttendanceData) ? employeesForAttendanceData : [];
 
   const clockMutation = useMutation({
     mutationFn: ({ employeeId, action }: { employeeId: string; action: string }) =>
@@ -1435,7 +1443,7 @@ function AttendanceSubTab({ storeId }: { storeId: string }) {
               <Select value={clockEmpId} onValueChange={setClockEmpId}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select employee..." /></SelectTrigger>
                 <SelectContent>
-                  {employees.filter((e) => e.status === 'ACTIVE').map((e) => (
+                  {employeesForAttendance.filter((e) => e.status === 'ACTIVE').map((e) => (
                     <SelectItem key={e.id} value={e.id}>{e.fullName} — {e.jobTitle || 'Staff'}</SelectItem>
                   ))}
                 </SelectContent>

@@ -33,7 +33,7 @@ function stage(n: number, total: number, name: string): (status: 'ok' | 'skipped
   };
 }
 
-const TOTAL_STAGES = 22;
+const TOTAL_STAGES = 23;
 
 // Generate date N days ago
 function daysAgo(n: number): Date {
@@ -1800,12 +1800,263 @@ async function seedBody() {
   console.log('   💵 Payroll period seeded: ' + payrollPeriod.name + ' (OPEN)');
 
   // ==========================================================================
-  // 22. Log the initialization event
+  // 22. SEED PURCHASE ORDERS (Juja Main store)
+  // ==========================================================================
+  console.log('Seeding purchase orders...');
+
+  // Helper: format date as YYYYMMDD
+  const poDateStr = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}${m}${day}`;
+  };
+
+  // Juja Main supplier IDs (from Stage 18)
+  const jujaSuppliers = {
+    bamburi: 'sup_juja_bamburi',
+    mabati: 'sup_juja_mabati',
+    dulux: 'sup_juja_dulux',
+  };
+
+  // Juja Main product IDs (from Stage 7)
+  const jujaProducts = {
+    cement: 'prod_cement_bamburi',
+    mabati30: 'prod_mabati_30',
+    dulux20l: 'prod_dulux_20l',
+    rebar12mm: 'prod_rebar_12mm',
+    mabati28: 'prod_mabati_28',
+    crown20l: 'prod_crown_20l',
+    rebar10mm: 'prod_rebar_10mm',
+    nails4inch: 'prod_nails_4inch',
+  };
+
+  // PO-1: RECEIVED — fully received order from Bamburi Cement (~2 weeks ago)
+  const po1Date = daysAgo(14);
+  const po1Items = [
+    { productId: jujaProducts.cement, productName: 'Bamburi Cement 50kg', quantity: 100, unitCost: 680, totalCost: 100 * 680, receivedQty: 100 },
+    { productId: jujaProducts.mabati30, productName: 'Mabati 30-Gauge (8ft)', quantity: 200, unitCost: 580, totalCost: 200 * 580, receivedQty: 200 },
+    { productId: jujaProducts.dulux20l, productName: 'Dulux Weathershield 20L', quantity: 20, unitCost: 7200, totalCost: 20 * 7200, receivedQty: 20 },
+    { productId: jujaProducts.rebar12mm, productName: 'Rebar 12mm x 12m', quantity: 150, unitCost: 1050, totalCost: 150 * 1050, receivedQty: 150 },
+  ];
+  const po1SubTotal = po1Items.reduce((sum, i) => sum + i.totalCost, 0);
+  const po1Tax = Math.round(po1SubTotal * 0.16);
+  const po1Total = po1SubTotal + po1Tax;
+
+  const po1Number = `PO-${poDateStr(po1Date)}-0001`;
+  const existingPO1 = await prisma.purchaseOrder.findUnique({ where: { poNumber: po1Number } });
+  if (!existingPO1) {
+    await prisma.purchaseOrder.create({
+      data: {
+        storeId: store.id,
+        poNumber: po1Number,
+        supplierId: jujaSuppliers.bamburi,
+        status: 'RECEIVED',
+        orderDate: po1Date,
+        expectedDate: daysAgo(10),
+        subTotal: po1SubTotal,
+        taxAmount: po1Tax,
+        totalAmount: po1Total,
+        notes: 'Routine restocking order — fully received.',
+        createdById: 'user_super_admin',
+        approvedById: 'user_super_admin',
+        approvedAt: daysAgoAtHour(13, 10),
+        receivedById: 'user_super_admin',
+        receivedAt: daysAgoAtHour(10, 14),
+        items: {
+          create: po1Items.map(i => ({
+            productId: i.productId,
+            productName: i.productName,
+            quantity: i.quantity,
+            unitCost: i.unitCost,
+            totalCost: i.totalCost,
+            receivedQty: i.receivedQty,
+          })),
+        },
+      },
+    });
+  }
+
+  // PO-2: APPROVED — approved but not yet sent (~1 week ago)
+  const po2Date = daysAgo(7);
+  const po2Items = [
+    { productId: jujaProducts.mabati28, productName: 'Mabati 28-Gauge (8ft)', quantity: 100, unitCost: 720, totalCost: 100 * 720, receivedQty: 0 },
+    { productId: jujaProducts.crown20l, productName: 'Crown Vinyl Silk 20L', quantity: 15, unitCost: 5500, totalCost: 15 * 5500, receivedQty: 0 },
+    { productId: jujaProducts.rebar10mm, productName: 'Rebar 10mm x 12m', quantity: 80, unitCost: 780, totalCost: 80 * 780, receivedQty: 0 },
+  ];
+  const po2SubTotal = po2Items.reduce((sum, i) => sum + i.totalCost, 0);
+  const po2Tax = Math.round(po2SubTotal * 0.16);
+  const po2Total = po2SubTotal + po2Tax;
+
+  const po2Number = `PO-${poDateStr(po2Date)}-0002`;
+  const existingPO2 = await prisma.purchaseOrder.findUnique({ where: { poNumber: po2Number } });
+  if (!existingPO2) {
+    await prisma.purchaseOrder.create({
+      data: {
+        storeId: store.id,
+        poNumber: po2Number,
+        supplierId: jujaSuppliers.mabati,
+        status: 'APPROVED',
+        orderDate: po2Date,
+        expectedDate: daysAgo(3),
+        subTotal: po2SubTotal,
+        taxAmount: po2Tax,
+        totalAmount: po2Total,
+        notes: 'Urgent order for upcoming construction season.',
+        createdById: 'user_super_admin',
+        approvedById: 'user_super_admin',
+        approvedAt: daysAgoAtHour(6, 11),
+        items: {
+          create: po2Items.map(i => ({
+            productId: i.productId,
+            productName: i.productName,
+            quantity: i.quantity,
+            unitCost: i.unitCost,
+            totalCost: i.totalCost,
+            receivedQty: i.receivedQty,
+          })),
+        },
+      },
+    });
+  }
+
+  // PO-3: PARTIALLY_RECEIVED — partially received (~3 weeks ago)
+  const po3Date = daysAgo(21);
+  const po3Items = [
+    { productId: jujaProducts.cement, productName: 'Bamburi Cement 50kg', quantity: 200, unitCost: 680, totalCost: 200 * 680, receivedQty: 200 },
+    { productId: jujaProducts.mabati30, productName: 'Mabati 30-Gauge (8ft)', quantity: 300, unitCost: 580, totalCost: 300 * 580, receivedQty: 300 },
+    { productId: jujaProducts.dulux20l, productName: 'Dulux Weathershield 20L', quantity: 30, unitCost: 7200, totalCost: 30 * 7200, receivedQty: 12 }, // partially received
+  ];
+  const po3SubTotal = po3Items.reduce((sum, i) => sum + i.totalCost, 0);
+  const po3Tax = Math.round(po3SubTotal * 0.16);
+  const po3Total = po3SubTotal + po3Tax;
+
+  const po3Number = `PO-${poDateStr(po3Date)}-0003`;
+  const existingPO3 = await prisma.purchaseOrder.findUnique({ where: { poNumber: po3Number } });
+  if (!existingPO3) {
+    await prisma.purchaseOrder.create({
+      data: {
+        storeId: store.id,
+        poNumber: po3Number,
+        supplierId: jujaSuppliers.dulux,
+        status: 'PARTIALLY_RECEIVED',
+        orderDate: po3Date,
+        expectedDate: daysAgo(14),
+        subTotal: po3SubTotal,
+        taxAmount: po3Tax,
+        totalAmount: po3Total,
+        notes: 'Partial delivery — Dulux paint backordered by supplier. Cement and mabati delivered in full.',
+        createdById: 'user_super_admin',
+        approvedById: 'user_super_admin',
+        approvedAt: daysAgoAtHour(20, 9),
+        receivedById: 'user_super_admin',
+        receivedAt: daysAgoAtHour(14, 15),
+        items: {
+          create: po3Items.map(i => ({
+            productId: i.productId,
+            productName: i.productName,
+            quantity: i.quantity,
+            unitCost: i.unitCost,
+            totalCost: i.totalCost,
+            receivedQty: i.receivedQty,
+          })),
+        },
+      },
+    });
+  }
+
+  // PO-4: DRAFT — a draft order (created today)
+  const po4Date = new Date();
+  const po4Items = [
+    { productId: jujaProducts.nails4inch, productName: '4-inch Nails', quantity: 200, unitCost: 110, totalCost: 200 * 110, receivedQty: 0 },
+    { productId: jujaProducts.rebar10mm, productName: 'Rebar 10mm x 12m', quantity: 50, unitCost: 780, totalCost: 50 * 780, receivedQty: 0 },
+  ];
+  const po4SubTotal = po4Items.reduce((sum, i) => sum + i.totalCost, 0);
+  const po4Tax = Math.round(po4SubTotal * 0.16);
+  const po4Total = po4SubTotal + po4Tax;
+
+  const po4Number = `PO-${poDateStr(po4Date)}-0004`;
+  const existingPO4 = await prisma.purchaseOrder.findUnique({ where: { poNumber: po4Number } });
+  if (!existingPO4) {
+    await prisma.purchaseOrder.create({
+      data: {
+        storeId: store.id,
+        poNumber: po4Number,
+        supplierId: jujaSuppliers.bamburi,
+        status: 'DRAFT',
+        orderDate: po4Date,
+        subTotal: po4SubTotal,
+        taxAmount: po4Tax,
+        totalAmount: po4Total,
+        notes: 'Draft — pending review before sending to supplier.',
+        createdById: 'user_super_admin',
+        items: {
+          create: po4Items.map(i => ({
+            productId: i.productId,
+            productName: i.productName,
+            quantity: i.quantity,
+            unitCost: i.unitCost,
+            totalCost: i.totalCost,
+            receivedQty: i.receivedQty,
+          })),
+        },
+      },
+    });
+  }
+
+  // PO-5: CANCELLED — a cancelled order (~1 month ago)
+  const po5Date = daysAgo(30);
+  const po5Items = [
+    { productId: jujaProducts.cement, productName: 'Bamburi Cement 50kg', quantity: 50, unitCost: 680, totalCost: 50 * 680, receivedQty: 0 },
+    { productId: jujaProducts.mabati30, productName: 'Mabati 30-Gauge (8ft)', quantity: 100, unitCost: 580, totalCost: 100 * 580, receivedQty: 0 },
+  ];
+  const po5SubTotal = po5Items.reduce((sum, i) => sum + i.totalCost, 0);
+  const po5Tax = Math.round(po5SubTotal * 0.16);
+  const po5Total = po5SubTotal + po5Tax;
+
+  const po5Number = `PO-${poDateStr(po5Date)}-0005`;
+  const existingPO5 = await prisma.purchaseOrder.findUnique({ where: { poNumber: po5Number } });
+  if (!existingPO5) {
+    await prisma.purchaseOrder.create({
+      data: {
+        storeId: store.id,
+        poNumber: po5Number,
+        supplierId: jujaSuppliers.mabati,
+        status: 'CANCELLED',
+        orderDate: po5Date,
+        expectedDate: daysAgo(23),
+        subTotal: po5SubTotal,
+        taxAmount: po5Tax,
+        totalAmount: po5Total,
+        notes: 'Cancelled — supplier could not meet delivery timeline. Will reorder from alternative supplier.',
+        createdById: 'user_super_admin',
+        approvedById: 'user_super_admin',
+        approvedAt: daysAgoAtHour(29, 14),
+        cancelledById: 'user_super_admin',
+        cancelledAt: daysAgoAtHour(28, 9),
+        items: {
+          create: po5Items.map(i => ({
+            productId: i.productId,
+            productName: i.productName,
+            quantity: i.quantity,
+            unitCost: i.unitCost,
+            totalCost: i.totalCost,
+            receivedQty: i.receivedQty,
+          })),
+        },
+      },
+    });
+  }
+
+  console.log('   📦 Purchase Orders seeded: 5 (RECEIVED, APPROVED, PARTIALLY_RECEIVED, DRAFT, CANCELLED)');
+
+  // ==========================================================================
+  // 23. Log the initialization event
   // ==========================================================================
   await prisma.initializationLog.create({
     data: {
       event: 'SYSTEM_INITIALIZED',
-      details: 'MBUMAH HARDWARE POS system initialized with default Super Admin, demo store, products, sales transactions, and accounts.',
+      details: 'MBUMAH HARDWARE POS system initialized with default Super Admin, demo store, products, sales transactions, purchase orders, and accounts.',
     },
   });
 
@@ -1836,6 +2087,7 @@ async function seedBody() {
   console.log('   🗄️ Cash drawer logs seeded: ' + cashDrawerLogs.length);
   console.log('   📝 Expenses seeded: ' + (expenses.length + branchExpenses.length));
   console.log('   🏭 Suppliers seeded: ' + suppliers.length);
+  console.log('   📦 Purchase Orders seeded: 5 (Juja Main)');
   console.log('   🎁 Gift cards seeded: 14');
   console.log('   🎁 Gift card redemptions seeded: ' + giftCardRedemptions.length);
 }

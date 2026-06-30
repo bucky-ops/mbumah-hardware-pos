@@ -114,11 +114,11 @@ async function fetchDashboard(): Promise<SecurityDashboardData> {
     blockedAttempts: data?.overview?.blockedAttempts24h ?? 0,
     criticalEvents: data?.overview?.criticalEvents24h ?? 0,
     activeSessions: data?.overview?.activeSessions ?? 0,
-    eventsByType: data?.breakdown?.byType ?? [],
-    eventsBySeverity: data?.breakdown?.bySeverity ?? [],
-    topIPs: data?.topTargets?.ips ?? [],
-    recentCritical: data?.recentCritical ?? [],
-    timeline: data?.timeline ?? [],
+    eventsByType: Array.isArray(data?.breakdown?.byType) ? data.breakdown.byType : [],
+    eventsBySeverity: Array.isArray(data?.breakdown?.bySeverity) ? data.breakdown.bySeverity : [],
+    topIPs: Array.isArray(data?.topTargets?.ips) ? data.topTargets.ips : [],
+    recentCritical: Array.isArray(data?.recentCritical) ? data.recentCritical : [],
+    timeline: Array.isArray(data?.timeline) ? data.timeline : [],
   };
 }
 

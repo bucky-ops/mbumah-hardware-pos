@@ -4020,3 +4020,65 @@ Stage Summary:
 - Vercel deployment verified working — no "Loading..." state
 - Production `eL.map is not a function` crash is FULLY RESOLVED
 - Release v2.0.1 includes: critical UI fix, defensive hardening across 28+ components, API utility 3-layer defense, ErrorBoundary crash-loop prevention, SectionErrorBoundary per-tab isolation, CONTRIBUTING.md, CI/CD pipeline, VERIFICATION_CHECKLIST.md
+
+---
+Task ID: 1b
+Agent: Code Agent
+Task: Fix defensive coding issues in 3 tab components — replace ?? [] and = [] with Array.isArray() guards
+
+Work Log:
+- conversations-tab.tsx: Replaced 4 instances of `?? []` with `Array.isArray()` guards:
+  - Line 127: `data?.data ?? []` → `Array.isArray(data?.data) ? data.data : []`
+  - Line 316: `messagesData?.data ?? []` → `Array.isArray(messagesData?.data) ? messagesData.data : []`
+  - Line 598: `usersData?.data ?? []` → `Array.isArray(usersData?.data) ? usersData.data : []`
+  - Line 770: `(usersData?.data ?? []).filter(...)` → `(Array.isArray(usersData?.data) ? usersData.data : []).filter(...)`
+- security-tab.tsx: Replaced 5 instances of `?? []` with `Array.isArray()` guards in the data mapping return object:
+  - `data?.breakdown?.byType ?? []` → `Array.isArray(data?.breakdown?.byType) ? data.breakdown.byType : []`
+  - `data?.breakdown?.bySeverity ?? []` → `Array.isArray(data?.breakdown?.bySeverity) ? data.breakdown.bySeverity : []`
+  - `data?.topTargets?.ips ?? []` → `Array.isArray(data?.topTargets?.ips) ? data.topTargets.ips : []`
+  - `data?.recentCritical ?? []` → `Array.isArray(data?.recentCritical) ? data.recentCritical : []`
+  - `data?.timeline ?? []` → `Array.isArray(data?.timeline) ? data.timeline : []`
+- payroll-tab.tsx: Replaced 8 instances of `= []` default destructuring with explicit `Array.isArray()` checks:
+  - EmployeesSubTab: `employees = []` → separate `employeesData` destructuring + `Array.isArray` guard
+  - LeaveSubTab: `leaves = []` and `leaveTypes = []` → separate vars + guards
+  - PeriodsSubTab: `periods = []` → separate var + guard
+  - RunsSubTab: `runs = []` → separate var + guard; `periods = []` → `periodsForDropdownData` + guard (renamed to avoid shadowing)
+  - AttendanceSubTab: `records = []` → separate var + guard; `employees = []` → `employeesForAttendanceData` + guard (renamed to avoid shadowing)
+- Fixed downstream references: `periods.filter(...)` → `periodsForDropdown.filter(...)`, `employees.filter(...)` → `employeesForAttendance.filter(...)`
+- Lint result: 0 errors, 346 warnings (all pre-existing, none from our changes)
+
+Stage Summary:
+- All 3 tab components now use `Array.isArray()` runtime guards instead of `?? []` or `= []` defaults
+- This prevents `.map()` crashes when API returns non-array objects (e.g., `{ error: "..." }`)
+- No functional changes — all existing logic preserved
+
+---
+
+## Task 4: Add PurchaseOrder seed data
+
+**Status**: ✅ Completed
+
+**What was done**:
+- Added Stage 22 "SEED PURCHASE ORDERS" to `/home/z/my-project/prisma/seed.ts`
+- Incremented `TOTAL_STAGES` from 22 to 23
+- Renumbered old Stage 22 (Initialization Log) to Stage 23
+- Created 5 sample PurchaseOrders for the Juja Main store:
+
+1. **PO-1** (`PO-YYYYMMDD-0001`): RECEIVED — 4 items (Cement, Mabati, Dulux, Rebar) from Bamburi Cement, all fully received, ~2 weeks ago
+2. **PO-2** (`PO-YYYYMMDD-0002`): APPROVED — 3 items (Mabati 28-gauge, Crown Paint, Rebar 10mm) from Mabati Rolling Mills, ~1 week ago
+3. **PO-3** (`PO-YYYYMMDD-0003`): PARTIALLY_RECEIVED — 3 items from AkzoNobel/Dulux, 2 fully received + 1 partial (Dulux 12/30 received), ~3 weeks ago
+4. **PO-4** (`PO-YYYYMMDD-0004`): DRAFT — 2 items (Nails, Rebar) from Bamburi, created today
+5. **PO-5** (`PO-YYYYMMDD-0005`): CANCELLED — 2 items from Mabati Rolling Mills, ~1 month ago
+
+**Key design decisions**:
+- Used existing supplier IDs from Stage 18 (`sup_juja_bamburi`, `sup_juja_mabati`, `sup_juja_dulux`)
+- Used existing product IDs from Stage 7 (Juja Main products)
+- poNumber follows `PO-YYYYMMDD-XXXX` pattern
+- Each PO is idempotent: checks `findUnique` by poNumber before creating
+- Tax calculated at 16% (Kenya VAT) on subTotal
+- subTotal = sum of item totalCosts (quantity × unitCost)
+- totalAmount = subTotal + taxAmount
+- Updated initialization log details string to mention purchase orders
+- Added PO count to the final seed summary
+
+**Lint result**: 0 errors, 349 warnings (all pre-existing)

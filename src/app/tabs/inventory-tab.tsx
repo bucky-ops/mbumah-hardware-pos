@@ -9,7 +9,7 @@ import {
   Minus, BarChart3, ChevronUp, ChevronDown, ChevronsUpDown,
   Download, History, RotateCcw, X, ImageIcon,
   Filter, ChevronRight, Tag, Palette, Zap, ShoppingCart, Info,
-  MessageCircle
+  MessageCircle, RefreshCw
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
@@ -250,7 +250,7 @@ export default function InventoryTab() {
     };
   }, [searchQuery]);
 
-  const { data: productsData, isLoading } = useQuery({
+  const { data: productsData, isLoading, isError: isProductsError, refetch: refetchProducts } = useQuery({
     queryKey: ['products', currentStoreId, debouncedSearch, selectedCategory],
     queryFn: () => productsApi.list({
       storeId: currentStoreId,
@@ -1005,6 +1005,14 @@ export default function InventoryTab() {
               {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="flex gap-4"><Skeleton className="h-10 flex-1" /></div>
               ))}
+            </div>
+          ) : isProductsError ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <AlertCircle className="h-10 w-10 text-red-500" />
+              <p className="text-sm text-muted-foreground">Failed to load products</p>
+              <Button variant="outline" size="sm" onClick={() => refetchProducts()} className="gap-2">
+                <RefreshCw className="h-3.5 w-3.5" /> Retry
+              </Button>
             </div>
           ) : (
             <div className="overflow-x-auto">
