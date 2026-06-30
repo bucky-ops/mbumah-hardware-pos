@@ -722,7 +722,7 @@ function TopProductsTable({ storeId }: { storeId: string }) {
   });
 
   const topProducts: TopProduct[] = useMemo(() => {
-    if (data?.topProducts && data.topProducts.length > 0) {
+    if (Array.isArray(data?.topProducts) && data.topProducts.length > 0) {
       return data.topProducts.slice(0, 5);
     }
     // Demo data

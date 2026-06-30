@@ -844,7 +844,7 @@ function InvoiceDetailDialog({
                 <p className="text-xs font-medium text-muted-foreground">VAT BREAKDOWN</p>
               </div>
               <div className="p-3 space-y-2">
-                {breakdown.items.map((item, i) => (
+                {Array.isArray(breakdown.items) && breakdown.items.map((item, i) => (
                   <div key={i} className="flex items-center justify-between text-xs">
                     <span className="flex-1 truncate">{item.name} × {item.quantity}</span>
                     <span className="text-muted-foreground mx-2">VAT {item.vatRate}%</span>
