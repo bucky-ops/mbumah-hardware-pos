@@ -304,3 +304,28 @@ Stage Summary:
 3. Rotate Neon database credentials
 4. Add more features: receipt printing, email notifications, batch operations
 5. Enhance UI styling with more detail and animations
+
+---
+Task ID: rehydrate-fix-1
+Agent: Main Agent
+Task: Fix Zustand rehydrate crash — TypeError: Cannot read properties of undefined (reading 'rehydrate')
+
+Work Log:
+- ROOT CAUSE: `useAppStore.persist.rehydrate()` called in page.tsx line 256, but `useAppStore` did NOT use `persist` middleware — `.persist` was `undefined`
+- SECONDARY BUG: `getSidebarState` destructured from `useAppStore()` in app-sidebar.tsx line 22, but function did NOT exist in the store interface — caused "getSidebarState is not a function" crash
+- Fix 1: Added `persist` middleware to `useAppStore` with `name: 'mbt_app_store'`, `skipHydration: true`, and `partialize()` to only persist activeTab, isSidebarCollapsed, currentStoreId
+- Fix 2: Added `getSidebarState(isDesktop: boolean)` method to useAppStore that returns SidebarState ('expanded' | 'collapsed' | 'mobile-overlay')
+- Fix 3: Added `SidebarState` type export
+- Fix 4: Made rehydrate call defensive: `if (useAppStore?.persist?.rehydrate) { useAppStore.persist.rehydrate(); }` wrapped in try/catch
+- Fix 5: Added `suppressHydrationWarning` to `<body>` tag in layout.tsx for persist-related hydration mismatches
+- Imported `persist` from `zustand/middleware` in stores.ts
+- Lint: 0 errors
+- Dev server: Compiles and serves 200 OK successfully
+- Git: Committed a7c685a, pushed to origin/main
+
+Stage Summary:
+- TypeError crash completely resolved — persist middleware added to useAppStore
+- getSidebarState() method added — sidebar state derivation now works correctly
+- Sidebar collapse state persists across page refreshes via localStorage
+- SSR-safe: skipHydration + defensive rehydrate call in useEffect
+- Commit: a7c685a pushed to origin/main
