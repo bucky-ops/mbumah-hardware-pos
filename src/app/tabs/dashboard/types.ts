@@ -8,7 +8,7 @@
 
 import type React from 'react';
 
-export type KpiMetricKey = 'revenue' | 'transactions' | 'lowStock' | 'debt';
+export type KpiMetricKey = 'revenue' | 'transactions' | 'avgTransaction' | 'lowStock' | 'debt';
 
 export interface KpiDetail {
   metricKey: KpiMetricKey;

@@ -343,6 +343,16 @@ function SalesOverview({ storeId }: { storeId: string }) {
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={revenueChartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                <defs>
+                  <linearGradient id="barRevenueGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#10b981" stopOpacity={1} />
+                    <stop offset="100%" stopColor="#059669" stopOpacity={0.7} />
+                  </linearGradient>
+                  <linearGradient id="barExpensesGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.8} />
+                    <stop offset="100%" stopColor="#d97706" stopOpacity={0.5} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" />
                 <XAxis
                   dataKey="label"
@@ -355,8 +365,8 @@ function SalesOverview({ storeId }: { storeId: string }) {
                   tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`}
                 />
                 <RechartsTooltip content={<ChartTooltipContent valuePrefix="KES " />} />
-                <Bar dataKey="revenue" name="Revenue" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                <Bar dataKey="expenses" name="Expenses" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={40} opacity={0.6} />
+                <Bar dataKey="revenue" name="Revenue" fill="url(#barRevenueGrad)" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                <Bar dataKey="expenses" name="Expenses" fill="url(#barExpensesGrad)" radius={[4, 4, 0, 0]} maxBarSize={40} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -513,6 +523,7 @@ function QuickActions({ onTabSwitch }: { onTabSwitch: (tab: AppTab) => void }) {
       label: 'New Sale',
       icon: ShoppingCart,
       color: 'text-green-600 dark:text-green-400',
+      iconCircle: 'bg-green-200 dark:bg-green-800/50',
       bg: 'bg-green-50 hover:bg-green-100 dark:bg-green-950/30 dark:hover:bg-green-950/50 border-green-200 dark:border-green-800',
       tab: 'pos' as AppTab,
       onClick: () => onTabSwitch('pos'),
@@ -521,6 +532,7 @@ function QuickActions({ onTabSwitch }: { onTabSwitch: (tab: AppTab) => void }) {
       label: 'Add Product',
       icon: Plus,
       color: 'text-emerald-600 dark:text-emerald-400',
+      iconCircle: 'bg-emerald-200 dark:bg-emerald-800/50',
       bg: 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800',
       tab: 'inventory' as AppTab,
       onClick: () => onTabSwitch('inventory'),
@@ -529,6 +541,7 @@ function QuickActions({ onTabSwitch }: { onTabSwitch: (tab: AppTab) => void }) {
       label: 'Record Expense',
       icon: Receipt,
       color: 'text-amber-600 dark:text-amber-400',
+      iconCircle: 'bg-amber-200 dark:bg-amber-800/50',
       bg: 'bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-950/50 border-amber-200 dark:border-amber-800',
       tab: null,
       onClick: () => setExpenseDialogOpen(true),
@@ -537,6 +550,7 @@ function QuickActions({ onTabSwitch }: { onTabSwitch: (tab: AppTab) => void }) {
       label: 'View Reports',
       icon: FileText,
       color: 'text-purple-600 dark:text-purple-400',
+      iconCircle: 'bg-purple-200 dark:bg-purple-800/50',
       bg: 'bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/30 dark:hover:bg-purple-950/50 border-purple-200 dark:border-purple-800',
       tab: 'reports' as AppTab,
       onClick: () => onTabSwitch('reports'),
@@ -545,6 +559,7 @@ function QuickActions({ onTabSwitch }: { onTabSwitch: (tab: AppTab) => void }) {
       label: 'Cash Drawer',
       icon: Banknote,
       color: 'text-teal-600 dark:text-teal-400',
+      iconCircle: 'bg-teal-200 dark:bg-teal-800/50',
       bg: 'bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/30 dark:hover:bg-teal-950/50 border-teal-200 dark:border-teal-800',
       tab: null,
       onClick: () => handleOpenCashDrawer(),
@@ -561,7 +576,7 @@ function QuickActions({ onTabSwitch }: { onTabSwitch: (tab: AppTab) => void }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="pb-4">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2.5">
             {actions.map((action) => {
               const Icon = action.icon;
               return (
@@ -569,10 +584,12 @@ function QuickActions({ onTabSwitch }: { onTabSwitch: (tab: AppTab) => void }) {
                   key={action.label}
                   variant="outline"
                   size="sm"
-                  className={`gap-2 border ${action.bg} transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5`}
+                  className={`gap-2.5 border ${action.bg} transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 px-4 py-2.5 h-auto`}
                   onClick={action.onClick}
                 >
-                  <Icon className={`h-4 w-4 ${action.color}`} />
+                  <span className={`inline-flex items-center justify-center h-7 w-7 rounded-full ${action.iconCircle} shrink-0`}>
+                    <Icon className={`h-4 w-4 ${action.color}`} />
+                  </span>
                   <span className="text-xs font-medium">{action.label}</span>
                 </Button>
               );
@@ -1312,6 +1329,10 @@ const METRIC_DESCRIPTIONS: Record<KpiMetricKey, { description: string; navButton
     description: 'Number of completed sales transactions processed today. Each transaction represents a unique customer purchase.',
     navButton: { label: 'View Transactions', tab: 'transactions', icon: Receipt },
   },
+  avgTransaction: {
+    description: 'Average value per transaction today. Calculated as today\'s total revenue divided by the number of transactions. A higher value indicates customers are spending more per visit.',
+    navButton: { label: 'View Transactions', tab: 'transactions', icon: Receipt },
+  },
   lowStock: {
     description: 'Products that have fallen below their reorder level and need restocking soon to avoid stockouts.',
     navButton: { label: 'View Inventory', tab: 'inventory', icon: Package },
@@ -1574,7 +1595,8 @@ function SalesTrendsWidget({ storeId, onSeeMore }: { storeId: string; onSeeMore:
                   <AreaChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                     <defs>
                       <linearGradient id="dashTrendGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.45} />
+                        <stop offset="50%" stopColor="#10b981" stopOpacity={0.15} />
                         <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
                       </linearGradient>
                     </defs>
@@ -1656,10 +1678,38 @@ const STORE_DISPLAY_NAMES: Record<string, string> = {
   store_nakuru: 'Nakuru',
 };
 
-// Welcome hero banner — personalized greeting + quick-action shortcuts shown at the top of the dashboard.
+// Daily motivational quotes — one per day of the week (0=Sun … 6=Sat)
+const DAILY_QUOTES = [
+  'Every sale today builds tomorrow\'s success.',
+  'Small progress is still progress — keep going!',
+  'Great service turns first-time buyers into lifelong customers.',
+  'Consistency beats intensity. Show up and deliver.',
+  'Your hard work today is someone else\'s foundation tomorrow.',
+  'Track everything, improve anything.',
+  'A well-stocked shelf is a silent salesperson.',
+];
+
+// Welcome hero banner — personalized greeting + live clock + daily quote + quick-action shortcuts.
 function WelcomeHero() {
   const { user } = useAuthStore();
   const { currentStoreId, setActiveTab } = useAppStore();
+  const [liveTime, setLiveTime] = useState<string>('');
+
+  useEffect(() => {
+    const update = () => {
+      setLiveTime(
+        new Date().toLocaleTimeString('en-KE', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        })
+      );
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const firstName = (user?.name || '').trim().split(/\s+/)[0];
   const greeting = firstName ? `Karibu, ${firstName} 👋` : 'Karibu 👋';
@@ -1670,10 +1720,14 @@ function WelcomeHero() {
     month: 'long',
     day: 'numeric',
   });
+  const dayIndex = new Date().getDay(); // 0-6
+  const dailyQuote = DAILY_QUOTES[dayIndex];
 
   return (
-    <Card className="overflow-hidden border-0 bg-gradient-to-br from-green-600 via-emerald-600 to-teal-600 text-white shadow-md">
-      <CardContent className="p-4 sm:p-5">
+    <Card className="overflow-hidden border-0 bg-gradient-to-br from-green-700 via-emerald-600 to-teal-500 text-white shadow-lg relative">
+      {/* Decorative pattern overlay */}
+      <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} aria-hidden="true" />
+      <CardContent className="p-4 sm:p-5 relative">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -1682,6 +1736,15 @@ function WelcomeHero() {
             </div>
             <p className="text-xs sm:text-sm text-emerald-50/90 mt-1">
               Here&rsquo;s what&rsquo;s happening at <span className="font-semibold">{branchName}</span> today · {today}
+            </p>
+            {/* Live clock */}
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <Clock className="h-3.5 w-3.5 text-emerald-200/80 shrink-0" />
+              <span className="text-xs font-mono tabular-nums text-emerald-100/90">{liveTime}</span>
+            </div>
+            {/* Daily motivational quote */}
+            <p className="text-[11px] text-emerald-100/70 mt-2 italic max-w-md leading-relaxed">
+              &ldquo;{dailyQuote}&rdquo;
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -1744,6 +1807,23 @@ export default function DashboardTab() {
     enabled: lowStockDialogOpen,
   });
 
+  // Onboarding detection — check if the store has any real activity
+  const { data: onboardingCheck } = useQuery({
+    queryKey: ['onboarding-check', currentStoreId],
+    queryFn: async () => {
+      const res = await dashboardApi.getStats(currentStoreId);
+      const d = res.data;
+      if (!d) return { hasData: false };
+      const hasRevenue = (d.todayRevenue ?? 0) > 0;
+      const hasTransactions = (d.todayTransactions ?? 0) > 0;
+      const hasProducts = Array.isArray(d.topProducts) && d.topProducts.length > 0;
+      return { hasData: hasRevenue || hasTransactions || hasProducts };
+    },
+    staleTime: 60_000,
+  });
+
+  const showOnboarding = onboardingCheck && !onboardingCheck.hasData;
+
   return (
     <div className="space-y-4 animate-fade-in">
       {/* Welcome Hero — personalized greeting + quick actions */}
@@ -1751,6 +1831,35 @@ export default function DashboardTab() {
 
       {/* Top KPI Cards Row */}
       <DashboardStats storeId={currentStoreId} onCardClick={handleKpiCardClick} />
+
+      {/* Onboarding message for first-time / empty stores */}
+      {showOnboarding && (
+        <Card className="border-dashed border-2 border-primary/20 bg-primary/5 backdrop-blur-sm animate-fade-in">
+          <CardContent className="p-6 sm:p-8 text-center">
+            <div className="flex flex-col items-center gap-3 max-w-md mx-auto">
+              <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center">
+                <Sparkles className="h-7 w-7 text-primary" />
+              </div>
+              <h3 className="text-lg font-semibold">Welcome to MBUMAH HARDWARE POS!</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Your dashboard is ready. Start by adding products in the <strong>Catalog</strong> tab,
+                then process your first sale in the <strong>POS</strong> tab. Charts and stats will
+                populate automatically as you record transactions.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+                <Button size="sm" className="gap-1.5" onClick={() => setActiveTab('catalog')}>
+                  <Plus className="h-4 w-4" />
+                  Add Products
+                </Button>
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setActiveTab('pos')}>
+                  <ShoppingCart className="h-4 w-4" />
+                  New Sale
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Shift Status Card */}
       <ShiftStatusCard storeId={currentStoreId} />

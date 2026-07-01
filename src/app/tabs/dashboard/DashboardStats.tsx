@@ -4,16 +4,16 @@
  * DashboardStats — top KPI cards row.
  *
  * Extracted from `dashboard-tab.tsx` to slim down the orchestrator. Renders
- * four animated KPI cards (Revenue, Transactions, Low Stock, Outstanding Debt)
- * and emits a click event with the full KpiDetail payload when a card is
- * clicked.
+ * five animated KPI cards (Revenue, Transactions, Avg Transaction Value, Low Stock,
+ * Outstanding Debt) and emits a click event with the full KpiDetail payload when
+ * a card is clicked.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   TrendingUp, TrendingDown, ShoppingCart, AlertTriangle,
-  CircleDollarSign, ArrowRight,
+  CircleDollarSign, ArrowRight, Calculator,
 } from 'lucide-react';
 
 import { dashboardApi, formatKES } from '@/lib/api';
@@ -75,6 +75,32 @@ function MiniSparkline({ data, color, height = 28 }: { data: number[]; color: st
   );
 }
 
+// --- Detailed skeleton that matches KPI card layout ---------------------------
+
+function KpiCardSkeleton() {
+  return (
+    <Card className="overflow-hidden">
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          {/* Icon skeleton */}
+          <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
+          <div className="flex-1 min-w-0 space-y-2">
+            {/* Label skeleton */}
+            <Skeleton className="h-3 w-24" />
+            {/* Value skeleton */}
+            <Skeleton className="h-6 w-28" />
+            {/* Trend + sparkline row */}
+            <div className="flex items-center justify-between mt-2">
+              <Skeleton className="h-3 w-14" />
+              <Skeleton className="h-7 w-16 rounded" />
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // --- Component ---------------------------------------------------------------
 
 export interface DashboardStatsProps {
@@ -111,6 +137,12 @@ export function DashboardStats({ storeId, onCardClick }: DashboardStatsProps) {
   const animatedTransactions = useAnimatedCounter(data?.todayTransactions ?? 0);
   const animatedLowStock = useAnimatedCounter(data?.lowStockProducts ?? 0);
   const animatedDebt = useAnimatedCounter(data?.outstandingDebt ?? 0);
+
+  // Average Transaction Value
+  const avgTransactionValue = (data?.todayTransactions ?? 0) > 0
+    ? Math.round((data?.todayRevenue ?? 0) / (data?.todayTransactions ?? 1))
+    : 0;
+  const animatedAvgTx = useAnimatedCounter(avgTransactionValue);
 
   const sparkData = useMemo(() => {
     if (data?.salesByHour && data.salesByHour.length > 1) {
@@ -151,6 +183,21 @@ export function DashboardStats({ storeId, onCardClick }: DashboardStatsProps) {
       metricKey: 'transactions' as KpiMetricKey,
     },
     {
+      label: 'Avg. Transaction Value',
+      value: avgTransactionValue,
+      animatedValue: animatedAvgTx,
+      format: 'kes' as const,
+      icon: Calculator,
+      color: 'text-teal-600 dark:text-teal-400',
+      iconBg: 'bg-teal-100 dark:bg-teal-900/40',
+      gradient: 'from-teal-50/80 to-cyan-50/50 dark:from-teal-950/30 dark:to-cyan-950/20',
+      borderColor: 'border-l-teal-500',
+      sparkColor: '#0d9488',
+      trend: '+4.1%',
+      trendUp: true,
+      metricKey: 'avgTransaction' as KpiMetricKey,
+    },
+    {
       label: 'Low Stock (Action Needed)',
       value: data?.lowStockProducts ?? 0,
       animatedValue: animatedLowStock,
@@ -184,26 +231,18 @@ export function DashboardStats({ storeId, onCardClick }: DashboardStatsProps) {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i} className="overflow-hidden">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-10 w-10 rounded-lg" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-3 w-20" />
-                  <Skeleton className="h-6 w-28" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} style={{ animationDelay: `${i * 100}ms` }} className="animate-fade-in opacity-0">
+            <KpiCardSkeleton />
+          </div>
         ))}
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
       {kpis.map((kpi, index) => {
         const Icon = kpi.icon;
         return (
@@ -214,7 +253,7 @@ export function DashboardStats({ storeId, onCardClick }: DashboardStatsProps) {
                 ? 'ring-2 ring-red-400/50 animate-pulse-slow'
                 : ''
             }`}
-            style={{ animationDelay: `${index * 100}ms` }}
+            style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'both' }}
             onClick={() => onCardClick({
               metricKey: kpi.metricKey,
               label: kpi.label,
