@@ -251,9 +251,18 @@ export default function HomePage() {
   const showRetry = useLoadingWatchdog(hasMounted);
 
   // Hydrate auth state from localStorage on first client mount.
+  // Also rehydrate the persisted app store (sidebar state, active tab, etc.)
+  // Defensive checks ensure this never crashes even if persist middleware
+  // is removed or the store structure changes.
   useEffect(() => {
     hydrateFromStorage();
-    useAppStore.persist.rehydrate();
+    try {
+      if (useAppStore?.persist?.rehydrate) {
+        useAppStore.persist.rehydrate();
+      }
+    } catch (err) {
+      console.error('[MbumahBoot] Failed to rehydrate app store:', err);
+    }
   }, [hydrateFromStorage]);
 
   if (!hasMounted) {

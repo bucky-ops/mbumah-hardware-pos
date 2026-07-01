@@ -1,6 +1,7 @@
 // Zustand state stores
 
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { AuthUser, CartItem } from './types';
 import { authApi } from './api';
 
@@ -201,6 +202,8 @@ export const useCartStore = create<CartState>((set, get) => ({
 
 export type AppTab = 'dashboard' | 'pos' | 'catalog' | 'inventory' | 'customers' | 'rentals' | 'financial' | 'reports' | 'transactions' | 'suppliers' | 'gift-cards' | 'admin' | 'vouchers' | 'invoices' | 'delivery' | 'credits' | 'messaging' | 'transfers' | 'banking' | 'loyalty' | 'security' | 'payroll' | 'etims' | 'debt-management' | 'conversations' | 'purchase-orders';
 
+export type SidebarState = 'expanded' | 'collapsed' | 'mobile-overlay';
+
 interface AppState {
   activeTab: AppTab;
   setActiveTab: (tab: AppTab) => void;
@@ -213,17 +216,47 @@ interface AppState {
   setSidebarCollapsed: (collapsed: boolean) => void;
   currentStoreId: string;
   setCurrentStoreId: (id: string) => void;
+  /**
+   * Derive the visual sidebar state from the store + viewport.
+   * Returns 'expanded' | 'collapsed' | 'mobile-overlay'.
+   */
+  getSidebarState: (isDesktop: boolean) => SidebarState;
 }
 
-export const useAppStore = create<AppState>((set) => ({
-  activeTab: 'dashboard',
-  setActiveTab: (tab) => set({ activeTab: tab }),
-  sidebarOpen: false,
-  toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
-  setSidebarOpen: (open) => set({ sidebarOpen: open }),
-  isSidebarCollapsed: false,
-  toggleSidebarCollapse: () => set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
-  setSidebarCollapsed: (collapsed) => set({ isSidebarCollapsed: collapsed }),
-  currentStoreId: 'store_juja_main',
-  setCurrentStoreId: (id) => set({ currentStoreId: id }),
-}));
+export const useAppStore = create<AppState>()(
+  persist(
+    (set, get) => ({
+      activeTab: 'dashboard',
+      setActiveTab: (tab) => set({ activeTab: tab }),
+      sidebarOpen: false,
+      toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+      setSidebarOpen: (open) => set({ sidebarOpen: open }),
+      isSidebarCollapsed: false,
+      toggleSidebarCollapse: () => set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
+      setSidebarCollapsed: (collapsed) => set({ isSidebarCollapsed: collapsed }),
+      currentStoreId: 'store_juja_main',
+      setCurrentStoreId: (id) => set({ currentStoreId: id }),
+      getSidebarState: (isDesktop: boolean): SidebarState => {
+        const state = get();
+        if (!isDesktop) {
+          return state.sidebarOpen ? 'mobile-overlay' : 'collapsed';
+        }
+        return state.isSidebarCollapsed ? 'collapsed' : 'expanded';
+      },
+    }),
+    {
+      name: 'mbt_app_store',
+      // skipHydration prevents auto-rehydration on the server (SSR safety).
+      // We manually call useAppStore.persist.rehydrate() in a client-only
+      // useEffect in page.tsx — see the hydrateFromStorage effect.
+      skipHydration: true,
+      // Only persist these fields — exclude transient state like sidebarOpen
+      // (mobile overlay should never persist across sessions).
+      partialize: (state) => ({
+        activeTab: state.activeTab,
+        isSidebarCollapsed: state.isSidebarCollapsed,
+        currentStoreId: state.currentStoreId,
+      }),
+    },
+  ),
+);
