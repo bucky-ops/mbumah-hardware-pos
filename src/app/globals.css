@@ -160,22 +160,105 @@
   background: oklch(0.55 0.02 250);
 }
 
-/* Print styles for receipt */
+/* Print styles for receipt — hides everything except the receipt printable area */
 @media print {
-  body * {
-    visibility: hidden;
+  /* 1. Hide all page chrome */
+  body > *:not(#__next):not(.receipt-dialog-wrapper) {
+    display: none !important;
   }
-  .receipt-printable,
-  .receipt-printable * {
-    visibility: visible;
+  aside, header, footer, nav, .no-print {
+    display: none !important;
   }
+
+  /* 2. Reset body for clean printing */
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* 3. Hide everything in the dialog except the receipt printable area */
+  [role="dialog"] > *:not(.receipt-printable-wrapper) {
+    display: none !important;
+  }
+  [role="dialog"] {
+    position: static !important;
+    transform: none !important;
+    width: 100% !important;
+    max-height: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    inset: auto !important;
+  }
+  [data-radix-overlay] {
+    display: none !important;
+  }
+
+  /* 4. Make the receipt printable area the only visible content */
   .receipt-printable {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 80mm;
-    font-size: 12px;
+    position: static !important;
+    width: 100% !important;
+    max-width: 80mm !important;
+    margin: 0 auto !important;
+    padding: 8mm !important;
+    font-size: 11px !important;
+    line-height: 1.4 !important;
+    color: black !important;
+    background: white !important;
+    box-shadow: none !important;
+    border: none !important;
   }
+  .receipt-printable * {
+    visibility: visible !important;
+    color: black !important;
+  }
+
+  /* 5. Hide the dialog header, footer, close button */
+  .receipt-printable ~ .no-print,
+  .no-print,
+  [role="dialog"] > div:first-child,
+  [role="dialog"] > div:last-child:not(:has(.receipt-printable)),
+  [aria-label="Close"] {
+    display: none !important;
+  }
+
+  /* 6. Remove decorative elements for print */
+  .receipt-printable [class*="shadow"],
+  .receipt-printable [class*="rounded"],
+  .receipt-printable .bg-muted,
+  .receipt-printable .bg-muted\/30 {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+
+  /* 7. Clean separator lines for print */
+  .receipt-printable [role="separator"],
+  .receipt-printable [data-slot="separator"] {
+    border-top: 1px solid #000 !important;
+    height: 0 !important;
+    background: none !important;
+    margin: 4px 0 !important;
+  }
+
+  /* 8. Keep Kenyan flag bar colors in print */
+  .receipt-printable .bg-black { background: black !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .receipt-printable .bg-red-600 { background: #dc2626 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .receipt-printable .bg-green-600 { background: #16a34a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* 9. Page setup */
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+
+  /* 10. Legacy class support — old receipt dialog */
   .receipt-dialog,
   .receipt-dialog * {
     visibility: visible;
@@ -186,16 +269,8 @@
     top: 0;
     width: 100%;
   }
-  .receipt-content {
-    padding: 1rem;
-  }
-  /* Hide dialog chrome when printing */
   .receipt-dialog button,
   .receipt-dialog [role="dialog"] > button {
-    display: none !important;
-  }
-  /* Hide sidebar, topbar, footer */
-  aside, header, footer, .no-print {
     display: none !important;
   }
 }

@@ -329,3 +329,38 @@ Stage Summary:
 - Sidebar collapse state persists across page refreshes via localStorage
 - SSR-safe: skipHydration + defensive rehydrate call in useEffect
 - Commit: a7c685a pushed to origin/main
+
+---
+Task ID: ui-enhancements-1
+Agent: Main Agent
+Task: Enhance login screen and dashboard with animations, 5th KPI card, onboarding
+
+Work Log:
+- Login screen: Added 12 floating animated hardware icon particles with CSS float keyframes
+- Login screen: Added logo scale-in entrance animation with spring bounce
+- Login screen: Added form field focus glow effect (pulsing amber ring)
+- Login screen: Added card border shimmer animation
+- Login screen: Enhanced demo button hover effects (scale-110, shadow-lg)
+- Login screen: Added gradient shift animation on sign-in button
+- Login screen: Added time-based greeting (Good morning/afternoon/evening)
+- Login screen: Added version badge v2.5.0 in bottom-right corner
+- Login screen: Added dot grid pattern overlay for visual depth
+- Dashboard: Added 5th KPI card — Average Transaction Value (teal color, Calculator icon)
+- Dashboard: Changed KPI grid from 4-col to 5-col on desktop
+- Dashboard: Added staggered card entrance animation with cascading delay
+- Dashboard: Added detailed skeleton loading matching real KPI card layout
+- Dashboard: Enhanced WelcomeHero with live clock, daily motivational quote, better gradient
+- Dashboard: Enhanced QuickActions with icon background circles, larger buttons
+- Dashboard: Added gradient fills on bar and area charts in SalesOverview
+- Dashboard: Added onboarding message for first-time users (no data detected)
+- Updated KpiMetricKey type with 'avgTransaction'
+- Fixed: Replace non-existent Screwdriver icon with Nut from lucide-react
+- 6 new CSS keyframes added to globals.css: float, scale-in-logo, gradient-button-shift, border-shimmer, input-focus-glow, dot-grid-pattern
+- Lint: 0 errors, 351 warnings
+- Commit: 69c3d90 pushed to origin/main
+
+Stage Summary:
+- Login screen significantly more polished with animations and visual effects
+- Dashboard now has 5 KPI cards with better loading states and entrance animations
+- Onboarding experience for new users
+- All changes compile and serve 200 OK

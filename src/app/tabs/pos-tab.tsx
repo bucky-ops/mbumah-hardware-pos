@@ -46,6 +46,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
+import { ReceiptPrintPreview } from '@/components/receipt-print';
 import {
   ShoppingCart, ShoppingBag, Package, PackageX, Search, Plus, Minus, Trash2, X, CreditCard,
   Smartphone, AlertCircle, Loader2, Banknote, Wallet, Gift,
@@ -1656,6 +1657,7 @@ export default function POSTab() {
   const queryClient = useQueryClient();
 
   const [receiptOpen, setReceiptOpen] = useState(false);
+  const [receiptPrintOpen, setReceiptPrintOpen] = useState(false);
   const [lastTransaction, setLastTransaction] = useState<TransactionItem | null>(null);
   const [lastCashReceived, setLastCashReceived] = useState(0);
   const [lastMpesaPhone, setLastMpesaPhone] = useState('');
@@ -1728,7 +1730,7 @@ export default function POSTab() {
         setLastTransaction(res.data);
         setLastCashReceived(paymentMethod === 'CASH' || paymentMethod === 'SPLIT' ? Number(splitCashAmount) || Number(cashReceived) || finalTotal : 0);
         setLastMpesaPhone(mpesaPhone);
-        setReceiptOpen(true);
+        setReceiptPrintOpen(true);
       }
       cart.clearCart();
       setCartNotes({});
@@ -3120,6 +3122,17 @@ export default function POSTab() {
           </div>
         )}
       </ResponsiveDialog>
+
+      {/* Receipt Print Preview — enhanced receipt dialog with Print, PDF, WhatsApp, New Sale */}
+      <ReceiptPrintPreview
+        open={receiptPrintOpen}
+        onOpenChange={setReceiptPrintOpen}
+        transaction={lastTransaction}
+        cashReceived={lastCashReceived}
+        mpesaPhone={lastMpesaPhone}
+        storeId={currentStoreId}
+        onNewSale={() => { setReceiptPrintOpen(false); setLastTransaction(null); }}
+      />
 
       {/* Send Receipt via WhatsApp Dialog */}
       <ResponsiveDialog
