@@ -651,3 +651,96 @@
   background-image: radial-gradient(circle, oklch(1 0 0 / 0.07) 1px, transparent 1px);
   background-size: 24px 24px;
 }
+
+/* ===== Tab transition & micro-interaction enhancements ===== */
+
+/* Tab content slide-in animation */
+@keyframes tab-enter {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-tab-enter {
+  animation: tab-enter 0.25s ease-out;
+}
+
+/* Card hover lift effect for interactive cards */
+.card-hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px oklch(0 0 0 / 0.08);
+}
+
+.dark .card-hover-lift:hover {
+  box-shadow: 0 4px 16px oklch(1 0 0 / 0.06);
+}
+
+/* Subtle row hover for tables */
+.table-row-hover {
+  transition: background-color 0.15s ease;
+}
+
+.table-row-hover:hover {
+  background-color: oklch(0.68 0.18 55 / 0.04);
+}
+
+.dark .table-row-hover:hover {
+  background-color: oklch(1 0 0 / 0.03);
+}
+
+/* Button press effect */
+.button-press {
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.button-press:active {
+  transform: scale(0.97);
+}
+
+/* Smooth list item entrance */
+@keyframes list-item-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-list-item-enter {
+  animation: list-item-enter 0.2s ease-out both;
+}
+
+/* Badge pop animation */
+@keyframes badge-pop {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-badge-pop {
+  animation: badge-pop 0.3s ease-out;
+}
+
+/* Skeleton pulse with subtle shimmer */
+.skeleton-shimmer {
+  background: linear-gradient(90deg, oklch(0.96 0.005 250) 25%, oklch(0.93 0.005 250) 50%, oklch(0.96 0.005 250) 75%);
+  background-size: 200% 100%;
+  animation: card-shimmer 1.5s ease-in-out infinite;
+}
+
+.dark .skeleton-shimmer {
+  background: linear-gradient(90deg, oklch(0.22 0.005 250) 25%, oklch(0.28 0.005 250) 50%, oklch(0.22 0.005 250) 75%);
+  background-size: 200% 100%;
+}
