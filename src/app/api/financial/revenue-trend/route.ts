@@ -1,4 +1,4 @@
-// GET /api/financial/revenue-trend (daily revenue, generates demo data if empty)
+// GET /api/financial/revenue-trend (daily revenue, generates demo data only if explicitly requested)
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -20,7 +20,7 @@ async function getRevenueTrendHandler(...args: unknown[]): Promise<Response> {
   }
 
   const days = parseInt(searchParams.get('days') || '30');
-  const includeDemo = searchParams.get('demo') !== 'false'; // default true
+  const includeDemo = searchParams.get('demo') === 'true'; // default false — demo data only on explicit request
 
   const startDate = new Date();
   startDate.setHours(0, 0, 0, 0);

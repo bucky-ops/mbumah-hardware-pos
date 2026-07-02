@@ -304,3 +304,34 @@ Stage Summary:
 3. Rotate Neon database credentials
 4. Add more features: receipt printing, email notifications, batch operations
 5. Enhance UI styling with more detail and animations
+
+---
+Task ID: prod-harden-phase1
+Agent: Main Agent
+Task: PHASE 1 — Remove Demo Accounts & Harden Login Interface
+
+Work Log:
+- Full audit of demo/credential references across entire codebase
+- Removed DEMO_ACCOUNTS constant from src/lib/app-config.ts (hardcoded emails + passwords shipped to client bundle)
+- Removed demo account imports and fillDemo function from src/components/login-screen.tsx
+- Removed "Quick Demo Access" section with 4 auto-fill role buttons from login screen
+- Changed email placeholder from "cashier@mbumahhardware.co.ke" to generic "you@company.com"
+- Changed trust badge from "5 branches" to "Multi-branch" (no count hint)
+- Fixed demo_user fallback in dashboard-tab.tsx: changed `user?.id || 'demo_user'` to `user?.id`
+- Removed client-side discount code validation in pos-tab.tsx (was revealing valid codes in error message)
+- Changed revenue-trend API default: demo data now OFF by default (requires explicit ?demo=true)
+- Fixed Zustand rehydrate crash: added persist middleware to useAppStore with skipHydration:true
+- Added getSidebarState() method to useAppStore (was missing but called by app-sidebar.tsx)
+- Added defensive optional chaining on useAppStore.persist.rehydrate() in page.tsx
+- Added suppressHydrationWarning to <body> in layout.tsx
+- Verified with agent-browser: login screen loads correctly, no demo elements visible
+- Lint: 0 errors
+
+Stage Summary:
+- All demo account references removed from client-side code
+- No hardcoded credentials shipped to browser
+- Login form accepts only standard email/password input
+- Discount code validation moved to server-side pattern
+- Demo data generation disabled by default in API
+- Zustand rehydrate crash fully fixed
+- App verified loading correctly in browser

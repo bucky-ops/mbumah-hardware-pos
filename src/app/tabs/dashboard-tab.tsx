@@ -970,7 +970,7 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
   const [isStarting, setIsStarting] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
 
-  const userId = user?.id || 'demo_user';
+  const userId = user?.id;
 
   const { data: activeShift, isLoading, refetch } = useQuery({
     queryKey: ['current-shift', storeId, userId],
@@ -978,7 +978,7 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
       const res = await shiftsApi.getCurrent(storeId, userId);
       return res.data;
     },
-    enabled: !!storeId && !!user?.id,
+    enabled: !!storeId && !!userId,
     refetchInterval: 15000,
   });
 

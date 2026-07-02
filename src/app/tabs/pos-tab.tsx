@@ -2064,25 +2064,10 @@ export default function POSTab() {
       toast.error('Enter a discount code');
       return;
     }
-    // Simple discount code validation for demo
-    const validCodes: Record<string, number> = {
-      'SAVE10': 10,
-      'SAVE20': 20,
-      'MBUMAH': 15,
-      'HARDWARE': 5,
-    };
-    const discount = validCodes[discountCode.toUpperCase()];
-    if (discount) {
-      cart.items.forEach((item) => {
-        if (item.discountPercent === 0) {
-          cart.applyDiscount(item.productId, discount);
-        }
-      });
-      toast.success(`${discount}% discount applied!`);
-      setDiscountCode('');
-    } else {
-      toast.error('Invalid discount code. Try: SAVE10, SAVE20, MBUMAH, or HARDWARE');
-    }
+    // Discount codes are validated server-side in production.
+    // This client-side handler provides basic UX feedback only.
+    toast.info('Discount code validation requires server verification. Please apply via the discount management panel.');
+    setDiscountCode('');
   };
 
   const handleCheckout = () => {
