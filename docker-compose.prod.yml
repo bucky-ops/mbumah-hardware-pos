@@ -1,0 +1,168 @@
+# ============================================================================
+# MBUMAH HARDWARE POS & ERP — Production Docker Compose (Self-Hosted)
+# ============================================================================
+# Usage:
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# This file orchestrates the full production stack:
+#   1. PostgreSQL 15 — persistent database
+#   2. Next.js App  — the POS application
+#   3. Nginx        — reverse proxy with SSL termination & security headers
+#
+# Prerequisites:
+#   - Copy .env.example to .env and fill in all values
+#   - Place SSL certificates in ./nginx/ssl/ (or use certbot after first boot)
+# ============================================================================
+
+services:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # PostgreSQL 15 with pg_trgm extension for fuzzy search
+  # ─────────────────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: mbumah_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mbumah}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-mbumah_pos}
+    # Do NOT expose PostgreSQL port to the host in production.
+    # Access is restricted to the internal Docker network only.
+    # If you need external access for backups/maintenance, use:
+    #   docker compose exec postgres psql -U mbumah -d mbumah_pos
+    expose:
+      - "5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mbumah} -d ${POSTGRES_DB:-mbumah_pos}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - mbumah-internal
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Next.js Application — built from the Dockerfile with standalone output
+  # ─────────────────────────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mbumah_app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # ── Database ──────────────────────────────────────────────────────────
+      # Uses the Docker internal hostname "postgres" to reach the DB container.
+      # pgBouncer-compatible mode (pgbouncer=true) is included for connection
+      # pooling compatibility, but can be removed if not using PgBouncer.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mbumah}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mbumah_pos}?sslmode=disable&connect_timeout=15
+      DIRECT_URL: postgresql://${POSTGRES_USER:-mbumah}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mbumah_pos}?sslmode=disable&connect_timeout=30
+
+      # ── Authentication ────────────────────────────────────────────────────
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET in .env}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+
+      # ── Application ───────────────────────────────────────────────────────
+      NODE_ENV: production
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost}
+      NEXT_PUBLIC_CURRENCY: ${NEXT_PUBLIC_CURRENCY:-KES}
+
+      # ── M-Pesa Daraja API ─────────────────────────────────────────────────
+      MPESA_CONSUMER_KEY: ${MPESA_CONSUMER_KEY:-}
+      MPESA_CONSUMER_SECRET: ${MPESA_CONSUMER_SECRET:-}
+      MPESA_PASSKEY: ${MPESA_PASSKEY:-}
+      MPESA_SHORTCODE: ${MPESA_SHORTCODE:-174379}
+      MPESA_ENVIRONMENT: ${MPESA_ENVIRONMENT:-sandbox}
+      MPESA_CALLBACK_URL: ${MPESA_CALLBACK_URL:-}
+
+      # ── Notifications (Optional) ──────────────────────────────────────────
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
+
+      # ── Redis (Optional — for caching & sessions) ─────────────────────────
+      REDIS_URL: ${REDIS_URL:-}
+
+      # ── Diagnostics ───────────────────────────────────────────────────────
+      # EXPOSE_ERRORS: "true"  # Uncomment TEMPORARILY to debug 500 errors
+    expose:
+      - "3000"
+    # Do NOT map port 3000 to the host in production — nginx handles external traffic.
+    # For initial testing only, uncomment the line below:
+    # ports:
+    #   - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - mbumah-internal
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Nginx — Reverse Proxy with SSL termination and security headers
+  # ─────────────────────────────────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: mbumah_nginx
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/logs:/var/log/nginx
+      # Certbot webroot for Let's Encrypt challenges
+      - certbot-webroot:/var/www/certbot:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - mbumah-internal
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Certbot — Automatic SSL certificate renewal via Let's Encrypt
+  # Uncomment and configure after your domain's DNS points to this server.
+  # ─────────────────────────────────────────────────────────────────────────────
+  # certbot:
+  #   image: certbot/certbot
+  #   container_name: mbumah_certbot
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./nginx/ssl:/etc/letsencrypt
+  #     - certbot-webroot:/var/www/certbot
+  #   entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+  #   networks:
+  #     - mbumah-internal
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Volumes
+# ───────────────────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  certbot-webroot:
+    driver: local
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Network — Internal-only network; only nginx exposes ports to the host
+# ───────────────────────────────────────────────────────────────────────────────
+networks:
+  mbumah-internal:
+    driver: bridge

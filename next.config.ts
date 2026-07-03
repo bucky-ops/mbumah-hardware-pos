@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // output: "standalone", // Not needed for Vercel — Vercel handles its own build output
+  // Standalone output produces a self-contained build in .next/standalone/
+  // that includes only the server code needed to run without node_modules.
+  // Required for Docker production deployments. Vercel ignores this setting
+  // and uses its own build output format.
+  output: "standalone",
 
   reactStrictMode: true,
 

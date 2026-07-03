@@ -335,3 +335,33 @@ Stage Summary:
 - Demo data generation disabled by default in API
 - Zustand rehydrate crash fully fixed
 - App verified loading correctly in browser
+
+---
+Task ID: prod-harden-phase2-3
+Agent: Main Agent
+Task: PHASE 2-3 — Dockerize Application & Create Docker Compose Orchestration
+
+Work Log:
+- Updated next.config.ts: enabled `output: "standalone"` for minimal Docker images
+- Created Dockerfile with 3-stage multi-stage build (base → builder → runner)
+  - Stage 1 (base): installs dependencies via bun
+  - Stage 2 (builder): copies source, runs Prisma generate + next build
+  - Stage 3 (runner): minimal Alpine image with standalone output, non-root user, health check
+- Created .dockerignore to prevent sensitive files from entering build context
+- Created docker-entrypoint.sh — runs Prisma db push + optional seed before starting server
+- Created docker-compose.prod.yml with 3 services:
+  - postgres: PostgreSQL 15 Alpine with health check, pg_trgm extension, persistent volume
+  - app: Next.js standalone built from Dockerfile, depends on postgres health check
+  - nginx: reverse proxy with SSL termination, security headers, rate limiting
+  - certbot (commented): optional Let's Encrypt auto-renewal
+- Created .env.example with comprehensive self-hosting configuration
+  - PostgreSQL credentials, auth secrets, M-Pesa, notifications, diagnostics
+- Fixed 3 lint errors: unused vars in offline-indicator.tsx and use-network-status.ts
+- Lint: 0 errors, 353 warnings
+
+Stage Summary:
+- Full Docker production stack ready for self-hosted deployment
+- Standalone Next.js output enabled (Vercel ignores this, so no conflict)
+- Non-root container, health checks, internal-only network
+- Entrypoint handles database migrations + seeding automatically
+- Nginx directories created (config files in Phase 4)
