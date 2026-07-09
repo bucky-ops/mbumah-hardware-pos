@@ -1,0 +1,39 @@
+# ============================================================================
+# MBUMAH HARDWARE POS — SSL Certificate Directory
+# ============================================================================
+#
+# Place your SSL certificates here. Nginx will load them from this directory.
+#
+# OPTIONS:
+#
+# ── Option 1: Let's Encrypt (RECOMMENDED for production) ──────────────────
+# After pointing your domain's DNS to this server:
+#
+#   1. Start the stack WITHOUT SSL first (see below)
+#   2. Run certbot to obtain certificates:
+#      docker compose -f docker-compose.prod.yml exec certbot certbot certonly \
+#        --webroot -w /var/www/certbot \
+#        -d your-server.com \
+#        --email your-email@example.com \
+#        --agree-tos --no-eff-email
+#   3. Update nginx/conf.d/mbumah-pos.conf ssl_certificate paths:
+#      ssl_certificate     /etc/nginx/ssl/live/your-server.com/fullchain.pem;
+#      ssl_certificate_key /etc/nginx/ssl/live/your-server.com/privkey.pem;
+#   4. Restart nginx:
+#      docker compose -f docker-compose.prod.yml restart nginx
+#
+# ── Option 2: Self-Signed (for testing/internal networks only) ────────────
+# Run the generate-self-signed.sh script in this directory:
+#   cd nginx/ssl && ./generate-self-signed.sh
+#
+# This creates server.crt and server.key valid for 365 days.
+# Browsers will show a security warning — this is expected for self-signed.
+#
+# ── Option 3: Existing Certificates ───────────────────────────────────────
+# Copy your certificate and key files here:
+#   cp /path/to/your/fullchain.pem nginx/ssl/server.crt
+#   cp /path/to/your/private.key   nginx/ssl/server.key
+#
+# IMPORTANT: Never commit certificate files to version control.
+# The .gitignore should include: nginx/ssl/*.pem, nginx/ssl/*.key, nginx/ssl/*.crt
+# ============================================================================

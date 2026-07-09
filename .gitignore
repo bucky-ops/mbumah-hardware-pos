@@ -78,3 +78,13 @@ screenshots/
 
 # Runner PID
 /tmp/
+
+# ── Docker / Self-Hosting ──────────────────────────────────────────────────
+# SSL certificates (never commit secrets)
+nginx/ssl/*.crt
+nginx/ssl/*.key
+nginx/ssl/*.pem
+nginx/ssl/live/
+nginx/ssl/archive/
+# Nginx logs (generated at runtime)
+nginx/logs/*.log
