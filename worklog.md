@@ -365,3 +365,55 @@ Stage Summary:
 - Non-root container, health checks, internal-only network
 - Entrypoint handles database migrations + seeding automatically
 - Nginx directories created (config files in Phase 4)
+
+---
+Task ID: prod-harden-phase4-7
+Agent: Main Agent
+Task: PHASE 4-7 — Nginx/SSL, Documentation, CI/CD, Git Push & Verification
+
+Work Log:
+- Created nginx/nginx.conf with:
+  - Rate limiting zones: general (30r/s), api (10r/s), login (5r/s), conn_limit (20/IP)
+  - Gzip compression for text/JSON/SVG/font types
+  - Upstream to app:3000 with keepalive
+  - Worker processes auto, 1024 connections
+- Created nginx/conf.d/mbumah-pos.conf with:
+  - HTTP → HTTPS 301 redirect
+  - Let's Encrypt ACME challenge path
+  - Health endpoint (/health) bypass for Docker
+  - TLS 1.2 + 1.3 with Mozilla Intermediate cipher suite
+  - SSL session caching (10m shared, 1d timeout)
+  - Full security headers: HSTS 1yr, X-Frame-Options, X-Content-Type-Options, etc.
+  - Static asset caching: /_next/static/ 365d with immutable, /categories/ 7d
+  - API rate limiting (10r/s burst 20), login brute-force protection (5r/s burst 5)
+  - M-Pesa callback burst handling (50 burst for Safaricom servers)
+  - WebSocket upgrade map for future use
+  - Hidden files denied, server_tokens off
+- Created nginx/ssl/generate-self-signed.sh for testing
+- Created nginx/ssl/README with 3 SSL options documented
+- Updated .gitignore to exclude SSL certs and nginx logs
+- Created SELF_HOSTING_GUIDE.md (561 lines) covering:
+  - Prerequisites, Quick Start (6 steps), Configuration, SSL setup (3 options)
+  - M-Pesa integration (sandbox + production), Database management
+  - Backups (manual + automated cron), Updates & maintenance
+  - Monitoring & logs, Troubleshooting (8 scenarios)
+  - Architecture diagram, Security checklist (10 items)
+- Created .github/workflows/deploy-selfhosted.yml:
+  - Build & push Docker image to GHCR with semver + SHA tags
+  - Deploy job: SSH into server, pull code, pull image, prisma db push, restart
+  - Optional seed, health check verification with 60s timeout
+  - Supports manual dispatch (production/staging) and release triggers
+- Fixed rebase conflicts:
+  - Deleted src/middleware.ts (conflicts with proxy.ts)
+  - Deleted src/app/api/auth/dev-bypass/route.ts (security)
+  - Restored hardened login-screen.tsx (DEMO_ACCOUNTS removed)
+- Browser verified: login screen loads cleanly, no demo elements
+- Lint: 0 errors
+- Pushed 3 commits to origin/main (e78c2c5)
+
+Stage Summary:
+- Complete self-hosting stack: Docker + Compose + Nginx + SSL + Docs + CI/CD
+- Production-ready login: no demo accounts, no credential hints, no bypass routes
+- Nginx provides: rate limiting, security headers, SSL termination, static caching
+- CI/CD: automated build → GHCR push → SSH deploy with health verification
+- All 7 phases complete and pushed to GitHub
