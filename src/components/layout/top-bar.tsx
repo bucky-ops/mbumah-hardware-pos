@@ -19,6 +19,7 @@ import {
   PanelLeftClose, PanelLeftOpen, Lightbulb, Keyboard, Smartphone, Info,
   CheckCheck, BellRing,
 } from 'lucide-react';
+import { CurrencySwitcher } from '@/components/currency-switcher';
 
 export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonElement | null> }) {
   const { activeTab, toggleSidebar, setActiveTab, isSidebarCollapsed, toggleSidebarCollapse } = useAppStore();
@@ -234,6 +235,7 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
                 {cartItemCount}
               </Badge>
             )}
+            <CurrencySwitcher />
             <Badge variant="outline" className="hidden sm:flex items-center gap-1.5">
               <CalendarDays className="h-3 w-3" />
               {now.toLocaleDateString('en-KE', { weekday: 'short', month: 'short', day: 'numeric' })}

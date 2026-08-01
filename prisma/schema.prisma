@@ -276,6 +276,10 @@ model Product {
   // shelf capacity for replenishment planning (null = unlimited).
   minimumStockLevel Int      @default(0)
   maximumStockLevel Int?
+  // ── eTIMS (KRA electronic tax invoice) fields ──────────────────────────
+  etimsItemCode     String?  // KRA item code after registration
+  etimsRegisteredAt DateTime?
+  etimsTaxType      String?  // A (VAT 16%), B (Zero-rated), C (Exempt), D (Not subject to VAT)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -453,6 +457,12 @@ model SalesTransaction {
   notes           String?
   isOffline       Boolean   @default(false)
   syncedAt        DateTime?
+  // ── eTIMS (KRA electronic tax invoice) fields ──────────────────────────
+  etimsInvoiceNumber String?  // KRA-issued invoice number
+  etimsQrCode        String?  // QR code data for receipt
+  etimsUrl           String?  // Verification URL
+  etimsStatus        String?  // PENDING, ISSUED, CANCELLED
+  etimsIssuedAt      DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

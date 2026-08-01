@@ -84,6 +84,51 @@ function getDateRange(preset: DatePreset): { from: Date; to: Date } {
 
 type TransactionType = 'sale' | 'refund' | 'void';
 
+// Framer-motion stagger variants — wrap the transactions tab wrapper.
+const _staggerContainer = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.04 } },
+};
+
+const _staggerItem = {
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } },
+};
+
+// Reused gradient palette for customer-initials avatars (kept in sync with
+// customers-tab.tsx so a customer shown here matches their colour on the
+// Customers tab).
+const AVATAR_GRADIENTS = [
+  'from-rose-500 to-pink-600',
+  'from-violet-500 to-purple-600',
+  'from-cyan-500 to-teal-600',
+  'from-emerald-500 to-green-600',
+  'from-amber-500 to-orange-600',
+  'from-red-500 to-rose-600',
+  'from-teal-500 to-cyan-600',
+  'from-orange-500 to-amber-600',
+  'from-fuchsia-500 to-pink-600',
+  'from-lime-500 to-green-600',
+];
+
+function getAvatarGradient(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
+}
+
+function getInitials(name: string): string {
+  if (!name) return '?';
+  return name
+    .split(/\s+/)
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
 function getTransactionType(transaction: TransactionItem): TransactionType {
   if (transaction.paymentStatus === 'REFUNDED') return 'refund';
   if (transaction.paymentStatus === 'VOIDED' || transaction.paymentStatus === 'CANCELLED') return 'void';
@@ -494,6 +539,9 @@ function TransactionRow({
 }) {
   const items = Array.isArray(transaction.items) ? transaction.items : [];
   const txType = getTransactionType(transaction);
+  const customerName = transaction.customer?.name || 'Walk-in';
+  const avatarGradient = getAvatarGradient(customerName);
+  const customerInitials = getInitials(customerName);
 
   return (
     <>
@@ -508,7 +556,7 @@ function TransactionRow({
         <TableCell className="font-mono text-xs">
           <div className="flex items-center gap-1.5">
             {isExpanded ? <ChevronUp className="h-3 w-3 text-muted-foreground" /> : <ChevronDown className="h-3 w-3 text-muted-foreground" />}
-            {transaction.receiptNumber}
+            <span className="truncate max-w-[120px]" title={transaction.receiptNumber}>{transaction.receiptNumber}</span>
           </div>
         </TableCell>
         <TableCell className="text-xs">
@@ -518,10 +566,25 @@ function TransactionRow({
           </Badge>
         </TableCell>
         <TableCell className="text-xs">{formatDateTime(transaction.createdAt)}</TableCell>
-        <TableCell className="text-xs">{transaction.customer?.name || 'Walk-in'}</TableCell>
-        <TableCell className="text-xs text-center">{items.length}</TableCell>
+        <TableCell className="text-xs">
+          <div className="flex items-center gap-2">
+            {/* Customer avatar — initials in gradient circle */}
+            <div
+              className={`shrink-0 h-7 w-7 rounded-full bg-gradient-to-br ${avatarGradient} text-white text-[10px] font-bold flex items-center justify-center shadow-sm`}
+              title={customerName}
+            >
+              {customerInitials}
+            </div>
+            <span className="truncate max-w-[120px]">{customerName}</span>
+          </div>
+        </TableCell>
+        <TableCell className="text-xs text-center">
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
+            {items.length} {items.length === 1 ? 'item' : 'items'}
+          </Badge>
+        </TableCell>
         <TableCell className="text-xs font-bold text-right">
-          <span className={txType === 'refund' ? 'text-amber-600' : txType === 'void' ? 'text-red-600 line-through' : 'text-foreground'}>
+          <span className={`text-sm ${txType === 'refund' ? 'text-amber-600' : txType === 'void' ? 'text-red-600 line-through' : 'text-foreground'}`}>
             {txType === 'refund' ? '-' : ''}{formatKES(transaction.totalAmount)}
           </span>
         </TableCell>
