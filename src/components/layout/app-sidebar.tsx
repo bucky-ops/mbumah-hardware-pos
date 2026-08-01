@@ -18,6 +18,16 @@ import {
   Keyboard, ShieldCheck, CheckCircle,
 } from 'lucide-react';
 
+/** Get role-based avatar ring class */
+function getAvatarRingClass(role?: string): string {
+  if (!role) return '';
+  const r = role.toUpperCase();
+  if (r === 'SUPER_ADMIN' || r === 'STORE_OWNER') return 'avatar-ring-admin';
+  if (r === 'BRANCH_MANAGER' || r === 'ACCOUNTANT') return 'avatar-ring-manager';
+  if (r === 'CASHIER' || r === 'SALES_ASSOCIATE') return 'avatar-ring-cashier';
+  return '';
+}
+
 export function AppSidebar() {
   const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen, currentStoreId, setCurrentStoreId, isSidebarCollapsed, toggleSidebarCollapse, setSidebarCollapsed, getSidebarState } = useAppStore();
   const user = useAuthStore((s) => s.user);
@@ -26,6 +36,19 @@ export function AppSidebar() {
   const [notificationOpen, setNotificationOpen] = useState(false);
   const notificationCount = useNotificationCount(currentStoreId);
   const sidebarRef = useRef<HTMLElement>(null);
+  // Track previous notification count for bounce animation
+  const prevNotifCount = useRef(0);
+  const [notifBadgeKey, setNotifBadgeKey] = useState(0);
+
+  // Bounce notification badge when count changes
+  useEffect(() => {
+    const prev = prevNotifCount.current;
+    prevNotifCount.current = notificationCount.unread;
+    if (notificationCount.unread > prev && prev >= 0) {
+      // Use requestAnimationFrame to defer setState outside the synchronous effect
+      requestAnimationFrame(() => setNotifBadgeKey((k) => k + 1));
+    }
+  }, [notificationCount.unread]);
 
   // Track whether viewport is desktop (≥ lg breakpoint)
   const isDesktop = useSyncExternalStore(
@@ -86,27 +109,31 @@ export function AppSidebar() {
     .filter(g => g.items.length > 0);
 
   const renderNavItem = ({ id, label, icon: Icon }: { id: AppTab; label: string; icon: React.ElementType }) => {
+    const isActive = activeTab === id;
     const btn = (
       <button
         key={id}
         onClick={() => handleNav(id)}
-        className={`w-full flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-300 ease-out relative group ${
+        className={`w-full flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-300 ease-out relative group sidebar-nav-item ${
           collapsed ? 'px-0 py-2.5 justify-center' : 'px-4 py-2.5'
         } ${
-          activeTab === id
+          isActive
             ? 'bg-sidebar-primary/90 text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/25'
             : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground hover:translate-x-1'
         }`}
       >
-        {activeTab === id && (
+        {/* Active item left border accent indicator */}
+        {isActive && (
           <div className="absolute left-0 top-0.5 bottom-0.5 w-1 rounded-r-full bg-sidebar-primary-foreground/90 transition-all duration-300 shadow-[0_0_6px] shadow-sidebar-primary-foreground/30" />
         )}
-        <Icon className={`h-4 w-4 shrink-0 relative z-10 transition-transform duration-300 ${activeTab === id ? 'scale-110' : 'group-hover:scale-110'}`} />
+        <Icon className={`h-4 w-4 shrink-0 relative z-10 transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
         {!collapsed && <span className="relative z-10">{label}</span>}
         {!collapsed && id === 'pos' && <kbd className="ml-auto text-[8px] opacity-40 hidden xl:inline">F2</kbd>}
         {!collapsed && id === 'inventory' && <kbd className="ml-auto text-[8px] opacity-40 hidden xl:inline">F3</kbd>}
         {!collapsed && id === 'customers' && <kbd className="ml-auto text-[8px] opacity-40 hidden xl:inline">F4</kbd>}
         {!collapsed && id === 'financial' && <kbd className="ml-auto text-[8px] opacity-40 hidden xl:inline">F5</kbd>}
+        {/* Ripple effect overlay on click */}
+        <span className="absolute inset-0 overflow-hidden rounded-lg pointer-events-none" />
       </button>
     );
 
@@ -120,6 +147,8 @@ export function AppSidebar() {
     }
     return btn;
   };
+
+  const avatarRingClass = getAvatarRingClass(user?.role);
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -147,8 +176,8 @@ export function AppSidebar() {
         }`}
       >
         <div className="flex flex-col h-full">
-          {/* Logo + Collapse Toggle */}
-          <div className={`flex items-center gap-3 border-b border-sidebar-border relative ${collapsed ? 'px-2 py-4 justify-center' : 'px-4 py-5'}`}>
+          {/* Logo + Collapse Toggle — gradient header */}
+          <div className={`flex items-center gap-3 border-b border-sidebar-border relative sidebar-header-gradient ${collapsed ? 'px-2 py-4 justify-center' : 'px-4 py-5'}`}>
             <div className={`rounded-lg overflow-hidden bg-sidebar-primary flex items-center justify-center shrink-0 ${collapsed ? 'w-8 h-8' : 'w-9 h-9'}`}>
               <img src="/logo.png" alt="MH" className="w-full h-full object-cover" />
             </div>
@@ -167,7 +196,7 @@ export function AppSidebar() {
               >
                 <Bell className="h-4 w-4" />
                 {notificationCount.unread > 0 ? (
-                  <span className={`absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[9px] font-bold text-white px-1 ${notificationCount.critical > 0 ? 'bg-red-500 animate-pulse' : 'bg-amber-500'}`}>
+                  <span key={notifBadgeKey} className={`absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[9px] font-bold text-white px-1 animate-badge-bounce-in ${notificationCount.critical > 0 ? 'bg-red-500 animate-pulse' : 'bg-amber-500'}`}>
                     {notificationCount.unread > 99 ? '99+' : notificationCount.unread}
                   </span>
                 ) : null}
@@ -207,7 +236,7 @@ export function AppSidebar() {
                   >
                     <Bell className="h-4 w-4" />
                     {notificationCount.unread > 0 && (
-                      <span className={`absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 flex items-center justify-center rounded-full text-[8px] font-bold text-white px-0.5 ${notificationCount.critical > 0 ? 'bg-red-500 animate-pulse' : 'bg-amber-500'}`}>
+                      <span key={`collapsed-${notifBadgeKey}`} className={`absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 flex items-center justify-center rounded-full text-[8px] font-bold text-white px-0.5 animate-badge-bounce-in ${notificationCount.critical > 0 ? 'bg-red-500 animate-pulse' : 'bg-amber-500'}`}>
                         {notificationCount.unread > 99 ? '99+' : notificationCount.unread}
                       </span>
                     )}
@@ -280,7 +309,7 @@ export function AppSidebar() {
             ))}
           </nav>
 
-          {/* Footer - User Profile Dropdown */}
+          {/* Footer - User Profile Dropdown — role-based avatar ring */}
           <div className={`border-t border-sidebar-border py-3 space-y-2 ${collapsed ? 'px-1' : 'px-3'}`}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -289,7 +318,7 @@ export function AppSidebar() {
                     <TooltipTrigger asChild>
                       <div className="w-full flex justify-center px-1 py-2 rounded-lg hover:bg-sidebar-accent transition-colors cursor-pointer" role="button" tabIndex={0}>
                         <div className="relative">
-                          <Avatar className="h-8 w-8 ring-2 ring-sidebar-primary/20">
+                          <Avatar className={`h-8 w-8 ring-2 ring-sidebar-primary/20 ${avatarRingClass}`}>
                             <AvatarFallback className="bg-gradient-to-br from-sidebar-primary to-sidebar-primary/70 text-sidebar-primary-foreground text-[10px] font-semibold">
                               {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
                             </AvatarFallback>
@@ -305,7 +334,7 @@ export function AppSidebar() {
                 ) : (
                   <div className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors text-left cursor-pointer" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}>
                     <div className="relative">
-                      <Avatar className="h-9 w-9 ring-2 ring-sidebar-primary/20">
+                      <Avatar className={`h-9 w-9 ring-2 ring-sidebar-primary/20 ${avatarRingClass}`}>
                         <AvatarFallback className="bg-gradient-to-br from-sidebar-primary to-sidebar-primary/70 text-sidebar-primary-foreground text-xs font-semibold">
                           {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
                         </AvatarFallback>

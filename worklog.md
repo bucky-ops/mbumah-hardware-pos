@@ -417,3 +417,163 @@ Stage Summary:
 - Nginx provides: rate limiting, security headers, SSL termination, static caching
 - CI/CD: automated build → GHCR push → SSH deploy with health verification
 - All 7 phases complete and pushed to GitHub
+
+---
+Task ID: 3-b
+Agent: frontend-styling-expert
+Task: Enhance UI Styling with More Detail and Animations
+
+Work Log:
+- Added 15+ new CSS animations to globals.css:
+  - `prefers-reduced-motion` media query: disables all animations for accessibility
+  - Page fade-in (`animate-page-enter`) and slide-up (`animate-slide-up`) transitions
+  - Scale-in hover (`animate-scale-in-hover`) and pulse active (`animate-pulse-active`)
+  - Staggered children animation (`animate-stagger-item`) for list items
+  - Ripple effect (`animate-ripple`) and slide-out-right (`animate-slide-out`)
+  - Glow hover (`animate-glow-hover`) and badge bounce-in (`animate-badge-bounce-in`)
+  - Shake warning (`animate-shake-warning`) and new badge pulse (`animate-new-badge`)
+  - Gradient border utility (`.gradient-border`) with color variants for stat cards
+  - Stat card shadow variants (`.stat-shadow-green/blue/amber/red`)
+  - Click micro-interaction (`.micro-click`) with scale-down-then-up bounce
+  - Sidebar gradient header (`.sidebar-header-gradient`)
+  - Role-based avatar ring colors (`.avatar-ring-admin/manager/cashier`)
+  - Checkout button glow effect (`.checkout-glow`)
+  - Glass card effect (`.glass-card`) with backdrop-blur + saturate
+  - Product card hover lift (`.product-card-lift`) with enhanced shadow
+
+- Enhanced Login Screen (`src/components/login-screen.tsx`):
+  - Added framer-motion for entrance animations (motion.div, AnimatePresence)
+  - Multi-layer animated gradient background (3 gradient layers with staggered timing)
+  - Floating particle pattern (20 deterministic particles with drift animation)
+  - Dot grid pattern overlay for depth
+  - Glassmorphism login card (backdrop-blur + saturate + semi-transparent border)
+  - Border shimmer glow animation on the card
+  - Animated logo with spring physics entrance (scale + rotate)
+  - Glow pulse animation on logo ring
+  - Smooth focus glow on input fields (login-input CSS class with keyframe glow)
+  - Animated gradient submit button with micro-click interaction
+  - AnimatePresence for loading/idle state transitions on submit button
+  - Brand tagline and footer fade-in from below with staggered delays
+  - Trust badges with hover scale + shadow effects
+
+- Enhanced DashboardStats in pos-tab.tsx:
+  - Color-coded stat card classes: green (revenue), blue (transactions), amber (low stock), red (debt)
+  - Gradient border on hover using CSS pseudo-elements (`.stat-card-*` variants)
+  - Stat-specific hover shadow colors (`.stat-shadow-*`)
+  - Micro-click interaction (scale-down-then-up on click)
+  - Staggered fade-in animation with 80ms delay per card
+  - Removed `active:translate-y-0` in favor of `micro-click` bounce animation
+
+- Enhanced ProductCard in pos-tab.tsx:
+  - Replaced `hover:-translate-y-1 hover:shadow-xl hover:scale-[1.02]` with `product-card-lift` class
+  - Smoother hover: -4px lift + enhanced shadow with cubic-bezier easing
+  - Increased image zoom on hover from scale-110 to scale-115 with ease-out
+  - "NEW" badge now has pulse animation (`animate-new-badge`)
+  - "OUT OF STOCK" and "LOW STOCK" badges now have shake animation (`animate-shake-warning`)
+
+- Enhanced Cart Section in pos-tab.tsx:
+  - CartItemRow: added `animate-stagger-item` for smooth entrance when not newly added
+  - Checkout button: added `checkout-glow` hover glow + `micro-click` press feedback
+  - EmptyCartState: enhanced with fade-in animation, shimmer on empty lines, floating particles
+
+- Enhanced Sidebar (`src/components/layout/app-sidebar.tsx`):
+  - Gradient header background (`.sidebar-header-gradient`)
+  - Active nav item: left border accent indicator with glow shadow
+  - Sidebar nav item: `sidebar-nav-item` class for hover ripple effect
+  - Notification badge: bounce-in animation (`animate-badge-bounce-in`) when count increases
+  - Uses requestAnimationFrame to defer setState (fixes lint error)
+  - Role-based avatar ring: gold glow for admin, blue for manager, green for cashier
+  - `getAvatarRingClass()` helper function for role-based styling
+
+- Fixed lint errors:
+  - Fixed `text?amber-400` typo → `text-amber-400` in login-screen.tsx
+  - Fixed notification badge setState-in-effect by deferring with requestAnimationFrame
+  - Final lint: 0 errors, 352 warnings (pre-existing)
+
+Stage Summary:
+- 15+ new CSS animations and utilities added to globals.css
+- Login screen: glassmorphism, floating particles, framer-motion entrance animations, input glow
+- Dashboard stats: gradient borders, color-coded hover shadows, micro-click, staggered entrance
+- Product cards: enhanced hover lift, image zoom, animated badges (pulse NEW, shake LOW STOCK)
+- Cart: staggered item entrance, checkout glow, animated empty state
+- Sidebar: gradient header, notification badge bounce, role-based avatar ring, nav item ripple
+- All animations respect `prefers-reduced-motion`
+- Lint: 0 errors, 352 warnings (pre-existing)
+
+---
+Task ID: 3-a
+Agent: receipt-export-agent
+Task: Add Enhanced Receipt Printing + Export Functionality
+
+Work Log:
+- Created `src/components/pos/receipt-print.tsx` — Enhanced receipt component with:
+  - Professional receipt layout with company logo area (MBUMAH HARDWARE)
+  - Itemized table with quantities, unit prices, and subtotals (5-col grid)
+  - Tax breakdown (VAT 16%) with taxable amount and exempt/zero-rated lines
+  - Payment method details with icons (CASH, MPESA, DEBT, SPLIT, GIFT_CARD)
+  - M-Pesa transaction reference display (mpesaReference prop)
+  - Gift card/voucher redemption details with color-coded rows
+  - Change amount display with green highlight and checkmark icon
+  - Voucher discount with gift icon
+  - Barcode/QR code area placeholder with receipt number
+  - Auto-print capability (autoPrint prop triggers window.print() on dialog open)
+  - Thermal receipt format (80mm width) via @media print CSS
+  - Monospace font option (thermalMode prop) for POS printers
+  - Copy receipt to clipboard functionality
+  - Enhanced WhatsApp sharing with full receipt details
+  - PDF download via browser print dialog
+  - Store email and KRA PIN (taxPin) on receipt
+  - ETR invoice reference line for Kenyan tax compliance
+  - Standalone ReceiptCard component for embedding in transaction history views
+  - Backward-compatible re-export of original ReceiptPrintPreview
+  - Fixed React hooks rule-of-hooks (all hooks called before conditional return)
+
+- Created `src/lib/export-utils.ts` — Browser-safe export utilities:
+  - `exportToCSV(data, filename, options)` — Export any data array to CSV with RFC 4180 escaping
+    - Proper comma, double-quote, and newline escaping
+    - Optional header ordering and human-readable labels
+    - UTF-8 BOM for Excel compatibility
+  - `exportToPDF(title, content)` — Generate PDF receipt via browser print
+    - Opens new window with monospace-styled 80mm receipt
+    - Auto-triggers print dialog after content loads
+  - `generateReceiptHTML(receiptData)` — Build receipt HTML string for PDF export
+  - `exportTransactions(transactions)` — Export transaction history to CSV
+    - Includes receipt #, date, customer, cashier, payment method/status, amounts, item count
+    - KES currency formatting for all monetary fields
+    - ISO 8601 date formatting for easy parsing
+  - `exportInventory(products)` — Export product inventory to CSV
+    - Includes name, SKU, barcode, category, prices, stock levels, stock status
+    - LOW STOCK/OK status indicator based on reorder level
+  - `exportSalesReport(salesData, storeName)` — Export sales summary to CSV
+    - Daily breakdown by payment method (cash, M-Pesa, debt, gift card)
+
+- Created `src/app/api/batch/route.ts` — Batch operations API:
+  - POST endpoint for batch operations with `withErrorBoundary(requireAuth(...))` pattern
+  - `batchUpdatePrices` — Update multiple product prices at once (pricePerUnit, costPrice)
+  - `batchUpdateStock` — Update multiple product stock levels (quantityInStock, reorderLevel)
+    - Creates StockMovement records with ADJUSTMENT type
+  - `batchDeleteProducts` — Soft-delete (deactivate) multiple products
+  - Authentication: requires SUPER_ADMIN or STORE_OWNER role
+  - Transaction-based: all updates in `db.$transaction()` (all succeed or all fail)
+  - Validation: max 500 items per batch, per-field type/negative checks
+  - Pre-flight: verifies all products exist and are active in the store
+  - Audit logging: systemLog for each operation with severity and metadata
+
+- Enhanced `src/app/globals.css` — Added 8 new @media print rules:
+  - Rule 11: Monospace font for thermal printers (`.receipt-printable.font-mono`)
+  - Rule 12: Print payment method badges as bordered plain text
+  - Rule 13: QR/Barcode area compact sizing (60px max)
+  - Rule 14: Page break avoidance inside receipt sections
+  - Rule 15: Smart page break before footer
+  - Rule 16: Colored highlights (change/gift card rows) → bold text in print
+  - Rule 17: Hide broken images in print context
+  - Rule 18: Receipt card standalone print format
+
+- Lint: 0 errors, 352 warnings (pre-existing non-null assertions)
+
+Stage Summary:
+- Enhanced receipt component with 12+ new features (M-Pesa ref, gift card, voucher, change, QR placeholder, auto-print, thermal mode, VAT breakdown, copy, PDF)
+- Export utilities: CSV export (RFC 4180 compliant), PDF via browser print, transaction/inventory/sales CSV exporters
+- Batch API: 3 operations (update prices, update stock, soft-delete), transaction-safe, role-gated
+- Print CSS: 8 new rules for thermal printers, page breaks, and print-safe formatting
+- All new files pass lint with 0 errors
