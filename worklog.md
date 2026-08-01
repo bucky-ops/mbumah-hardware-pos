@@ -1159,3 +1159,93 @@ Stage Summary:
 4. Add KRA electronic tax invoice (eTIMS) integration
 5. Extract pos-tab.tsx handler functions into custom hooks
 6. Add multi-currency support (USD, UGX, TZS for East African trade)
+
+---
+Task ID: cron-v3.2.0
+Agent: Cron QA Agent
+Task: QA Assessment + Email Service + Multi-Currency + eTIMS Integration (v3.2.0)
+
+Work Log:
+- Read worklog.md to understand project state (v3.1.0)
+- Performed QA: dev server starts and serves HTTP 200, login page renders correctly
+- Lint check: 0 errors, 354 warnings (pre-existing)
+- Fixed lint error: removed unused KraBusinessProfileItem import from etims-tab.tsx
+
+- Feature: Email Notification Service (Task 2)
+  - Created src/lib/email-service.ts (590 lines) with 7 email functions using Resend
+  - Created src/lib/email-templates.ts (564 lines) with 6 HTML templates
+  - Prisma schema: User notification preferences (4 boolean fields) + NotificationLog model
+  - API routes: email send, test, logs, settings
+  - Enhanced notification-center.tsx with 3-tab layout (Alerts, Settings, Email Log)
+  - Auto-send receipt email after checkout (non-blocking IIFE)
+
+- Feature: Multi-Currency Support (Task 3)
+  - Created src/lib/currency-utils.ts with 4 currencies (KES, USD, UGX, TZS)
+  - Created src/hooks/use-currency.ts for reactive currency formatting
+  - Created src/components/currency-switcher.tsx dropdown with flags
+  - Prisma schema: Store.defaultCurrency + CurrencyRate model
+  - API routes: currency rates, settings currency
+  - Updated product-card, cart-item-row, checkout-dialog, dashboard-stats, kpi-grid
+  - Added CurrencySwitcher to TopBar header
+
+- Feature: KRA eTIMS Integration (Task 4-5)
+  - Created src/lib/etims-service.ts (mock implementation) with 8 functions
+  - Created src/lib/etims-utils.ts with PIN validation, invoice generation, tax breakdown
+  - Created src/lib/etims-types.ts with TypeScript types
+  - Created src/components/etims/qr-code-display.tsx with SVG QR generation
+  - Created src/components/etims/invoice-card.tsx with status badges
+  - API routes: dashboard, register-product, issue-invoice, settings, test-connection
+  - Prisma schema: Product etims fields (itemCode, registeredAt, taxType)
+  - Prisma schema: SalesTransaction etims fields (invoiceNumber, qrCode, url, status)
+
+- Fixed lint errors:
+  - Removed unused initializeEtimsClient imports from dashboard/settings routes
+  - Prefixed unused staggerContainer/staggerItem with underscore
+  - Removed unused FileText import from invoice-card
+  - Prefixed unused currency/invoiceNumber params with underscore
+
+- Verified: lint 0 errors, dev server HTTP 200, login page renders
+- Git: committed 0cde857, tagged v3.2.0, pushed to origin/main
+
+Stage Summary:
+- 3 major feature systems added (email, multi-currency, eTIMS)
+- 16+ new files created (API routes, components, utilities)
+- 5+ existing files enhanced
+- Currency switcher integrated into header
+- Lint: 0 errors maintained throughout
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PROJECT STATUS SUMMARY (Updated — v3.2.0)
+# ─────────────────────────────────────────────────────────────────────────────
+
+## Current Project Status
+- **Version**: v3.2.0 (commit 0cde857, pushed to GitHub)
+- **Database**: Local SQLite (82+ tables, seeded)
+- **Lint**: 0 errors, 354 warnings (pre-existing)
+- **Features**: Loyalty, analytics, stock tracking, reports, email, multi-currency, eTIMS
+- **Dev Server**: Works but memory-constrained in sandbox
+
+## Completed Modifications (This Session)
+1. **Email Service**: Full notification system with Resend integration
+   - 7 email types, 6 HTML templates, notification logs, user preferences
+   - Auto-send receipts, low-stock alerts, daily reports
+2. **Multi-Currency**: KES, USD, UGX, TZS for East African trade
+   - Currency switcher in header, reactive formatting, DB-stored rates
+3. **KRA eTIMS**: Electronic tax invoice management
+   - Product registration, invoice issuing, QR codes, PIN validation
+   - Mock implementation ready for production KRA API
+4. **UI Enhancements**: Currency switcher in TopBar, notification center 3-tab layout
+
+## Unresolved Issues / Risks
+1. **Dev server memory**: Turbopack compilation OOM-kills in sandbox
+2. **eTIMS is mock**: Needs real KRA API integration for production
+3. **Email service**: Needs RESEND_API_KEY env var for production
+4. **Currency rates**: Static rates need live API for accuracy
+
+## Priority Recommendations for Next Phase
+1. Add E2E tests (Playwright) for checkout, loyalty, and email flows
+2. Integrate real KRA eTIMS API (replace mock implementation)
+3. Add live currency exchange rate API (CBK Kenya Central Bank rates)
+4. Implement real-time notifications via WebSocket mini-service
+5. Add customer debt management enhancements (payment plans, reminders)
+6. Add supplier performance analytics dashboard
