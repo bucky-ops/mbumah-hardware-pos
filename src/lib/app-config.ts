@@ -20,7 +20,7 @@ import {
   CreditCard, Ticket, Receipt, Building2,
   CircleDollarSign, BadgeDollarSign, MessageSquare, MessagesSquare,
   ArrowUpDown, Landmark, Award, Wallet, Shield, Settings,
-  LineChart,
+  LineChart, Database, CalendarDays,
 } from 'lucide-react';
 
 export const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType; roles: string[] }[] = [
@@ -43,12 +43,15 @@ export const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType; r
   { id: 'delivery', label: 'Delivery', icon: Truck, roles: SENIOR_ROLES },
   { id: 'credits', label: 'Credits', icon: CircleDollarSign, roles: MGMT_ROLES },
   { id: 'debt-management', label: 'Debt Mgmt', icon: BadgeDollarSign, roles: MGMT_ROLES },
+  { id: 'debt-plans', label: 'Debt Plans', icon: BadgeDollarSign, roles: MGMT_ROLES },
   { id: 'messaging', label: 'Messaging', icon: MessageSquare, roles: ALL_ROLES },
   { id: 'conversations', label: 'Chat', icon: MessagesSquare, roles: ALL_ROLES },
   { id: 'transfers', label: 'Transfers', icon: ArrowUpDown, roles: SENIOR_ROLES },
   { id: 'banking', label: 'Banking', icon: Landmark, roles: ['SUPER_ADMIN', 'STORE_OWNER', 'ACCOUNTANT'] },
   { id: 'loyalty', label: 'Loyalty', icon: Award, roles: SENIOR_ROLES },
   { id: 'payroll', label: 'Payroll', icon: Wallet, roles: MGMT_ROLES },
+  { id: 'data-exports', label: 'Data Exports', icon: Database, roles: MGMT_ROLES },
+  { id: 'shift-scheduling', label: 'Shift Scheduling', icon: CalendarDays, roles: MGMT_ROLES },
   { id: 'security', label: 'Security', icon: Shield, roles: ADMIN_ROLES },
   { id: 'admin', label: 'Admin', icon: Settings, roles: ADMIN_ROLES },
 ];
@@ -57,10 +60,10 @@ export const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType; r
 
 export const NAV_GROUPS: { label: string; ids: AppTab[] }[] = [
   { label: 'Main', ids: ['dashboard', 'pos', 'catalog', 'inventory', 'customers', 'transactions'] },
-  { label: 'Sales & Credit', ids: ['invoices', 'delivery', 'credits', 'debt-management', 'vouchers', 'gift-cards', 'loyalty'] },
+  { label: 'Sales & Credit', ids: ['invoices', 'delivery', 'credits', 'debt-management', 'debt-plans', 'vouchers', 'gift-cards', 'loyalty'] },
   { label: 'Finance & Insights', ids: ['financial', 'analytics', 'banking', 'payroll', 'transfers'] },
-  { label: 'Operations', ids: ['rentals', 'suppliers', 'messaging', 'conversations'] },
-  { label: 'Compliance & System', ids: ['etims', 'reports', 'security', 'admin'] },
+  { label: 'Operations', ids: ['rentals', 'suppliers', 'messaging', 'conversations', 'shift-scheduling'] },
+  { label: 'Compliance & System', ids: ['etims', 'reports', 'data-exports', 'security', 'admin'] },
 ];
 
 // ── Category Images ─────────────────────────────────────────────────────────

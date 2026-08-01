@@ -818,6 +818,379 @@ export const debtApi = {
   },
 };
 
+// ─── Debt Payment Plans ─────────────────────────────────────────────────────
+//
+// Installment-based repayment schedules for outstanding customer debts.
+
+export type DebtPlanStatus =
+  | 'PENDING_APPROVAL'
+  | 'ACTIVE'
+  | 'COMPLETED'
+  | 'DEFAULTED'
+  | 'CANCELLED'
+  | 'PAUSED';
+
+export type DebtPlanFrequency = 'WEEKLY' | 'BI_WEEKLY' | 'MONTHLY';
+
+export type DebtInstallmentStatus =
+  | 'SCHEDULED'
+  | 'PAID'
+  | 'PARTIAL'
+  | 'OVERDUE'
+  | 'MISSED'
+  | 'WAIVED';
+
+export interface DebtPlanInstallmentItem {
+  id: string;
+  planId: string;
+  installmentNumber: number;
+  dueDate: string;
+  amountDue: number;
+  amountPaid: number;
+  status: DebtInstallmentStatus;
+  paidAt: string | null;
+  paymentMethod: string | null;
+  paymentReference: string | null;
+  lateFeeApplied: number;
+  waiverReason: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DebtPaymentPlanItem {
+  id: string;
+  storeId: string;
+  customerId: string;
+  debtLedgerId: string;
+  createdById: string;
+  approvedById: string | null;
+  status: DebtPlanStatus;
+  totalAmount: number;
+  installmentCount: number;
+  installmentAmount: number;
+  frequency: DebtPlanFrequency;
+  startDate: string;
+  endDate: string;
+  amountPaid: number;
+  balance: number;
+  installmentsPaid: number;
+  installmentsOverdue: number;
+  interestRate: number;
+  lateFee: number;
+  notes: string | null;
+  autoCharge: boolean;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  customer?: {
+    id: string;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    currentDebtBalance: number;
+    debtLimit?: number;
+  };
+  debtLedger?: {
+    id: string;
+    amountOwed: number;
+    amountPaid?: number;
+    balance: number;
+    status: string;
+    dueDate?: string;
+  } | null;
+  createdBy?: { id: string; name: string };
+  approvedBy?: { id: string; name: string } | null;
+  installments?: DebtPlanInstallmentItem[];
+  _count?: { installments: number };
+}
+
+export interface DebtPaymentPlanStats {
+  totalActivePlans: number;
+  totalOutstandingBalance: number;
+  plansWithOverdueInstallments: number;
+  completedThisMonth: number;
+  totalCollectedThisMonth: number;
+  totalPendingApproval: number;
+}
+
+export interface CreateDebtPaymentPlanPayload {
+  storeId: string;
+  customerId: string;
+  debtLedgerId: string;
+  totalAmount: number;
+  installmentCount: number;
+  frequency: DebtPlanFrequency;
+  startDate: string;
+  interestRate?: number;
+  lateFee?: number;
+  notes?: string;
+  autoCharge?: boolean;
+}
+
+export const debtPaymentPlansApi = {
+  list: async (params?: {
+    storeId?: string;
+    customerId?: string;
+    status?: DebtPlanStatus | '';
+    overdue?: boolean;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.storeId) query.set('storeId', params.storeId);
+    if (params?.customerId) query.set('customerId', params.customerId);
+    if (params?.status) query.set('status', params.status);
+    if (params?.overdue) query.set('overdue', 'true');
+    return request<DebtPaymentPlanItem[]>(`/debt-payment-plans?${query.toString()}`);
+  },
+
+  get: async (id: string) => {
+    return request<DebtPaymentPlanItem>(`/debt-payment-plans/${id}`);
+  },
+
+  create: async (data: CreateDebtPaymentPlanPayload) => {
+    return request<DebtPaymentPlanItem>('/debt-payment-plans', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: async (
+    id: string,
+    data: { notes?: string; status?: 'PAUSED' | 'ACTIVE' | 'CANCELLED' },
+  ) => {
+    return request<DebtPaymentPlanItem>(`/debt-payment-plans/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: string) => {
+    return request<{ message: string }>(`/debt-payment-plans/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  approve: async (id: string) => {
+    return request<DebtPaymentPlanItem>(`/debt-payment-plans/${id}/approve`, {
+      method: 'POST',
+    });
+  },
+
+  listInstallments: async (id: string) => {
+    return request<DebtPlanInstallmentItem[]>(
+      `/debt-payment-plans/${id}/installments`,
+    );
+  },
+
+  payInstallment: async (
+    planId: string,
+    installmentId: string,
+    data: { amount: number; paymentMethod: string; paymentReference?: string },
+  ) => {
+    return request<{
+      plan: DebtPaymentPlanItem;
+      installment: DebtPlanInstallmentItem;
+    }>(`/debt-payment-plans/${planId}/installments/${installmentId}/pay`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  waiveInstallment: async (
+    planId: string,
+    installmentId: string,
+    data: { waiverReason: string },
+  ) => {
+    return request<{
+      plan: DebtPaymentPlanItem;
+      installment: DebtPlanInstallmentItem;
+    }>(`/debt-payment-plans/${planId}/installments/${installmentId}/waive`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  stats: async (storeId: string) => {
+    return request<DebtPaymentPlanStats>(
+      `/debt-payment-plans/stats?storeId=${encodeURIComponent(storeId)}`,
+    );
+  },
+};
+
+// ─── Data Exports ────────────────────────────────────────────────────────────
+//
+// Server-side data export dashboard. Each call to `create` synchronously
+// generates the file (CSV or JSON) and persists it under
+// `/home/z/my-project/download/exports/`. The returned row carries the
+// `filePath` and a 7-day `expiresAt`; downloads go through
+// `/api/data-exports/[id]/download`.
+
+export type DataExportType =
+  | 'PRODUCTS'
+  | 'CUSTOMERS'
+  | 'TRANSACTIONS'
+  | 'DEBT'
+  | 'INVENTORY'
+  | 'EMPLOYEES'
+  | 'SUPPLIERS'
+  | 'LOYALTY'
+  | 'TAX'
+  | 'SALES_SUMMARY';
+
+export type DataExportFormat = 'CSV' | 'JSON';
+
+export type DataExportStatus =
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'EXPIRED';
+
+export interface DataExportItem {
+  id: string;
+  storeId: string;
+  createdById: string;
+  exportType: DataExportType;
+  format: DataExportFormat;
+  filters: string;
+  dateFrom: string | null;
+  dateTo: string | null;
+  recordCount: number;
+  fileSizeBytes: number;
+  filePath: string | null;
+  status: DataExportStatus;
+  errorMessage: string | null;
+  expiresAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  createdBy?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+}
+
+export interface DataExportsStats {
+  totalExports: number;
+  completedExports: number;
+  failedExports: number;
+  totalRecordsExported: number;
+  totalFileSizeBytes: number;
+  successRate: number;
+  byType: Record<string, { count: number; records: number }>;
+}
+
+export interface CreateDataExportPayload {
+  storeId: string;
+  exportType: DataExportType;
+  format: DataExportFormat;
+  dateFrom?: string;
+  dateTo?: string;
+  filters?: Record<string, unknown>;
+}
+
+export const dataExportsApi = {
+  list: async (params?: {
+    storeId?: string;
+    status?: DataExportStatus | '';
+    exportType?: DataExportType | '';
+    limit?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.storeId) query.set('storeId', params.storeId);
+    if (params?.status) query.set('status', params.status);
+    if (params?.exportType) query.set('exportType', params.exportType);
+    if (params?.limit) query.set('limit', String(params.limit));
+    return request<DataExportItem[]>(`/data-exports?${query.toString()}`);
+  },
+
+  get: async (id: string) => {
+    return request<DataExportItem>(`/data-exports/${id}`);
+  },
+
+  create: async (data: CreateDataExportPayload) => {
+    return request<DataExportItem>('/data-exports', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: string) => {
+    return request<{ message: string }>(`/data-exports/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  stats: async (storeId: string) => {
+    return request<DataExportsStats>(
+      `/data-exports/stats?storeId=${encodeURIComponent(storeId)}`,
+    );
+  },
+
+  /**
+   * Returns the relative URL for downloading an export file. The caller is
+   * responsible for fetching with auth headers (see `fetchDownload` below).
+   */
+  downloadUrl: (id: string): string => `/api/data-exports/${id}/download`,
+
+  /**
+   * Fetch the export file as a Blob and trigger a browser download. Handles
+   * the Bearer token + CSRF headers the same way `request` does.
+   */
+  download: async (id: string, fallbackName = 'export'): Promise<void> => {
+    const token =
+      typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null;
+
+    let csrfHeader: Record<string, string> = {};
+    // GET requests don't strictly need CSRF, but the gateway enforces it for
+    // state-changing methods only. We still send the token if available.
+    if (!csrfToken && typeof window !== 'undefined') {
+      await fetchCSRFToken();
+    }
+    if (csrfToken) csrfHeader = { 'X-CSRF-Token': csrfToken };
+
+    const res = await fetch(`/api/data-exports/${id}/download`, {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...csrfHeader,
+      },
+    });
+
+    if (!res.ok) {
+      let errMsg = `Download failed (HTTP ${res.status})`;
+      try {
+        const errJson = await res.json();
+        if (errJson?.error) errMsg = errJson.error;
+      } catch {
+        /* ignore parse error */
+      }
+      throw new Error(errMsg);
+    }
+
+    const blob = await res.blob();
+    // Use Content-Disposition if present, otherwise fall back.
+    const disposition = res.headers.get('Content-Disposition') || '';
+    let fileName = `${fallbackName}.${Date.now()}.csv`;
+    const match = disposition.match(/filename="?([^";]+)"?/i);
+    if (match && match[1]) fileName = match[1];
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 100);
+  },
+};
+
 
 export interface ExpenseItem {
   id: string;
@@ -2049,6 +2422,175 @@ export const shiftsApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  },
+};
+
+// ─── Shift Schedules (planned roster) ────────────────────────────────────────
+//
+// Distinct from `shiftsApi` (which records actual clock-in/out worked
+// shifts). `shiftSchedulesApi` is the *planned* weekly roster — recurring
+// weekly shifts or one-off assignments.
+
+export type ShiftScheduleStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED';
+
+export type ShiftScheduleColor =
+  | 'emerald'
+  | 'teal'
+  | 'amber'
+  | 'rose'
+  | 'violet'
+  | 'cyan'
+  | 'orange'
+  | 'purple';
+
+export interface ShiftScheduleItem {
+  id: string;
+  storeId: string;
+  userId: string;
+  title: string;
+  /** 0=Sun … 6=Sat. null for one-off. */
+  dayOfWeek: number | null;
+  /** ISO string. null for recurring. */
+  specificDate: string | null;
+  /** ISO string. Time-of-day matters; date portion is epoch (1970-01-01). */
+  startTime: string;
+  endTime: string;
+  recurrenceEndDate: string | null;
+  status: ShiftScheduleStatus;
+  color: string;
+  notes: string | null;
+  createdById: string | null;
+  createdAt: string;
+  updatedAt: string;
+  durationHours: number;
+  user?: {
+    id: string;
+    name: string;
+    role: string;
+    avatarUrl?: string | null;
+  };
+  store?: { id: string; name: string };
+}
+
+export interface CreateShiftSchedulePayload {
+  storeId: string;
+  userId: string;
+  title: string;
+  dayOfWeek?: number | null;
+  specificDate?: string | null;
+  startTime: string;
+  endTime: string;
+  recurrenceEndDate?: string | null;
+  color?: string;
+  notes?: string;
+}
+
+export interface UpdateShiftSchedulePayload {
+  title?: string;
+  dayOfWeek?: number | null;
+  specificDate?: string | null;
+  startTime?: string;
+  endTime?: string;
+  recurrenceEndDate?: string | null;
+  color?: string;
+  notes?: string | null;
+}
+
+export interface WeeklyDaySchedule {
+  date: string;
+  dayOfWeek: number;
+  isToday: boolean;
+  schedules: ShiftScheduleItem[];
+}
+
+export interface ShiftScheduleStats {
+  totalScheduledHours: number;
+  perUserHours: Array<{
+    userId: string;
+    name: string;
+    role: string;
+    avatarUrl?: string | null;
+    hours: number;
+    shiftCount: number;
+  }>;
+  shiftsPerDay: Array<{
+    date: string;
+    dayOfWeek: number;
+    count: number;
+    hours: number;
+  }>;
+  coverageGaps: Array<{ date: string; dayOfWeek: number }>;
+  peakDay: {
+    date: string;
+    dayOfWeek: number;
+    count: number;
+    hours: number;
+  } | null;
+  coverageDays: number;
+  activeStaff: number;
+  avgHoursPerStaff: number;
+}
+
+export const shiftSchedulesApi = {
+  list: async (params?: {
+    storeId?: string;
+    userId?: string;
+    status?: ShiftScheduleStatus | '';
+    dateFrom?: string;
+    dateTo?: string;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.storeId) query.set('storeId', params.storeId);
+    if (params?.userId) query.set('userId', params.userId);
+    if (params?.status) query.set('status', params.status);
+    if (params?.dateFrom) query.set('dateFrom', params.dateFrom);
+    if (params?.dateTo) query.set('dateTo', params.dateTo);
+    return request<ShiftScheduleItem[]>(`/shift-schedules?${query.toString()}`);
+  },
+
+  get: async (id: string) => {
+    return request<ShiftScheduleItem>(`/shift-schedules/${id}`);
+  },
+
+  create: async (data: CreateShiftSchedulePayload) => {
+    return request<ShiftScheduleItem>('/shift-schedules', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: async (id: string, data: UpdateShiftSchedulePayload) => {
+    return request<ShiftScheduleItem>(`/shift-schedules/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: string) => {
+    return request<{ message: string }>(`/shift-schedules/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  setStatus: async (id: string, status: ShiftScheduleStatus) => {
+    return request<ShiftScheduleItem>(`/shift-schedules/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+  },
+
+  weekly: async (storeId: string, weekStart: string) => {
+    const query = new URLSearchParams();
+    query.set('storeId', storeId);
+    query.set('weekStart', weekStart);
+    return request<WeeklyDaySchedule[]>(`/shift-schedules/weekly?${query.toString()}`);
+  },
+
+  stats: async (storeId: string, weekStart: string) => {
+    const query = new URLSearchParams();
+    query.set('storeId', storeId);
+    query.set('weekStart', weekStart);
+    return request<ShiftScheduleStats>(`/shift-schedules/stats?${query.toString()}`);
   },
 };
 

@@ -47,6 +47,9 @@ import {
 import { DashboardStats } from './dashboard/DashboardStats';
 import { RecentTransactions } from './dashboard/RecentTransactions';
 import { LowStockAlerts } from './dashboard/LowStockAlerts';
+import { TopCustomersWidget } from './dashboard/TopCustomersWidget';
+import { StoreHealthWidget } from './dashboard/StoreHealthWidget';
+import { HourlySalesWidget } from './dashboard/HourlySalesWidget';
 // Shared types — kept in a separate module to avoid circular imports
 import type { KpiMetricKey, KpiDetail } from './dashboard/types';
 // Re-export for backwards compatibility with any external consumers
@@ -1870,19 +1873,30 @@ export default function DashboardTab() {
       {/* Quick Actions Bar */}
       <QuickActions onTabSwitch={handleTabSwitch} />
 
-      {/* Bottom Grid: Activity Feed + Alerts + Top Products + Debt Aging + Sales Trend */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Bottom Grid: Activity Feed + Alerts + Top Products + Debt Aging + Sales Trend + Top Customers + Store Health */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Left Column */}
-        <div className="space-y-4">
+        <div className="space-y-4 stagger-1">
           <RecentTransactions storeId={currentStoreId} />
           <TopProductsTable storeId={currentStoreId} />
         </div>
 
-        {/* Right Column */}
-        <div className="space-y-4">
+        {/* Middle Column */}
+        <div className="space-y-4 stagger-2">
+          <StoreHealthWidget storeId={currentStoreId} />
+          <HourlySalesWidget storeId={currentStoreId} />
           <SalesTrendsWidget storeId={currentStoreId} onSeeMore={() => handleTabSwitch('reports')} />
-          <LowStockAlerts storeId={currentStoreId} onTabSwitch={handleTabSwitch} />
           <DebtAgingCard storeId={currentStoreId} />
+        </div>
+
+        {/* Right Column */}
+        <div className="space-y-4 stagger-3">
+          <TopCustomersWidget
+            storeId={currentStoreId}
+            onSeeMore={() => handleTabSwitch('customers')}
+            onTabSwitch={handleTabSwitch}
+          />
+          <LowStockAlerts storeId={currentStoreId} onTabSwitch={handleTabSwitch} />
         </div>
       </div>
 

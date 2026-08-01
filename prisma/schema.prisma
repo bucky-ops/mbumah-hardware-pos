@@ -129,6 +129,10 @@ model Store {
   trialBalanceSnapshots TrialBalanceSnapshot[]
   budgets              Budget[]
   auditLogs            AuditLog[]
+  // ── v3.4.0 module relations ────────────────────────────────────────────
+  debtPaymentPlans     DebtPaymentPlan[]
+  dataExports          DataExport[]
+  shiftSchedules       ShiftSchedule[]
 
   @@index([organizationId])
   @@map("stores")
@@ -190,6 +194,11 @@ model User {
   approvedPOs             PurchaseOrder[]     @relation("POApprovedBy")
   receivedPOs             PurchaseOrder[]     @relation("POReceivedBy")
   cancelledPOs            PurchaseOrder[]     @relation("POCancelledBy")
+  // ── v3.4.0 relations ────────────────────────────────────────────────────
+  createdDebtPaymentPlans DebtPaymentPlan[]   @relation("DebtPlanCreatedBy")
+  approvedDebtPaymentPlans DebtPaymentPlan[]  @relation("DebtPlanApprovedBy")
+  createdDataExports      DataExport[]        @relation("DataExportCreatedBy")
+  shiftSchedules          ShiftSchedule[]
 
   @@index([organizationId])
   @@index([storeId])
@@ -404,6 +413,8 @@ model Customer {
   loyalty                 CustomerLoyalty?
   loyaltyTransactions     LoyaltyTransaction[]
   customerInteractions    CustomerInteraction[]
+  // ── v3.4.0 relations ────────────────────────────────────────────────────
+  debtPaymentPlans        DebtPaymentPlan[]
 
   @@index([storeId])
   @@index([phone])
@@ -584,6 +595,8 @@ model DebtLedger {
   debtPayments DebtPayment[]
   // ── v2.0.0 debt-management relation ────────────────────────────────────
   reminders    DebtReminder[]
+  // ── v3.4.0 debt payment plans relation ─────────────────────────────────
+  paymentPlans DebtPaymentPlan[]
 
   @@index([storeId])
   @@index([customerId])
@@ -2710,4 +2723,192 @@ model AuditLog {
   @@index([storeId, entityType])
   @@index([timestamp])
   @@map("audit_logs")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// v3.4.0 — DEBT PAYMENT PLANS, DATA EXPORT, SHIFT SCHEDULING
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Debt Payment Plan — installment-based repayment for outstanding debts.
+/// Allows a store to formalize a repayment schedule with a customer, breaking
+/// a debt into N installments with due dates. Payments are tracked per
+/// installment and the plan status reflects overall progress.
+model DebtPaymentPlan {
+  id              String   @id @default(cuid())
+  storeId         String
+  customerId      String
+  debtLedgerId    String
+  createdById     String
+  approvedById    String?
+  // PENDING_APPROVAL, ACTIVE, COMPLETED, DEFAULTED, CANCELLED, PAUSED
+  status          String   @default("PENDING_APPROVAL")
+  // Total original debt amount (snapshot at plan creation)
+  totalAmount     Decimal
+  // Number of installments
+  installmentCount Int
+  // Per-installment amount (totalAmount / installmentCount, rounded)
+  installmentAmount Decimal
+  // Frequency: WEEKLY, BI_WEEKLY, MONTHLY
+  frequency       String   @default("MONTHLY")
+  // First installment due date
+  startDate       DateTime
+  // Computed end date (startDate + (installmentCount - 1) * frequency)
+  endDate         DateTime
+  // Total paid so far (denormalized for fast reads)
+  amountPaid      Decimal  @default(0)
+  // Outstanding balance on the plan
+  balance         Decimal
+  // Number of installments paid
+  installmentsPaid Int     @default(0)
+  // Number of installments overdue
+  installmentsOverdue Int  @default(0)
+  // Optional interest rate (annual %). 0 = interest-free.
+  interestRate    Decimal  @default(0)
+  // Optional late fee per missed installment
+  lateFee         Decimal  @default(0)
+  // Notes / terms agreed with the customer
+  notes           String?
+  // Auto-charge via M-Pesa STK push on due date (requires customer consent)
+  autoCharge      Boolean  @default(false)
+  // When the plan was completed/cancelled
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store         Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer      Customer     @relation(fields: [customerId], references: [id])
+  debtLedger    DebtLedger   @relation(fields: [debtLedgerId], references: [id], onDelete: Cascade)
+  createdBy     User         @relation("DebtPlanCreatedBy", fields: [createdById], references: [id])
+  approvedBy    User?        @relation("DebtPlanApprovedBy", fields: [approvedById], references: [id])
+  installments  DebtPlanInstallment[]
+
+  @@index([storeId])
+  @@index([customerId])
+  @@index([debtLedgerId])
+  @@index([status])
+  @@index([endDate])
+  @@map("debt_payment_plans")
+}
+
+/// A single installment in a debt payment plan.
+model DebtPlanInstallment {
+  id              String   @id @default(cuid())
+  planId          String
+  // Sequential installment number (1, 2, 3, ...)
+  installmentNumber Int
+  // Scheduled due date
+  dueDate         DateTime
+  // Amount due (principal + interest portion)
+  amountDue       Decimal
+  // Amount actually paid
+  amountPaid      Decimal  @default(0)
+  // SCHEDULED, PAID, PARTIAL, OVERDUE, MISSED, WAIVED
+  status          String   @default("SCHEDULED")
+  // When paid (if paid)
+  paidAt          DateTime?
+  // Payment method (CASH, MPESA, etc.) if paid
+  paymentMethod   String?
+  // Payment reference (M-Pesa code, receipt #, etc.)
+  paymentReference String?
+  // Late fee applied (if overdue)
+  lateFeeApplied  Decimal  @default(0)
+  // Waiver reason (if waived)
+  waiverReason    String?
+  // Notes
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  plan DebtPaymentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("debt_plan_installments")
+}
+
+/// Data Export — track batch data exports for compliance and audit.
+/// Records each export (type, format, filters) and stores the resulting file
+/// path so users can re-download or audit what was exported when.
+model DataExport {
+  id              String   @id @default(cuid())
+  storeId         String
+  createdById     String
+  // PRODUCTS, CUSTOMERS, TRANSACTIONS, DEBT, INVENTORY, EMPLOYEES,
+  // SUPPLIERS, PAYROLL, LOYALTY, TAX, SALES_SUMMARY, ALL
+  exportType     String
+  // CSV, XLSX, PDF, JSON
+  format          String
+  // JSON-encoded filter object (date range, category, etc.)
+  filters         String
+  // ISO date range covered
+  dateFrom        DateTime?
+  dateTo          DateTime?
+  // Number of records exported
+  recordCount     Int      @default(0)
+  // File size in bytes
+  fileSizeBytes   Int      @default(0)
+  // Relative path to the generated file (under /downloads/)
+  filePath        String?
+  // PENDING, PROCESSING, COMPLETED, FAILED, EXPIRED
+  status          String   @default("PENDING")
+  // Error message if failed
+  errorMessage    String?
+  // When the export expires (auto-cleanup after 7 days)
+  expiresAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+
+  store       Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdBy   User  @relation("DataExportCreatedBy", fields: [createdById], references: [id])
+
+  @@index([storeId])
+  @@index([exportType])
+  @@index([status])
+  @@index([createdAt])
+  @@index([createdById])
+  @@map("data_exports")
+}
+
+/// Shift Schedule — planned/recurring shift assignments for employees.
+/// Distinct from Shift (which records an actual worked shift). ShiftSchedule
+/// is the *planned* roster; Shift is the *actual* worked record (clock-in/out).
+model ShiftSchedule {
+  id              String   @id @default(cuid())
+  storeId         String
+  userId          String
+  // Shift title/label (e.g., "Morning", "Evening", "Weekend")
+  title           String
+  // MONDAY, TUESDAY, ..., SUNDAY — for recurring weekly shifts.
+  // For one-off shifts, this is null and specificDate is set.
+  dayOfWeek       Int?     // 0 = Sunday, 6 = Saturday
+  // For one-off shifts (overrides dayOfWeek if set)
+  specificDate    DateTime?
+  // Scheduled start/end times (time-of-day, stored as DateTime for SQLite compat)
+  startTime       DateTime
+  endTime         DateTime
+  // Recurring shifts repeat weekly until recurrenceEndDate.
+  // One-off shifts have null recurrenceEndDate.
+  recurrenceEndDate DateTime?
+  // ACTIVE, PAUSED, COMPLETED
+  status          String   @default("ACTIVE")
+  // Color label for the calendar (CSS color or tailwind class)
+  color           String   @default("emerald")
+  // Notes
+  notes           String?
+  // Created by manager
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store    Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user     User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([userId])
+  @@index([dayOfWeek])
+  @@index([specificDate])
+  @@index([status])
+  @@map("shift_schedules")
 }

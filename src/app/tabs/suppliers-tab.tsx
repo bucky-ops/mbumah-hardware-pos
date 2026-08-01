@@ -225,9 +225,9 @@ function DeliveryStatusIndicator({ po }: { po: PurchaseOrderListItem }) {
   );
 }
 
-// Supplier Performance Card
+// Supplier Performance Card (local, PO-based variant)
 
-function SupplierPerformanceCard({ purchaseOrders }: { purchaseOrders: PurchaseOrderListItem[] }) {
+function SupplierPOPerformanceCard({ purchaseOrders }: { purchaseOrders: PurchaseOrderListItem[] }) {
   const receivedPOs = purchaseOrders.filter(po => po.status === 'RECEIVED');
   const onTimePOs = receivedPOs.filter(po => {
     if (!po.expectedDate) return true;
@@ -1150,7 +1150,7 @@ function SupplierDetailView({
         </TabsContent>
 
         <TabsContent value="performance" className="mt-4">
-          <SupplierPerformanceCard purchaseOrders={purchaseOrders} />
+          <SupplierPOPerformanceCard purchaseOrders={purchaseOrders} />
         </TabsContent>
 
         <TabsContent value="contact" className="mt-4">

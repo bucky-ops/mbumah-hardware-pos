@@ -43,8 +43,11 @@ const LazySecurityTab = lazy(() => import('./tabs/security-tab'));
 const LazyPayrollTab = lazy(() => import('./tabs/payroll-tab'));
 const LazyEtimsTab = lazy(() => import('./tabs/etims-tab'));
 const LazyDebtManagementTab = lazy(() => import('./tabs/debt-management-tab'));
+const LazyDebtPlansTab = lazy(() => import('./tabs/debt-plans-tab'));
+const LazyDataExportsTab = lazy(() => import('./tabs/data-exports-tab'));
 const LazyConversationsTab = lazy(() => import('./tabs/conversations-tab'));
 const LazyPurchaseOrdersTab = lazy(() => import('./tabs/purchase-orders-tab'));
+const LazyShiftSchedulingTab = lazy(() => import('./tabs/shift-scheduling-tab'));
 const LazyPOSTab = lazy(() => import('./tabs/pos-tab'));
 
 function TabLoadingFallback() {
@@ -143,8 +146,11 @@ function MainApp() {
       case 'payroll': return <SectionErrorBoundary sectionName="Payroll"><Suspense fallback={<TabLoadingFallback />}><LazyPayrollTab /></Suspense></SectionErrorBoundary>;
       case 'etims': return <SectionErrorBoundary sectionName="eTIMS"><Suspense fallback={<TabLoadingFallback />}><LazyEtimsTab /></Suspense></SectionErrorBoundary>;
       case 'debt-management': return <SectionErrorBoundary sectionName="Debt Management"><Suspense fallback={<TabLoadingFallback />}><LazyDebtManagementTab /></Suspense></SectionErrorBoundary>;
+      case 'debt-plans': return <SectionErrorBoundary sectionName="Debt Plans"><Suspense fallback={<TabLoadingFallback />}><LazyDebtPlansTab /></Suspense></SectionErrorBoundary>;
+      case 'data-exports': return <SectionErrorBoundary sectionName="Data Exports"><Suspense fallback={<TabLoadingFallback />}><LazyDataExportsTab /></Suspense></SectionErrorBoundary>;
       case 'conversations': return <SectionErrorBoundary sectionName="Conversations"><Suspense fallback={<TabLoadingFallback />}><LazyConversationsTab /></Suspense></SectionErrorBoundary>;
       case 'purchase-orders': return <SectionErrorBoundary sectionName="Purchase Orders"><Suspense fallback={<TabLoadingFallback />}><LazyPurchaseOrdersTab /></Suspense></SectionErrorBoundary>;
+      case 'shift-scheduling': return <SectionErrorBoundary sectionName="Shift Scheduling"><Suspense fallback={<TabLoadingFallback />}><LazyShiftSchedulingTab /></Suspense></SectionErrorBoundary>;
       default: return <SectionErrorBoundary sectionName="POS"><Suspense fallback={<TabLoadingFallback />}><LazyPOSTab /></Suspense></SectionErrorBoundary>;
     }
   };

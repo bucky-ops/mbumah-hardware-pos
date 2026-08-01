@@ -1434,3 +1434,205 @@ Stage Summary:
 4. Add receipt printing with thermal printer support
 5. Add employee shift management and payroll integration
 6. Add data export dashboard (batch export all data)
+
+---
+Task ID: 5-A
+Agent: Debt Payment Plans Agent
+Task: Build Debt Payment Plans feature (API + UI)
+
+Work Log:
+- Read worklog.md to understand project state (v3.3.0). Confirmed Prisma schema already has DebtPaymentPlan + DebtPlanInstallment models (lines 2736-2829) and the DB is pushed.
+- Studied existing auth pattern: `withErrorBoundary(withFinancialAuth(handler, FINANCIAL_ROLES), COMPONENT)` from `src/lib/auth.ts` + `src/lib/logger.ts`. Mirrored the debt/route.ts and gift-cards/[id]/redeem patterns.
+- Created `src/lib/debt-plan-utils.ts` — pure utility library with:
+  - `calculateInstallmentSchedule(totalAmount, count, frequency, startDate, interestRate?)` — returns array of {installmentNumber, dueDate, amountDue}. Rounding error pushed onto the final installment so totals reconcile.
+  - `calculateEndDate(startDate, count, frequency)` — due date of the last installment.
+  - `calculateInstallmentAmount(total, count, rate)` — per-installment amount for live preview.
+  - `getPlanStatus(plan)` — derives ACTIVE/COMPLETED/DEFAULTED from installments paid/overdue (preserves PENDING_APPROVAL/CANCELLED/PAUSED).
+  - `recalculatePlanTotals(plan, installments)` — recomputes amountPaid, balance, installmentsPaid, installmentsOverdue.
+  - `markOverdueInstallments(installments)` — pure function that returns a new array with overdue statuses applied.
+  - `toNumber(value)` — Decimal-safe coercion (handles Prisma Decimal, string, number, null).
+  - Label constants for frequency/status.
+- Created 7 API routes under `src/app/api/debt-payment-plans/`:
+  1. `route.ts` — GET (list, filter by storeId/customerId/status/overdue) + POST (create plan + scheduled installments in a transaction; validates input, blocks plans > outstanding debt, blocks duplicate active plans on the same ledger). All Decimal fields serialized to numbers in the response.
+  2. `[id]/route.ts` — GET (single plan with installments; lazily marks overdue installments on read and recomputes plan totals/status), PATCH (notes editable only on PENDING_APPROVAL; status transitions ACTIVE↔PAUSED, ACTIVE/PAUSED→CANCELLED with state-machine guard), DELETE (only PENDING_APPROVAL or CANCELLED).
+  3. `[id]/approve/route.ts` — POST (PENDING_APPROVAL → ACTIVE, sets approvedById).
+  4. `[id]/installments/route.ts` — GET (list installments for a plan).
+  5. `[id]/installments/[installmentId]/pay/route.ts` — POST. Records payment against a single installment in a transaction: updates installment (PAID/PARTIAL), recalculates plan totals, marks plan COMPLETED when balance hits zero, AND mirrors the payment onto the underlying DebtLedger (creates a DebtPayment row, decrements customer.currentDebtBalance, logs to cash drawer if CASH, posts a balanced JournalEntry debiting cash/mpesa and crediting Accounts Receivable). Keeps existing debt accounting consistent.
+  6. `[id]/installments/[installmentId]/waive/route.ts` — POST. Marks installment WAIVED with required reason, reduces plan totalAmount by the waived amount (so balance stays consistent), recalculates totals, mirrors the waiver onto the underlying DebtLedger (reduces amountOwed + balance + customer debt).
+  7. `stats/route.ts` — GET ?storeId=... Returns totalActivePlans, totalOutstandingBalance, plansWithOverdueInstallments, completedThisMonth, totalCollectedThisMonth, totalPendingApproval.
+- Added `debtPaymentPlansApi` client + 4 types (`DebtPaymentPlanItem`, `DebtPlanInstallmentItem`, `DebtPaymentPlanStats`, `CreateDebtPaymentPlanPayload`) and status/frequency union types to `src/lib/api.ts` next to the existing `debtApi`.
+- Created 6 UI components in `src/components/debt-plans/`:
+  - `plan-status-helpers.ts` — shared status badge classes (PENDING_APPROVAL=amber, ACTIVE=emerald, COMPLETED=green, DEFAULTED=red, CANCELLED=gray, PAUSED=sky/blue) and label functions.
+  - `payment-plan-card.tsx` — compact summary card: customer, progress bar (color-coded by status), per-installment amount, balance, next due date / overdue indicator, View Details button. Glass-card + hover-lift styling.
+  - `create-plan-dialog.tsx` — full form with async customer search, outstanding-debt select (auto-fills totalAmount), installment count slider (1-24), frequency select, date picker, interest rate, late fee, auto-charge switch, notes textarea, live preview (per-installment amount + end date + total payable). Validation: totalAmount > 0, count 1-24, startDate not in past.
+  - `plan-details-dialog.tsx` — large dialog with header summary (4 stat cards), progress bar, action buttons (Approve / Pause / Resume / Cancel / Delete based on status), and 3 tabs: Installment Schedule (table with Pay/Waive actions per row), Payment History (paid/waived installments sorted desc), Overview (createdBy/approvedBy, dates, interest, late fee, next-due callout, overdue alert, auto-charge notice, notes). Includes a delete confirmation AlertDialog.
+  - `record-payment-dialog.tsx` — sub-dialog for installment payment: amount (default = remaining balance), payment method (Cash/M-Pesa/Bank/Cheque), reference. Validates amount > 0 and ≤ remaining balance.
+  - `waive-installment-dialog.tsx` — sub-dialog for waiver with required reason textarea, summary of amount to be waived.
+  - `plans-stats-cards.tsx` — 4 glass-card stat cards (Active Plans, Outstanding Balance, Overdue Plans, Collected This Month) with gradient icons + stagger animations matching the customers-tab pattern. Stagger classes declared statically so Tailwind can find them.
+- Created `src/app/tabs/debt-plans-tab.tsx` — main tab with header + Create Plan button, stats cards row, 5 filter chips (All/Pending/Active/Overdue/Completed) with live counts, plans grid, empty state, loading skeletons, floating "Syncing…" indicator. Uses tanstack-query v5 (`error` + `useEffect` instead of the removed `onError` query callback).
+- Wired the new tab into the SPA:
+  - `src/lib/stores.ts` — added `'debt-plans'` to the `AppTab` union.
+  - `src/lib/app-config.ts` — added `{ id: 'debt-plans', label: 'Debt Plans', icon: BadgeDollarSign, roles: MGMT_ROLES }` to TAB_CONFIG and included it in the 'Sales & Credit' NAV_GROUPS group.
+  - `src/app/page.tsx` — added `LazyDebtPlansTab` lazy import + `case 'debt-plans':` in the renderTab switch.
+- Fixed a pre-existing compile blocker in `src/app/tabs/suppliers-tab.tsx`: the local `SupplierPerformanceCard` function (PO-based, line 230) conflicted with the imported one from `@/components/suppliers/supplier-performance-card` (supplier-data-based, line 27). Renamed the local function to `SupplierPOPerformanceCard` and updated its single usage at line 1153. The imported component (used at line 1797 with `data`/`rank` props) is now unambiguous. This was blocking the entire app from compiling — without this fix the new debt-plans tab couldn't be reached.
+- Lint iteration: first run had 9 errors (3 unused imports + 6 `react-hooks/set-state-in-effect` violations from form-reset and pre-fill `useEffect`s in the dialogs). Refactored all setState-in-effect patterns to event-driven `handleOpenChange` wrappers and removed unused imports. Final result: 0 errors, 362 warnings (all pre-existing).
+
+Stage Summary:
+- Files created:
+  - src/lib/debt-plan-utils.ts
+  - src/app/api/debt-payment-plans/route.ts
+  - src/app/api/debt-payment-plans/[id]/route.ts
+  - src/app/api/debt-payment-plans/[id]/approve/route.ts
+  - src/app/api/debt-payment-plans/[id]/installments/route.ts
+  - src/app/api/debt-payment-plans/[id]/installments/[installmentId]/pay/route.ts
+  - src/app/api/debt-payment-plans/[id]/installments/[installmentId]/waive/route.ts
+  - src/app/api/debt-payment-plans/stats/route.ts
+  - src/components/debt-plans/plan-status-helpers.ts
+  - src/components/debt-plans/payment-plan-card.tsx
+  - src/components/debt-plans/create-plan-dialog.tsx
+  - src/components/debt-plans/plan-details-dialog.tsx
+  - src/components/debt-plans/record-payment-dialog.tsx
+  - src/components/debt-plans/waive-installment-dialog.tsx
+  - src/components/debt-plans/plans-stats-cards.tsx
+  - src/app/tabs/debt-plans-tab.tsx
+- Files modified:
+  - src/lib/api.ts (added debtPaymentPlansApi + types)
+  - src/lib/stores.ts (added 'debt-plans' to AppTab)
+  - src/lib/app-config.ts (added debt-plans tab config + nav group)
+  - src/app/page.tsx (added lazy import + renderTab case)
+  - src/app/tabs/suppliers-tab.tsx (fixed pre-existing duplicate SupplierPerformanceCard definition that was blocking the whole app from compiling)
+- API routes: 7 (list+create, get+patch+delete, approve, installments list, installment pay, installment waive, stats)
+- UI components: 6 in src/components/debt-plans/ + 1 main tab in src/app/tabs/
+- Lint: 0 errors, 362 warnings (all pre-existing). First run had 9 errors (unused imports + set-state-in-effect); all fixed.
+- Notes: Dev server was not running at time of writing (no `next`/`bun` process). The lint passes cleanly. The pre-existing suppliers-tab duplicate-definition bug was the only thing blocking the SPA from compiling — it's now resolved so the new debt-plans tab is reachable.
+
+---
+Task ID: 5-B
+Agent: Data Export Dashboard Agent
+Task: Build Data Export Dashboard feature (API + UI)
+
+Work Log:
+- Read worklog.md and confirmed sibling agent 5-A (Debt Payment Plans) had completed and shipped the v3.4.0 schema bump that introduced the DataExport model on `data_exports`. Verified Prisma client (`node_modules/.prisma/client/index.d.ts`) exposes `db.dataExport` and the relations `Store.dataExports` + `User.createdDataExports` ("DataExportCreatedBy") exist.
+- Studied the auth pattern from `src/app/api/debt/route.ts`, `src/app/api/products/route.ts`, `src/app/api/debt-payment-plans/route.ts`, and `src/app/api/debt-payment-plans/stats/route.ts`. Adopted `withErrorBoundary(withFinancialAuth(handler, ROLES), COMPONENT)` with `FINANCIAL_READ_ROLES = ['SUPER_ADMIN','STORE_OWNER','BRANCH_MANAGER','ACCOUNTANT']` for both read and write (data exports are sensitive — same restriction as financial reports).
+- Read `src/lib/export-utils.ts` to learn the existing CSV helpers (`escapeCSVField`, `objectToCSVRow`, `formatKESForCSV`). Those helpers are not exported and the module also pulls in browser-only APIs (Blob, document), so I implemented RFC 4180 CSV helpers locally in `src/lib/data-export-utils.ts` (`escapeCsvField`, `buildCsv`) to keep the module Node/server-only.
+- Created `src/lib/data-export-utils.ts` — pure utility library with 10 generators + a dispatcher:
+  - `generateProductsCsv` — products + category, stock, prices, eTIMS codes
+  - `generateCustomersCsv` — customers + debt balance, loyalty tier, contact info
+  - `generateTransactionsCsv` — sales transactions + customer, cashier, totals, item count (date-range aware)
+  - `generateDebtCsv` — debt ledger + customer, balance, aging bucket (reuses `calculateAgingBucket` from `debt-helpers`)
+  - `generateInventoryCsv` — products + stock levels, reorder points, bin locations (locationCode/aisle/shelf/bin per `BinLocation` schema), computed stock value
+  - `generateEmployeesCsv` — employees + role, salary, allowances, computed total gross
+  - `generateSuppliersCsv` — suppliers + contact, payment terms, rating
+  - `generateLoyaltyCsv` — customers with loyalty points, tier, lifetime totals, transaction count
+  - `generateTaxCsv` — transactions with VAT breakdown + reverse-computed effective VAT rate
+  - `generateSalesSummaryCsv` — daily aggregated revenue / tax / per-payment-method breakdown
+  - `runExportGenerator` — dispatcher that switches on exportType
+  - `parseExportFilters` — typed JSON filter parser
+  - `csvToJson` — RFC 4180 CSV → JSON array converter (used when format=JSON)
+  - Decimal-safe: every Decimal field coerced via `toNumber()` then formatted with `toFixed(2)`; dates ISO-formatted
+  - All generators return `{ csv: string; recordCount: number }` and prepend a UTF-8 BOM so Excel detects encoding
+- Created 4 API routes under `src/app/api/data-exports/`:
+  1. `route.ts` — GET (list with filters: storeId, status, exportType, limit) + POST (create + synchronously process). POST flow: create PROCESSING row → run generator → write file to `/home/z/my-project/download/exports/{id}.{ext}` (mkdir recursive) → update row COMPLETED with recordCount/fileSizeBytes/filePath/completedAt/expiresAt(now+7d) → systemLog + return row. On error: update row FAILED with errorMessage, systemLog ERROR, return 500.
+  2. `[id]/route.ts` — GET (single record) + DELETE (best-effort file unlink + DB delete). DELETE logs a WARN-level systemLog even if the file is missing (still removes the DB row).
+  3. `[id]/download/route.ts` — GET streams the file with Content-Type (text/csv or application/json), Content-Disposition (attachment with friendly filename `TYPE_YYYY-MM-DD_shortid.ext`), Content-Length, and Cache-Control headers. Returns 404 if row/file missing, 409 if not COMPLETED, 410 if expired.
+  4. `stats/route.ts` — GET ?storeId=... returns totalExports, completedExports, failedExports, totalRecordsExported, totalFileSizeBytes, successRate (completed/(completed+failed), 1 if no terminal rows yet), byType breakdown.
+- Added `dataExportsApi` client + 4 types (`DataExportType`, `DataExportFormat`, `DataExportStatus`, `DataExportItem`, `DataExportsStats`, `CreateDataExportPayload`) to `src/lib/api.ts` next to the existing `debtPaymentPlansApi`. The `download(id, fallbackName)` helper fetches the file as a Blob with the Bearer token + CSRF header and triggers a browser download by reading the `Content-Disposition` filename.
+- Created 4 UI components in `src/components/data-exports/`:
+  - `export-type-card.tsx` — exports an `EXPORT_TYPES` array (10 cards) with per-type colour/icon mapping (PRODUCTS=emerald/Package, CUSTOMERS=cyan/Users, TRANSACTIONS=teal/Receipt, DEBT=rose/CircleDollarSign, INVENTORY=amber/Boxes, EMPLOYEES=violet/UserCog, SUPPLIERS=orange/Truck, LOYALTY=purple/Award, TAX=blue/Receipt, SALES_SUMMARY=green/TrendingUp — blue only on the TAX card per the task spec, which explicitly overrides the project's no-blue rule). Each card has a gradient icon chip, title, description, "Date range" badge if applicable, and a "Generate" button. Stagger classes declared statically so Tailwind's JIT can find them.
+  - `create-export-dialog.tsx` — full form: export-type select (with icons in dropdown), format selector (CSV/JSON as two side-by-side tappable cards with icon + description), date-range pickers (only shown when `supportsDateRange` is true — TRANSACTIONS/TAX/SALES_SUMMARY), advanced-filters toggle that reveals a JSON textarea (validated client-side). On submit: `dataExportsApi.create` → toast success with record count → invalidate `data-exports` and `data-exports-stats` queries → close dialog. State reset wired into `handleOpenChange` (event-driven, not effect-driven) to satisfy the `react-hooks/set-state-in-effect` rule.
+  - `exports-history-table.tsx` — table of past exports with columns: Type (colour-coded badge), Format, Date Range, Records, Size (human-readable bytes), Status (badge with tooltip for FAILED error messages), Created (datetime), Actions (Download + Delete). Filter chips: All / Completed / Failed / Processing with per-chip counts. Delete uses an AlertDialog confirmation. Download is disabled when status !== COMPLETED.
+  - `exports-stats-cards.tsx` — 4 glass-card stat cards (Total Exports, Total Records, Storage Used with human-readable bytes, Success Rate %) matching the debt-plans stats-cards styling.
+- Created `src/app/tabs/data-exports-tab.tsx` — main tab with header (title + description + Refresh + New Export buttons), stats cards row, "Export Types" grid (responsive 1/2/3/4 cols with stagger), "Export History" section with table, loading skeletons, floating "Syncing…" indicator. Uses tanstack-query v5 with `useEffect`-based error toasts (same pattern as `debt-plans-tab`). The CreateExportDialog accepts a `presetType` so clicking a card opens the dialog pre-filled with that type.
+- Wired the new tab into the SPA:
+  - `src/lib/stores.ts` — added `'data-exports'` to the `AppTab` union.
+  - `src/lib/app-config.ts` — imported `Database` from lucide-react; added `{ id: 'data-exports', label: 'Data Exports', icon: Database, roles: MGMT_ROLES }` to TAB_CONFIG; inserted `'data-exports'` into the 'Compliance & System' NAV_GROUPS group (alongside `etims`, `reports`, `security`, `admin`).
+  - `src/app/page.tsx` — added `LazyDataExportsTab` lazy import + `case 'data-exports':` in the renderTab switch wrapped in `SectionErrorBoundary` + `Suspense`.
+- Fixed a schema mismatch in `generateInventoryCsv`: initially referenced `binCode` and `warehouse` on `BinLocation`, but the actual schema uses `locationCode` (string), `aisle`, `shelf`, `bin` (all optional). Corrected the select + the bin-location stringification.
+- Lint iteration: first run had 1 error (unused `Switch` import in create-export-dialog) + 1 warning (`react/no-unescaped-entities` apostrophe in data-exports-tab description). Removed the unused import and replaced the apostrophe with `&apos;`. Final result: 0 errors, 362 warnings (all pre-existing — same baseline as sibling agent 5-A). None of my new files appear in the lint output.
+
+Stage Summary:
+- Files created:
+  - src/lib/data-export-utils.ts
+  - src/app/api/data-exports/route.ts
+  - src/app/api/data-exports/[id]/route.ts
+  - src/app/api/data-exports/[id]/download/route.ts
+  - src/app/api/data-exports/stats/route.ts
+  - src/components/data-exports/export-type-card.tsx
+  - src/components/data-exports/create-export-dialog.tsx
+  - src/components/data-exports/exports-history-table.tsx
+  - src/components/data-exports/exports-stats-cards.tsx
+  - src/app/tabs/data-exports-tab.tsx
+- Files modified:
+  - src/lib/api.ts (added dataExportsApi + 5 types)
+  - src/lib/stores.ts (added 'data-exports' to AppTab)
+  - src/lib/app-config.ts (added Database import, data-exports tab config, 'Compliance & System' nav group entry)
+  - src/app/page.tsx (added LazyDataExportsTab import + renderTab case)
+- API routes: 4 (list+create, get+delete, download, stats)
+- UI components: 4 in src/components/data-exports/ + 1 main tab in src/app/tabs/
+- Lint: 0 errors, 362 warnings (all pre-existing). First run had 1 error (unused Switch import) + 1 apostrophe warning; both fixed.
+- Notes: Dev server was running cleanly (only the pre-existing Prisma config deprecation warning in dev.log). No runtime errors triggered. The TAX export card uses blue per the explicit task spec ("TAX: blue/Receipt") which overrides the project's general no-blue rule. The dialog's `handleOpenChange` is event-driven (not effect-driven) to satisfy `react-hooks/set-state-in-effect`. Exports directory `/home/z/my-project/download/exports/` is created on first POST via `fs.mkdir(recursive: true)`.
+
+---
+Task ID: 5-C
+Agent: Shift Scheduling Agent
+Task: Build Shift Scheduling Calendar feature (API + UI)
+
+Work Log:
+- Read worklog.md to understand project state (v3.4.0). Confirmed sibling agents 5-A (Debt Payment Plans) and 5-B (Data Export Dashboard) shipped clean lint (0 errors, 362 warnings baseline).
+- Verified `ShiftSchedule` model exists in `prisma/schema.prisma` (lines 2877–2914) on table `shift_schedules`. `User.shiftSchedules` back-relation present (line 201). Schema already pushed — did NOT run db:push.
+- Studied auth pattern from `src/app/api/shifts/route.ts`, `src/app/api/debt/route.ts`, `src/app/api/debt-payment-plans/route.ts`, `src/app/api/debt-payment-plans/[id]/route.ts`, `src/app/api/debt-payment-plans/stats/route.ts`. Adopted `withErrorBoundary(withFinancialAuth(handler, ROLES), COMPONENT)` with READ_ROLES = [SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER, ACCOUNTANT] and WRITE_ROLES = [SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER].
+- Created `src/lib/shift-schedule-utils.ts` — pure utility library with:
+  - `expandScheduleForWeek(schedule, weekStart)` — recurring schedules expand to matching day-of-week within [createdAt, recurrenceEndDate]; returns [] if paused/completed.
+  - `expandScheduleForMonth(schedule, monthStart)` — same logic for a month view.
+  - `getSchedulesForDate(schedules, date)` — filters schedules applying to a specific date (one-off OR recurring within range AND status=ACTIVE).
+  - `formatTimeRange(startTime, endTime)` — "HH:MM - HH:MM" using local time-of-day.
+  - `calculateShiftDurationHours(startTime, endTime)` — handles overnight shifts (endTime < startTime ⇒ next day). Returns hours rounded to 2 decimals.
+  - `getWeekStart(date)` — Sunday (local) of the week containing `date`.
+  - `getWeekDays(weekStart)` — 7 Date objects Sun–Sat, each normalized to local midnight.
+  - `COLOR_PALETTE` — 8 colors (emerald, teal, amber, rose, violet, cyan, orange, purple) with `{ name, value, bg, text, border, dot, gradient }`.
+  - Plus helpers: `formatTime`, `formatDuration`, `combineDateAndTime`, `dateToTimeInputValue`, `dateToDateInputValue`, `formatDayLabel`, `formatWeekRange`, `isSameDay`, `DAY_NAMES`, `DAY_NAMES_SHORT`, `getColor`.
+- Created 5 API routes under `src/app/api/shift-schedules/`:
+  1. `route.ts` — GET (list with filters: storeId, userId, status, dateFrom, dateTo; gracefully returns [] when storeId missing) + POST (create with full validation: mutual exclusivity of dayOfWeek/specificDate, dayOfWeek 0-6, recurrenceEndDate not in past, one-off endTime > startTime same day, recurring allows overnight). systemLog on create.
+  2. `[id]/route.ts` — GET (single with user+store relations), PATCH (only when status=ACTIVE or PAUSED; COMPLETED is terminal/frozen; validates mutual exclusivity post-patch; validates time ordering), DELETE (any state). systemLog on update + delete.
+  3. `[id]/status/route.ts` — PATCH body `{ status }`. State machine: ACTIVE→PAUSED|COMPLETED; PAUSED→ACTIVE|COMPLETED; COMPLETED is terminal (400). No-op (same status) returns current state without DB write. systemLog on transition.
+  4. `weekly/route.ts` — GET `?storeId=...&weekStart=YYYY-MM-DD`. Expands recurring schedules by dayOfWeek (within recurrenceEndDate) and matches one-off schedules by specificDate in the week. Response: array of `{ date, dayOfWeek, isToday, schedules: [{ ...schedule, durationHours, user: { id, name, role, avatarUrl } }] }` sorted by start time-of-day ascending.
+  5. `stats/route.ts` — GET `?storeId=...&weekStart=...`. Returns: totalScheduledHours, perUserHours (sorted desc), shiftsPerDay (7 entries), coverageGaps (days with 0 shifts), peakDay, coverageDays (0-7), activeStaff, avgHoursPerStaff. All hours rounded to 2 decimals.
+- Added `shiftSchedulesApi` to `src/lib/api.ts` next to existing `shiftsApi`. Includes 7 types (ShiftScheduleStatus, ShiftScheduleColor, ShiftScheduleItem, CreateShiftSchedulePayload, UpdateShiftSchedulePayload, WeeklyDaySchedule, ShiftScheduleStats) and 8 methods (list, get, create, update, delete, setStatus, weekly, stats).
+- Created 6 UI components in `src/components/shift-scheduling/`:
+  - `shift-card.tsx` — colored left border (4px), title with color dot, user name, time range, duration badge. Hover lifts + shadows. Clickable. `title` attr surfaces notes as tooltip.
+  - `weekly-calendar.tsx` — 7-column CSS grid on sm+, vertical stack on mobile (each day gets an inline header). Today highlighted emerald. Empty slot click adds a shift (with preset date). Each existing shift card is clickable for edit. "Add" button at bottom of each non-empty day cell. Max height per day cell with custom scrollbar.
+  - `create-schedule-dialog.tsx` — full form: async staff search (debounced via React Query), title input, type toggle (Recurring / One-off tappable cards), dayOfWeek select + recurrenceEndDate date picker (recurring), specificDate date picker (one-off), start/end `<Input type="time">`, 8-color picker (clickable circles with check indicator), notes textarea, live preview ("Monday · 09:00 - 17:00 · 8h"). Validation: title required, user required, times required (end > start for one-off; equal forbidden; overnight allowed for recurring). State reset wired into `handleOpenChange` (event-driven, no setState-in-effect).
+  - `edit-schedule-dialog.tsx` — reuses form layout pre-filled. Adds status control buttons (Pause / Resume / Complete) depending on current status. Delete button with AlertDialog confirmation. All fields disabled when COMPLETED. Same live preview.
+  - `schedule-stats-cards.tsx` — 4 glass-card stat cards (Total Hours This Week, Active Staff, Coverage Days, Avg Hours/Staff) with gradient icons + stagger animations matching the debt-plans pattern.
+  - `user-hours-breakdown.tsx` — per-user scheduled hours panel sorted descending. Each row: avatar with initials fallback, name + role + shift count, hours number, color-coded Progress bar (emerald=normal, amber=under-scheduled at <50% of avg, rose=over-scheduled at >140% of avg). TrendingUp/TrendingDown icons flag outliers. Legend below. Coverage gaps alert (amber) listing day names. Uses shadcn Progress with Tailwind arbitrary-variant `[&>[data-slot=progress-indicator]]:bg-{color}-500` to override the hardcoded `bg-primary` indicator.
+- Created `src/app/tabs/shift-scheduling-tab.tsx` — main tab with header + Refresh + Add Shift buttons, stats cards row, week navigation strip (Prev / Today / Next + week range label + total shift count), two-column desktop layout (lg+): left 2/3 = WeeklyCalendar, right 1/3 = UserHoursBreakdown + color legend + empty-state. Mobile stacked. Loading skeletons, empty state ("No shifts this week"), floating "Syncing…" indicator. Uses tanstack-query v5 with `useEffect`-based error toasts (same pattern as debt-plans-tab). 60-second staleTime + refetchInterval.
+- Wired the new tab into the SPA:
+  - `src/lib/stores.ts` — added `'shift-scheduling'` to the `AppTab` union.
+  - `src/lib/app-config.ts` — imported `CalendarDays` from lucide-react; added `{ id: 'shift-scheduling', label: 'Shift Scheduling', icon: CalendarDays, roles: MGMT_ROLES }` to TAB_CONFIG; inserted `'shift-scheduling'` into the 'Operations' NAV_GROUPS group.
+  - `src/app/page.tsx` — added `LazyShiftSchedulingTab` lazy import + `case 'shift-scheduling':` in renderTab switch wrapped in `SectionErrorBoundary` + `Suspense`.
+- Lint iteration: first run had 1 error (unused `Progress` import in `user-hours-breakdown.tsx` — initially removed it before re-adding when migrating to the Progress component) + 2 `react/no-unescaped-entities` apostrophe warnings in the empty-state copy. Fixed by using the imported `Progress` component with Tailwind arbitrary-variant overrides for per-row color theming, and replacing `"Add Shift"` with `&ldquo;Add Shift&rdquo;`. Final result: **0 errors, 362 warnings** (all pre-existing baseline). None of my new files appear in the lint output.
+
+Stage Summary:
+- Files created:
+  - src/lib/shift-schedule-utils.ts
+  - src/app/api/shift-schedules/route.ts
+  - src/app/api/shift-schedules/[id]/route.ts
+  - src/app/api/shift-schedules/[id]/status/route.ts
+  - src/app/api/shift-schedules/weekly/route.ts
+  - src/app/api/shift-schedules/stats/route.ts
+  - src/components/shift-scheduling/shift-card.tsx
+  - src/components/shift-scheduling/weekly-calendar.tsx
+  - src/components/shift-scheduling/create-schedule-dialog.tsx
+  - src/components/shift-scheduling/edit-schedule-dialog.tsx
+  - src/components/shift-scheduling/schedule-stats-cards.tsx
+  - src/components/shift-scheduling/user-hours-breakdown.tsx
+  - src/app/tabs/shift-scheduling-tab.tsx
+- Files modified:
+  - src/lib/api.ts (added shiftSchedulesApi + 7 types)
+  - src/lib/stores.ts (added 'shift-scheduling' to AppTab)
+  - src/lib/app-config.ts (added CalendarDays import, shift-scheduling tab config, Operations nav group entry)
+  - src/app/page.tsx (added LazyShiftSchedulingTab import + renderTab case)
+- API routes: 5 (list+create, get+patch+delete, status, weekly, stats)
+- UI components: 6 in src/components/shift-scheduling/ + 1 main tab in src/app/tabs/
+- Lint: 0 errors, 362 warnings (all pre-existing baseline). First run had 1 error (unused Progress import) + 2 apostrophe warnings; all fixed.
+- Notes: Dev server running cleanly. Time-of-day values stored as DateTime (epoch 1970-01-01 base) per the task spec — `combineDateAndTime` enforces the base date. Overnight shifts supported for recurring schedules (endTime < startTime ⇒ next day). One-off shifts cannot be overnight (enforced in POST and PATCH validation). The shadcn Progress component's hardcoded `bg-primary` indicator is overridden per-row via Tailwind arbitrary-variant selector `[&>[data-slot=progress-indicator]]:bg-{color}-500` for color-coded hours bars.
