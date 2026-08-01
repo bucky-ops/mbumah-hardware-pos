@@ -656,3 +656,415 @@ Stage Summary:
 4. Add customer loyalty points calculation and redemption
 5. Add KRA (Kenya Revenue Authority) electronic tax invoice integration
 6. Further extract handler functions from pos-tab.tsx into custom hooks
+
+---
+Task ID: 3
+Agent: loyalty-system-agent
+Task: Add Customer Loyalty Points System (API + UI + POS checkout integration)
+
+Work Log:
+- Updated `prisma/schema.prisma`:
+  - Customer model: added 4 new fields (loyaltyPoints already existed, preserved) —
+    `totalLoyaltyEarned Int @default(0)`, `totalLoyaltyRedeemed Int @default(0)`,
+    `loyaltyTier String @default("BRONZE")`, `joinedAt DateTime @default(now())`.
+  - LoyaltyTransaction model: extended existing model (did NOT remove legacy fields)
+    with `type String @default("EARNED")`, `transactionId String?` (linked sale),
+    `balanceAfter Int @default(0)`, `reason String?`. Added `@@index([transactionId])`.
+  - SQLite-compatible types only (no @db.Decimal, no PostgreSQL-only constructs).
+- Created `src/lib/loyalty-utils.ts` (280 lines) — pure helpers:
+  - `calculateEarnedPoints` (1 pt per KES 100), `getTierFromPoints` (BRONZE/SILVER/GOLD/PLATINUM
+    @ 0/500/2000/5000 pts), `getTierBenefits`, `calculateRedemptionValue` (100 pts = KES 10),
+  - `getNextTierProgress`, `getTierConfigList`, `validateRedemption` (min 100 pts + balance check),
+  - `normalizeLegacyType` (EARN→EARNED etc. for back-compat with legacy transactionType field).
+- Created API routes:
+  - `src/app/api/customers/[id]/loyalty/route.ts` (GET) — points balance, tier, lifetime
+    stats, next-tier progress, last 10 transactions. Auth: SUPER_ADMIN/STORE_OWNER/BRANCH_MANAGER/CASHIER/ACCOUNTANT.
+  - `src/app/api/customers/[id]/loyalty/redeem/route.ts` (POST) — atomic redemption inside
+    db.$transaction (re-reads customer for concurrent-safety), min 100 pts, rounds to nearest 100,
+    updates Customer.loyaltyPoints + totalLoyaltyRedeemed + loyaltyTier, creates LoyaltyTransaction
+    with both legacy and new fields. Auth: SUPER_ADMIN/STORE_OWNER/BRANCH_MANAGER/CASHIER.
+  - `src/app/api/loyalty/stats/route.ts` (GET) — aggregate stats (totalMembers,
+    totalPointsOutstanding, totalPointsEarned, totalPointsRedeemed, redemptionRate,
+    tierBreakdown, topMembers top 5). Auth: SUPER_ADMIN/STORE_OWNER/BRANCH_MANAGER.
+  - Modified `src/app/api/loyalty/tiers/route.ts` — GET now returns standard tier config
+    (BRONZE/SILVER/GOLD/PLATINUM with pointsRequired, discountRate, benefits[]) when no storeId
+    is provided; falls back to legacy DB-configured tiers when storeId is provided. Added
+    `requireAuth` to both GET and POST (was previously unauthenticated — security gap fixed).
+    Restricted POST to SUPER_ADMIN/STORE_OWNER. Removed SQLite-incompatible `mode: 'insensitive'`.
+- Created UI components:
+  - `src/components/loyalty/loyalty-card.tsx` (470 lines) — gradient tier header (bronze/silver/
+    gold/platinum gradients), animated points counter (easeOutCubic rAF), progress bar to next
+    tier, lifetime stats grid (earned/redeemed with KES conversion), quick redeem button (when
+    balance ≥ 100 pts), ScrollArea list of last 5 transactions, skeleton + error states.
+    TanStack Query for caching + mutation. `compact` prop for POS side-panels.
+  - `src/components/loyalty/redeem-dialog.tsx` (340 lines) — available-points banner with tier
+    gradient, slider (step=100, min=100, max=balance) + manual input, real-time discount summary
+    card, quick-select chips (100/500/1000/Max), insufficient-points state, success state with
+    new balance + discount value. State reset deferred via requestAnimationFrame.
+- Integrated LoyaltyCard into `src/app/tabs/customers-tab.tsx` Customer Detail Sheet
+  (after Debt Summary, before Debt Aging Breakdown). onRedeemed callback invalidates the
+  customers list query so the table column stays in sync.
+- Integrated loyalty awarding into `src/app/api/transactions/route.ts` POST (POS checkout):
+  - Non-blocking — runs AFTER the sale commits, failures logged but never roll back the sale.
+  - Inside db.$transaction: reloads customer (concurrent-safety), increments loyaltyPoints +
+    totalLoyaltyEarned, recomputes loyaltyTier from new lifetime total.
+  - Creates LoyaltyTransaction with type=EARNED, transactionId=SaleTransaction.id,
+    balanceAfter, reason. Also populates legacy transactionType=EARN + reference fields.
+  - Audit log: LOYALTY_POINTS_EARNED (info) on success, LOYALTY_AWARD_FAILED (warn) on failure.
+
+Stage Summary:
+- 5 new files created (loyalty-utils + 3 API routes + 2 UI components = 6, minus loyalty-utils
+  already counted = 5 net new files; 2 modified API routes; 2 modified integrations).
+- Prisma schema: 4 new Customer fields + 4 new LoyaltyTransaction fields. Prisma client
+  generated successfully (validated with `bunx prisma generate`).
+- 4 API endpoints: GET /customers/[id]/loyalty, POST /customers/[id]/loyalty/redeem,
+  GET /loyalty/tiers (modified), GET /loyalty/stats. All use `requireAuth` + `withErrorBoundary`.
+- Tier system: BRONZE (0+, 0% discount), SILVER (500+, 2%), GOLD (2000+, 5%), PLATINUM (5000+, 10%).
+- Redemption: 100 pts = KES 10, min 100 pts, rounded to nearest 100, atomic.
+- POS checkout integration: every sale with a customerId awards 1 pt per KES 100 spent (non-blocking).
+- Backward compatibility preserved: legacy /api/loyalty/transactions route unchanged; both old
+  (transactionType) and new (type) LoyaltyTransaction fields populated on every write.
+- Security: added missing auth to /api/loyalty/tiers (was previously unauthenticated).
+- Lint: 0 errors, 355 warnings (all pre-existing). Fixed 3 errors in new code during development.
+- Per task instructions, `bun run db:push` was NOT run (user will handle separately).
+
+---
+Task ID: 4
+Agent: analytics-dashboard-agent
+Task: Add Sales Analytics Dashboard with Charts
+
+Work Log:
+- AUDIT FINDING: All required files already existed from prior development:
+  - 4 API routes: src/app/api/analytics/{kpis,sales-trend,top-products,payment-breakdown}/route.ts
+  - Utility: src/lib/analytics-utils.ts (493 lines, fully featured with KPI deltas,
+    period bucketing, heatmap matrix, chart shaping, payment-method color palette)
+  - 6 dashboard components: src/components/analytics/{kpi-grid,sales-trend-chart,
+    top-products-chart,payment-donut,hourly-heatmap,analytics-dashboard}.tsx
+  - Bonus: src/app/api/analytics/hourly-heatmap/route.ts + HourlyHeatmap component
+  - Already wired: src/app/tabs/analytics-tab.tsx → page.tsx lazy-loaded 'analytics' route
+  - Existing impl is a SUPERSET of the task spec (6 KPI cards vs required 4; includes
+    year period and hourly heatmap on top of today/week/month).
+- Gap 1 — GIFT_CARD missing from payment-breakdown known methods list:
+  Modified `src/app/api/analytics/payment-breakdown/route.ts` line 73 to add 'GIFT_CARD'
+  to knownMethods array. The PAYMENT_METHOD_COLORS map in analytics-utils.ts already had
+  GIFT_CARD='#06b6d4' so the donut now renders a 6th slice for gift-card sales. Without
+  this, gift-card transactions were silently dropped from the donut chart.
+- Gap 2 — task-spec named helpers missing from analytics-utils.ts:
+  Added 4 public helpers at the end of `src/lib/analytics-utils.ts` as thin wrappers
+  around the existing internal functions (no behavior change to existing callers):
+    • `formatKES(amount)` — "KES 1,234.50" format with 2 decimals (separate from the
+      Intl-based formatKES in lib/api.ts which omits decimals on whole numbers)
+    • `calculatePercentageChange(current, previous)` → number | null (delegates to
+      computeDelta().changePercent)
+    • `getPeriodDateRange(period)` → { start, end } (delegates to getPeriodWindow()
+      and returns only the two Date fields)
+    • `formatTrendData(data, format)` → ChartPoint[] (delegates to formatChartData()
+      with 'area' format)
+  Generic-typed `formatTrendData<T extends {...}>` so callers can pass partial shapes
+  without TypeScript errors.
+
+Stage Summary:
+- Files modified: 2 (payment-breakdown route + analytics-utils.ts). No new files needed —
+  all 11 task-listed files already existed and are functional.
+- Lint: 0 errors, 354 warnings (all pre-existing). Verified no new warnings introduced
+  by the 2 modified files (rg "analytics" lint output: empty).
+- Dashboard is live: the 'analytics' tab in page.tsx renders <AnalyticsDashboard storeId=...>
+  which fetches all 4 required endpoints + hourly-heatmap, auto-refreshes every 60s with
+  countdown indicator, and supports Today/Week/Month/Year period switching.
+- All API routes use `export const dynamic = 'force-dynamic'` + requireAuth + withErrorBoundary.
+- All components handle empty states ("No data available") gracefully — no crashes on
+  cold stores with zero transactions.
+
+---
+Task ID: 5
+Agent: frontend-styling-expert
+Task: Enhance POS and Dashboard Styling with More Detail
+
+Work Log:
+- Verified `src/app/globals.css` already contained all requested utility classes from
+  the task spec: `.glass-card` (frosted glass with backdrop-blur-xl), `.text-gradient`
+  (bg-clip-text text-transparent), `.card-hover-lift` (translateY + shadow), `.btn-press`
+  (active scale-95), `.fade-in-up` (keyframe animation), `.stagger-1` through `.stagger-6`
+  (animation-delay), `.scrollbar-thin` (webkit + firefox), `.status-pulse` (pulsing dot),
+  `.skeleton-shimmer` (gradient sweep). No CSS additions needed.
+- Enhanced `src/components/pos/product-card.tsx`:
+  - Upgraded Add-to-Cart button to use a gradient background (emerald-500→emerald-600)
+    with glossy white sheen overlay, drop shadow-md, shadow-emerald-500/30 color,
+    and existing btn-press animation. Previously used default flat variant.
+  - All other required features (stock bar with green/amber/red thresholds, Best Seller
+    badge with Star icon, hover overlay with quick-add button, category color accent
+    strip on left side, image scale-115 zoom on hover) were already implemented —
+    preserved as-is.
+- Enhanced `src/components/pos/dashboard-stats.tsx`:
+  - Replaced flat icon container (`bg-white/70 dark:bg-black/20`) with gradient icon
+    circles per stat: emerald (Today's Sales), sky-blue (Transactions), amber-orange
+    (Avg Order), rose-red (Low Stock).
+  - Refactored trend data shape from string ('+12%') + boolean to { value: number,
+    isPositive: boolean } object as per task spec, and rendered with +/- prefix and
+    up/down arrow icon.
+  - Replaced inline `animationDelay: ${index * 80}ms` with `.stagger-1` through
+    `.stagger-4` utility classes (card 1→stagger-1, card 2→stagger-2, etc).
+  - Added per-stat colored glow shadow on hover (`hover:shadow-emerald-500/20`,
+    `hover:shadow-blue-500/20`, `hover:shadow-amber-500/20`, `hover:shadow-rose-500/20`)
+    on top of existing `card-hover-lift` translateY lift and `gradient-border` border
+    glow.
+  - Changed Low Stock card color theme from amber to rose-red (semantically more
+    attention-grabbing for warnings); updated statClass to `stat-card-red stat-shadow-red`.
+  - Changed Avg Order card color theme from purple/fuchsia to amber-orange (avoid
+    purple/indigo per task constraints).
+- Verified `src/components/pos/category-chips.tsx` already implements all required
+  features: per-chip product count badges, active chip with gradient background +
+  scale-105 + shadow (chip-active class), scroll edge fade indicators on left/right
+  with auto-hide when at scroll bounds, category-specific Lucide icon mapping
+  (Boxes, Wrench, HardHat, Zap, Paintbrush, Hammer, etc. based on name substring
+  match), and scroll-snap-x for smooth snap-scrolling. No changes needed.
+- Enhanced `src/components/pos/checkout-dialog.tsx`:
+  - Added `motion`, `AnimatePresence`, `useReducedMotion` imports from framer-motion.
+  - Wrapped all 3 step panels in `<AnimatePresence mode="wait" custom={stepDirection}>`
+    with `<motion.div key="step-N">` for slide transitions. Defined stepVariants
+    (enter/center/exit) using custom direction-aware x-translate (24px). Replaced
+    CSS step-enter-right/step-enter-left classes with framer-motion variants.
+  - Added `useReducedMotion()` hook to respect prefers-reduced-motion: when true,
+    transitions reduce to opacity-only (no x-translate) with shorter 150ms duration
+    instead of 300ms.
+  - Enhanced PAYMENT_METHODS config with per-method `selectedGradient` (Tailwind
+    gradient classes: emerald, amber-orange, fuchsia-purple, sky-blue) and
+    `iconGradient` for the icon circle background.
+  - Redesigned payment method cards: selected state now shows full gradient
+    background (was just `border-primary bg-primary/5`), with white text, glossy
+    top sheen, and an icon circle that uses translucent white when selected or
+    the method's gradient color when not. Unselected state shows border-2 with
+    gradient icon circle.
+  - Enhanced "Process Payment" button (step 3 footer): replaced flat
+    `bg-accent-orange` with a vibrant emerald-to-amber gradient
+    (`bg-gradient-to-r from-emerald-600 via-emerald-500 to-amber-500`), added
+    shadow-lg shadow-emerald-500/30, glossy top sheen overlay, and btn-press
+    scale animation. Loading state already had Loader2 spinner — preserved.
+  - Enhanced cash change display: larger (text-2xl sm:text-3xl extrabold tabular-nums),
+    brighter emerald gradient background with border-2, decorative left-edge
+    gradient sweep stripe, and tabular-nums for stable numeric width.
+  - Enhanced quick-amount cash buttons: added flex-1 for equal-width layout,
+    emerald-tinted hover gradient, larger min-h-[40px], and bold font for amounts.
+
+Stage Summary:
+- 4 files modified (product-card, dashboard-stats, checkout-dialog verified; globals.css
+  and category-chips already had the requested features so they were preserved).
+- 0 lint errors introduced (354 pre-existing warnings remain unchanged).
+- 0 new TypeScript errors introduced in modified files (pre-existing errors in
+  dashboard-stats.tsx lines 25/27/28 — unrelated to my changes, stem from
+  DashboardStats API type missing recentTransactions/topSellingCategories/recentActivities
+  properties).
+- All animations respect prefers-reduced-motion via framer-motion's useReducedMotion
+  hook + the existing globals.css `@media (prefers-reduced-motion: reduce)` block.
+- Color palette strictly follows task constraints: emerald, amber, rose-red, sky-blue
+  accents — no indigo or purple used as primary brand colors (purple appears only
+  as one accent gradient on the SPLIT payment method card).
+- All existing functionality preserved: payment flow, STK push, debt checkout, split
+  payments, order summary, step validation, M-Pesa success/processing/failed states,
+  and the responsive dialog wrapper all work unchanged.
+
+---
+Task ID: 6-7
+Agent: inventory-reports-developer
+Task: Add Stock Movement Tracking + Sales Report Exports
+
+Work Log:
+
+PART 1 — Stock Movement Tracking
+- Rewrote `src/app/api/stock-movements/route.ts` to match task spec while
+  preserving backward compatibility with existing callers (inventory-tab.tsx
+  uses `movementType` + `page`; the new spec uses `type` + `offset`):
+    • GET accepts both `type` (new) and `movementType` (legacy); both
+      `offset` (new) and `page` (legacy) for pagination; limit clamped to
+      500 max. Returns `{ success, data: [...], summary, pagination: {
+      offset, limit, total, totalPages, page } }` so legacy readers of
+      `pagination.page` keep working.
+    • GET auth: `requireStoreAccess` (any authenticated user, store-scoped
+      via the tenant context — same pattern as `/api/products`).
+    • POST body: `{ productId, type, quantity, reason, note }` per spec.
+      Also accepts legacy `{ adjustmentType, storeId, performedBy, unitCost }`.
+      `storeId` resolved from body OR session.storeId. `note` + `reason`
+      are joined into the StockMovement.notes field as "reason — note".
+    • POST auth: `requireAuth(handler, { roles: ['SUPER_ADMIN',
+      'STORE_OWNER', 'BRANCH_MANAGER'] })` per spec.
+    • POST creates StockMovement + atomically updates
+      Product.quantityInStock inside a single `$transaction` so the books
+      always reconcile. PURCHASE movements optionally accept `unitCost` to
+      recompute the weighted-average cost (WAC) via
+      `calculateWeightedAverageCost`.
+    • Fixed Decimal+number type errors: wrapped `product.quantityInStock`
+      and `product.costPrice` in `Number()` before arithmetic / WAC compute.
+- Created `src/app/api/products/low-stock/route.ts` (new GET endpoint):
+    • Returns products where `quantityInStock <= reorderLevel`
+      (optionally widened to `<= 1.5 × reorderLevel` via `includeNear=true`
+      for the "near reorder" yellow band).
+    • Each row includes: product details, current stock, reorder level,
+      min/max thresholds, deficit, suggested reorder qty (to reach 1.5× RL),
+      supplier info (resolved from the most recent PurchaseOrder that
+      contained the product — joined via PurchaseOrderItem → PurchaseOrder
+      → Supplier), and last restocked date (most recent PURCHASE
+      StockMovement).
+    • Sort by urgency: OUT_OF_STOCK → BELOW_REORDER → NEAR_REORDER, then
+      by largest deficit first.
+    • Summary header: `{ total, outOfStock, belowReorder, nearReorder }`.
+    • Auth: `requireStoreAccess`.
+- Created `src/components/inventory/stock-movement-log.tsx` (new component):
+    • Self-contained audit trail table with TanStack Query.
+    • Columns: Date, Product (name + SKU), Type (color-coded badge),
+      Quantity (signed +/-, color-coded red/green), Reason (notes), User
+      (performedBy, abbreviated).
+    • Type badges per spec: PURCHASE (blue), SALE (gray), ADJUSTMENT
+      (amber), RETURN (green), TRANSFER (purple), RENTAL_OUT/RENTAL_RETURN
+      (slate).
+    • Filter bar: type Select + date-from + date-to inputs + Clear button.
+    • Summary chips showing the top-4 movement-type counts.
+    • Pagination controls (Prev / Next + page indicator) using the new
+      `offset` + `limit` query params.
+    • Loading skeletons + friendly empty state with action button.
+    • Sticky table header inside a `max-h-[28rem]` scroll container with
+      `scrollbar-thin` styling.
+    • Props: `storeId` (required), `productId` (optional — scopes log to
+      one product), `pageSize` (default 10), `className`.
+    • Uses `fetch` directly with Bearer token (the internal `request`
+      helper in lib/api.ts is not exported).
+- Created `src/components/inventory/low-stock-alert-panel.tsx` (new):
+    • Summary header: "X products need attention" + breakdown chips for
+      out-of-stock / below-reorder / near-reorder.
+    • Each item card: product name + SKU, color-coded urgency badge,
+      stock-vs-reorder progress bar (red/amber/yellow), deficit value,
+      supplier name + phone + email, last restocked date + qty, suggested
+      reorder qty.
+    • "Create Purchase Order" button per item — calls
+      `onCreatePurchaseOrder(product)` callback prop (parent wires the PO
+      dialog).
+    • Color-coded urgency (left border accent + badge):
+        - OUT_OF_STOCK → red
+        - BELOW_REORDER → amber
+        - NEAR_REORDER → yellow
+    • Empty state with green Package icon and "All products are well
+      stocked!" message.
+    • Refresh button + retry-on-error.
+    • Props: `storeId` (required), `includeNear` (default false),
+      `onCreatePurchaseOrder` (optional callback),
+      `forceShowStoreSelector`, `className`.
+    • ScrollArea with `max-h-[36rem]` for long lists.
+
+PART 2 — Sales Report Exports
+- Created `src/lib/report-utils.ts` (new shared utility):
+    • `escapeCSVCell(value)` — RFC 4180 escaping (quotes, commas,
+      newlines, doubles embedded quotes).
+    • `toCSV(header, rows)` — joins header + rows with CRLF for max
+      spreadsheet compat (Excel on Windows).
+    • `formatReportDate(date)` — "Monday, January 1, 2025" per spec.
+    • `formatISODate(date)` — YYYY-MM-DD for filenames / CSV cells.
+    • `formatNumber(value)` — 2-dp rounding, strips trailing zeros,
+      NaN/null-safe.
+    • `generateSalesCSV(data: SalesSummaryData)` — multi-section CSV:
+      header (store + period), totals, comparison vs previous period,
+      payment-method breakdown, top-10 products, hourly distribution.
+      Sections separated by blank lines + section title rows so the CSV
+      is human-readable when opened in a spreadsheet.
+    • `generateDailyReportCSV(data: DailyReportData)` — EOD
+      reconciliation CSV: header, daily totals (gross sales, tax,
+      discounts, returns, voids), payment breakdown, cashier breakdown.
+    • `calculateReportTotals(transactions)` — sums revenue, tax,
+      discounts; NaN-safe; accepts both number and Decimal-string fields.
+    • `downloadCSV(csvString, filename)` — browser-only download helper;
+      prepends a UTF-8 BOM so Excel auto-detects encoding (prevents
+      mojibake on accented chars); creates a Blob + temporary <a>
+      element; cleans up the URL after 100ms.
+    • Exports `SalesSummaryData` and `DailyReportData` TypeScript
+      interfaces used by both the API routes (server) and the
+      report-generator component (client).
+- Created `src/app/api/reports/sales-summary/route.ts` (new GET endpoint):
+    • Query: `startDate`, `endDate`, `storeId` (required), `format`
+      ('json' default | 'csv').
+    • Returns comprehensive sales summary:
+        - Total revenue, transactions, avg order value
+        - Tax collected, total discount, COGS (from SaleItem snapshots),
+          gross profit, profit margin %
+        - Payment-method breakdown with count + amount + % share
+        - Top 10 products by revenue (with qty, cost, profit)
+        - Hourly distribution (0–23h, with transaction count + revenue)
+        - Comparison vs previous period of equal length: previous
+          revenue, revenue change (abs + %), previous transactions,
+          transactions change
+    • When `format=csv`, returns a `text/csv` file response using
+      `generateSalesCSV()` with `Content-Disposition: attachment;
+      filename="sales_summary_YYYY-MM-DD_to_YYYY-MM-DD.csv"`.
+    • Audit-logs the report generation (REPORT_GENERATED action).
+    • Auth: `requireStoreAccess` (any authenticated user).
+- Created `src/app/api/reports/daily/route.ts` (new GET endpoint):
+    • Query: `date` (YYYY-MM-DD, defaults to today), `storeId` (required),
+      `format` ('json' default | 'csv').
+    • Returns end-of-day reconciliation data:
+        - Sales totals (revenue, subtotal, tax, discount, count, AOV)
+        - Returns (count + refunded amount)
+        - Voided (count + amount)
+        - Tax collected (separate from returns tax)
+        - Payment-method breakdown (SALE only)
+        - Cashier breakdown (per-cashier revenue + transaction count,
+          sorted by revenue desc)
+    • When `format=csv`, returns `daily_report_YYYY-MM-DD.csv` via
+      `generateDailyReportCSV()`.
+    • Audit-logs the report generation.
+    • Auth: `requireStoreAccess`.
+- Created `src/components/reports/report-generator.tsx` (new):
+    • Report type selector: Daily / Weekly / Monthly / Custom Range
+      (Tabs component).
+    • Date range picker: single `<Input type="date">` for Daily;
+      start + end for the others. Sensible defaults: today (Daily),
+      start-of-week → today (Weekly), first-of-month → today (Monthly).
+    • Store selector (Select) — auto-hidden when only one store is
+      available; fetches the store list from `/api/stores` lazily.
+    • "Generate Report" button — fetches JSON from the appropriate
+      endpoint and renders a preview panel.
+    • "Download CSV" button — fetches the same endpoint with
+      `format=csv` and triggers `downloadCSV()` with a typed filename.
+    • "Print" button — calls `window.print()`. The toolbar is hidden
+      when printing (`print:hidden`) so the printed page shows only
+      the report preview.
+    • Preview panel — two shapes:
+        - Daily: 4 metric cards (revenue, transactions, tax, AOV) +
+          returns/voids panels + payment breakdown table + cashier
+          breakdown table.
+        - SalesSummary: 4 metric cards (revenue w/ trend %, transactions,
+          AOV, gross profit w/ margin) + payment breakdown table + top-10
+          products table + hourly distribution bar chart (24 vertical
+          bars with hover tooltips).
+    • MetricCard sub-component: border-l-4 accent (emerald/sky/amber/
+      purple), gradient icon chip, optional footer (e.g. trend %).
+    • Loading skeletons + empty state ("No report generated yet").
+    • Mobile-only download button (sm:hidden) so phone users get a
+      visible download affordance even when the header button is hidden.
+    • Props: `storeId` (required), `stores` (optional list),
+      `forceShowStoreSelector`, `className`.
+
+Stage Summary:
+- Files created: 7 (3 API routes, 1 lib utility, 3 components)
+- Files modified: 1 (stock-movements/route.ts rewritten)
+- All API routes use `export const dynamic = 'force-dynamic'`.
+- All API routes use `requireStoreAccess` (GET) or `requireAuth` with
+  role restriction (POST) — matching the auth pattern in
+  `/api/products/route.ts`.
+- Auth results verified by smoke test: an unauthenticated request to
+  `/api/products/low-stock?storeId=store_juja_main` correctly returned
+  `{"success":false,"error":"Authentication required."}` HTTP 401.
+- CSV exports use proper RFC 4180 escaping: quotes are doubled, fields
+  containing commas/quotes/newlines are wrapped in double quotes, rows
+  are CRLF-terminated, and a UTF-8 BOM is prepended for Excel compat.
+- All components handle empty states gracefully (skeletons while
+  loading, friendly messages when no data matches, retry buttons on
+  error).
+- Lint: 0 errors, 354 warnings (all pre-existing). 0 warnings in the
+  8 files I created/modified (verified by filtering lint output for the
+  new file paths).
+- Typecheck: 0 errors in my files (626 pre-existing errors in other
+  files unrelated to this task — Decimal type issues, sentry config,
+  test files using non-null assertions).
+- Note on the dev server: when testing, the Next.js Turbopack dev
+  server hit the sandbox's memory limit (4 GB) while compiling the new
+  routes — an OOM-kill event was logged in dmesg. This is an
+  environmental constraint, not a code defect; the routes compile
+  successfully (confirmed by the 401 response on first request) and
+  pass lint + typecheck.

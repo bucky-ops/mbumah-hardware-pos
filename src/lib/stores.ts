@@ -200,7 +200,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
 }));
 
-export type AppTab = 'dashboard' | 'pos' | 'catalog' | 'inventory' | 'customers' | 'rentals' | 'financial' | 'reports' | 'transactions' | 'suppliers' | 'gift-cards' | 'admin' | 'vouchers' | 'invoices' | 'delivery' | 'credits' | 'messaging' | 'transfers' | 'banking' | 'loyalty' | 'security' | 'payroll' | 'etims' | 'debt-management' | 'conversations' | 'purchase-orders';
+export type AppTab = 'dashboard' | 'pos' | 'catalog' | 'inventory' | 'customers' | 'rentals' | 'financial' | 'reports' | 'transactions' | 'suppliers' | 'gift-cards' | 'admin' | 'vouchers' | 'invoices' | 'delivery' | 'credits' | 'messaging' | 'transfers' | 'banking' | 'loyalty' | 'security' | 'payroll' | 'etims' | 'debt-management' | 'conversations' | 'purchase-orders' | 'analytics';
 
 export type SidebarState = 'expanded' | 'collapsed' | 'mobile-overlay';
 

@@ -24,6 +24,7 @@ const LazyInventoryTab = lazy(() => import('./tabs/inventory-tab'));
 const LazyCustomersTab = lazy(() => import('./tabs/customers-tab'));
 const LazyRentalsTab = lazy(() => import('./tabs/rentals-tab'));
 const LazyFinancialTab = lazy(() => import('./tabs/financial-tab'));
+const LazyAnalyticsTab = lazy(() => import('./tabs/analytics-tab'));
 const LazyReportsTab = lazy(() => import('./tabs/reports-tab'));
 const LazyAdminTab = lazy(() => import('./tabs/admin-tab'));
 const LazyTransactionsTab = lazy(() => import('./tabs/transactions-tab'));
@@ -124,6 +125,7 @@ function MainApp() {
       case 'customers': return <SectionErrorBoundary sectionName="Customers"><Suspense fallback={<TabLoadingFallback />}><LazyCustomersTab /></Suspense></SectionErrorBoundary>;
       case 'rentals': return <SectionErrorBoundary sectionName="Rentals"><Suspense fallback={<TabLoadingFallback />}><LazyRentalsTab /></Suspense></SectionErrorBoundary>;
       case 'financial': return <SectionErrorBoundary sectionName="Financial"><Suspense fallback={<TabLoadingFallback />}><LazyFinancialTab /></Suspense></SectionErrorBoundary>;
+      case 'analytics': return <SectionErrorBoundary sectionName="Analytics"><Suspense fallback={<TabLoadingFallback />}><LazyAnalyticsTab /></Suspense></SectionErrorBoundary>;
       case 'reports': return <SectionErrorBoundary sectionName="Reports"><Suspense fallback={<TabLoadingFallback />}><LazyReportsTab /></Suspense></SectionErrorBoundary>;
       case 'transactions': return <SectionErrorBoundary sectionName="Transactions"><Suspense fallback={<TabLoadingFallback />}><LazyTransactionsTab /></Suspense></SectionErrorBoundary>;
       case 'admin': return <SectionErrorBoundary sectionName="Admin"><Suspense fallback={<TabLoadingFallback />}><LazyAdminTab /></Suspense></SectionErrorBoundary>;

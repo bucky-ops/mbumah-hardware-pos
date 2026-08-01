@@ -28,6 +28,7 @@ import { generateReceiptNumber, calculateLineTotal } from '@/lib/helpers';
 import { recordSaleJournalEntry, getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, PaymentMethod, PaymentStatus } from '@/lib/types';
 import { checkoutSchema, validateInput } from '@/lib/validations';
+import { calculateEarnedPoints, getTierFromPoints } from '@/lib/loyalty-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -758,6 +759,110 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
       customerId: customerId || null,
     },
   });
+
+  // ── Phase 3: Award loyalty points to the customer (non-blocking) ──
+  //
+  // Rule: 1 point per KES 100 spent (see src/lib/loyalty-utils.ts).
+  // Awarding runs AFTER the sale is committed so it can never roll back a
+  // successful transaction. Failures are logged but swallowed — the customer
+  // simply doesn't earn points for this sale (rather than blocking checkout).
+  if (customerId && customer) {
+    try {
+      const earnedPoints = calculateEarnedPoints(finalTotal);
+      if (earnedPoints > 0) {
+        // Reload the customer inside a fresh tx to get the authoritative
+        // loyaltyPoints + totalLoyaltyEarned values (concurrent sales to the
+        // same customer could otherwise cause a lost update).
+        await db.$transaction(
+          async (tx) => {
+            const fresh = await tx.customer.findUnique({
+              where: { id: customerId },
+              select: {
+                id: true,
+                loyaltyPoints: true,
+                totalLoyaltyEarned: true,
+                storeId: true,
+              },
+            });
+            if (!fresh) return;
+
+            const newBalance = fresh.loyaltyPoints + earnedPoints;
+            const newLifetime = fresh.totalLoyaltyEarned + earnedPoints;
+            const newTier = getTierFromPoints(newLifetime);
+
+            await tx.customer.update({
+              where: { id: customerId },
+              data: {
+                loyaltyPoints: newBalance,
+                totalLoyaltyEarned: newLifetime,
+                loyaltyTier: newTier,
+              },
+            });
+
+            await tx.loyaltyTransaction.create({
+              data: {
+                storeId: fresh.storeId,
+                customerId,
+                // Legacy field — positive for earned
+                points: earnedPoints,
+                transactionType: 'EARN',
+                // Phase-3 fields
+                type: 'EARNED',
+                transactionId: result.id,
+                balanceAfter: newBalance,
+                reason: `Earned from sale ${receiptNumber} (KES ${finalTotal.toFixed(2)})`,
+                description: `Earned from sale ${receiptNumber}`,
+                reference: receiptNumber,
+                referenceId: result.id,
+                referenceType: 'SALE',
+                createdBy: cashierId,
+              },
+            });
+          },
+          { timeout: 8000, maxWait: 6000 },
+        );
+
+        // Best-effort audit log — never block the response on logging.
+        void systemLog({
+          action: 'LOYALTY_POINTS_EARNED',
+          component: LogComponent.POS,
+          severity: LogSeverity.INFO,
+          message: `Customer ${customerId}: earned ${earnedPoints} points from sale ${receiptNumber}`,
+          storeId,
+          userId: cashierId,
+          metadata: {
+            customerId,
+            transactionId: result.id,
+            receiptNumber,
+            saleTotal: finalTotal,
+            earnedPoints,
+          },
+        }).catch(() => {
+          /* logging must never block */
+        });
+      }
+    } catch (loyaltyErr) {
+      // Swallow — sale is already committed. Log for diagnostics.
+      void systemLog({
+        action: 'LOYALTY_AWARD_FAILED',
+        component: LogComponent.POS,
+        severity: LogSeverity.WARN,
+        message: `Failed to award loyalty points for sale ${receiptNumber}: ${
+          loyaltyErr instanceof Error ? loyaltyErr.message : 'Unknown error'
+        }`,
+        storeId,
+        userId: cashierId,
+        metadata: {
+          customerId,
+          transactionId: result.id,
+          receiptNumber,
+          saleTotal: finalTotal,
+        },
+      }).catch(() => {
+        /* logging must never block */
+      });
+    }
+  }
 
   const fullTransaction = await db.salesTransaction.findUnique({
     where: { id: result.id },

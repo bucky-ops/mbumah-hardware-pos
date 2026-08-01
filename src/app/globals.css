@@ -536,12 +536,7 @@
   animation: fade-in-up 0.4s ease-out;
 }
 
-/* Staggered animation delay utility */
-.stagger-1 { animation-delay: 50ms; }
-.stagger-2 { animation-delay: 100ms; }
-.stagger-3 { animation-delay: 150ms; }
-.stagger-4 { animation-delay: 200ms; }
-.stagger-5 { animation-delay: 250ms; }
+/* Staggered animation delay utility — 0.1s → 0.6s (defined later in file) */
 
 /* Scale in animation for modals and dialogs */
 @keyframes scale-in {
@@ -860,20 +855,7 @@
   animation: tab-enter 0.25s ease-out;
 }
 
-/* Card hover lift effect for interactive cards */
-.card-hover-lift {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.card-hover-lift:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px oklch(0 0 0 / 0.08);
-}
-
-.dark .card-hover-lift:hover {
-  box-shadow: 0 4px 16px oklch(1 0 0 / 0.06);
-}
-
+/* Card hover lift — 4px translate + enhanced shadow (full definition later in file) */
 /* Subtle row hover for tables */
 .table-row-hover {
   transition: background-color 0.15s ease;
@@ -923,18 +905,7 @@
   animation: badge-pop 0.3s ease-out;
 }
 
-/* Skeleton pulse with subtle shimmer */
-.skeleton-shimmer {
-  background: linear-gradient(90deg, oklch(0.96 0.005 250) 25%, oklch(0.93 0.005 250) 50%, oklch(0.96 0.005 250) 75%);
-  background-size: 200% 100%;
-  animation: card-shimmer 1.5s ease-in-out infinite;
-}
-
-.dark .skeleton-shimmer {
-  background: linear-gradient(90deg, oklch(0.22 0.005 250) 25%, oklch(0.28 0.005 250) 50%, oklch(0.22 0.005 250) 75%);
-  background-size: 200% 100%;
-}
-
+/* Skeleton pulse with shimmer — full enhanced definition (with ::after sweep) later in file */
 /* ===== Gradient border utility ===== */
 .gradient-border {
   position: relative;
@@ -1020,16 +991,504 @@
   opacity: 0.5;
 }
 
-/* Glass card effect */
+/* Glass card effect — frosted glass with stronger blur + shadow-xl */
 .glass-card {
-  background: oklch(1 0 0 / 0.8);
-  backdrop-filter: blur(16px) saturate(180%);
-  border: 1px solid oklch(1 0 0 / 0.15);
+  background: oklch(1 0 0 / 0.6);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid oklch(1 0 0 / 0.2);
+  box-shadow: 0 12px 32px oklch(0 0 0 / 0.08), 0 4px 12px oklch(0 0 0 / 0.04);
 }
 
 .dark .glass-card {
-  background: oklch(0.19 0.02 260 / 0.85);
-  border-color: oklch(1 0 0 / 0.08);
+  background: oklch(0.19 0.02 260 / 0.6);
+  border-color: oklch(1 0 0 / 0.1);
+  box-shadow: 0 12px 32px oklch(0 0 0 / 0.3), 0 4px 12px oklch(0 0 0 / 0.2);
+}
+
+/* Animated gradient border using background-clip (used on .gradient-border class — kept above) */
+.gradient-border-animated {
+  position: relative;
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+.gradient-border-animated::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: -1;
+  background: linear-gradient(135deg, oklch(0.68 0.18 55), oklch(0.65 0.15 260), oklch(0.65 0.18 145), oklch(0.68 0.18 55));
+  background-size: 300% 300%;
+  animation: gradient-shift 6s ease infinite;
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Improved shimmer background — smoother, wider gradient sweep */
+@keyframes shimmer-sweep {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer-bg {
+  background: linear-gradient(
+    90deg,
+    oklch(0.96 0.005 250) 0%,
+    oklch(0.96 0.005 250) 35%,
+    oklch(0.92 0.01 250) 50%,
+    oklch(0.96 0.005 250) 65%,
+    oklch(0.96 0.005 250) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-sweep 2.5s ease-in-out infinite;
+}
+
+.dark .shimmer-bg {
+  background: linear-gradient(
+    90deg,
+    oklch(0.22 0.005 250) 0%,
+    oklch(0.22 0.005 250) 35%,
+    oklch(0.28 0.01 250) 50%,
+    oklch(0.22 0.005 250) 65%,
+    oklch(0.22 0.005 250) 100%
+  );
+  background-size: 200% 100%;
+}
+
+/* Glow effect in primary color */
+.glow-primary {
+  box-shadow: 0 0 0 0 oklch(0.68 0.18 55 / 0);
+  transition: box-shadow 0.3s ease;
+}
+
+.glow-primary:hover,
+.glow-primary.is-active {
+  box-shadow: 0 0 16px oklch(0.68 0.18 55 / 0.35), 0 0 32px oklch(0.68 0.18 55 / 0.15);
+}
+
+.dark .glow-primary:hover,
+.dark .glow-primary.is-active {
+  box-shadow: 0 0 16px oklch(0.75 0.18 55 / 0.45), 0 0 32px oklch(0.75 0.18 55 / 0.2);
+}
+
+/* Gradient text (primary to accent) */
+.text-gradient {
+  background: linear-gradient(135deg, oklch(0.55 0.18 260) 0%, oklch(0.68 0.18 55) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.dark .text-gradient {
+  background: linear-gradient(135deg, oklch(0.7 0.18 260) 0%, oklch(0.75 0.2 55) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Card hover lift — 4px translate + enhanced shadow */
+.card-hover-lift {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.2s ease;
+}
+
+.card-hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px oklch(0 0 0 / 0.1), 0 4px 12px oklch(0 0 0 / 0.06);
+}
+
+.dark .card-hover-lift:hover {
+  box-shadow: 0 12px 32px oklch(1 0 0 / 0.06), 0 4px 12px oklch(1 0 0 / 0.04);
+}
+
+/* Button press effect — scale(0.97) on active */
+.btn-press {
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.btn-press:active {
+  transform: scale(0.97);
+}
+
+/* Direct fade-in-up utility (apply animation directly without .animate- prefix) */
+.fade-in-up {
+  animation: fade-in-up 0.4s ease-out both;
+}
+
+/* Staggered animation delay utility — 6 stagger steps (0.1s → 0.6s) */
+.stagger-1 { animation-delay: 100ms; }
+.stagger-2 { animation-delay: 200ms; }
+.stagger-3 { animation-delay: 300ms; }
+.stagger-4 { animation-delay: 400ms; }
+.stagger-5 { animation-delay: 500ms; }
+.stagger-6 { animation-delay: 600ms; }
+
+/* Custom thin scrollbar (webkit + firefox) */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.7 0.02 250) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: oklch(0.7 0.02 250);
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.55 0.02 250);
+}
+
+.dark .scrollbar-thin {
+  scrollbar-color: oklch(0.4 0.02 250) transparent;
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: oklch(0.4 0.02 250);
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.55 0.02 250);
+}
+
+/* Improved skeleton with gradient sweep — richer gradient stops */
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  background: oklch(0.96 0.005 250);
+}
+
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    oklch(1 0 0 / 0.55) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-sweep 1.8s ease-in-out infinite;
+}
+
+.dark .skeleton-shimmer {
+  background: oklch(0.22 0.005 250);
+}
+
+.dark .skeleton-shimmer::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    oklch(1 0 0 / 0.07) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+}
+
+/* Pulsing dot for live/active status */
+@keyframes status-pulse-anim {
+  0%, 100% {
+    box-shadow: 0 0 0 0 oklch(0.65 0.18 145 / 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 6px oklch(0.65 0.18 145 / 0);
+  }
+}
+
+.status-pulse {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background-color: oklch(0.65 0.18 145);
+  animation: status-pulse-anim 2s ease-in-out infinite;
+}
+
+.status-pulse.status-pulse-amber {
+  background-color: oklch(0.75 0.15 85);
+  animation-name: status-pulse-anim-amber;
+}
+
+@keyframes status-pulse-anim-amber {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.75 0.15 85 / 0.55); }
+  50% { box-shadow: 0 0 0 6px oklch(0.75 0.15 85 / 0); }
+}
+
+.status-pulse.status-pulse-red {
+  background-color: oklch(0.6 0.2 25);
+  animation-name: status-pulse-anim-red;
+}
+
+@keyframes status-pulse-anim-red {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.6 0.2 25 / 0.55); }
+  50% { box-shadow: 0 0 0 6px oklch(0.6 0.2 25 / 0); }
+}
+
+/* ===== POS product card enhancements ===== */
+
+/* Image blur-up effect for lazy-loaded images */
+.img-blur-up {
+  filter: blur(8px);
+  transition: filter 0.4s ease-out;
+}
+
+.img-blur-up.img-loaded {
+  filter: blur(0);
+}
+
+/* Price tag with gradient background */
+.price-tag {
+  background: linear-gradient(135deg, oklch(0.68 0.18 55), oklch(0.75 0.15 80));
+  color: oklch(0.18 0.04 55);
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 2px 8px;
+  display: inline-block;
+  box-shadow: 0 2px 8px oklch(0.68 0.18 55 / 0.2);
+}
+
+.dark .price-tag {
+  color: oklch(0.18 0.04 55);
+}
+
+/* On-sale pulse badge */
+@keyframes on-sale-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 oklch(0.6 0.2 25 / 0.6);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 0 0 6px oklch(0.6 0.2 25 / 0);
+  }
+}
+
+.animate-on-sale {
+  animation: on-sale-pulse 1.8s ease-in-out infinite;
+}
+
+/* Category accent strip (left side of product card) */
+.category-accent-strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 4px 0 0 4px;
+}
+
+/* Hover overlay with quick actions */
+.product-hover-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, oklch(0 0 0 / 0.65) 0%, oklch(0 0 0 / 0.15) 50%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 8px;
+  gap: 6px;
+}
+
+.group:hover .product-hover-overlay {
+  opacity: 1;
+}
+
+/* Best seller badge styling */
+.best-seller-badge {
+  background: linear-gradient(135deg, oklch(0.75 0.15 85), oklch(0.8 0.18 60));
+  color: oklch(0.2 0.05 60);
+  text-shadow: 0 1px 0 oklch(1 0 0 / 0.3);
+  box-shadow: 0 2px 6px oklch(0.75 0.15 85 / 0.4);
+}
+
+/* ===== Cart panel enhancements ===== */
+
+/* Cart item hover highlight */
+.cart-item-row {
+  transition: background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cart-item-row:hover {
+  background-color: oklch(0.68 0.18 55 / 0.06);
+  transform: translateX(2px);
+}
+
+.dark .cart-item-row:hover {
+  background-color: oklch(1 0 0 / 0.04);
+}
+
+/* Animated total breakdown row */
+@keyframes total-row-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-total-row {
+  animation: total-row-in 0.3s ease-out both;
+}
+
+/* Checkout button pulsing glow when cart has items */
+@keyframes checkout-glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 16px oklch(0.68 0.18 55 / 0.3), 0 4px 16px oklch(0.68 0.18 55 / 0.25);
+  }
+  50% {
+    box-shadow: 0 0 28px oklch(0.68 0.18 55 / 0.5), 0 4px 24px oklch(0.68 0.18 55 / 0.4);
+  }
+}
+
+.checkout-glow-pulse {
+  animation: checkout-glow-pulse 2s ease-in-out infinite;
+}
+
+/* ===== Category chips enhancements ===== */
+
+/* Scroll snap for category chips */
+.scroll-snap-x {
+  scroll-snap-type: x mandatory;
+  scroll-padding-left: 4px;
+}
+
+.scroll-snap-x > * {
+  scroll-snap-align: start;
+}
+
+/* Fade gradient on edges */
+.scroll-fade-left::before,
+.scroll-fade-right::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.scroll-fade-left::before {
+  left: 0;
+  background: linear-gradient(to right, var(--background), transparent);
+}
+
+.scroll-fade-right::after {
+  right: 0;
+  background: linear-gradient(to left, var(--background), transparent);
+}
+
+.scroll-fade-left.fade-hidden::before,
+.scroll-fade-right.fade-hidden::after {
+  display: none;
+}
+
+/* Active category chip scale */
+.chip-active {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px oklch(0 0 0 / 0.12);
+}
+
+.chip-hover-lift {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.chip-hover-lift:hover {
+  transform: translateY(-1px);
+}
+
+/* ===== Checkout dialog enhancements ===== */
+
+/* Step transition animation */
+@keyframes step-slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes step-slide-in-left {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.step-enter-right {
+  animation: step-slide-in-right 0.3s ease-out both;
+}
+
+.step-enter-left {
+  animation: step-slide-in-left 0.3s ease-out both;
+}
+
+/* Step progress indicator connector fill */
+.step-connector {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  right: -50%;
+  height: 2px;
+  background: oklch(0.91 0.01 250);
+  transform: translateY(-50%);
+  z-index: 0;
+}
+
+.dark .step-connector {
+  background: oklch(1 0 0 / 12%);
+}
+
+.step-connector.step-connector-filled {
+  background: linear-gradient(to right, oklch(0.65 0.18 145), oklch(0.68 0.18 55));
+}
+
+/* Payment method card */
+.payment-method-card {
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.payment-method-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px oklch(0 0 0 / 0.08);
+}
+
+.dark .payment-method-card:hover {
+  box-shadow: 0 4px 12px oklch(0 0 0 / 0.3);
+}
+
+/* Quick amount button */
+.quick-amount-btn {
+  transition: transform 0.1s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.quick-amount-btn:active {
+  transform: scale(0.95);
+}
+
+/* ===== Reduced motion: disable all animations ===== */
+@media (prefers-reduced-motion: reduce) {
+  .checkout-glow-pulse,
+  .animate-on-sale,
+  .status-pulse,
+  .shimmer-bg,
+  .skeleton-shimmer::after,
+  .gradient-border-animated::before,
+  .animate-total-row,
+  .step-enter-right,
+  .step-enter-left {
+    animation: none !important;
+  }
 }
 
 /* Product card hover lift with image zoom */

@@ -375,7 +375,12 @@ model Customer {
   idNumber           String? // Kenyan National ID
   currentDebtBalance Decimal  @default(0)
   debtLimit          Decimal  @default(50000) // KES default limit
-  loyaltyPoints      Int      @default(0)
+  loyaltyPoints      Int      @default(0) // current points balance
+  // ── Phase 3 loyalty points system ─────────────────────────────────────
+  totalLoyaltyEarned Int      @default(0) // lifetime points earned
+  totalLoyaltyRedeemed Int    @default(0) // lifetime points redeemed
+  loyaltyTier        String   @default("BRONZE") // BRONZE, SILVER, GOLD, PLATINUM
+  joinedAt           DateTime @default(now()) // when customer joined loyalty program
   preferredChannel   String   @default("SMS") // SMS, EMAIL, WHATSAPP, PRINT
   isActive           Boolean  @default(true)
   createdAt          DateTime @default(now())
@@ -2216,6 +2221,18 @@ model LoyaltyTransaction {
   tierId          String?
   points          Int // Positive = earned, negative = redeemed
   transactionType String // EARN, REDEEM, ADJUST, BONUS, EXPIRE
+  // ── Phase 3 loyalty points system ─────────────────────────────────────
+  // `type` mirrors `transactionType` for the simplified loyalty API
+  // (EARNED, REDEEMED, ADJUSTED, EXPIRED). Kept in sync by the loyalty
+  // utility helpers so both the legacy /loyalty/transactions endpoint and
+  // the new /customers/[id]/loyalty endpoints can coexist.
+  type            String   @default("EARNED") // EARNED, REDEEMED, ADJUSTED, EXPIRED
+  // Optional FK to the originating SalesTransaction. Currently not enforced
+  // at the DB level (no relation back-relation on SalesTransaction) but
+  // stored so the loyalty UI can deep-link into the receipt.
+  transactionId   String? // linked sales transaction
+  balanceAfter    Int      @default(0) // balance after this transaction
+  reason          String?  // description (mirrors `description` for new API)
   reference       String?
   referenceId     String? // FK to originating SalesTransaction etc. (not enforced)
   referenceType   String? // SALE, REDEMPTION, MANUAL_ADJUST, CAMPAIGN
@@ -2231,6 +2248,7 @@ model LoyaltyTransaction {
   @@index([customerId])
   @@index([transactionType])
   @@index([referenceId])
+  @@index([transactionId])
   @@index([createdAt])
   @@map("loyalty_transactions")
 }

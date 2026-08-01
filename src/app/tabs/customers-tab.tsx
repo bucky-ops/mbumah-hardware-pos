@@ -22,6 +22,7 @@ import {
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
+import { LoyaltyCard } from '@/components/loyalty/loyalty-card';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -1326,14 +1327,20 @@ export default function CustomersTab() {
                   )}
                   <Separator />
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Loyalty Points</span>
-                    <span className="text-sm font-medium">{selectedCustomer.loyaltyPoints} pts</span>
-                  </div>
-                  <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Member Since</span>
                     <span className="text-sm font-medium">{formatDate(selectedCustomer.createdAt)}</span>
                   </div>
                 </div>
+
+                {/* Loyalty Card — Phase 3 loyalty points system */}
+                <LoyaltyCard
+                  customerId={selectedCustomer.id}
+                  onRedeemed={() => {
+                    // Refresh the customers list so the loyaltyPoints column
+                    // in the table stays in sync after a redemption.
+                    void queryClient.invalidateQueries({ queryKey: ['customers'] });
+                  }}
+                />
 
                 {/* Debt Aging Breakdown */}
                 {totalAging > 0 && (

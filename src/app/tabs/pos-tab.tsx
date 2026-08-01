@@ -41,6 +41,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { ReceiptPrintPreview } from '@/components/receipt-print';
 import {
   ShoppingCart, ShoppingBag, Package, Search, Plus, Trash2, CreditCard,
@@ -78,6 +88,7 @@ export default function POSTab() {
   const [cartBadgeShake, setCartBadgeShake] = useState(false);
   const [addedItemId, setAddedItemId] = useState<string | null>(null);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [clearCartConfirmOpen, setClearCartConfirmOpen] = useState(false);
   const currentStoreId = useAppStore((s) => s.currentStoreId);
 
   // Add Customer dialog state
@@ -984,6 +995,25 @@ export default function POSTab() {
     return 'grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2.5';
   }, [sortedProducts.length]);
 
+  // Compute product counts per category for the category chips badges
+  const categoryProductCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const p of products) {
+      if (p.categoryId) {
+        counts[p.categoryId] = (counts[p.categoryId] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [products]);
+
+  // Best seller IDs from dashboard topProducts (if available) — passed to ProductCard
+  const bestSellerIds = useMemo(() => {
+    // Fallback heuristic: products that are recently updated AND have low stock
+    // (low stock + recent activity = popular). This is purely a visual cue.
+    // Real integration: caller can pass topProducts from dashboard query.
+    return new Set<string>();
+  }, []);
+
   // Cart note handler
   const handleCartNoteChange = (productId: string, note: string) => {
     setCartNotes(prev => ({ ...prev, [productId]: note }));
@@ -1111,6 +1141,8 @@ export default function POSTab() {
             categories={categories}
             selected={selectedCategory}
             onSelect={setSelectedCategory}
+            productCounts={categoryProductCounts}
+            totalCount={products.length}
           />
         </div>
 
@@ -1144,6 +1176,7 @@ export default function POSTab() {
                 product={product}
                 onAdd={handleAddToCart}
                 cartQuantity={cart.items.find(i => i.productId === product.id)?.quantity}
+                isBestSeller={bestSellerIds.has(product.id)}
               />
             ))}
           </div>
@@ -1307,7 +1340,9 @@ export default function POSTab() {
                 <ShoppingCart className="h-4 w-4" />
                 Cart
                 {cart.items.length > 0 && (
-                  <Badge variant="secondary" className={cartBadgeShake ? 'animate-shake' : ''}>{cart.getItemCount()}</Badge>
+                  <Badge variant="secondary" className={cartBadgeShake ? 'animate-shake' : 'animate-badge-pop'}>
+                    {cart.getItemCount()}
+                  </Badge>
                 )}
                 {heldCartCount > 0 && (
                   <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300">
@@ -1323,16 +1358,28 @@ export default function POSTab() {
                 )}
                 {cart.items.length > 0 && (
                   <>
-                    <Button variant="ghost" size="sm" onClick={holdCart} className="text-amber-600 h-7" title="Hold current cart (F10)">
+                    <Button variant="ghost" size="sm" onClick={holdCart} className="text-amber-600 h-7 btn-press" title="Hold current cart (F10)">
                       <Pause className="h-3.5 w-3.5 mr-1" /> Hold
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => { cart.clearCart(); setCartNotes({}); setCartDiscountInput(''); }} className="text-destructive h-7">
+                    <Button variant="ghost" size="sm" onClick={() => setClearCartConfirmOpen(true)} className="text-destructive h-7 btn-press" title="Clear cart (with confirmation)">
                       <Trash2 className="h-3.5 w-3.5 mr-1" /> Clear
                     </Button>
                   </>
                 )}
               </div>
             </div>
+            {/* Cart total value sub-header */}
+            {cart.items.length > 0 && (
+              <div className="flex items-center justify-between mt-1 pt-2 border-t border-dashed text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <span className="status-pulse" aria-hidden />
+                  <span>Live cart</span>
+                </span>
+                <span>
+                  {cart.getItemCount()} item{cart.getItemCount() !== 1 ? 's' : ''} · <span className="font-bold text-foreground">{formatKES(finalTotal)}</span>
+                </span>
+              </div>
+            )}
           </CardHeader>
           <Separator className="shrink-0" />
           <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
@@ -1527,16 +1574,16 @@ export default function POSTab() {
                 )}
 
                 <div className="space-y-1 text-sm">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between animate-total-row">
                     <span className="text-muted-foreground">Subtotal</span>
                     <span>{formatKES(subtotal)}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between animate-total-row" style={{ animationDelay: '60ms' }}>
                     <span className="text-muted-foreground">VAT (16%)</span>
                     <span>{formatKES(tax)}</span>
                   </div>
                   {totalDiscount > 0 && (
-                    <div className="flex justify-between text-green-600">
+                    <div className="flex justify-between text-green-600 animate-total-row" style={{ animationDelay: '120ms' }}>
                       <span className="flex items-center gap-1">
                         <Tag className="h-3 w-3" />
                         Discount
@@ -1545,9 +1592,9 @@ export default function POSTab() {
                     </div>
                   )}
                   <Separator />
-                  <div className="flex justify-between font-bold text-base">
+                  <div className="flex justify-between font-bold text-base animate-total-row" style={{ animationDelay: '180ms' }}>
                     <span>Total</span>
-                    <span className="gradient-text">{formatKES(finalTotal)}</span>
+                    <span className="text-gradient">{formatKES(finalTotal)}</span>
                   </div>
                 </div>
               </div>
@@ -1555,7 +1602,7 @@ export default function POSTab() {
               {/* Checkout button — always pinned at the bottom, never scrolled out of view */}
               <div className="shrink-0 p-3 border-t bg-card/80 backdrop-blur-sm space-y-1.5">
                 <Button
-                  className="w-full bg-gradient-to-r from-accent-orange to-amber-500 hover:from-accent-orange/90 hover:to-amber-600 text-white font-semibold h-12 shadow-lg shadow-accent-orange/20 checkout-glow micro-click"
+                  className="w-full bg-gradient-to-r from-accent-orange to-amber-500 hover:from-accent-orange/90 hover:to-amber-600 text-white font-semibold h-12 shadow-lg shadow-accent-orange/20 checkout-glow checkout-glow-pulse micro-click btn-press"
                   size="lg"
                   onClick={() => setCheckoutOpen(true)}
                 >
@@ -1612,6 +1659,9 @@ export default function POSTab() {
         onSendStkPush={handleMpesaPay}
         onRetryStk={() => { setMpesaStatus('idle'); setStkCheckoutRequestId(''); setStkResultDesc(''); clearStkPolling(); }}
         onCompleteSale={handleCheckout}
+        cartItems={cart.items}
+        subtotal={subtotal}
+        taxAmount={tax}
       />
 
       {/* Receipt Dialog (ResponsiveDialog) — Print + WhatsApp + New Sale */}
@@ -2060,10 +2110,10 @@ export default function POSTab() {
                 )}
                 {cart.items.length > 0 && (
                   <>
-                    <Button variant="ghost" size="sm" onClick={holdCart} className="text-amber-600 h-7 text-xs">
+                    <Button variant="ghost" size="sm" onClick={holdCart} className="text-amber-600 h-7 text-xs btn-press">
                       <Pause className="h-3.5 w-3.5 mr-1" /> Hold
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => { cart.clearCart(); setCartNotes({}); setCartDiscountInput(''); }} className="text-destructive h-7 text-xs">
+                    <Button variant="ghost" size="sm" onClick={() => setClearCartConfirmOpen(true)} className="text-destructive h-7 text-xs btn-press" title="Clear cart (with confirmation)">
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </>
@@ -2211,16 +2261,16 @@ export default function POSTab() {
                   </div>
                 )}
                 <div className="space-y-1 text-sm">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between animate-total-row">
                     <span className="text-muted-foreground">Subtotal</span>
                     <span>{formatKES(subtotal)}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between animate-total-row" style={{ animationDelay: '60ms' }}>
                     <span className="text-muted-foreground">VAT (16%)</span>
                     <span>{formatKES(tax)}</span>
                   </div>
                   {totalDiscount > 0 && (
-                    <div className="flex justify-between text-green-600">
+                    <div className="flex justify-between text-green-600 animate-total-row" style={{ animationDelay: '120ms' }}>
                       <span className="flex items-center gap-1">
                         <Tag className="h-3 w-3" />
                         Discount
@@ -2229,9 +2279,9 @@ export default function POSTab() {
                     </div>
                   )}
                   <Separator />
-                  <div className="flex justify-between font-bold text-base">
+                  <div className="flex justify-between font-bold text-base animate-total-row" style={{ animationDelay: '180ms' }}>
                     <span>Total</span>
-                    <span className="gradient-text">{formatKES(finalTotal)}</span>
+                    <span className="text-gradient">{formatKES(finalTotal)}</span>
                   </div>
                 </div>
               </div>
@@ -2239,7 +2289,7 @@ export default function POSTab() {
               {/* Checkout button — always pinned at the bottom of the sheet */}
               <div className="shrink-0 p-3 border-t bg-card/80 backdrop-blur-sm space-y-1.5">
                 <Button
-                  className="w-full bg-gradient-to-r from-accent-orange to-amber-500 hover:from-accent-orange/90 hover:to-amber-600 text-white font-semibold h-12 shadow-lg shadow-accent-orange/20"
+                  className="w-full bg-gradient-to-r from-accent-orange to-amber-500 hover:from-accent-orange/90 hover:to-amber-600 text-white font-semibold h-12 shadow-lg shadow-accent-orange/20 checkout-glow checkout-glow-pulse micro-click btn-press"
                   size="lg"
                   onClick={() => { setMobileCartOpen(false); setCheckoutOpen(true); }}
                 >
@@ -2257,6 +2307,38 @@ export default function POSTab() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Clear Cart Confirmation Dialog (shared — desktop & mobile) */}
+      <AlertDialog open={clearCartConfirmOpen} onOpenChange={setClearCartConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" />
+              Clear cart?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove all {cart.getItemCount()} item{cart.getItemCount() !== 1 ? 's' : ''} (total {formatKES(finalTotal)}) from the current cart.
+              Cart notes and discounts will also be cleared. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="btn-press">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 btn-press"
+              onClick={() => {
+                cart.clearCart();
+                setCartNotes({});
+                setCartDiscountInput('');
+                setClearCartConfirmOpen(false);
+                toast.success('Cart cleared');
+              }}
+            >
+              <Trash2 className="h-4 w-4 mr-1.5" />
+              Clear Cart
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

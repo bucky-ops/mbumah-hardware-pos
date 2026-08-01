@@ -24,9 +24,21 @@ export function CartItemRow({
 }) {
   const quickAddAmounts = [1, 2, 5, 10];
   const [showNote, setShowNote] = useState(!!note);
+  const [isEditingQty, setIsEditingQty] = useState(false);
+  const [qtyInput, setQtyInput] = useState(String(item.quantity));
+
+  const commitQtyInput = () => {
+    const n = parseInt(qtyInput, 10);
+    if (!Number.isNaN(n) && n > 0) {
+      onUpdateQty(item.productId, n);
+    } else {
+      setQtyInput(String(item.quantity));
+    }
+    setIsEditingQty(false);
+  };
 
   return (
-    <div className={`group flex gap-2 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-all duration-200 ${isNew ? 'animate-slide-in' : 'animate-stagger-item'}`}>
+    <div className={`cart-item-row group flex gap-2 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-all duration-200 ${isNew ? 'animate-slide-in' : 'animate-stagger-item'}`}>
       {/* Image placeholder */}
       <div className="shrink-0 w-9 h-9 rounded-md bg-muted flex items-center justify-center">
         <Package className="h-3.5 w-3.5 text-muted-foreground/40" />
@@ -88,17 +100,40 @@ export function CartItemRow({
           <Button
             variant="outline"
             size="icon"
-            className="h-6 w-6"
+            className="h-6 w-6 btn-press"
             onClick={() => onUpdateQty(item.productId, item.quantity - 1)}
             aria-label="Decrease quantity"
+            disabled={item.quantity <= 1}
           >
             <Minus className="h-2.5 w-2.5" />
           </Button>
-          <span className="w-7 text-center text-xs font-semibold">{item.quantity}</span>
+          {isEditingQty ? (
+            <input
+              type="number"
+              min={1}
+              value={qtyInput}
+              onChange={(e) => setQtyInput(e.target.value)}
+              onBlur={commitQtyInput}
+              onKeyDown={(e) => { if (e.key === 'Enter') commitQtyInput(); if (e.key === 'Escape') { setQtyInput(String(item.quantity)); setIsEditingQty(false); } }}
+              className="w-9 h-6 text-center text-xs font-semibold border rounded px-0.5 bg-background"
+              aria-label="Edit quantity"
+              autoFocus
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => { setQtyInput(String(item.quantity)); setIsEditingQty(true); }}
+              className="w-7 text-center text-xs font-semibold hover:bg-muted rounded transition-colors"
+              title="Click to edit quantity"
+            >
+              {item.quantity}
+            </button>
+          )}
           <Button
             variant="outline"
             size="icon"
-            className="h-6 w-6"
+            className="h-6 w-6 btn-press"
             onClick={() => onUpdateQty(item.productId, item.quantity + 1)}
             aria-label="Increase quantity"
           >

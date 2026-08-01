@@ -1,31 +1,64 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { formatKES, type ProductListItem } from '@/lib/api';
 import { getCategoryImage } from '@/lib/app-config';
 import { QuickAddPopup } from '@/components/pos/quick-add-popup';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Package, Plus, Zap } from 'lucide-react';
+import { Package, Plus, Zap, Star, Eye, ShoppingCart } from 'lucide-react';
 
+export interface ProductCardProps {
+  product: ProductListItem;
+  onAdd: (p: ProductListItem, qty?: number) => void;
+  cartQuantity?: number;
+  /** Mark this product as a top seller — shows gold "Best Seller" badge with star icon */
+  isBestSeller?: boolean;
+  /** Original price (pre-discount). When set and > product.pricePerUnit, shows "On Sale" badge */
+  originalPrice?: number;
+  /** Optional callback for "View Details" quick action */
+  onViewDetails?: (p: ProductListItem) => void;
+}
+
+/**
+ * Enhanced product card with:
+ * - Stock level indicator bar (green/amber/red)
+ * - Best Seller badge with star icon
+ * - On Sale badge with animated pulse
+ * - Category color accent strip on left side
+ * - Subtle hover overlay with quick actions (Add to Cart, View Details)
+ * - Image lazy loading with blur-up effect
+ * - Price tag with gradient background
+ * - Quantity selector for bulk add (via QuickAddPopup)
+ * - Ripple effect on Add to Cart button
+ */
 export function ProductCard({
   product,
   onAdd,
   cartQuantity,
-}: {
-  product: ProductListItem;
-  onAdd: (p: ProductListItem, qty?: number) => void;
-  cartQuantity?: number;
-}) {
+  isBestSeller = false,
+  originalPrice,
+  onViewDetails,
+}: ProductCardProps) {
   const [isBouncing, setIsBouncing] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [ripple, setRipple] = useState<{ x: number; y: number; id: number } | null>(null);
+  const rippleIdRef = useRef(0);
+
   const categoryColor = product.category?.color || '#6b7280';
   const stockPercent = product.reorderLevel > 0
     ? Math.min((product.quantityInStock / (product.reorderLevel * 3)) * 100, 100)
     : product.quantityInStock > 0 ? 100 : 0;
   const isLowStock = product.quantityInStock <= product.reorderLevel && product.quantityInStock > 0;
   const isOutOfStock = product.quantityInStock <= 0;
+
+  // On-sale detection: originalPrice (if provided) > current price
+  const isOnSale = !!originalPrice && originalPrice > product.pricePerUnit;
+  const discountPct = isOnSale && originalPrice
+    ? Math.round(((originalPrice - product.pricePerUnit) / originalPrice) * 100)
+    : 0;
 
   // Check if product is new (created within last 7 days)
   const isNew = useMemo(() => {
@@ -35,11 +68,14 @@ export function ProductCard({
     return created > sevenDaysAgo;
   }, [product.createdAt]);
 
+  // Stock level color: green >50%, amber 20-50%, red <20%
   const stockBarColor = isOutOfStock
     ? 'bg-red-500'
-    : isLowStock
-      ? 'bg-amber-500'
-      : 'bg-green-500';
+    : stockPercent < 20
+      ? 'bg-red-500'
+      : stockPercent < 50
+        ? 'bg-amber-500'
+        : 'bg-green-500';
 
   const unitBadgeColor: Record<string, string> = {
     PIECE: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
@@ -52,11 +88,12 @@ export function ProductCard({
   };
 
   const handleClick = () => {
-    // If already in cart, show Quick Add popup
+    // If already in cart, show Quick Add popup for bulk quantity selector
     if (cartQuantity && cartQuantity > 0) {
       setShowQuickAdd(true);
       return;
     }
+    triggerRipple(0, 0);
     setIsBouncing(true);
     onAdd(product);
     setTimeout(() => setIsBouncing(false), 400);
@@ -66,6 +103,26 @@ export function ProductCard({
     setIsBouncing(true);
     onAdd(product, qty);
     setTimeout(() => setIsBouncing(false), 400);
+  };
+
+  // Ripple effect on Add to Cart button click
+  const triggerRipple = (x: number, y: number) => {
+    const id = ++rippleIdRef.current;
+    setRipple({ x, y, id });
+    setTimeout(() => {
+      if (rippleIdRef.current === id) setRipple(null);
+    }, 600);
+  };
+
+  const handleAddClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    triggerRipple(e.clientX - rect.left, e.clientY - rect.top);
+    if (cartQuantity && cartQuantity > 0) {
+      setShowQuickAdd(true);
+    } else {
+      handleClick();
+    }
   };
 
   // Out-of-stock disables interaction (rentals can still be added)
@@ -80,7 +137,14 @@ export function ProductCard({
       aria-label={`${product.name}, ${formatKES(product.pricePerUnit)}, ${isOutOfStock ? 'out of stock' : `${product.quantityInStock} in stock`}`}
       aria-disabled={disabled}
     >
-      {/* Quick Add Popup Overlay */}
+      {/* Category accent strip on left side of card */}
+      <span
+        className="category-accent-strip"
+        style={{ backgroundColor: categoryColor }}
+        aria-hidden
+      />
+
+      {/* Quick Add Popup Overlay (bulk quantity selector) */}
       {showQuickAdd && !disabled && (
         <QuickAddPopup
           product={product}
@@ -89,41 +153,98 @@ export function ProductCard({
           onClose={() => setShowQuickAdd(false)}
         />
       )}
+
       {/* In-cart indicator */}
       {cartQuantity && cartQuantity > 0 && (
-        <div className="absolute top-1.5 right-1.5 z-10 bg-primary text-primary-foreground text-[11px] font-bold rounded-full min-w-[22px] h-[22px] flex items-center justify-center px-1.5 shadow-md ring-2 ring-background">
+        <div className="absolute top-1.5 right-1.5 z-10 bg-primary text-primary-foreground text-[11px] font-bold rounded-full min-w-[22px] h-[22px] flex items-center justify-center px-1.5 shadow-md ring-2 ring-background animate-badge-pop">
           {cartQuantity}
         </div>
       )}
+
       {/* Image area — taller & more readable */}
       <div className="h-32 bg-muted flex items-center justify-center relative overflow-hidden shrink-0">
         {product.imageUrl ? (
-          <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover group-hover:scale-115 transition-transform duration-500 ease-out" />
+          <img
+            src={product.imageUrl}
+            alt={product.name}
+            loading="lazy"
+            onLoad={() => setImageLoaded(true)}
+            className={`h-full w-full object-cover group-hover:scale-115 transition-transform duration-500 ease-out img-blur-up ${imageLoaded ? 'img-loaded' : ''}`}
+          />
         ) : getCategoryImage(product.categoryId) ? (
-          <img src={getCategoryImage(product.categoryId)!} alt={product.category?.name || ''} className="h-full w-full object-cover group-hover:scale-115 transition-transform duration-500 ease-out" />
+          <img
+            src={getCategoryImage(product.categoryId)!}
+            alt={product.category?.name || ''}
+            loading="lazy"
+            onLoad={() => setImageLoaded(true)}
+            className={`h-full w-full object-cover group-hover:scale-115 transition-transform duration-500 ease-out img-blur-up ${imageLoaded ? 'img-loaded' : ''}`}
+          />
         ) : (
           <Package className="h-10 w-10 text-muted-foreground/25" />
         )}
-        {/* Gradient overlay on hover */}
+        {/* Blur-up placeholder shimmer while image loads */}
+        {!imageLoaded && (product.imageUrl || getCategoryImage(product.categoryId)) && (
+          <div className="absolute inset-0 shimmer-bg" aria-hidden />
+        )}
+
+        {/* Hover overlay with quick actions */}
         {!disabled && (
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/0 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-            <div className="bg-white/95 dark:bg-black/80 rounded-full p-2.5 shadow-lg transform scale-50 group-hover:scale-100 transition-transform duration-200">
-              {cartQuantity && cartQuantity > 0 ? <Zap className="h-5 w-5 text-primary" /> : <Plus className="h-5 w-5 text-primary" />}
-            </div>
+          <div className="product-hover-overlay">
+            <Button
+              type="button"
+              size="sm"
+              className="h-7 px-2 text-[10px] bg-white/95 hover:bg-white text-foreground shadow-md"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleClick();
+              }}
+            >
+              {cartQuantity && cartQuantity > 0 ? (
+                <><Zap className="h-3 w-3 mr-1" />Quick Add</>
+              ) : (
+                <><Plus className="h-3 w-3 mr-1" />Add to Cart</>
+              )}
+            </Button>
+            {onViewDetails && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="h-7 px-2 text-[10px] bg-white/80 hover:bg-white/95 text-foreground shadow-md"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onViewDetails(product);
+                }}
+              >
+                <Eye className="h-3 w-3 mr-1" />View
+              </Button>
+            )}
           </div>
         )}
+
         {/* Badges */}
-        <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 z-20">
+        <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 z-20 max-w-[60%]">
           {product.isRental && (
             <Badge className="bg-amber-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm">RENTAL</Badge>
           )}
           {product.isBundle && (
             <Badge className="bg-purple-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm">BUNDLE</Badge>
           )}
-          {isNew && !product.isRental && !product.isBundle && (
+          {isBestSeller && (
+            <Badge className="best-seller-badge text-[10px] px-1.5 py-0.5 font-semibold flex items-center gap-0.5">
+              <Star className="h-2.5 w-2.5 fill-current" />BEST SELLER
+            </Badge>
+          )}
+          {isOnSale && (
+            <Badge className="bg-red-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm animate-on-sale flex items-center gap-0.5">
+              ON SALE · -{discountPct}%
+            </Badge>
+          )}
+          {isNew && !product.isRental && !product.isBundle && !isBestSeller && (
             <Badge className="bg-green-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm animate-new-badge">NEW</Badge>
           )}
         </div>
+
         {/* Stock status badge (top-right when not in cart) */}
         {(!cartQuantity || cartQuantity === 0) && (
           <div className="absolute top-1.5 right-1.5 z-20">
@@ -138,8 +259,9 @@ export function ProductCard({
           <div className="absolute inset-0 bg-red-500/10 flex items-center justify-center pointer-events-none" />
         )}
       </div>
+
       <CardContent className="p-3 flex-1 flex flex-col gap-1">
-        {/* Product name — wraps fully, never truncates words (no line-clamp so every word shows) */}
+        {/* Product name — wraps fully, never truncates words */}
         <h3 className="font-semibold text-[15px] leading-snug break-words min-h-[2.6em]">{product.name}</h3>
         {product.category && (
           <div className="flex items-center gap-1.5">
@@ -149,34 +271,60 @@ export function ProductCard({
         )}
         <div className="flex items-end justify-between mt-1 gap-1.5">
           <div className="min-w-0">
-            <p className="font-bold text-primary text-base leading-none break-words">{formatKES(product.pricePerUnit)}</p>
+            {/* Price tag with gradient background; shows struck-through original if on sale */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="price-tag text-[13px] leading-none">{formatKES(product.pricePerUnit)}</span>
+              {isOnSale && originalPrice && (
+                <span className="text-[10px] text-muted-foreground line-through font-medium" aria-label={`Original price ${formatKES(originalPrice)}`}>
+                  {formatKES(originalPrice)}
+                </span>
+              )}
+            </div>
             <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium mt-1 inline-block ${unitBadgeColor[product.unitType] || 'bg-muted text-muted-foreground'}`}>
               per {product.unitType}
             </span>
           </div>
-          {/* Quick add button — touch-friendly 44px target */}
+
+          {/* Quick add button — touch-friendly 44px target with gradient + ripple + press animation */}
           <Button
             type="button"
             size="icon"
             variant={disabled ? 'ghost' : 'default'}
-            className="h-10 w-10 shrink-0 shadow-sm"
+            className={`relative overflow-hidden h-10 w-10 shrink-0 shadow-md btn-press ${
+              disabled
+                ? ''
+                : 'bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-emerald-500/30'
+            }`}
             disabled={disabled}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (cartQuantity && cartQuantity > 0) {
-                setShowQuickAdd(true);
-              } else {
-                handleClick();
-              }
-            }}
+            onClick={handleAddClick}
             aria-label={`Add ${product.name} to cart`}
           >
-            {cartQuantity && cartQuantity > 0 ? <Zap className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {/* Glossy gradient sheen on top */}
+            {!disabled && (
+              <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-md bg-gradient-to-b from-white/25 to-transparent" aria-hidden />
+            )}
+            {cartQuantity && cartQuantity > 0 ? <Zap className="h-4 w-4 relative z-10" /> : <Plus className="h-4 w-4 relative z-10" />}
+            {/* Ripple element */}
+            {ripple && (
+              <span
+                key={ripple.id}
+                className="pointer-events-none absolute rounded-full bg-white/40 animate-ripple"
+                style={{
+                  left: ripple.x || '50%',
+                  top: ripple.y || '50%',
+                  width: '12px',
+                  height: '12px',
+                  transform: 'translate(-50%, -50%)',
+                }}
+                aria-hidden
+              />
+            )}
           </Button>
         </div>
-        {/* Stock bar — clear low/out-of-stock visual */}
+
+        {/* Stock bar — clear low/out-of-stock visual with colored thresholds */}
         <div className="flex items-center gap-2 mt-auto pt-1.5">
-          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={stockPercent} aria-valuemin={0} aria-valuemax={100} aria-label={`Stock level: ${stockPercent}%`}>
             <div
               className={`h-full rounded-full animate-stock-fill ${stockBarColor} relative`}
               style={{ width: `${stockPercent}%` }}
@@ -184,8 +332,13 @@ export function ProductCard({
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
             </div>
           </div>
-          <span className={`text-[10px] font-semibold shrink-0 ${isOutOfStock ? 'text-red-500' : isLowStock ? 'text-amber-500' : 'text-muted-foreground'}`}>
-            {isOutOfStock ? 'Out' : `${product.quantityInStock} left`}
+          <span className={`text-[10px] font-semibold shrink-0 ${isOutOfStock ? 'text-red-500' : stockPercent < 50 ? 'text-amber-500' : stockPercent < 20 ? 'text-red-500' : 'text-muted-foreground'}`}>
+            {isOutOfStock ? 'Out' : (
+              <span className="flex items-center gap-0.5">
+                <ShoppingCart className="h-2.5 w-2.5" aria-hidden />
+                {product.quantityInStock} left
+              </span>
+            )}
           </span>
         </div>
       </CardContent>

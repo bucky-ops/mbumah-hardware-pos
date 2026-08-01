@@ -20,6 +20,7 @@ import {
   CreditCard, Ticket, Receipt, Building2,
   CircleDollarSign, BadgeDollarSign, MessageSquare, MessagesSquare,
   ArrowUpDown, Landmark, Award, Wallet, Shield, Settings,
+  LineChart,
 } from 'lucide-react';
 
 export const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType; roles: string[] }[] = [
@@ -33,6 +34,7 @@ export const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType; r
   { id: 'suppliers', label: 'Suppliers', icon: Truck, roles: SENIOR_ROLES },
   { id: 'purchase-orders', label: 'Purchase Orders', icon: ClipboardList, roles: SENIOR_ROLES },
   { id: 'financial', label: 'Financial', icon: BarChart3, roles: MGMT_ROLES },
+  { id: 'analytics', label: 'Analytics', icon: LineChart, roles: MGMT_ROLES },
   { id: 'reports', label: 'Reports', icon: FileText, roles: MGMT_ROLES },
   { id: 'gift-cards', label: 'Gift Cards', icon: CreditCard, roles: SENIOR_ROLES },
   { id: 'vouchers', label: 'Vouchers', icon: Ticket, roles: SENIOR_ROLES },
@@ -56,7 +58,7 @@ export const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType; r
 export const NAV_GROUPS: { label: string; ids: AppTab[] }[] = [
   { label: 'Main', ids: ['dashboard', 'pos', 'catalog', 'inventory', 'customers', 'transactions'] },
   { label: 'Sales & Credit', ids: ['invoices', 'delivery', 'credits', 'debt-management', 'vouchers', 'gift-cards', 'loyalty'] },
-  { label: 'Finance', ids: ['financial', 'banking', 'payroll', 'transfers'] },
+  { label: 'Finance & Insights', ids: ['financial', 'analytics', 'banking', 'payroll', 'transfers'] },
   { label: 'Operations', ids: ['rentals', 'suppliers', 'messaging', 'conversations'] },
   { label: 'Compliance & System', ids: ['etims', 'reports', 'security', 'admin'] },
 ];
