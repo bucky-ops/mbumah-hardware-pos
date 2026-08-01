@@ -28,7 +28,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { handleError } from '@/lib/error-handler';
@@ -675,55 +675,63 @@ export default function InventoryTab() {
         </div>
       )}
 
-      {/* Stats Cards with glass-morphism */}
+      {/* Stats Cards — Glass-morphism with gradient icons */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card className="bg-gradient-to-br from-card/80 to-muted/10 border-l-4 border-l-primary hover:-translate-y-0.5 transition-all cursor-default backdrop-blur-sm shadow-sm hover:shadow-md">
+        <Card className="glass-card stagger-1 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10"><Package className="h-5 w-5 text-primary" /></div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Products</p>
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-sm">
+                <Package className="h-5 w-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground">Total Products</p>
                 <p className="text-xl font-bold">{allProducts.length}</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-card/80 to-muted/10 border-l-4 border-l-yellow-500 hover:-translate-y-0.5 transition-all cursor-default backdrop-blur-sm shadow-sm hover:shadow-md">
+        <Card className="glass-card stagger-2 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-yellow-100 dark:bg-yellow-900/30"><AlertTriangle className="h-5 w-5 text-yellow-600" /></div>
-              <div>
-                <p className="text-sm text-muted-foreground">Low Stock</p>
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-sm">
+                <DollarSign className="h-5 w-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground">Stock Value</p>
+                <p className="text-xl font-bold whitespace-nowrap">{formatKES(totalInventoryValue)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="glass-card stagger-3 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-sm">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground">Low Stock</p>
                 <p className="text-xl font-bold">{lowStockCount}</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-card/80 to-muted/10 border-l-4 border-l-red-500 hover:-translate-y-0.5 transition-all cursor-default backdrop-blur-sm shadow-sm hover:shadow-md">
+        <Card className="glass-card stagger-4 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30"><AlertCircle className="h-5 w-5 text-red-600" /></div>
-              <div>
-                <p className="text-sm text-muted-foreground">Out of Stock</p>
-                <p className="text-xl font-bold">{outOfStockCount}</p>
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-rose-500 to-rose-600 text-white shadow-sm">
+                <AlertCircle className="h-5 w-5" />
               </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-gradient-to-br from-card/80 to-muted/10 border-l-4 border-l-green-500 hover:-translate-y-0.5 transition-all cursor-default backdrop-blur-sm shadow-sm hover:shadow-md">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30"><DollarSign className="h-5 w-5 text-green-600" /></div>
-              <div>
-                <p className="text-sm text-muted-foreground">Inventory Value</p>
-                <p className="text-xl font-bold whitespace-nowrap">{formatKES(totalInventoryValue)}</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground">Out of Stock</p>
+                <p className="text-xl font-bold">{outOfStockCount}</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Toolbar */}
+      {/* Filter Bar with Add Product */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -785,12 +793,15 @@ export default function InventoryTab() {
           </Tooltip>
         </TooltipProvider>
 
-        <Dialog open={addProductOpen} onOpenChange={setAddProductOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground">
-              <Plus className="mr-2 h-4 w-4" /> Add Product
-            </Button>
-          </DialogTrigger>
+        <Button
+          className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-sm"
+          onClick={() => setAddProductOpen(true)}
+        >
+          <Plus className="mr-2 h-4 w-4" /> Add Product
+        </Button>
+      </div>
+
+      <Dialog open={addProductOpen} onOpenChange={setAddProductOpen}>
           <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Add New Product</DialogTitle>
@@ -921,7 +932,6 @@ export default function InventoryTab() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
 
       {/* Category Tags Row */}
       {categories.length > 0 && (

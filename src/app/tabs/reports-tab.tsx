@@ -9,6 +9,7 @@ import { BarChart3, Package, TrendingUp, TrendingDown,
   Calendar, Clock, Eye, Play, Sparkles, PieChart,
   HeartPulse, RotateCcw, CreditCard, Banknote, Smartphone,
   AlertTriangle, Users, Timer, Printer, Wrench, Sparkle, Link2, ArrowRight,
+  Receipt, UserCog,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area,
@@ -1358,85 +1359,145 @@ export default function ReportsTab() {
   return (
     <div className="space-y-4">
       {/* ================================================================== */}
+      {/* Report Types Grid — Glass-morphism with stagger animations         */}
+      {/* ================================================================== */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { key: 'sales', label: 'Sales Report', iconName: 'TrendingUp', color: 'from-emerald-500 to-emerald-600', desc: 'Revenue, transactions, and payment method breakdown', stagger: 'stagger-1' },
+          { key: 'inventory', label: 'Inventory Report', iconName: 'Package', color: 'from-blue-500 to-blue-600', desc: 'Stock levels, categories, and inventory valuation', stagger: 'stagger-2' },
+          { key: 'financial', label: 'Financial Report', iconName: 'DollarSign', color: 'from-purple-500 to-purple-600', desc: 'Profit & loss, expenses, and cash flow analysis', stagger: 'stagger-3' },
+          { key: 'tax', label: 'Tax Report', iconName: 'Receipt', color: 'from-amber-500 to-amber-600', desc: 'KRA compliance, tax collections, and filings', stagger: 'stagger-4' },
+          { key: 'customer_analysis', label: 'Customer Report', iconName: 'Users', color: 'from-rose-500 to-rose-600', desc: 'Customer spending, debt, and loyalty analysis', stagger: 'stagger-5' },
+          { key: 'rental_performance', label: 'Employee Report', iconName: 'UserCog', color: 'from-cyan-500 to-cyan-600', desc: 'Staff performance, shifts, and payroll overview', stagger: 'stagger-6' },
+        ].map((type) => {
+          const iconMap: Record<string, React.ReactNode> = {
+            TrendingUp: <TrendingUp className="h-5 w-5" />,
+            Package: <Package className="h-5 w-5" />,
+            DollarSign: <DollarSign className="h-5 w-5" />,
+            Receipt: <Receipt className="h-5 w-5" />,
+            Users: <Users className="h-5 w-5" />,
+            UserCog: <UserCog className="h-5 w-5" />,
+          };
+          return (
+            <Card
+              key={type.key}
+              className={`glass-card ${type.stagger} hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group`}
+              onClick={() => {
+                if (type.key === 'financial') setReportType('sales');
+                else if (type.key === 'tax') setReportType('sales');
+                else if (type.key === 'rental_performance') setReportType('rental_performance');
+                else setReportType(type.key as typeof reportType);
+              }}
+            >
+              <CardContent className="p-5">
+                <div className="flex items-start gap-3 mb-3">
+                  <div className={`p-2.5 rounded-xl bg-gradient-to-br ${type.color} text-white shadow-sm shrink-0`}>
+                    {iconMap[type.iconName]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-sm group-hover:text-emerald-600 transition-colors">{type.label}</h3>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{type.desc}</p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  className={`w-full bg-gradient-to-r ${type.color} hover:opacity-90 text-white text-xs h-8`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (type.key === 'financial') setReportType('sales');
+                    else if (type.key === 'tax') setReportType('sales');
+                    else if (type.key === 'rental_performance') setReportType('rental_performance');
+                    else setReportType(type.key as typeof reportType);
+                  }}
+                >
+                  Generate
+                </Button>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* ================================================================== */}
       {/* Quick Stats Cards - Glass-morphism                         */}
       {/* ================================================================== */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card className="border-l-4 border-l-green-500 bg-gradient-to-br from-card to-green-50/30 dark:to-green-900/10 backdrop-blur-sm">
+        <Card className="glass-card hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/40 dark:to-green-800/30">
-                <DollarSign className="h-5 w-5 text-green-600" />
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-sm">
+                <DollarSign className="h-5 w-5" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground">Today Revenue</p>
                 <p className="text-lg font-bold whitespace-nowrap">{formatKES(quickStats.todayRevenue)}</p>
               </div>
-            </div>
-            <div className="flex items-center gap-1 mt-2">
-              {changeIndicator(quickStats.revenueChange)}
-              <span className={`text-xs font-medium ${changeColor(quickStats.revenueChange)}`}>
-                {quickStats.revenueChange >= 0 ? '+' : ''}{quickStats.revenueChange}%
-              </span>
+              <div className="flex items-center gap-1">
+                {changeIndicator(quickStats.revenueChange)}
+                <span className={`text-[10px] font-medium ${changeColor(quickStats.revenueChange)}`}>
+                  {quickStats.revenueChange >= 0 ? '+' : ''}{quickStats.revenueChange}%
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-primary bg-gradient-to-br from-card to-primary-50/30 dark:to-primary-900/10 backdrop-blur-sm">
+        <Card className="glass-card hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary/10 to-primary/20">
-                <ShoppingCart className="h-5 w-5 text-primary" />
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-cyan-500 to-cyan-600 text-white shadow-sm">
+                <ShoppingCart className="h-5 w-5" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground">Today Sales</p>
                 <p className="text-lg font-bold whitespace-nowrap">{quickStats.todayTransactions}</p>
               </div>
-            </div>
-            <div className="flex items-center gap-1 mt-2">
-              {changeIndicator(quickStats.transactionsChange)}
-              <span className={`text-xs font-medium ${changeColor(quickStats.transactionsChange)}`}>
-                {quickStats.transactionsChange >= 0 ? '+' : ''}{quickStats.transactionsChange}%
-              </span>
+              <div className="flex items-center gap-1">
+                {changeIndicator(quickStats.transactionsChange)}
+                <span className={`text-[10px] font-medium ${changeColor(quickStats.transactionsChange)}`}>
+                  {quickStats.transactionsChange >= 0 ? '+' : ''}{quickStats.transactionsChange}%
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-amber-500 bg-gradient-to-br from-card to-amber-50/30 dark:to-amber-900/10 backdrop-blur-sm">
+        <Card className="glass-card hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-100 to-amber-200 dark:from-amber-900/40 dark:to-amber-800/30">
-                <Package className="h-5 w-5 text-amber-600" />
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-sm">
+                <Package className="h-5 w-5" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground">Low Stock</p>
                 <p className="text-lg font-bold whitespace-nowrap">{quickStats.lowStockProducts}</p>
               </div>
-            </div>
-            <div className="flex items-center gap-1 mt-2">
-              {changeIndicator(quickStats.lowStockChange)}
-              <span className={`text-xs font-medium ${changeColor(quickStats.lowStockChange)}`}>
-                {quickStats.lowStockChange >= 0 ? '+' : ''}{quickStats.lowStockChange}%
-              </span>
+              <div className="flex items-center gap-1">
+                {changeIndicator(quickStats.lowStockChange)}
+                <span className={`text-[10px] font-medium ${changeColor(quickStats.lowStockChange)}`}>
+                  {quickStats.lowStockChange >= 0 ? '+' : ''}{quickStats.lowStockChange}%
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-red-500 bg-gradient-to-br from-card to-red-50/30 dark:to-red-900/10 backdrop-blur-sm">
+        <Card className="glass-card hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-red-100 to-red-200 dark:from-red-900/40 dark:to-red-800/30">
-                <TrendingDown className="h-5 w-5 text-red-600" />
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-rose-500 to-rose-600 text-white shadow-sm">
+                <TrendingDown className="h-5 w-5" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground">Outstanding Debt</p>
                 <p className="text-lg font-bold whitespace-nowrap">{formatKES(quickStats.outstandingDebt)}</p>
               </div>
-            </div>
-            <div className="flex items-center gap-1 mt-2">
-              {changeIndicator(quickStats.debtChange)}
-              <span className={`text-xs font-medium ${changeColor(quickStats.debtChange)}`}>
-                {quickStats.debtChange >= 0 ? '+' : ''}{quickStats.debtChange}%
-              </span>
+              <div className="flex items-center gap-1">
+                {changeIndicator(quickStats.debtChange)}
+                <span className={`text-[10px] font-medium ${changeColor(quickStats.debtChange)}`}>
+                  {quickStats.debtChange >= 0 ? '+' : ''}{quickStats.debtChange}%
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>

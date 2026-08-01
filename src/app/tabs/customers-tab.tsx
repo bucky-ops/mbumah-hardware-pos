@@ -7,7 +7,7 @@ import {
   Users, Search, Plus, CircleDollarSign, AlertTriangle,
   Eye, Loader2, HandCoins, Banknote, Smartphone, ShoppingBag, Phone, Mail, MapPin, CreditCard, Clock,
   ArrowUpDown, Filter, UserPlus, TrendingUp, FileText, Bell,
-  History, Send, Tag, Gift, Truck, FileCheck, Receipt,
+  History, Send, Tag, Gift, Truck, FileCheck, Receipt, Minus,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
@@ -578,7 +578,7 @@ export default function CustomersTab() {
   }, [rawCustomers, debtFilter, regDateFrom, regDateTo, sortField, sortDirection]);
 
   // Statistics
-  const totalDebt = rawCustomers.reduce((s, c) => s + c.currentDebtBalance, 0);
+  const _totalDebt = rawCustomers.reduce((s, c) => s + c.currentDebtBalance, 0);
   const activeDebts = debts.filter((d) => d.status !== 'SETTLED');
   const paymentAmountNum = parseFloat(debtPaymentAmount) || 0;
   const selectedDebt = activeDebts.find((d) => d.id === selectedDebtLedgerId);
@@ -586,8 +586,10 @@ export default function CustomersTab() {
   const newBalancePreview = Math.max(0, currentDebtBalance - paymentAmountNum);
   const _goldCustomers = rawCustomers.filter(c => c.loyaltyPoints >= 1500).length;
   const customersWithDebt = rawCustomers.filter(c => c.currentDebtBalance > 0).length;
+  const loyaltyMembers = rawCustomers.filter(c => c.loyaltyPoints > 0).length;
+  const activeCustomers = rawCustomers.filter(c => c.isActive).length;
   const _averageSpend = rawCustomers.length > 0 ? 0 : 0; // Would need total spend data
-  const newCustomersThisMonth = rawCustomers.filter(c => {
+  const _newCustomersThisMonth = rawCustomers.filter(c => {
     const created = new Date(c.createdAt);
     const now = new Date();
     return created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear();
@@ -676,60 +678,107 @@ export default function CustomersTab() {
 
   return (
     <div className="space-y-4">
-      {/* Stats Cards with glass-morphism */}
+      {/* Stats Cards — Glass-morphism with gradient icons */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card className="bg-gradient-to-br from-card/80 to-muted/10 border-l-4 border-l-primary hover:-translate-y-0.5 transition-all cursor-default backdrop-blur-sm shadow-sm hover:shadow-md">
+        <Card className="glass-card stagger-1 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-gradient-to-br from-primary/20 to-primary/10">
-                <Users className="h-5 w-5 text-primary" />
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-sm">
+                <Users className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Customers</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground">Total Customers</p>
                 <p className="text-xl font-bold">{rawCustomers.length}</p>
               </div>
+              <TrendingUp className="h-4 w-4 text-emerald-500 shrink-0" />
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-card/80 to-muted/10 border-l-4 border-l-red-500 hover:-translate-y-0.5 transition-all cursor-default backdrop-blur-sm shadow-sm hover:shadow-md">
+        <Card className="glass-card stagger-2 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-gradient-to-br from-red-500/20 to-red-500/10">
-                <CircleDollarSign className="h-5 w-5 text-red-600" />
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-cyan-500 to-cyan-600 text-white shadow-sm">
+                <Users className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Outstanding Debt</p>
-                <p className="text-xl font-bold whitespace-nowrap">{formatKES(totalDebt)}</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground">Active</p>
+                <p className="text-xl font-bold">{activeCustomers}</p>
               </div>
+              <TrendingUp className="h-4 w-4 text-cyan-500 shrink-0" />
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-card/80 to-muted/10 border-l-4 border-l-amber-500 hover:-translate-y-0.5 transition-all cursor-default backdrop-blur-sm shadow-sm hover:shadow-md">
+        <Card className="glass-card stagger-3 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-gradient-to-br from-amber-500/20 to-amber-500/10">
-                <AlertTriangle className="h-5 w-5 text-amber-600" />
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-sm">
+                <CircleDollarSign className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">With Debt</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground">With Debt</p>
                 <p className="text-xl font-bold">{customersWithDebt}</p>
               </div>
+              {customersWithDebt > 0 ? <TrendingUp className="h-4 w-4 text-amber-500 shrink-0" /> : <Minus className="h-4 w-4 text-muted-foreground shrink-0" />}
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-card/80 to-muted/10 border-l-4 border-l-green-500 hover:-translate-y-0.5 transition-all cursor-default backdrop-blur-sm shadow-sm hover:shadow-md">
+        <Card className="glass-card stagger-4 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-gradient-to-br from-green-500/20 to-green-500/10">
-                <UserPlus className="h-5 w-5 text-green-600" />
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 text-white shadow-sm">
+                <Gift className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">New This Month</p>
-                <p className="text-xl font-bold">{newCustomersThisMonth}</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground">Loyalty Members</p>
+                <p className="text-xl font-bold">{loyaltyMembers}</p>
               </div>
+              <TrendingUp className="h-4 w-4 text-purple-500 shrink-0" />
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Filter Chips + Add Customer Button */}
+      <div className="flex flex-wrap items-center gap-2">
+        {[
+          { key: 'all', label: 'All', count: rawCustomers.length, color: 'emerald' },
+          { key: 'active', label: 'Active', count: activeCustomers, color: 'cyan' },
+          { key: 'debt', label: 'With Debt', count: customersWithDebt, color: 'amber' },
+          { key: 'loyalty', label: 'Loyalty Members', count: loyaltyMembers, color: 'purple' },
+        ].map((chip) => (
+          <button
+            key={chip.key}
+            onClick={() => {
+              if (chip.key === 'all') setDebtFilter('all');
+              else if (chip.key === 'debt') setDebtFilter('outstanding');
+              else if (chip.key === 'loyalty') setDebtFilter('all'); // loyalty filter not in current state
+              else setDebtFilter('all');
+            }}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+              (chip.key === 'all' && debtFilter === 'all') || (chip.key === 'debt' && debtFilter === 'outstanding')
+                ? 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700'
+                : 'bg-white/60 text-muted-foreground border-border/50 hover:bg-white/80 dark:bg-white/5 dark:hover:bg-white/10'
+            }`}
+          >
+            {chip.label}
+            <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+              chip.color === 'emerald' ? 'bg-emerald-200/60 text-emerald-800 dark:bg-emerald-800/40 dark:text-emerald-300' :
+              chip.color === 'cyan' ? 'bg-cyan-200/60 text-cyan-800 dark:bg-cyan-800/40 dark:text-cyan-300' :
+              chip.color === 'amber' ? 'bg-amber-200/60 text-amber-800 dark:bg-amber-800/40 dark:text-amber-300' :
+              'bg-purple-200/60 text-purple-800 dark:bg-purple-800/40 dark:text-purple-300'
+            }`}>
+              {chip.count}
+            </span>
+          </button>
+        ))}
+        <div className="flex-1" />
+        <Button
+          size="sm"
+          className="h-9 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-sm"
+          onClick={() => setAddCustomerOpen(true)}
+        >
+          <UserPlus className="h-4 w-4 mr-1" /> Add Customer
+        </Button>
       </div>
 
       {/* Registration Trend Mini Chart */}

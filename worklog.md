@@ -1249,3 +1249,114 @@ Stage Summary:
 4. Implement real-time notifications via WebSocket mini-service
 5. Add customer debt management enhancements (payment plans, reminders)
 6. Add supplier performance analytics dashboard
+
+---
+Task ID: 2
+Agent: Notification Service Agent
+Task: Create Real-Time WebSocket Notification Mini-Service
+
+Work Log:
+- Created `mini-services/notification-service/` with package.json and index.ts
+- Socket.io server on port 3003 with room management (store-based, user-based)
+- Implemented events: join-store, leave-store, join-user, notification, low-stock-alert, new-transaction, payment-received, loyalty-tier-upgrade, stock-movement
+- Added health check at GET /health (using default socket.io path `/socket.io/` to avoid engine.io intercepting all requests with `path: '/'`)
+- Added heartbeat every 30s, connection/disconnection logging, graceful shutdown
+- Installed `socket.io-client@4.8.3` in main project
+- Created `src/lib/socket-client.ts` — browser-safe Socket.io client singleton connecting via `io('/?XTransformPort=3003')`
+- Created `src/hooks/use-realtime.ts` — `useRealtimeNotifications(storeId, userId)` hook with auto-connect, notification accumulation, unread count, markAllRead
+- Created `src/components/realtime/notification-badge.tsx` — notification badge with bounce animation, connection status indicator, dropdown panel
+- Created `src/components/realtime/notification-toast.tsx` — toast notifications with type-specific styling (amber/emerald/blue/purple/teal), auto-dismiss 5s, click-to-navigate
+- Created `src/lib/notify.ts` — backend notification helper (notifyStore, notifyUser, notifyLowStock, notifyNewTransaction, notifyPaymentReceived)
+- Fixed lint errors: removed unused vars, changed to type imports, replaced console.log with console.info, fixed setState-in-effect pattern by using framer-motion key trick
+- Lint: 0 errors, 0 warnings on all new files
+
+Stage Summary:
+- Real-time notification mini-service fully operational on port 3003
+- Health check verified: `{"status":"ok","service":"mbumah-notification-service","version":"1.0.0"}`
+- Frontend client connects through Caddy gateway via XTransformPort=3003
+- Backend helper connects directly to localhost:3003 for server-side emission
+- Files created: 8 new files (2 mini-service, 3 src/lib, 1 src/hooks, 2 src/components)
+
+---
+Task ID: 3-4
+Agent: Task Agent
+Task: Add Supplier Performance Analytics + Enhance Tab Styling
+
+Work Log:
+
+PART 1 — Supplier Performance Analytics API Routes:
+- Created `src/app/api/suppliers/performance/route.ts` (GET):
+  - Returns performance metrics for all suppliers in a store
+  - Metrics: total orders, total spend, on-time delivery rate, avg fulfillment days, quality rating, top products, outstanding balance, last order date, trend, performance score
+  - Performance score = weighted average: on-time delivery (40%), quality (30%), order volume (30%)
+  - Query params: storeId (required), period (month|quarter|year)
+- Created `src/app/api/suppliers/[id]/performance/route.ts` (GET):
+  - Detailed performance for a single supplier
+  - Includes: monthly order trend, product list, payment history
+  - Same metrics as the bulk endpoint plus trend data
+
+PART 1 — Supplier Performance Components:
+- Created `src/components/suppliers/supplier-performance-card.tsx`:
+  - Card showing supplier performance summary
+  - Avatar with initials in gradient circle, star rating (1-5), total orders badge
+  - Total spend with currency formatting, on-time delivery progress bar (green/amber/red)
+  - Outstanding balance red badge if > 0, last order date, trend indicator (up/down/stable)
+  - Hover: lift + shadow effect
+- Created `src/components/suppliers/supplier-leaderboard.tsx`:
+  - Leaderboard table of top suppliers by performance score
+  - Columns: Rank (with trophy/medal icons), Name, Rating, Orders, Spend, On-Time %, Score
+  - Sortable columns (SortableHeader component defined outside render to avoid hooks rule violation)
+  - Clickable rows to view details
+  - Performance score badges with color coding
+
+PART 2 — Enhanced Tab Styling:
+
+customers-tab.tsx:
+- Replaced 4 stat cards with glass-card styling + gradient icon circles
+- Cards: Total Customers (emerald), Active (cyan), With Debt (amber), Loyalty Members (purple)
+- Added trend arrows (TrendingUp/Minus) on each card
+- Added filter chips row: All, Active, With Debt, Loyalty Members (with counts)
+- Added "Add Customer" button with emerald gradient
+- Added stagger-1 through stagger-4 animations
+
+inventory-tab.tsx:
+- Replaced 4 stat cards with glass-card styling + gradient icon circles
+- Cards: Total Products (emerald), Stock Value (blue), Low Stock (amber), Out of Stock (rose)
+- Added "Add Product" button with emerald gradient
+- Filter bar with search, category dropdown, stock status filter preserved
+- Added stagger-1 through stagger-4 animations
+
+reports-tab.tsx:
+- Added "Report Types" grid with 6 large cards (stagger animations):
+  - Sales Report (emerald, TrendingUp), Inventory Report (blue, Package)
+  - Financial Report (purple, DollarSign), Tax Report (amber, Receipt)
+  - Customer Report (rose, Users), Employee Report (cyan, UserCog)
+- Each card: icon in gradient circle, title, description, "Generate" button
+- Replaced quick stats cards with glass-card styling + gradient icon circles
+- Added Receipt and UserCog icon imports
+
+suppliers-tab.tsx:
+- Replaced 4 stat cards with glass-card styling + gradient icon circles
+- Cards: Total Suppliers (emerald), Active Suppliers (cyan), Pending Orders (amber), Total Payables (purple)
+- Added "Add Supplier" button with emerald gradient
+- Integrated SupplierPerformanceCard component in supplier list (up to 6 cards)
+- Performance data computed from available PO data per supplier
+- Added stagger-1 through stagger-4 animations
+
+globals.css:
+- Added stagger-1 through stagger-6 animation classes (staggerFadeIn keyframes)
+- Added .glass-card utility class (bg-white/60 backdrop-blur-xl border-white/20)
+- Added dark mode glass-card variant
+- Updated reduced-motion media query to include stagger classes
+
+Lint Results:
+- 0 errors, 356 warnings (all pre-existing)
+- Fixed: unused vars (totalDebt, newCustomersThisMonth, avgRating), removed unused DialogTrigger import, fixed SortableHeader component definition (moved outside render to avoid hooks rule violation), fixed inventory-tab.tsx Dialog structure, fixed reports-tab.tsx icon rendering (iconMap instead of inline component references)
+
+Stage Summary:
+- 2 new API routes created (supplier performance endpoints)
+- 2 new components created (SupplierPerformanceCard, SupplierLeaderboard)
+- 4 tab files enhanced with glass-card styling, gradient icons, filter chips, stagger animations
+- 1 CSS file updated with stagger animations and glass-card utilities
+- All existing API integrations and data flows preserved
+- Lint: 0 errors maintained

@@ -9,7 +9,7 @@ import {
   ChevronRight, Download, Package, CalendarDays,
   ClipboardCheck, AlertTriangle, Hash, Clock, CheckCircle2,
   Circle, Award, Timer, MessageSquare,
-  Send, MoreVertical,
+  Send, MoreVertical, DollarSign,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
@@ -24,6 +24,7 @@ import {
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
+import { SupplierPerformanceCard } from '@/components/suppliers/supplier-performance-card';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1633,10 +1634,10 @@ export default function SuppliersTab() {
 
   const activeSuppliers = suppliers.filter((s) => s.isActive).length;
   const pendingPOs = purchaseOrders.filter((po) => ['DRAFT', 'SENT', 'CONFIRMED'].includes(po.status)).length;
-  const _totalPOValue = purchaseOrders
+  const totalPayables = purchaseOrders
     .filter((po) => po.status !== 'CANCELLED')
     .reduce((sum, po) => sum + po.totalAmount, 0);
-  const avgRating = suppliers.length > 0
+  const _avgRating = suppliers.length > 0
     ? (suppliers.reduce((s, sup) => s + sup.rating, 0) / suppliers.length).toFixed(1)
     : '0';
 
@@ -1678,64 +1679,134 @@ export default function SuppliersTab() {
 
   return (
     <div className="p-1 space-y-4">
-      {/* Overview Stats - Glass-morphism */}
+      {/* Overview Stats — Glass-morphism with gradient icons */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card className="border-l-4 border-l-violet-500 backdrop-blur-sm bg-card/80">
+        <Card className="glass-card stagger-1 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
-                <Truck className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-sm">
+                <Truck className="h-5 w-5" />
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground">Total Suppliers</p>
                 <p className="text-xl font-bold">{suppliers.length}</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-green-500 backdrop-blur-sm bg-card/80">
+        <Card className="glass-card stagger-2 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
-                <Building2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-cyan-500 to-cyan-600 text-white shadow-sm">
+                <Building2 className="h-5 w-5" />
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground">Active Suppliers</p>
                 <p className="text-xl font-bold">{activeSuppliers}</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-amber-500 backdrop-blur-sm bg-card/80">
+        <Card className="glass-card stagger-3 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
-                <ClipboardCheck className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-sm">
+                <ClipboardCheck className="h-5 w-5" />
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground">Pending Orders</p>
                 <p className="text-xl font-bold">{pendingPOs}</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-teal-500 backdrop-blur-sm bg-card/80">
+        <Card className="glass-card stagger-4 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center shrink-0">
-                <Star className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 text-white shadow-sm">
+                <DollarSign className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Avg. Rating</p>
-                <p className="text-xl font-bold">{avgRating}/5</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground">Total Payables</p>
+                <p className="text-xl font-bold whitespace-nowrap">{formatKES(totalPayables)}</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
+      {/* Add Supplier Button */}
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          className="h-9 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-sm"
+          onClick={() => setAddOpen(true)}
+        >
+          <Plus className="h-4 w-4 mr-1" /> Add Supplier
+        </Button>
+      </div>
+
+      {/* Supplier Performance Cards */}
+      {suppliers.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {suppliers.slice(0, 6).map((supplier, index) => {
+            // Compute simple performance data from available info
+            const supplierPOs = purchaseOrders.filter((po) => po.supplierId === supplier.id);
+            const nonCancelledPOs = supplierPOs.filter((po) => po.status !== 'CANCELLED');
+            const totalSpend = nonCancelledPOs.reduce((sum, po) => sum + po.totalAmount, 0);
+            const receivedPOs = supplierPOs.filter((po) => po.status === 'RECEIVED');
+            const onTimePOs = receivedPOs.filter((po) => {
+              if (!po.expectedDate || !po.receivedAt) return true;
+              return new Date(po.receivedAt) <= new Date(po.expectedDate);
+            });
+            const onTimeRate = receivedPOs.length > 0 ? Math.round((onTimePOs.length / receivedPOs.length) * 100) : 100;
+            const outstandingPOs = supplierPOs.filter((po) => ['DRAFT', 'SENT', 'CONFIRMED'].includes(po.status));
+            const outstandingBalance = outstandingPOs.reduce((sum, po) => sum + po.totalAmount, 0);
+            const lastOrderDate = supplierPOs.length > 0 ? supplierPOs.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime())[0].orderDate : null;
+            const recentOrders = supplierPOs.filter((po) => {
+              const d = new Date(po.orderDate);
+              const threeMonthsAgo = new Date();
+              threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+              return d >= threeMonthsAgo;
+            });
+            const trend: 'up' | 'down' | 'stable' = recentOrders.length > nonCancelledPOs.length / 4 ? 'up' : recentOrders.length === 0 ? 'down' : 'stable';
+
+            const performanceData = {
+              supplierId: supplier.id,
+              supplierName: supplier.name,
+              contactPerson: supplier.contactPerson,
+              email: supplier.email,
+              phone: supplier.phone,
+              rating: supplier.rating,
+              paymentTerms: supplier.paymentTerms,
+              metrics: {
+                totalOrders: nonCancelledPOs.length,
+                totalSpend,
+                onTimeDeliveryRate: onTimeRate,
+                avgFulfillmentDays: 0,
+                qualityRating: supplier.rating,
+                topProducts: [],
+                outstandingBalance,
+                lastOrderDate,
+                trend,
+                performanceScore: Math.round((onTimeRate / 100) * 5 * 0.4 + supplier.rating * 0.3 + Math.min(nonCancelledPOs.length / 10, 1) * 5 * 0.3),
+              },
+            };
+
+            return (
+              <SupplierPerformanceCard
+                key={supplier.id}
+                data={performanceData}
+                rank={index + 1}
+                onClick={() => setSelectedSupplierId(supplier.id)}
+              />
+            );
+          })}
+        </div>
+      )}
+
       {/* Supplier List - Cards */}
-      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+      <Card className="glass-card">
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <CardTitle className="text-base">Suppliers</CardTitle>
