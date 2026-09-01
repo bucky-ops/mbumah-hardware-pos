@@ -89,8 +89,8 @@ describe('Transactions API — financial invariants', () => {
         });
 
         expect(entry).not.toBeNull();
-        const totalDebit = entry!.lines.reduce((s, l) => s + l.debit as number, 0);
-        const totalCredit = entry!.lines.reduce((s, l) => s + l.credit as number, 0);
+        const totalDebit = entry!.lines.reduce((s, l) => s + Number(l.debit), 0);
+        const totalCredit = entry!.lines.reduce((s, l) => s + Number(l.credit), 0);
 
         expect(totalDebit).toBeCloseTo(1160, 2);
         expect(totalCredit).toBeCloseTo(1160, 2);
@@ -127,21 +127,21 @@ describe('Transactions API — financial invariants', () => {
           (l) => l.account.code === ACCOUNT_CODES.CASH_ON_HAND,
         );
         expect(cashLine).toBeDefined();
-        expect(cashLine!.debit as number).toBe(1160);
-        expect(cashLine!.credit as number).toBe(0);
+        expect(Number(cashLine!.debit)).toBe(1160);
+        expect(Number(cashLine!.credit)).toBe(0);
 
         const salesLine = entry!.lines.find(
           (l) => l.account.code === ACCOUNT_CODES.SALES_REVENUE,
         );
         expect(salesLine).toBeDefined();
-        expect(salesLine!.credit as number).toBe(1000);
-        expect(salesLine!.debit as number).toBe(0);
+        expect(Number(salesLine!.credit)).toBe(1000);
+        expect(Number(salesLine!.debit)).toBe(0);
 
         const vatLine = entry!.lines.find(
           (l) => l.account.code === ACCOUNT_CODES.VAT_PAYABLE,
         );
         expect(vatLine).toBeDefined();
-        expect(vatLine!.credit as number).toBe(160);
+        expect(Number(vatLine!.credit)).toBe(160);
       });
     });
   });
@@ -178,13 +178,13 @@ describe('Transactions API — financial invariants', () => {
         );
 
         expect(cashLine).toBeDefined();
-        expect(cashLine!.debit as number).toBe(500);
+        expect(Number(cashLine!.debit)).toBe(500);
         expect(mpesaLine).toBeDefined();
-        expect(mpesaLine!.debit as number).toBe(660);
+        expect(Number(mpesaLine!.debit)).toBe(660);
 
         // Still balanced.
-        const totalDebit = entry!.lines.reduce((s, l) => s + l.debit as number, 0);
-        const totalCredit = entry!.lines.reduce((s, l) => s + l.credit as number, 0);
+        const totalDebit = entry!.lines.reduce((s, l) => s + Number(l.debit), 0);
+        const totalCredit = entry!.lines.reduce((s, l) => s + Number(l.credit), 0);
         expect(Math.abs(totalDebit - totalCredit)).toBeLessThan(0.01);
       });
     });
@@ -218,7 +218,7 @@ describe('Transactions API — financial invariants', () => {
           (l) => l.account.code === ACCOUNT_CODES.ACCOUNTS_RECEIVABLE,
         );
         expect(arLine).toBeDefined();
-        expect(arLine!.debit as number).toBe(2320);
+        expect(Number(arLine!.debit)).toBe(2320);
 
         // No Cash on Hand debit for a debt sale.
         const cashLine = entry!.lines.find(
@@ -259,18 +259,18 @@ describe('Transactions API — financial invariants', () => {
           (l) => l.account.code === ACCOUNT_CODES.SALES_DISCOUNTS,
         );
         expect(discountLine).toBeDefined();
-        expect(discountLine!.debit as number).toBe(100);
+        expect(Number(discountLine!.debit)).toBe(100);
 
         // Sales Revenue is credited at the GROSS amount.
         const salesLine = entry!.lines.find(
           (l) => l.account.code === ACCOUNT_CODES.SALES_REVENUE,
         );
         expect(salesLine).toBeDefined();
-        expect(salesLine!.credit as number).toBe(1000);
+        expect(Number(salesLine!.credit)).toBe(1000);
 
         // Still balanced: debits (1044 + 100) === credits (1000 + 144).
-        const totalDebit = entry!.lines.reduce((s, l) => s + l.debit as number, 0);
-        const totalCredit = entry!.lines.reduce((s, l) => s + l.credit as number, 0);
+        const totalDebit = entry!.lines.reduce((s, l) => s + Number(l.debit), 0);
+        const totalCredit = entry!.lines.reduce((s, l) => s + Number(l.credit), 0);
         expect(Math.abs(totalDebit - totalCredit)).toBeLessThan(0.01);
       });
     });
@@ -304,17 +304,17 @@ describe('Transactions API — financial invariants', () => {
           (l) => l.account.code === ACCOUNT_CODES.COST_OF_GOODS_SOLD,
         );
         expect(cogsLine).toBeDefined();
-        expect(cogsLine!.debit as number).toBe(400);
+        expect(Number(cogsLine!.debit)).toBe(400);
 
         const invLine = entry!.lines.find(
           (l) => l.account.code === ACCOUNT_CODES.INVENTORY,
         );
         expect(invLine).toBeDefined();
-        expect(invLine!.credit as number).toBe(400);
+        expect(Number(invLine!.credit)).toBe(400);
 
         // Balanced: debits (1160 + 400) === credits (1000 + 160 + 400).
-        const totalDebit = entry!.lines.reduce((s, l) => s + l.debit as number, 0);
-        const totalCredit = entry!.lines.reduce((s, l) => s + l.credit as number, 0);
+        const totalDebit = entry!.lines.reduce((s, l) => s + Number(l.debit), 0);
+        const totalCredit = entry!.lines.reduce((s, l) => s + Number(l.credit), 0);
         expect(Math.abs(totalDebit - totalCredit)).toBeLessThan(0.01);
       });
     });

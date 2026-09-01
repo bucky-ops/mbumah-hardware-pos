@@ -118,25 +118,25 @@ describe('recordSaleJournalEntry — double-entry accounting', () => {
       savedJeId = je!.id;
 
       // Golden rule: debits must equal credits.
-      expect(je!.totalDebit).toBeCloseTo(je!.totalCredit, 2);
-      expect(je!.totalDebit).toBeCloseTo(finalTotal, 2);
+      expect(Number(je!.totalDebit)).toBeCloseTo(Number(je!.totalCredit), 2);
+      expect(Number(je!.totalDebit)).toBeCloseTo(finalTotal, 2);
 
       // Sales Revenue (4000) credited with gross revenue.
       const revenueLine = je!.lines.find((l) => l.account.code === ACCOUNT_CODES.SALES_REVENUE);
       expect(revenueLine).toBeDefined();
-      expect(revenueLine!.credit).toBeCloseTo(grossRevenue, 2);
-      expect(revenueLine!.debit).toBe(0);
+      expect(Number(revenueLine!.credit)).toBeCloseTo(grossRevenue, 2);
+      expect(Number(revenueLine!.debit)).toBe(0);
 
       // VAT Payable (2100) credited with tax.
       const vatLine = je!.lines.find((l) => l.account.code === ACCOUNT_CODES.VAT_PAYABLE);
       expect(vatLine).toBeDefined();
-      expect(vatLine!.credit).toBeCloseTo(taxAmount, 2);
+      expect(Number(vatLine!.credit)).toBeCloseTo(taxAmount, 2);
 
       // Cash on Hand (1000) debited with the full amount received.
       const cashLine = je!.lines.find((l) => l.account.code === ACCOUNT_CODES.CASH_ON_HAND);
       expect(cashLine).toBeDefined();
-      expect(cashLine!.debit).toBeCloseTo(finalTotal, 2);
-      expect(cashLine!.credit).toBe(0);
+      expect(Number(cashLine!.debit)).toBeCloseTo(finalTotal, 2);
+      expect(Number(cashLine!.credit)).toBe(0);
 
       // Entry should be posted (M-Pesa is the only unposted path).
       expect(je!.isPosted).toBe(true);
@@ -182,22 +182,22 @@ describe('recordSaleJournalEntry — double-entry accounting', () => {
       expect(je).not.toBeNull();
 
       // Balance: cash(1060) + discount(100) = revenue(1000) + vat(160) = 1160
-      expect(je!.totalDebit).toBeCloseTo(1160, 2);
-      expect(je!.totalCredit).toBeCloseTo(1160, 2);
+      expect(Number(je!.totalDebit)).toBeCloseTo(1160, 2);
+      expect(Number(je!.totalCredit)).toBeCloseTo(1160, 2);
 
       // Sales Revenue stays at the FULL gross (discount does NOT net it).
       const revenueLine = je!.lines.find((l) => l.account.code === ACCOUNT_CODES.SALES_REVENUE);
-      expect(revenueLine!.credit).toBeCloseTo(grossRevenue, 2);
+      expect(Number(revenueLine!.credit)).toBeCloseTo(grossRevenue, 2);
 
       // Sales Discounts (4300) is debited — contra-revenue.
       const discountLine = je!.lines.find((l) => l.account.code === ACCOUNT_CODES.SALES_DISCOUNTS);
       expect(discountLine).toBeDefined();
-      expect(discountLine!.debit).toBeCloseTo(discountAmount, 2);
-      expect(discountLine!.credit).toBe(0);
+      expect(Number(discountLine!.debit)).toBeCloseTo(discountAmount, 2);
+      expect(Number(discountLine!.credit)).toBe(0);
 
       // Cash debited with the reduced final total.
       const cashLine = je!.lines.find((l) => l.account.code === ACCOUNT_CODES.CASH_ON_HAND);
-      expect(cashLine!.debit).toBeCloseTo(finalTotal, 2);
+      expect(Number(cashLine!.debit)).toBeCloseTo(finalTotal, 2);
     });
   });
 
@@ -233,14 +233,14 @@ describe('recordSaleJournalEntry — double-entry accounting', () => {
       });
 
       expect(je).not.toBeNull();
-      expect(je!.totalDebit).toBeCloseTo(finalTotal, 2);
-      expect(je!.totalCredit).toBeCloseTo(finalTotal, 2);
+      expect(Number(je!.totalDebit)).toBeCloseTo(finalTotal, 2);
+      expect(Number(je!.totalCredit)).toBeCloseTo(finalTotal, 2);
 
       // Gift Card Liability (2300) DEBITED — liability decreases.
       const gcLine = je!.lines.find((l) => l.account.code === ACCOUNT_CODES.GIFT_CARD_LIABILITY);
       expect(gcLine).toBeDefined();
-      expect(gcLine!.debit).toBeCloseTo(finalTotal, 2);
-      expect(gcLine!.credit).toBe(0);
+      expect(Number(gcLine!.debit)).toBeCloseTo(finalTotal, 2);
+      expect(Number(gcLine!.credit)).toBe(0);
 
       // Cash should NOT be touched in a pure gift-card sale.
       const cashLine = je!.lines.find((l) => l.account.code === ACCOUNT_CODES.CASH_ON_HAND);
