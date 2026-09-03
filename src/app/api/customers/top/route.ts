@@ -48,9 +48,9 @@ async function getTopCustomersHandler(req: NextRequest): Promise<Response> {
       ...where,
       customerId: { not: null },
     },
-    _sum: { grandTotal: true },
+    _sum: { totalAmount: true },
     _count: { id: true },
-    orderBy: { _sum: { grandTotal: 'desc' } },
+    orderBy: { _sum: { totalAmount: 'desc' } },
     take: limit,
   });
 
@@ -89,7 +89,7 @@ async function getTopCustomersHandler(req: NextRequest): Promise<Response> {
   const result = validRows.map((row, index) => {
     const customer = customerMap.get(row.customerId);
     if (!customer) return null;
-    const totalSpend = Number(row._sum.grandTotal ?? 0);
+    const totalSpend = Number(row._sum.totalAmount ?? 0);
     const orderCount = row._count.id;
     const avgOrderValue = orderCount > 0 ? totalSpend / orderCount : 0;
     return {
@@ -111,9 +111,9 @@ async function getTopCustomersHandler(req: NextRequest): Promise<Response> {
   // Compute total spend across ALL customers (for share %)
   const totalAllSpend = await db.salesTransaction.aggregate({
     where,
-    _sum: { grandTotal: true },
+    _sum: { totalAmount: true },
   });
-  const totalSpendAll = Number(totalAllSpend._sum.grandTotal ?? 0);
+  const totalSpendAll = Number(totalAllSpend._sum.totalAmount ?? 0);
 
   return Response.json({
     success: true,

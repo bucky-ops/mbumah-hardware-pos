@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useAuthStore, useCartStore, useAppStore } from '@/lib/stores';
 import { getCategoryImage, safeMap } from '@/lib/app-config';
+import { STORE_LIST } from '@/lib/store-info';
 import { ConfettiOverlay } from '@/components/confetti-overlay';
 import {
   productsApi, categoriesApi, customersApi, transactionsApi,
@@ -882,6 +883,11 @@ export default function POSTab() {
   };
 
   // Print receipt — opens a new window with a clean printable layout
+  // ── HTML escape helper (for receipt print) ─────────────────────
+  function escapeHtml(str: unknown): string {
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
   const handlePrintReceipt = () => {
     if (!lastTransaction) return;
     const store = STORE_LIST.find((s) => s.id === currentStoreId);

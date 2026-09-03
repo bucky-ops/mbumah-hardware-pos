@@ -37,7 +37,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { CheckoutPayload, TransactionItem } from '@/lib/types';
+import type { CheckoutPayload } from '@/lib/types';
+import type { TransactionItem } from '@/lib/api';
 
 // ── Schema ───────────────────────────────────────────────────────────────────
 

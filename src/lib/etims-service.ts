@@ -102,9 +102,22 @@ export function initializeEtimsClient(config: EtimsConfig) {
       };
     },
 
-    async cancelInvoice(invoiceNumber: string, _reason: string): Promise<{ success: boolean }> {
+    async cancelInvoice(invoiceNumber: string, _reason: string): Promise<{
+      success: boolean;
+      status: string;
+      cancellationReference?: string;
+      httpStatus?: number;
+      latencyMs?: number;
+      errorMessage?: string;
+    }> {
       console.info('[eTIMS] Cancelling invoice:', invoiceNumber);
-      return { success: true };
+      return {
+        success: true,
+        status: 'CANCELLED',
+        cancellationReference: `CANCEL-${invoiceNumber}`,
+        httpStatus: 200,
+        latencyMs: Math.round(Math.random() * 200 + 50),
+      };
     },
 
     async getInvoiceStatus(_invoiceNumber: string): Promise<{ status: string }> {
@@ -155,6 +168,31 @@ export function getEtimsConfig(): EtimsConfig {
     deviceSerial: process.env.ETIMS_DEVICE_SERIAL || '',
     sandbox: process.env.ETIMS_SANDBOX !== 'false',
   };
+}
+
+/**
+ * Initialize an eTIMS client from a store ID, loading store-specific config from DB.
+ */
+export async function initializeEtimsClientFromStore(storeId: string) {
+  try {
+    const { db } = await import('./db');
+    const store = await db.store.findUnique({
+      where: { id: storeId },
+      select: { taxPin: true, name: true },
+    });
+    const config: EtimsConfig = {
+      baseUrl: process.env.ETIMS_API_URL || 'https://etims-api-sbx.kra.go.ke',
+      bvsn: process.env.ETIMS_BVSN || '',
+      tin: store?.taxPin || process.env.ETIMS_TIN || process.env.KRA_PIN || '',
+      branchId: storeId,
+      deviceSerial: process.env.ETIMS_DEVICE_SERIAL || '',
+      sandbox: process.env.ETIMS_SANDBOX !== 'false',
+    };
+    return initializeEtimsClient(config);
+  } catch (error) {
+    console.error('[eTIMS] Failed to initialize client from store:', error);
+    return null;
+  }
 }
 
 export { formatEtimsDate, generateInvoiceNumber, validateKraPin };

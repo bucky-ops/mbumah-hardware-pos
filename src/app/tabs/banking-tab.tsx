@@ -71,7 +71,7 @@ const MPESA_STATUS_BADGE: Record<string, { label: string; color: string }> = {
 // ── Main Component ──────────────────────────────────────────
 
 export default function BankingTab() {
-  const storeId = useAppStore((s) => s.activeStoreId);
+  const storeId = useAppStore((s) => s.currentStoreId);
   const queryClient = useQueryClient();
   const [activeSubTab, setActiveSubTab] = useState('accounts');
 

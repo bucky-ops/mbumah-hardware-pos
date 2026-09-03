@@ -104,9 +104,9 @@ async function updateStoreTransferHandler(...args: unknown[]): Promise<Response>
         data: {
           productId: item.productId,
           storeId: existing.fromStoreId,
-          type: 'TRANSFER',
+          movementType: 'TRANSFER',
           quantity: -item.quantity,
-          reason: `Transfer ${existing.transferNumber} to destination store`,
+          notes: `Transfer ${existing.transferNumber} to destination store`,
           referenceId: existing.id,
         },
       });
@@ -175,9 +175,9 @@ async function updateStoreTransferHandler(...args: unknown[]): Promise<Response>
         data: {
           productId: item.productId,
           storeId: existing.toStoreId,
-          type: 'TRANSFER',
+          movementType: 'TRANSFER',
           quantity: parseFloat(String(receivedQty)),
-          reason: `Received from transfer ${existing.transferNumber}`,
+          notes: `Received from transfer ${existing.transferNumber}`,
           referenceId: existing.id,
         },
       });

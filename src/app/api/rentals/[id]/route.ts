@@ -134,7 +134,7 @@ async function deleteRentalHandler(...args: unknown[]): Promise<Response> {
   await systemLog({
     action: 'RENTAL_DELETED',
     component: LogComponent.RENTAL,
-    severity: LogSeverity.WARNING,
+    severity: LogSeverity.WARN,
     message: `Rental deleted: ${rental.product?.name || id} for ${rental.customer?.name || 'Customer'}`,
     storeId: rental.storeId,
     metadata: { rentalId: id, productId: rental.productId, customerId: rental.customerId },

@@ -225,10 +225,10 @@ async function batchUpdateStock(
         data: {
           storeId,
           productId: item.productId,
-          type: 'ADJUSTMENT',
+          movementType: 'ADJUSTMENT',
           quantity: item.quantityInStock,
-          reason: 'Batch stock update',
-          processedById: session.userId,
+          notes: 'Batch stock update',
+          performedBy: session.userId,
         },
       })
     ),

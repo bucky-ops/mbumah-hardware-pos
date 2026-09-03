@@ -354,7 +354,7 @@ async function sendDocumentHandler(request: NextRequest, session: AuthSession): 
             const productName = item.product
               ? (await db.product.findUnique({ where: { id: item.productId } }))?.name || 'Item'
               : 'Item';
-            whatsappMessage += `\u2022 ${productName} x${item.quantity} @ KES ${item.unitPrice.toLocaleString()}\n`;
+            whatsappMessage += `\u2022 ${productName} x${item.quantity} @ KES ${item.unitCost.toLocaleString()}\n`;
           }
         }
 
