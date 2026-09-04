@@ -34,11 +34,19 @@
 //      migration as applied so FUTURE deploys take the clean `migrate deploy`
 //      path (step 1) and the `--accept-data-loss` fallback never runs again.
 //
-// The script is a no-op when DATABASE_URL is absent (e.g. `vercel build`
-// locally without env vars) so generic builds never hard-fail here.
+// The script is a no-op when DATABASE_URL is absent OR the database is
+// UNREACHABLE (e.g. `vercel build` locally without env vars, or the GitHub
+// Actions "Build" check which exports a dummy
+// `postgresql://…@localhost:5432/…` DATABASE_URL purely so the
+// provider auto-detection in setup-prisma-provider.mjs generates the
+// postgresql client — there is no database server in CI, nothing to sync,
+// and `next build` does not need one). Hard-fail (exit 1) is reserved for
+// the case where the database IS reachable but cannot be converged — that
+// is the genuine "do not deploy a build that will 500" signal.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { spawnSync } from 'node:child_process';
+import net from 'node:net';
 
 const BASELINE_MIGRATION = '20260904120000_financial_baseline';
 
@@ -53,11 +61,76 @@ function run(cmd, args) {
   return result.status === 0;
 }
 
+// ── Reachability gate ────────────────────────────────────────────────────────
+// Probes host:port from DATABASE_URL with a short TCP connect. Unreachable
+// (connection refused / timeout / DNS failure) ⇒ there is no database to
+// sync in this environment: warn loudly and skip (exit 0) so DB-less build
+// environments (GitHub Actions) still produce artifacts. A reachable-but-
+// uncooperative database keeps the strict fail-loudly behaviour below.
+function probeDatabaseReachability(url, timeoutMs = 5000) {
+  return new Promise((resolve) => {
+    const host = url.hostname;
+    // IPv6 literals arrive bracketed in hrefs; net.connect wants them bare.
+    const cleanHost = host.replace(/^\[|\]$/g, '');
+    const port = Number.parseInt(url.port, 10) || 5432;
+    const socket = net.connect({ host: cleanHost, port, timeout: timeoutMs });
+    const finish = (reachable) => {
+      socket.destroy();
+      resolve(reachable);
+    };
+    socket.once('connect', () => finish(true));
+    socket.once('timeout', () => finish(false));
+    socket.once('error', () => finish(false));
+  });
+}
+
+function parseDatabaseUrl(raw) {
+  try {
+    return new URL(raw);
+  } catch {
+    return null;
+  }
+}
+
 if (!DATABASE_URL) {
   console.warn('⚠️  [schema-sync] DATABASE_URL is not set — skipping schema sync.');
   console.warn('    Production deploys MUST provide DATABASE_URL (Neon) or runtime');
   console.warn('    queries will fail with Prisma P2021/P2022 (missing table/column).');
   process.exit(0);
+}
+
+const dbUrl = parseDatabaseUrl(DATABASE_URL);
+if (dbUrl && dbUrl.protocol.startsWith('postgres') && dbUrl.hostname) {
+  const reachable = await probeDatabaseReachability(dbUrl);
+  if (!reachable) {
+    console.warn('⚠️  [schema-sync] database host ' + dbUrl.hostname + ':' +
+      (Number.parseInt(dbUrl.port, 10) || 5432) + ' is UNREACHABLE — skipping schema sync.');
+    console.warn('    Nothing to sync in this environment (e.g. GitHub Actions Build check');
+    console.warn('    uses a placeholder localhost DATABASE_URL for provider detection).');
+    console.warn('    Production deploys MUST provide a reachable DATABASE_URL (Neon) or');
+    console.warn('    runtime queries will fail with Prisma P2021/P2022 (missing table/column).');
+    process.exit(0);
+  }
+} else if (!dbUrl) {
+  console.warn('⚠️  [schema-sync] DATABASE_URL is not a parsable URL — skipping schema sync.');
+  process.exit(0);
+}
+
+// ── DIRECT_URL fallback (CLI schema operations) ──────────────────────────────
+// schema.prisma declares `directUrl = env("DIRECT_URL")`. The Prisma CLI
+// (migrate deploy / db push / migrate resolve) resolves it and FAILS with
+// P1012 "Environment variable not found: DIRECT_URL" when absent — which
+// would kill every build in environments that only configure DATABASE_URL.
+// Schema surgery wants a DIRECT (non-pooled) connection, but falling back to
+// DATABASE_URL is strictly better than failing the build: the pre-#15
+// pipeline never touched the database at build time at all.
+if (process.env.DIRECT_URL) {
+  console.log('🔗 [schema-sync] DIRECT_URL is set — schema commands use the direct endpoint.');
+} else {
+  console.warn('⚠️  [schema-sync] DIRECT_URL is not set — falling back to DATABASE_URL for');
+  console.warn('    schema commands. Neon: prefer the direct (non-pooled) endpoint for');
+  console.warn('    build-time schema operations to avoid pgbouncer quirks.');
+  process.env.DIRECT_URL = DATABASE_URL;
 }
 
 console.log('🗄️  [schema-sync] step 1/3: prisma migrate deploy …');
