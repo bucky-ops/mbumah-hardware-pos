@@ -13,13 +13,14 @@ import {
 import { transactionsApi, whatsappApi, formatKES, formatDateTime, type TransactionItem, type SaleItemDetail, type ReceiptDistributionResult } from '@/lib/api';
 import { useAppStore } from '@/lib/stores';
 import { getStoreInfo, getLogoUrl, COMPANY } from '@/lib/store-info';
+import { printReceiptElement, generateReceiptPdf, buildReceiptFileName, RECEIPT_CONTENT_ID } from '@/lib/receipt-pdf';
+import { ReceiptDocument } from '@/components/receipt-print';
 import { handleError } from '@/lib/error-handler';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -294,6 +295,7 @@ function ReceiptModal({
   // modal closes (see the wrapped handler below).
   const [distChannel, setDistChannel] = useState<'EMAIL' | 'WHATSAPP' | null>(null);
   const [recipient, setRecipient] = useState('');
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   // Reset distribution state when the modal closes.
   const handleOpenChange = (open: boolean) => {
@@ -305,8 +307,6 @@ function ReceiptModal({
   };
 
   if (!transaction) return null;
-
-  const items = Array.isArray(transaction.items) ? transaction.items : [];
 
   const handleStartEmail = () => {
     setDistChannel('EMAIL');
@@ -326,42 +326,34 @@ function ReceiptModal({
     onDistribute(distChannel!, recipient.trim());
   };
 
+  // Print + PDF go through the shared receipt utilities: print uses the
+  // #print-root isolation (the old popup-window writer printed an unbranded,
+  // unstyled clone), PDF export captures the branded ReceiptDocument via
+  // html2canvas-pro → jsPDF with full error containment.
   const handlePrint = () => {
-    const printContent = document.getElementById('receipt-print-area');
-    if (!printContent) return;
-    const store = getStoreInfo(currentStoreId);
-    const logoUrl = getLogoUrl();
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
-    if (!printWindow) return;
-    printWindow.document.write(`
-      <html>
-        <head><title>Receipt ${transaction.receiptNumber}</title>
-        <style>
-          body { font-family: monospace; padding: 20px; font-size: 12px; max-width: 300px; margin: 0 auto; }
-          .center { text-align: center; }
-          .bold { font-weight: bold; }
-          .line { border-top: 1px dashed #000; margin: 8px 0; }
-          table { width: 100%; }
-          td { padding: 2px 0; }
-          .right { text-align: right; }
-          .logo { max-width: 140px; max-height: 60px; margin: 0 auto 4px; display: block; }
-        </style></head>
-        <body>
-          <div class="center">
-            <img src="${logoUrl}" alt="${COMPANY.legalName}" class="logo" />
-            <h2 class="bold" style="margin:0">${COMPANY.legalName}</h2>
-            <p style="margin:2px 0">${store.name}</p>
-            <p style="margin:2px 0">${store.location}</p>
-            <p style="margin:2px 0">Tel: ${store.phone}</p>
-          </div>
-          <div class="line"></div>
-          ${printContent.innerHTML}
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => printWindow.print(), 200);
+    try {
+      printReceiptElement(RECEIPT_CONTENT_ID);
+    } catch (error) {
+      console.error('[RECEIPT_PRINT_ERROR]', error);
+      toast.error('Failed to open the print dialog. Please try again.');
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!transaction) return;
+    setPdfBusy(true);
+    try {
+      await generateReceiptPdf({
+        elementId: RECEIPT_CONTENT_ID,
+        fileName: buildReceiptFileName(transaction.receiptNumber, transaction.id),
+      });
+      toast.success('Receipt PDF downloaded.');
+    } catch (error) {
+      console.error('[RECEIPT_DOWNLOAD_ERROR]', error);
+      toast.error('Failed to download receipt. Please try again or use Print to PDF.');
+    } finally {
+      setPdfBusy(false);
+    }
   };
 
   return (
@@ -373,65 +365,9 @@ function ReceiptModal({
           </DialogTitle>
           <DialogDescription>Receipt #{transaction.receiptNumber}</DialogDescription>
         </DialogHeader>
-        <div id="receipt-print-area" className="space-y-4">
-          {/* Store Header with logo */}
-          <div className="text-center space-y-1">
-            <img src={COMPANY.logoPath} alt="MBUMAH HARDWARE" className="max-w-[140px] max-h-[60px] mx-auto" />
-            <h3 className="font-bold text-lg">{COMPANY.legalName}</h3>
-            <p className="text-xs text-muted-foreground">{getStoreInfo(currentStoreId).name}</p>
-            <p className="text-xs text-muted-foreground">{getStoreInfo(currentStoreId).location}</p>
-            <p className="text-xs text-muted-foreground">Tel: {getStoreInfo(currentStoreId).phone}</p>
-            <Separator className="my-2" />
-            <p className="text-xs text-muted-foreground">Receipt #{transaction.receiptNumber}</p>
-            <p className="text-xs text-muted-foreground">{formatDateTime(transaction.createdAt)}</p>
-          </div>
-          <Separator />
-          {/* Customer Info */}
-          <div className="text-xs">
-            <span className="text-muted-foreground">Customer: </span>
-            <span className="font-medium">{transaction.customer?.name || 'Walk-in'}</span>
-          </div>
-          {/* Line Items */}
-          <div className="border rounded-lg overflow-hidden">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-muted/50">
-                  <th className="text-left p-2">Item</th>
-                  <th className="text-center p-2">Qty</th>
-                  <th className="text-right p-2">Price</th>
-                  <th className="text-right p-2">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item: SaleItemDetail) => (
-                  <tr key={item.id} className="border-t border-border/50">
-                    <td className="p-2">{item.productName}</td>
-                    <td className="p-2 text-center">{item.quantity}</td>
-                    <td className="p-2 text-right">{formatKES(item.pricePerUnit)}</td>
-                    <td className="p-2 text-right font-medium">{formatKES(item.lineTotal)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {/* Totals */}
-          <div className="space-y-1 text-xs">
-            <div className="flex justify-between"><span className="text-muted-foreground">Subtotal:</span><span>{formatKES(transaction.subtotal)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">VAT:</span><span>{formatKES(transaction.taxAmount)}</span></div>
-            {transaction.discountAmount > 0 && (
-              <div className="flex justify-between text-green-600"><span>Discount:</span><span>-{formatKES(transaction.discountAmount)}</span></div>
-            )}
-            <Separator />
-            <div className="flex justify-between font-bold text-sm"><span>TOTAL:</span><span>{formatKES(transaction.totalAmount)}</span></div>
-          </div>
-          {/* Payment Info */}
-          <div className="text-xs text-center text-muted-foreground space-y-0.5">
-            <p>Paid via {transaction.paymentMethod}</p>
-            <p>Status: {getPaymentStatusLabel(transaction.paymentStatus)}</p>
-            {transaction.cashier && <p>Cashier: {transaction.cashier.name}</p>}
-          </div>
-          <div className="text-center text-[10px] text-muted-foreground pt-2">Thank you for your business!</div>
-        </div>
+        {/* Branded, colored, QR-coded receipt — same component as the
+            checkout modal; id=RECEIPT_CONTENT_ID drives print/PDF export. */}
+        <ReceiptDocument transaction={transaction} storeId={currentStoreId} />
 
         {/* Distribution controls (Phase 4 — Email via Resend + WhatsApp via Twilio) */}
         {distChannel ? (
@@ -460,6 +396,10 @@ function ReceiptModal({
           </div>
         ) : (
           <DialogFooter className="gap-2 flex-wrap sm:flex-nowrap">
+            <Button variant="outline" size="sm" onClick={handleDownloadPdf} disabled={pdfBusy}>
+              {pdfBusy ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Download className="h-4 w-4 mr-1.5" />}
+              {pdfBusy ? 'Preparing…' : 'Download PDF'}
+            </Button>
             <Button variant="outline" size="sm" onClick={handlePrint}>
               <Printer className="h-4 w-4 mr-1.5" /> Print
             </Button>

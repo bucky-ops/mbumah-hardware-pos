@@ -990,95 +990,15 @@ export default function POSTab() {
     }
   };
 
-  // Print receipt — opens a new window with a clean printable layout
-  // ── HTML escape helper (for receipt print) ─────────────────────
-  function escapeHtml(str: unknown): string {
-    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
+  // Print receipt — opens the branded ReceiptPrintPreview modal, which owns
+  // the modern colored receipt with QR verification, real PDF download and
+  // the print-root isolation (see src/lib/receipt-pdf.ts + globals.css).
+  // (Previously this hand-wrote a monospace HTML popup — duplicated, unbranded
+  // and bypassed the QR/PDF pipeline; the modal is now the single source.)
   const handlePrintReceipt = () => {
     if (!lastTransaction) return;
-    const store = STORE_LIST.find((s) => s.id === currentStoreId);
-    const itemsHtml = safeMap<TransactionItem, string>(lastTransaction?.items, (item) => `
-      <tr>
-        <td class="name">${escapeHtml(item.productName)}</td>
-        <td class="qty">${item.quantity}</td>
-        <td class="unit">${item.unitType}</td>
-        <td class="price">${formatKES(item.pricePerUnit ?? 0)}</td>
-        <td class="total">${formatKES(item.lineTotal)}</td>
-      </tr>
-    `).join('');
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${escapeHtml(lastTransaction.receiptNumber)}</title>
-      <style>
-        * { box-sizing: border-box; }
-        body { font-family: 'Courier New', monospace; padding: 12px; max-width: 320px; margin: 0 auto; color: #000; }
-        h1, h2, h3, p { margin: 0; }
-        .center { text-align: center; }
-        .store-name { font-size: 18px; font-weight: bold; letter-spacing: 1px; margin-bottom: 2px; }
-        .store-info { font-size: 11px; color: #444; }
-        .meta { font-size: 11px; margin: 8px 0; }
-        .meta-row { display: flex; justify-content: space-between; }
-        hr { border: none; border-top: 1px dashed #000; margin: 8px 0; }
-        table { width: 100%; border-collapse: collapse; font-size: 11px; }
-        th { text-align: left; font-size: 10px; text-transform: uppercase; padding: 2px 0; border-bottom: 1px solid #000; }
-        td { padding: 2px 0; vertical-align: top; }
-        td.name { width: 45%; }
-        td.qty, td.unit { text-align: center; width: 12%; }
-        td.price { text-align: right; width: 15%; }
-        td.total { text-align: right; width: 16%; font-weight: bold; }
-        .totals { font-size: 12px; margin: 8px 0; }
-        .totals .meta-row { padding: 1px 0; }
-        .totals .grand { font-size: 14px; font-weight: bold; padding-top: 4px; }
-        .footer { text-align: center; margin-top: 12px; font-size: 11px; }
-        @media print { body { padding: 0; } }
-      </style></head><body>
-      <div class="center">
-        <div class="store-name">MBUMAH HARDWARE</div>
-        <div class="store-info">${escapeHtml(store?.shortName || 'Juja Main Branch')}</div>
-        <div class="store-info">${escapeHtml(store?.location || '')}</div>
-        <div class="store-info">Tel: ${escapeHtml(store?.phone || '+254 700 123 456')}</div>
-      </div>
-      <hr/>
-      <div class="meta">
-        <div class="meta-row"><span>Receipt #:</span><strong>${escapeHtml(lastTransaction.receiptNumber)}</strong></div>
-        <div class="meta-row"><span>Date:</span><span>${escapeHtml(formatDateTime(lastTransaction.createdAt))}</span></div>
-        <div class="meta-row"><span>Cashier:</span><span>${escapeHtml(lastTransaction.cashier?.name || useAuthStore.getState().user?.name || 'N/A')}</span></div>
-        <div class="meta-row"><span>Customer:</span><span>${escapeHtml(lastTransaction.customer?.name || 'Walk-in')}</span></div>
-      </div>
-      <hr/>
-      <table>
-        <thead><tr><th>Item</th><th class="qty">Qty</th><th class="unit">Unit</th><th class="price">Price</th><th class="total">Total</th></tr></thead>
-        <tbody>${itemsHtml}</tbody>
-      </table>
-      <hr/>
-      <div class="totals">
-        <div class="meta-row"><span>Subtotal</span><span>${formatKES(lastTransaction.subtotal)}</span></div>
-        <div class="meta-row"><span>VAT (16%)</span><span>${formatKES(lastTransaction.taxAmount)}</span></div>
-        ${lastTransaction.discountAmount > 0 ? `<div class="meta-row"><span>Discount</span><span>-${formatKES(lastTransaction.discountAmount)}</span></div>` : ''}
-        <div class="meta-row grand"><span>TOTAL</span><span>${formatKES(lastTransaction.totalAmount)}</span></div>
-      </div>
-      <hr/>
-      <div class="meta">
-        <div class="meta-row"><span>Payment</span><span>${escapeHtml(lastTransaction.paymentMethod)}</span></div>
-        ${lastTransaction.paymentMethod === 'CASH' && lastCashReceived > 0 ? `<div class="meta-row"><span>Cash Received</span><span>${formatKES(lastCashReceived)}</span></div>` : ''}
-        ${lastTransaction.paymentMethod === 'CASH' && (lastCashReceived - lastTransaction.totalAmount) > 0 ? `<div class="meta-row"><span>Change</span><span>${formatKES(lastCashReceived - lastTransaction.totalAmount)}</span></div>` : ''}
-        ${lastTransaction.paymentMethod === 'MPESA' && lastMpesaPhone ? `<div class="meta-row"><span>M-Pesa Phone</span><span>${escapeHtml(lastMpesaPhone)}</span></div>` : ''}
-      </div>
-      <div class="footer">
-        <p><strong>Thank you for shopping at MBUMAH HARDWARE!</strong></p>
-        <p>Asante sana!</p>
-      </div>
-      <script>window.onload = function() { window.print(); }</script>
-      </body></html>`;
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
-    if (printWindow) {
-      printWindow.document.open();
-      printWindow.document.write(html);
-      printWindow.document.close();
-    } else {
-      // Popup blocked — fall back to inline print
-      window.print();
-    }
+    setReceiptOpen(false);
+    setReceiptPrintOpen(true);
   };
 
   const change = paymentMethod === 'CASH' && cashReceived ? Number(cashReceived) - finalTotal : 0;
