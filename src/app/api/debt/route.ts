@@ -336,10 +336,16 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
       resourceId: String(result?.debtPayment?.id || debtLedgerId),
       actorId: receivedBy || 'system',
       storeId,
-      newValues: { debtLedgerId, amount: paymentAmount, paymentMethod, balanceAfter: newBalance },
+      // AUDIT FIX: referenced out-of-scope `newBalance` (tx-local variable)
+      // → ReferenceError silently swallowed by the empty catch. Use the
+      // actual post-payment balance returned by the transaction (`result` is
+      // the updated DebtLedger row) so the audit trail records the truth.
+      newValues: { debtLedgerId, amount: paymentAmount, paymentMethod, balanceAfter: Number(result.balance) },
     });
-  } catch {
-    /* audit chain must never block payment recording */
+  } catch (error) {
+    // AUDIT FIX: audit chain still must never block payment recording,
+    // but the swallow is no longer silent.
+    console.error('Failed to write tamper-evident audit entry for debt payment:', error);
   }
 
   return Response.json({ success: true, data: result });

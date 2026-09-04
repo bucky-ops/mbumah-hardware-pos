@@ -5,12 +5,24 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateJournalEntryNumber } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
-import { LogSeverity, LogComponent } from '@/lib/types';
-import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
+import { LogSeverity, LogComponent, UserRole } from '@/lib/types';
+import { withSessionAuth, getSessionFromRequest } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 const VALID_DRAWER_ACTIONS = ['OPEN', 'CLOSE', 'CASH_IN', 'CASH_OUT'];
+
+// AUDIT FIX (drawer/shift RBAC): any store role from PERMISSION_MATRIX may
+// VIEW drawer data (X-analog inquiry). Destructive drawer ops that remove
+// cash (CLOSE, CASH_OUT) are restricted in-handler to manager-or-above
+// (SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER); non-destructive OPEN/CASH_IN
+// remain available to any store role.
+const STORE_ROLES: string[] = Object.values(UserRole);
+const MANAGER_UP_ROLES: string[] = [
+  UserRole.SUPER_ADMIN,
+  UserRole.STORE_OWNER,
+  UserRole.BRANCH_MANAGER,
+];
 
 async function getCashDrawerHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
@@ -66,19 +78,23 @@ async function getCashDrawerHandler(...args: unknown[]): Promise<Response> {
     db.cashDrawerLog.count({ where }),
   ]);
 
-    const latestEntry = await db.cashDrawerLog.findFirst({
+  // AUDIT FIX: read-latest-row → aggregate _sum (same pattern as the R6
+  // remediation in transactions/route.ts). The latest row's balance can be
+  // stale/missing under concurrent drawer writes; the SUM of signed amounts
+  // is the authoritative store-wide drawer position.
+  const balanceAgg = await db.cashDrawerLog.aggregate({
     where: { storeId },
-    orderBy: { createdAt: 'desc' },
-    select: { balance: true },
+    _sum: { amount: true },
   });
+  const currentDrawerBalance = Number(balanceAgg._sum.amount ?? 0);
 
-    const summaryData = await db.cashDrawerLog.findMany({
+  const summaryData = await db.cashDrawerLog.findMany({
     where,
     select: { action: true, amount: true },
   });
 
   const summary = {
-    currentBalance: latestEntry?.balance || 0,
+    currentBalance: currentDrawerBalance,
     totalCashIn: summaryData
       .filter((e) => ['CASH_IN', 'OPEN', 'SALE'].includes(e.action))
       .reduce((sum, e) => sum + e.amount, 0),
@@ -136,11 +152,29 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-    const lastEntry = await db.cashDrawerLog.findFirst({
+  // AUDIT FIX: read-latest-row lost-update race — the previous findFirst
+  // (latest row balance) silently dropped concurrent drawer writes. Derive
+  // the running balance from the SUM of all drawer amounts instead (same
+  // aggregate pattern as src/app/api/transactions/route.ts R6 remediation).
+  const balanceAgg = await db.cashDrawerLog.aggregate({
     where: { storeId },
-    orderBy: { createdAt: 'desc' },
+    _sum: { amount: true },
   });
-  const currentBalance = lastEntry?.balance || 0;
+  const currentBalance = Number(balanceAgg._sum.amount ?? 0);
+
+  // AUDIT FIX: destructive ops (CLOSE/CASH_OUT remove cash from the drawer)
+  // are manager-or-above per PERMISSION_MATRIX. OPEN/CASH_IN remain available
+  // to any store role (the wrapper below already enforces a valid session).
+  const session = await getSessionFromRequest(request);
+  if (
+    (eventType === 'CLOSE' || eventType === 'CASH_OUT') &&
+    (!session || !MANAGER_UP_ROLES.includes(session.role))
+  ) {
+    return Response.json(
+      { success: false, error: 'Closing the drawer or removing cash requires manager privileges.' },
+      { status: 403 }
+    );
+  }
 
     let newBalance = currentBalance;
   switch (eventType) {
@@ -273,5 +307,8 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: logEntry }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(withSessionAuth(getCashDrawerHandler, FINANCIAL_ROLES.WRITE), 'CASH_DRAWER_LIST');
-export const POST = withErrorBoundary(withSessionAuth(createCashDrawerHandler, FINANCIAL_ROLES.WRITE), 'CASH_DRAWER_CREATE');
+// AUDIT FIX (RBAC): GET was FINANCIAL_ROLES.WRITE — per the audit directive
+// any store role may VIEW drawer data; destructive POST events (CLOSE /
+// CASH_OUT) are additionally gated to manager-or-above inside the handler.
+export const GET = withErrorBoundary(withSessionAuth(getCashDrawerHandler, STORE_ROLES), 'CASH_DRAWER_LIST');
+export const POST = withErrorBoundary(withSessionAuth(createCashDrawerHandler, STORE_ROLES), 'CASH_DRAWER_CREATE');

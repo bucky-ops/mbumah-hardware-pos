@@ -3,9 +3,16 @@
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
-import { LogSeverity, LogComponent } from '@/lib/types';
+import { LogSeverity, LogComponent, UserRole } from '@/lib/types';
+import { withSessionAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
+
+// AUDIT FIX: shifts routes previously had NO session auth (any Bearer token
+// could mutate shifts). Every store role from PERMISSION_MATRIX may view/open
+// shifts; destructive ops (shift end) are manager-or-above — see
+// src/app/api/shifts/[id]/end/route.ts.
+const STORE_ROLES: string[] = Object.values(UserRole);
 
 async function getShiftsHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
@@ -70,6 +77,11 @@ async function createShiftHandler(...args: unknown[]): Promise<Response> {
 
   const { storeId, userId, startingCash } = body;
 
+  // AUDIT FIX: coerce opening cash to a number up-front so downstream drawer
+  // balance arithmetic (priorBalance + openingCash) can never degrade into
+  // string concatenation when clients send a string amount.
+  const openingCash = Number(startingCash) || 0;
+
   if (!storeId || !userId) {
     return Response.json(
       { success: false, error: 'storeId and userId are required.' },
@@ -115,7 +127,7 @@ async function createShiftHandler(...args: unknown[]): Promise<Response> {
       data: {
         userId,
         storeId,
-        startingCash: startingCash || 0,
+        startingCash: openingCash,
         status: 'ACTIVE',
       },
       include: {
@@ -125,19 +137,23 @@ async function createShiftHandler(...args: unknown[]): Promise<Response> {
     });
 
     // Record opening balance in the cash drawer ledger.
-    const lastDrawerEntry = await tx.cashDrawerLog.findFirst({
+    // AUDIT FIX: read-latest-row lost-update race — the previous findFirst
+    // (latest row balance) silently dropped concurrent drawer writes. Derive
+    // the running balance from the SUM of all drawer amounts instead (same
+    // aggregate pattern as src/app/api/transactions/route.ts R6 remediation).
+    const drawerAgg = await tx.cashDrawerLog.aggregate({
       where: { storeId },
-      orderBy: { createdAt: 'desc' },
+      _sum: { amount: true },
     });
-    const priorBalance = lastDrawerEntry?.balance ?? 0;
+    const priorBalance = Number(drawerAgg._sum.amount ?? 0);
 
     await tx.cashDrawerLog.create({
       data: {
         storeId,
         userId,
         action: 'SHIFT_OPEN',
-        amount: startingCash || 0,
-        balance: priorBalance + (startingCash || 0),
+        amount: openingCash,
+        balance: priorBalance + openingCash,
         notes: `Opening cash for shift started by ${newShift.user.name}`,
       },
     });
@@ -149,12 +165,12 @@ async function createShiftHandler(...args: unknown[]): Promise<Response> {
     action: 'SHIFT_START',
     component: LogComponent.POS,
     severity: LogSeverity.INFO,
-    message: `Shift started by ${shift.user.name} with starting cash KES ${(startingCash || 0).toLocaleString()}`,
+    message: `Shift started by ${shift.user.name} with starting cash KES ${openingCash.toLocaleString()}`,
     storeId,
     userId,
     metadata: {
       shiftId: shift.id,
-      startingCash: startingCash || 0,
+      startingCash: openingCash,
     },
   });
 
@@ -180,5 +196,7 @@ async function createShiftHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getShiftsHandler, 'SHIFTS_LIST');
-export const POST = withErrorBoundary(createShiftHandler, 'SHIFTS_CREATE');
+// AUDIT FIX: session auth added (was Bearer-presence-only via proxy).
+// Any store role may list shifts / open a shift (non-destructive).
+export const GET = withErrorBoundary(withSessionAuth(getShiftsHandler, STORE_ROLES), 'SHIFTS_LIST');
+export const POST = withErrorBoundary(withSessionAuth(createShiftHandler, STORE_ROLES), 'SHIFTS_CREATE');
