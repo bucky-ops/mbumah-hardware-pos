@@ -1,0 +1,27 @@
+# TEMPORARY diagnostic workflow (PR #15 debugging) — DELETED BEFORE MERGE.
+# Read-only: lists Vercel project env KEYS (never values) and pulls build logs
+# of deployments for this commit, to explain why the Vercel builds failed.
+name: Vercel Diagnose (read-only)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Inspect Vercel deployments + env keys for this commit
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/vercel-diagnose.mjs
