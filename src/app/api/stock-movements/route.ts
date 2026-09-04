@@ -8,7 +8,9 @@
 //   GET accepts both `type` (new spec) and `movementType` (legacy) query params.
 //   GET accepts both `offset` (new spec) and `page` (legacy) for pagination.
 //   POST accepts both `type` (new spec) and `adjustmentType` (legacy), and
-//   both `note` (new spec) and `reason` (legacy). Either may be omitted.
+//   both `note` (new spec) and `reason` (legacy). Either may be omitted —
+//   EXCEPT for write-offs (negative quantity), where `reason` (min 3 chars)
+//   is mandatory and a DAMAGED/STOLEN/EXPIRED `category` may be supplied.
 //
 // The POST handler creates a StockMovement record AND atomically updates
 // Product.quantityInStock inside a single $transaction so the books always
@@ -19,7 +21,8 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent, StockMovementType } from '@/lib/types';
-import { calculateWeightedAverageCost } from '@/lib/account-helper';
+import { calculateWeightedAverageCost, getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
+import { generateJournalEntryNumber } from '@/lib/helpers';
 import { requireAuth, requireStoreAccess, type AuthSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -33,6 +36,36 @@ const MANUAL_MOVEMENT_TYPES: string[] = [
   StockMovementType.RETURN,
   StockMovementType.TRANSFER,
 ];
+
+// AUDIT FIX (governance): recognized write-off classifications. StockMovement
+// has no category column (schema untouched), so the classification supplied by
+// the client is persisted inside the `notes` field as a `[WRITE_OFF: X]` prefix.
+const WRITE_OFF_CATEGORIES = ['DAMAGED', 'STOLEN', 'EXPIRED'] as const;
+type WriteOffCategory = (typeof WRITE_OFF_CATEGORIES)[number];
+
+/**
+ * Resolve the write-off classification for a negative-quantity movement:
+ * an explicit `category` body field wins; otherwise it is detected from the
+ * reason text. Returns null when nothing recognisable was supplied.
+ */
+function classifyWriteOff(category: unknown, reasonText: string): WriteOffCategory | null {
+  const explicit = String(category || '').trim().toUpperCase();
+  if (explicit) {
+    return (WRITE_OFF_CATEGORIES as readonly string[]).includes(explicit)
+      ? (explicit as WriteOffCategory)
+      : null;
+  }
+  const haystack = reasonText.toUpperCase();
+  if (haystack.includes('DAMAGE')) return 'DAMAGED';
+  if (haystack.includes('STOLEN') || haystack.includes('THEFT')) return 'STOLEN';
+  if (haystack.includes('EXPIRED') || haystack.includes('EXPIRY')) return 'EXPIRED';
+  return null;
+}
+
+/** 2dp HALF_UP rounding for journal line amounts (mirrors account-helper.ts). */
+function roundMoney(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
 
 // ── GET /api/stock-movements ────────────────────────────────────────────────
 
@@ -178,7 +211,7 @@ async function createStockAdjustmentHandler(
     reason,
     note,
     storeId: bodyStoreId,
-    performedBy,
+    category,
     unitCost,
   } = body as {
     productId?: string;
@@ -188,7 +221,10 @@ async function createStockAdjustmentHandler(
     reason?: string;
     note?: string;
     storeId?: string;
-    performedBy?: string;
+    // AUDIT FIX (governance): `category` carries the DAMAGED/STOLEN/EXPIRED
+    // write-off classification. The old `performedBy` body field was removed:
+    // actor identity MUST come from the authenticated session only.
+    category?: string;
     unitCost?: number | string;
   };
 
@@ -269,13 +305,41 @@ async function createStockAdjustmentHandler(
     );
   }
 
-  // Guard against negative stock for issuances.
-  const currentStockNum = Number(product.quantityInStock);
-  if (adjustmentQuantity < 0 && currentStockNum + adjustmentQuantity < 0) {
+  // AUDIT FIX (TOCTOU/oversell): the old outside-the-tx stock pre-check was a
+  // read-then-act race — it could not see concurrent decrements and is now
+  // replaced by a conditional updateMany INSIDE the transaction below
+  // (count === 0 → typed 409). Stock sufficiency is enforced atomically there.
+
+  // ── Write-off governance (negative quantity) ──
+  // AUDIT FIX (governance): a write-off previously required no reason and was
+  // never classified or valued in the GL. Negative movements now REQUIRE a
+  // documented reason (min 3 chars) and persist a DAMAGED/STOLEN/EXPIRED
+  // classification (explicit `category` field, else detected from the reason).
+  const reasonText = (reason || '').trim();
+  const noteText = (note || '').trim();
+  if (adjustmentQuantity < 0 && reasonText.length < 3) {
     return Response.json(
       {
         success: false,
-        error: `Insufficient stock. Current: ${currentStockNum}, Adjustment: ${adjustmentQuantity}`,
+        error: 'A reason (min 3 characters) is required for stock write-offs (negative quantity).',
+      },
+      { status: 400 },
+    );
+  }
+  const writeOffCategory =
+    adjustmentQuantity < 0 ? classifyWriteOff(category, reasonText) : null;
+  if (
+    adjustmentQuantity < 0 &&
+    category !== undefined &&
+    category !== null &&
+    String(category).trim() !== '' &&
+    writeOffCategory === null
+  ) {
+    // An explicit but unrecognised category must not be silently dropped.
+    return Response.json(
+      {
+        success: false,
+        error: `Invalid write-off category. Must be one of: ${WRITE_OFF_CATEGORIES.join(', ')}.`,
       },
       { status: 400 },
     );
@@ -293,15 +357,32 @@ async function createStockAdjustmentHandler(
     newWac = wac.newWac;
   }
 
-  // Compose a readable notes string: "reason | note" if both supplied.
-  const reasonText = (reason || '').trim();
-  const noteText = (note || '').trim();
+  // Compose a readable notes string: "[WRITE_OFF: X] reason — note". The
+  // classification is encoded here because StockMovement has no category column.
+  const writeOffPrefix = writeOffCategory ? `[WRITE_OFF: ${writeOffCategory}] ` : '';
   const composedNotes =
-    reasonText && noteText
+    writeOffPrefix +
+    (reasonText && noteText
       ? `${reasonText} — ${noteText}`
-      : reasonText || noteText || `Stock ${movementTypeValue.toLowerCase()}`;
+      : reasonText || noteText || `Stock ${movementTypeValue.toLowerCase()}`);
 
   const result = await db.$transaction(async (tx) => {
+    // AUDIT FIX (TOCTOU/oversell): the stock claim is a conditional updateMany
+    // (row lock + atomic predicate re-check) replacing the blind decrement that
+    // followed an outside-the-tx pre-check. It runs FIRST so a failed claim
+    // aborts with NO StockMovement row (an early return after the create would
+    // commit a movement that never moved stock). count === 0 → typed 409 below,
+    // mirroring the transactions route pattern (transactions/route.ts:583-591).
+    if (adjustmentQuantity < 0) {
+      const claimed = await tx.product.updateMany({
+        where: { id: productId, quantityInStock: { gte: Math.abs(adjustmentQuantity) } },
+        data: { quantityInStock: { decrement: Math.abs(adjustmentQuantity) } },
+      });
+      if (claimed.count === 0) {
+        return { ok: false as const, reason: 'insufficient_stock' as const };
+      }
+    }
+
     const movement = await tx.stockMovement.create({
       data: {
         storeId,
@@ -309,7 +390,9 @@ async function createStockAdjustmentHandler(
         movementType: movementTypeValue,
         quantity: adjustmentQuantity,
         notes: composedNotes,
-        performedBy: performedBy || session.userId,
+        // AUDIT FIX (governance): actor identity is session-only — the request
+        // body must never be able to impersonate another user.
+        performedBy: session.userId,
       },
       include: {
         product: {
@@ -335,14 +418,74 @@ async function createStockAdjustmentHandler(
         },
       });
     } else {
-      await tx.product.update({
-        where: { id: productId },
-        data: { quantityInStock: { decrement: Math.abs(adjustmentQuantity) } },
-      });
+      // AUDIT FIX (write-off JE): shrinkage previously never touched the GL —
+      // Inventory (1300) was only ever credited by POS COGS, so every write-off
+      // drifted the books. Post a balanced JE in the SAME tx, following the
+      // recordGoodsReceiptEntry style:
+      //   Dr Cost of Goods Sold (5000) — the seeded expense account already
+      //     used for inventory reductions (see recordSaleJournalEntry COGS leg)
+      //   Cr Inventory (1300)
+      // valued at the product's WAC (costPrice) × units written off — the same
+      // Σ(wac × qty) valuation COGS uses elsewhere.
+      const writeOffValue = roundMoney(Math.abs(adjustmentQuantity) * Number(product.costPrice));
+      if (writeOffValue > 0) {
+        const store = await tx.store.findUnique({
+          where: { id: storeId },
+          select: { organizationId: true },
+        });
+        const orgId = store?.organizationId || 'org_mbumah';
+        const accounts = await getAccountIds(orgId, [
+          ACCOUNT_CODES.COST_OF_GOODS_SOLD,
+          ACCOUNT_CODES.INVENTORY,
+        ]);
+        await tx.journalEntry.create({
+          data: {
+            storeId,
+            entryNumber: generateJournalEntryNumber(),
+            description: `Stock write-off (${writeOffCategory || 'UNCLASSIFIED'}) — ${product.name}`,
+            referenceType: 'STOCK_MOVEMENT',
+            referenceId: movement.id,
+            totalDebit: writeOffValue,
+            totalCredit: writeOffValue,
+            isPosted: true,
+            postedAt: new Date(),
+            createdBy: session.userId,
+            lines: {
+              create: [
+                {
+                  accountId: accounts.COST_OF_GOODS_SOLD,
+                  debit: writeOffValue,
+                  credit: 0,
+                  description: `Write-off loss for ${product.sku} — ${composedNotes}`,
+                },
+                {
+                  accountId: accounts.INVENTORY,
+                  debit: 0,
+                  credit: writeOffValue,
+                  description: `Inventory reduced by ${Math.abs(adjustmentQuantity)} units (write-off)`,
+                },
+              ],
+            },
+          },
+        });
+      }
     }
 
-    return movement;
+    return { ok: true as const, movement };
   });
+
+  if (!result.ok) {
+    // Typed conflict (mirrors the store-transfers ship/receive/cancel pattern):
+    // the atomic conditional decrement lost the race for available stock.
+    return Response.json(
+      {
+        success: false,
+        error: `Insufficient stock for "${product.name}". Needed: ${Math.abs(adjustmentQuantity)}.`,
+      },
+      { status: 409 },
+    );
+  }
+  const movement = result.movement;
 
   const updatedProduct = await db.product.findUnique({
     where: { id: productId },
@@ -355,7 +498,10 @@ async function createStockAdjustmentHandler(
     severity: LogSeverity.INFO,
     message: `Stock ${movementTypeValue.toLowerCase()}: ${product.name} by ${adjustmentQuantity > 0 ? '+' : ''}${adjustmentQuantity}. New stock: ${updatedProduct?.quantityInStock}`,
     storeId,
-    userId: performedBy || session.userId,
+    // AUDIT FIX (governance): audit actor is session-only (was `performedBy || session.userId`,
+    // letting the body override the recorded actor). Row carries actor, reason,
+    // quantity and product identity for traceability.
+    userId: session.userId,
     metadata: {
       productId,
       productName: product.name,
@@ -369,6 +515,7 @@ async function createStockAdjustmentHandler(
       unitCost: parsedUnitCost,
       reason: reasonText,
       note: noteText,
+      writeOffCategory: writeOffCategory || null,
     },
   });
 
@@ -376,7 +523,7 @@ async function createStockAdjustmentHandler(
     {
       success: true,
       data: {
-        ...result,
+        ...movement,
         previousStock: product.quantityInStock,
         newStock: updatedProduct?.quantityInStock,
         previousWac: product.costPrice,
