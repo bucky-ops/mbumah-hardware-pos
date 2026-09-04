@@ -212,11 +212,14 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
 
       // Cash drawer log for CASH payments.
       if (method === 'CASH') {
-        const lastDrawer = await tx.cashDrawerLog.findFirst({
+        // AUDIT FIX: read-latest-row lost-update race → aggregate _sum pattern
+        // (same as src/app/api/transactions/route.ts R6 remediation). The
+        // latest row's balance can be stale under concurrent drawer writes.
+        const drawerAgg = await tx.cashDrawerLog.aggregate({
           where: { storeId: plan.storeId },
-          orderBy: { createdAt: 'desc' },
+          _sum: { amount: true },
         });
-        const currentBalance = lastDrawer?.balance ? toNumber(lastDrawer.balance) : 0;
+        const currentBalance = Number(drawerAgg._sum.amount ?? 0);
         await tx.cashDrawerLog.create({
           data: {
             storeId: plan.storeId,

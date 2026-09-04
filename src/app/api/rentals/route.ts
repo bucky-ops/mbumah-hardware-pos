@@ -6,7 +6,7 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateJournalEntryNumber } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, RentalStatus, StockMovementType } from '@/lib/types';
-import { withSessionAuth } from '@/lib/auth';
+import { withSessionAuth, getSessionFromRequest } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -134,8 +134,21 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
     ratePerWeek,
     ratePerMonth,
     notes,
-    createdBy,
   } = body;
+
+  // AUDIT FIX (governance): the actor identity previously came from the request
+  // body (`createdBy`) — any caller could impersonate another user. Identity is
+  // now derived from the authenticated session (withSessionAuth above has
+  // already validated it; same in-handler pattern as gift-cards/debt routes).
+  const session = await getSessionFromRequest(request);
+  if (!session) {
+    // Defensive — withSessionAuth already returned 401 for unauthenticated calls.
+    return Response.json(
+      { success: false, error: 'Authentication required.' },
+      { status: 401 }
+    );
+  }
+  const actorId = session.userId;
 
   if (!storeId || !productId || !customerId || !expectedReturnDate || !ratePerDay) {
     return Response.json(
@@ -159,7 +172,10 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  if (product.quantityInStock < 1) {
+  // Advisory fast-fail only — the AUTHORITATIVE guard is the conditional
+  // updateMany inside the transaction below (AUDIT FIX: the old outside-tx
+  // check was a read-then-act race that concurrent rentals/checkouts could beat).
+  if (Number(product.quantityInStock) < 1) {
     return Response.json(
       { success: false, error: 'This rental item is currently out of stock.' },
       { status: 400 }
@@ -178,6 +194,21 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
   const dailyRate = parseFloat(String(ratePerDay));
 
   const result = await db.$transaction(async (tx) => {
+    // AUDIT FIX (oversell): this was a blind `product.update` decrement AFTER
+    // creating the rental, preceded by an outside-the-tx stock check — a
+    // concurrent rental/checkout of the last unit could drive stock negative
+    // and strand a phantom rental. The claim is now a conditional updateMany
+    // (row lock + atomic `gte 1` predicate re-check) that runs FIRST so a
+    // failed claim aborts before any rental row is written; count === 0 →
+    // typed 409 below. Same pattern as transactions/route.ts:583-591.
+    const claimed = await tx.product.updateMany({
+      where: { id: productId, quantityInStock: { gte: 1 } },
+      data: { quantityInStock: { decrement: 1 } },
+    });
+    if (claimed.count === 0) {
+      return { ok: false as const, reason: 'unavailable' as const };
+    }
+
     const rental = await tx.equipmentRental.create({
       data: {
         storeId,
@@ -199,11 +230,6 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
       },
     });
 
-        await tx.product.update({
-      where: { id: productId },
-      data: { quantityInStock: { decrement: 1 } },
-    });
-
         await tx.stockMovement.create({
       data: {
         storeId,
@@ -212,21 +238,28 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
         quantity: -1,
         referenceId: rental.id,
         notes: `Rental to ${customer.name}`,
-        performedBy: createdBy || null,
+        // AUDIT FIX (governance): session-derived identity (was `createdBy || null`
+        // from the request body).
+        performedBy: actorId,
       },
     });
 
         if (deposit > 0) {
-      const lastDrawerEntry = await tx.cashDrawerLog.findFirst({
+      // AUDIT FIX (integration): read-latest-row lost-update race — derive the
+      // running balance from the SUM of signed drawer amounts (same aggregate
+      // pattern as cash-drawer/route.ts and the R6 remediation), never the
+      // latest row's possibly-stale balance snapshot.
+      const balanceAgg = await tx.cashDrawerLog.aggregate({
         where: { storeId },
-        orderBy: { createdAt: 'desc' },
+        _sum: { amount: true },
       });
-      const currentBalance = lastDrawerEntry?.balance || 0;
+      const currentBalance = Number(balanceAgg._sum.amount ?? 0);
 
       await tx.cashDrawerLog.create({
         data: {
           storeId,
-          userId: createdBy || 'system',
+          // AUDIT FIX (governance): session-derived identity (was `createdBy || 'system'`).
+          userId: actorId,
           action: 'CASH_IN',
           amount: deposit,
           balance: currentBalance + deposit,
@@ -252,7 +285,8 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
           totalCredit: deposit,
           isPosted: true,
           postedAt: new Date(),
-          createdBy: createdBy || null,
+          // AUDIT FIX (governance): session-derived identity (was `createdBy || null`).
+          createdBy: actorId,
           lines: {
             create: [
               {
@@ -273,8 +307,17 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
       });
     }
 
-    return rental;
+    return { ok: true as const, rental };
   });
+
+  if (!result.ok) {
+    // Typed conflict: the atomic stock claim lost the race for the last unit.
+    return Response.json(
+      { success: false, error: 'Item not available for rental.' },
+      { status: 409 }
+    );
+  }
+  const rental = result.rental;
 
   await systemLog({
     action: 'RENTAL_CREATED',
@@ -282,9 +325,10 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
     severity: LogSeverity.INFO,
     message: `Rental created: ${product.name} to ${customer.name}`,
     storeId,
-    userId: createdBy || undefined,
+    // AUDIT FIX (governance): audit actor from session (was body `createdBy`).
+    userId: actorId,
     metadata: {
-      rentalId: result.id,
+      rentalId: rental.id,
       productId,
       customerId,
       securityDeposit: deposit,
@@ -292,7 +336,7 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
     },
   });
 
-  return Response.json({ success: true, data: result }, { status: 201 });
+  return Response.json({ success: true, data: rental }, { status: 201 });
 }
 
 export const GET = withErrorBoundary(withSessionAuth(getRentalsHandler), 'RENTALS_LIST');

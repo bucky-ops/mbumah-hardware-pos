@@ -284,6 +284,24 @@ export default function InvoicesTab() {
     },
   });
 
+  // AUDIT FIX (Task 3-e): dedicated quote-conversion mutation. The payload is
+  // byte-identical to before (server detects the conversion via invoiceType
+  // 'INVOICE' + "Converted from <quoteNumber>" notes), but feedback is
+  // quote-specific: server 409s (QUOTE_EXPIRED / QUOTE_ALREADY_CONVERTED) surface
+  // their server `error` message via the api client, and a failed conversion no
+  // longer resets the unrelated create form.
+  const convertMutation = useMutation({
+    mutationFn: invoicesApi.create,
+    onSuccess: () => {
+      toast.success('Quote converted to invoice');
+      queryClient.invalidateQueries({ queryKey: ['invoices', currentStoreId] });
+    },
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Convert quote to invoice');
+      toast.error(msg);
+    },
+  });
+
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => invoicesApi.update(id, data),
     onSuccess: (_, variables) => {
@@ -476,7 +494,23 @@ export default function InvoicesTab() {
 
   const handleConvertToInvoice = (invoice: InvoiceItem) => {
     if (invoice.invoiceType !== 'QUOTATION') return;
-    createMutation.mutate({
+    // AUDIT FIX (Task 3-e): UX pre-check — block obviously expired or
+    // already-converted quotes before posting. The server (409 QUOTE_EXPIRED /
+    // QUOTE_ALREADY_CONVERTED in invoices/route.ts) remains authoritative; this
+    // just avoids a doomed round-trip with clear feedback.
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const due = invoice.dueDate ? new Date(invoice.dueDate) : null;
+    const isExpired =
+      invoice.status === 'EXPIRED' ||
+      invoice.status === 'CONVERTED' ||
+      (due !== null && !Number.isNaN(due.getTime()) && due < todayStart);
+    if (isExpired) {
+      toast.error('Quote expired — revalidate prices before converting');
+      return;
+    }
+    if (convertMutation.isPending) return;
+    convertMutation.mutate({
       storeId: invoice.storeId,
       invoiceType: 'INVOICE',
       customerId: invoice.customerId,
@@ -821,7 +855,7 @@ export default function InvoicesTab() {
                               className="h-8 w-8 text-purple-600 hover:text-purple-700"
                               onClick={() => handleConvertToInvoice(inv)}
                               title="Convert to Invoice"
-                              disabled={createMutation.isPending}
+                              disabled={convertMutation.isPending}
                             >
                               <ArrowRightLeft className="h-4 w-4" />
                             </Button>
@@ -1436,7 +1470,7 @@ export default function InvoicesTab() {
                       variant="default"
                       size="sm"
                       onClick={() => { handleConvertToInvoice(invoiceDetail); setViewOpen(false); }}
-                      disabled={createMutation.isPending}
+                      disabled={convertMutation.isPending}
                       className="gap-1.5"
                     >
                       <ArrowRightLeft className="h-4 w-4" /> Convert to Invoice

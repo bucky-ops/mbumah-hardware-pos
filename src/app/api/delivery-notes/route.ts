@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -193,5 +194,13 @@ async function createDeliveryNoteHandler(...args: unknown[]): Promise<Response> 
   return Response.json({ success: true, data: deliveryNote }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getDeliveryNotesHandler, 'DELIVERY_NOTES_LIST');
-export const POST = withErrorBoundary(createDeliveryNoteHandler, 'DELIVERY_NOTES_CREATE');
+// AUDIT FIX (Task 3-d): session-validated (was Bearer-presence only).
+// Any store role — delivery workflows involve cashiers/drivers.
+export const GET = withErrorBoundary(
+  withSessionAuth(getDeliveryNotesHandler),
+  'DELIVERY_NOTES_LIST',
+);
+export const POST = withErrorBoundary(
+  withSessionAuth(createDeliveryNoteHandler),
+  'DELIVERY_NOTES_CREATE',
+);

@@ -30,10 +30,23 @@ import { LogSeverity, LogComponent, PaymentMethod, PaymentStatus } from '@/lib/t
 import { checkoutSchema, validateInput } from '@/lib/validations';
 import { calculateEarnedPoints, getTierFromPoints } from '@/lib/loyalty-utils';
 import { requireStoreAccess, type AuthSession } from '@/lib/auth';
+import { KES } from '@/lib/money';
 import { enqueueOutbox } from '@/lib/outbox';
 import { withSequenceRetry, isP2002 } from '@/lib/sequence';
 
 export const dynamic = 'force-dynamic';
+
+// AUDIT FIX (2): typed credit-limit failure. Thrown from INSIDE the checkout
+// transaction when the conditional credit-limit write claims 0 rows (i.e. a
+// concurrent sale consumed the customer's remaining headroom). It is caught
+// in the handler and surfaced as the same 400 the friendly pre-check returns,
+// so the POS treats a race-loser identically to a known-over-limit customer.
+class CreditLimitExceededError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CreditLimitExceededError';
+  }
+}
 
 async function getTransactionsHandler(
   request: NextRequest,
@@ -389,25 +402,82 @@ async function createTransactionHandler(
     };
   });
 
-  const totalAmount = subtotal - totalDiscount + taxAmount;
+  // AUDIT FIX (5): calculateLineTotal now returns HALF_EVEN-rounded 2dp
+  // values per line; re-round the accumulated header aggregates so float
+  // summation dust (Σ of 2dp doubles) can never be frozen into the Decimal
+  // columns. With all aggregates exact at 2dp, the journal balance identity
+  // holds exactly and the ±0.01 backstop in recordSaleJournalEntry can
+  // never trip.
+  subtotal = KES(subtotal).round().toNumber();
+  taxAmount = KES(taxAmount).round().toNumber();
+  totalDiscount = KES(totalDiscount).round().toNumber();
+
+  const totalAmount = KES(subtotal - totalDiscount + taxAmount).round().toNumber();
   // F5-1: discount cap — a discount larger than the line-discounted total
   // used to produce a NEGATIVE finalTotal (negative Payment, negative debt).
   const appliedDiscount = Math.max(0, Math.min(Number(discountAmount) || 0, totalAmount));
-  const finalTotal = totalAmount - appliedDiscount;
+  const finalTotal = KES(totalAmount - appliedDiscount).round().toNumber();
 
-  // F5-1: credit-limit check now uses SERVER-computed totals (it previously
-  // re-derived totals from client prices and could be bypassed).
-  if (paymentMethod === PaymentMethod.DEBT && customer) {
-    const totalTransactionAmount = finalTotal;
-    const availableCredit = customer.debtLimit - customer.currentDebtBalance;
-    if (totalTransactionAmount > availableCredit) {
+  // AUDIT FIX (3): explicit split-tender total validation. Σ(split legs)
+  // must equal the server-computed finalTotal within 0.005 — the route
+  // returns a clear 400 instead of relying on the deep ±0.01 journal-entry
+  // balance throw in recordSaleJournalEntry to catch a mismatched tender.
+  if (paymentMethod === PaymentMethod.SPLIT && paymentDetails?.splits) {
+    let splitSum = 0;
+    for (let i = 0; i < paymentDetails.splits.length; i++) {
+      const split = paymentDetails.splits[i];
+      const legAmount = Number(split.amount);
+      if (!Number.isFinite(legAmount) || legAmount <= 0) {
+        return Response.json(
+          { success: false, error: `Split payment ${i + 1} amount must be a positive number.` },
+          { status: 400 }
+        );
+      }
+      splitSum += legAmount;
+    }
+    const roundedSplitSum = KES(splitSum).round().toNumber();
+    if (Math.abs(roundedSplitSum - finalTotal) > 0.005) {
       return Response.json(
         {
           success: false,
-          error: `Customer credit limit exceeded. Available credit: KES ${availableCredit.toLocaleString()}, Transaction total: KES ${totalTransactionAmount.toLocaleString()}`,
+          error: `Split payment total (KES ${roundedSplitSum.toFixed(2)}) does not match the sale total (KES ${finalTotal.toFixed(2)}).`,
         },
         { status: 400 }
       );
+    }
+  }
+
+  // F5-1: credit-limit check now uses SERVER-computed totals (it previously
+  // re-derived totals from client prices and could be bypassed).
+  // AUDIT FIX (2): the check now also covers SPLIT tenders containing DEBT
+  // legs — those charge the customer's credit account exactly like a
+  // pure-DEBT sale. This pre-check is the friendly early 400; the
+  // authoritative guard is the conditional write inside the transaction
+  // below (TOCTOU-proof against concurrent sales to the same customer).
+  if (customer) {
+    const debtCharge =
+      paymentMethod === PaymentMethod.DEBT
+        ? finalTotal
+        : paymentMethod === PaymentMethod.SPLIT && paymentDetails?.splits
+          ? paymentDetails.splits
+              .filter((s) => s.method === PaymentMethod.DEBT)
+              .reduce((sum, s) => sum + Number(s.amount), 0)
+          : 0;
+    if (debtCharge > 0) {
+      const availableCredit = KES(customer.debtLimit)
+        .subtract(customer.currentDebtBalance)
+        .round()
+        .toNumber();
+      const roundedCharge = KES(debtCharge).round().toNumber();
+      if (roundedCharge > availableCredit) {
+        return Response.json(
+          {
+            success: false,
+            error: `Customer credit limit exceeded. Available credit: KES ${availableCredit.toLocaleString()}, Transaction total: KES ${roundedCharge.toLocaleString()}`,
+          },
+          { status: 400 }
+        );
+      }
     }
   }
 
@@ -479,7 +549,7 @@ async function createTransactionHandler(
   // Wrapped in withSequenceRetry: on a receipt-number P2002 the retry
   // regenerates the number and re-runs (SYS-7). On an idempotency-key
   // P2002 (concurrent same-key replay) the committed original is returned.
-  const { transaction: result, receiptNumber } = await withSequenceRetry(async () => {
+  const checkoutAttempt = await withSequenceRetry(async () => {
     const receiptNumber = generateReceiptNumber();
     try {
       const txResult = await runCheckoutTransaction(receiptNumber);
@@ -498,7 +568,36 @@ async function createTransactionHandler(
       }
       throw err;
     }
+  }).catch((err: unknown) => {
+    // AUDIT FIX (2): map the typed in-transaction credit-limit failure to the
+    // same client-facing 400 the friendly pre-check returns (a concurrent
+    // sale may have consumed the customer's remaining headroom).
+    if (err instanceof CreditLimitExceededError) {
+      return { creditLimitExceeded: true as const, message: err.message };
+    }
+    throw err;
   });
+
+  if ('creditLimitExceeded' in checkoutAttempt) {
+    await systemLog({
+      action: 'CREDIT_LIMIT_EXCEEDED',
+      component: LogComponent.POS,
+      severity: LogSeverity.WARN,
+      message: `Checkout aborted: ${checkoutAttempt.message}`,
+      storeId,
+      userId: cashierId,
+      metadata: {
+        customerId: customerId || null,
+        paymentMethod,
+      },
+    });
+    return Response.json(
+      { success: false, error: checkoutAttempt.message },
+      { status: 400 }
+    );
+  }
+
+  const { transaction: result, receiptNumber } = checkoutAttempt;
 
   // ══ The transaction body is factored into runCheckoutTransaction so the
   // ══ retry wrapper can regenerate the receipt number per attempt.
@@ -541,6 +640,11 @@ async function createTransactionHandler(
     });
 
     // 2 ── Record payment row(s) ──
+    // AUDIT FIX (1): a SPLIT may now include DEBT legs. The Payment row for
+    // EVERY leg (including DEBT, COMPLETED — same as the pure-DEBT path) is
+    // created here; the DEBT leg's DebtLedger charge + customer balance
+    // increment + A/R journal treatment are applied further below, inside
+    // this SAME interactive transaction.
     if (paymentMethod === PaymentMethod.SPLIT && paymentDetails?.splits) {
       for (const split of paymentDetails.splits) {
         await tx.payment.create({
@@ -607,7 +711,24 @@ async function createTransactionHandler(
     // 4 ── Payment-method-specific side effects ──
 
     // CASH → cash drawer ledger entry.
-    if (paymentMethod === PaymentMethod.CASH) {
+    // AUDIT FIX (4): a SPLIT tender's CASH portion previously never reached
+    // the drawer ledger, so the drawer balance drifted from reality whenever
+    // a sale was split across cash + another tender. The full-CASH path and
+    // the split's cash portion now share the SAME aggregate-then-insert
+    // pattern (running balance derived from Σ signed amounts — never
+    // read-latest-row, which loses concurrent updates).
+    const splitCashTotal =
+      paymentMethod === PaymentMethod.SPLIT && paymentDetails?.splits
+        ? paymentDetails.splits
+            .filter((s) => s.method === PaymentMethod.CASH)
+            .reduce((sum, s) => sum + Number(s.amount), 0)
+        : 0;
+    const cashDrawerAmount =
+      paymentMethod === PaymentMethod.CASH
+        ? finalTotal
+        : KES(splitCashTotal).round().toNumber();
+
+    if (cashDrawerAmount > 0) {
       // R6 remediation: running balance derived from the SUM of signed
       // amounts instead of read-latest-row + write — the old pattern lost
       // updates whenever two cash events ran concurrently.
@@ -615,16 +736,19 @@ async function createTransactionHandler(
         where: { storeId },
         _sum: { amount: true },
       });
-      const runningBalance = Number(agg._sum.amount ?? 0) + Number(finalTotal);
+      const runningBalance = Number(agg._sum.amount ?? 0) + Number(cashDrawerAmount);
 
       await tx.cashDrawerLog.create({
         data: {
           storeId,
           userId: cashierId,
           action: 'SALE',
-          amount: finalTotal,
+          amount: cashDrawerAmount,
           balance: runningBalance,
-          notes: `Sale ${receiptNumber}`,
+          notes:
+            paymentMethod === PaymentMethod.CASH
+              ? `Sale ${receiptNumber}`
+              : `Split-tender cash portion of sale ${receiptNumber}`,
         },
       });
     }
@@ -684,10 +808,34 @@ async function createTransactionHandler(
         },
       });
 
-      await tx.customer.update({
-        where: { id: customer.id },
-        data: { currentDebtBalance: { increment: finalTotal } },
+      // AUDIT FIX (2) TOCTOU: the old code did a pre-check OUTSIDE the tx
+      // followed by an UNCONDITIONAL `increment` inside it — two concurrent
+      // DEBT sales could both pass the check and push the customer past
+      // their limit. The `lte` predicate makes the limit check and the
+      // increment ONE atomic operation under the row lock: only checkouts
+      // that keep `balance + charge ≤ debtLimit` commit; a losing checkout
+      // claims 0 rows and aborts the whole sale (typed error → 400).
+      // Schema note: currentDebtBalance/debtLimit are Prisma `Decimal`
+      // (decimal.js) columns — headroom is computed via `KES` (HALF_EVEN,
+      // 2dp) so no float dust can skew the predicate.
+      const chargeAmount = KES(finalTotal).round().toNumber();
+      const headroom = KES(customer.debtLimit).subtract(chargeAmount).round().toNumber();
+      const claimedCredit = await tx.customer.updateMany({
+        where: {
+          id: customer.id,
+          currentDebtBalance: { lte: headroom },
+        },
+        data: { currentDebtBalance: { increment: chargeAmount } },
       });
+      if (claimedCredit.count === 0) {
+        throw new CreditLimitExceededError(
+          `Customer credit limit exceeded. Available credit: KES ${KES(customer.debtLimit)
+            .subtract(customer.currentDebtBalance)
+            .round()
+            .toNumber()
+            .toLocaleString()}, Charge: KES ${chargeAmount.toLocaleString()} (a concurrent sale may have used the remaining credit).`,
+        );
+      }
     }
 
     // GIFT_CARD → redeem the balance with an ATOMIC conditional decrement.
@@ -798,6 +946,70 @@ async function createTransactionHandler(
       }
     }
 
+    // AUDIT FIX (1): SPLIT tender with a DEBT leg previously recorded ONLY a
+    // COMPLETED Payment row — no DebtLedger charge row, no customer balance
+    // increment, and no A/R debit in the journal. The customer received
+    // goods on credit that existed nowhere in the debt system, and the JE
+    // was one-sided. Each DEBT leg now runs the EXACT same treatment as the
+    // pure-DEBT path, inside this SAME interactive transaction:
+    //   (a) credit-limit enforcement via the conditional optimistic write
+    //       (AUDIT FIX 2 pattern — TOCTOU-proof),
+    //   (b) a DebtLedger charge row,
+    //   (c) a customer.currentDebtBalance increment,
+    //   (d) the A/R debit is routed via paymentBreakdown.credit below
+    //       (identical to the pure-DEBT journal treatment).
+    // The Payment row itself was already created in step 2 above.
+    if (paymentMethod === PaymentMethod.SPLIT && paymentDetails?.splits) {
+      for (const split of paymentDetails.splits) {
+        if (split.method !== PaymentMethod.DEBT) continue;
+        if (!customer) {
+          // Defense in depth — the checkout schema refinement already
+          // requires customerId for DEBT split legs; the customer row is
+          // re-checked here in case it was deleted after the pre-check.
+          throw new Error('Customer is required for every DEBT split payment.');
+        }
+        const splitAmount = KES(split.amount).round().toNumber();
+
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + 30);
+        await tx.debtLedger.create({
+          data: {
+            storeId,
+            customerId: customer.id,
+            transactionId: transaction.id,
+            amountOwed: splitAmount,
+            amountPaid: 0,
+            balance: splitAmount,
+            dueDate,
+            status: 'OUTSTANDING',
+            agingBucket: 'CURRENT',
+            notes: `Auto-created from split-tender payment on sale ${receiptNumber}`,
+          },
+        });
+
+        // Conditional optimistic write (see AUDIT FIX 2): the predicate is
+        // re-evaluated under the row lock, so it accounts for prior DEBT
+        // legs in this same tx AND committed concurrent sales.
+        const headroom = KES(customer.debtLimit).subtract(splitAmount).round().toNumber();
+        const claimedCredit = await tx.customer.updateMany({
+          where: {
+            id: customer.id,
+            currentDebtBalance: { lte: headroom },
+          },
+          data: { currentDebtBalance: { increment: splitAmount } },
+        });
+        if (claimedCredit.count === 0) {
+          throw new CreditLimitExceededError(
+            `Customer credit limit exceeded for ${customer.name}. Available credit: KES ${KES(customer.debtLimit)
+              .subtract(customer.currentDebtBalance)
+              .round()
+              .toNumber()
+              .toLocaleString()}, Split charge: KES ${splitAmount.toLocaleString()}.`,
+          );
+        }
+      }
+    }
+
     // ── F2-1: claim serialized assets (IN_STOCK → SOLD) ──
     // Conditional updateMany per serial = the double-sell lock: only ONE
     // concurrent checkout can flip a serial out of IN_STOCK; the loser
@@ -825,7 +1037,7 @@ async function createTransactionHandler(
     //   SALES_DISCOUNTS contra-revenue account (proper GAAP accounting).
     // Balance identity:
     //   Σ debits (payments + discount + COGS) = Σ credits (revenue + tax + inventory)
-    const grossRevenue = subtotal - totalDiscount;
+    const grossRevenue = KES(subtotal - totalDiscount).round().toNumber();
     const cogsAmount = saleItemsData.reduce(
       (sum: number, item: { costPrice: number; quantity: number; isRentalItem: boolean }) =>
         item.isRentalItem ? sum : sum + (item.costPrice || 0) * item.quantity,
@@ -856,6 +1068,13 @@ async function createTransactionHandler(
           paymentBreakdown.mpesa = (paymentBreakdown.mpesa || 0) + splitAmount;
         } else if (split.method === PaymentMethod.GIFT_CARD) {
           paymentBreakdown.giftCard = (paymentBreakdown.giftCard || 0) + splitAmount;
+        } else if (split.method === PaymentMethod.DEBT) {
+          // AUDIT FIX (1d): a DEBT split leg debits Accounts Receivable —
+          // the exact journal treatment the pure-DEBT path gets via
+          // `paymentBreakdown.credit = finalTotal`. Without this line the
+          // JE was unbalanced by the DEBT leg's amount and the ±0.01
+          // backstop aborted the whole sale.
+          paymentBreakdown.credit = (paymentBreakdown.credit || 0) + splitAmount;
         }
       }
     }

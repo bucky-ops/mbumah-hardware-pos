@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -297,6 +298,17 @@ async function deleteCustomerCreditHandler(...args: unknown[]): Promise<Response
   });
 }
 
-export const GET = withErrorBoundary(getCustomerCreditHandler, 'CUSTOMER_CREDIT_DETAIL');
-export const PUT = withErrorBoundary(updateCustomerCreditHandler, 'CUSTOMER_CREDIT_UPDATE');
-export const DELETE = withErrorBoundary(deleteCustomerCreditHandler, 'CUSTOMER_CREDIT_VOID');
+// AUDIT FIX (Task 3-d): GET = any store role; PUT/DELETE (balance recalc, void)
+// = manager-or-above.
+export const GET = withErrorBoundary(
+  withSessionAuth(getCustomerCreditHandler),
+  'CUSTOMER_CREDIT_DETAIL',
+);
+export const PUT = withErrorBoundary(
+  withSessionAuth(updateCustomerCreditHandler, { roles: MANAGER_PLUS_ROLES }),
+  'CUSTOMER_CREDIT_UPDATE',
+);
+export const DELETE = withErrorBoundary(
+  withSessionAuth(deleteCustomerCreditHandler, { roles: MANAGER_PLUS_ROLES }),
+  'CUSTOMER_CREDIT_VOID',
+);

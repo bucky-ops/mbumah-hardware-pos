@@ -3,6 +3,7 @@
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
+import { withSessionAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -141,4 +142,9 @@ async function getFastMovingProductsHandler(...args: unknown[]): Promise<Respons
   });
 }
 
-export const GET = withErrorBoundary(getFastMovingProductsHandler, 'FAST_MOVING_REPORT');
+// AUDIT FIX (Task 3-d): session-validated (was Bearer-presence only).
+// Any store role — stock-turnover visibility is operational, not margin-bearing.
+export const GET = withErrorBoundary(
+  withSessionAuth(getFastMovingProductsHandler),
+  'FAST_MOVING_REPORT',
+);

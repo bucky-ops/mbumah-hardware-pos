@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -175,5 +176,13 @@ async function createCustomerCreditHandler(...args: unknown[]): Promise<Response
   return Response.json({ success: true, data: credit }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getCustomerCreditsHandler, 'CUSTOMER_CREDITS_LIST');
-export const POST = withErrorBoundary(createCustomerCreditHandler, 'CUSTOMER_CREDITS_CREATE');
+// AUDIT FIX (Task 3-d): GET = any store role; POST mutates the customer credit
+// balance (ledger) = manager-or-above.
+export const GET = withErrorBoundary(
+  withSessionAuth(getCustomerCreditsHandler),
+  'CUSTOMER_CREDITS_LIST',
+);
+export const POST = withErrorBoundary(
+  withSessionAuth(createCustomerCreditHandler, { roles: MANAGER_PLUS_ROLES }),
+  'CUSTOMER_CREDITS_CREATE',
+);

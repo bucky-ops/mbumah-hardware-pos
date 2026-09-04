@@ -9,11 +9,27 @@
 // The middleware (src/middleware.ts) guarantees a Bearer token header is
 // present on protected routes. These helpers perform the full DB-backed
 // validation.
+//
+// ── Enforcement model (defense-in-depth) ────────────────────────────────────
+//
+//   Layer 1  src/proxy.ts            — cheap edge check: Bearer PRESENCE only
+//                                      (rejects empty headers, not junk tokens).
+//   Layer 2  these wrappers          — DB-backed session validation on every
+//                                      route (401) + optional role membership
+//                                      (403, SecurityEvent-style log).
+//   Layer 3  assertPermission()      — fine-grained PERMISSION_MATRIX
+//                                      action/resource checks (see
+//                                      src/lib/types.ts + use-permissions.ts).
+//   Layer 4  src/lib/db.ts tenancy   — ORM-level storeId filtering so a valid
+//                                      session can only touch its own store.
+//
+// A route is properly guarded only when Layers 2+ are applied in-file; the
+// proxy is a convenience, never the security boundary.
 
 import { type NextRequest } from 'next/server';
 import { db, runWithTenant, runWithoutTenant } from '@/lib/db';
 import { systemLog } from '@/lib/logger';
-import { LogSeverity, LogComponent } from '@/lib/types';
+import { LogSeverity, LogComponent, hasPermission, type UserRole } from '@/lib/types';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -91,6 +107,19 @@ function runWithSessionTenant<T>(
   }
   return runWithTenant(session.storeId, fn);
 }
+
+// ── Shared role sets (PERMISSION_MATRIX-aligned) ─────────────────────────────
+
+/** Manager-or-above: matrix grants create/update on catalog, customers,
+ *  campaigns, tax config only to these roles (CASHIER/ACCOUNTANT excluded). */
+export const MANAGER_PLUS_ROLES: readonly string[] = [
+  'SUPER_ADMIN',
+  'STORE_OWNER',
+  'BRANCH_MANAGER',
+];
+
+/** Owner-or-above: org-level configuration (stores/branches, system config). */
+export const OWNER_ROLES: readonly string[] = ['SUPER_ADMIN', 'STORE_OWNER'];
 
 // ── Route wrapper: requireAuth ───────────────────────────────────────────────
 
@@ -201,10 +230,36 @@ export function requireRole(...roles: string[]) {
  *     'EXPENSES_CREATE',
  *   );
  */
+/** Options accepted by `withSessionAuth` / `requireStoreAccess` (Task 3-d).
+ *  `roles` — allowed role names; SUPER_ADMIN always bypasses. */
+export interface SessionGuardOptions {
+  roles?: readonly string[];
+}
+
+/** Type guard: distinguishes the legacy positional role-list form from the
+ *  options object (Array.isArray cannot narrow `readonly string[]`). */
+function isRoleList(
+  value: readonly string[] | SessionGuardOptions | undefined
+): value is readonly string[] {
+  return Array.isArray(value);
+}
+
+/** Normalize the legacy positional `readonly string[]` form and the new
+ *  `{ roles }` options-object form into one shape. Backward compatible. */
+function normalizeRoleOptions(
+  rolesOrOptions?: readonly string[] | SessionGuardOptions
+): SessionGuardOptions {
+  if (!rolesOrOptions) return {};
+  if (isRoleList(rolesOrOptions)) return { roles: rolesOrOptions };
+  return rolesOrOptions;
+}
+
 export function withSessionAuth(
   handler: FinancialHandler,
-  allowedRoles?: readonly string[]
+  rolesOrOptions?: readonly string[] | SessionGuardOptions
 ): FinancialHandler {
+  const { roles: allowedRoles } = normalizeRoleOptions(rolesOrOptions);
+
   return async (...args: unknown[]): Promise<Response> => {
     const request = args[0] as NextRequest;
     const session = await getSessionFromRequest(request);
@@ -216,7 +271,12 @@ export function withSessionAuth(
       );
     }
 
-    if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(session.role)) {
+    if (
+      allowedRoles &&
+      allowedRoles.length > 0 &&
+      session.role !== 'SUPER_ADMIN' && // SUPER_ADMIN always bypasses role gates
+      !allowedRoles.includes(session.role)
+    ) {
       try {
         await systemLog({
           action: 'ACCESS_DENIED',
@@ -236,7 +296,10 @@ export function withSessionAuth(
         /* logging must never block the auth decision */
       }
       return Response.json(
-        { success: false, error: 'Insufficient permissions.' },
+        {
+          success: false,
+          error: `Insufficient permissions. Requires one of: ${allowedRoles.join(', ')}.`,
+        },
         { status: 403 }
       );
     }
@@ -263,7 +326,12 @@ type StoreScopedHandler = (
  * export const GET = requireStoreAccess(async (request, session) => { ... });
  * ```
  */
-export function requireStoreAccess(handler: StoreScopedHandler) {
+export function requireStoreAccess(
+  handler: StoreScopedHandler,
+  rolesOrOptions?: readonly string[] | SessionGuardOptions
+) {
+  const { roles: allowedRoles } = normalizeRoleOptions(rolesOrOptions);
+
   return async (...args: unknown[]): Promise<Response> => {
     const request = args[0] as NextRequest;
     const session = await getSessionFromRequest(request);
@@ -272,6 +340,41 @@ export function requireStoreAccess(handler: StoreScopedHandler) {
       return Response.json(
         { success: false, error: 'Authentication required.' },
         { status: 401 }
+      );
+    }
+
+    // Task 3-d: optional role gate, enforced after session validation and
+    // before store-access resolution. SUPER_ADMIN always bypasses.
+    if (
+      allowedRoles &&
+      allowedRoles.length > 0 &&
+      session.role !== 'SUPER_ADMIN' &&
+      !allowedRoles.includes(session.role)
+    ) {
+      try {
+        await systemLog({
+          action: 'ACCESS_DENIED',
+          component: LogComponent.AUTH,
+          severity: LogSeverity.WARN,
+          message: `User ${session.email} (role: ${session.role}) attempted access requiring: ${allowedRoles.join(', ')}`,
+          userId: session.userId,
+          storeId: session.storeId || undefined,
+          metadata: {
+            requiredRoles: allowedRoles,
+            actualRole: session.role,
+            path: new URL(request.url).pathname,
+            method: request.method,
+          },
+        });
+      } catch {
+        /* ignore logging errors */
+      }
+      return Response.json(
+        {
+          success: false,
+          error: `Insufficient permissions. Requires one of: ${allowedRoles.join(', ')}.`,
+        },
+        { status: 403 }
       );
     }
 
@@ -326,6 +429,53 @@ export function requireStoreAccess(handler: StoreScopedHandler) {
       handler(request, session, ...args.slice(1))
     );
   };
+}
+
+// ── Permission-matrix enforcement (Task 3-d) ───────────────────────────────────
+//
+// The PERMISSION_MATRIX in src/lib/types.ts was previously consulted only by
+// the client (use-permissions.ts). `assertPermission` exposes it server-side
+// so handlers can make fine-grained action/resource decisions; SUPER_ADMIN is
+// always allowed (the matrix already lists every action for that role, but the
+// bypass is kept explicit so new matrix entries can never lock out admins).
+
+/** Check `action` on `resource` for a session's role against
+ *  PERMISSION_MATRIX. Returns `{ allowed, reason? }` — never throws. */
+export function assertPermission(
+  session: { role: string },
+  action: string,
+  resource: string
+): { allowed: boolean; reason?: string } {
+  if (session.role === 'SUPER_ADMIN') return { allowed: true };
+
+  const allowed = hasPermission(session.role as UserRole, resource, action);
+  return allowed
+    ? { allowed: true }
+    : {
+        allowed: false,
+        reason: `Role '${session.role}' lacks permission '${action}' on resource '${resource}'.`,
+      };
+}
+
+/** Convenience: `assertPermission` in the file's Response-error style.
+ *  Returns a ready-to-return 403 Response when denied, `null` when allowed:
+ *
+ * ```ts
+ * const denied = hasPermissionOr403(session, 'update', 'products');
+ * if (denied) return denied;
+ * ```
+ */
+export function hasPermissionOr403(
+  session: { role: string },
+  action: string,
+  resource: string
+): Response | null {
+  const result = assertPermission(session, action, resource);
+  if (result.allowed) return null;
+  return Response.json(
+    { success: false, error: result.reason ?? 'Insufficient permissions.' },
+    { status: 403 }
+  );
 }
 
 // ── Financial-route auth wrapper ─────────────────────────────────────────────

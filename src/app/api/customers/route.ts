@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { createCustomerSchema, validateInput } from '@/lib/validations';
+import { withSessionAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -149,5 +150,10 @@ async function createCustomerHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: customer }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getCustomersHandler, 'CUSTOMERS_LIST');
-export const POST = withErrorBoundary(createCustomerHandler, 'CUSTOMERS_CREATE');
+// AUDIT FIX (Task 3-d): GET = any store role. POST intentionally allows ALL
+// store roles (integration decision): walk-in customer creation is a core POS
+// checkout workflow and the audit deny-list for cashiers covers price edits,
+// profit visibility, invoice deletion and user administration — not customer
+// intake. Customer edits/deletes remain manager-or-above (customers/[id]).
+export const GET = withErrorBoundary(withSessionAuth(getCustomersHandler), 'CUSTOMERS_LIST');
+export const POST = withErrorBoundary(withSessionAuth(createCustomerHandler), 'CUSTOMERS_CREATE');

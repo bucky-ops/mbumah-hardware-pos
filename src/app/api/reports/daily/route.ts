@@ -22,14 +22,37 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
-import { requireStoreAccess, type AuthSession } from '@/lib/auth';
+import { requireStoreAccess, MANAGER_PLUS_ROLES, type AuthSession } from '@/lib/auth';
 import {
   generateDailyReportCSV,
   formatISODate,
   type DailyReportData,
 } from '@/lib/report-utils';
+// AUDIT FIX (Task 3-f): unified, VAT-exclusive revenue/profit formulas
+// (single source of truth — see src/lib/profit.ts).
+import { grossRevenue, PROFIT_FORMULA_VERSION } from '@/lib/profit';
+import { KES } from '@/lib/money';
 
 export const dynamic = 'force-dynamic';
+
+// ── AUDIT FIX (Task 3-d): profit/margin redaction at the response boundary ──
+// Task 3-f owns the aggregation above; this block ONLY redacts profit/margin
+// fields for callers below branch-manager level (e.g. CASHIER). No-op today
+// (DailyReportData carries no profit fields) but keeps the response safe if
+// the unified profit formula lands here later. JSON drops the keys entirely.
+const PROFIT_FIELD_KEYS = new Set(['grossProfit', 'profitMargin', 'profit', 'margin', 'costOfGoods']);
+function redactProfitFields<T>(value: T): T {
+  if (value instanceof Date) return value;
+  if (Array.isArray(value)) return value.map((v) => redactProfitFields(v)) as unknown as T;
+  if (value !== null && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      out[key] = PROFIT_FIELD_KEYS.has(key) ? undefined : redactProfitFields(val);
+    }
+    return out as T;
+  }
+  return value;
+}
 
 async function getDailyReportHandler(
   request: NextRequest,
@@ -114,21 +137,36 @@ async function getDailyReportHandler(
     }),
   ]);
 
-  // ── Sales totals ──
-  const totalRevenue = Number(saleAggregate._sum.totalAmount || 0);
-  const totalSubtotal = Number(saleAggregate._sum.subtotal || 0);
-  const totalTax = Number(saleAggregate._sum.taxAmount || 0);
-  const totalDiscount = Number(saleAggregate._sum.discountAmount || 0);
+  // ── Sales totals (AUDIT FIX Task 3-f — canonical formulas, see src/lib/profit.ts)
+  // totalRevenue is now VAT-EXCLUSIVE (totalAmount − taxAmount) so this report
+  // agrees with sales-summary, revenue-trend and the tax-filings server
+  // recompute on what "revenue" means. Header identity still holds:
+  //   totalRevenue = totalSubtotal − totalDiscount (stored totals are net of
+  //   line discounts and inclusive of VAT; stripping VAT yields net revenue).
+  // NOTE for end-of-day reconciliation: the CASH figures to compare against a
+  // counted drawer are the TAX-INCLUSIVE tender amounts in `paymentBreakdown`
+  // (what customers actually handed over), NOT totalRevenue.
+  const storedTenderTotal = KES(saleAggregate._sum.totalAmount || 0).round().toNumber();
+  const totalTax = KES(saleAggregate._sum.taxAmount || 0).round().toNumber();
+  const totalRevenue = grossRevenue(storedTenderTotal, totalTax);
+  const totalSubtotal = KES(saleAggregate._sum.subtotal || 0).round().toNumber();
+  const totalDiscount = KES(saleAggregate._sum.discountAmount || 0).round().toNumber();
   const transactionCount = saleAggregate._count;
-  const avgTransactionValue = Number(saleAggregate._avg.totalAmount || 0);
+  // Average now on the same VAT-exclusive basis as totalRevenue so that
+  // avgTransactionValue × transactionCount ≈ totalRevenue still holds.
+  const avgTransactionValue = transactionCount > 0
+    ? KES(totalRevenue).divide(transactionCount).round().toNumber()
+    : 0;
 
-  // ── Returns + voids ──
+  // ── Returns + voids (tender amounts, kept tax-inclusive; HALF_EVEN-rounded) ──
   const returnsCount = refundAggregate._count;
-  const returnsRefunded = Number(refundAggregate._sum.totalAmount || 0);
+  const returnsRefunded = KES(refundAggregate._sum.totalAmount || 0).round().toNumber();
   const voidedCount = voidAggregate._count;
-  const voidedAmount = Number(voidAggregate._sum.totalAmount || 0);
+  const voidedAmount = KES(voidAggregate._sum.totalAmount || 0).round().toNumber();
 
   // ── Payment-method breakdown (SALE transactions only) ──
+  // AUDIT FIX (Task 3-f): amounts stay TAX-INCLUSIVE — tender collected, the
+  // figure to reconcile against the cash drawer.
   const paymentMap: Record<string, { count: number; amount: number }> = {};
   for (const tx of allTransactions) {
     if (tx.transactionType !== 'SALE') continue;
@@ -136,15 +174,15 @@ async function getDailyReportHandler(
     const method = tx.paymentMethod || 'CASH';
     if (!paymentMap[method]) paymentMap[method] = { count: 0, amount: 0 };
     paymentMap[method].count += 1;
-    paymentMap[method].amount += Number(tx.totalAmount);
+    paymentMap[method].amount += KES(tx.totalAmount).toNumber();
   }
   const paymentBreakdown = Object.entries(paymentMap).map(([method, v]) => ({
     method,
     count: v.count,
-    amount: v.amount,
+    amount: KES(v.amount).round().toNumber(),
   }));
 
-  // ── Cashier breakdown ──
+  // ── Cashier breakdown (tender amounts, tax-inclusive — reconciliation basis) ──
   const cashierMap: Record<string, { cashierId: string; cashierName: string; transactionCount: number; revenue: number }> = {};
   for (const tx of allTransactions) {
     if (tx.transactionType !== 'SALE') continue;
@@ -159,9 +197,13 @@ async function getDailyReportHandler(
       };
     }
     cashierMap[id].transactionCount += 1;
-    cashierMap[id].revenue += Number(tx.totalAmount);
+    cashierMap[id].revenue += KES(tx.totalAmount).toNumber();
   }
-  const cashierBreakdown = Object.values(cashierMap).sort((a, b) => b.revenue - a.revenue);
+  // Key kept as `revenue` for client compatibility; value is the cashier's
+  // tax-inclusive tender collected (HALF_EVEN-rounded at the boundary).
+  const cashierBreakdown = Object.values(cashierMap)
+    .map((c) => ({ ...c, revenue: KES(c.revenue).round().toNumber() }))
+    .sort((a, b) => b.revenue - a.revenue);
 
   const report: DailyReportData = {
     date: dayStart.toISOString(),
@@ -190,6 +232,11 @@ async function getDailyReportHandler(
     cashierBreakdown,
   };
 
+  // AUDIT FIX (Task 3-d): strip profit/margin fields for below-manager callers
+  // (response boundary only — aggregation untouched).
+  const viewerIsManagerPlus = MANAGER_PLUS_ROLES.includes(session.role);
+  const outbound = viewerIsManagerPlus ? report : redactProfitFields(report);
+
   // ── Audit log ──
   await systemLog({
     action: 'REPORT_GENERATED',
@@ -201,6 +248,7 @@ async function getDailyReportHandler(
     metadata: {
       reportType: 'DAILY_RECONCILIATION',
       format,
+      profitFormulaVersion: PROFIT_FORMULA_VERSION, // AUDIT FIX (Task 3-f): lineage tracking
       date: formatISODate(dayStart),
       transactionCount,
       totalRevenue,
@@ -211,7 +259,7 @@ async function getDailyReportHandler(
 
   // ── CSV response ──
   if (format === 'csv') {
-    const csv = generateDailyReportCSV(report);
+    const csv = generateDailyReportCSV(outbound);
     const filename = `daily_report_${formatISODate(dayStart)}.csv`;
     return new Response(csv, {
       status: 200,
@@ -222,7 +270,7 @@ async function getDailyReportHandler(
     });
   }
 
-  return Response.json({ success: true, data: report });
+  return Response.json({ success: true, data: outbound });
 }
 
 export const GET = withErrorBoundary(

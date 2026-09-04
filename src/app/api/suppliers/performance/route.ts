@@ -6,6 +6,7 @@
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
+import { requireStoreAccess } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -191,4 +192,9 @@ async function getSuppliersPerformanceHandler(...args: unknown[]): Promise<Respo
   });
 }
 
-export const GET = withErrorBoundary(getSuppliersPerformanceHandler, 'SUPPLIERS_PERFORMANCE');
+// AUDIT FIX (Task 3-d): session-validated + storeId-param scoping
+// (requireStoreAccess). Any store role — read-only supplier metrics.
+export const GET = withErrorBoundary(
+  requireStoreAccess(getSuppliersPerformanceHandler),
+  'SUPPLIERS_PERFORMANCE',
+);

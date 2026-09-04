@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env'; // Eager env validation — fails fast on missing DATABASE_URL
 import { withErrorBoundary } from '@/lib/logger';
+import { requireStoreAccess } from '@/lib/auth';
 
 // Force this route to be dynamically rendered at request time.
 // This prevents Next.js from attempting to collect page data / statically
@@ -230,4 +231,9 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const GET = withErrorBoundary(getDashboardHandler, 'DASHBOARD');
+// AUDIT FIX (Task 3-d): session-validated + storeId-param scoping
+// (requireStoreAccess). Any store role.
+export const GET = withErrorBoundary(
+  requireStoreAccess(getDashboardHandler),
+  'DASHBOARD',
+);

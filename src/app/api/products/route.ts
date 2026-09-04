@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateSKU } from '@/lib/helpers';
 import { LogSeverity, LogComponent } from '@/lib/types';
-import { requireStoreAccess, type AuthSession } from '@/lib/auth';
+import { requireStoreAccess, MANAGER_PLUS_ROLES, type AuthSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -195,7 +195,8 @@ export const GET = withErrorBoundary(
   requireStoreAccess(getProductsHandler),
   'PRODUCTS_LIST',
 );
+// AUDIT FIX (Task 3-d): product create = manager-or-above per PERMISSION_MATRIX.
 export const POST = withErrorBoundary(
-  requireStoreAccess(createProductHandler),
+  requireStoreAccess(createProductHandler, { roles: MANAGER_PLUS_ROLES }),
   'PRODUCTS_CREATE',
 );

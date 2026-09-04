@@ -3,6 +3,7 @@
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
+import { withSessionAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,4 +62,9 @@ async function searchProductsHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: products });
 }
 
-export const GET = withErrorBoundary(searchProductsHandler, 'PRODUCTS_SEARCH');
+// AUDIT FIX (Task 3-d): session-validated (was Bearer-presence only).
+// Any store role — POS product search is a CASHIER 'products: read' action.
+export const GET = withErrorBoundary(
+  withSessionAuth(searchProductsHandler),
+  'PRODUCTS_SEARCH',
+);

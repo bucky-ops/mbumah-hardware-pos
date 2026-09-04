@@ -1,9 +1,21 @@
 // GET /api/financial/revenue-trend (daily revenue, generates demo data only if explicitly requested)
+//
+// AUDIT FIX (Task 3-f): the `revenue` series (and the summary built on it) is
+// now VAT-EXCLUSIVE via the canonical grossRevenue(totalAmount, taxAmount)
+// helper (src/lib/profit.ts) — previously it summed the tax-inclusive
+// totalAmount. Chart series KEYS are unchanged (client-safe); only values
+// changed basis. `expenses` remain ALL EXPENSE-type journal debits (which
+// include account 5000 COGS), so the figure exposed under the legacy
+// `grossProfit` key is a net-profit-style number — see the summary block.
+// DIVERGENCE NOTE: `byMethod` stays TAX-INCLUSIVE — it is tender collected
+// per payment method, not revenue.
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { withFinancialAuth, FINANCIAL_ROLES } from '@/lib/auth';
+import { grossRevenue, grossProfit, netProfit, PROFIT_FORMULA_VERSION } from '@/lib/profit';
+import { KES } from '@/lib/money';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,6 +49,7 @@ async function getRevenueTrendHandler(...args: unknown[]): Promise<Response> {
     select: {
       createdAt: true,
       totalAmount: true,
+      taxAmount: true, // AUDIT FIX (Task 3-f): needed to derive VAT-exclusive revenue
       paymentMethod: true,
     },
   });
@@ -72,25 +85,36 @@ async function getRevenueTrendHandler(...args: unknown[]): Promise<Response> {
     dailyRevenue[key] = { revenue: 0, expenses: 0, transactions: 0, byMethod: {} };
   }
 
-    let hasRealData = false;
+  // AUDIT FIX (Task 3-f): the old accumulators did `number += tx.totalAmount`
+  // where totalAmount is a Prisma Decimal — Decimal.valueOf() returns a STRING,
+  // so `0 + Decimal` string-concatenated ("0123.45", then "0123.45123.46"…).
+  // Math.round downstream masked it for revenue/expenses, but `byMethod` leaked
+  // the corrupted strings straight into the JSON. All accumulation is now
+  // explicit numeric conversion + HALF_EVEN rounding at the output boundary.
+  let hasRealData = false;
   for (const tx of transactions) {
     const key = new Date(tx.createdAt).toISOString().split('T')[0];
     if (dailyRevenue[key]) {
       hasRealData = true;
-      dailyRevenue[key].revenue += tx.totalAmount;
+      // VAT-exclusive revenue per transaction (canonical basis).
+      dailyRevenue[key].revenue += grossRevenue(tx.totalAmount, tx.taxAmount);
       dailyRevenue[key].transactions += 1;
-      dailyRevenue[key].byMethod[tx.paymentMethod] = (dailyRevenue[key].byMethod[tx.paymentMethod] || 0) + tx.totalAmount;
+      // Tender per method stays TAX-INCLUSIVE (see header divergence note).
+      const tender = KES(tx.totalAmount).toNumber();
+      dailyRevenue[key].byMethod[tx.paymentMethod] = (dailyRevenue[key].byMethod[tx.paymentMethod] || 0) + tender;
     }
   }
 
-    for (const line of expenseLines) {
+  for (const line of expenseLines) {
     const key = new Date(line.journalEntry.entryDate).toISOString().split('T')[0];
     if (dailyRevenue[key]) {
-      dailyRevenue[key].expenses += line.debit;
+      dailyRevenue[key].expenses += KES(line.debit).toNumber();
     }
   }
 
   // If no real data and demo is allowed, generate realistic demo data
+  // (NOTE: the demo series is SYNTHETIC — it is not governed by the unified
+  // profit formulas and only appears when ?demo=true is explicitly passed).
   if (!hasRealData && includeDemo) {
     // Seed a deterministic but varied pattern based on storeId
     const seed = storeId.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
@@ -131,15 +155,24 @@ async function getRevenueTrendHandler(...args: unknown[]): Promise<Response> {
     .map(([date, data]) => {
       const d = new Date(date);
       const label = d.toLocaleDateString('en-KE', { month: 'short', day: 'numeric' });
-      const margin = data.revenue > 0 ? ((data.revenue - data.expenses) / data.revenue) * 100 : 0;
+      // Keys unchanged; revenue is now VAT-exclusive. `margin` remains
+      // (revenue − expenses) / revenue — a NET-margin style figure because
+      // `expenses` includes COGS (see summary note below).
+      const revenue = KES(data.revenue).round().toNumber();
+      const expenses = KES(data.expenses).round().toNumber();
+      const margin = revenue > 0 ? ((revenue - expenses) / revenue) * 100 : 0;
+      const byMethod: Record<string, number> = {};
+      for (const [method, amount] of Object.entries(data.byMethod)) {
+        byMethod[method] = KES(amount || 0).round().toNumber();
+      }
       return {
         date,
         label,
-        revenue: Math.round(data.revenue),
-        expenses: Math.round(data.expenses),
+        revenue,
+        expenses,
         transactions: data.transactions,
         margin: Math.round(margin * 10) / 10,
-        byMethod: data.byMethod,
+        byMethod,
       };
     });
 
@@ -150,6 +183,17 @@ async function getRevenueTrendHandler(...args: unknown[]): Promise<Response> {
   const peakDay = result.reduce((max, d) => d.revenue > max.revenue ? d : max, result[0]);
   const isDemo = !hasRealData && includeDemo;
 
+  // AUDIT FIX (Task 3-f): the legacy `grossProfit` key previously held
+  // totalRevenue − totalExpenses where totalRevenue was tax-inclusive. The
+  // key is kept for client compatibility, but the value is now composed
+  // through the canonical chain: because `expenses` already bundles COGS
+  // (EXPENSE account 5000) with operating expenses, there is no separate COGS
+  // input — grossProfit(netRevenue, 0) is netRevenue, and
+  // netProfit(grossProfit, allExpenses) yields netRevenue − allExpenses
+  // (net-profit-style) with version-tracked lineage and no double-counted COGS.
+  const revenueGrossProfit = grossProfit(totalRevenue, 0);
+  const summaryNetProfit = netProfit(revenueGrossProfit, totalExpenses);
+
   return Response.json({
     success: true,
     data: {
@@ -157,13 +201,16 @@ async function getRevenueTrendHandler(...args: unknown[]): Promise<Response> {
       summary: {
         totalRevenue,
         totalExpenses,
-        grossProfit: totalRevenue - totalExpenses,
-        profitMargin: totalRevenue > 0 ? ((totalRevenue - totalExpenses) / totalRevenue) * 100 : 0,
+        // Legacy key — value is netRevenue − allExpenses (see composition note).
+        grossProfit: summaryNetProfit,
+        profitMargin: totalRevenue > 0 ? (summaryNetProfit / totalRevenue) * 100 : 0,
         avgDailyRevenue: Math.round(avgRevenue),
         peakDayRevenue: peakDay?.revenue || 0,
         peakDayLabel: peakDay?.label || '',
         totalTransactions,
         isDemo,
+        // AUDIT FIX (Task 3-f): formula lineage marker (additive field).
+        profitFormulaVersion: PROFIT_FORMULA_VERSION,
       },
     },
   });

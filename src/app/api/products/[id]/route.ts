@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -178,6 +179,17 @@ async function deleteProductHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const GET = withErrorBoundary(getProductHandler, 'PRODUCT_DETAIL');
-export const PUT = withErrorBoundary(updateProductHandler, 'PRODUCT_UPDATE');
-export const DELETE = withErrorBoundary(deleteProductHandler, 'PRODUCT_DELETE');
+// AUDIT FIX (Task 3-d): GET = any store role; PUT/DELETE (price edit, delete) =
+// manager-or-above per PERMISSION_MATRIX (CASHIER has products: ['read'] only).
+export const GET = withErrorBoundary(
+  withSessionAuth(getProductHandler),
+  'PRODUCT_DETAIL',
+);
+export const PUT = withErrorBoundary(
+  withSessionAuth(updateProductHandler, { roles: MANAGER_PLUS_ROLES }),
+  'PRODUCT_UPDATE',
+);
+export const DELETE = withErrorBoundary(
+  withSessionAuth(deleteProductHandler, { roles: MANAGER_PLUS_ROLES }),
+  'PRODUCT_DELETE',
+);

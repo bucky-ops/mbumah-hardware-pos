@@ -219,11 +219,14 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
     });
 
         if (expensePaymentMethod === 'CASH') {
-      const lastDrawerEntry = await tx.cashDrawerLog.findFirst({
+      // AUDIT FIX: read-latest-row lost-update race → aggregate _sum pattern
+      // (same as src/app/api/transactions/route.ts R6 remediation). The
+      // latest row's balance can be stale under concurrent drawer writes.
+      const drawerAgg = await tx.cashDrawerLog.aggregate({
         where: { storeId },
-        orderBy: { createdAt: 'desc' },
+        _sum: { amount: true },
       });
-      const currentBalance = lastDrawerEntry?.balance || 0;
+      const currentBalance = Number(drawerAgg._sum.amount ?? 0);
 
       await tx.cashDrawerLog.create({
         data: {
@@ -231,7 +234,7 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
           userId: paidBy,
           action: 'CASH_OUT',
           amount: expense.amount,
-          balance: currentBalance - expense.amount,
+          balance: currentBalance - Number(expense.amount),
           notes: `Expense: ${description} (${category})`,
         },
       });

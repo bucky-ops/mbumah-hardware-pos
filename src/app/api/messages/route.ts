@@ -3,6 +3,7 @@
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
+import { requireStoreAccess } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -146,5 +147,7 @@ async function sendMessageHandler(...args: unknown[]): Promise<Response> {
   }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getMessagesHandler, 'MESSAGES_LIST');
-export const POST = withErrorBoundary(sendMessageHandler, 'MESSAGES_SEND');
+// AUDIT FIX (Task 3-d): session-validated + storeId-param scoping
+// (requireStoreAccess). Any store role — customer messaging history/send.
+export const GET = withErrorBoundary(requireStoreAccess(getMessagesHandler), 'MESSAGES_LIST');
+export const POST = withErrorBoundary(requireStoreAccess(sendMessageHandler), 'MESSAGES_SEND');

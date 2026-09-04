@@ -37,6 +37,17 @@ type TransferWithItems = NonNullable<
   Awaited<ReturnType<typeof db.storeTransfer.findUnique>>
 > & { items: Array<{ id: string; productId: string; quantity: unknown; receivedQty: unknown }> };
 
+// AUDIT FIX (oversell): sentinel error thrown inside the ship tx when the
+// conditional origin-stock decrement claims 0 rows. Prisma interactive tx:
+// throwing aborts/rolls back the WHOLE transaction (no partial shipment), and
+// the catch below maps it to a typed 409 instead of a generic 400.
+class InsufficientStockError extends Error {
+  constructor(productId: string) {
+    super(`Insufficient stock at source location for product ${productId}`);
+    this.name = 'InsufficientStockError';
+  }
+}
+
 /** Verify a non-admin session belongs to one of the two stores on the transfer. */
 function assertTransferMembership(
   session: AuthSession,
@@ -169,10 +180,21 @@ async function updateStoreTransferHandler(
             `Origin store has no inventory record for product ${item.productId}`
           );
         }
-        await tx.inventory.update({
-          where: { id: inventory.id },
-          data: { quantityInStock: { decrement: item.quantity } },
+        // AUDIT FIX (oversell): this was a blind decrement — the status claim
+        // above prevents double-ship but the inventory row itself could still
+        // go negative when a concurrent POS sale consumed the same stock
+        // between the findFirst above and this write. The decrement is now a
+        // conditional updateMany (row lock + atomic `gte shippedQty` predicate
+        // re-check); count === 0 throws InsufficientStockError which aborts the
+        // ENTIRE ship tx (no partial shipment) and surfaces as a typed 409.
+        const shippedQty = Number(item.quantity);
+        const claimed = await tx.inventory.updateMany({
+          where: { id: inventory.id, quantityInStock: { gte: shippedQty } },
+          data: { quantityInStock: { decrement: shippedQty } },
         });
+        if (claimed.count === 0) {
+          throw new InsufficientStockError(item.productId);
+        }
         await tx.stockMovement.create({
           data: {
             productId: item.productId,
@@ -186,9 +208,23 @@ async function updateStoreTransferHandler(
         });
       }
       return { ok: true as const };
-    }).catch((err: unknown) => ({ ok: false as const, reason: err instanceof Error ? err.message : 'ship_failed' }));
+    }).catch((err: unknown) => {
+      // AUDIT FIX: typed 409 for the conditional origin-stock decrement losing
+      // the race; every other thrown error still rolls the tx back and
+      // surfaces as a 400 with its message (unchanged behavior).
+      if (err instanceof InsufficientStockError) {
+        return { ok: false as const, reason: 'insufficient_stock' as const };
+      }
+      return { ok: false as const, reason: err instanceof Error ? err.message : 'ship_failed' };
+    });
 
     if (!result.ok) {
+      if (result.reason === 'insufficient_stock') {
+        return Response.json(
+          { success: false, error: 'Insufficient stock at source location.' },
+          { status: 409 }
+        );
+      }
       const status = result.reason === 'not_claimable' ? 409 : 400;
       return Response.json(
         {

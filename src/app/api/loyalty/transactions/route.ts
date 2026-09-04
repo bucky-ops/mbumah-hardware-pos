@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -256,5 +257,13 @@ async function createLoyaltyTransactionHandler(...args: unknown[]): Promise<Resp
   return Response.json({ success: true, data: transaction }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getLoyaltyTransactionsHandler, 'LOYALTY_TRANSACTIONS_LIST');
-export const POST = withErrorBoundary(createLoyaltyTransactionHandler, 'LOYALTY_TRANSACTIONS_CREATE');
+// AUDIT FIX (Task 3-d): GET = any store role; POST mints/redeems loyalty
+// points (redeemable value) = manager-or-above.
+export const GET = withErrorBoundary(
+  withSessionAuth(getLoyaltyTransactionsHandler),
+  'LOYALTY_TRANSACTIONS_LIST',
+);
+export const POST = withErrorBoundary(
+  withSessionAuth(createLoyaltyTransactionHandler, { roles: MANAGER_PLUS_ROLES }),
+  'LOYALTY_TRANSACTIONS_CREATE',
+);

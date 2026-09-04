@@ -68,7 +68,12 @@ export const checkoutSchema = z.object({
     // SPLIT payments: array of { method, amount, reference? } so the checkout
     // can record multiple tenders (e.g. cash + M-Pesa) in one transaction.
     splits: z.array(z.object({
-      method: z.enum(['CASH', 'MPESA', 'GIFT_CARD']),
+      // AUDIT FIX (1): DEBT is now a legal split-tender leg. Each DEBT leg is
+      // treated exactly like a pure-DEBT sale inside the checkout transaction
+      // (credit-limit enforcement, DebtLedger charge row, customer balance
+      // increment, A/R debit in the journal) instead of a bare COMPLETED
+      // Payment row that bypassed the customer's credit account.
+      method: z.enum(['CASH', 'MPESA', 'GIFT_CARD', 'DEBT']),
       amount: z.coerce.number().positive(),
       reference: z.string().optional(),
       giftCardCode: z.string().optional(),
@@ -76,6 +81,21 @@ export const checkoutSchema = z.object({
   }).optional(),
   discountAmount: z.coerce.number().nonnegative().optional(),
   notes: z.string().max(1000).optional(),
+}).superRefine((data, ctx) => {
+  // AUDIT FIX (1): a DEBT split leg charges the customer's credit account, so
+  // a customerId is MANDATORY — without one the DebtLedger charge row could
+  // never be written and the credit limit could not be enforced.
+  if (
+    data.paymentMethod === 'SPLIT' &&
+    data.paymentDetails?.splits?.some((s) => s.method === 'DEBT') &&
+    !data.customerId
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['customerId'],
+      message: 'Customer is required when a split payment includes a DEBT leg.',
+    });
+  }
 });
 
 // Customer schemas

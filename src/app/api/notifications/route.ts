@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { db, runWithTenant } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
+import { requireStoreAccess } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -238,4 +239,7 @@ async function getHandler(request: NextRequest): Promise<Response> {
   });
 }
 
-export const GET = withErrorBoundary(getHandler, 'NOTIFICATIONS');
+// AUDIT FIX (Task 3-d): session-validated + storeId-param scoping
+// (requireStoreAccess). Any store role — dashboard notifications.
+// The handler's inner runWithTenant(storeId) keeps its original behavior.
+export const GET = withErrorBoundary(requireStoreAccess(getHandler), 'NOTIFICATIONS');

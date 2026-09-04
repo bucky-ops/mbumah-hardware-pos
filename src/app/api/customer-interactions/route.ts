@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -214,5 +215,13 @@ async function createCustomerInteractionHandler(...args: unknown[]): Promise<Res
   return Response.json({ success: true, data: interaction }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getCustomerInteractionsHandler, 'CUSTOMER_INTERACTIONS_LIST');
-export const POST = withErrorBoundary(createCustomerInteractionHandler, 'CUSTOMER_INTERACTIONS_CREATE');
+// AUDIT FIX (Task 3-d): session-validated (was Bearer-presence only).
+// Any store role — CRM interaction logging is part of the POS flow.
+export const GET = withErrorBoundary(
+  withSessionAuth(getCustomerInteractionsHandler),
+  'CUSTOMER_INTERACTIONS_LIST',
+);
+export const POST = withErrorBoundary(
+  withSessionAuth(createCustomerInteractionHandler),
+  'CUSTOMER_INTERACTIONS_CREATE',
+);
