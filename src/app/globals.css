@@ -160,181 +160,82 @@
   background: oklch(0.55 0.02 250);
 }
 
-/* Print styles for receipt — hides everything except the receipt printable area */
-@media print {
-  /* 1. Hide all page chrome */
-  body > *:not(#__next):not(.receipt-dialog-wrapper) {
-    display: none !important;
-  }
-  aside, header, footer, nav, .no-print {
-    display: none !important;
-  }
+/* ─────────────────────────────────────────────────────────────────────────────
+   Receipt PRINT isolation (2026-09 overhaul)
 
-  /* 2. Reset body for clean printing */
+   The previous rules keyed on a `.receipt-printable-wrapper` class that never
+   existed in the dialog DOM — every direct child of [role="dialog"] collapsed
+   to display:none and the printer produced a BLANK page.
+
+   New model (see src/lib/receipt-pdf.ts → printReceiptElement):
+   • printReceiptElement() clones #receipt-content into #print-root just before
+     window.print() and removes it on afterprint.
+   • These rules show ONLY #print-root on paper; the QR <canvas> is swapped for
+     an <img> in the clone because canvas pixels do not survive cloneNode.
+   • Backgrounds/badges keep their colors via print-color-adjust: exact.
+   ───────────────────────────────────────────────────────────────────────────── */
+@media screen {
+  /* The print host is empty except during a print — never show it on screen. */
+  #print-root { display: none !important; }
+}
+
+@media print {
+  html,
   body {
     margin: 0 !important;
     padding: 0 !important;
-    background: white !important;
-    color: black !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  /* 3. Hide everything in the dialog except the receipt printable area */
-  [role="dialog"] > *:not(.receipt-printable-wrapper) {
+  /* Everything except the print host disappears — display:none (not just
+     visibility) so hidden ancestors can never suppress the receipt. */
+  body > *:not(#print-root) {
     display: none !important;
   }
-  [role="dialog"] {
+  #print-root {
+    display: block !important;
     position: static !important;
-    transform: none !important;
-    width: 100% !important;
-    max-height: none !important;
-    border: none !important;
-    box-shadow: none !important;
-    background: white !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    inset: auto !important;
-  }
-  [data-radix-overlay] {
-    display: none !important;
   }
 
-  /* 4. Make the receipt printable area the only visible content */
-  .receipt-printable {
+  /* Receipt paper: 80mm thermal width, content starts at the page origin. */
+  #print-root #receipt-content {
     position: static !important;
-    width: 100% !important;
+    width: 80mm !important;
     max-width: 80mm !important;
-    margin: 0 auto !important;
-    padding: 8mm !important;
-    font-size: 11px !important;
-    line-height: 1.4 !important;
-    color: black !important;
-    background: white !important;
-    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 6mm !important;
     border: none !important;
-  }
-  .receipt-printable * {
-    visibility: visible !important;
-    color: black !important;
-  }
-
-  /* 5. Hide the dialog header, footer, close button */
-  .receipt-printable ~ .no-print,
-  .no-print,
-  [role="dialog"] > div:first-child,
-  [role="dialog"] > div:last-child:not(:has(.receipt-printable)),
-  [aria-label="Close"] {
-    display: none !important;
-  }
-
-  /* 6. Remove decorative elements for print */
-  .receipt-printable [class*="shadow"],
-  .receipt-printable [class*="rounded"],
-  .receipt-printable .bg-muted,
-  .receipt-printable .bg-muted\/30 {
     box-shadow: none !important;
     border-radius: 0 !important;
-    background: transparent !important;
+    font-size: 11px !important;
+    line-height: 1.45 !important;
+    background: #ffffff !important;
   }
 
-  /* 7. Clean separator lines for print */
-  .receipt-printable [role="separator"],
-  .receipt-printable [data-slot="separator"] {
-    border-top: 1px solid #000 !important;
-    height: 0 !important;
-    background: none !important;
-    margin: 4px 0 !important;
+  /* Keep brand colors (banner, badges, flag bar, QR) on paper. */
+  #print-root #receipt-content,
+  #print-root #receipt-content [class*="bg-"] {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  /* 8. Keep Kenyan flag bar colors in print */
-  .receipt-printable .bg-black { background: black !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .receipt-printable .bg-red-600 { background: #dc2626 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .receipt-printable .bg-green-600 { background: #16a34a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-
-  /* 9. Page setup */
-  @page {
-    size: 80mm auto;
-    margin: 0;
-  }
-
-  /* 10. Legacy class support — old receipt dialog */
-  .receipt-dialog,
-  .receipt-dialog * {
-    visibility: visible;
-  }
-  .receipt-dialog {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-  }
-  .receipt-dialog button,
-  .receipt-dialog [role="dialog"] > button {
+  /* Interactive chrome must never reach paper. */
+  #print-root button,
+  #print-root .no-print {
     display: none !important;
   }
 
-  /* ── Enhanced receipt print additions ───────────────────────────────────── */
-
-  /* 11. Monospace font for thermal printers (when thermalMode=true) */
-  .receipt-printable.font-mono,
-  .receipt-printable.font-mono * {
-    font-family: 'Courier New', Courier, monospace !important;
-    font-size: 10px !important;
-    letter-spacing: 0 !important;
-  }
-
-  /* 12. Print payment method badges as plain text */
-  .receipt-printable [data-slot="badge"] {
-    background: transparent !important;
-    border: 1px solid #000 !important;
-    border-radius: 0 !important;
-    padding: 0 4px !important;
-  }
-
-  /* 13. QR/Barcode area — ensure visibility and compact sizing */
-  .receipt-printable svg {
-    max-width: 60px !important;
-    max-height: 60px !important;
-  }
-
-  /* 14. Prevent page breaks inside receipt sections */
-  .receipt-printable > div {
+  /* Avoid awkward page breaks inside logical receipt sections. */
+  #print-root #receipt-content table {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
 
-  /* 15. Page break before footer only when needed */
-  .receipt-printable > div:last-child {
-    page-break-before: auto !important;
-  }
-
-  /* 16. Print-colored highlights for change/gift card rows */
-  .receipt-printable .bg-green-50,
-  .receipt-printable .bg-purple-50,
-  .receipt-printable .bg-amber-50 {
-    background: transparent !important;
-    border: none !important;
-    font-weight: bold !important;
-  }
-  .dark .receipt-printable .bg-green-50,
-  .dark .receipt-printable .bg-purple-50,
-  .dark .receipt-printable .bg-amber-50,
-  .dark .receipt-printable .bg-green-950\/20,
-  .dark .receipt-printable .bg-purple-950\/20,
-  .dark .receipt-printable .bg-amber-950\/20 {
-    background: transparent !important;
-  }
-
-  /* 17. Hide images that may not load in print context */
-  .receipt-printable img[src=""] {
-    display: none !important;
-  }
-
-  /* 18. Receipt card standalone print */
-  .receipt-printable[type="card"] {
-    max-width: 80mm !important;
-    border: none !important;
+  @page {
+    size: 80mm auto;
+    margin: 0;
   }
 }
 
