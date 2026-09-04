@@ -23,7 +23,7 @@
     "db:reset": "prisma migrate reset",
     "audit:financial": "bun run scripts/run-financial-audit.ts",
     "health": "curl -s http://localhost:3000/api/health | bun -e 'process.stdin.on(\"data\",d=>console.log(JSON.stringify(JSON.parse(d.toString()),null,2)))'",
-    "vercel-build": "SKIP_ENV_VALIDATION=1 node scripts/setup-prisma-provider.mjs && prisma generate && next build"
+    "vercel-build": "SKIP_ENV_VALIDATION=1 node scripts/setup-prisma-provider.mjs && prisma generate && node scripts/sync-db-schema.mjs && next build"
   },
   "prisma": {
     "seed": "bun prisma/seed.ts"

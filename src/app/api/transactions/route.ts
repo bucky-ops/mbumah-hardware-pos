@@ -23,7 +23,7 @@
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { systemLog, withErrorBoundary } from '@/lib/logger';
+import { systemLog, withErrorBoundary, sanitizeForLog } from '@/lib/logger';
 import { generateReceiptNumber, calculateLineTotal } from '@/lib/helpers';
 import { recordSaleJournalEntry, getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, PaymentMethod, PaymentStatus } from '@/lib/types';
@@ -45,6 +45,17 @@ class CreditLimitExceededError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'CreditLimitExceededError';
+  }
+}
+
+// Typed client-input failure: a payload field that passed Zod's coercion but
+// cannot be applied to the loaded Product rows (NaN price/qty/tax/cost).
+// These used to escape as raw `throw new Error` → HTTP 500; they are client
+// errors and MUST be 400s. Caught in createTransactionHandler below.
+class CheckoutInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CheckoutInputError';
   }
 }
 
@@ -153,21 +164,76 @@ async function getTransactionsHandler(
   });
 }
 
+// ═════════════════════════════════════════════════════════════════════
+// POST /api/transactions — error-containment wrapper.
+//
+// ROOT-CAUSE RUNBOOK (checkout 500 incident, 2026-09):
+// A production 500 with body {"error":"An unexpected error occurred. Please
+// try again."} was completely undiagnosable: no payload on stdout, no detail
+// in the response. The actual cause was Prisma P2022 — the deployed Neon
+// database was missing the `idempotencyKey` column added by the financial
+// remediation because the Vercel build never synced the schema (fixed by
+// scripts/sync-db-schema.mjs, wired into `npm run vercel-build`).
+//
+// This wrapper guarantees that can never be invisible again:
+//   1. Malformed JSON → 400 (previously an unhandled throw → 500).
+//   2. ANY unhandled error from the checkout flow is logged to stdout as
+//      [TRANSACTION-API-ERROR] with the error, its stack, and a PII-redacted,
+//      size-capped copy of the request payload — Vercel Runtime Logs captures
+//      console.error, so production failures are triageable from the logs.
+//   3. CheckoutInputError (bad item field values) → clean 400.
+//   4. Everything else rethrows to withErrorBoundary, which emits the
+//      [API-ERROR] stdout breadcrumb and a sanitized 500 carrying the
+//      non-sensitive {name, code, component} diagnostic pair.
+// ═════════════════════════════════════════════════════════════════════
 async function createTransactionHandler(
   request: NextRequest,
   session: AuthSession,
   ..._args: unknown[]
 ): Promise<Response> {
-  const body = await request.json();
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json(
+      { success: false, error: 'Request body must be valid JSON.' },
+      { status: 400 }
+    );
+  }
 
+  try {
+    return await createTransactionInner(request, session, body);
+  } catch (err) {
+    console.error('[TRANSACTION-API-ERROR]', {
+      error: err instanceof Error ? err.message : err,
+      stack: err instanceof Error ? err.stack : undefined,
+      payload: sanitizeForLog(body),
+    });
+
+    if (err instanceof CheckoutInputError) {
+      return Response.json({ success: false, error: err.message }, { status: 400 });
+    }
+    throw err;
+  }
+}
+
+async function createTransactionInner(
+  request: NextRequest,
+  session: AuthSession,
+  body: unknown,
+): Promise<Response> {
   // ── SYS-10: idempotent checkout replay ──────────────────────────────────
   // The offline queue (src/lib/offline-sync.ts) re-POSTs sales whose response
   // was lost. A client-generated idempotencyKey makes that replay safe: the
   // original committed transaction is returned instead of re-applying stock,
   // payments and journals.
+  // `body` arrives typed `unknown` from the error-containment wrapper —
+  // narrow through a Record cast before touching the optional key.
+  const rawBody = (body ?? {}) as Record<string, unknown>;
+  const rawIdempotencyKey = rawBody.idempotencyKey;
   const idempotencyKey =
-    typeof body?.idempotencyKey === 'string' && body.idempotencyKey.trim().length >= 8
-      ? body.idempotencyKey.trim()
+    typeof rawIdempotencyKey === 'string' && rawIdempotencyKey.trim().length >= 8
+      ? rawIdempotencyKey.trim()
       : undefined;
   if (idempotencyKey) {
     const existing = await db.salesTransaction.findUnique({
@@ -261,10 +327,26 @@ async function createTransactionHandler(
     }
   }
 
-  // Validate all items and stock levels
+  // M-Pesa requires a destination phone — validate AFTER the customer lookup
+  // (which may supply it via customer.phone) and BEFORE the transaction so a
+  // missing number is a clean 400 instead of a throw inside the checkout
+  // transaction (the sale would roll back and surface as a 500).
+  if (paymentMethod === PaymentMethod.MPESA && !(paymentDetails?.mpesaPhone || customer?.phone)) {
+    return Response.json(
+      { success: false, error: 'M-Pesa phone number is required for M-Pesa payments.' },
+      { status: 400 }
+    );
+  }
+
+  // Verify all items and stock levels.
+  // NOTE: the existence check uses the DEDUPLICATED id list — a cart may
+  // legitimately contain the same product on two lines (e.g. two serial
+  // ranges of one SKU). Comparing against the raw list rejected every such
+  // checkout with a false "Products not found or inactive" 400.
   const productIds = items.map((item: { productId: string }) => item.productId);
+  const uniqueProductIds = [...new Set(productIds)];
   const products = await db.product.findMany({
-    where: { id: { in: productIds }, storeId, isActive: true },
+    where: { id: { in: uniqueProductIds }, storeId, isActive: true },
     include: {
       bundleItems: {
         include: {
@@ -274,9 +356,9 @@ async function createTransactionHandler(
     },
   });
 
-  if (products.length !== productIds.length) {
+  if (products.length !== uniqueProductIds.length) {
     const foundIds = products.map((p) => p.id);
-    const missingIds = productIds.filter((id: string) => !foundIds.includes(id));
+    const missingIds = uniqueProductIds.filter((id: string) => !foundIds.includes(id));
     return Response.json(
       { success: false, error: `Products not found or inactive: ${missingIds.join(', ')}` },
       { status: 400 }
@@ -371,16 +453,16 @@ async function createTransactionHandler(
     const safeTax   = product ? Number(product.taxRate) : parseFloat(String(item.taxRate || 16));
 
     if (Number.isNaN(safePrice) || safePrice < 0) {
-      throw new Error(`items[${index}].pricePerUnit: Invalid value "${item.pricePerUnit}" — expected a non-negative number.`);
+      throw new CheckoutInputError(`items[${index}].pricePerUnit: Invalid value "${item.pricePerUnit}" — expected a non-negative number.`);
     }
     if (Number.isNaN(safeCost) || safeCost < 0) {
-      throw new Error(`items[${index}].costPrice: Invalid value "${item.costPrice}" — expected a non-negative number.`);
+      throw new CheckoutInputError(`items[${index}].costPrice: Invalid value "${item.costPrice}" — expected a non-negative number.`);
     }
     if (Number.isNaN(safeQty) || safeQty <= 0) {
-      throw new Error(`items[${index}].quantity: Invalid value "${item.quantity}" — expected a positive number.`);
+      throw new CheckoutInputError(`items[${index}].quantity: Invalid value "${item.quantity}" — expected a positive number.`);
     }
     if (Number.isNaN(safeTax) || safeTax < 0 || safeTax > 100) {
-      throw new Error(`items[${index}].taxRate: Invalid value "${item.taxRate}" — expected a number between 0 and 100.`);
+      throw new CheckoutInputError(`items[${index}].taxRate: Invalid value "${item.taxRate}" — expected a number between 0 and 100.`);
     }
 
     const calc = calculateLineTotal(safePrice, safeQty, safeDisc, safeTax);
