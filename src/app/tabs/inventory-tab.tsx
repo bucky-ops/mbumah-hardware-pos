@@ -20,6 +20,7 @@ import {
   type StockMovementItem,
   type CreateProductPayload,
 } from '@/lib/api';
+import { formatQtyWithUnit } from '@/lib/utils/financialMath';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1494,7 +1495,7 @@ export default function InventoryTab() {
                   </div>
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Current: <span className="font-medium text-foreground">{detailProduct.quantityInStock}</span> {detailProduct.unitType.toLowerCase()}s</span>
+                      <span className="text-muted-foreground">Current: <span className="font-medium text-foreground">{formatQtyWithUnit(detailProduct.quantityInStock, detailProduct.unitType)}</span></span>
                       <span className="text-muted-foreground">Reorder Level: <span className="font-medium text-foreground">{detailProduct.reorderLevel}</span></span>
                     </div>
                     <div className="relative">
@@ -1765,7 +1766,7 @@ export default function InventoryTab() {
               <div className="rounded-lg border bg-gradient-to-r from-muted/30 to-muted/10 p-3 space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Current Stock</span>
-                  <span className="text-sm font-bold">{adjustStockProduct.quantityInStock} {adjustStockProduct.unitType.toLowerCase()}s</span>
+                  <span className="text-sm font-bold">{formatQtyWithUnit(adjustStockProduct.quantityInStock, adjustStockProduct.unitType)}</span>
                 </div>
                 <StockLevelBar product={adjustStockProduct} />
                 <div className="flex justify-between items-center">
@@ -1815,7 +1816,7 @@ export default function InventoryTab() {
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">New Stock</span>
                     <span className={`text-sm font-bold ${adjustStockProduct.quantityInStock + stockAdjustAmount < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {adjustStockProduct.quantityInStock + stockAdjustAmount} {adjustStockProduct.unitType.toLowerCase()}s
+                      {formatQtyWithUnit(adjustStockProduct.quantityInStock + stockAdjustAmount, adjustStockProduct.unitType)}
                     </span>
                   </div>
                 </div>

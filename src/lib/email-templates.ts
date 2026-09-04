@@ -19,6 +19,12 @@
 // All templates are SSR-safe (no `window` / `document` references) and may
 // be imported by both server-only email-service.ts and server components.
 
+// FORMAT UNIFICATION (task 12-d): KES rendering delegates to the ONE canonical
+// en-KE formatter (financialMath.formatKES — server-safe, no DOM/ICU
+// divergence) so e-mails render the identical "Ksh 1,234.56" string as
+// receipts, PDFs and WhatsApp messages.
+import { formatKES as formatKESCanonical } from '@/lib/utils/financialMath';
+
 // ── Shared branding constants ────────────────────────────────────────────────
 
 const BRAND = {
@@ -40,11 +46,9 @@ const BRAND = {
   warning: '#f59e0b', // amber-500
 } as const;
 
-/** ISO currency formatter for Kenyan Shillings. */
+/** Canonical Kenyan Shillings formatter (delegates to financialMath.formatKES). */
 function kes(amount: number | string | null | undefined): string {
-  const n = typeof amount === 'string' ? parseFloat(amount) : (amount ?? 0);
-  if (Number.isNaN(n)) return 'KES 0.00';
-  return `KES ${n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return formatKESCanonical(amount ?? 0);
 }
 
 /** Common HTML wrapper — header, footer, and basic responsive styles. */

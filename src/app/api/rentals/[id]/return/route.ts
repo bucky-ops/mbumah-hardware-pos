@@ -3,11 +3,16 @@
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
-import { calculateLateFee, generateJournalEntryNumber } from '@/lib/helpers';
+import { generateJournalEntryNumber } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, RentalStatus, StockMovementType } from '@/lib/types';
 import { withSessionAuth } from '@/lib/auth';
 import { getSessionFromRequest } from '@/lib/auth';
+// Task 12-c: canonical financial math (HALF_UP 2dp). Prisma Decimal
+// `valueOf()` returns a STRING — `rentalDays * rental.ratePerDay` and
+// `rental.securityDeposit - totalCharges` coerced through float (and the
+// charge line fed a Decimal into a number-typed helper).
+import { toDec, round2 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,7 +58,7 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
     );
   }
 
-  const session = await getSessionFromRequest(args[0] as Request);
+  const session = await getSessionFromRequest(request);
   const processedBy = session?.userId || null;
   void _bodyProcessedBy; // body value ignored by design (spoofable actor)
 
@@ -62,22 +67,37 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
   const expectedReturnDate = new Date(rental.expectedReturnDate);
 
     const rentalDurationMs = actualReturnDate.getTime() - rentalStartDate.getTime();
+  // Days are integers derived from the date difference (unchanged formula).
   const rentalDays = Math.max(1, Math.ceil(rentalDurationMs / (1000 * 60 * 60 * 24)));
 
-    const totalRentalCharge = rentalDays * rental.ratePerDay;
+    // Task 12-c: Decimal money math.
+  // totalRentalCharge = round2(days × ratePerDay) — was float coercion of the
+  // Prisma Decimal rate.
+  const totalRentalCharge = round2(toDec(rentalDays).mul(toDec(rental.ratePerDay)));
 
-    const lateFee = calculateLateFee(rental.ratePerDay, expectedReturnDate, actualReturnDate);
+  // lateFee = round2(daysLate × lateFeeRate) — inline Decimal re-derivation of
+  // helpers.calculateLateFee's formula (floor of full late days, floored at 0),
+  // which also removes the old Decimal-into-number-arg type error.
+  const daysLate = Math.max(0, Math.floor(
+    (actualReturnDate.getTime() - expectedReturnDate.getTime()) / (1000 * 60 * 60 * 24)
+  ));
+  const lateFee = round2(toDec(daysLate).mul(toDec(rental.ratePerDay)));
 
     const assessedDamage = damageAssessment || 'NONE';
-  const assessedDamageCharge = parseFloat(String(damageCharge || 0));
+  const assessedDamageCharge = round2(toDec(damageCharge || 0));
 
     let returnStatus: string = RentalStatus.RETURNED;
   if (assessedDamage !== 'NONE') {
     returnStatus = assessedDamage === 'SEVERE' ? RentalStatus.LOST : RentalStatus.DAMAGED;
   }
 
-    const totalCharges = totalRentalCharge + lateFee + assessedDamageCharge;
-  const settlement = rental.securityDeposit - totalCharges;
+  // Task 12-c: charges and settlement in exact Decimal. NO max0 clamp is
+  // applied to the settlement — the existing logic intentionally branches on
+  // the sign (negative ⇒ CUSTOMER_OWES, positive ⇒ REFUND_DUE).
+  const totalChargesDec = toDec(totalRentalCharge).plus(lateFee).plus(assessedDamageCharge);
+  const totalCharges = round2(totalChargesDec);
+  const settlementDec = toDec(rental.securityDeposit).minus(totalChargesDec);
+  const settlement = round2(settlementDec);
 
     const orgId = rental.store.organizationId;
   const accounts = await getAccountIds(orgId, [
@@ -137,14 +157,17 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
       });
     }
 
-        if (settlement < 0) {
-            const amountOwed = Math.abs(settlement);
+        if (settlementDec.isNegative()) {
+            // Task 12-c: exact Decimal abs (was Math.abs over a coerced float).
+      const amountOwedDec = settlementDec.abs();
+      const amountOwed = round2(amountOwedDec);
       // R6 remediation: SUM-derived drawer balance (concurrency-safe).
       const drawerAgg = await tx.cashDrawerLog.aggregate({
         where: { storeId: rental.storeId },
         _sum: { amount: true },
       });
-      const currentBalance = Number(drawerAgg._sum.amount ?? 0);
+      // Task 12-c: Decimal running balance.
+      const drawerBalanceDec = toDec(drawerAgg._sum.amount ?? 0);
 
       await tx.cashDrawerLog.create({
         data: {
@@ -152,7 +175,7 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
           userId: processedBy || 'system',
           action: 'CASH_IN',
           amount: amountOwed,
-          balance: currentBalance + amountOwed,
+          balance: round2(drawerBalanceDec.plus(amountOwed)),
           notes: `Additional rental charge from ${rental.customer.name} - ${rental.product.name}`,
         },
       });
@@ -169,8 +192,10 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
           // F3-7 remediation: the damage charge is now INCLUDED on the
           // credit side — previously debits exceeded credits by exactly the
           // damage amount, corrupting the GL on every damaged return.
-          totalDebit: amountOwed + Number(rental.securityDeposit),
-          totalCredit: totalRentalCharge + lateFee + assessedDamageCharge,
+          // Task 12-c: exact Decimal sums for the JE headers (were float
+          // `amountOwed + Number(rental.securityDeposit)`).
+          totalDebit: round2(amountOwedDec.plus(rental.securityDeposit)),
+          totalCredit: totalCharges,
           isPosted: true,
           postedAt: new Date(),
           createdBy: processedBy || null,
@@ -210,13 +235,14 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
           },
         },
       });
-    } else if (settlement > 0) {
+    } else if (settlementDec.gt(0)) {
             // R6 remediation: SUM-derived drawer balance (concurrency-safe).
       const drawerAgg = await tx.cashDrawerLog.aggregate({
         where: { storeId: rental.storeId },
         _sum: { amount: true },
       });
-      const currentBalance = Number(drawerAgg._sum.amount ?? 0);
+      // Task 12-c: Decimal running balance.
+      const drawerBalanceDec = toDec(drawerAgg._sum.amount ?? 0);
 
       await tx.cashDrawerLog.create({
         data: {
@@ -224,7 +250,7 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
           userId: processedBy || 'system',
           action: 'CASH_OUT',
           amount: settlement,
-          balance: currentBalance - settlement,
+          balance: round2(drawerBalanceDec.minus(settlement)),
           notes: `Refund excess deposit to ${rental.customer.name} - ${rental.product.name}`,
         },
       });
@@ -239,8 +265,10 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
           referenceType: 'RENTAL',
           referenceId: rental.id,
           // F3-7: damage charge included in the credit side.
-          totalDebit: Number(rental.securityDeposit),
-          totalCredit: settlement + totalRentalCharge + lateFee + assessedDamageCharge,
+          // Task 12-c: exact Decimal JE header (was
+          // `settlement + totalRentalCharge + lateFee + assessedDamageCharge`).
+          totalDebit: round2(toDec(rental.securityDeposit)),
+          totalCredit: totalCharges,
           isPosted: true,
           postedAt: new Date(),
           createdBy: processedBy || null,
@@ -289,7 +317,7 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
           description: `Rental settlement - exact match for ${rental.customer.name}`,
           referenceType: 'RENTAL',
           referenceId: rental.id,
-          totalDebit: rental.securityDeposit,
+          totalDebit: round2(toDec(rental.securityDeposit)),
           totalCredit: totalCharges,
           isPosted: true,
           postedAt: new Date(),
@@ -357,10 +385,11 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
         lateFee,
         damageCharge: assessedDamageCharge,
         totalCharges,
-        securityDeposit: rental.securityDeposit,
+        securityDeposit: round2(rental.securityDeposit),
         settlement,
-        settlementType: settlement < 0 ? 'CUSTOMER_OWES' : settlement > 0 ? 'REFUND_DUE' : 'EXACT',
-        settlementAmount: Math.abs(settlement),
+        // Task 12-c: sign branches on the exact Decimal (was float coercion).
+        settlementType: settlementDec.isNegative() ? 'CUSTOMER_OWES' : settlementDec.gt(0) ? 'REFUND_DUE' : 'EXACT',
+        settlementAmount: round2(settlementDec.abs()),
       },
     },
   });

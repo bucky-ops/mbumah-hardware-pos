@@ -21,6 +21,7 @@ import {
   type CustomerItem,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
+import { formatQtyWithUnit } from '@/lib/utils/financialMath';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 import { Button } from '@/components/ui/button';
@@ -556,7 +557,7 @@ export default function InvoicesTab() {
             <div><strong>${escapeHtml(item.productName)}</strong></div>
             ${item.description ? `<div class="muted">${escapeHtml(item.description)}</div>` : ''}
           </td>
-          <td class="text-center">${item.quantity} ${escapeHtml(item.unitType)}</td>
+          <td class="text-center">${escapeHtml(formatQtyWithUnit(item.quantity, item.unitType))}</td>
           <td class="text-right">${formatKES(item.pricePerUnit)}</td>
           <td class="text-center">${item.discountPercent}%</td>
           <td class="text-center">${item.taxRate}%</td>
@@ -1409,7 +1410,7 @@ export default function InvoicesTab() {
                               {item.description && <p className="text-xs text-muted-foreground">{item.description}</p>}
                             </div>
                           </TableCell>
-                          <TableCell className="text-sm text-center">{item.quantity} {item.unitType}</TableCell>
+                          <TableCell className="text-sm text-center">{formatQtyWithUnit(item.quantity, item.unitType)}</TableCell>
                           <TableCell className="text-sm text-right">{formatKES(item.pricePerUnit)}</TableCell>
                           <TableCell className="text-sm text-center">{item.discountPercent}%</TableCell>
                           <TableCell className="text-sm text-center">{item.taxRate}%</TableCell>

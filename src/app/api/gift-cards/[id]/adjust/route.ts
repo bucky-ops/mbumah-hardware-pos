@@ -5,6 +5,10 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
+// Task 12-c: canonical financial math. Prisma Decimal `valueOf()` returns a
+// STRING — `giftCard.currentBalance + amount` used to STRING-CONCATENATE
+// ("500.00" + 100 → "500.00100") instead of adding.
+import { toDec, round2 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,20 +55,25 @@ async function adjustGiftCardHandler(...args: unknown[]): Promise<Response> {
 
   const previousStatus = giftCard.status as string;
 
-  const newBalance = giftCard.currentBalance + amount;
+  // Task 12-c: Decimal arithmetic (was `giftCard.currentBalance + amount` —
+  // a number + Prisma-Decimal STRING concat). Rounded HALF_UP to 2dp.
+  const adjustAmtDec = toDec(amount);
+  // toDecimalPlaces(2) uses the global HALF_UP rounding owned by financialMath.
+  const newBalanceDec = toDec(giftCard.currentBalance).plus(adjustAmtDec).toDecimalPlaces(2);
+  const newBalance = round2(newBalanceDec);
 
-  if (newBalance < 0) {
+  if (newBalanceDec.isNegative()) {
     return Response.json(
-      { success: false, error: `Adjustment would result in a negative balance (${newBalance}). Current balance: ${giftCard.currentBalance}, adjustment: ${amount}.` },
+      { success: false, error: `Adjustment would result in a negative balance (${newBalance}). Current balance: ${round2(giftCard.currentBalance)}, adjustment: ${adjustAmtDec.toNumber()}.` },
       { status: 400 }
     );
   }
 
   // Determine new status
   let newStatus = giftCard.status;
-  if (newBalance === 0) {
+  if (newBalanceDec.isZero()) {
     newStatus = 'REDEEMED';
-  } else if (previousStatus === 'REDEEMED' && newBalance > 0) {
+  } else if (previousStatus === 'REDEEMED' && newBalanceDec.gt(0)) {
     // If card was fully redeemed and we're adding balance back
     newStatus = 'PARTIALLY_REDEEMED';
   }
@@ -72,12 +81,12 @@ async function adjustGiftCardHandler(...args: unknown[]): Promise<Response> {
   // Auto-adjust visibility
   let isVisible = giftCard.isVisible;
   if (giftCard.autoAdjustItems) {
-    if (amount > 0) {
+    if (adjustAmtDec.gt(0)) {
       // Increasing balance - make visible
       isVisible = true;
     } else {
       // Decreasing balance
-      isVisible = newBalance > 0;
+      isVisible = newBalanceDec.gt(0);
     }
   }
 
@@ -99,20 +108,20 @@ async function adjustGiftCardHandler(...args: unknown[]): Promise<Response> {
     },
   });
 
-  const adjustmentType = amount > 0 ? 'INCREASE' : 'DECREASE';
+  const adjustmentType = adjustAmtDec.gt(0) ? 'INCREASE' : 'DECREASE';
 
   await systemLog({
     action: 'GIFT_CARD_BALANCE_ADJUSTED',
     component: LogComponent.FINANCIAL,
     severity: LogSeverity.WARN,
-    message: `Gift card ${giftCard.code} balance adjusted: ${amount > 0 ? '+' : ''}${amount} KES. Reason: ${reason}. New balance: ${newBalance}`,
+    message: `Gift card ${giftCard.code} balance adjusted: ${adjustAmtDec.gt(0) ? '+' : ''}${adjustAmtDec.toNumber()} KES. Reason: ${reason}. New balance: ${newBalance}`,
     storeId: giftCard.storeId,
     metadata: {
       giftCardId: id,
       code: giftCard.code,
       adjustmentType,
-      adjustmentAmount: amount,
-      previousBalance: giftCard.currentBalance,
+      adjustmentAmount: adjustAmtDec.toNumber(),
+      previousBalance: round2(giftCard.currentBalance),
       newBalance,
       newStatus,
       reason,

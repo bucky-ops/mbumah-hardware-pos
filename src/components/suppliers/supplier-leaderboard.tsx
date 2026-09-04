@@ -10,6 +10,7 @@ import {
   ArrowUpDown, Trophy, Medal,
 } from 'lucide-react';
 import type { SupplierPerformanceData } from './supplier-performance-card';
+import { formatKES } from '@/lib/api';
 
 type SortField = 'rank' | 'name' | 'rating' | 'orders' | 'spend' | 'onTime' | 'score';
 type SortDirection = 'asc' | 'desc';
@@ -19,14 +20,7 @@ interface SupplierLeaderboardProps {
   onSupplierClick?: (supplierId: string) => void;
 }
 
-function formatKES(amount: number): string {
-  return new Intl.NumberFormat('en-KE', {
-    style: 'currency',
-    currency: 'KES',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
+// formatKES: canonical en-KE KES formatter imported from '@/lib/api' (task 12-d)
 
 function getRankIcon(rank: number) {
   if (rank === 1) return <Trophy className="h-4 w-4 text-amber-500" />;

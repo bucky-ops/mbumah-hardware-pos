@@ -23,6 +23,9 @@ import {
   type AnalyticsPeriod,
   type TransactionSlice,
 } from '@/lib/analytics-utils';
+// Task 12-b: Decimal-safe conversion at the Prisma boundary; buckets emit
+// NET (VAT-exclusive) revenue rounded 2dp HALF_UP via round2.
+import { toDec, round2 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -63,6 +66,7 @@ async function getSalesTrendHandler(
         id: true,
         createdAt: true,
         totalAmount: true,
+        taxAmount: true, // Task 12-b: needed for the VAT-exclusive revenue basis
         paymentMethod: true,
         paymentStatus: true,
         transactionType: true,
@@ -80,6 +84,7 @@ async function getSalesTrendHandler(
         id: true,
         createdAt: true,
         totalAmount: true,
+        taxAmount: true, // Task 12-b: needed for the VAT-exclusive revenue basis
         paymentMethod: true,
         paymentStatus: true,
         transactionType: true,
@@ -104,17 +109,25 @@ async function getSalesTrendHandler(
       txIdToBucketKey.set(t.id, key);
     }
     itemsSoldByBucket = {};
+    // Task 12-b: quantities accumulated in Decimal (was float `Number(si.quantity)`).
+    const itemsSoldDecByBucket: Record<string, ReturnType<typeof toDec>> = {};
     for (const si of saleItems) {
       const key = txIdToBucketKey.get(si.transactionId);
       if (!key) continue;
-      itemsSoldByBucket[key] = (itemsSoldByBucket[key] || 0) + Number(si.quantity);
+      itemsSoldDecByBucket[key] = (itemsSoldDecByBucket[key] || toDec(0)).plus(toDec(si.quantity));
+    }
+    for (const [key, dec] of Object.entries(itemsSoldDecByBucket)) {
+      itemsSoldByBucket[key] = dec.toNumber();
     }
   }
 
+  // Task 12-b: slices carry taxAmount so aggregation can emit NET revenue
+  // (totalAmount − taxAmount); Decimal-safe conversion at the boundary.
   const currentSlices: TransactionSlice[] = currentTx.map((t) => ({
     id: t.id,
     createdAt: t.createdAt,
-    totalAmount: Number(t.totalAmount),
+    totalAmount: toDec(t.totalAmount).toNumber(),
+    taxAmount: toDec(t.taxAmount).toNumber(),
     paymentMethod: t.paymentMethod,
     paymentStatus: t.paymentStatus,
     transactionType: t.transactionType,
@@ -128,7 +141,8 @@ async function getSalesTrendHandler(
   const previousSlices: TransactionSlice[] = previousTx.map((t) => ({
     id: t.id,
     createdAt: t.createdAt,
-    totalAmount: Number(t.totalAmount),
+    totalAmount: toDec(t.totalAmount).toNumber(),
+    taxAmount: toDec(t.taxAmount).toNumber(),
     paymentMethod: t.paymentMethod,
     paymentStatus: t.paymentStatus,
     transactionType: t.transactionType,
@@ -157,7 +171,7 @@ async function getSalesTrendHandler(
   // the current window's labels so the chart can overlay them 1:1.
   const previousSeries = prevBuckets.map((b, i) => ({
     label: buckets[i]?.label ?? b.label,
-    value: Math.round(b.revenue * 100) / 100,
+    value: round2(b.revenue),
   }));
 
   return Response.json({
@@ -171,18 +185,18 @@ async function getSalesTrendHandler(
       },
       buckets: buckets.map((b) => ({
         ...b,
-        revenue: Math.round(b.revenue * 100) / 100,
-        avgOrderValue: Math.round(b.avgOrderValue * 100) / 100,
+        revenue: round2(b.revenue),
+        avgOrderValue: round2(b.avgOrderValue),
       })),
       previousSeries,
       summary: {
-        totalRevenue: Math.round(totalRevenue * 100) / 100,
+        totalRevenue: round2(totalRevenue),
         totalTransactions,
         totalItemsSold,
-        avgOrderValue: Math.round(avgOrderValue * 100) / 100,
-        previousTotalRevenue: Math.round(prevTotalRevenue * 100) / 100,
+        avgOrderValue: round2(avgOrderValue),
+        previousTotalRevenue: round2(prevTotalRevenue),
         previousTotalTransactions: prevTotalTransactions,
-        previousAvgOrderValue: Math.round(prevAvgOrderValue * 100) / 100,
+        previousAvgOrderValue: round2(prevAvgOrderValue),
         revenueChangePct: Math.round(revenueChangePct * 100) / 100,
         transactionsChangePct: Math.round(txChangePct * 100) / 100,
         aovChangePct: Math.round(aovChangePct * 100) / 100,

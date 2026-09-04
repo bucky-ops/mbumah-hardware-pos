@@ -5,6 +5,8 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { withSessionAuth } from '@/lib/auth';
+import Decimal from 'decimal.js';
+import { toDec, max0 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -295,8 +297,12 @@ async function createInvoiceHandler(...args: unknown[]): Promise<Response> {
   }
 
   // Validate items and compute totals
-  let subtotal = 0;
-  let taxAmount = 0;
+  // FINANCIAL MATH AUDIT — Decimal-exact line math (HALF_UP 2dp at the
+  // line level). Invoices are B2B/wholesale documents → VAT-EXCLUSIVE
+  // (tax added on top of the net line amount), per the audit spec §2.
+  // Σ(lineTotal) − document discount === totalAmount EXACTLY (no drift).
+  let subtotalAcc = new Decimal(0);
+  let taxAmountAcc = new Decimal(0);
   const invoiceItems = items.map((item: {
     productId?: string;
     productName: string;
@@ -310,20 +316,24 @@ async function createInvoiceHandler(...args: unknown[]): Promise<Response> {
     if (!item.productName || item.quantity === undefined || item.pricePerUnit === undefined) {
       throw new Error('Each item must have productName, quantity, and pricePerUnit.');
     }
-    if (item.quantity <= 0) {
+    if (!(item.quantity > 0)) {
       throw new Error('Item quantity must be greater than 0.');
     }
 
-    const discountPct = item.discountPercent || 0;
-    const taxRt = item.taxRate ?? 16;
-    const lineSubtotal = item.quantity * item.pricePerUnit;
-    const lineDiscount = lineSubtotal * (discountPct / 100);
-    const lineAfterDiscount = lineSubtotal - lineDiscount;
-    const lineTax = lineAfterDiscount * (taxRt / 100);
-    const lineTotal = lineAfterDiscount + lineTax;
+    const discountPct = Math.min(100, Math.max(0, item.discountPercent || 0));
+    const taxRt = Math.min(100, Math.max(0, item.taxRate ?? 16));
 
-    subtotal += lineSubtotal;
-    taxAmount += lineTax;
+    // Line math — every step HALF_UP-rounded to 2dp in Decimal.
+    const lineSubtotal = toDec(item.quantity).mul(toDec(item.pricePerUnit)).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+    const lineDiscount = lineSubtotal.mul(discountPct).div(100).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+    const lineAfterDiscount = lineSubtotal.minus(lineDiscount);
+    const lineTax = taxRt === 0
+      ? new Decimal(0)
+      : lineAfterDiscount.mul(taxRt).div(100).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+    const lineTotal = lineAfterDiscount.plus(lineTax);
+
+    subtotalAcc = subtotalAcc.plus(lineSubtotal);
+    taxAmountAcc = taxAmountAcc.plus(lineTax);
 
     return {
       productId: item.productId || null,
@@ -334,12 +344,22 @@ async function createInvoiceHandler(...args: unknown[]): Promise<Response> {
       pricePerUnit: item.pricePerUnit,
       discountPercent: discountPct,
       taxRate: taxRt,
-      lineTotal,
+      lineTotal: lineTotal.toNumber(),
     };
   });
 
-  const totalDiscount = discountAmount || 0;
-  const totalAmount = subtotal - totalDiscount + taxAmount;
+  // Header = EXACT sums of the rounded lines (audit assertion: no
+  // off-by-one-cent drift between Σ lines and the document header).
+  const subtotal = subtotalAcc.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toNumber();
+  const taxAmount = taxAmountAcc.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toNumber();
+  // Document-level discount: validated (≥ 0, capped at the pre-tax gross
+  // subtotal) — a negative or oversized discount previously could push the
+  // invoice total negative or inflate it via the update route.
+  const totalDiscount = Math.min(
+    max0(toDec(discountAmount as number | undefined)).toNumber(),
+    subtotal,
+  );
+  const totalAmount = max0(subtotal - totalDiscount + taxAmount).toNumber();
 
   // Generate invoice number
   const invoiceNumber = await generateInvoiceNumber(type);

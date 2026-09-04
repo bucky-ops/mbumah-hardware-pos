@@ -462,6 +462,12 @@ model SalesTransaction {
   taxAmount       Decimal
   discountAmount  Decimal   @default(0)
   totalAmount     Decimal
+  // ── FINANCIAL MATH AUDIT (spec §4): real till movement on cash sales ──
+  // cashTendered = what the customer actually handed over; changeDue =
+  // max(0, cashTendered − totalAmount). Null for non-cash tenders. Used by
+  // receipts ("Cash / Change" rows) and cash-reconciliation reporting.
+  cashTendered    Decimal?
+  changeDue       Decimal?
   paymentMethod   String // CASH, MPESA, DEBT, SPLIT
   paymentStatus   String    @default("COMPLETED") // PENDING, COMPLETED, FAILED, REFUNDED, PARTIAL
   transactionType String    @default("SALE") // SALE, REFUND, VOID

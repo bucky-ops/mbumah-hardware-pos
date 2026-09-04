@@ -23,6 +23,7 @@ import {
   type ProductListItem,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
+import { formatQty, formatQtyWithUnit } from '@/lib/utils/financialMath';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 import { Button } from '@/components/ui/button';
@@ -650,12 +651,12 @@ function ReceiveItemsDialog({
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{product?.name || item.productName || 'Unknown'}</p>
                   <p className="text-xs text-muted-foreground">
-                    <span>Ordered: {item.quantity}</span>
+                    <span>Ordered: {formatQtyWithUnit(item.quantity, product?.unitType)}</span>
                     <span className="mx-1">&middot;</span>
-                    <span>Received: {item.receivedQty}</span>
+                    <span>Received: {formatQtyWithUnit(item.receivedQty, product?.unitType)}</span>
                     <span className="mx-1">&middot;</span>
                     <span className={remaining > 0 ? 'text-amber-600 font-medium' : 'text-green-600'}>
-                      Remaining: {remaining}
+                      Remaining: {formatQtyWithUnit(remaining, product?.unitType)}
                     </span>
                   </p>
                 </div>
@@ -1092,7 +1093,7 @@ function PODetailView({
                               )}
                             </div>
                           </TableCell>
-                          <TableCell className="text-center text-sm">{item.quantity}</TableCell>
+                          <TableCell className="text-center text-sm">{formatQtyWithUnit(item.quantity, item.product?.unitType)}</TableCell>
                           <TableCell className="text-right text-sm">{formatKES(item.unitCost)}</TableCell>
                           <TableCell className="text-right text-sm font-medium">
                             {formatKES(item.totalCost)}
@@ -1100,7 +1101,7 @@ function PODetailView({
                           <TableCell className="text-center">
                             <div className="flex flex-col items-center gap-1">
                               <span className="text-sm">
-                                {item.receivedQty}/{item.quantity}
+                                {formatQty(item.receivedQty)}/{formatQtyWithUnit(item.quantity, item.product?.unitType)}
                               </span>
                               <Progress value={itemReceivedPct} className="h-1 w-12" />
                             </div>

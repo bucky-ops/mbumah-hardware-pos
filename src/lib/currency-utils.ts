@@ -31,6 +31,9 @@
 
 import Decimal from "decimal.js";
 import type { CurrencyCode } from "@/lib/money";
+// FINANCIAL MATH AUDIT: rounding policy + the canonical KES formatter are
+// owned by financialMath.ts — this module must not set its own mode.
+import { MONEY_ROUNDING, formatKES as formatKESCanonical } from "@/lib/utils/financialMath";
 
 // Re-export CurrencyCode from money.ts so callers have a single import path.
 export type { CurrencyCode } from "@/lib/money";
@@ -135,11 +138,16 @@ export function getCurrencyByCountry(countryCode: string): CurrencyCode {
  * Format a numeric amount as a currency display string with the proper
  * symbol, thousands separators, and decimal precision for the given currency.
  *
+ * KES amounts delegate to the ONE canonical en-KE formatter
+ * (`financialMath.formatKES`) so every surface in the ERP renders the
+ * identical string for the same amount ("KES 1,234.56"). Other currencies
+ * keep their ISO-code prefix and ISO-4217 decimals.
+ *
  * Uses `decimal.js` internally to avoid IEEE-754 float artifacts in the
  * displayed string (e.g. `0.1 + 0.2` would otherwise render as
- * "Ksh 0.30000000000000004" — unacceptable for a POS).
+ * "KES 0.30000000000000004" — unacceptable for a POS).
  *
- * @example formatCurrency(1234.5, "KES")   → "Ksh 1,234.50"
+ * @example formatCurrency(1234.5, "KES")   → "KES 1,234.50"
  * @example formatCurrency(1234.5, "USD")   → "$ 1,234.50"
  * @example formatCurrency(50000, "UGX")    → "USh 50,000"
  * @example formatCurrency(15000, "TZS")    → "TSh 15,000"
@@ -149,6 +157,12 @@ export function formatCurrency(
   currency: CurrencyCode = "KES",
 ): string {
   const meta = CURRENCY_BY_CODE[currency] ?? CURRENCY_BY_CODE.KES;
+
+  // KES (the store's home currency) always renders through the ONE canonical
+  // en-KE formatter — including the null/undefined → "KES 0.00" case.
+  if (currency === "KES") {
+    return formatKESCanonical((amount ?? 0) as number | string | Decimal);
+  }
 
   if (amount === null || amount === undefined) {
     return `${meta.symbol} 0${meta.decimals > 0 ? "." + "0".repeat(meta.decimals) : ""}`;
@@ -174,7 +188,7 @@ export function formatCurrency(
 
   const fixed = d.toDecimalPlaces(
     meta.decimals,
-    Decimal.ROUND_HALF_EVEN,
+    MONEY_ROUNDING,
   ).toFixed(meta.decimals);
 
   // Group integer part with thousands separators.
@@ -228,10 +242,10 @@ export function convertCurrency(
   if (to.exchangeRateToKES === 0) return 0;
   const converted = inKES.div(to.exchangeRateToKES);
 
-  // Round to the target currency's decimal precision (banker's rounding).
+  // Round to the target currency's decimal precision (audit HALF_UP policy).
   const rounded = converted.toDecimalPlaces(
     to.decimals,
-    Decimal.ROUND_HALF_EVEN,
+    MONEY_ROUNDING,
   );
   return rounded.toNumber();
 }

@@ -23,6 +23,7 @@ import {
   type SupplierSendOrderResult,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
+import { formatQty } from '@/lib/utils/financialMath';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 import { SupplierPerformanceCard } from '@/components/suppliers/supplier-performance-card';
 
@@ -699,7 +700,7 @@ function CreatePODialog({
                         {item.currentStock !== undefined && (
                           <span className="ml-2 text-amber-600">
                             <Package className="h-3 w-3 inline mr-0.5" />
-                            {item.currentStock} in stock
+                            {formatQty(item.currentStock)} in stock
                           </span>
                         )}
                       </p>

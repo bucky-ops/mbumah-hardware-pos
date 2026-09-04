@@ -19,7 +19,7 @@ import { useAppStore } from '@/lib/stores';
 import {
   systemLogsApi, stockMovementsApi, productsApi,
   auditLogsApi, systemConfigApi, usersApi,
-  formatDateTime,
+  formatDateTime, formatKES,
   type AuditLogItem, type SystemConfigItem, type UserItem,
 } from '@/lib/api';
 
@@ -270,7 +270,7 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Price</span>
-                  <span className="font-medium">KES {selectedProduct.pricePerUnit.toLocaleString()}</span>
+                  <span className="font-medium">{formatKES(selectedProduct.pricePerUnit)}</span>
                 </div>
               </div>
             )}

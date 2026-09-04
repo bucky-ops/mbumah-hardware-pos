@@ -7,6 +7,10 @@ import { generateJournalEntryNumber } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, RentalStatus, StockMovementType } from '@/lib/types';
 import { withSessionAuth, getSessionFromRequest } from '@/lib/auth';
+// Task 12-c: canonical financial math. Prisma Decimal `valueOf()` returns a
+// STRING — `currentBalance + deposit` used to STRING-CONCATENATE, and
+// parseFloat() let IEEE-754 dust into the Decimal rate/deposit columns.
+import { toDec, round2 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -190,8 +194,9 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  const deposit = parseFloat(String(securityDeposit || 0));
-  const dailyRate = parseFloat(String(ratePerDay));
+  // Task 12-c: Decimal coercion + HALF_UP 2dp rounding for money columns.
+  const deposit = round2(toDec(securityDeposit ?? 0));
+  const dailyRate = round2(toDec(ratePerDay));
 
   const result = await db.$transaction(async (tx) => {
     // AUDIT FIX (oversell): this was a blind `product.update` decrement AFTER
@@ -218,8 +223,8 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
         expectedReturnDate: new Date(expectedReturnDate),
         securityDeposit: deposit,
         ratePerDay: dailyRate,
-        ratePerWeek: ratePerWeek ? parseFloat(String(ratePerWeek)) : null,
-        ratePerMonth: ratePerMonth ? parseFloat(String(ratePerMonth)) : null,
+        ratePerWeek: ratePerWeek ? round2(toDec(ratePerWeek)) : null,
+        ratePerMonth: ratePerMonth ? round2(toDec(ratePerMonth)) : null,
         totalRentalCharge: 0,
         lateFeeAccumulated: 0,
         notes: notes || null,
@@ -253,7 +258,12 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
         where: { storeId },
         _sum: { amount: true },
       });
-      const currentBalance = Number(balanceAgg._sum.amount ?? 0);
+      // Task 12-c: Decimal running balance (was `currentBalance + deposit`, a
+      // number + Prisma-Decimal STRING concat). NOTE: CashDrawerLog is an
+      // APPEND-ONLY ledger (no mutable balance row), so Prisma's atomic
+      // increment/decrement does not apply — the SUM-derived derivation below
+      // is the concurrency-safe equivalent (R6 pattern).
+      const currentBalanceDec = toDec(balanceAgg._sum.amount ?? 0);
 
       await tx.cashDrawerLog.create({
         data: {
@@ -262,7 +272,7 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
           userId: actorId,
           action: 'CASH_IN',
           amount: deposit,
-          balance: currentBalance + deposit,
+          balance: round2(currentBalanceDec.plus(deposit)),
           notes: `Security deposit for rental - ${product.name}`,
         },
       });

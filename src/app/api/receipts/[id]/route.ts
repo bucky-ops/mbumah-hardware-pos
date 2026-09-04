@@ -11,6 +11,9 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { requireStoreAccess, type AuthSession } from '@/lib/auth';
+// Task 12-b: Prisma Decimal valueOf() returns a STRING — `number + decimal`
+// concatenates. Receipt computed totals run through toDec().
+import { toDec } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -121,14 +124,23 @@ async function getReceiptDetailHandler(...args: unknown[]): Promise<Response> {
     mpesaReceiptNumber = mpesaTx?.mpesaReceiptNumber || null;
   }
 
-    const lineItemsTotal = receipt.transaction.items.reduce(
-    (sum, item) => sum + item.lineTotal,
-    0
-  );
-  const totalItemDiscount = receipt.transaction.items.reduce(
-    (sum, item) => sum + (item.pricePerUnit * item.quantity * item.discountPercent / 100),
-    0
-  );
+    // Task 12-b: Decimal-safe computed totals (was `0 + Decimal` string-concat
+    // for lineItemsTotal and float coercion for the discount sum).
+    const lineItemsTotal = receipt.transaction.items
+      .reduce((acc, item) => acc.plus(toDec(item.lineTotal)), toDec(0))
+      .toNumber();
+  const totalItemDiscount = receipt.transaction.items
+    .reduce(
+      (acc, item) =>
+        acc.plus(
+          toDec(item.pricePerUnit)
+            .mul(toDec(item.quantity))
+            .mul(toDec(item.discountPercent))
+            .div(100),
+        ),
+      toDec(0),
+    )
+    .toNumber();
 
   const receiptData = {
         id: receipt.id,

@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { QrCodeDisplay } from './qr-code-display';
+import { formatCurrency } from '@/lib/currency-utils';
 
 interface InvoiceCardProps {
   invoice: {
@@ -60,7 +61,9 @@ export function InvoiceCard({
   onView,
   onCancel,
   currency: _currency = 'KES',
-  formatAmount = (n) => `KES ${n.toLocaleString('en-KE', { minimumFractionDigits: 2 })}`,
+  // FORMAT UNIFICATION (task 12-d): default renderer delegates to the ONE
+  // canonical en-KE KES formatter (currency-utils → financialMath.formatKES).
+  formatAmount = (n) => formatCurrency(n ?? 0, 'KES'),
 }: InvoiceCardProps) {
   const config = statusConfig[invoice.status] || statusConfig.PENDING;
   const StatusIcon = config.icon;

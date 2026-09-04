@@ -5,6 +5,9 @@ import { db } from '@/lib/db';
 import { requireAuth, type AuthSession } from '@/lib/auth';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+// FORMAT UNIFICATION (task 12-d): canonical en-KE KES formatter for all
+// WhatsApp money strings (handles Decimal / string / number safely).
+import { formatKES } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,16 +78,16 @@ async function sendDocumentHandler(request: NextRequest, session: AuthSession): 
         if (invoice.items && Array.isArray(invoice.items)) {
           for (const item of invoice.items) {
             const itemTotal = item.lineTotal || item.quantity * item.pricePerUnit;
-            whatsappMessage += `\u2022 ${item.productName || 'Item'} x${item.quantity} @ KES ${item.pricePerUnit.toLocaleString()} = KES ${itemTotal.toLocaleString()}\n`;
+            whatsappMessage += `\u2022 ${item.productName || 'Item'} x${item.quantity} @ ${formatKES(item.pricePerUnit)} = ${formatKES(itemTotal)}\n`;
           }
         }
 
         whatsappMessage += `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n`;
-        whatsappMessage += `\u{1F4B0} Subtotal: KES ${invoice.subtotal.toLocaleString()}\n`;
-        whatsappMessage += `\u{1F4CA} Tax: KES ${invoice.taxAmount.toLocaleString()}\n`;
+        whatsappMessage += `\u{1F4B0} Subtotal: ${formatKES(invoice.subtotal)}\n`;
+        whatsappMessage += `\u{1F4CA} Tax: ${formatKES(invoice.taxAmount)}\n`;
         if (invoice.discountAmount > 0)
-          whatsappMessage += `\u{1F3F7}\uFE0F Discount: KES ${invoice.discountAmount.toLocaleString()}\n`;
-        whatsappMessage += `\u{1F4B5} *TOTAL: KES ${invoice.totalAmount.toLocaleString()}*\n`;
+          whatsappMessage += `\u{1F3F7}\uFE0F Discount: ${formatKES(invoice.discountAmount)}\n`;
+        whatsappMessage += `\u{1F4B5} *TOTAL: ${formatKES(invoice.totalAmount)}*\n`;
         whatsappMessage += `\u{1F4CA} Status: ${invoice.status}\n`;
         if (message) whatsappMessage += `\n\u{1F4AC} ${message}\n`;
         whatsappMessage += `\nThank you for your business! \u{1F64F}`;
@@ -114,16 +117,16 @@ async function sendDocumentHandler(request: NextRequest, session: AuthSession): 
 
         if (transaction.items && Array.isArray(transaction.items)) {
           for (const item of transaction.items) {
-            whatsappMessage += `\u2022 ${item.productName} x${item.quantity} @ KES ${(item.pricePerUnit || 0).toLocaleString()} = KES ${(item.lineTotal || 0).toLocaleString()}\n`;
+            whatsappMessage += `\u2022 ${item.productName} x${item.quantity} @ ${formatKES(item.pricePerUnit || 0)} = ${formatKES(item.lineTotal || 0)}\n`;
           }
         }
 
         whatsappMessage += `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n`;
-        whatsappMessage += `\u{1F4B0} Subtotal: KES ${transaction.subtotal.toLocaleString()}\n`;
-        whatsappMessage += `\u{1F4CA} Tax: KES ${transaction.taxAmount.toLocaleString()}\n`;
+        whatsappMessage += `\u{1F4B0} Subtotal: ${formatKES(transaction.subtotal)}\n`;
+        whatsappMessage += `\u{1F4CA} Tax: ${formatKES(transaction.taxAmount)}\n`;
         if (transaction.discountAmount > 0)
-          whatsappMessage += `\u{1F3F7}\uFE0F Discount: KES ${transaction.discountAmount.toLocaleString()}\n`;
-        whatsappMessage += `\u{1F4B5} *TOTAL: KES ${transaction.totalAmount.toLocaleString()}*\n`;
+          whatsappMessage += `\u{1F3F7}\uFE0F Discount: ${formatKES(transaction.discountAmount)}\n`;
+        whatsappMessage += `\u{1F4B5} *TOTAL: ${formatKES(transaction.totalAmount)}*\n`;
         whatsappMessage += `\u{1F4B3} Payment: ${transaction.paymentMethod}\n`;
         if (message) whatsappMessage += `\n\u{1F4AC} ${message}\n`;
         whatsappMessage += `\nThank you for shopping with us! \u{1F64F}`;
@@ -152,12 +155,12 @@ async function sendDocumentHandler(request: NextRequest, session: AuthSession): 
         if (quotation.items && Array.isArray(quotation.items)) {
           for (const item of quotation.items) {
             const itemTotal = item.lineTotal || item.quantity * item.pricePerUnit;
-            whatsappMessage += `\u2022 ${item.productName || 'Item'} x${item.quantity} @ KES ${item.pricePerUnit.toLocaleString()} = KES ${itemTotal.toLocaleString()}\n`;
+            whatsappMessage += `\u2022 ${item.productName || 'Item'} x${item.quantity} @ ${formatKES(item.pricePerUnit)} = ${formatKES(itemTotal)}\n`;
           }
         }
 
         whatsappMessage += `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n`;
-        whatsappMessage += `\u{1F4B5} *TOTAL: KES ${quotation.totalAmount.toLocaleString()}*\n`;
+        whatsappMessage += `\u{1F4B5} *TOTAL: ${formatKES(quotation.totalAmount)}*\n`;
         whatsappMessage += `\u26A0\uFE0F *This is a quotation. Prices subject to change.*\n`;
         if (message) whatsappMessage += `\n\u{1F4AC} ${message}\n`;
         whatsappMessage += `\nContact us to place your order! \u{1F4DE}`;
@@ -183,17 +186,17 @@ async function sendDocumentHandler(request: NextRequest, session: AuthSession): 
         if (voucher.voucherType === 'PERCENTAGE') {
           whatsappMessage += `\u{1F4B0} Value: ${voucher.value}% off\n`;
         } else if (voucher.voucherType === 'FIXED') {
-          whatsappMessage += `\u{1F4B0} Value: KES ${voucher.value.toLocaleString()} off\n`;
+          whatsappMessage += `\u{1F4B0} Value: ${formatKES(voucher.value)} off\n`;
         } else if (voucher.voucherType === 'FREE_PRODUCT') {
           whatsappMessage += `\u{1F381} Value: Free Product\n`;
         } else {
-          whatsappMessage += `\u{1F4B0} Value: KES ${voucher.value.toLocaleString()}\n`;
+          whatsappMessage += `\u{1F4B0} Value: ${formatKES(voucher.value)}\n`;
         }
         if (voucher.description) whatsappMessage += `\u{1F4DD} ${voucher.description}\n`;
         if (voucher.minimumPurchase > 0)
-          whatsappMessage += `\u{1F512} Min. Purchase: KES ${voucher.minimumPurchase.toLocaleString()}\n`;
+          whatsappMessage += `\u{1F512} Min. Purchase: ${formatKES(voucher.minimumPurchase)}\n`;
         if (voucher.maxDiscount)
-          whatsappMessage += `\u{1F4CA} Max Discount: KES ${voucher.maxDiscount.toLocaleString()}\n`;
+          whatsappMessage += `\u{1F4CA} Max Discount: ${formatKES(voucher.maxDiscount)}\n`;
         whatsappMessage += `\u{1F4C5} Valid: ${new Date(voucher.startDate).toLocaleDateString('en-KE')}${voucher.endDate ? ' - ' + new Date(voucher.endDate).toLocaleDateString('en-KE') : ' onwards'}\n`;
         whatsappMessage += `\u{1F504} Uses: ${voucher.currentUses}/${voucher.maxUses}\n`;
         whatsappMessage += `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n`;
@@ -226,7 +229,7 @@ async function sendDocumentHandler(request: NextRequest, session: AuthSession): 
           totalItems++;
           const isLow = product.quantityInStock <= product.reorderLevel;
           if (isLow) lowStockItems++;
-          whatsappMessage += `${isLow ? '\u26A0\uFE0F' : '\u2705'} ${product.name} (${product.sku}): ${product.quantityInStock} @ KES ${product.pricePerUnit.toLocaleString()}\n`;
+          whatsappMessage += `${isLow ? '\u26A0\uFE0F' : '\u2705'} ${product.name} (${product.sku}): ${product.quantityInStock} @ ${formatKES(product.pricePerUnit)}\n`;
         }
 
         whatsappMessage += `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n`;
@@ -289,7 +292,7 @@ async function sendDocumentHandler(request: NextRequest, session: AuthSession): 
         whatsappMessage += `From: ${giftCard.store?.name || 'Mbumah Hardware'}\n`;
         whatsappMessage += `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n`;
         whatsappMessage += `\u{1F511} Code: *${giftCard.code}*\n`;
-        whatsappMessage += `\u{1F4B0} Balance: KES ${giftCard.currentBalance.toLocaleString()}\n`;
+        whatsappMessage += `\u{1F4B0} Balance: ${formatKES(giftCard.currentBalance)}\n`;
         whatsappMessage += `\u{1F4CB} Status: ${giftCard.status}\n`;
         if (giftCard.recipientName)
           whatsappMessage += `\u{1F464} Recipient: ${giftCard.recipientName}\n`;
@@ -316,7 +319,7 @@ async function sendDocumentHandler(request: NextRequest, session: AuthSession): 
         whatsappMessage += `From: ${credit.store?.name || 'Mbumah Hardware'}\n`;
         whatsappMessage += `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n`;
         whatsappMessage += `\u{1F464} Customer: ${credit.customer?.name || 'N/A'}\n`;
-        whatsappMessage += `\u{1F4B0} Amount: KES ${credit.amount.toLocaleString()}\n`;
+        whatsappMessage += `\u{1F4B0} Amount: ${formatKES(credit.amount)}\n`;
         whatsappMessage += `\u{1F4CB} Type: ${credit.creditType}\n`;
         whatsappMessage += `\u{1F4CA} Status: ${credit.status}\n`;
         if (credit.description) whatsappMessage += `\u{1F4DD} Description: ${credit.description}\n`;
@@ -354,12 +357,12 @@ async function sendDocumentHandler(request: NextRequest, session: AuthSession): 
             const productName = item.product
               ? (await db.product.findUnique({ where: { id: item.productId } }))?.name || 'Item'
               : 'Item';
-            whatsappMessage += `\u2022 ${productName} x${item.quantity} @ KES ${item.unitCost.toLocaleString()}\n`;
+            whatsappMessage += `\u2022 ${productName} x${item.quantity} @ ${formatKES(item.unitCost)}\n`;
           }
         }
 
         whatsappMessage += `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n`;
-        whatsappMessage += `\u{1F4B5} *TOTAL: KES ${po.totalAmount.toLocaleString()}*\n`;
+        whatsappMessage += `\u{1F4B5} *TOTAL: ${formatKES(po.totalAmount)}*\n`;
         if (message) whatsappMessage += `\n\u{1F4AC} ${message}\n`;
         whatsappMessage += `\nPlease confirm availability. \u{1F64F}`;
         break;
@@ -392,13 +395,13 @@ async function sendDocumentHandler(request: NextRequest, session: AuthSession): 
         whatsappMessage += `From: ${customer.store?.name || 'Mbumah Hardware'}\n`;
         whatsappMessage += `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n`;
         whatsappMessage += `\u{1F464} Customer: ${customer.name}\n`;
-        whatsappMessage += `\u{1F4B0} Outstanding Debt: KES ${customer.currentDebtBalance.toLocaleString()}\n`;
-        whatsappMessage += `\u{1F4CA} Credit Limit: KES ${customer.debtLimit.toLocaleString()}\n`;
+        whatsappMessage += `\u{1F4B0} Outstanding Debt: ${formatKES(customer.currentDebtBalance)}\n`;
+        whatsappMessage += `\u{1F4CA} Credit Limit: ${formatKES(customer.debtLimit)}\n`;
         whatsappMessage += `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n`;
         whatsappMessage += `*Recent Transactions:*\n`;
 
         for (const txn of recentTxns) {
-          whatsappMessage += `\u2022 ${txn.receiptNumber}: KES ${txn.totalAmount.toLocaleString()} (${txn.paymentMethod}) - ${new Date(txn.createdAt).toLocaleDateString('en-KE')}\n`;
+          whatsappMessage += `\u2022 ${txn.receiptNumber}: ${formatKES(txn.totalAmount)} (${txn.paymentMethod}) - ${new Date(txn.createdAt).toLocaleDateString('en-KE')}\n`;
         }
 
         whatsappMessage += `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n`;

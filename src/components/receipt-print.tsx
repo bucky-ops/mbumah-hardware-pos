@@ -60,6 +60,8 @@ import {
   type SaleItemDetail,
 } from '@/lib/api';
 import { STORE_LIST, COMPANY, type StoreInfo } from '@/lib/store-info';
+import Decimal from 'decimal.js';
+import { toDec, toNum, max0, changeDue as changeDueOf } from '@/lib/utils/financialMath';
 import { safeMap } from '@/lib/app-config';
 import {
   RECEIPT_CONTENT_ID,
@@ -229,9 +231,16 @@ function buildReceiptText(
   lines.push(divider);
   lines.push(`Payment: ${tx.paymentMethod}`);
 
-  if (tx.paymentMethod === 'CASH' && opts?.cashReceived && opts.cashReceived > 0) {
-    lines.push(`Cash Received:   ${formatKES(opts.cashReceived).padStart(14)}`);
-    const change = opts.cashReceived - tx.totalAmount;
+  if (tx.paymentMethod === 'CASH') {
+    // FINANCIAL MATH AUDIT: prefer server-persisted tender/change (spec §4);
+    // change = max(0, cash rendered − total), Decimal-exact.
+    const tendered = tx.cashTendered != null ? toNum(tx.cashTendered) : opts?.cashReceived ?? 0;
+    const change = tx.changeDue != null
+      ? toNum(tx.changeDue)
+      : changeDueOf(tendered, toNum(tx.totalAmount));
+    if (tendered > 0) {
+      lines.push(`Cash Tendered:  ${formatKES(tendered).padStart(14)}`);
+    }
     if (change > 0) {
       lines.push(`Change:          ${formatKES(change).padStart(14)}`);
     }
@@ -271,17 +280,27 @@ export function ReceiptDocument({
 }: ReceiptDocumentProps) {
   const store = STORE_LIST.find((s) => s.id === storeId);
 
-  const change = transaction.paymentMethod === 'CASH' && cashReceived > 0
-    ? cashReceived - transaction.totalAmount
+  // FINANCIAL MATH AUDIT: change = max(0, cash rendered − total), Decimal-
+  // exact. Server-persisted `changeDue` (audit spec §4) is authoritative
+  // when present; the client-passed tender is the fallback for live prints.
+  const serverCashTendered = transaction.cashTendered != null ? toNum(transaction.cashTendered) : 0;
+  const serverChangeDue = transaction.changeDue != null ? toNum(transaction.changeDue) : null;
+  const effectiveCash = serverCashTendered > 0 ? serverCashTendered : cashReceived;
+  const change = transaction.paymentMethod === 'CASH'
+    ? (serverChangeDue ?? changeDueOf(effectiveCash, toNum(transaction.totalAmount)))
     : 0;
 
-  // VAT breakdown (16% standard rate; remainder of the subtotal is
-  // zero-rated/exempt — mirrors the eTIMS invoice classification).
+  // VAT breakdown — mode-agnostic and Decimal-exact. For every stored
+  // transaction (legacy VAT-exclusive AND current VAT-inclusive pricing)
+  // `totalAmount − taxAmount` is the NET (VAT-exclusive) revenue, and
+  // taxAmount / 0.16 recovers the standard-rated net value; whatever net
+  // remains is exempt / zero-rated (mirrors the eTIMS classification).
   const VAT_RATE = 0.16;
-  const taxableAmount = transaction.taxAmount > 0
-    ? transaction.taxAmount / VAT_RATE
-    : 0;
-  const exemptAmount = Math.max(0, transaction.subtotal - taxableAmount);
+  const netRevenue = max0(toDec(transaction.totalAmount).minus(toDec(transaction.taxAmount)));
+  const taxableAmount = toDec(transaction.taxAmount).gt(0)
+    ? toDec(transaction.taxAmount).div(VAT_RATE).toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+    : new Decimal(0);
+  const exemptAmount = max0(netRevenue.minus(taxableAmount)).toNumber();
 
   const qrPayload = buildReceiptQrPayload(transaction);
 
@@ -456,10 +475,10 @@ export function ReceiptDocument({
           )}
 
           {/* VAT / tax breakdown */}
-          {taxableAmount > 0 && (
+          {taxableAmount.gt(0) && (
             <div className="flex justify-between text-[10px] text-muted-foreground">
-              <span className="pl-2">Taxable Amount (16%)</span>
-              <span>{formatKES(taxableAmount)}</span>
+              <span className="pl-2">Taxable Value (excl. VAT)</span>
+              <span>{formatKES(taxableAmount.toNumber())}</span>
             </div>
           )}
           <div className="flex justify-between">
@@ -481,12 +500,13 @@ export function ReceiptDocument({
             </span>
           </div>
 
-          {/* Tendered / change */}
-          {transaction.paymentMethod === 'CASH' && cashReceived > 0 && (
+          {/* Tendered / change — FINANCIAL MATH AUDIT: prefers the
+              server-persisted cashTendered/changeDue fields (spec §4). */}
+          {transaction.paymentMethod === 'CASH' && effectiveCash > 0 && (
             <>
               <div className="flex justify-between pt-0.5">
                 <span className="text-muted-foreground">Cash Tendered</span>
-                <span className="font-medium">{formatKES(cashReceived)}</span>
+                <span className="font-medium">{formatKES(effectiveCash)}</span>
               </div>
               {change > 0 && (
                 <div className="-mx-1 flex items-center justify-between rounded bg-emerald-50 px-1.5 py-1 font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">

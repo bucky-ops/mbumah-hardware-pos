@@ -4,6 +4,10 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
+// Task 12-b: Prisma Decimal valueOf() returns a STRING — `number + decimal`
+// concatenates and relational operators compare as strings. Valuation runs
+// through toDec(); numbers emitted at the JSON boundary.
+import { toDec } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,13 +77,21 @@ async function getInventoryReportHandler(...args: unknown[]): Promise<Response> 
   ]);
 
     const enrichedProducts = products.map((product) => {
-    const stockValue = product.quantityInStock * product.costPrice;
-    const retailValue = product.quantityInStock * product.pricePerUnit;
-    const potentialProfit = retailValue - stockValue;
-    const isLowStock = product.quantityInStock <= product.reorderLevel;
-    const isOutOfStock = product.quantityInStock <= 0;
+    // Task 12-b: valuation in Decimal (was Decimal×Decimal via JS `*`, which
+    // coerces both valueOf() STRINGS through float).
+    const stockValueDec = toDec(product.quantityInStock).mul(toDec(product.costPrice));
+    const retailValueDec = toDec(product.quantityInStock).mul(toDec(product.pricePerUnit));
+    const stockValue = stockValueDec.toNumber();
+    const retailValue = retailValueDec.toNumber();
+    const potentialProfit = retailValueDec.minus(stockValueDec).toNumber();
+    // Decimal comparisons — `<=` on Decimals is a STRING comparison.
+    const isLowStock = toDec(product.quantityInStock).lte(toDec(product.reorderLevel));
+    const isOutOfStock = toDec(product.quantityInStock).lte(0);
 
-    const totalWarehouseQty = product.warehouseStocks.reduce((sum, ws) => sum + ws.quantity, 0);
+    const totalWarehouseQty = product.warehouseStocks.reduce(
+      (acc, ws) => acc.plus(toDec(ws.quantity)),
+      toDec(0),
+    ).toNumber();
 
     return {
       id: product.id,
@@ -117,10 +129,16 @@ async function getInventoryReportHandler(...args: unknown[]): Promise<Response> 
     },
   });
 
-  const totalStockValue = allActiveProducts.reduce((sum, p) => sum + p.quantityInStock * p.costPrice, 0);
-  const totalRetailValue = allActiveProducts.reduce((sum, p) => sum + p.quantityInStock * p.pricePerUnit, 0);
-  const lowStockCount = allActiveProducts.filter((p) => p.quantityInStock > 0 && p.quantityInStock <= p.reorderLevel).length;
-  const outOfStockCount = allActiveProducts.filter((p) => p.quantityInStock <= 0).length;
+  const totalStockValue = allActiveProducts.reduce(
+    (acc, p) => acc.plus(toDec(p.quantityInStock).mul(toDec(p.costPrice))),
+    toDec(0),
+  );
+  const totalRetailValue = allActiveProducts.reduce(
+    (acc, p) => acc.plus(toDec(p.quantityInStock).mul(toDec(p.pricePerUnit))),
+    toDec(0),
+  );
+  const lowStockCount = allActiveProducts.filter((p) => toDec(p.quantityInStock).gt(0) && toDec(p.quantityInStock).lte(toDec(p.reorderLevel))).length;
+  const outOfStockCount = allActiveProducts.filter((p) => toDec(p.quantityInStock).lte(0)).length;
   const rentalItemCount = allActiveProducts.filter((p) => p.isRental).length;
 
   return Response.json({
@@ -128,9 +146,9 @@ async function getInventoryReportHandler(...args: unknown[]): Promise<Response> 
     data: enrichedProducts,
     summary: {
       totalProducts: allActiveProducts.length,
-      totalStockValue,
-      totalRetailValue,
-      potentialProfit: totalRetailValue - totalStockValue,
+      totalStockValue: totalStockValue.toNumber(),
+      totalRetailValue: totalRetailValue.toNumber(),
+      potentialProfit: totalRetailValue.minus(totalStockValue).toNumber(),
       lowStockCount,
       outOfStockCount,
       rentalItemCount,

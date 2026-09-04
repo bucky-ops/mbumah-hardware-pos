@@ -18,8 +18,9 @@
 // to centralise every money operation behind this `Money` class so that:
 //
 //   1. No floating-point ever touches a money field in application code.
-//   2. Rounding is explicit and uses banker's rounding (HALF_EVEN) — the
-//      GAAP / IFRS standard — never "round half up" (which biases upward).
+//   2. Rounding is explicit and uses HALF_UP to 2dp — the FINANCIAL MATH
+//      AUDIT policy (KRA/eTIMS-aligned, Kenya retail standard) — owned by
+//      src/lib/utils/financialMath.ts so no module can diverge.
 //   3. Currency is attached to every amount, preventing accidental KES/KES
 //      cross-currency arithmetic.
 //   4. Allocation (splitting an amount into ratios) is exact — no penny
@@ -56,22 +57,17 @@
 
 import Decimal from "decimal.js";
 
-// ── Banker's rounding (HALF_EVEN) — GAAP / IFRS standard ──────────────────────
+// ── Global decimal.js config — OWNED by financialMath.ts ────────────────────
 //
-// Half-even rounding rounds 0.5 to the nearest EVEN digit, eliminating the
-// upward bias of "half up" (which rounds every 0.5 up, skewing aggregates
-// over many transactions). This is the rounding mode mandated by:
-//   • IFRS for financial reporting
-//   • Article 7 of the EU "Prices in Euro" Directive
-//   • KRA (Kenya Revenue Authority) for VAT computation
-//
-// Decimal.js configuration: precision 28 significant digits (enough for
-// Ksh 9,999,999,999.99 — well beyond any retail POS transaction), rounding
-// HALF_EVEN.
-Decimal.set({
-  precision: 28,
-  rounding: Decimal.ROUND_HALF_EVEN,
-});
+// FINANCIAL MATH AUDIT: the strict rounding policy (HALF_UP, 2dp at the
+// line level) and the decimal.js global configuration are owned by
+// src/lib/utils/financialMath.ts. Importing it here for its side effect
+// guarantees the config is applied exactly once, before any Money
+// operation runs, regardless of module import order. Do NOT call
+// Decimal.set in this file (an import-order tug-of-war would make the
+// active rounding mode depend on which module happened to load last).
+import '@/lib/utils/financialMath';
+import { MONEY_ROUNDING, formatKES as formatKESCanonical } from '@/lib/utils/financialMath';
 
 // ── Currency codes we accept (extensible) ────────────────────────────────────
 export type CurrencyCode = "KES" | "USD" | "EUR" | "GBP" | "TZS" | "UGX";
@@ -339,7 +335,7 @@ export class Money {
     const decimals = currencyDecimals(this.currency);
     const unit = new Decimal(10).pow(decimals);
     // Work in integer minor units (cents) to guarantee exact distribution.
-    const totalMinor = this.amount.mul(unit).toDecimalPlaces(0, Decimal.ROUND_HALF_EVEN);
+    const totalMinor = this.amount.mul(unit).toDecimalPlaces(0, MONEY_ROUNDING);
 
     // First pass: floor allocation.
     const floored = ratios.map((r) => {
@@ -372,15 +368,16 @@ export class Money {
   // ── Rounding ───────────────────────────────────────────────────────────────
 
   /**
-   * Round to the currency's minor-unit precision using banker's rounding
-   * (HALF_EVEN). KES rounds to 2 decimals (cents); TZS / UGX to 0 decimals.
+   * Round to the currency's minor-unit precision using the audit-mandated
+   * HALF_UP policy (0.005 → 0.01). KES rounds to 2 decimals (cents);
+   * TZS / UGX to 0 decimals.
    *
    * This does NOT mutate — returns a new Money.
    */
   round(): Money {
     const decimals = currencyDecimals(this.currency);
     return new Money(
-      this.amount.toDecimalPlaces(decimals, Decimal.ROUND_HALF_EVEN),
+      this.amount.toDecimalPlaces(decimals, MONEY_ROUNDING),
       this.currency,
     );
   }
@@ -479,19 +476,23 @@ export class Money {
   // ── Formatting ─────────────────────────────────────────────────────────────
 
   /**
-   * Format as a Kenyan-Shilling display string with thousands separators and
-   * 2 decimal places. e.g. `KES(1234567.5).formatKES()` → "Ksh 1,234,567.50".
+   * Format as a Kenyan-Shilling display string — delegates to the ONE
+   * canonical en-KE formatter (financialMath.formatKES) so a receipt, an
+   * e-mail and a UI table render the identical string for the same amount:
+   * `KES(1234567.5).formatKES()` → "KES 1,234,567.50".
    *
    * For currencies with 0 minor units (TZS, UGX), no decimals are shown.
    */
   formatKES(): string {
-    const decimals = currencyDecimals(this.currency);
-    const symbol = this.currency === "KES" ? "Ksh " : `${this.currency} `;
-    const fixed = this.amount.toFixed(decimals);
-    // Add thousands separators: "1234567.50" → "1,234,567.50"
-    const [intPart, decPart] = fixed.split(".");
-    const withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    return `${symbol}${decPart ? `${withCommas}.${decPart}` : withCommas}`;
+    if (this.currency !== "KES") {
+      // Non-KES keeps the ISO-code prefix with its ISO-4217 decimals.
+      const decimals = currencyDecimals(this.currency);
+      const fixed = this.amount.toFixed(decimals);
+      const [intPart, decPart] = fixed.split(".");
+      const withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      return `${this.currency} ${decPart ? `${withCommas}.${decPart}` : withCommas}`;
+    }
+    return formatKESCanonical(this.amount);
   }
 
   /**

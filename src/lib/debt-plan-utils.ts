@@ -4,7 +4,26 @@
  *
  * All math is Decimal-safe: callers pass Prisma `Decimal`-shaped values and
  * receive plain `number`s back (suitable for JSON responses and UI display).
+ *
+ * Task 12-c: `round2` is now the CANONICAL implementation re-exported from
+ * `@/lib/utils/financialMath` (decimal.js HALF_UP, 2dp — the global rounding
+ * policy owner). The previous local implementation was a float
+ * `Math.round((n + Number.EPSILON) * 100) / 100` hack; schedules produced
+ * with the old helper remain numerically identical (the old hack agreed with
+ * HALF_UP on every positive half-cent case; the only divergence is negative
+ * half-cent inputs, which never occur in schedule math — balances are
+ * clamped ≥ 0). Money arithmetic in this module now flows through `toDec`.
  */
+
+import { toDec, round2, max0 } from '@/lib/utils/financialMath';
+import type Decimal from 'decimal.js';
+
+/** Numeric-ish shape accepted by toDec (Prisma Decimal is a decimal.js Decimal). */
+type NumericLike = number | string | Decimal | null | undefined;
+
+// Re-export so every existing `import { round2 } from '@/lib/debt-plan-utils'`
+// call site (routes + tests) keeps working against the canonical helper.
+export { round2 };
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -82,10 +101,7 @@ export function toNumber(value: unknown): number {
   return Number.isFinite(coerced) ? coerced : 0;
 }
 
-/** Round to 2 decimal places (banker's-style safety without surprises). */
-export function round2(n: number): number {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
-}
+// `round2` (canonical HALF_UP 2dp) is re-exported from financialMath above.
 
 // ── Schedule calculation ────────────────────────────────────────────────────
 
@@ -128,20 +144,24 @@ export function calculateInstallmentSchedule(
   interestRate: number = 0,
 ): ScheduledInstallment[] {
   const safeCount = Math.max(1, Math.floor(installmentCount));
-  const safeTotal = Math.max(0, Number.isFinite(totalAmount) ? totalAmount : 0);
-  const safeRate = Math.max(0, Number.isFinite(interestRate) ? interestRate : 0);
+  // Task 12-c: money math in Decimal (toDec maps NaN/Infinity → 0, matching
+  // the old Number.isFinite guards).
+  const safeTotal = max0(toDec(totalAmount));
+  const safeRate = max0(toDec(interestRate));
 
   // Duration in years (rough — used only for simple-interest allocation).
   const unitsPerYear =
     frequency === 'WEEKLY' ? 52 : frequency === 'BI_WEEKLY' ? 26 : 12;
   const durationYears = safeCount / unitsPerYear;
 
-  const totalWithInterest = safeTotal * (1 + (safeRate / 100) * durationYears);
-  const perInstallment = round2(totalWithInterest / safeCount);
+  // totalWithInterest = total × (1 + (rate/100) × durationYears) — exact Decimal.
+  const growthFactor = toDec(1).plus(safeRate.div(100).mul(durationYears));
+  const totalWithInterest = safeTotal.mul(growthFactor);
+  const perInstallment = round2(totalWithInterest.div(safeCount));
 
   // Distribute rounding error onto the final installment so totals reconcile.
-  const sumOfFirst = round2(perInstallment * (safeCount - 1));
-  const lastInstallment = round2(totalWithInterest - sumOfFirst);
+  const sumOfFirst = round2(toDec(perInstallment).mul(safeCount - 1));
+  const lastInstallment = round2(totalWithInterest.minus(sumOfFirst));
 
   const schedule: ScheduledInstallment[] = [];
   for (let i = 0; i < safeCount; i++) {
@@ -171,10 +191,11 @@ export function calculateInstallmentAmount(
   interestRate: number = 0,
 ): number {
   const safeCount = Math.max(1, Math.floor(installmentCount));
-  const safeTotal = Math.max(0, Number.isFinite(totalAmount) ? totalAmount : 0);
-  const safeRate = Math.max(0, Number.isFinite(interestRate) ? interestRate : 0);
-  const totalWithInterest = safeTotal * (1 + (safeRate / 100));
-  return round2(totalWithInterest / safeCount);
+  // Task 12-c: Decimal money math (same formula, exact).
+  const safeTotal = max0(toDec(totalAmount));
+  const safeRate = max0(toDec(interestRate));
+  const totalWithInterest = safeTotal.mul(toDec(1).plus(safeRate.div(100)));
+  return round2(totalWithInterest.div(safeCount));
 }
 
 // ── Status helpers ──────────────────────────────────────────────────────────
@@ -256,10 +277,13 @@ export function recalculatePlanTotals(
   plan: PlanLike,
   installments: InstallmentLike[],
 ): PlanTotals {
-  const totalAmount = toNumber(plan.totalAmount);
-  const amountPaid = installments.reduce(
-    (sum, inst) => sum + toNumber(inst.amountPaid),
-    0,
+  // Task 12-c: Decimal accumulators (was a float `sum + toNumber(...)`
+  // reduce — number+number, so no concat risk, but exact Decimal removes the
+  // float dust before rounding).
+  const totalAmountDec = toDec(plan.totalAmount as NumericLike);
+  const amountPaidDec = installments.reduce(
+    (acc, inst) => acc.plus(toDec(inst.amountPaid as NumericLike)),
+    toDec(0),
   );
   const installmentsPaid = installments.filter(
     (inst) => inst.status === 'PAID',
@@ -267,9 +291,9 @@ export function recalculatePlanTotals(
   const installmentsOverdue = installments.filter(
     (inst) => inst.status === 'OVERDUE',
   ).length;
-  const balance = Math.max(0, round2(totalAmount - amountPaid));
+  const balance = round2(max0(totalAmountDec.minus(amountPaidDec)));
   return {
-    amountPaid: round2(amountPaid),
+    amountPaid: round2(amountPaidDec),
     balance,
     installmentsPaid,
     installmentsOverdue,

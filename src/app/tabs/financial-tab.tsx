@@ -1212,7 +1212,7 @@ export default function FinancialTab() {
               <div>
                 <p className="text-sm text-muted-foreground">Today Revenue</p>
                 <p className="text-xl font-bold text-green-600">
-                  <AnimatedCounter value={stats?.todayRevenue || 0} prefix="Ksh " />
+                  <AnimatedCounter value={stats?.todayRevenue || 0} />
                 </p>
                 <div className="flex items-center gap-1 mt-0.5">
                   {revenueTrend >= 0 ? (
@@ -1253,7 +1253,7 @@ export default function FinancialTab() {
               <div>
                 <p className="text-sm text-muted-foreground">Outstanding Debt</p>
                 <p className="text-xl font-bold text-red-600">
-                  <AnimatedCounter value={stats?.outstandingDebt || 0} prefix="Ksh " />
+                  <AnimatedCounter value={stats?.outstandingDebt || 0} />
                 </p>
                 <div className="flex items-center gap-1 mt-0.5">
                   {debtTrend >= 0 ? (

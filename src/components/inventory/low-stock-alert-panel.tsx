@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 
 import { formatDate } from '@/lib/api';
+import { formatQtyWithUnit } from '@/lib/utils/financialMath';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -316,10 +317,7 @@ export function LowStockAlertPanel({
                           <span className="text-muted-foreground">
                             Stock:{' '}
                             <span className="font-mono font-semibold text-foreground">
-                              {product.quantityInStock}
-                            </span>
-                            <span className="ml-1 text-[10px] uppercase text-muted-foreground">
-                              {product.unitType}
+                              {formatQtyWithUnit(product.quantityInStock, product.unitType)}
                             </span>
                           </span>
                           <span className="text-muted-foreground">
@@ -406,7 +404,7 @@ export function LowStockAlertPanel({
                       <div className="mt-2 rounded-md bg-muted/40 px-2 py-1.5 text-[11px] text-muted-foreground">
                         Suggested reorder:{' '}
                         <span className="font-mono font-semibold text-foreground">
-                          {product.suggestedReorderQty} {product.unitType}
+                          {formatQtyWithUnit(product.suggestedReorderQty, product.unitType)}
                         </span>
                         {' '}
                         <span className="text-muted-foreground/70">

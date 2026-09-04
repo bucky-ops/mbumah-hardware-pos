@@ -30,6 +30,7 @@ import {
 import { toast } from 'sonner';
 import { formatKES, formatDateTime, type TransactionItem } from '@/lib/api';
 import { STORE_LIST, COMPANY, type StoreInfo } from '@/lib/store-info';
+import { toNum, changeDue as changeDueOf } from '@/lib/utils/financialMath';
 import { RECEIPT_CONTENT_ID, generateReceiptPdf, buildReceiptFileName, printReceiptElement } from '@/lib/receipt-pdf';
 import { ReceiptDocument, ReceiptPrintPreview } from '@/components/receipt-print';
 
@@ -122,9 +123,15 @@ function buildReceiptText(
   lines.push(divider);
   lines.push(`Payment: ${tx.paymentMethod}`);
 
-  if (tx.paymentMethod === 'CASH' && opts?.cashReceived && opts.cashReceived > 0) {
-    lines.push(`Cash Received:   ${formatKES(opts.cashReceived).padStart(14)}`);
-    const change = opts.cashReceived - tx.totalAmount;
+  if (tx.paymentMethod === 'CASH') {
+    // FINANCIAL MATH AUDIT: server-persisted tender/change preferred (spec §4).
+    const tendered = tx.cashTendered != null ? toNum(tx.cashTendered) : opts?.cashReceived ?? 0;
+    const change = tx.changeDue != null
+      ? toNum(tx.changeDue)
+      : changeDueOf(tendered, toNum(tx.totalAmount));
+    if (tendered > 0) {
+      lines.push(`Cash Tendered:  ${formatKES(tendered).padStart(14)}`);
+    }
     if (change > 0) {
       lines.push(`Change:          ${formatKES(change).padStart(14)}`);
     }

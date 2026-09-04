@@ -14,6 +14,12 @@ import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { UserRole } from '@/lib/types';
 import { withSessionAuth } from '@/lib/auth';
+// Task 12-c: canonical financial math (HALF_UP 2dp). The expected-cash chain
+// previously mixed Number()-coerced Prisma Decimals in float arithmetic; now
+// every leg is an exact Decimal accumulator. FORMULA UNCHANGED:
+//   expectedCash = startingCash + SUM(SALE) + SUM(CASH_IN) - SUM(CASH_OUT)
+// (REFUND rows remain intentionally excluded per the audit spec.)
+import { toDec, round2 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,7 +64,8 @@ async function xreadShiftHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  const startingCash = Number(shift.startingCash);
+  // Task 12-c: Decimal coercion + HALF_UP 2dp emit.
+  const startingCash = round2(toDec(shift.startingCash));
   // X-read window end: "now" for an open shift; the frozen end time for an
   // already-closed (Z-read) shift so the snapshot is stable.
   const windowEnd = shift.endedAt ?? new Date();
@@ -73,13 +80,16 @@ async function xreadShiftHandler(...args: unknown[]): Promise<Response> {
     _sum: { amount: true },
   });
 
-  const sumFor = (action: string): number =>
-    Number(drawerSums.find((row) => row.action === action)?._sum.amount ?? 0);
+  const sumFor = (action: string): ReturnType<typeof toDec> =>
+    toDec(drawerSums.find((row) => row.action === action)?._sum.amount ?? 0);
 
-  const salesCash = sumFor('SALE');
-  const cashIn = sumFor('CASH_IN');
-  const cashOut = sumFor('CASH_OUT');
-  const expectedCash = startingCash + salesCash + cashIn - cashOut;
+  // Task 12-c: Decimal accumulators (was Number()-coerced floats).
+  const salesCash = round2(sumFor('SALE'));
+  const cashIn = round2(sumFor('CASH_IN'));
+  const cashOut = round2(sumFor('CASH_OUT'));
+  const expectedCash = round2(
+    toDec(startingCash).plus(sumFor('SALE')).plus(sumFor('CASH_IN')).minus(sumFor('CASH_OUT'))
+  );
 
   return Response.json({
     success: true,
@@ -97,8 +107,9 @@ async function xreadShiftHandler(...args: unknown[]): Promise<Response> {
       cashOut,
       expectedCash,
       // Only present once the Z-read (shift end) has been performed.
-      countedCash: shift.countedCash === null ? null : Number(shift.countedCash),
-      difference: shift.cashDifference === null ? null : Number(shift.cashDifference),
+      // Task 12-c: Decimal-coerced, rounded emits (was Number()).
+      countedCash: shift.countedCash === null ? null : round2(toDec(shift.countedCash)),
+      difference: shift.cashDifference === null ? null : round2(toDec(shift.cashDifference)),
       generatedAt: new Date().toISOString(),
     },
   });

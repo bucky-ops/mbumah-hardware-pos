@@ -5,6 +5,32 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
+// Task 12-c: canonical financial math. Prisma Decimal `valueOf()` returns a
+// STRING — the replay loops' `runningBalance += entry.amount` used to
+// STRING-CONCATENATE (number += Decimal).
+import { toDec, round2 } from '@/lib/utils/financialMath';
+import type Decimal from 'decimal.js';
+
+/** Numeric-ish shape accepted by toDec (Prisma Decimal is a decimal.js Decimal). */
+type NumericLike = number | string | Decimal | null | undefined;
+
+/** Task 12-c: Decimal replay accumulator for one credit-type entry. */
+function applyCreditType(
+  runningBalance: ReturnType<typeof toDec>,
+  creditType: string,
+  entryAmount: NumericLike,
+): ReturnType<typeof toDec> {
+  switch (creditType) {
+    case 'CREDIT':
+    case 'REFUND':
+    case 'ADJUSTMENT':
+      return runningBalance.plus(toDec(entryAmount));
+    case 'DEBIT':
+      return runningBalance.minus(toDec(entryAmount));
+    default:
+      return runningBalance;
+  }
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -110,39 +136,19 @@ async function updateCustomerCreditHandler(...args: unknown[]): Promise<Response
       orderBy: { createdAt: 'asc' },
     });
 
-    // Recalculate running balance from the beginning
-    let runningBalance = 0;
+    // Recalculate running balance from the beginning (Task 12-c: Decimal
+    // accumulator — was a float `+=` over Prisma Decimals).
+    let runningBalanceDec = toDec(0);
     for (const entry of allCredits) {
       if (entry.id === id) {
         // Use the new values for this entry
-        switch (effectiveType) {
-          case 'CREDIT':
-          case 'REFUND':
-            runningBalance += effectiveAmount;
-            break;
-          case 'DEBIT':
-            runningBalance -= effectiveAmount;
-            break;
-          case 'ADJUSTMENT':
-            runningBalance += effectiveAmount;
-            break;
-        }
+        runningBalanceDec = applyCreditType(runningBalanceDec, effectiveType, effectiveAmount);
       } else {
-        switch (entry.creditType) {
-          case 'CREDIT':
-          case 'REFUND':
-            runningBalance += entry.amount;
-            break;
-          case 'DEBIT':
-            runningBalance -= entry.amount;
-            break;
-          case 'ADJUSTMENT':
-            runningBalance += entry.amount;
-            break;
-        }
+        runningBalanceDec = applyCreditType(runningBalanceDec, entry.creditType, entry.amount);
       }
     }
 
+    const runningBalance = round2(runningBalanceDec);
     updateData.balance = runningBalance;
 
     // Update all subsequent entries' running balances
@@ -155,23 +161,12 @@ async function updateCustomerCreditHandler(...args: unknown[]): Promise<Response
       orderBy: { createdAt: 'asc' },
     });
 
-    let subsequentBalance = runningBalance;
+    let subsequentBalanceDec = runningBalanceDec;
     for (const entry of subsequentCredits) {
-      switch (entry.creditType) {
-        case 'CREDIT':
-        case 'REFUND':
-          subsequentBalance += entry.amount;
-          break;
-        case 'DEBIT':
-          subsequentBalance -= entry.amount;
-          break;
-        case 'ADJUSTMENT':
-          subsequentBalance += entry.amount;
-          break;
-      }
+      subsequentBalanceDec = applyCreditType(subsequentBalanceDec, entry.creditType, entry.amount);
       await db.customerCredit.update({
         where: { id: entry.id },
-        data: { balance: subsequentBalance },
+        data: { balance: round2(subsequentBalanceDec) },
       });
     }
   }
@@ -257,23 +252,12 @@ async function deleteCustomerCreditHandler(...args: unknown[]): Promise<Response
     orderBy: { createdAt: 'asc' },
   });
 
-  let runningBalance = 0;
+  let runningBalanceDec = toDec(0);
   for (const entry of allCredits) {
-    switch (entry.creditType) {
-      case 'CREDIT':
-      case 'REFUND':
-        runningBalance += entry.amount;
-        break;
-      case 'DEBIT':
-        runningBalance -= entry.amount;
-        break;
-      case 'ADJUSTMENT':
-        runningBalance += entry.amount;
-        break;
-    }
+    runningBalanceDec = applyCreditType(runningBalanceDec, entry.creditType, entry.amount);
     await db.customerCredit.update({
       where: { id: entry.id },
-      data: { balance: runningBalance },
+      data: { balance: round2(runningBalanceDec) },
     });
   }
 

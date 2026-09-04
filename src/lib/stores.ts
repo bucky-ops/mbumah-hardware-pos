@@ -4,6 +4,14 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { AuthUser, CartItem } from './types';
 import { authApi } from './api';
+// FINANCIAL MATH AUDIT: cart money math is Decimal-based (never float) and
+// uses the SAME line formula as the server (financialMath.calculateLineItem,
+// VAT-INCLUSIVE retail pricing) so what the cashier sees is exactly what
+// POST /api/transactions persists. financialMath is isomorphic (no node
+// imports) — safe in the client bundle.
+import { calculateLineItem, toDec, round2, max0 } from '@/lib/utils/financialMath';
+import Decimal from 'decimal.js';
+const Decimal0 = new Decimal(0);
 
 interface AuthState {
   user: AuthUser | null;
@@ -107,10 +115,26 @@ interface CartState {
   getItemCount: () => number;
 }
 
+/**
+ * FINANCIAL MATH AUDIT: identical formula to the server-side
+ * calculateLineTotal — HALF_UP 2dp, VAT-INCLUSIVE retail pricing.
+ * `lineTotal` is the VAT-INCLUSIVE gross the customer pays for the line
+ * (pricePerUnit is the shelf price; the VAT component lives inside it).
+ */
 function calculateLineTotal(item: Omit<CartItem, 'lineTotal'>): number {
-  const base = item.pricePerUnit * item.quantity;
-  const discount = base * (item.discountPercent / 100);
-  return base - discount;
+  return calculateLineItem(item.quantity, item.pricePerUnit, item.discountPercent, true, item.taxRate).lineGrossTotal;
+}
+
+/**
+ * The VAT component of a cart line — extracted FROM the VAT-inclusive
+ * lineTotal (net = gross / (1 + rate)); 0 for exempt lines. Decimal-exact.
+ */
+function lineVatComponent(item: CartItem): number {
+  const rate = Math.min(100, Math.max(0, item.taxRate || 0));
+  if (rate === 0) return 0;
+  const gross = toDec(item.lineTotal);
+  const net = gross.div(1 + rate / 100).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+  return round2(gross.minus(net));
 }
 
 export const useCartStore = create<CartState>((set, get) => ({
@@ -119,8 +143,9 @@ export const useCartStore = create<CartState>((set, get) => ({
 
   setDiscount: (amount) => {
     // Cart-level flat discount (Ksh). Clamped to >= 0 and capped at the
-    // pre-discount total so it can never make the total negative.
-    const maxDiscount = get().getSubtotal() + get().getTax();
+    // pre-discount GROSS total (VAT is inside the line totals now) so it
+    // can never make the total negative.
+    const maxDiscount = get().getSubtotal();
     const safe = Math.max(0, Math.min(amount, maxDiscount));
     set({ discount: Number.isFinite(safe) ? safe : 0 });
   },
@@ -177,22 +202,23 @@ export const useCartStore = create<CartState>((set, get) => ({
   clearCart: () => set({ items: [], discount: 0 }),
 
   getSubtotal: () => {
-    return get().items.reduce((sum, item) => sum + item.lineTotal, 0);
+    // Σ lineTotal — each line is exact at 2dp and the sum runs in Decimal,
+    // so this is the exact VAT-inclusive merchandise value.
+    return round2(get().items.reduce((sum, item) => sum.plus(toDec(item.lineTotal)), Decimal0));
   },
 
   getTax: () => {
-    return get().items.reduce((sum, item) => {
-      const taxable = item.lineTotal;
-      return sum + (taxable * item.taxRate / 100);
-    }, 0);
+    // Σ per-line VAT components EXTRACTED from the VAT-inclusive line
+    // totals (never `lineTotal × rate%` on top — that would double-count
+    // VAT under inclusive pricing). Matches the server's taxAmount exactly.
+    return round2(get().items.reduce((sum, item) => sum.plus(toDec(lineVatComponent(item))), Decimal0));
   },
 
   getTotal: () => {
-    // Cart-level flat discount is subtracted from (subtotal + tax).
-    // Never returns negative — discount is clamped in setDiscount, but we
-    // guard here too for safety (ISO 9001 financial integrity).
-    const preDiscount = get().getSubtotal() + get().getTax();
-    return Math.max(0, preDiscount - get().discount);
+    // Cart-level flat discount is subtracted from the gross (VAT-inclusive)
+    // subtotal. Never returns negative — discount is clamped in setDiscount,
+    // but we guard here too for safety (ISO 9001 financial integrity).
+    return round2(max0(toDec(get().getSubtotal()).minus(toDec(get().discount))));
   },
 
   getItemCount: () => {

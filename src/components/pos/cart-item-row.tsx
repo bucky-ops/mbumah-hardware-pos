@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { formatKES } from '@/lib/api';
+import { formatQty, roundQty } from '@/lib/utils/financialMath';
 import type { CartItem } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,7 +29,9 @@ export function CartItemRow({
   const [qtyInput, setQtyInput] = useState(String(item.quantity));
 
   const commitQtyInput = () => {
-    const n = parseInt(qtyInput, 10);
+    // Decimal-safe parse: hardware units are sold fractionally (0.25 kg, 2.5 m).
+    const parsed = parseFloat(qtyInput);
+    const n = Number.isFinite(parsed) ? roundQty(parsed) : NaN;
     if (!Number.isNaN(n) && n > 0) {
       onUpdateQty(item.productId, n);
     } else {
@@ -97,13 +100,14 @@ export function CartItemRow({
       </div>
       <div className="flex flex-col items-end gap-1 shrink-0">
         <div className="flex items-center gap-0.5">
+          {/* Fractional units: allow going below 1; disable only at the smallest step. */}
           <Button
             variant="outline"
             size="icon"
             className="h-6 w-6 btn-press"
             onClick={() => onUpdateQty(item.productId, item.quantity - 1)}
             aria-label="Decrease quantity"
-            disabled={item.quantity <= 1}
+            disabled={item.quantity <= 0.001}
           >
             <Minus className="h-2.5 w-2.5" />
           </Button>
@@ -111,6 +115,7 @@ export function CartItemRow({
             <input
               type="number"
               min={1}
+              inputMode="decimal"
               value={qtyInput}
               onChange={(e) => setQtyInput(e.target.value)}
               onBlur={commitQtyInput}
@@ -127,7 +132,7 @@ export function CartItemRow({
               className="w-7 text-center text-xs font-semibold hover:bg-muted rounded transition-colors"
               title="Click to edit quantity"
             >
-              {item.quantity}
+              {formatQty(item.quantity)}
             </button>
           )}
           <Button

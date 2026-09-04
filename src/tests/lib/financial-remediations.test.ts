@@ -272,7 +272,10 @@ describe('recordGoodsReceiptEntry (F1-1 remediation)', () => {
         storeId: STORE_ID,
         poId,
         poNumber: 'PO-AUDIT-0001',
-        grossAmount: 1160, // 1000 net + 160 input VAT (16%)
+        // FINANCIAL MATH AUDIT: POs are VAT-EXCLUSIVE B2B documents — the
+        // passed amount is the NET received value; input VAT (16% = 160)
+        // is computed ON TOP, so the supplier liability is 1000 + 160.
+        grossAmount: 1000,
         vatRate: 16,
         receivedById: CASHIER_ID,
       });
@@ -288,9 +291,9 @@ describe('recordGoodsReceiptEntry (F1-1 remediation)', () => {
       const totalDebit = je!.lines.reduce((s, l) => s + Number(l.debit), 0);
       const totalCredit = je!.lines.reduce((s, l) => s + Number(l.credit), 0);
       expect(Math.abs(totalDebit - totalCredit)).toBeLessThanOrEqual(0.01);
-      expect(totalDebit).toBeCloseTo(1160, 2); // gross hits AP in full
+      expect(totalDebit).toBeCloseTo(1160, 2); // net + input VAT hits AP in full
 
-      // Debit sides: Inventory (net 1000) + VAT Payable (160).
+      // Debit sides: Inventory (net 1000) + VAT Payable (input VAT 160).
       const inventoryLine = je!.lines.find((l) => Number(l.debit) > 0 && Number(l.credit) === 0 && l.description?.includes('Inventory'));
       const vatLine = je!.lines.find((l) => l.description?.includes('input VAT'));
       expect(Number(inventoryLine?.debit)).toBeCloseTo(1000, 2);

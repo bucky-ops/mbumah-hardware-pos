@@ -5,6 +5,12 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent, UserRole } from '@/lib/types';
 import { withSessionAuth } from '@/lib/auth';
+// Task 12-c: canonical financial math (HALF_UP 2dp). The expected-cash chain
+// previously mixed Number()-coerced Prisma Decimals in float arithmetic;
+// now every leg is an exact Decimal accumulator. FORMULA UNCHANGED:
+//   expectedCash = startingCash + Σ cash sale payments + Σ CASH_IN − Σ CASH_OUT
+// (REFUND rows remain intentionally excluded per the audit spec).
+import { toDec, round2 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,20 +64,22 @@ async function computeShiftCashBreakdown(
     _sum: { amount: true },
   });
 
-  const sumFor = (action: string): number =>
-    Number(drawerSums.find((row) => row.action === action)?._sum.amount ?? 0);
+  const sumFor = (action: string): ReturnType<typeof toDec> =>
+    toDec(drawerSums.find((row) => row.action === action)?._sum.amount ?? 0);
 
-  const salesCash = sumFor('SALE');
-  const cashIn = sumFor('CASH_IN');
-  const cashOut = sumFor('CASH_OUT');
-  const expectedCash = startingCash + salesCash + cashIn - cashOut;
+  // Task 12-c: Decimal accumulators (was Number()-coerced floats).
+  const salesCashDec = sumFor('SALE');
+  const cashInDec = sumFor('CASH_IN');
+  const cashOutDec = sumFor('CASH_OUT');
+  const startingCashDec = toDec(startingCash);
+  const expectedCashDec = startingCashDec.plus(salesCashDec).plus(cashInDec).minus(cashOutDec);
 
   return {
-    startingCash,
-    salesCash,
-    cashIn,
-    cashOut,
-    expectedCash,
+    startingCash: round2(startingCashDec),
+    salesCash: round2(salesCashDec),
+    cashIn: round2(cashInDec),
+    cashOut: round2(cashOutDec),
+    expectedCash: round2(expectedCashDec),
     countedCash: 0,
     difference: 0,
     windowEnd: windowEnd.toISOString(),
@@ -95,14 +103,18 @@ async function endShiftHandler(...args: unknown[]): Promise<Response> {
 
   // AUDIT FIX: numeric coercion + NaN guard so the persisted decimals and the
   // difference math can never be polluted by string/NaN body values.
-  const endingCashValue = Number(endingCash);
-  const countedValue = Number(countedCash);
-  if (!Number.isFinite(endingCashValue) || !Number.isFinite(countedValue)) {
+  // Task 12-c: toDec maps garbage → 0 (downstream of the finite check) and
+  // the counted cash is rounded HALF_UP to 2dp like every money value.
+  const endingCashRaw = Number(endingCash);
+  const countedCashRaw = Number(countedCash);
+  if (!Number.isFinite(endingCashRaw) || !Number.isFinite(countedCashRaw)) {
     return Response.json(
       { success: false, error: 'endingCash and countedCash must be finite numbers.' },
       { status: 400 }
     );
   }
+  const endingCashNum = round2(endingCashRaw);
+  const countedValueDec = toDec(countedCashRaw);
 
     const shift = await db.shift.findUnique({
     where: { id: shiftId },
@@ -129,7 +141,8 @@ async function endShiftHandler(...args: unknown[]): Promise<Response> {
   // AUDIT FIX: real expected cash from the drawer ledger instead of the
   // never-written shift.totalSales (was always 0).
   const endedAt = new Date();
-  const startingCashValue = Number(shift.startingCash);
+  // Task 12-c: money coerced + rounded via Decimal (HALF_UP 2dp).
+  const startingCashValue = round2(toDec(shift.startingCash));
   const breakdown = await computeShiftCashBreakdown(
     shift.storeId,
     startingCashValue,
@@ -137,8 +150,10 @@ async function endShiftHandler(...args: unknown[]): Promise<Response> {
     shift.startedAt
   );
   const expectedCash = breakdown.expectedCash;
+  const countedValue = round2(countedValueDec);
   breakdown.countedCash = countedValue;
-  breakdown.difference = countedValue - expectedCash;
+  // Task 12-c: exact Decimal difference (was `countedValue - expectedCash`).
+  breakdown.difference = round2(countedValueDec.minus(expectedCash));
   const cashDifference = breakdown.difference;
 
   // Persist the breakdown on the existing free-form notes column (NO schema
@@ -150,7 +165,7 @@ async function endShiftHandler(...args: unknown[]): Promise<Response> {
     data: {
       endedAt,
       status: 'ENDED',
-      endingCash: endingCashValue,
+      endingCash: endingCashNum,
       countedCash: countedValue,
       cashDifference,
       // AUDIT FIX: totalSales was never written anywhere; store the
