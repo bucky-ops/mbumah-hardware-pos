@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -161,5 +162,5 @@ async function createTaxFilingHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: filing }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getTaxFilingsHandler, 'TAX_FILINGS_LIST');
-export const POST = withErrorBoundary(createTaxFilingHandler, 'TAX_FILINGS_CREATE');
+export const GET = withErrorBoundary(withSessionAuth(getTaxFilingsHandler, FINANCIAL_ROLES.WRITE), 'TAX_FILINGS_LIST');
+export const POST = withErrorBoundary(withSessionAuth(createTaxFilingHandler, FINANCIAL_ROLES.WRITE), 'TAX_FILINGS_CREATE');

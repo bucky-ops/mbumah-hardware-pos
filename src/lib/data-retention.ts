@@ -24,7 +24,7 @@
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { db } from '@/lib/db';
+import { db, withImmutabilityBypass } from '@/lib/db';
 import { systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
@@ -102,10 +102,11 @@ export const RETENTION_POLICIES: RetentionPolicy[] = [
   },
   {
     category: 'audit_logs',
-    retentionDays: 365 * 3, // 3 years
+    // F9-7: Kenya Tax Procedures Act requires ≥ 5 (practise 7) years of records.
+    retentionDays: 365 * 7, // 7 years
     graceDays: 30,
-    description: 'Audit logs retained for 3 years per Kenyan data protection regulations and ISO 27001 requirements.',
-    isoReference: 'ISO 27001 A.12.4.2 / ISO 9001 7.5.3',
+    description: 'Audit logs retained for 7 years to satisfy the Kenya Tax Procedures Act (≥ 5 years, practise 7) and ISO 27001 requirements.',
+    isoReference: 'ISO 27001 A.12.4.2 / ISO 9001 7.5.3 / Kenya Tax Procedures Act',
     isConfigurable: false, // Audit logs must NOT be deleted early
     modelName: 'auditLog',
     dateField: 'timestamp',
@@ -227,19 +228,37 @@ export const dataRetention = {
     // We use a dynamic approach since each model has different fields
     switch (policy.category) {
       case 'system_logs': {
-        const result = await db.systemLog.deleteMany({
-          where: { createdAt: { lte: cutoff } },
-        });
+        // AUDIT REMEDIATION (F9-7): systemLog is append-only (IMMUTABLE_MODELS
+        // in db.ts), so the bare deleteMany ALWAYS threw IMMUTABILITY_VIOLATION
+        // and the nightly purge silently purged nothing. Route it through the
+        // audited bypass ('retention_purge') as the sanctioned path.
+        // Explicit <{count}> keeps `result` typed even while the checked-in
+        // Prisma client is stale (pre-existing repo typecheck debt).
+        const result = await withImmutabilityBypass<{ count: number }>(
+          () =>
+            db.systemLog.deleteMany({
+              where: { createdAt: { lte: cutoff } },
+            }),
+          'retention_purge',
+        );
         return result.count;
       }
 
       case 'audit_logs': {
         // ISO 27001: Audit logs have a LONG retention period and are
         // NOT configurable. We still honour the policy but with the
-        // 3-year + 30-day grace period.
-        const result = await db.auditLog.deleteMany({
-          where: { timestamp: { lte: cutoff } },
-        });
+        // 7-year + 30-day grace period.
+        // AUDIT REMEDIATION (F9-7): auditLog is likewise append-only — the
+        // purge previously threw IMMUTABILITY_VIOLATION on every run. Use the
+        // audited bypass ('retention_purge'); each execution is logged via the
+        // DATA_RETENTION_EXECUTION systemLog in executeAll().
+        const result = await withImmutabilityBypass<{ count: number }>(
+          () =>
+            db.auditLog.deleteMany({
+              where: { timestamp: { lte: cutoff } },
+            }),
+          'retention_purge',
+        );
         return result.count;
       }
 

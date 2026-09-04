@@ -10,11 +10,9 @@
 //   2. **Trial balance** — across a date range, the sum of all debits must
 //      equal the sum of all credits. If they don't, data corruption has
 //      occurred and the system is in a financially inconsistent state.
-//   3. **Account reconciliation** — verify that the sum of journal lines for
-//      a given account matches the account's recorded balance.
-//   4. **Posting integrity** — verify that posted entries are never voided
+//   3. **Posting integrity** — verify that posted entries are never voided
 //      and voided entries are never posted.
-//   5. **Immutability verification** — confirm that no JournalEntry has been
+//   4. **Immutability verification** — confirm that no JournalEntry has been
 //      mutated outside of sanctioned bypass paths (updatedAt > createdAt
 //      with no corresponding void/post action).
 //
@@ -507,83 +505,13 @@ export async function quickIntegrityCheck(): Promise<{
   };
 }
 
-// ── 5. Account balance reconciliation ────────────────────────────────────────
+// removed: referenced nonexistent Account.balance (audit F7-8) — reconcile from
+// journal lines instead. The former `reconcileAccount()` selected a `balance`
+// column that the Account model does not have; the per-account computed balance
+// is available from `generateTrialBalance()` (netBalance per account), which is
+// derived entirely from journal lines.
 
-/**
- * Reconcile a specific account's balance against the sum of its journal lines.
- *
- * This catches bugs where an account's `balance` field drifts from the actual
- * sum of posted journal lines — which can happen if someone updates the balance
- * directly instead of posting a journal entry.
- *
- * @param accountId The account ID to reconcile.
- * @param asOfDate  Reconcile as of this date (default: now).
- * @returns An IntegrityIssue if the balance doesn't match, or null if healthy.
- */
-export async function reconcileAccount(
-  accountId: string,
-  asOfDate: Date = new Date(),
-): Promise<IntegrityIssue | null> {
-  const account = await db.account.findUnique({
-    where: { id: accountId },
-    select: { id: true, code: true, name: true, balance: true, type: true },
-  });
-
-  if (!account) {
-    return {
-      type: "ORPHANED_LINE",
-      severity: "HIGH",
-      message: `Account ${accountId} not found during reconciliation.`,
-      entityId: accountId,
-      detectedAt: new Date().toISOString(),
-    };
-  }
-
-  // Sum all non-voided journal lines for this account up to asOfDate.
-  const lines = await db.journalEntryLine.findMany({
-    where: {
-      accountId,
-      journalEntry: {
-        isVoided: false,
-        entryDate: { lte: asOfDate },
-      },
-    },
-    select: { debit: true, credit: true },
-  });
-
-  let debitTotal = Money.zero();
-  let creditTotal = Money.zero();
-  for (const line of lines) {
-    debitTotal = debitTotal.add(Money.fromPrisma(line.debit));
-    creditTotal = creditTotal.add(Money.fromPrisma(line.credit));
-  }
-
-  // For asset/expense accounts, balance = debits - credits.
-  // For liability/equity/revenue accounts, balance = credits - debits.
-  const isDebitNormal =
-    account.type === "ASSET" || account.type === "EXPENSE";
-  const computedBalance = isDebitNormal
-    ? debitTotal.subtract(creditTotal)
-    : creditTotal.subtract(debitTotal);
-
-  const recordedBalance = Money.fromPrisma(account.balance);
-
-  if (!computedBalance.eq(recordedBalance)) {
-    return {
-      type: "TRIAL_BALANCE_MISMATCH",
-      severity: "HIGH",
-      message: `Account ${account.code} (${account.name}) balance mismatch: recorded ${recordedBalance.formatKES()} vs computed ${computedBalance.formatKES()} from ${lines.length} journal lines.`,
-      entityId: account.id,
-      expected: computedBalance.formatKES(),
-      actual: recordedBalance.formatKES(),
-      detectedAt: new Date().toISOString(),
-    };
-  }
-
-  return null;
-}
-
-// ── 6. Period close verification ─────────────────────────────────────────────
+// ── 5. Period close verification ─────────────────────────────────────────────
 
 /**
  * Verify that a financial period can be safely closed. A period is closeable

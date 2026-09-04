@@ -6,6 +6,7 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateJournalEntryNumber, calculateAgingBucket } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, DebtStatus } from '@/lib/types';
+import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -109,9 +110,23 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
     amount,
     paymentMethod,
     reference,
-    receivedBy,
-    notes,
+    notes: _bodyNotes, // notes intentionally not persisted to ledger after R3 rework
   } = body;
+
+  // SYS-2: the receiving actor ALWAYS comes from the authenticated session —
+  // a body-supplied `receivedBy` allowed payments to be attributed to anyone.
+  const session = await getSessionFromRequest(request);
+  const receivedBy = session?.userId ?? null;
+
+  // F9 (journal integrity): only tender methods backed by a real asset
+  // account are accepted — arbitrary strings used to debit whichever
+  // account the journal mapping resolved to.
+  if (!['CASH', 'MPESA'].includes(paymentMethod)) {
+    return Response.json(
+      { success: false, error: 'paymentMethod must be CASH or MPESA for debt payments.' },
+      { status: 400 }
+    );
+  }
 
   if (!storeId || !debtLedgerId || !amount || !paymentMethod) {
     return Response.json(
@@ -144,6 +159,15 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
+  // SYS-3 (cross-tenant): a debt ledger from another store can no longer be
+  // paid by supplying a foreign debtLedgerId with a local storeId.
+  if (debt.storeId !== storeId) {
+    return Response.json(
+      { success: false, error: 'Debt ledger does not belong to this store.' },
+      { status: 403 }
+    );
+  }
+
   if (debt.status === 'SETTLED' || debt.status === 'WRITTEN_OFF') {
     return Response.json(
       { success: false, error: `Cannot record payment on a ${debt.status.toLowerCase()} debt.` },
@@ -159,8 +183,34 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
   }
 
   const result = await db.$transaction(async (tx) => {
-    const newAmountPaid = debt.amountPaid + paymentAmount;
-    const newBalance = debt.amountOwed - newAmountPaid;
+    // R3 remediation: ATOMIC conditional claim. The old code computed
+    // `amountPaid + payment` from a STALE pre-transaction read — two
+    // concurrent submissions (double-click) both passed the balance check
+    // and both wrote, collecting cash twice. The `gte` predicate makes the
+    // balance check + decrement one atomic operation; the loser aborts.
+    const claimed = await tx.debtLedger.updateMany({
+      where: {
+        id: debtLedgerId,
+        status: { notIn: ['SETTLED', 'WRITTEN_OFF'] },
+        balance: { gte: paymentAmount },
+      },
+      data: {
+        amountPaid: { increment: paymentAmount },
+        balance: { decrement: paymentAmount },
+      },
+    });
+    if (claimed.count === 0) {
+      throw new Error(
+        'Debt payment conflict: balance changed or already settled. Refresh and retry.'
+      );
+    }
+
+    // Re-read INSIDE the tx for the authoritative post-claim state.
+    const updatedDebt = await tx.debtLedger.findUniqueOrThrow({
+      where: { id: debtLedgerId },
+    });
+    const newAmountPaid = Number(updatedDebt.amountPaid);
+    const newBalance = Number(updatedDebt.balance);
 
     let newStatus: string;
     if (newBalance <= 0) {
@@ -173,15 +223,9 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
 
     const newAgingBucket = calculateAgingBucket(debt.dueDate);
 
-        const updatedDebt = await tx.debtLedger.update({
+    await tx.debtLedger.update({
       where: { id: debtLedgerId },
-      data: {
-        amountPaid: newAmountPaid,
-        balance: Math.max(0, newBalance),
-        status: newStatus,
-        agingBucket: newAgingBucket,
-        notes: notes ? `${debt.notes || ''}\n${notes}` : debt.notes,
-      },
+      data: { status: newStatus, agingBucket: newAgingBucket },
     });
 
         await tx.debtPayment.create({
@@ -202,11 +246,12 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
 
     // Record payment in cash drawer if CASH
     if (paymentMethod === 'CASH') {
-      const lastDrawerEntry = await tx.cashDrawerLog.findFirst({
+      // R6 remediation: SUM-derived running balance (concurrency-safe).
+      const drawerAgg = await tx.cashDrawerLog.aggregate({
         where: { storeId },
-        orderBy: { createdAt: 'desc' },
+        _sum: { amount: true },
       });
-      const currentBalance = lastDrawerEntry?.balance || 0;
+      const currentBalance = Number(drawerAgg._sum.amount ?? 0);
 
       await tx.cashDrawerLog.create({
         data: {
@@ -282,8 +327,23 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
     },
   });
 
+  // F9-1: tamper-evident audit entry for every debt payment (best-effort).
+  try {
+    const { auditTrail } = await import('@/lib/audit-trail');
+    await auditTrail.log({
+      action: 'CREATE',
+      resourceType: 'DebtPayment',
+      resourceId: String(result?.debtPayment?.id || debtLedgerId),
+      actorId: receivedBy || 'system',
+      storeId,
+      newValues: { debtLedgerId, amount: paymentAmount, paymentMethod, balanceAfter: newBalance },
+    });
+  } catch {
+    /* audit chain must never block payment recording */
+  }
+
   return Response.json({ success: true, data: result });
 }
 
-export const GET = withErrorBoundary(getDebtHandler, 'DEBT_LIST');
-export const POST = withErrorBoundary(recordDebtPaymentHandler, 'DEBT_PAYMENT');
+export const GET = withErrorBoundary(withSessionAuth(getDebtHandler, FINANCIAL_ROLES.WRITE), 'DEBT_LIST');
+export const POST = withErrorBoundary(withSessionAuth(recordDebtPaymentHandler, FINANCIAL_ROLES.WRITE), 'DEBT_PAYMENT');

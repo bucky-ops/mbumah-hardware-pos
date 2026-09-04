@@ -53,10 +53,13 @@ describe('Retention policies — structure', () => {
     expect(policy!.graceDays).toBe(7);
   });
 
-  it('audit_logs has 3-year retention', () => {
+  it('audit_logs has 7-year retention (F9-7: Kenya Tax Procedures Act requires ≥ 5 years)', () => {
     const policy = RETENTION_POLICIES.find((p) => p.category === 'audit_logs');
     expect(policy).toBeDefined();
-    expect(policy!.retentionDays).toBe(365 * 3);
+    // AUDIT REMEDIATION (F9-7): the previous 3-year retention destroyed
+    // tax-relevant audit evidence below the statutory minimum. The policy
+    // (and this assertion) now requires the 7-year practice standard.
+    expect(policy!.retentionDays).toBe(365 * 7);
     expect(policy!.isConfigurable).toBe(false); // Must NOT be configurable
   });
 

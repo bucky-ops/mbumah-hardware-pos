@@ -286,6 +286,12 @@ export const auditTrail = {
         ipAddress: options.ipAddress ?? null,
         userAgent: options.userAgent ?? null,
         timestamp: now,
+        // F9-1 remediation: the chain columns now EXIST on the model
+        // (prisma/schema.prisma AuditLog) — persisting them makes the
+        // hash chain actually tamper-evident instead of a computed-only
+        // value that was never stored.
+        previousHash,
+        integrityHash,
       },
     });
 
@@ -360,16 +366,39 @@ export const auditTrail = {
         newValuesHash,
       );
 
-      // We can't directly verify against a stored integrityHash because
-      // the AuditLog model doesn't have that field yet. Instead, we
-      // verify that the hash chain is consistent (each event's hash
-      // is computed from the previous). This provides tamper detection
-      // when the hashes are stored alongside the events (via SystemLog).
-      // For full tamper-evidence, we'd add integrityHash/previousHash
-      // columns to AuditLog — but that's a schema migration we avoid
-      // for now. The SystemLog records contain the full hash chain.
+      // F9-1 remediation: the chain columns are persisted since the schema
+      // gained previousHash/integrityHash. Rows created BEFORE that change
+      // have a null integrityHash — verify() treats them as "legacy" (chain
+      // position advanced, no break recorded) so historic rows don't fail
+      // the audit, while any tampering with NEW rows is detected exactly.
+      if (event.integrityHash) {
+        if (event.integrityHash !== expectedHash) {
+          result.brokenLinks++;
+          result.breaks.push({
+            index: result.totalChecked,
+            eventId: event.id,
+            entityType: event.entityType,
+            entityId: event.entityId,
+            reason: 'HASH_MISMATCH — event was modified after creation or the chain was tampered with',
+          });
+          result.isIntact = false;
+          previousHash = event.integrityHash; // re-anchor at the stored value
+          continue;
+        }
+        if (event.previousHash && event.previousHash !== previousHash) {
+          result.brokenLinks++;
+          result.breaks.push({
+            index: result.totalChecked,
+            eventId: event.id,
+            entityType: event.entityType,
+            entityId: event.entityId,
+            reason: 'CHAIN_BREAK — previousHash does not match the prior event\'s integrityHash',
+          });
+          result.isIntact = false;
+        }
+      }
 
-      previousHash = expectedHash;
+      previousHash = event.integrityHash || expectedHash;
       result.validLinks++;
     }
 

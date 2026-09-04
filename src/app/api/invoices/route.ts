@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -262,5 +263,5 @@ async function createInvoiceHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: invoice }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getInvoicesHandler, 'INVOICES_LIST');
-export const POST = withErrorBoundary(createInvoiceHandler, 'INVOICES_CREATE');
+export const GET = withErrorBoundary(withSessionAuth(getInvoicesHandler), 'INVOICES_LIST');
+export const POST = withErrorBoundary(withSessionAuth(createInvoiceHandler), 'INVOICES_CREATE');

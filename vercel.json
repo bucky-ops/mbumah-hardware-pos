@@ -6,5 +6,23 @@
   "outputDirectory": ".next",
   "git": {
     "deploymentEnabled": true
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/outbox",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/payments-sweeper",
+      "schedule": "5 * * * *"
+    },
+    {
+      "path": "/api/cron/reconciliation",
+      "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/api/cron/retention",
+      "schedule": "0 3 * * *"
+    }
+  ]
 }

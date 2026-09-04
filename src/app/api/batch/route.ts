@@ -205,35 +205,48 @@ async function batchUpdateStock(
     );
   }
 
-  // Execute all updates in a transaction
-  const result = await db.$transaction(
-    items.map((item) =>
-      db.product.update({
+  // ── F3-6 remediation ────────────────────────────────────────────────────
+  // The old implementation (a) SET absolute quantities from a pre-tx read —
+  // clobbering concurrent sales/receipts (lost updates), and (b) logged the
+  // NEW TOTAL as the movement quantity in a SEPARATE transaction whose
+  // failures were swallowed — so the movement ledger could never reconcile
+  // with balances (stock 100→50 was logged as ADJUSTMENT +50).
+  // Now: one transaction; per-item DELTA computed from a fresh in-tx read
+  // and applied via atomic increment; the movement row (quantity = delta)
+  // commits atomically with the balance change and can no longer be lost.
+  const result = await db.$transaction(async (tx) => {
+    const updated = [];
+    for (const item of items) {
+      const before = await tx.product.findUnique({
+        where: { id: item.productId },
+        select: { quantityInStock: true, name: true },
+      });
+      if (!before) continue;
+      const delta = Number(item.quantityInStock) - Number(before.quantityInStock);
+
+      const after = await tx.product.update({
         where: { id: item.productId },
         data: {
           quantityInStock: item.quantityInStock,
           ...(item.reorderLevel !== undefined ? { reorderLevel: item.reorderLevel } : {}),
         },
-      })
-    ),
-  );
+      });
 
-  // Create stock movement records in a separate transaction
-  await db.$transaction(
-    items.map((item) =>
-      db.stockMovement.create({
-        data: {
-          storeId,
-          productId: item.productId,
-          movementType: 'ADJUSTMENT',
-          quantity: item.quantityInStock,
-          notes: 'Batch stock update',
-          performedBy: session.userId,
-        },
-      })
-    ),
-  ).catch(() => {
-    // Non-critical: stock movement logging failure shouldn't fail the operation
+      if (delta !== 0) {
+        await tx.stockMovement.create({
+          data: {
+            storeId,
+            productId: item.productId,
+            movementType: 'ADJUSTMENT',
+            quantity: delta,
+            notes: `Batch stock update (${Number(before.quantityInStock)} → ${Number(item.quantityInStock)})`,
+            performedBy: session.userId,
+          },
+        });
+      }
+      updated.push(after);
+    }
+    return updated;
   });
 
   // Log the batch operation

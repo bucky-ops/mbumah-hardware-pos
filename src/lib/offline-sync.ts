@@ -28,6 +28,13 @@
 //   • Each queued row carries a client-generated `clientReceiptNumber`
 //     (format OFFLINE-<timestamp>-<rand>) so the cashier can print a receipt
 //     with a unique number even before the server assigns the real one.
+//   • AUDIT REMEDIATION (SYS-10): each queued row also carries a stable
+//     client-generated `idempotencyKey` — replays send the SAME key and the
+//     server dedupes on SalesTransaction.idempotencyKey (@unique); a 409 or
+//     an `idempotentReplay: true` response counts as success.
+//   • AUDIT REMEDIATION (SYS-10): replays attach the same Bearer token
+//     (localStorage `mbt_token`) used by the online checkout — previously
+//     every replay was rejected 401 and offline sales never synced.
 //   • The actual `receiptNumber` is assigned server-side on sync; the client
 //     receipt number is included in the payload as `notes` so the server-side
 //     transaction can be cross-referenced if needed.
@@ -49,6 +56,13 @@ interface OfflineTransactionRow {
   clientReceiptNumber: string;
   /** The exact CheckoutPayload that would have been POSTed. */
   payload: CheckoutPayload;
+  /**
+   * AUDIT REMEDIATION (SYS-10): stable client-generated idempotency key.
+   * Generated ONCE when the sale is queued and reused verbatim on every
+   * replay so the server can dedupe on SalesTransaction.idempotencyKey
+   * (unique). Nullable only for rows queued by older app versions.
+   */
+  idempotencyKey: string | null;
   /** ISO timestamp when the sale was queued. */
   queuedAt: string;
   /** ISO timestamp of the last sync attempt (null if never attempted). */
@@ -70,6 +84,30 @@ interface MbumahOfflineDB extends DBSchema {
 const DB_NAME = 'mbumah-offline-pos';
 const DB_VERSION = 1;
 const STORE_NAME = 'transactions';
+
+// ── Auth token (SYS-10) ─────────────────────────────────────────────────────
+
+/**
+ * AUDIT REMEDIATION (SYS-10): the offline replay fetch previously sent NO
+ * Authorization header, so the proxy 401'd every replay and offline sales
+ * NEVER synced. Replicates the exact token read used by `request()` in
+ * src/lib/api.ts (localStorage key `mbt_token`) — never hardcode a token.
+ */
+function getStoredAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem('mbt_token');
+  } catch {
+    return null;
+  }
+}
+
+/** Generate a fresh UUID, with a timestamp fallback for non-secure contexts. */
+function newIdempotencyKey(seed: string): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `idem-${seed}`;
+}
 
 // ── Singleton DB handle (lazy) ────────────────────────────────────────────────
 
@@ -130,18 +168,28 @@ export async function saveOfflineTransaction(
 
   const clientReceiptNumber = generateOfflineReceiptNumber();
 
+  // AUDIT REMEDIATION (SYS-10): attach a stable idempotencyKey to the queued
+  // payload (if the caller did not already supply one) so that every replay
+  // sends the SAME key and the server dedupes on SalesTransaction
+  // .idempotencyKey (@unique) instead of double-charging the customer.
+  const existingKey = (payload as CheckoutPayload & { idempotencyKey?: string })
+    .idempotencyKey;
+  const idempotencyKey = existingKey || newIdempotencyKey(id);
+
   // Stamp the payload with the offline reference so the server can reconcile.
-  const stampedPayload: CheckoutPayload = {
+  const stampedPayload: CheckoutPayload & { idempotencyKey: string } = {
     ...payload,
     notes: [payload.notes, `Offline ref: ${clientReceiptNumber}`]
       .filter(Boolean)
       .join(' | '),
+    idempotencyKey,
   };
 
   const row: OfflineTransactionRow = {
     id,
     clientReceiptNumber,
     payload: stampedPayload,
+    idempotencyKey,
     queuedAt: new Date().toISOString(),
     lastAttemptAt: null,
     attempts: 0,
@@ -179,27 +227,56 @@ export async function syncQueue(): Promise<SyncResult> {
     return result;
   }
 
+  // AUDIT REMEDIATION (SYS-10): replays must carry the same Bearer token the
+  // online checkout uses; without it the proxy rejected every replay with 401
+  // and queued sales were never synced. If there is no token (logged out),
+  // bail out instead of burning attempt counters on guaranteed 401s.
+  const token = getStoredAuthToken();
+  if (!token) return result;
+
   const conn = await db;
   const queued = await conn.getAllFromIndex(STORE_NAME, 'by-queuedAt');
 
   for (const row of queued) {
     result.attempted += 1;
     try {
+      // AUDIT REMEDIATION (SYS-10): legacy rows queued before this fix have no
+      // stored key — mint one once, persist it on the row, and reuse it on
+      // every subsequent retry.
+      let idempotencyKey = row.idempotencyKey;
+      if (!idempotencyKey) {
+        idempotencyKey = newIdempotencyKey(row.id);
+        await conn.put(STORE_NAME, { ...row, idempotencyKey });
+      }
+
       const res = await fetch('/api/transactions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          // Same-origin POST includes an Origin header, so the proxy's CSRF
+          // layer passes without an explicit X-CSRF-Token.
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         credentials: 'same-origin',
-        body: JSON.stringify(row.payload),
+        body: JSON.stringify({ ...row.payload, idempotencyKey }),
       });
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
+      const body = await res.json().catch(() => ({}));
+
+      // AUDIT REMEDIATION (SYS-10): a 409 (duplicate idempotencyKey) OR a
+      // response carrying `idempotentReplay: true` means the sale was ALREADY
+      // recorded server-side — treat both as success and drop the queued row
+      // instead of retrying forever.
+      const idempotentReplay =
+        res.status === 409 || body?.idempotentReplay === true;
+
+      if (!res.ok && !idempotentReplay) {
         throw new Error(
           body?.error || body?.message || `HTTP ${res.status} ${res.statusText}`,
         );
       }
 
-      // Success — remove from queue.
+      // Success (fresh create, idempotent replay, or 409 dup) — remove from queue.
       await conn.delete(STORE_NAME, row.id);
       result.succeeded += 1;
     } catch (err) {

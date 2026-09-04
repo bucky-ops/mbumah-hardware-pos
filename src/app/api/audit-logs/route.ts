@@ -3,6 +3,7 @@
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
+import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -102,4 +103,4 @@ async function getAuditLogsHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const GET = withErrorBoundary(getAuditLogsHandler, 'AUDIT_LOGS');
+export const GET = withErrorBoundary(withSessionAuth(getAuditLogsHandler, FINANCIAL_ROLES.AUDIT), 'AUDIT_LOGS');

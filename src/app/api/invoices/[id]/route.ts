@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -120,5 +121,5 @@ async function updateInvoiceHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: invoice });
 }
 
-export const GET = withErrorBoundary(getInvoiceHandler, 'INVOICE_DETAIL');
-export const PUT = withErrorBoundary(updateInvoiceHandler, 'INVOICE_UPDATE');
+export const GET = withErrorBoundary(withSessionAuth(getInvoiceHandler), 'INVOICE_DETAIL');
+export const PUT = withErrorBoundary(withSessionAuth(updateInvoiceHandler), 'INVOICE_UPDATE');

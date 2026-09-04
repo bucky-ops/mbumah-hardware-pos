@@ -4,7 +4,8 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
-import { calculateWeightedAverageCost } from '@/lib/account-helper';
+import { calculateWeightedAverageCost, recordGoodsReceiptEntry } from '@/lib/account-helper';
+import { isPostgres } from '@/lib/sequence';
 import { requireStoreAccess, type AuthSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -57,7 +58,7 @@ async function getPurchaseOrderHandler(
 
 async function updatePurchaseOrderHandler(
   request: NextRequest,
-  _session: AuthSession,
+  session: AuthSession,
   context: RouteContext,
 ): Promise<Response> {
   const { id } = await context.params;
@@ -105,21 +106,49 @@ async function updatePurchaseOrderHandler(
       );
     }
 
+    // F1-4: RECEIVED / PARTIALLY_RECEIVED are DERIVED states — they may only
+    // be set by the goods-receipt flow (which records stock + journals). The
+    // old plain status update allowed a phantom "RECEIVED" with zero goods.
+    if (body.status === 'RECEIVED' || body.status === 'PARTIALLY_RECEIVED') {
+      return Response.json(
+        { success: false, error: 'RECEIVED / PARTIALLY_RECEIVED are set automatically by the goods-receipt flow.' },
+        { status: 400 }
+      );
+    }
+
+    // F1-4: a PO with real receipts cannot be cancelled — stock already moved.
+    if (body.status === 'CANCELLED' && existing.items.some((i) => Number(i.receivedQty) > 0)) {
+      return Response.json(
+        { success: false, error: 'Cannot cancel a purchase order with received items. Process a return-to-supplier instead.' },
+        { status: 400 }
+      );
+    }
+
+    // F1-3 (SoD): approval and cancellation are management actions — clerks
+    // can create and receive, but approving/cancelling needs a manager role.
+    const managerRoles = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'];
+    if (['APPROVED', 'CANCELLED'].includes(body.status) && !managerRoles.includes(session.role)) {
+      return Response.json(
+        { success: false, error: 'Only managers can approve or cancel purchase orders.' },
+        { status: 403 }
+      );
+    }
+
     // Build update data
     const updateData: Record<string, unknown> = {
       status: body.status,
       notes: body.notes || existing.notes,
     };
 
-    // Track approval
+    // F1-3 (SYS-2): approval/cancellation identity from the SESSION — the
+    // body-supplied IDs allowed anyone to sign approvals as the owner.
     if (body.status === 'APPROVED') {
-      updateData.approvedById = body.approvedById || null;
+      updateData.approvedById = session.userId;
       updateData.approvedAt = new Date();
     }
 
-    // Track cancellation
     if (body.status === 'CANCELLED') {
-      updateData.cancelledById = body.cancelledById || null;
+      updateData.cancelledById = session.userId;
       updateData.cancelledAt = new Date();
     }
 
@@ -163,7 +192,11 @@ async function updatePurchaseOrderHandler(
     }
 
     const receivedItems: { itemId: string; receivedQty: number }[] = body.receivedItems;
-    const receivedById = body.receivedById || null;
+    // F1-3/SYS-2: receiving identity from the session (was body-supplied).
+    const receivedById = session.userId;
+
+    // Track the received value for the GRN journal (F1-1).
+    let receivedGrossValue = 0;
 
     const result = await db.$transaction(async (tx) => {
       for (const recv of receivedItems) {
@@ -172,42 +205,83 @@ async function updatePurchaseOrderHandler(
 
         if (recv.receivedQty <= 0) continue;
 
-        const newReceivedQty = Number(item.receivedQty) + recv.receivedQty;
+        // F1-2 remediation: OPTIMISTIC CAS on receivedQty. The old code read
+        // the item OUTSIDE the tx and wrote an absolute value inside — two
+        // concurrent GRNs both read receivedQty=0 and both wrote 5 while the
+        // stock side (atomic increments) added 10. Now the update is guarded
+        // by the pre-read value as an optimistic token; on contention we
+        // re-read inside the tx and retry once, else 409. The over-receipt
+        // guard therefore validates against CURRENT data.
+        let current = item;
+        let claimed = await tx.purchaseOrderItem.updateMany({
+          where: { id: recv.itemId, receivedQty: current.receivedQty },
+          data: { receivedQty: { increment: recv.receivedQty } },
+        });
+        if (claimed.count === 0) {
+          current = (await tx.purchaseOrderItem.findUnique({ where: { id: recv.itemId } })) ?? item;
+          if (Number(current.receivedQty) + recv.receivedQty > Number(current.quantity)) {
+            throw new Error(`Cannot receive more than ordered for item ${item.productName}. Ordered: ${current.quantity}, Already received: ${current.receivedQty}, Attempting: ${recv.receivedQty}`);
+          }
+          claimed = await tx.purchaseOrderItem.updateMany({
+            where: { id: recv.itemId, receivedQty: current.receivedQty },
+            data: { receivedQty: { increment: recv.receivedQty } },
+          });
+          if (claimed.count === 0) {
+            throw Object.assign(new Error(`Concurrent goods receipt detected for ${item.productName}. Retry.`), { statusCode: 409 });
+          }
+        }
+        const baseReceivedQty = Number(current.receivedQty);
 
-        // Validate not over-receiving
-        if (newReceivedQty > Number(item.quantity)) {
-          throw new Error(`Cannot receive more than ordered for item ${item.productName}. Ordered: ${item.quantity}, Already received: ${item.receivedQty}, Attempting: ${recv.receivedQty}`);
+        const newReceivedQty = baseReceivedQty + recv.receivedQty;
+        if (newReceivedQty > Number(current.quantity)) {
+          throw new Error(`Cannot receive more than ordered for item ${item.productName}. Ordered: ${current.quantity}, Already received: ${baseReceivedQty}, Attempting: ${recv.receivedQty}`);
         }
 
-        await tx.purchaseOrderItem.update({
-          where: { id: recv.itemId },
-          data: { receivedQty: newReceivedQty },
-        });
+        receivedGrossValue += Number(recv.receivedQty) * Number(item.unitCost);
 
-        // ── Weighted Average Cost (WAC) recompute ──
-        const productBefore = await tx.product.findUnique({
-          where: { id: item.productId },
-          select: { quantityInStock: true, costPrice: true, name: true, sku: true },
-        });
+        // ── F1-7 remediation: atomic WAC blend ──
+        // On PostgreSQL the quantity increment and the weighted-average-cost
+        // recompute happen in ONE statement, so two concurrent receipts can
+        // no longer blend from the same base and last-write-wins each other's
+        // cost (systematic COGS corruption). SQLite (tests) keeps the
+        // find-then-update path — single-writer there.
+        if (isPostgres()) {
+          await tx.$executeRaw`
+            UPDATE "products" SET
+              "quantityInStock" = "quantityInStock" + ${recv.receivedQty},
+              "costPrice" = CASE
+                WHEN ("quantityInStock" + ${recv.receivedQty}) > 0
+                THEN (("quantityInStock" * "costPrice") + (${recv.receivedQty} * ${Number(item.unitCost)}::float8))
+                     / ("quantityInStock" + ${recv.receivedQty})
+                ELSE "costPrice"
+              END
+            WHERE "id" = ${item.productId}
+          `;
+        } else {
+          const productBefore = await tx.product.findUnique({
+            where: { id: item.productId },
+            select: { quantityInStock: true, costPrice: true, name: true, sku: true },
+          });
 
-        if (!productBefore) {
-          throw new Error(`Product ${item.productId} not found during GRN receive.`);
+          if (!productBefore) {
+            throw new Error(`Product ${item.productId} not found during GRN receive.`);
+          }
+
+          const wac = calculateWeightedAverageCost({
+            currentStock: productBefore.quantityInStock,
+            currentWac: productBefore.costPrice,
+            incomingStock: recv.receivedQty,
+            incomingUnitCost: item.unitCost,
+          });
+
+          await tx.product.update({
+            where: { id: item.productId },
+            data: {
+              quantityInStock: { increment: recv.receivedQty },
+              costPrice: wac.newWac,
+            },
+          });
         }
-
-        const wac = calculateWeightedAverageCost({
-          currentStock: productBefore.quantityInStock,
-          currentWac: productBefore.costPrice,
-          incomingStock: recv.receivedQty,
-          incomingUnitCost: item.unitCost,
-        });
-
-        await tx.product.update({
-          where: { id: item.productId },
-          data: {
-            quantityInStock: { increment: recv.receivedQty },
-            costPrice: wac.newWac,
-          },
-        });
 
         // Update warehouse stock
         const warehouseStock = await tx.warehouseStock.findUnique({
@@ -246,6 +320,26 @@ async function updatePurchaseOrderHandler(
             referenceId: existing.id,
             notes: `Received from PO ${existing.poNumber}`,
           },
+        });
+      }
+
+      // ── F1-1 remediation: post the goods-receipt journal ──
+      // Dr Inventory (+ input VAT recovery) / Cr Accounts Payable — in the
+      // SAME transaction as the stock writes. Previously the buy side never
+      // touched the GL: Accounts Payable was never used and the Inventory
+      // account was only ever CREDITED by COGS, drifting it negative.
+      if (receivedGrossValue > 0) {
+        const store = await tx.store.findUnique({
+          where: { id: existing.storeId },
+          select: { organizationId: true },
+        });
+        await recordGoodsReceiptEntry(tx, {
+          organizationId: store?.organizationId || 'org_mbumah',
+          storeId: existing.storeId,
+          poId: existing.id,
+          poNumber: existing.poNumber,
+          grossAmount: receivedGrossValue,
+          receivedById,
         });
       }
 
@@ -309,6 +403,16 @@ async function updatePurchaseOrderHandler(
     if (existing.status !== 'DRAFT' && existing.status !== 'CANCELLED') {
       return Response.json(
         { success: false, error: 'Can only delete DRAFT or CANCELLED purchase orders.' },
+        { status: 400 }
+      );
+    }
+
+    // F1-4: a cancelled PO with receipts must NOT be deleted — the cascade
+    // would orphan the StockMovements (and, once posted, the GRN journals)
+    // that reference it, destroying inventory traceability.
+    if (existing.items.some((i) => Number(i.receivedQty) > 0)) {
+      return Response.json(
+        { success: false, error: 'Cannot delete a purchase order with received items (stock movements exist).' },
         { status: 400 }
       );
     }

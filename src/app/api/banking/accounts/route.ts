@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -152,5 +153,5 @@ async function createBankAccountHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: account }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getBankAccountsHandler, 'BANK_ACCOUNTS_LIST');
-export const POST = withErrorBoundary(createBankAccountHandler, 'BANK_ACCOUNTS_CREATE');
+export const GET = withErrorBoundary(withSessionAuth(getBankAccountsHandler, FINANCIAL_ROLES.WRITE), 'BANK_ACCOUNTS_LIST');
+export const POST = withErrorBoundary(withSessionAuth(createBankAccountHandler, FINANCIAL_ROLES.WRITE), 'BANK_ACCOUNTS_CREATE');

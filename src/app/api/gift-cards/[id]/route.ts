@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -224,6 +225,6 @@ async function deleteGiftCardHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const GET = withErrorBoundary(getGiftCardHandler, 'GIFT_CARD_DETAIL');
-export const PUT = withErrorBoundary(updateGiftCardHandler, 'GIFT_CARD_UPDATE');
-export const DELETE = withErrorBoundary(deleteGiftCardHandler, 'GIFT_CARD_CANCEL');
+export const GET = withErrorBoundary(withSessionAuth(getGiftCardHandler), 'GIFT_CARD_DETAIL');
+export const PUT = withErrorBoundary(withSessionAuth(updateGiftCardHandler), 'GIFT_CARD_UPDATE');
+export const DELETE = withErrorBoundary(withSessionAuth(deleteGiftCardHandler), 'GIFT_CARD_CANCEL');

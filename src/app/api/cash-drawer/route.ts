@@ -6,6 +6,7 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateJournalEntryNumber } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -272,5 +273,5 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: logEntry }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getCashDrawerHandler, 'CASH_DRAWER_LIST');
-export const POST = withErrorBoundary(createCashDrawerHandler, 'CASH_DRAWER_CREATE');
+export const GET = withErrorBoundary(withSessionAuth(getCashDrawerHandler, FINANCIAL_ROLES.WRITE), 'CASH_DRAWER_LIST');
+export const POST = withErrorBoundary(withSessionAuth(createCashDrawerHandler, FINANCIAL_ROLES.WRITE), 'CASH_DRAWER_CREATE');

@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db, withImmutabilityBypass } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,6 +40,21 @@ async function updateExpenseHandler(...args: unknown[]): Promise<Response> {
     if (body[field] !== undefined) {
       updateData[field] = body[field];
     }
+  }
+
+  // F1-9 remediation: an expense whose journal entry was already posted is
+  // a FINALISED financial record — editing its amount/category desynchronised
+  // the source document from the GL with no compensating entry (silent P&L
+  // misstatement). Posted expenses are now immutable: void + re-create.
+  if ((body.amount !== undefined || body.category !== undefined) && existing?.journalEntryId) {
+    return Response.json(
+      {
+        success: false,
+        error:
+          'This expense is already posted to the general ledger and can no longer be edited. Void it and create a corrected expense instead (the void posts a reversing entry).',
+      },
+      { status: 409 }
+    );
   }
 
   if (body.amount !== undefined) {
@@ -184,5 +200,5 @@ async function deleteExpenseHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const PUT = withErrorBoundary(updateExpenseHandler, 'EXPENSE_UPDATE');
-export const DELETE = withErrorBoundary(deleteExpenseHandler, 'EXPENSE_DELETE');
+export const PUT = withErrorBoundary(withSessionAuth(updateExpenseHandler, FINANCIAL_ROLES.WRITE), 'EXPENSE_UPDATE');
+export const DELETE = withErrorBoundary(withSessionAuth(deleteExpenseHandler, FINANCIAL_ROLES.WRITE), 'EXPENSE_DELETE');

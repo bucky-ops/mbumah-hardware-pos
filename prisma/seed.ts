@@ -14,6 +14,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 const prisma = new PrismaClient();
 
@@ -216,6 +217,28 @@ async function seedBody() {
       role: 'SUPER_ADMIN',
       phone: '0795191909',
       isActive: true,
+    },
+  });
+
+  // ── F6-3 remediation: dedicated `system` actor ──────────────────────────
+  // The M-Pesa callback (and other automated flows) previously wrote
+  // `CashDrawerLog.userId = 'system'` — a FK to User that did not exist,
+  // which made EVERY successful M-Pesa confirmation throw. The `system`
+  // user is a non-loginable service identity (isActive: false ⇒ no session
+  // can ever be created for it; the random password hash is unknowable).
+  await prisma.user.upsert({
+    where: { id: 'system' },
+    update: { isActive: false },
+    create: {
+      id: 'system',
+      organizationId: org.id,
+      storeId: store.id,
+      email: 'system@mbumahhardware.co.ke',
+      name: 'System (automated)',
+      // Unusable password hash — this identity never authenticates.
+      passwordHash: bcrypt.hashSync(crypto.randomUUID(), 12),
+      role: 'SUPER_ADMIN',
+      isActive: false,
     },
   });
   done3('ok', superAdmin.id);

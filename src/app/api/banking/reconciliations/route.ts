@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,9 +63,11 @@ async function getBankReconciliationsHandler(...args: unknown[]): Promise<Respon
         bankAccount: {
           select: { id: true, bankName: true, accountName: true, accountNumber: true, storeId: true, currentBalance: true },
         },
-        transactions: {
-          select: { id: true, transactionType: true, amount: true, reference: true, isReconciled: true },
-        },
+        // AUDIT REMEDIATION (F7-8): removed the `transactions` include —
+        // BankReconciliation has no such relation in prisma/schema.prisma, so
+        // PrismaClientValidationError 500'd every GET. Linked SalesTransactions
+        // are reachable via bankAccount (BankAccount→SalesTransaction), not
+        // from the reconciliation row itself.
       },
       orderBy: { [sortField]: orderDirection },
       skip: (page - 1) * limit,
@@ -155,5 +158,5 @@ async function createBankReconciliationHandler(...args: unknown[]): Promise<Resp
   return Response.json({ success: true, data: reconciliation }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getBankReconciliationsHandler, 'BANK_RECONCILIATIONS_LIST');
-export const POST = withErrorBoundary(createBankReconciliationHandler, 'BANK_RECONCILIATIONS_CREATE');
+export const GET = withErrorBoundary(withSessionAuth(getBankReconciliationsHandler, FINANCIAL_ROLES.WRITE), 'BANK_RECONCILIATIONS_LIST');
+export const POST = withErrorBoundary(withSessionAuth(createBankReconciliationHandler, FINANCIAL_ROLES.WRITE), 'BANK_RECONCILIATIONS_CREATE');

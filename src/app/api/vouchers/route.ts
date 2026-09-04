@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -189,5 +190,5 @@ async function createVoucherHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: voucher }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getVouchersHandler, 'VOUCHERS_LIST');
-export const POST = withErrorBoundary(createVoucherHandler, 'VOUCHERS_CREATE');
+export const GET = withErrorBoundary(withSessionAuth(getVouchersHandler), 'VOUCHERS_LIST');
+export const POST = withErrorBoundary(withSessionAuth(createVoucherHandler), 'VOUCHERS_CREATE');

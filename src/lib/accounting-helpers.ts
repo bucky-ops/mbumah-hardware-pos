@@ -869,6 +869,15 @@ export async function voidJournalEntry(
   if (entry.isVoided) {
     throw APIError.conflict(`Entry ${entry.entryNumber} is already voided.`);
   }
+  // F7-2 remediation: voiding a DRAFT (never posted, contributes nothing to
+  // balances) used to mint a POSTED reversing entry out of nothing — silently
+  // corrupting every affected account and the trial balance. Drafts are voided
+  // in place (flag only); only POSTED entries get a reversing entry.
+  if (!entry.isPosted) {
+    throw APIError.badRequest(
+      `Entry ${entry.entryNumber} is a DRAFT (never posted). Delete it or void it in place instead — voiding would mint a posted reversal from nothing.`,
+    );
+  }
 
   const organizationId = entry.store.organizationId;
   const now = new Date();

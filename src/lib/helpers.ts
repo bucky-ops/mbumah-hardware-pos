@@ -1,11 +1,27 @@
 // Receipt & reference generators, formatting, calculations
+//
+// AUDIT REMEDIATION — FINANCIAL_MODULE_AUDIT_REPORT.md (SYS-7/F5-6/F1-9):
+//   Document numbers previously used `Math.random()` 5-digit suffixes.
+//   With a busy day's volume the birthday bound makes collisions (and the
+//   resulting P2002 500s mid-checkout) likely, and guessable receipt numbers
+//   weaken the M-Pesa callback's reference security. All user-facing document
+//   suffixes are now crypto-random. Callers wrap creates in
+//   `withSequenceRetry` (src/lib/sequence.ts) as the P2002 backstop.
+
+import crypto from 'crypto';
+
+function secureSuffix(): string {
+  // 5-char base36 ≈ 60M combinations — collision-safe at retail volumes and
+  // unpredictable to outside observers.
+  return crypto.randomBytes(4).toString('hex').toUpperCase().slice(0, 5);
+}
 
 export function generateReceiptNumber(): string {
   const now = new Date();
   const dateStr = now.getFullYear().toString() +
     String(now.getMonth() + 1).padStart(2, '0') +
     String(now.getDate()).padStart(2, '0');
-  const random = String(Math.floor(Math.random() * 99999)).padStart(5, '0');
+  const random = secureSuffix();
   return `MBM-${dateStr}-${random}`;
 }
 
@@ -15,7 +31,7 @@ export function generateJournalEntryNumber(): string {
   const dateStr = now.getFullYear().toString() +
     String(now.getMonth() + 1).padStart(2, '0') +
     String(now.getDate()).padStart(2, '0');
-  const random = String(Math.floor(Math.random() * 99999)).padStart(5, '0');
+  const random = secureSuffix();
   return `JE-${dateStr}-${random}`;
 }
 

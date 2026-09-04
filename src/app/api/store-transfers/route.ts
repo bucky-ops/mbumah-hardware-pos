@@ -1,9 +1,18 @@
 // GET/POST /api/store-transfers
+//
+// AUDIT REMEDIATION — FINANCIAL_MODULE_AUDIT_REPORT.md:
+//   • SYS-1/P0-3: both endpoints were unauthenticated (any non-empty Bearer
+//     passed the proxy). Now wrapped in `requireStoreAccess`.
+//   • SYS-2/F1-3: `requestedBy` previously came from the request body —
+//     spoofable. Now derived from the authenticated session.
+//   • F3-5: a non-admin can only create transfers FROM their own store.
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
+import { requireStoreAccess, type AuthSession } from '@/lib/auth';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import crypto from 'crypto';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,12 +21,18 @@ function generateTransferNumber(): string {
   const dateStr = now.getFullYear().toString() +
     String(now.getMonth() + 1).padStart(2, '0') +
     String(now.getDate()).padStart(2, '0');
-  const random = String(Math.floor(Math.random() * 99999)).padStart(5, '0');
+  // crypto.randomBytes instead of Math.random — receipt/transfer numbers must
+  // not be predictable (they are referenced in payment descriptions) and the
+  // larger space reduces birthday collisions (SYS-7).
+  const random = crypto.randomBytes(3).toString('hex').toUpperCase();
   return `XFR-${dateStr}-${random}`;
 }
 
-async function getStoreTransfersHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function getStoreTransfersHandler(
+  request: NextRequest,
+  _session: AuthSession,
+  ..._args: unknown[]
+): Promise<Response> {
   const { searchParams } = new URL(request.url);
 
   const storeId = searchParams.get('storeId');
@@ -100,17 +115,22 @@ async function getStoreTransfersHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-async function createStoreTransferHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function createStoreTransferHandler(
+  request: NextRequest,
+  session: AuthSession,
+  ..._args: unknown[]
+): Promise<Response> {
   const body = await request.json();
 
   const {
     fromStoreId,
     toStoreId,
     items,
-    requestedBy,
     notes,
   } = body;
+
+  // SYS-2/F3-5: actor identity from the session; non-admins may only dispatch
+  // transfers from their own store (the `requestedBy` body field is ignored).
 
   if (!fromStoreId || !toStoreId || !items || !Array.isArray(items) || items.length === 0) {
     return Response.json(
@@ -123,6 +143,16 @@ async function createStoreTransferHandler(...args: unknown[]): Promise<Response>
     return Response.json(
       { success: false, error: 'fromStoreId and toStoreId must be different.' },
       { status: 400 }
+    );
+  }
+
+  // F3-5 (store binding): non-admin users may only originate transfers from
+  // the store they are assigned to. SUPER_ADMIN may create cross-store flows.
+  const requestedBy = session.userId;
+  if (session.role !== 'SUPER_ADMIN' && session.storeId && session.storeId !== fromStoreId) {
+    return Response.json(
+      { success: false, error: 'You can only create transfers from your own store.' },
+      { status: 403 }
     );
   }
 
@@ -214,5 +244,5 @@ async function createStoreTransferHandler(...args: unknown[]): Promise<Response>
   return Response.json({ success: true, data: transfer }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getStoreTransfersHandler, 'STORE_TRANSFERS_LIST');
-export const POST = withErrorBoundary(createStoreTransferHandler, 'STORE_TRANSFERS_CREATE');
+export const GET = withErrorBoundary(requireStoreAccess(getStoreTransfersHandler) as (...args: unknown[]) => Promise<Response>, 'STORE_TRANSFERS_LIST');
+export const POST = withErrorBoundary(requireStoreAccess(createStoreTransferHandler) as (...args: unknown[]) => Promise<Response>, 'STORE_TRANSFERS_CREATE');

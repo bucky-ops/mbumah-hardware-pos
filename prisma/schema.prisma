@@ -474,6 +474,12 @@ model SalesTransaction {
   etimsUrl           String?  // Verification URL
   etimsStatus        String?  // PENDING, ISSUED, CANCELLED
   etimsIssuedAt      DateTime?
+  // SYS-10/F1-8 remediation: client-generated idempotency key. A unique
+  // constraint on this column makes checkout retries/offline replays
+  // (lost-response duplicates) safe — the retried POST returns the ORIGINAL
+  // transaction instead of double-applying stock, payments and journals.
+  // Nullable + unique is safe in PostgreSQL/SQLite: multiple NULLs allowed.
+  idempotencyKey     String?   @unique
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -568,6 +574,10 @@ model MpesaTransaction {
   @@index([storeId])
   @@index([checkoutRequestId])
   @@index([status])
+  // F6-3/F6-4 remediation: one Daraja receipt may only ever settle ONE
+  // MpesaTransaction per store. Nullable column ⇒ retries with no receipt
+  // yet are unaffected (PostgreSQL/SQLite allow multiple NULLs).
+  @@unique([storeId, mpesaReceiptNumber])
   @@map("mpesa_transactions")
 }
 
@@ -860,7 +870,9 @@ model Supplier {
 model PurchaseOrder {
   id                  String    @id @default(cuid())
   storeId             String
-  poNumber            String    @unique
+  // F1-6 remediation: uniqueness is scoped per store (a global unique would
+  // make store-scoped daily counters collide across stores on the same day).
+  poNumber            String
   supplierId          String
   status              String    @default("DRAFT") // DRAFT, PENDING_APPROVAL, APPROVED, SENT, CONFIRMED, PARTIALLY_RECEIVED, RECEIVED, CANCELLED
   orderDate           DateTime  @default(now())
@@ -887,6 +899,7 @@ model PurchaseOrder {
   receivedBy  User?               @relation("POReceivedBy", fields: [receivedById], references: [id])
   cancelledBy User?               @relation("POCancelledBy", fields: [cancelledById], references: [id])
 
+  @@unique([storeId, poNumber]) // F1-6: per-store PO number uniqueness
   @@index([storeId])
   @@index([supplierId])
   @@index([status])
@@ -2429,11 +2442,18 @@ model StoreTransfer {
   transferNumber String    @unique
   fromStoreId    String
   toStoreId      String
-  status         String    @default("PENDING") // PENDING, IN_TRANSIT, PARTIAL, COMPLETED, CANCELLED
+  status         String    @default("PENDING") // PENDING, IN_TRANSIT, PARTIAL, RECEIVED, CANCELLED
   requestedBy    String?
   approvedBy     String?
+  // F3-2 remediation: the receive/ship/cancel handlers write these actor
+  // columns — they were previously missing, which made every receive crash
+  // with a PrismaClientValidationError AFTER stock had been credited.
+  shippedBy      String?
+  receivedBy     String?
+  cancelledBy    String?
   shippedAt      DateTime?
   receivedAt     DateTime?
+  cancelledAt    DateTime? // when the transfer was cancelled (F3-4 cancel flow)
   notes          String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -2709,6 +2729,11 @@ model AuditLog {
   reason       String?  // Optional reason (mandatory for VOID, CLOSE, LOCK)
   ipAddress    String?
   userAgent    String?
+  // F9-1 remediation: tamper-evident hash chain. Each AuditLog row stores
+  // sha256(previousHash + canonicalPayload) so any mutation/deletion out of
+  // band breaks the chain and verifyIntegrity() reports the exact break point.
+  previousHash String?
+  integrityHash String?
   timestamp    DateTime @default(now())
 
   store Store? @relation(fields: [storeId], references: [id], onDelete: Cascade)
@@ -2911,4 +2936,32 @@ model ShiftSchedule {
   @@index([specificDate])
   @@index([status])
   @@map("shift_schedules")
+}
+
+// ── F8-4 remediation: transactional outbox ──────────────────────────────────
+//
+// Vercel serverless functions freeze after the response returns, so any
+// fire-and-forget promise (STK push initiation, notifications, webhooks)
+// can silently die. Instead of calling side effects inline, business
+// transactions enqueue an OutboxEvent row INSIDE the same Prisma
+// transaction; a cron-driven pump (see /api/cron/outbox + src/lib/outbox.ts)
+// delivers them with retries and dead-letters after MAX_ATTEMPTS.
+model OutboxEvent {
+  id          String    @id @default(cuid())
+  storeId     String
+  // e.g. MPESA_STK_PUSH, DEBT_REMINDER, ERP_EXPORT_READY
+  kind        String
+  payload     String // JSON-serialised event body (String for SQLite parity)
+  status      String    @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED, DEAD
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  lastError   String?
+  availableAt DateTime  @default(now()) // for exponential backoff scheduling
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, availableAt])
+  @@index([storeId, kind])
+  @@map("outbox_events")
 }

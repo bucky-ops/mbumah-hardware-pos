@@ -6,6 +6,8 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { calculateLateFee, generateJournalEntryNumber } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, RentalStatus, StockMovementType } from '@/lib/types';
+import { withSessionAuth } from '@/lib/auth';
+import { getSessionFromRequest } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +25,8 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
     damageAssessment,
     damageCharge,
     notes,
-    processedBy,
+    // SYS-2: actor identity from the authenticated session (body ignored).
+    processedBy: _bodyProcessedBy,
   } = body;
 
   // Validate rental exists
@@ -49,6 +52,10 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
       { status: 400 }
     );
   }
+
+  const session = await getSessionFromRequest(args[0] as Request);
+  const processedBy = session?.userId || null;
+  void _bodyProcessedBy; // body value ignored by design (spoofable actor)
 
   const actualReturnDate = new Date();
   const rentalStartDate = new Date(rental.rentalStartDate);
@@ -81,6 +88,17 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
   ]);
 
   const result = await db.$transaction(async (tx) => {
+    // R8 remediation: ATOMIC status claim — the old code checked status
+    // BEFORE the transaction and then updated unconditionally, so two
+    // concurrent returns both passed and double-credited stock.
+    const claimed = await tx.equipmentRental.updateMany({
+      where: { id, status: { in: [RentalStatus.ACTIVE, RentalStatus.OVERDUE] } },
+      data: { status: returnStatus },
+    });
+    if (claimed.count === 0) {
+      throw Object.assign(new Error('Rental already returned (concurrent request).'), { statusCode: 409 });
+    }
+
         const updatedRental = await tx.equipmentRental.update({
       where: { id },
       data: {
@@ -98,30 +116,35 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
       },
     });
 
-        await tx.product.update({
-      where: { id: rental.productId },
-      data: { quantityInStock: { increment: 1 } },
-    });
+        // R8/F3-7 remediation: a LOST (destroyed) rental must NOT return to
+    // sellable stock — previously SEVERE damage outcomes restocked the unit.
+    if (returnStatus !== RentalStatus.LOST) {
+      await tx.product.update({
+        where: { id: rental.productId },
+        data: { quantityInStock: { increment: 1 } },
+      });
 
-        await tx.stockMovement.create({
-      data: {
-        storeId: rental.storeId,
-        productId: rental.productId,
-        movementType: StockMovementType.RENTAL_RETURN,
-        quantity: 1,
-        referenceId: rental.id,
-        notes: `Rental return - ${rental.product.name}`,
-        performedBy: processedBy || null,
-      },
-    });
+      await tx.stockMovement.create({
+        data: {
+          storeId: rental.storeId,
+          productId: rental.productId,
+          movementType: StockMovementType.RENTAL_RETURN,
+          quantity: 1,
+          referenceId: rental.id,
+          notes: `Rental return - ${rental.product.name}`,
+          performedBy: processedBy || null,
+        },
+      });
+    }
 
         if (settlement < 0) {
             const amountOwed = Math.abs(settlement);
-      const lastDrawerEntry = await tx.cashDrawerLog.findFirst({
+      // R6 remediation: SUM-derived drawer balance (concurrency-safe).
+      const drawerAgg = await tx.cashDrawerLog.aggregate({
         where: { storeId: rental.storeId },
-        orderBy: { createdAt: 'desc' },
+        _sum: { amount: true },
       });
-      const currentBalance = lastDrawerEntry?.balance || 0;
+      const currentBalance = Number(drawerAgg._sum.amount ?? 0);
 
       await tx.cashDrawerLog.create({
         data: {
@@ -143,8 +166,11 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
           description: `Rental settlement - additional charges from ${rental.customer.name}`,
           referenceType: 'RENTAL',
           referenceId: rental.id,
-          totalDebit: amountOwed + rental.securityDeposit,
-          totalCredit: totalRentalCharge + lateFee,
+          // F3-7 remediation: the damage charge is now INCLUDED on the
+          // credit side — previously debits exceeded credits by exactly the
+          // damage amount, corrupting the GL on every damaged return.
+          totalDebit: amountOwed + Number(rental.securityDeposit),
+          totalCredit: totalRentalCharge + lateFee + assessedDamageCharge,
           isPosted: true,
           postedAt: new Date(),
           createdBy: processedBy || null,
@@ -174,16 +200,23 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
                 credit: lateFee,
                 description: lateFee > 0 ? `Late fee revenue` : 'No late fee',
               },
+              {
+                accountId: accounts.RENTAL_REVENUE,
+                debit: 0,
+                credit: assessedDamageCharge,
+                description: 'Damage charge assessed at return',
+              },
             ],
           },
         },
       });
     } else if (settlement > 0) {
-            const lastDrawerEntry = await tx.cashDrawerLog.findFirst({
+            // R6 remediation: SUM-derived drawer balance (concurrency-safe).
+      const drawerAgg = await tx.cashDrawerLog.aggregate({
         where: { storeId: rental.storeId },
-        orderBy: { createdAt: 'desc' },
+        _sum: { amount: true },
       });
-      const currentBalance = lastDrawerEntry?.balance || 0;
+      const currentBalance = Number(drawerAgg._sum.amount ?? 0);
 
       await tx.cashDrawerLog.create({
         data: {
@@ -205,8 +238,9 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
           description: `Rental settlement - refund to ${rental.customer.name}`,
           referenceType: 'RENTAL',
           referenceId: rental.id,
-          totalDebit: rental.securityDeposit,
-          totalCredit: settlement + totalRentalCharge + lateFee,
+          // F3-7: damage charge included in the credit side.
+          totalDebit: Number(rental.securityDeposit),
+          totalCredit: settlement + totalRentalCharge + lateFee + assessedDamageCharge,
           isPosted: true,
           postedAt: new Date(),
           createdBy: processedBy || null,
@@ -235,6 +269,12 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
                 debit: 0,
                 credit: lateFee,
                 description: lateFee > 0 ? 'Late fee revenue' : 'No late fee',
+              },
+              {
+                accountId: accounts.RENTAL_REVENUE,
+                debit: 0,
+                credit: assessedDamageCharge,
+                description: 'Damage charge assessed at return',
               },
             ],
           },
@@ -273,6 +313,12 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
                 debit: 0,
                 credit: lateFee,
                 description: lateFee > 0 ? 'Late fee revenue' : 'No late fee',
+              },
+              {
+                accountId: accounts.RENTAL_REVENUE,
+                debit: 0,
+                credit: assessedDamageCharge,
+                description: 'Damage charge assessed at return',
               },
             ],
           },
@@ -320,4 +366,4 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
   });
 }
 
-export const POST = withErrorBoundary(processRentalReturnHandler, 'RENTAL_RETURN');
+export const POST = withErrorBoundary(withSessionAuth(processRentalReturnHandler), 'RENTAL_RETURN');

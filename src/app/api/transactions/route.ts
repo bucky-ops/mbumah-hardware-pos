@@ -29,11 +29,17 @@ import { recordSaleJournalEntry, getAccountIds, ACCOUNT_CODES } from '@/lib/acco
 import { LogSeverity, LogComponent, PaymentMethod, PaymentStatus } from '@/lib/types';
 import { checkoutSchema, validateInput } from '@/lib/validations';
 import { calculateEarnedPoints, getTierFromPoints } from '@/lib/loyalty-utils';
+import { requireStoreAccess, type AuthSession } from '@/lib/auth';
+import { enqueueOutbox } from '@/lib/outbox';
+import { withSequenceRetry, isP2002 } from '@/lib/sequence';
 
 export const dynamic = 'force-dynamic';
 
-async function getTransactionsHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function getTransactionsHandler(
+  request: NextRequest,
+  _session: AuthSession,
+  ..._args: unknown[]
+): Promise<Response> {
   const { searchParams } = new URL(request.url);
 
   const storeId = searchParams.get('storeId');
@@ -134,9 +140,38 @@ async function getTransactionsHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-async function createTransactionHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function createTransactionHandler(
+  request: NextRequest,
+  session: AuthSession,
+  ..._args: unknown[]
+): Promise<Response> {
   const body = await request.json();
+
+  // ── SYS-10: idempotent checkout replay ──────────────────────────────────
+  // The offline queue (src/lib/offline-sync.ts) re-POSTs sales whose response
+  // was lost. A client-generated idempotencyKey makes that replay safe: the
+  // original committed transaction is returned instead of re-applying stock,
+  // payments and journals.
+  const idempotencyKey =
+    typeof body?.idempotencyKey === 'string' && body.idempotencyKey.trim().length >= 8
+      ? body.idempotencyKey.trim()
+      : undefined;
+  if (idempotencyKey) {
+    const existing = await db.salesTransaction.findUnique({
+      where: { idempotencyKey },
+      include: {
+        items: true,
+        payments: true,
+        receipt: true,
+      },
+    });
+    if (existing) {
+      return Response.json(
+        { success: true, data: existing, idempotentReplay: true },
+        { status: 200 }
+      );
+    }
+  }
 
   const validation = validateInput(checkoutSchema, body);
   if (!validation.success) {
@@ -145,13 +180,17 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
   const {
     storeId,
     customerId,
-    cashierId,
     items,
     paymentMethod,
     paymentDetails,
     discountAmount,
     notes,
+    serials,
   } = validation.data;
+
+  // SYS-2 (F5-1): the cashier identity ALWAYS comes from the authenticated
+  // session — the request body can no longer attribute a sale to another user.
+  const cashierId = session.userId;
 
   if (!Object.values(PaymentMethod).includes(paymentMethod)) {
     return Response.json(
@@ -188,12 +227,12 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     }
   }
 
-  // Verify cashier exists
-  const cashier = await db.user.findUnique({ where: { id: cashierId } });
-  if (!cashier || !cashier.isActive) {
+  // F5-1 (store binding): non-admin users can only check out in their own
+  // store — a body-borne storeId for another store is rejected.
+  if (session.role !== 'SUPER_ADMIN' && session.storeId && session.storeId !== storeId) {
     return Response.json(
-      { success: false, error: 'Invalid or inactive cashier.' },
-      { status: 400 }
+      { success: false, error: 'You can only create transactions for your own store.' },
+      { status: 403 }
     );
   }
 
@@ -297,44 +336,26 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     }
   }
 
-  if (paymentMethod === PaymentMethod.DEBT && customer) {
-    let totalTransactionAmount = 0;
-    for (const item of items) {
-      const calc = calculateLineTotal(
-        Number(item.pricePerUnit) || 0,
-        Number(item.quantity) || 0,
-        Number(item.discountPercent) || 0,
-        Number(item.taxRate) || 16
-      );
-      totalTransactionAmount += calc.total;
-    }
-    totalTransactionAmount -= Number(discountAmount) || 0;
-
-    const availableCredit = customer.debtLimit - customer.currentDebtBalance;
-    if (totalTransactionAmount > availableCredit) {
-      return Response.json(
-        {
-          success: false,
-          error: `Customer credit limit exceeded. Available credit: KES ${availableCredit.toLocaleString()}, Transaction total: KES ${totalTransactionAmount.toLocaleString()}`,
-        },
-        { status: 400 }
-      );
-    }
-  }
-
+  // ── F5-1: server-authoritative pricing ──────────────────────────────────
+  // The checkout previously trusted client-supplied pricePerUnit, costPrice
+  // and taxRate — a compromised/misbehaving client could sell KES 10,000 of
+  // stock for KES 1 or poison COGS. Prices, cost and tax now come from the
+  // Product row loaded above; client values are ignored.
   let subtotal = 0;
   let taxAmount = 0;
   let totalDiscount = 0;
 
   const saleItemsData = items.map((item: { productId: string; productName: string; sku: string; quantity: number; unitType: string; pricePerUnit: number; costPrice: number; discountPercent: number; taxRate: number; isRentalItem: boolean; isBundle: boolean }, index: number) => {
+    const product = productMap.get(item.productId);
+
     // Safe numeric coercion with NaN guard — prevents silent NaN propagation
     // into the database. If any numeric field cannot be parsed, we reject the
     // entire checkout with a clear 400 error.
-    const safePrice = parseFloat(String(item.pricePerUnit));
-    const safeCost  = parseFloat(String(item.costPrice));
+    const safePrice = product ? Number(product.pricePerUnit) : parseFloat(String(item.pricePerUnit));
+    const safeCost  = product ? Number(product.costPrice) : parseFloat(String(item.costPrice));
     const safeQty   = parseFloat(String(item.quantity));
-    const safeDisc  = parseFloat(String(item.discountPercent || 0));
-    const safeTax   = parseFloat(String(item.taxRate || 16));
+    const safeDisc  = Math.min(100, Math.max(0, parseFloat(String(item.discountPercent || 0)) || 0));
+    const safeTax   = product ? Number(product.taxRate) : parseFloat(String(item.taxRate || 16));
 
     if (Number.isNaN(safePrice) || safePrice < 0) {
       throw new Error(`items[${index}].pricePerUnit: Invalid value "${item.pricePerUnit}" — expected a non-negative number.`);
@@ -356,7 +377,7 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
 
     return {
       productId: item.productId,
-      productName: item.productName,
+      productName: product?.name || item.productName,
       quantity: safeQty,
       unitType: item.unitType || 'PIECE',
       pricePerUnit: safePrice,
@@ -369,8 +390,26 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
   });
 
   const totalAmount = subtotal - totalDiscount + taxAmount;
-  const appliedDiscount = Number(discountAmount) || 0;
+  // F5-1: discount cap — a discount larger than the line-discounted total
+  // used to produce a NEGATIVE finalTotal (negative Payment, negative debt).
+  const appliedDiscount = Math.max(0, Math.min(Number(discountAmount) || 0, totalAmount));
   const finalTotal = totalAmount - appliedDiscount;
+
+  // F5-1: credit-limit check now uses SERVER-computed totals (it previously
+  // re-derived totals from client prices and could be bypassed).
+  if (paymentMethod === PaymentMethod.DEBT && customer) {
+    const totalTransactionAmount = finalTotal;
+    const availableCredit = customer.debtLimit - customer.currentDebtBalance;
+    if (totalTransactionAmount > availableCredit) {
+      return Response.json(
+        {
+          success: false,
+          error: `Customer credit limit exceeded. Available credit: KES ${availableCredit.toLocaleString()}, Transaction total: KES ${totalTransactionAmount.toLocaleString()}`,
+        },
+        { status: 400 }
+      );
+    }
+  }
 
   // ── Pre-validate gift card payments (fail fast with 400) ──────────────
   // We validate existence / status / expiry / balance BEFORE opening the
@@ -407,10 +446,10 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     }
   }
 
-  const receiptNumber = generateReceiptNumber();
-
-  const cashierOrg = await db.user.findUnique({ where: { id: cashierId }, select: { organizationId: true } });
-  const orgId = cashierOrg?.organizationId || 'org_mbumah';
+  // SYS-7/F5-6: receipt numbers are crypto-random (see helpers.ts) and the
+  // whole checkout is retried on the rare P2002 unique-number collision —
+  // the old Math.random suffix could abort a live checkout with a 500.
+  const orgId = session.organizationId || 'org_mbumah';
 
   // Pre-fetch (and auto-create if missing) ALL accounting chart-of-account
   // IDs BEFORE opening the transaction. `recordSaleJournalEntry` calls
@@ -437,7 +476,34 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
   //  Timeout raised to 15s (default 5s) to accommodate Daraja STK push prep
   //  and journal-entry line creation on slow connections.
   // ═══════════════════════════════════════════════════════════════════════
-  const result = await db.$transaction(
+  // Wrapped in withSequenceRetry: on a receipt-number P2002 the retry
+  // regenerates the number and re-runs (SYS-7). On an idempotency-key
+  // P2002 (concurrent same-key replay) the committed original is returned.
+  const { transaction: result, receiptNumber } = await withSequenceRetry(async () => {
+    const receiptNumber = generateReceiptNumber();
+    try {
+      const txResult = await runCheckoutTransaction(receiptNumber);
+      return { transaction: txResult, receiptNumber };
+    } catch (err) {
+      // Concurrent same-idempotency-key checkout: the other request committed
+      // first — return ITS transaction instead of failing the client.
+      if (idempotencyKey && isP2002(err)) {
+        const existing = await db.salesTransaction.findUnique({
+          where: { idempotencyKey },
+          include: { items: true, payments: true, receipt: true },
+        });
+        if (existing) {
+          return { transaction: existing, receiptNumber };
+        }
+      }
+      throw err;
+    }
+  });
+
+  // ══ The transaction body is factored into runCheckoutTransaction so the
+  // ══ retry wrapper can regenerate the receipt number per attempt.
+  async function runCheckoutTransaction(receiptNumber: string) {
+    return db.$transaction(
     async (tx) => {
     let paymentStatusValue: string = PaymentStatus.COMPLETED;
 
@@ -462,6 +528,9 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
         paymentStatus: paymentStatusValue,
         transactionType: 'SALE',
         notes: notes || null,
+        // SYS-10: stores the client idempotency key (unique) so replayed
+        // checkouts are detectable at the database level.
+        idempotencyKey: idempotencyKey || null,
         items: {
           create: saleItemsData,
         },
@@ -500,30 +569,27 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
       });
     }
 
-    // 3 ── Deduct stock + write stock movements (with negative-stock safeguard) ──
+    // 3 ── Deduct stock + write stock movements ──
     for (const [productId, deduction] of stockDeductions) {
       const { quantity, product } = deduction;
 
-      // Safeguard: re-read stock INSIDE the transaction and refuse to go
-      // negative. The pre-tx check at the top guards the common path, but
-      // two concurrent checkouts could both pass the pre-check and then
-      // double-decrement. This in-tx re-check is the authoritative guard.
+      // R1 remediation: ATOMIC conditional decrement. The previous
+      // read-then-check (`findUnique` → compare → `decrement`) was a TOCTOU
+      // race — two concurrent checkouts of the last unit could both pass and
+      // drive stock negative. `updateMany` with a `gte` predicate takes the
+      // row lock and re-evaluates the predicate atomically: only ONE of the
+      // concurrent checkouts can succeed; the loser aborts the whole sale.
       if (!product.isRental) {
-        const currentStock = await tx.product.findUnique({
-          where: { id: productId },
-          select: { quantityInStock: true, name: true },
+        const claimed = await tx.product.updateMany({
+          where: { id: productId, quantityInStock: { gte: quantity } },
+          data: { quantityInStock: { decrement: quantity } },
         });
-        if (currentStock && currentStock.quantityInStock < quantity) {
+        if (claimed.count === 0) {
           throw new Error(
-            `Insufficient stock for "${currentStock.name}". Available: ${currentStock.quantityInStock}, Needed: ${quantity}.`,
+            `Insufficient stock for "${product.name}". Needed: ${quantity}. (Concurrent sale may have consumed the last units.)`,
           );
         }
       }
-
-      await tx.product.update({
-        where: { id: productId },
-        data: { quantityInStock: { decrement: quantity } },
-      });
 
       await tx.stockMovement.create({
         data: {
@@ -542,11 +608,14 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
 
     // CASH → cash drawer ledger entry.
     if (paymentMethod === PaymentMethod.CASH) {
-      const lastDrawerEntry = await tx.cashDrawerLog.findFirst({
+      // R6 remediation: running balance derived from the SUM of signed
+      // amounts instead of read-latest-row + write — the old pattern lost
+      // updates whenever two cash events ran concurrently.
+      const agg = await tx.cashDrawerLog.aggregate({
         where: { storeId },
-        orderBy: { createdAt: 'desc' },
+        _sum: { amount: true },
       });
-      const currentBalance = lastDrawerEntry?.balance || 0;
+      const runningBalance = Number(agg._sum.amount ?? 0) + Number(finalTotal);
 
       await tx.cashDrawerLog.create({
         data: {
@@ -554,13 +623,13 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
           userId: cashierId,
           action: 'SALE',
           amount: finalTotal,
-          balance: currentBalance + finalTotal,
+          balance: runningBalance,
           notes: `Sale ${receiptNumber}`,
         },
       });
     }
 
-    // M-PESA → pending M-Pesa transaction row (STK push fired post-commit).
+    // M-PESA → pending M-Pesa transaction row + outbox STK-push event.
     if (paymentMethod === PaymentMethod.MPESA) {
       const mpesaPhone = paymentDetails?.mpesaPhone || customer?.phone || '';
       if (!mpesaPhone) {
@@ -573,6 +642,24 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
           phoneNumber: mpesaPhone,
           amount: finalTotal,
           status: 'PENDING',
+          transactionId: transaction.id,
+        },
+      });
+
+      // F6-2 remediation: the server-side STK push is no longer a
+      // fire-and-forget relative-URL fetch (which could never resolve and
+      // silently stranded every M-Pesa sale in PENDING). The push request is
+      // enqueued INSIDE this transaction and delivered right after commit by
+      // the outbox pump — atomically with the sale, retried on failure.
+      await enqueueOutbox(tx, {
+        storeId,
+        kind: 'MPESA_STK_PUSH',
+        payload: {
+          phoneNumber: mpesaPhone,
+          amount: finalTotal,
+          accountReference: receiptNumber,
+          transactionDesc: `Payment for ${receiptNumber}`,
+          storeId,
           transactionId: transaction.id,
         },
       });
@@ -603,7 +690,7 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
       });
     }
 
-    // GIFT_CARD → redeem the balance atomically (in-tx re-check + decrement).
+    // GIFT_CARD → redeem the balance with an ATOMIC conditional decrement.
     if (paymentMethod === PaymentMethod.GIFT_CARD && giftCardCode) {
       const giftCard = await tx.giftCard.findUnique({
         where: { code: giftCardCode },
@@ -617,19 +704,37 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
       if (giftCard.expiresAt && giftCard.expiresAt < new Date()) {
         throw new Error(`Gift card "${giftCardCode}" has expired.`);
       }
-      if (giftCard.currentBalance < finalTotal) {
+
+      // R2 remediation: the previous read-balance-then-write-absolute-value
+      // pattern allowed two concurrent redemptions to both drain the same
+      // card (double-spend). The `gte` predicate makes the balance check and
+      // decrement one atomic operation — at most ONE concurrent checkout can
+      // claim the balance.
+      const claimed = await tx.giftCard.updateMany({
+        where: {
+          id: giftCard.id,
+          status: { in: ['ACTIVE', 'PARTIALLY_REDEEMED'] },
+          currentBalance: { gte: finalTotal },
+        },
+        data: {
+          currentBalance: { decrement: finalTotal },
+          lastRedeemedAt: new Date(),
+        },
+      });
+      if (claimed.count === 0) {
         throw new Error(
-          `Gift card "${giftCardCode}" balance (KES ${giftCard.currentBalance}) is less than the sale total (KES ${finalTotal}).`,
+          `Gift card "${giftCardCode}" has insufficient balance or was concurrently redeemed.`,
         );
       }
 
-      const newBalance = giftCard.currentBalance - finalTotal;
+      // Re-read INSIDE the tx to observe the post-decrement balance (our own
+      // write + any committed concurrent writes) for the status flags.
+      const freshCard = await tx.giftCard.findUnique({ where: { id: giftCard.id } });
+      const newBalance = Number(freshCard?.currentBalance ?? 0);
       await tx.giftCard.update({
         where: { id: giftCard.id },
         data: {
-          currentBalance: newBalance,
           status: newBalance <= 0 ? 'REDEEMED' : 'PARTIALLY_REDEEMED',
-          lastRedeemedAt: new Date(),
           isVisible: newBalance > 0 ? giftCard.isVisible : false,
         },
       });
@@ -643,6 +748,75 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
           notes: `Redeemed for sale ${receiptNumber}`,
         },
       });
+    }
+
+    // F5-3 remediation: SPLIT payments that include a GIFT_CARD leg now
+    // REDEEM the card. Previously the split only aggregated the amount into
+    // the journal's gift-card liability debit — the card balance was never
+    // touched, so the card remained fully spendable while the GL said the
+    // liability was consumed (double-spend + misstated liability).
+    if (paymentMethod === PaymentMethod.SPLIT && paymentDetails?.splits) {
+      for (const split of paymentDetails.splits) {
+        if (split.method !== PaymentMethod.GIFT_CARD) continue;
+        const splitAmount = parseFloat(String(split.amount));
+        const splitCode = split.giftCardCode?.trim();
+        if (!splitCode) {
+          throw new Error(
+            'A gift card code is required for every GIFT_CARD split (paymentDetails.splits[].giftCardCode).',
+          );
+        }
+        const splitCard = await tx.giftCard.findUnique({ where: { code: splitCode } });
+        if (!splitCard) throw new Error(`Gift card "${splitCode}" not found.`);
+        if (splitCard.status !== 'ACTIVE' && splitCard.status !== 'PARTIALLY_REDEEMED') {
+          throw new Error(`Gift card "${splitCode}" is not active (status: ${splitCard.status}).`);
+        }
+        if (splitCard.expiresAt && splitCard.expiresAt < new Date()) {
+          throw new Error(`Gift card "${splitCode}" has expired.`);
+        }
+        const claimedSplit = await tx.giftCard.updateMany({
+          where: {
+            id: splitCard.id,
+            status: { in: ['ACTIVE', 'PARTIALLY_REDEEMED'] },
+            currentBalance: { gte: splitAmount },
+          },
+          data: { currentBalance: { decrement: splitAmount }, lastRedeemedAt: new Date() },
+        });
+        if (claimedSplit.count === 0) {
+          throw new Error(
+            `Gift card "${splitCode}" has insufficient balance for the split amount or was concurrently redeemed.`,
+          );
+        }
+        await tx.giftCardRedemption.create({
+          data: {
+            giftCardId: splitCard.id,
+            transactionId: transaction.id,
+            amount: splitAmount,
+            redeemedBy: cashierId,
+            notes: `Split-tender redemption for sale ${receiptNumber}`,
+          },
+        });
+      }
+    }
+
+    // ── F2-1: claim serialized assets (IN_STOCK → SOLD) ──
+    // Conditional updateMany per serial = the double-sell lock: only ONE
+    // concurrent checkout can flip a serial out of IN_STOCK; the loser
+    // aborts the entire sale before the journal/receipt are written.
+    if (serials && serials.length > 0) {
+      for (const s of serials) {
+        const claimedSerial = await tx.serialNumber.updateMany({
+          where: { serial: s.serial, productId: s.productId, storeId, status: 'IN_STOCK' },
+          data: {
+            status: 'SOLD',
+            soldInTransactionId: transaction.id,
+          },
+        });
+        if (claimedSerial.count === 0) {
+          throw new Error(
+            `Serial "${s.serial}" is not available in this store (already sold, reserved, or unknown). Sale aborted.`,
+          );
+        }
+      }
     }
 
     // 5 ── Single balanced double-entry journal (all payment types) ──
@@ -712,35 +886,22 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     });
 
     return transaction;
-  },
+    },
     { timeout: 15000, maxWait: 10000 },
   );
+  }
 
-  // ── Post-commit: fire M-Pesa STK push (non-blocking) ──
-  if (paymentMethod === PaymentMethod.MPESA) {
-    try {
-      const mpesaPhone = paymentDetails?.mpesaPhone || customer?.phone || '';
-      const stkPayload = {
-        phoneNumber: mpesaPhone,
-        amount: finalTotal,
-        accountReference: receiptNumber,
-        transactionDesc: `Payment for ${receiptNumber}`,
-      };
-
-      fetch('/api/payments/mpesa/stkpush?XTransformPort=3001', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...stkPayload,
-          storeId,
-          transactionId: result.id,
-        }),
-      }).catch(() => {
-        // STK push failure logged but does not block the transaction
-      });
-    } catch {
-      // Non-blocking: STK push initiation failure
-    }
+  // ── Post-commit: opportunistic outbox pump ──
+  // The MPESA_STK_PUSH event enqueued inside the transaction is delivered
+  // here in-process (fast, best-effort) AND by the cron pump as the durable
+  // fallback (F6-2/F8-4). Failures leave the event queued with backoff.
+  try {
+    const { pumpOutbox } = await import('@/lib/outbox');
+    const { ensureOutboxHandlers } = await import('@/lib/outbox-handlers');
+    ensureOutboxHandlers();
+    await pumpOutbox();
+  } catch {
+    // Pump failure is non-fatal — the cron pump will retry with backoff.
   }
 
   await systemLog({
@@ -760,13 +921,35 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
     },
   });
 
+  // F9-1: tamper-evident audit entry for every completed sale (best-effort —
+  // the sale is already committed; chain logging must never block the POS).
+  try {
+    const { auditTrail } = await import('@/lib/audit-trail');
+    await auditTrail.log({
+      action: 'CREATE',
+      resourceType: 'SalesTransaction',
+      resourceId: result.id,
+      actorId: cashierId,
+      actorRole: session.role,
+      storeId,
+      ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0] || undefined,
+      userAgent: request.headers.get('user-agent') || undefined,
+      newValues: { receiptNumber, totalAmount: finalTotal, paymentMethod, itemCount: items.length },
+    });
+  } catch {
+    /* audit chain must never block checkout */
+  }
+
   // ── Phase 3: Award loyalty points to the customer (non-blocking) ──
   //
   // Rule: 1 point per KES 100 spent (see src/lib/loyalty-utils.ts).
-  // Awarding runs AFTER the sale is committed so it can never roll back a
-  // successful transaction. Failures are logged but swallowed — the customer
-  // simply doesn't earn points for this sale (rather than blocking checkout).
-  if (customerId && customer) {
+  // F5-5 remediation: points are awarded ONLY when payment is COMPLETED at
+  // checkout — M-Pesa sales start PENDING and earn points only if the
+  // Daraja callback confirms (previously failed M-Pesa sales kept points).
+  // R5 remediation: the balance update uses atomic `increment` operations
+  // instead of read-then-write so concurrent sales to one customer cannot
+  // lose updates; the tier is recomputed AFTER the atomic increment.
+  if (customerId && customer && paymentMethod !== PaymentMethod.MPESA) {
     try {
       const earnedPoints = calculateEarnedPoints(finalTotal);
       if (earnedPoints > 0) {
@@ -786,17 +969,28 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
             });
             if (!fresh) return;
 
-            const newBalance = fresh.loyaltyPoints + earnedPoints;
-            const newLifetime = fresh.totalLoyaltyEarned + earnedPoints;
-            const newTier = getTierFromPoints(newLifetime);
-
+            // R5 remediation: ATOMIC increments (not read-then-write) so
+            // concurrent sales to the same customer can never lose points.
             await tx.customer.update({
               where: { id: customerId },
               data: {
-                loyaltyPoints: newBalance,
-                totalLoyaltyEarned: newLifetime,
-                loyaltyTier: newTier,
+                loyaltyPoints: { increment: earnedPoints },
+                totalLoyaltyEarned: { increment: earnedPoints },
               },
+            });
+
+            // Re-read AFTER the atomic increment to compute the tier from the
+            // authoritative post-increment lifetime total.
+            const updated = await tx.customer.findUnique({
+              where: { id: customerId },
+              select: { loyaltyPoints: true, totalLoyaltyEarned: true },
+            });
+            const newBalance = Number(updated?.loyaltyPoints ?? Number(fresh.loyaltyPoints) + earnedPoints);
+            const newLifetime = Number(updated?.totalLoyaltyEarned ?? Number(fresh.totalLoyaltyEarned) + earnedPoints);
+            const newTier = getTierFromPoints(newLifetime);
+            await tx.customer.update({
+              where: { id: customerId },
+              data: { loyaltyTier: newTier },
             });
 
             await tx.loyaltyTransaction.create({
@@ -882,5 +1076,5 @@ async function createTransactionHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: fullTransaction }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getTransactionsHandler, 'TRANSACTIONS_LIST');
-export const POST = withErrorBoundary(createTransactionHandler, 'TRANSACTIONS_CREATE');
+export const GET = withErrorBoundary(requireStoreAccess(getTransactionsHandler) as (...args: unknown[]) => Promise<Response>, 'TRANSACTIONS_LIST');
+export const POST = withErrorBoundary(requireStoreAccess(createTransactionHandler) as (...args: unknown[]) => Promise<Response>, 'TRANSACTIONS_CREATE');
