@@ -15,10 +15,18 @@
 //   /api/cron/outbox           (was "0 * * * *")  ─┐
 //   /api/cron/payments-sweeper (was "5 * * * *")  ─┴─> /api/cron/hourly "0 * * * *"
 //
-// SCHEDULE NOTE (Vercel Hobby plan): Hobby clamps cron frequency to daily —
-// the hourly expression is accepted and degrades to 00:00 UTC daily on
-// Hobby (Pro runs it hourly). The outbox also pumps opportunistically
-// after checkout commits, so clamping slows background retries only.
+// SCHEDULE NOTE (Vercel Hobby plan — updated by the FINANCIAL MATH AUDIT
+// remediation, PR #17): Vercel now ENFORCES once-daily cron schedules on
+// Hobby at config validation — the previous "0 * * * *" expression (which
+// used to be silently clamped to daily) is REJECTED outright and fails the
+// whole deployment with a commit status linking to the cron usage-and-
+// pricing docs. vercel.json therefore schedules this dispatcher daily
+// ("0 3 * * *", staggered 30 min after the nightly dispatcher). The route
+// itself stays hourly-capable: on Pro plans (or via any external scheduler
+// holding CRON_SECRET) it can be triggered every hour with zero code
+// change. The outbox also pumps opportunistically after checkout commits
+// and M-Pesa confirmations process synchronously via the callback route,
+// so daily sweeping slows only the retry of edge-case missed pumps.
 //
 // AUTH: same CRON_SECRET gate as the sibling routes (fail-open with a WARN
 // systemLog when CRON_SECRET is unset — Vercel Cron cannot send per-run
