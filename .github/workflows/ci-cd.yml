@@ -284,11 +284,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Vercel CLI
-        run: bunx vercel@latest --version
-
       - name: Deploy to Vercel (Production)
-        run: bunx vercel@latest --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
+        # npx: node is preinstalled on runners (bun is not installed here)
+        run: npx -y vercel@latest --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -324,13 +322,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Vercel CLI
-        run: bunx vercel@latest --version
-
       - name: Deploy to Vercel (Preview)
         id: deploy-preview
         run: |
-          bunx vercel@latest --yes --token=${{ secrets.VERCEL_TOKEN }} > vercel-output.txt 2>&1
+          npx -y vercel@latest --yes --token=${{ secrets.VERCEL_TOKEN }} > vercel-output.txt 2>&1
           PREVIEW_URL=$(tail -1 vercel-output.txt)
           echo "url=$PREVIEW_URL" >> $GITHUB_OUTPUT
           echo "Preview URL: $PREVIEW_URL"
