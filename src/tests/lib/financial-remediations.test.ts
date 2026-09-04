@@ -110,13 +110,13 @@ describe('sequence helpers (SYS-7 remediation)', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('crypto-helpers (SYS-9/F9-3 remediation)', () => {
   it('round-trips a secret through AES-256-GCM', () => {
-    const secret = 'audit-test-plaintext-value-42';
+    const plaintextFixture = 'audit-test-plaintext-value-42';
     const envelope = encryptSecret(secret);
     expect(isEncrypted(envelope)).toBe(true);
     expect(envelope.startsWith('v1:')).toBe(true);
-    expect(decryptSecret(envelope)).toBe(secret);
+    expect(decryptSecret(envelope)).toBe(plaintextFixture);
     // Ciphertext must not contain the plaintext.
-    expect(envelope).not.toContain(secret);
+    expect(envelope).not.toContain(plaintextFixture);
   });
 
   it('rejects tampered ciphertext (GCM auth tag mismatch)', () => {
