@@ -41,10 +41,34 @@ async function api(path) {
 function log(...parts) { console.log(...parts.map(redact)); }
 
 async function main() {
-  // 1) Find all mbumah projects
-  const projRes = await api('/v9/projects?limit=50');
-  const projects = (projRes.body && projRes.body.projects) || [];
-  const matched = projects.filter((p) => /mbumah/i.test(p.name || ''));
+  // 0) Who am I / which teams can this token see?
+  const me = await api('/v2/user');
+  log(`\n-- token identity: ${me.ok ? (me.body && me.body.user && me.body.user.username) || JSON.stringify(me.body).slice(0, 120) : 'ERROR ' + me.status + ' ' + JSON.stringify(me.body).slice(0, 200)}`);
+  const teams = await api('/v2/teams?limit=20');
+  if (teams.ok && teams.body && teams.body.teams) {
+    log(`-- teams visible: ${teams.body.teams.map((t) => `${t.slug}(${t.id})`).join(', ') || 'none'}`);
+  } else {
+    log(`-- teams query: status=${teams.status} ${JSON.stringify(teams.body).slice(0, 200)}`);
+  }
+
+  // 1) Find all mbumah projects — try several scoping strategies
+  const strategies = [
+    ['teamId', `/v9/projects?limit=50&teamId=${ORG}`],
+    ['no-scope', '/v9/projects?limit=50'],
+    ['slug', `/v9/projects?limit=50&slug=${ORG}`],
+  ];
+  let matched = [];
+  for (const [label, path] of strategies) {
+    const projRes = await api(path);
+    if (!projRes.ok) {
+      log(`-- projects (${label}): HTTP ${projRes.status} ${JSON.stringify(projRes.body).slice(0, 250)}`);
+      continue;
+    }
+    const all = (projRes.body && projRes.body.projects) || [];
+    log(`-- projects (${label}): ${all.length} total -> ${all.map((p) => p.name).join(', ') || 'none'}`);
+    matched = all.filter((p) => /mbumah/i.test(p.name || ''));
+    if (matched.length) break;
+  }
   log(`\n=== Vercel projects matched: ${matched.map((p) => `${p.name}(${p.id})`).join(', ') || 'NONE'} ===`);
   if (!matched.length) return;
 
