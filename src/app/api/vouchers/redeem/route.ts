@@ -18,6 +18,13 @@ import { db } from '@/lib/db';
 import { requireAuth, type AuthSession } from '@/lib/auth';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+// Task 12-c: canonical financial math (HALF_UP 2dp). The percentage discount
+// was `(base * voucher.value) / 100` — a float mul/div against Prisma Decimal
+// fields (valueOf() returns a STRING) with a Math.max cap; now exact Decimal
+// with Decimal.min caps. Import order matters: financialMath owns the global
+// decimal.js config (HALF_UP) and must load before any Decimal arithmetic.
+import { toDec, round2, max0 } from '@/lib/utils/financialMath';
+import Decimal from 'decimal.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -110,12 +117,16 @@ async function redeemVoucherByCodeHandler(
   }
 
   // Minimum spend check
+  // Task 12-c: spend stays a JS number for the response field (unchanged),
+  // while the math runs on its exact Decimal twin.
   const spendAmount = typeof amount === 'number' ? amount : 0;
-  if (voucher.minimumPurchase > 0 && spendAmount < voucher.minimumPurchase) {
+  const spendDec = toDec(spendAmount);
+  const minimumPurchaseDec = toDec(voucher.minimumPurchase);
+  if (minimumPurchaseDec.gt(0) && spendDec.lt(minimumPurchaseDec)) {
     return Response.json(
       {
         success: false,
-        error: `Minimum spend of KES ${voucher.minimumPurchase.toLocaleString()} required (current: KES ${spendAmount.toLocaleString()}).`,
+        error: `Minimum spend of KES ${round2(voucher.minimumPurchase).toLocaleString()} required (current: KES ${spendAmount.toLocaleString()}).`,
       },
       { status: 400 },
     );
@@ -138,31 +149,36 @@ async function redeemVoucherByCodeHandler(
   }
 
   // Compute discount
-  let discountAmount = 0;
+  // Task 12-c: all discount math in exact Decimal; caps via Decimal.min.
+  const valueDec = toDec(voucher.value);
+  let discountDec = toDec(0);
   if (voucher.voucherType === 'FIXED') {
-    discountAmount = voucher.value;
+    discountDec = valueDec;
   } else if (voucher.voucherType === 'PERCENTAGE') {
-    const base = spendAmount > 0 ? spendAmount : 0;
-    let computed = (base * voucher.value) / 100;
-    if (voucher.maxDiscount && computed > voucher.maxDiscount) {
-      computed = voucher.maxDiscount;
+    const baseDec = spendDec.gt(0) ? spendDec : toDec(0);
+    // discount = round2(spend × value / 100) — HALF_UP (was float mul/div).
+    let computedDec = toDec(round2(baseDec.mul(valueDec).div(100)));
+    if (voucher.maxDiscount !== null && voucher.maxDiscount !== undefined) {
+      // Cap at maxDiscount via Decimal min (was float `>` comparison).
+      computedDec = Decimal.min(computedDec, toDec(voucher.maxDiscount));
     }
-    discountAmount = computed;
+    discountDec = computedDec;
   } else if (voucher.voucherType === 'FREE_PRODUCT') {
     // No monetary discount — the caller can choose to add the free product
     // to the cart. We return a 0 discount amount and the product id.
-    discountAmount = 0;
+    discountDec = toDec(0);
   } else {
     // BUNDLE / unknown — treat as FIXED for safety
-    discountAmount = voucher.value;
+    discountDec = valueDec;
   }
 
   // Cap discount at the spend amount (we never refund more than the cart total)
-  if (spendAmount > 0 && discountAmount > spendAmount) {
-    discountAmount = spendAmount;
+  if (spendDec.gt(0)) {
+    discountDec = Decimal.min(discountDec, spendDec);
   }
 
-  const finalTotal = Math.max(0, spendAmount - discountAmount);
+  const discountAmount = round2(discountDec);
+  const finalTotal = round2(max0(spendDec.minus(discountDec)));
   const newUses = voucher.currentUses + 1;
   const reachedLimit = voucher.maxUses > 0 && newUses >= voucher.maxUses;
 
@@ -215,7 +231,7 @@ async function redeemVoucherByCodeHandler(
       redemption,
       newBalance:
         voucher.voucherType === 'FIXED'
-          ? Math.max(0, voucher.value - discountAmount)
+          ? round2(max0(valueDec.minus(discountDec)))
           : undefined,
     },
   });

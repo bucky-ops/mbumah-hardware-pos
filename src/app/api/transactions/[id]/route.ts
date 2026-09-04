@@ -13,6 +13,8 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { requireStoreAccess, type AuthSession } from '@/lib/auth';
+import Decimal from 'decimal.js';
+import { toDec, round2 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,9 +70,23 @@ async function getTransactionDetailHandler(...args: unknown[]): Promise<Response
     );
   }
 
-    const totalCost = transaction.items.reduce((sum, item) => sum + (item.costPrice * item.quantity), 0);
-  const grossProfit = transaction.subtotal - totalCost;
-  const profitMargin = transaction.subtotal > 0 ? (grossProfit / transaction.subtotal) * 100 : 0;
+  // FINANCIAL MATH AUDIT — canonical profit chain (mirrors src/lib/profit.ts):
+  //   netRevenue  = totalAmount − taxAmount   (VAT belongs to KRA, not the
+  //               store; this identity holds for legacy VAT-exclusive rows
+  //               AND current VAT-inclusive rows)
+  //   COGS        = Σ(costPrice × quantity) — snapshot WAC at sale time
+  //   grossProfit = netRevenue − COGS − totalDiscounts (line + cart).
+  // The previous formula (`subtotal − cost`, pre-discount, VAT-mixed basis)
+  // overstated profit by every shilling of discount and the VAT component.
+  const totalCost = transaction.items.reduce(
+    (sum: Decimal, item) => sum.plus(toDec(item.costPrice).mul(toDec(item.quantity))),
+    new Decimal(0),
+  ).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+  const netRevenue = toDec(transaction.totalAmount).minus(toDec(transaction.taxAmount));
+  const totalDiscounts = toDec(transaction.discountAmount);
+  const grossProfit = round2(netRevenue.minus(totalCost).minus(totalDiscounts));
+  const profitBase = round2(netRevenue.minus(totalDiscounts));
+  const profitMargin = profitBase > 0 ? (grossProfit / profitBase) * 100 : 0;
 
   // AUDIT FIX (6): profit/cost fields are set to undefined (dropped from the
   // JSON payload) for non-manager roles. The per-item costPrice is the same
@@ -85,11 +101,11 @@ async function getTransactionDetailHandler(...args: unknown[]): Promise<Response
         ? transaction.items
         : transaction.items.map((item) => ({ ...item, costPrice: undefined })),
       analytics: {
-        totalCost: canViewProfit ? totalCost : undefined,
+        totalCost: canViewProfit ? totalCost.toNumber() : undefined,
         grossProfit: canViewProfit ? grossProfit : undefined,
-        profitMargin: canViewProfit ? Math.round(profitMargin * 100) / 100 : undefined,
+        profitMargin: canViewProfit ? round2(profitMargin) : undefined,
         averageItemValue: transaction.items.length > 0
-          ? transaction.totalAmount / transaction.items.length
+          ? round2(toDec(transaction.totalAmount).div(transaction.items.length))
           : 0,
       },
     },

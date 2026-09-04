@@ -5,6 +5,10 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
+// Task 12-c: canonical financial math. Prisma Decimal `valueOf()` returns a
+// STRING — `previousBalance + Math.abs(amount)` used to STRING-CONCATENATE
+// when previousBalance came from the last credit row's Decimal balance.
+import { toDec, round2 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -121,29 +125,35 @@ async function createCustomerCreditHandler(...args: unknown[]): Promise<Response
     select: { balance: true },
   });
 
-  const previousBalance = latestCredit?.balance ?? 0;
-  let newBalance: number;
+  // Task 12-c: running balance math in Decimal (HALF_UP 2dp at emit).
+  // Ordering semantics preserved: latest non-voided row by createdAt desc.
+  const previousBalanceDec = toDec(latestCredit?.balance ?? 0);
+  const amountDec = toDec(amount);
+  const absAmount = amountDec.abs();
+
+  let newBalanceDec = previousBalanceDec;
 
   switch (type) {
     case 'CREDIT':
     case 'REFUND':
-      newBalance = previousBalance + Math.abs(amount);
+      newBalanceDec = previousBalanceDec.plus(absAmount);
       break;
     case 'DEBIT':
-      newBalance = previousBalance - Math.abs(amount);
+      newBalanceDec = previousBalanceDec.minus(absAmount);
       break;
     case 'ADJUSTMENT':
-      newBalance = previousBalance + amount; // Can be positive or negative
+      newBalanceDec = previousBalanceDec.plus(amountDec); // Can be positive or negative
       break;
     default:
-      newBalance = previousBalance;
+      newBalanceDec = previousBalanceDec;
   }
+  const newBalance = round2(newBalanceDec);
 
   const credit = await db.customerCredit.create({
     data: {
       storeId,
       customerId,
-      amount: Math.abs(amount),
+      amount: round2(absAmount),
       creditType: type,
       reference: reference || null,
       description: description || null,
@@ -168,7 +178,7 @@ async function createCustomerCreditHandler(...args: unknown[]): Promise<Response
       customerId,
       creditType: type,
       amount,
-      previousBalance,
+      previousBalance: round2(previousBalanceDec),
       newBalance,
     },
   });

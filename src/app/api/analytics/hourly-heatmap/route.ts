@@ -23,6 +23,8 @@ import {
   getPeakHours,
   type TransactionSlice,
 } from '@/lib/analytics-utils';
+// Task 12-b: Decimal-safe conversion at the Prisma boundary.
+import { toDec } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,6 +59,7 @@ async function getHourlyHeatmapHandler(
       id: true,
       createdAt: true,
       totalAmount: true,
+      taxAmount: true, // Task 12-b: needed for the VAT-exclusive revenue basis
       paymentMethod: true,
       paymentStatus: true,
       transactionType: true,
@@ -64,10 +67,13 @@ async function getHourlyHeatmapHandler(
     take: 100000,
   });
 
+  // Task 12-b: slices carry taxAmount so the heatmap aggregates NET revenue
+  // (totalAmount − taxAmount); Decimal-safe conversion at the boundary.
   const slices: TransactionSlice[] = txs.map((t) => ({
     id: t.id,
     createdAt: t.createdAt,
-    totalAmount: Number(t.totalAmount),
+    totalAmount: toDec(t.totalAmount).toNumber(),
+    taxAmount: toDec(t.taxAmount).toNumber(),
     paymentMethod: t.paymentMethod,
     paymentStatus: t.paymentStatus,
     transactionType: t.transactionType,

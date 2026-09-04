@@ -18,6 +18,9 @@ import { db } from '@/lib/db';
 import { requireAuth, type AuthSession } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
 import { getPeriodWindow, type AnalyticsPeriod } from '@/lib/analytics-utils';
+// Task 12-b: Decimal-safe conversion — Prisma Decimal valueOf() returns a
+// STRING, so `number + decimal` concatenates; accumulate via toDec().
+import { toDec, round2 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -63,7 +66,14 @@ async function getPaymentBreakdownHandler(
     _count: true,
   });
 
-  const totalRevenue = grouped.reduce((s, g) => s + Number(g._sum.totalAmount || 0), 0);
+  // Task 12-b: these are TENDER totals (money COLLECTED per payment method,
+  // tax-INCLUSIVE) by design — the chart is labelled by payment method, and
+  // tender ≠ revenue (VAT is owed to KRA). Only the accumulation was made
+  // Decimal-safe; the basis is intentionally unchanged.
+  const totalRevenue = grouped.reduce(
+    (acc, g) => acc.plus(toDec(g._sum.totalAmount)),
+    toDec(0),
+  );
   const totalCount = grouped.reduce((s, g) => s + g._count, 0);
 
   // Ensure every known method appears in the response so the donut chart has
@@ -76,11 +86,11 @@ async function getPaymentBreakdownHandler(
     byMethodMap.set(m, { method: m, count: 0, amount: 0, percentage: 0 });
   }
   for (const g of grouped) {
-    const amount = Number(g._sum.totalAmount || 0);
+    const amount = round2(toDec(g._sum.totalAmount));
     const row: PaymentBreakdownRow = {
       method: g.paymentMethod,
       count: g._count,
-      amount: Math.round(amount * 100) / 100,
+      amount,
       percentage: 0,
     };
     byMethodMap.set(g.paymentMethod, row);
@@ -89,7 +99,7 @@ async function getPaymentBreakdownHandler(
   const methods = Array.from(byMethodMap.values())
     .map((r) => ({
       ...r,
-      percentage: totalRevenue > 0 ? Math.round((r.amount / totalRevenue) * 1000) / 10 : 0,
+      percentage: totalRevenue.gt(0) ? Math.round(r.amount / totalRevenue.toNumber() * 1000) / 10 : 0,
     }))
     .sort((a, b) => b.amount - a.amount);
 
@@ -98,7 +108,7 @@ async function getPaymentBreakdownHandler(
     data: {
       period,
       methods,
-      totalRevenue: Math.round(totalRevenue * 100) / 100,
+      totalRevenue: round2(totalRevenue),
       totalCount,
     },
   });

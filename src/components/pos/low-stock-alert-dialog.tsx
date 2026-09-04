@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { productsApi } from '@/lib/api';
+import { formatQtyWithUnit } from '@/lib/utils/financialMath';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -143,7 +144,7 @@ export function LowStockAlertDialog({
                             <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
                               <span>Current: {product.quantityInStock} / Reorder at: {product.reorderLevel}</span>
                               <span className="text-amber-600 dark:text-amber-400 font-medium">
-                                Restock ~{restockQty} {product.unitType.toLowerCase()}s
+                                Restock ~{formatQtyWithUnit(restockQty, product.unitType)}
                               </span>
                             </div>
                             <div className="h-2 bg-muted rounded-full overflow-hidden">

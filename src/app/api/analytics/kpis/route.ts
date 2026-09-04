@@ -23,6 +23,9 @@ import { db } from '@/lib/db';
 import { requireAuth, type AuthSession } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
 import { calculateKPIs, type KPIInput } from '@/lib/analytics-utils';
+// Task 12-b: Prisma Decimal valueOf() returns a STRING — net revenue is derived
+// in Decimal (ΣtotalAmount − ΣtaxAmount) and emitted as a number at the boundary.
+import { toDec, round2 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,13 +72,11 @@ async function getKPIsHandler(
   ] = await Promise.all([
     db.salesTransaction.aggregate({
       where: { ...SALE_FILTER, createdAt: { gte: todayStart, lte: todayEnd } },
-      _sum: { totalAmount: true },
-      _avg: { totalAmount: true },
+      _sum: { totalAmount: true, taxAmount: true },
     }),
     db.salesTransaction.aggregate({
       where: { ...SALE_FILTER, createdAt: { gte: yesterdayStart, lte: yesterdayEnd } },
-      _sum: { totalAmount: true },
-      _avg: { totalAmount: true },
+      _sum: { totalAmount: true, taxAmount: true },
     }),
     db.salesTransaction.count({
       where: { ...SALE_FILTER, createdAt: { gte: todayStart, lte: todayEnd } },
@@ -122,10 +123,15 @@ async function getKPIsHandler(
     }),
   ]);
 
-  const todayRevenue = Number(todayAgg._sum.totalAmount || 0);
-  const yesterdayRevenue = Number(yesterdayAgg._sum.totalAmount || 0);
-  const averageOrderValue = Number(todayAgg._avg.totalAmount || 0);
-  const prevAverageOrderValue = Number(yesterdayAgg._avg.totalAmount || 0);
+  // Task 12-b: revenue KPIs are NET of VAT — netRevenue = Σ(totalAmount) −
+  // Σ(taxAmount) accumulated in Decimal (never float, never string-concat).
+  // averageOrderValue follows the same net basis (net revenue / transactions).
+  const todayNetRevenue = toDec(todayAgg._sum.totalAmount).minus(toDec(todayAgg._sum.taxAmount));
+  const yesterdayNetRevenue = toDec(yesterdayAgg._sum.totalAmount).minus(toDec(yesterdayAgg._sum.taxAmount));
+  const todayRevenue = todayNetRevenue.toNumber();
+  const yesterdayRevenue = yesterdayNetRevenue.toNumber();
+  const averageOrderValue = todayCount > 0 ? round2(todayNetRevenue.div(todayCount)) : 0;
+  const prevAverageOrderValue = yesterdayCount > 0 ? round2(yesterdayNetRevenue.div(yesterdayCount)) : 0;
 
   const input: KPIInput = {
     todayRevenue,

@@ -4,6 +4,9 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { withSessionAuth } from '@/lib/auth';
+// Task 12-b: Prisma Decimal valueOf() returns a STRING — `number + decimal`
+// concatenates. Accumulation runs through toDec(); numbers emitted at the end.
+import { toDec, round2 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,13 +65,13 @@ async function getFastMovingProductsHandler(...args: unknown[]): Promise<Respons
     },
   });
 
-  // Aggregate by product
+  // Aggregate by product — Decimal accumulators (Task 12-b).
   const productMap = new Map<string, {
     productId: string;
     productName: string;
     sku: string;
-    totalQuantitySold: number;
-    totalRevenue: number;
+    totalQuantitySold: ReturnType<typeof toDec>;
+    totalRevenue: ReturnType<typeof toDec>;
     saleCount: number;
     category: string | null;
     currentStock: number;
@@ -77,19 +80,19 @@ async function getFastMovingProductsHandler(...args: unknown[]): Promise<Respons
   for (const item of saleItems) {
     const existing = productMap.get(item.productId);
     if (existing) {
-      existing.totalQuantitySold += item.quantity;
-      existing.totalRevenue += item.lineTotal;
+      existing.totalQuantitySold = existing.totalQuantitySold.plus(toDec(item.quantity));
+      existing.totalRevenue = existing.totalRevenue.plus(toDec(item.lineTotal));
       existing.saleCount += 1;
     } else {
       productMap.set(item.productId, {
         productId: item.productId,
         productName: item.productName,
         sku: item.product.sku,
-        totalQuantitySold: item.quantity,
-        totalRevenue: item.lineTotal,
+        totalQuantitySold: toDec(item.quantity),
+        totalRevenue: toDec(item.lineTotal),
         saleCount: 1,
         category: item.product.category?.name || null,
-        currentStock: item.product.quantityInStock,
+        currentStock: toDec(item.product.quantityInStock).toNumber(),
       });
     }
   }
@@ -114,16 +117,20 @@ async function getFastMovingProductsHandler(...args: unknown[]): Promise<Respons
     fastMovingProducts = fastMovingProducts.filter((p) => categoryProductIds.has(p.productId));
   }
 
-  // Sort by total quantity sold descending
-  fastMovingProducts.sort((a, b) => b.totalQuantitySold - a.totalQuantitySold);
+  // Sort by total quantity sold descending — numeric comparison via Decimal.
+  fastMovingProducts.sort((a, b) => b.totalQuantitySold.comparedTo(a.totalQuantitySold));
 
   // Limit results
   fastMovingProducts = fastMovingProducts.slice(0, limit);
 
-  // Calculate summary stats
+  // Calculate summary stats — Decimal sums, plain numbers at the boundary.
   const totalProductsAnalyzed = productMap.size;
-  const totalUnitsSold = Array.from(productMap.values()).reduce((sum, p) => sum + p.totalQuantitySold, 0);
-  const totalRevenue = Array.from(productMap.values()).reduce((sum, p) => sum + p.totalRevenue, 0);
+  const totalUnitsSold = Array.from(productMap.values())
+    .reduce((acc, p) => acc.plus(p.totalQuantitySold), toDec(0))
+    .toNumber();
+  const totalRevenue = round2(
+    Array.from(productMap.values()).reduce((acc, p) => acc.plus(p.totalRevenue), toDec(0)),
+  );
 
   return Response.json({
     success: true,
@@ -137,7 +144,11 @@ async function getFastMovingProductsHandler(...args: unknown[]): Promise<Respons
         totalUnitsSold,
         totalRevenue,
       },
-      products: fastMovingProducts,
+      products: fastMovingProducts.map((p) => ({
+        ...p,
+        totalQuantitySold: p.totalQuantitySold.toNumber(),
+        totalRevenue: round2(p.totalRevenue),
+      })),
     },
   });
 }

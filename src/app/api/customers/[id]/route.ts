@@ -5,6 +5,9 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
+// Task 12-b: Prisma Decimal valueOf() returns a STRING — `number + decimal`
+// concatenates. Sums run through toDec(); numbers emitted at the boundary.
+import { toDec } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,8 +60,14 @@ async function getCustomerHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  const totalDebtOwed = customer.debtLedgers.reduce((sum, dl) => sum + dl.balance, 0);
-  const availableCredit = customer.debtLimit - customer.currentDebtBalance;
+  // Task 12-b: Decimal-safe debt sums (was `0 + Decimal` string-concat and
+  // Decimal−Decimal via float coercion).
+  const totalDebtOwed = customer.debtLedgers
+    .reduce((acc, dl) => acc.plus(toDec(dl.balance)), toDec(0))
+    .toNumber();
+  const availableCredit = toDec(customer.debtLimit)
+    .minus(toDec(customer.currentDebtBalance))
+    .toNumber();
 
   return Response.json({
     success: true,

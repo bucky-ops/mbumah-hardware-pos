@@ -152,11 +152,10 @@ describe('formatCurrency — UGX (0 decimals)', () => {
     expect(formatCurrency(50000, 'UGX')).toBe('USh 50,000');
   });
 
-  it('rounds UGX with banker\'s rounding (HALF_EVEN)', () => {
-    // 50000.50 → 50000 (0 is even, so 0.5 rounds down to even)
-    expect(formatCurrency(50000.50, 'UGX')).toBe('USh 50,000');
+  it('rounds UGX with HALF_UP rounding (audit policy)', () => {
+    // HALF_UP: exact halves round away from zero (50000.50 → 50001).
+    expect(formatCurrency(50000.50, 'UGX')).toBe('USh 50,001');
     expect(formatCurrency(50000.49, 'UGX')).toBe('USh 50,000');
-    // 50001.50 → 50002 (2 is even)
     expect(formatCurrency(50001.50, 'UGX')).toBe('USh 50,002');
   });
 
@@ -189,7 +188,8 @@ describe('formatCurrency — edge cases', () => {
   });
 
   it('handles negative amounts', () => {
-    expect(formatCurrency(-100, 'KES')).toBe('Ksh -100.00');
+    // ICU en-KE places the minus sign before the currency symbol.
+    expect(formatCurrency(-100, 'KES')).toBe('-Ksh 100.00');
   });
 
   it('handles very small amounts', () => {
@@ -380,14 +380,11 @@ describe('Money.formatKES — multi-currency', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('Rounding behavior', () => {
-  it('formatCurrency rounds 0.5 to nearest even (banker\'s rounding)', () => {
-    // 0.005 → 0.00 (0 is even)
-    expect(formatCurrency(0.005, 'KES')).toBe('Ksh 0.00');
-    // 0.015 → 0.02 (2 is even)
+  it('formatCurrency rounds halves up (HALF_UP — audit policy)', () => {
+    // HALF_UP: exact halves round to the next cent (0.005 → 0.01).
+    expect(formatCurrency(0.005, 'KES')).toBe('Ksh 0.01');
     expect(formatCurrency(0.015, 'KES')).toBe('Ksh 0.02');
-    // 0.025 → 0.02 (2 is even)
-    expect(formatCurrency(0.025, 'KES')).toBe('Ksh 0.02');
-    // 0.035 → 0.04 (4 is even)
+    expect(formatCurrency(0.025, 'KES')).toBe('Ksh 0.03');
     expect(formatCurrency(0.035, 'KES')).toBe('Ksh 0.04');
   });
 

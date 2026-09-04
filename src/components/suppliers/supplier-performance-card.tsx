@@ -13,6 +13,7 @@ import {
   DollarSign,
   Package,
 } from 'lucide-react';
+import { formatKES } from '@/lib/api';
 
 export interface SupplierPerformanceData {
   supplierId: string;
@@ -55,14 +56,7 @@ function getAvatarGradient(name: string): string {
   return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
 }
 
-function formatKES(amount: number): string {
-  return new Intl.NumberFormat('en-KE', {
-    style: 'currency',
-    currency: 'KES',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
+// formatKES: canonical en-KE KES formatter imported from '@/lib/api' (task 12-d)
 
 function formatDate(date: string | null): string {
   if (!date) return '—';

@@ -13,6 +13,9 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { requireAuth, type AuthSession } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
+// Task 12-b: Prisma Decimal valueOf() returns a STRING — `number + decimal`
+// concatenates. Sums/amounts run through toDec(); numbers emitted at the boundary.
+import { toDec } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -238,7 +241,7 @@ async function customerHistoryHandler(
       id: t.id,
       timestamp: t.createdAt.toISOString(),
       ref: t.receiptNumber,
-      amount: t.totalAmount,
+      amount: toDec(t.totalAmount).toNumber(),
       paymentMethod: t.paymentMethod,
       paymentStatus: t.paymentStatus,
       itemCount: t.items.length,
@@ -251,7 +254,7 @@ async function customerHistoryHandler(
       id: inv.id,
       timestamp: inv.issueDate.toISOString(),
       ref: inv.invoiceNumber,
-      amount: inv.totalAmount,
+      amount: toDec(inv.totalAmount).toNumber(),
       status: inv.status,
       invoiceType: inv.invoiceType,
       itemCount: inv.items.length,
@@ -264,7 +267,7 @@ async function customerHistoryHandler(
       id: c.id,
       timestamp: c.createdAt.toISOString(),
       ref: c.reference || c.id,
-      amount: c.amount,
+      amount: toDec(c.amount).toNumber(),
       creditType: c.creditType,
       status: c.status,
       description: c.description,
@@ -277,7 +280,7 @@ async function customerHistoryHandler(
       id: g.id,
       timestamp: g.createdAt.toISOString(),
       ref: g.giftCard.code,
-      amount: g.amount,
+      amount: toDec(g.amount).toNumber(),
       giftCardCode: g.giftCard.code,
     });
   }
@@ -288,7 +291,7 @@ async function customerHistoryHandler(
       id: v.id,
       timestamp: v.createdAt.toISOString(),
       ref: v.voucher.code,
-      discountAmount: v.discountAmount,
+      discountAmount: toDec(v.discountAmount).toNumber(),
       voucherCode: v.voucher.code,
     });
   }
@@ -299,7 +302,7 @@ async function customerHistoryHandler(
       id: d.id,
       timestamp: d.createdAt.toISOString(),
       ref: d.reference || d.id,
-      amount: d.amount,
+      amount: toDec(d.amount).toNumber(),
       paymentMethod: d.paymentMethod,
     });
   }
@@ -321,11 +324,15 @@ async function customerHistoryHandler(
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
   );
 
-  // Compute summary stats
+  // Compute summary stats — Task 12-b: Decimal-safe sums (was `0 + Decimal`
+  // string-concat). totalSpent is the gross tender across the customer's
+  // non-failed transactions.
   const completedTxns = transactions.filter(
     (t) => t.paymentStatus !== 'FAILED' && t.paymentStatus !== 'REFUNDED',
   );
-  const totalSpent = completedTxns.reduce((s, t) => s + t.totalAmount, 0);
+  const totalSpent = completedTxns
+    .reduce((acc, t) => acc.plus(toDec(t.totalAmount)), toDec(0))
+    .toNumber();
   const transactionCount = completedTxns.length;
   const avgOrderValue = transactionCount > 0 ? totalSpent / transactionCount : 0;
   const lastVisit =
@@ -337,11 +344,12 @@ async function customerHistoryHandler(
   ).length;
   const creditsTotal = customerCredits
     .filter((c) => c.status === 'ACTIVE' && c.creditType === 'CREDIT')
-    .reduce((s, c) => s + c.amount, 0);
+    .reduce((acc, c) => acc.plus(toDec(c.amount)), toDec(0))
+    .toNumber();
 
   const summary: CustomerHistorySummary = {
     totalSpent,
-    outstandingDebt: customer.currentDebtBalance,
+    outstandingDebt: toDec(customer.currentDebtBalance).toNumber(),
     lastVisit,
     loyaltyPoints: customer.loyaltyPoints,
     transactionCount,

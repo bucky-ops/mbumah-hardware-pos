@@ -20,6 +20,9 @@ import type {
   AdjustGiftCardBalancePayload,
 } from './types';
 
+// Canonical currency display formatting (delegates KES to financialMath.formatKES).
+import { formatCurrency } from '@/lib/currency-utils';
+
 // Re-export types so consumers can import from this module
 export type { GiftCardItem } from './types';
 
@@ -646,6 +649,11 @@ export interface TransactionItem {
   taxAmount: number;
   discountAmount: number;
   totalAmount: number;
+  // FINANCIAL MATH AUDIT (spec §4): real till movement on cash sales —
+  // what the customer handed over and the change handed back. Serialized
+  // from the Prisma Decimal columns as number | string.
+  cashTendered?: number | string | null;
+  changeDue?: number | string | null;
   paymentMethod: string;
   paymentStatus: string;
   transactionType: string;
@@ -1291,7 +1299,7 @@ export const messagesApi = {
         phone,
         channel: 'WHATSAPP',
         messageType: 'DEBT_REMINDER',
-        content: `Hello, this is a friendly reminder from MBUMAH HARDWARE that you have an outstanding balance of KES ${debtAmount.toLocaleString()}. Please settle your account at your earliest convenience. Thank you!`,
+        content: `Hello, this is a friendly reminder from MBUMAH HARDWARE that you have an outstanding balance of ${formatKES(debtAmount)}. Please settle your account at your earliest convenience. Thank you!`,
       }),
     });
   },
@@ -1305,7 +1313,7 @@ export const messagesApi = {
         phone,
         channel: 'WHATSAPP',
         messageType: 'BALANCE_UPDATE',
-        content: `Hello, your current account balance at MBUMAH HARDWARE is KES ${balance.toLocaleString()}. Thank you for your continued business!`,
+        content: `Hello, your current account balance at MBUMAH HARDWARE is ${formatKES(balance)}. Thank you for your continued business!`,
       }),
     });
   },
@@ -2856,12 +2864,11 @@ export function openSMS(phone: string, message: string): void {
 
 
 export function formatKES(amount: number): string {
-  return new Intl.NumberFormat('en-KE', {
-    style: 'currency',
-    currency: 'KES',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(amount);
+  // FORMAT UNIFICATION (task 12-d): delegate to the ONE canonical en-KE KES
+  // formatter (currency-utils → financialMath.formatKES) so every consumer of
+  // this helper renders the identical "Ksh 1,234.56" string — same 2dp
+  // HALF_UP rounding as receipts, PDFs, e-mails and WhatsApp messages.
+  return formatCurrency(amount ?? 0, 'KES');
 }
 
 export function formatDate(date: string | Date): string {

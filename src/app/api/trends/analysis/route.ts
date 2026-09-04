@@ -14,6 +14,10 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { requireAuth, type AuthSession } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
+// Task 12-b: Prisma Decimal valueOf() returns a STRING — `number + decimal`
+// concatenates. All qty/revenue accumulation runs through toDec(); numbers are
+// emitted only at the JSON boundary; growth % guards emit null (never NaN).
+import { toDec, round2 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,7 +79,9 @@ function growthPct(recent: number, previous: number): number | null {
   if (previous === 0) {
     return recent > 0 ? null : 0;
   }
-  return ((recent - previous) / previous) * 100;
+  const pct = ((recent - previous) / previous) * 100;
+  // NaN guard: a nullable growth field must yield null, never NaN.
+  return Number.isFinite(pct) ? pct : null;
 }
 
 async function trendsAnalysisHandler(
@@ -107,12 +113,15 @@ async function trendsAnalysisHandler(
   // Fetch all sale items in the broader window (previous_start .. now)
   // We only need fields for aggregation, but we need the transaction's
   // createdAt to bucket into "previous" vs "recent".
+  // Task 12-b SCOPE FIX: this route leaked PENDING / REFUNDED / VOID-adjacent
+  // rows via `paymentStatus: { not: 'FAILED' }`. It now uses the system-wide
+  // revenue filter (SALE + COMPLETED/PARTIAL) like every other reporting route.
   const sales = await db.salesTransaction.findMany({
     where: {
       storeId,
       createdAt: { gte: previousStart },
       transactionType: 'SALE',
-      paymentStatus: { not: 'FAILED' },
+      paymentStatus: { in: ['COMPLETED', 'PARTIAL'] },
     },
     select: {
       id: true,
@@ -129,16 +138,16 @@ async function trendsAnalysisHandler(
     take: 50000,
   });
 
-  // Build per-product aggregates for the two periods
+  // Build per-product aggregates for the two periods — Decimal accumulators.
   interface ProductAgg {
     productId: string;
     productName: string;
-    recentQty: number;
-    previousQty: number;
-    recentRevenue: number;
-    previousRevenue: number;
+    recentQty: ReturnType<typeof toDec>;
+    previousQty: ReturnType<typeof toDec>;
+    recentRevenue: ReturnType<typeof toDec>;
+    previousRevenue: ReturnType<typeof toDec>;
     // recent daily series for projection
-    recentDaily: Map<string, number>; // yyyy-mm-dd -> qty
+    recentDaily: Map<string, ReturnType<typeof toDec>>; // yyyy-mm-dd -> qty
   }
 
   const agg = new Map<string, ProductAgg>();
@@ -146,10 +155,10 @@ async function trendsAnalysisHandler(
     string,
     {
       categoryId: string | null;
-      recentQty: number;
-      previousQty: number;
-      recentRevenue: number;
-      previousRevenue: number;
+      recentQty: ReturnType<typeof toDec>;
+      previousQty: ReturnType<typeof toDec>;
+      recentRevenue: ReturnType<typeof toDec>;
+      previousRevenue: ReturnType<typeof toDec>;
     }
   >();
 
@@ -182,27 +191,29 @@ async function trendsAnalysisHandler(
   for (const sale of sales) {
     const isRecent = sale.createdAt >= recentStart;
     for (const item of sale.items) {
+      const qty = toDec(item.quantity);
+      const revenue = toDec(item.lineTotal);
       let entry = agg.get(item.productId);
       if (!entry) {
         entry = {
           productId: item.productId,
           productName: item.productName,
-          recentQty: 0,
-          previousQty: 0,
-          recentRevenue: 0,
-          previousRevenue: 0,
+          recentQty: toDec(0),
+          previousQty: toDec(0),
+          recentRevenue: toDec(0),
+          previousRevenue: toDec(0),
           recentDaily: new Map(),
         };
         agg.set(item.productId, entry);
       }
       if (isRecent) {
-        entry.recentQty += item.quantity;
-        entry.recentRevenue += item.lineTotal;
+        entry.recentQty = entry.recentQty.plus(qty);
+        entry.recentRevenue = entry.recentRevenue.plus(revenue);
         const dayKey = sale.createdAt.toISOString().slice(0, 10);
-        entry.recentDaily.set(dayKey, (entry.recentDaily.get(dayKey) || 0) + item.quantity);
+        entry.recentDaily.set(dayKey, (entry.recentDaily.get(dayKey) || toDec(0)).plus(qty));
       } else {
-        entry.previousQty += item.quantity;
-        entry.previousRevenue += item.lineTotal;
+        entry.previousQty = entry.previousQty.plus(qty);
+        entry.previousRevenue = entry.previousRevenue.plus(revenue);
       }
 
       // category-level
@@ -212,19 +223,19 @@ async function trendsAnalysisHandler(
       if (!cat) {
         cat = {
           categoryId: info?.categoryId ?? null,
-          recentQty: 0,
-          previousQty: 0,
-          recentRevenue: 0,
-          previousRevenue: 0,
+          recentQty: toDec(0),
+          previousQty: toDec(0),
+          recentRevenue: toDec(0),
+          previousRevenue: toDec(0),
         };
         categoryAgg.set(catKey, cat);
       }
       if (isRecent) {
-        cat.recentQty += item.quantity;
-        cat.recentRevenue += item.lineTotal;
+        cat.recentQty = cat.recentQty.plus(qty);
+        cat.recentRevenue = cat.recentRevenue.plus(revenue);
       } else {
-        cat.previousQty += item.quantity;
-        cat.previousRevenue += item.lineTotal;
+        cat.previousQty = cat.previousQty.plus(qty);
+        cat.previousRevenue = cat.previousRevenue.plus(revenue);
       }
     }
   }
@@ -235,21 +246,20 @@ async function trendsAnalysisHandler(
     const info = productInfoMap.get(productId);
     // Linear projection: average daily qty over the recent period * 7
     const recentDayCount = e.recentDaily.size || 1;
-    const avgDailyQty = e.recentQty / recentDayCount;
-    const projectedNext7dQty = Math.round(avgDailyQty * 7 * 100) / 100;
+    const projectedNext7dQty = round2(e.recentQty.div(recentDayCount).mul(7));
 
     productTrends.push({
       productId,
       productName: e.productName,
       sku: info?.sku ?? '',
       categoryName: info?.categoryName ?? null,
-      recentQty: e.recentQty,
-      previousQty: e.previousQty,
-      recentRevenue: e.recentRevenue,
-      previousRevenue: e.previousRevenue,
-      qtyGrowthPct: growthPct(e.recentQty, e.previousQty),
-      revenueGrowthPct: growthPct(e.recentRevenue, e.previousRevenue),
-      direction: computeDirection(e.recentQty, e.previousQty),
+      recentQty: e.recentQty.toNumber(),
+      previousQty: e.previousQty.toNumber(),
+      recentRevenue: e.recentRevenue.toNumber(),
+      previousRevenue: e.previousRevenue.toNumber(),
+      qtyGrowthPct: growthPct(e.recentQty.toNumber(), e.previousQty.toNumber()),
+      revenueGrowthPct: growthPct(e.recentRevenue.toNumber(), e.previousRevenue.toNumber()),
+      direction: computeDirection(e.recentQty.toNumber(), e.previousQty.toNumber()),
       projectedNext7dQty,
     });
   }
@@ -273,20 +283,23 @@ async function trendsAnalysisHandler(
       categoryName:
         products.find((p) => p.categoryId === c.categoryId)?.category?.name ??
         (c.categoryId ? 'Uncategorised' : 'Uncategorised'),
-      recentQty: c.recentQty,
-      recentRevenue: c.recentRevenue,
-      previousQty: c.previousQty,
-      previousRevenue: c.previousRevenue,
-      direction: computeDirection(c.recentQty, c.previousQty),
-      growthPct: growthPct(c.recentQty, c.previousQty),
+      recentQty: c.recentQty.toNumber(),
+      recentRevenue: c.recentRevenue.toNumber(),
+      previousQty: c.previousQty.toNumber(),
+      previousRevenue: c.previousRevenue.toNumber(),
+      direction: computeDirection(c.recentQty.toNumber(), c.previousQty.toNumber()),
+      growthPct: growthPct(c.recentQty.toNumber(), c.previousQty.toNumber()),
     }),
   );
   categoryTrends.sort((a, b) => b.recentRevenue - a.recentRevenue);
 
-  // Overall projection for next 7 days across the whole store
-  const totalRecentQty = productTrends.reduce((s, t) => s + t.recentQty, 0);
-  const totalProjectedNext7dQty =
-    Math.round((totalRecentQty / days) * 7 * 100) / 100;
+  // Overall projection for next 7 days across the whole store — Decimal sum.
+  const totalRecentQtyDec = productTrends.reduce(
+    (acc, t) => acc.plus(toDec(t.recentQty)),
+    toDec(0),
+  );
+  const totalRecentQty = totalRecentQtyDec.toNumber();
+  const totalProjectedNext7dQty = round2(totalRecentQtyDec.div(days).mul(7));
 
   // ---- Store-wide 7-day forward forecast (revenue) ----
   // Build a daily revenue series over the recent window, fit a simple least-
@@ -297,8 +310,13 @@ async function trendsAnalysisHandler(
   for (const sale of sales) {
     if (sale.createdAt < recentStart) continue;
     const dayKey = sale.createdAt.toISOString().slice(0, 10);
-    const dayRevenue = sale.items.reduce((s, it) => s + it.lineTotal, 0);
-    dailyRevenue.set(dayKey, (dailyRevenue.get(dayKey) || 0) + dayRevenue);
+    // Task 12-b: per-day revenue accumulated in Decimal (was string-concat),
+    // emitted as a number for the regression below.
+    const dayRevenueDec = sale.items.reduce(
+      (acc, it) => acc.plus(toDec(it.lineTotal)),
+      toDec(0),
+    );
+    dailyRevenue.set(dayKey, (dailyRevenue.get(dayKey) || 0) + dayRevenueDec.toNumber());
   }
 
   // Build an ordered series of [dayIndex, revenue] for the recent window.
@@ -327,8 +345,12 @@ async function trendsAnalysisHandler(
     const sumXY = seriesPoints.reduce((s, p) => s + p.x * p.y, 0);
     const sumXX = seriesPoints.reduce((s, p) => s + p.x * p.x, 0);
     const denom = n * sumXX - sumX * sumX;
-    const b = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0; // slope
-    const a = sumY / n - b * (sumX / n); // intercept
+    const rawB = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0; // slope
+    const rawA = sumY / n - rawB * (sumX / n); // intercept
+    // Task 12-b NaN guard: a non-finite fit degrades to a flat mean forecast —
+    // the series (and every emitted number) stays finite.
+    const b = Number.isFinite(rawB) ? rawB : 0;
+    const a = Number.isFinite(rawA) ? rawA : sumY / n;
 
     // Residual std dev for confidence band width
     const residuals = seriesPoints.map((p) => p.y - (a + b * p.x));
@@ -337,15 +359,20 @@ async function trendsAnalysisHandler(
     const residualStd = Math.sqrt(residualVariance);
     // Band width: 1.5 sigma, floored to 5% of mean to avoid zero-width bands
     const meanY = sumY / n;
-    const bandWidth = Math.max(residualStd * 1.5, meanY * 0.05);
-    forecastAvgDaily = meanY;
+    const bandWidth = Math.max(
+      Number.isFinite(residualStd) ? residualStd * 1.5 : 0,
+      Number.isFinite(meanY) ? meanY * 0.05 : 0,
+    );
+    forecastAvgDaily = Number.isFinite(meanY) ? meanY : 0;
 
     // Project 7 days forward starting tomorrow
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const lastX = seriesPoints[seriesPoints.length - 1].x;
     for (let i = 1; i <= 7; i++) {
       const x = lastX + i;
-      const predicted = Math.max(0, a + b * x);
+      const rawPredicted = a + b * x;
+      // NaN guard: a non-finite projection yields 0 (never NaN in JSON).
+      const predicted = Number.isFinite(rawPredicted) ? Math.max(0, rawPredicted) : 0;
       const projected = new Date(todayFloor.getTime() + i * dayMs);
       forecast.push({
         label: dayNames[projected.getDay()],
@@ -366,13 +393,11 @@ async function trendsAnalysisHandler(
       summary: {
         totalProductsAnalyzed: productTrends.length,
         totalRecentQty,
-        totalRecentRevenue: productTrends.reduce(
-          (s, t) => s + t.recentRevenue,
-          0,
+        totalRecentRevenue: round2(
+          productTrends.reduce((acc, t) => acc.plus(toDec(t.recentRevenue)), toDec(0)),
         ),
-        totalPreviousRevenue: productTrends.reduce(
-          (s, t) => s + t.previousRevenue,
-          0,
+        totalPreviousRevenue: round2(
+          productTrends.reduce((acc, t) => acc.plus(toDec(t.previousRevenue)), toDec(0)),
         ),
         overallRevenueGrowthPct: growthPct(
           productTrends.reduce((s, t) => s + t.recentRevenue, 0),

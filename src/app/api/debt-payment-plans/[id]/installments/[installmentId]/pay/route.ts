@@ -18,6 +18,23 @@ import { LogSeverity, LogComponent } from '@/lib/types';
 import { generateJournalEntryNumber, calculateAgingBucket } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { toNumber, recalculatePlanTotals, getPlanStatus } from '@/lib/debt-plan-utils';
+// Task 12-c: canonical financial math (HALF_UP 2dp). Prisma Decimal
+// `valueOf()` returns a STRING — the old float/tolerance math and the
+// read-then-write on the installment + DebtLedger allowed concurrent
+// double-pay. Money math below is Decimal; balance mutations are atomic
+// conditional claims (updateMany + count check), mirroring the R3 pattern
+// in src/app/api/debt/route.ts.
+import { toDec, round2 } from '@/lib/utils/financialMath';
+
+// Typed in-transaction conflict for the optimistic claims (count 0).
+// Caught in the handler → client-facing 400 (same pattern as
+// CreditLimitExceededError in src/app/api/transactions/route.ts).
+class InstallmentClaimConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InstallmentClaimConflictError';
+  }
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -46,6 +63,9 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
       { status: 400 },
     );
   }
+  // Task 12-c: money rounded HALF_UP to 2dp before it touches Decimal columns.
+  const payNum = round2(payAmount);
+  const payDec = toDec(payNum);
 
   const method: PaymentMethod = VALID_PAYMENT_METHODS.includes(paymentMethod)
     ? paymentMethod
@@ -104,45 +124,71 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  const remainingOnInstallment =
-    toNumber(installment.amountDue) - toNumber(installment.amountPaid);
-  if (payAmount > remainingOnInstallment + 0.01) {
+  // Task 12-c: Decimal comparisons with the original 0.01 tolerance kept as
+  // an exact Decimal constant (was float `payAmount > remaining + 0.01`).
+  const OVERPAY_TOLERANCE = toDec('0.01');
+
+  const remainingOnInstallmentDec = toDec(installment.amountDue).minus(toDec(installment.amountPaid));
+  if (payDec.gt(remainingOnInstallmentDec.plus(OVERPAY_TOLERANCE))) {
     return Response.json(
       {
         success: false,
-        error: `Payment amount (KES ${payAmount.toLocaleString()}) exceeds remaining installment balance (KES ${remainingOnInstallment.toLocaleString()}).`,
+        error: `Payment amount (KES ${payDec.toNumber().toLocaleString()}) exceeds remaining installment balance (KES ${round2(remainingOnInstallmentDec).toLocaleString()}).`,
       },
       { status: 400 },
     );
   }
 
   // Also guard against overpaying the plan as a whole.
-  if (payAmount > toNumber(plan.balance) + 0.01) {
+  const planBalanceDec = toDec(plan.balance);
+  if (payDec.gt(planBalanceDec.plus(OVERPAY_TOLERANCE))) {
     return Response.json(
       {
         success: false,
-        error: `Payment amount (KES ${payAmount.toLocaleString()}) exceeds plan balance (KES ${toNumber(plan.balance).toLocaleString()}).`,
+        error: `Payment amount (KES ${payDec.toNumber().toLocaleString()}) exceeds plan balance (KES ${round2(planBalanceDec).toLocaleString()}).`,
       },
       { status: 400 },
     );
   }
 
-  // ── Execute the payment transaction ──────────────────────────────────────
+  // ── Execute the payment transaction ─────────────────────────────────────
   const result = await db.$transaction(async (tx) => {
-    const newInstPaid = toNumber(installment.amountPaid) + payAmount;
-    const newInstBalance = toNumber(installment.amountDue) - newInstPaid;
-    const newInstStatus =
-      newInstBalance <= 0.001 ? 'PAID' : 'PARTIAL';
-
-    // 1. Update the installment row.
-    const updatedInstallment = await tx.debtPlanInstallment.update({
-      where: { id: installmentId },
+    // Task 12-c: ATOMIC installment claim. The old code read amountPaid,
+    // computed an absolute `amountPaid + pay` and wrote it back — two
+    // concurrent submissions both passed the PAID check and both wrote
+    // (double-pay). The status predicate makes the claim conditional: at
+    // most ONE concurrent request can increment a non-settled installment.
+    const claimedInstallment = await tx.debtPlanInstallment.updateMany({
+      where: {
+        id: installmentId,
+        status: { in: ['SCHEDULED', 'PARTIAL', 'OVERDUE', 'MISSED'] },
+      },
       data: {
-        amountPaid: newInstPaid,
-        status: newInstStatus,
+        amountPaid: { increment: payNum },
         paidAt: new Date(),
         paymentMethod: method,
         paymentReference: typeof paymentReference === 'string' ? paymentReference : null,
+      },
+    });
+    if (claimedInstallment.count === 0) {
+      throw new InstallmentClaimConflictError(
+        'Installment payment conflict: already paid, waived, or concurrently claimed. Refresh and retry.'
+      );
+    }
+
+    // Re-read INSIDE the tx for the authoritative post-claim state.
+    const claimedRow = await tx.debtPlanInstallment.findUniqueOrThrow({
+      where: { id: installmentId },
+    });
+    const newInstPaidDec = toDec(claimedRow.amountPaid);
+    const newInstBalanceDec = toDec(claimedRow.amountDue).minus(newInstPaidDec);
+    const newInstStatus = newInstBalanceDec.lte('0.001') ? 'PAID' : 'PARTIAL';
+
+    // 1. Persist the derived status (amountPaid was already claimed above).
+    const updatedInstallment = await tx.debtPlanInstallment.update({
+      where: { id: installmentId },
+      data: {
+        status: newInstStatus,
       },
     });
 
@@ -152,12 +198,13 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
     );
     const totals = recalculatePlanTotals(plan, refreshedInstallments);
 
-    // 3. Derive new plan status — COMPLETED if balance is now 0.
+    // 3. Derive new plan status — COMPLETED if balance is now 0 (exact
+    // Decimal comparison, was float `totals.balance <= 0.001`).
     let newPlanStatus = getPlanStatus({
       ...plan,
       ...totals,
     });
-    if (totals.balance <= 0.001) {
+    if (toDec(totals.balance).lte('0.001')) {
       newPlanStatus = 'COMPLETED';
     }
 
@@ -176,19 +223,39 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
     // 4. Mirror the payment onto the underlying DebtLedger + customer.
     const debt = plan.debtLedger;
     if (debt) {
-      const newDebtPaid = toNumber(debt.amountPaid) + payAmount;
-      const newDebtBalance = toNumber(debt.amountOwed) - newDebtPaid;
+      // Task 12-c: ATOMIC conditional claim (R3 pattern from
+      // src/app/api/debt/route.ts) — was read-modify-write of amountPaid +
+      // absolute balance, which could double-pay the ledger concurrently.
+      const claimedDebt = await tx.debtLedger.updateMany({
+        where: {
+          id: debt.id,
+          status: { notIn: ['SETTLED', 'WRITTEN_OFF'] },
+          balance: { gte: payNum },
+        },
+        data: {
+          amountPaid: { increment: payNum },
+          balance: { decrement: payNum },
+        },
+      });
+      if (claimedDebt.count === 0) {
+        throw new InstallmentClaimConflictError(
+          'Debt ledger payment conflict: balance changed or already settled. Refresh and retry.'
+        );
+      }
+
+      // Re-read INSIDE the tx for the authoritative post-claim state.
+      const freshDebt = await tx.debtLedger.findUniqueOrThrow({ where: { id: debt.id } });
+      const newDebtPaidDec = toDec(freshDebt.amountPaid);
+      const newDebtBalanceDec = toDec(freshDebt.balance);
       let newDebtStatus = debt.status;
-      if (newDebtBalance <= 0.001) {
+      if (newDebtBalanceDec.lte('0.001')) {
         newDebtStatus = 'SETTLED';
-      } else if (newDebtPaid > 0) {
+      } else if (newDebtPaidDec.gt(0)) {
         newDebtStatus = 'PARTIAL';
       }
       await tx.debtLedger.update({
         where: { id: debt.id },
         data: {
-          amountPaid: newDebtPaid,
-          balance: Math.max(0, newDebtBalance),
           status: newDebtStatus,
           agingBucket: calculateAgingBucket(debt.dueDate),
         },
@@ -198,7 +265,7 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
         data: {
           storeId: plan.storeId,
           debtLedgerId: debt.id,
-          amount: payAmount,
+          amount: payNum,
           paymentMethod: method,
           reference: typeof paymentReference === 'string' ? paymentReference : null,
           receivedBy: session.userId,
@@ -207,7 +274,7 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
 
       await tx.customer.update({
         where: { id: plan.customerId },
-        data: { currentDebtBalance: { decrement: payAmount } },
+        data: { currentDebtBalance: { decrement: payNum } },
       });
 
       // Cash drawer log for CASH payments.
@@ -219,14 +286,15 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
           where: { storeId: plan.storeId },
           _sum: { amount: true },
         });
-        const currentBalance = Number(drawerAgg._sum.amount ?? 0);
+        // Task 12-c: Decimal running balance (was `Number(_sum) + payAmount`).
+        const drawerBalanceDec = toDec(drawerAgg._sum.amount ?? 0);
         await tx.cashDrawerLog.create({
           data: {
             storeId: plan.storeId,
             userId: session.userId,
             action: 'CASH_IN',
-            amount: payAmount,
-            balance: currentBalance + payAmount,
+            amount: payNum,
+            balance: round2(drawerBalanceDec.plus(payNum)),
             notes: `Installment payment from ${plan.customer?.name ?? 'customer'} (Plan #${plan.id.slice(-6)})`,
           },
         });
@@ -250,11 +318,11 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
         data: {
           storeId: plan.storeId,
           entryNumber: generateJournalEntryNumber(),
-          description: `Installment payment from ${plan.customer?.name ?? 'customer'} — Plan #${plan.id.slice(-6)} (KES ${payAmount.toLocaleString()})`,
+          description: `Installment payment from ${plan.customer?.name ?? 'customer'} — Plan #${plan.id.slice(-6)} (KES ${payNum.toLocaleString()})`,
           referenceType: 'DEBT_PAYMENT_PLAN',
           referenceId: plan.id,
-          totalDebit: payAmount,
-          totalCredit: payAmount,
+          totalDebit: payNum,
+          totalCredit: payNum,
           isPosted: true,
           postedAt: new Date(),
           createdBy: session.userId,
@@ -262,14 +330,14 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
             create: [
               {
                 accountId: cashAccountId,
-                debit: payAmount,
+                debit: payNum,
                 credit: 0,
                 description: `Installment payment received — ${method}`,
               },
               {
                 accountId: accounts.ACCOUNTS_RECEIVABLE,
                 debit: 0,
-                credit: payAmount,
+                credit: payNum,
                 description: `Reduce A/R for ${plan.customer?.name ?? 'customer'}`,
               },
             ],
@@ -279,19 +347,34 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
     }
 
     return { updatedInstallment, updatedPlan };
+  }).catch((err: unknown) => {
+    // Map the typed in-transaction claim conflicts to client-facing 400s
+    // (a race loser is a retryable user error, not a server fault).
+    if (err instanceof InstallmentClaimConflictError) {
+      return Response.json(
+        { success: false, error: err.message },
+        { status: 400 },
+      );
+    }
+    throw err;
   });
+
+  // Early-return shape for the conflict path (typed narrow).
+  if (result instanceof Response) {
+    return result;
+  }
 
   await systemLog({
     action: 'DEBT_PLAN_INSTALLMENT_PAID',
     component: LogComponent.FINANCIAL,
     severity: LogSeverity.INFO,
-    message: `Installment ${installment.installmentNumber} on plan ${id} paid KES ${payAmount.toLocaleString()} via ${method}.`,
+    message: `Installment ${installment.installmentNumber} on plan ${id} paid KES ${payNum.toLocaleString()} via ${method}.`,
     storeId: plan.storeId,
     userId: session.userId,
     metadata: {
       planId: id,
       installmentId,
-      amount: payAmount,
+      amount: payNum,
       paymentMethod: method,
       paymentReference: paymentReference || null,
       newPlanStatus: result.updatedPlan.status,

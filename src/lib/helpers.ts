@@ -9,7 +9,7 @@
 //   `withSequenceRetry` (src/lib/sequence.ts) as the P2002 backstop.
 
 import crypto from 'crypto';
-import { KES } from '@/lib/money';
+import { calculateLineItem, formatKES as canonicalFormatKES } from '@/lib/utils/financialMath';
 
 function secureSuffix(): string {
   // 5-char base36 ≈ 60M combinations — collision-safe at retail volumes and
@@ -42,14 +42,12 @@ export function generateSKU(categoryCode: string = 'GEN'): string {
   return `MBM-${categoryCode.toUpperCase()}-${random}`;
 }
 
-export function formatKES(amount: number): string {
-  return new Intl.NumberFormat('en-KE', {
-    style: 'currency',
-    currency: 'KES',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(amount);
-}
+/**
+ * Canonical KES formatting (en-KE, exactly 2 decimal places) — delegated to
+ * the central financialMath utility so server-rendered PDFs show the exact
+ * same string as the UI, receipts, e-mails and WhatsApp messages.
+ */
+export const formatKES = canonicalFormatKES;
 
 /**
  * Format a date as a readable string (e.g. "26 Jun 2026").
@@ -111,38 +109,42 @@ export function generateGiftCardCode(): string {
 /**
  * Compute a sale line's gross subtotal, line discount, tax and total.
  *
- * AUDIT FIX (5): this previously did raw IEEE-754 float math
- * (`pricePerUnit * quantity`, etc.), so results like 0.1 + 0.2 →
- * 0.30000000000000004 drifted before being frozen into the Decimal columns —
- * line-sum vs header mismatches of a cent, exactly what eTIMS reconciliation
- * flags. Every operation now goes through the `Money` primitive (arbitrary
- * precision decimal, src/lib/money.ts) and is rounded HALF_EVEN (banker's
- * rounding — the GAAP/IFRS/KRA-VAT standard) to the currency's minor unit
- * (2dp for KES):
- *   subtotal = round(pricePerUnit × quantity)
- *   discount = round(subtotal × discountPercent / 100)
- *   taxable  = subtotal − discount          (exact — both are 2dp)
- *   tax      = round(taxable × taxRate / 100)
- *   total    = taxable + tax                (exact — both are 2dp)
+ * FINANCIAL MATH AUDIT — UNIFORM FORMULA (src/lib/utils/financialMath.ts):
+ * every operation runs in decimal.js (never IEEE-754 float) and rounds
+ * HALF_UP to 2dp at the line level:
+ *   subtotal = round_HUP(pricePerUnit × quantity)
+ *   discount = round_HUP(subtotal × discountPercent / 100)
+ *   net      = subtotal − discount
+ *   VAT-INCLUSIVE (POS retail default — shelf price includes VAT):
+ *     tax      = net − round_HUP(net / 1.16)
+ *     total    = net                       (customer pays the shelf price)
+ *   VAT-EXCLUSIVE (B2B / wholesale — pass `isVatInclusive = false`):
+ *     tax      = round_HUP(net × taxRate / 100)
+ *     total    = net + tax
+ * Exempt lines (taxRate 0) always carry tax = 0.
  *
- * The exported signature is UNCHANGED so all existing callers keep
- * compiling; only the numeric behaviour (exact, rounded) is different.
+ * Because each line is exact at 2dp, document totals aggregate without
+ * off-by-one-cent drift (see aggregateDocument in financialMath).
+ *
+ * The exported shape ({ subtotal, discount, tax, total }) is UNCHANGED so
+ * all existing callers keep compiling; only the numeric behaviour (exact,
+ * rounded, VAT-inclusive) is different. NOTE the semantic flip: `total` is
+ * now the VAT-INCLUSIVE gross the customer pays — the header formula in
+ * checkout was updated in the same audit to `subtotal − lineDiscounts −
+ * cartDiscount` (VAT is inside the lines, never added on top).
  */
 export function calculateLineTotal(
   pricePerUnit: number,
   quantity: number,
   discountPercent: number = 0,
-  taxRate: number = 16
+  taxRate: number = 16,
+  isVatInclusive: boolean = true
 ): { subtotal: number; discount: number; tax: number; total: number } {
-  const subtotal = KES(pricePerUnit).multiply(quantity).round();
-  const discount = subtotal.multiply(discountPercent / 100).round();
-  const taxable = subtotal.subtract(discount);
-  const tax = taxable.multiply(taxRate / 100).round();
-  const total = taxable.add(tax).round();
+  const line = calculateLineItem(quantity, pricePerUnit, discountPercent, isVatInclusive, taxRate);
   return {
-    subtotal: subtotal.toNumber(),
-    discount: discount.toNumber(),
-    tax: tax.toNumber(),
-    total: total.toNumber(),
+    subtotal: line.subtotal,
+    discount: line.discountAmount,
+    tax: line.vatAmount,
+    total: line.lineGrossTotal,
   };
 }

@@ -4,7 +4,7 @@
 //
 // These tests verify the financial-correctness guarantees of the Money class:
 //   • No floating-point drift on add / subtract / multiply
-//   • Banker's rounding (HALF_EVEN) — GAAP / IFRS standard
+//   • HALF_UP cent rounding (2dp) — the FINANCIAL MATH AUDIT policy
 //   • Exact allocation (no lost or created pennies)
 //   • Safe parsing of user input (no throws on bad input)
 //   • Currency enforcement (cannot add KES + USD)
@@ -116,24 +116,23 @@ describe('Money — arithmetic (no floating-point drift)', () => {
   });
 });
 
-describe('Money — rounding (banker\'s rounding / HALF_EVEN)', () => {
-  it('rounds 0.005 to 0.00 (HALF_EVEN, not HALF_UP)', () => {
-    // Banker's rounding rounds to the nearest EVEN number.
-    // 0.005 → 0.00 (0 is even), 0.015 → 0.02 (2 is even).
-    expect(KES(0.005).round().toNumber()).toBe(0);
+describe('Money — rounding (HALF_UP — FINANCIAL MATH AUDIT policy)', () => {
+  it('rounds 0.005 to 0.01 (HALF_UP, half away from zero)', () => {
+    // The audit-mandated policy: exact halves round UP to the next cent.
+    // Config is owned by src/lib/utils/financialMath.ts.
+    expect(KES(0.005).round().toNumber()).toBe(0.01);
   });
 
-  it('rounds 0.015 to 0.02 (HALF_EVEN)', () => {
+  it('rounds 0.015 to 0.02 (HALF_UP)', () => {
     expect(KES(0.015).round().toNumber()).toBe(0.02);
   });
 
-  it('rounds 0.025 to 0.02 (HALF_EVEN, NOT 0.03)', () => {
-    // This is the key difference from "round half up": 0.025 → 0.02 (even),
-    // not 0.03. This prevents the systematic upward bias of HALF_UP.
-    expect(KES(0.025).round().toNumber()).toBe(0.02);
+  it('rounds 0.025 to 0.03 (HALF_UP, NOT HALF_EVEN)', () => {
+    // Key difference from banker's rounding: 0.025 → 0.03 (up), not 0.02.
+    expect(KES(0.025).round().toNumber()).toBe(0.03);
   });
 
-  it('rounds 0.035 to 0.04 (HALF_EVEN)', () => {
+  it('rounds 0.035 to 0.04 (HALF_UP)', () => {
     expect(KES(0.035).round().toNumber()).toBe(0.04);
   });
 
@@ -290,10 +289,10 @@ describe('Money — immutability', () => {
   });
 
   it('round returns a NEW Money (does not mutate)', () => {
-    const a = KES(0.005);
+    const a = KES(1.005);
     const b = a.round();
-    expect(a.toNumber()).toBe(0.005); // unchanged
-    expect(b.toNumber()).toBe(0);
+    expect(a.toNumber()).toBe(1.005); // unchanged
+    expect(b.toNumber()).toBe(1.01); // HALF_UP — audit policy
   });
 
   it('multiply returns a NEW Money (does not mutate)', () => {

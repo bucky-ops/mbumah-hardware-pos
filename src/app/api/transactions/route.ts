@@ -31,6 +31,8 @@ import { checkoutSchema, validateInput } from '@/lib/validations';
 import { calculateEarnedPoints, getTierFromPoints } from '@/lib/loyalty-utils';
 import { requireStoreAccess, type AuthSession } from '@/lib/auth';
 import { KES } from '@/lib/money';
+import Decimal from 'decimal.js';
+import { toDec, toNum, round2, changeDue as calcChangeDue } from '@/lib/utils/financialMath';
 import { enqueueOutbox } from '@/lib/outbox';
 import { withSequenceRetry, isP2002 } from '@/lib/sequence';
 
@@ -436,9 +438,16 @@ async function createTransactionInner(
   // and taxRate — a compromised/misbehaving client could sell KES 10,000 of
   // stock for KES 1 or poison COGS. Prices, cost and tax now come from the
   // Product row loaded above; client values are ignored.
-  let subtotal = 0;
-  let taxAmount = 0;
-  let totalDiscount = 0;
+  //
+  // FINANCIAL MATH AUDIT — VAT-INCLUSIVE RETAIL PRICING:
+  // product.pricePerUnit is the VAT-INCLUSIVE shelf price (Kenya retail
+  // standard). calculateLineTotal (→ financialMath.calculateLineItem)
+  // extracts each line's VAT component (net = gross / 1.16 for standard
+  // lines; 0 for exempt) and `lineTotal` is the gross the customer pays.
+  // All accumulators run in Decimal — float `+=` on money is banned.
+  let subtotalAcc = new Decimal(0);
+  let taxAcc = new Decimal(0);
+  let discountAcc = new Decimal(0);
 
   const saleItemsData = items.map((item: { productId: string; productName: string; sku: string; quantity: number; unitType: string; pricePerUnit: number; costPrice: number; discountPercent: number; taxRate: number; isRentalItem: boolean; isBundle: boolean }, index: number) => {
     const product = productMap.get(item.productId);
@@ -466,9 +475,9 @@ async function createTransactionInner(
     }
 
     const calc = calculateLineTotal(safePrice, safeQty, safeDisc, safeTax);
-    subtotal += calc.subtotal;
-    taxAmount += calc.tax;
-    totalDiscount += calc.discount;
+    subtotalAcc = subtotalAcc.plus(toDec(calc.subtotal));
+    taxAcc = taxAcc.plus(toDec(calc.tax));
+    discountAcc = discountAcc.plus(toDec(calc.discount));
 
     return {
       productId: item.productId,
@@ -484,28 +493,62 @@ async function createTransactionInner(
     };
   });
 
-  // AUDIT FIX (5): calculateLineTotal now returns HALF_EVEN-rounded 2dp
-  // values per line; re-round the accumulated header aggregates so float
-  // summation dust (Σ of 2dp doubles) can never be frozen into the Decimal
-  // columns. With all aggregates exact at 2dp, the journal balance identity
-  // holds exactly and the ±0.01 backstop in recordSaleJournalEntry can
-  // never trip.
-  subtotal = KES(subtotal).round().toNumber();
-  taxAmount = KES(taxAmount).round().toNumber();
-  totalDiscount = KES(totalDiscount).round().toNumber();
+  // FINANCIAL MATH AUDIT: accumulators ran in Decimal end-to-end; the final
+  // freeze to number is exact because every component is already 2dp.
+  const subtotal = round2(subtotalAcc);
+  const taxAmount = round2(taxAcc);
+  const totalDiscount = round2(discountAcc);
 
-  const totalAmount = KES(subtotal - totalDiscount + taxAmount).round().toNumber();
+  // VAT-INCLUSIVE header: the customer pays Σ(line gross) − cart discount.
+  // The VAT component lives INSIDE the lines (never added on top):
+  //   totalAmount = Σ lineTotal − Σ lineDiscounts
+  //   taxAmount   = Σ line VAT components (VAT ledger / eTIMS payloads)
+  const totalAmount = KES(subtotal - totalDiscount).round().toNumber();
   // F5-1: discount cap — a discount larger than the line-discounted total
   // used to produce a NEGATIVE finalTotal (negative Payment, negative debt).
-  const appliedDiscount = Math.max(0, Math.min(Number(discountAmount) || 0, totalAmount));
+  const appliedDiscount = Math.max(0, Math.min(round2(toDec(discountAmount as number | undefined)), totalAmount));
   const finalTotal = KES(totalAmount - appliedDiscount).round().toNumber();
+
+  // ── FINANCIAL MATH AUDIT — CASH TENDERED & CHANGE DUE (spec §4) ──────
+  // Change Due = max(0, Cash Rendered − Final Total). The tendered cash
+  // and the change handed back are now PERSISTED on the transaction so
+  // receipts, X/Z-reads and the audit trail see the real till movement
+  // (previously the change never existed server-side).
+  let cashTendered: number | null = null;
+  let changeDueAmount: number | null = null;
+  if (paymentMethod === PaymentMethod.CASH) {
+    const rendered = paymentDetails?.cashAmount != null
+      ? toNum(paymentDetails.cashAmount as number)
+      : finalTotal; // no explicit tender captured → exact amount (legacy)
+    if (rendered + 0.005 < finalTotal) {
+      return Response.json(
+        {
+          success: false,
+          error: `Cash tendered (KES ${round2(rendered).toFixed(2)}) is less than the sale total (KES ${finalTotal.toFixed(2)}).`,
+        },
+        { status: 400 }
+      );
+    }
+    cashTendered = round2(rendered);
+    changeDueAmount = calcChangeDue(rendered, finalTotal);
+  } else if (paymentMethod === PaymentMethod.SPLIT && paymentDetails?.splits) {
+    // Split legs must sum to exactly the sale total (validated below), so
+    // no change is due; the cash leg is still persisted for the till log.
+    const cashLegs = paymentDetails.splits
+      .filter((s) => s.method === PaymentMethod.CASH)
+      .reduce((acc, s) => acc.plus(toDec(s.amount as number)), new Decimal(0));
+    if (cashLegs.gt(0)) {
+      cashTendered = round2(cashLegs);
+      changeDueAmount = 0;
+    }
+  }
 
   // AUDIT FIX (3): explicit split-tender total validation. Σ(split legs)
   // must equal the server-computed finalTotal within 0.005 — the route
   // returns a clear 400 instead of relying on the deep ±0.01 journal-entry
   // balance throw in recordSaleJournalEntry to catch a mismatched tender.
   if (paymentMethod === PaymentMethod.SPLIT && paymentDetails?.splits) {
-    let splitSum = 0;
+    let splitSumAcc = new Decimal(0);
     for (let i = 0; i < paymentDetails.splits.length; i++) {
       const split = paymentDetails.splits[i];
       const legAmount = Number(split.amount);
@@ -515,9 +558,9 @@ async function createTransactionInner(
           { status: 400 }
         );
       }
-      splitSum += legAmount;
+      splitSumAcc = splitSumAcc.plus(toDec(legAmount));
     }
-    const roundedSplitSum = KES(splitSum).round().toNumber();
+    const roundedSplitSum = round2(splitSumAcc);
     if (Math.abs(roundedSplitSum - finalTotal) > 0.005) {
       return Response.json(
         {
@@ -712,6 +755,10 @@ async function createTransactionInner(
         // SYS-10: stores the client idempotency key (unique) so replayed
         // checkouts are detectable at the database level.
         idempotencyKey: idempotencyKey || null,
+        // FINANCIAL MATH AUDIT: real till movement — cash rendered and the
+        // change handed back (spec §4). Null for non-cash tenders.
+        cashTendered: cashTendered ?? null,
+        changeDue: changeDueAmount ?? null,
         items: {
           create: saleItemsData,
         },
@@ -1114,17 +1161,20 @@ async function createTransactionInner(
     }
 
     // 5 ── Single balanced double-entry journal (all payment types) ──
-    // grossRevenue = subtotal − line discounts (net sales BEFORE the
-    //   cart-level discount). The cart-level discount is routed to the
+    // FINANCIAL MATH AUDIT — VAT-INCLUSIVE PRICING:
+    //   grossRevenue = Σ lineTotal − Σ lineDiscounts − Σ VAT = NET revenue
+    //   (excl. VAT). The cart-level discount is routed to the
     //   SALES_DISCOUNTS contra-revenue account (proper GAAP accounting).
-    // Balance identity:
-    //   Σ debits (payments + discount + COGS) = Σ credits (revenue + tax + inventory)
-    const grossRevenue = KES(subtotal - totalDiscount).round().toNumber();
+    // Balance identity (must hold to the cent):
+    //   Σ debits (payments + cart discount + COGS)
+    //     = Σ credits (net revenue + VAT payable + inventory)
+    //   finalTotal + appliedDiscount − taxAmount = grossRevenue
+    const grossRevenue = KES(subtotal - totalDiscount - taxAmount).round().toNumber();
     const cogsAmount = saleItemsData.reduce(
-      (sum: number, item: { costPrice: number; quantity: number; isRentalItem: boolean }) =>
-        item.isRentalItem ? sum : sum + (item.costPrice || 0) * item.quantity,
-      0,
-    );
+      (sum: Decimal, item: { costPrice: number; quantity: number; isRentalItem: boolean }) =>
+        item.isRentalItem ? sum : sum.plus(toDec(item.costPrice).mul(toDec(item.quantity))),
+      new Decimal(0),
+    ).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toNumber();
 
     const paymentBreakdown: {
       cash?: number;
@@ -1143,20 +1193,20 @@ async function createTransactionInner(
       paymentBreakdown.giftCard = finalTotal;
     } else if (paymentMethod === PaymentMethod.SPLIT && paymentDetails?.splits) {
       for (const split of paymentDetails.splits) {
-        const splitAmount = parseFloat(String(split.amount));
+        const splitAmount = toNum(split.amount as number);
         if (split.method === PaymentMethod.CASH) {
-          paymentBreakdown.cash = (paymentBreakdown.cash || 0) + splitAmount;
+          paymentBreakdown.cash = round2(toDec(paymentBreakdown.cash ?? 0).plus(splitAmount));
         } else if (split.method === PaymentMethod.MPESA) {
-          paymentBreakdown.mpesa = (paymentBreakdown.mpesa || 0) + splitAmount;
+          paymentBreakdown.mpesa = round2(toDec(paymentBreakdown.mpesa ?? 0).plus(splitAmount));
         } else if (split.method === PaymentMethod.GIFT_CARD) {
-          paymentBreakdown.giftCard = (paymentBreakdown.giftCard || 0) + splitAmount;
+          paymentBreakdown.giftCard = round2(toDec(paymentBreakdown.giftCard ?? 0).plus(splitAmount));
         } else if (split.method === PaymentMethod.DEBT) {
           // AUDIT FIX (1d): a DEBT split leg debits Accounts Receivable —
           // the exact journal treatment the pure-DEBT path gets via
           // `paymentBreakdown.credit = finalTotal`. Without this line the
           // JE was unbalanced by the DEBT leg's amount and the ±0.01
           // backstop aborted the whole sale.
-          paymentBreakdown.credit = (paymentBreakdown.credit || 0) + splitAmount;
+          paymentBreakdown.credit = round2(toDec(paymentBreakdown.credit ?? 0).plus(splitAmount));
         }
       }
     }

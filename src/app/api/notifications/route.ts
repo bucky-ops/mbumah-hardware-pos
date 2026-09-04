@@ -2,6 +2,9 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { db, runWithTenant } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { requireStoreAccess } from '@/lib/auth';
+// FORMAT UNIFICATION (task 12-d): canonical en-KE KES formatter for money toasts
+// (accepts Prisma Decimal / string / number safely).
+import { formatKES } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -147,7 +150,7 @@ async function getHandler(request: NextRequest): Promise<Response> {
         id: `debt-${d.id}`,
         type: 'large_debt',
         title: isOverdue ? 'Overdue Debt' : 'Large Outstanding Debt',
-        description: `${d.customer.name} owes KES ${Math.round(d.balance).toLocaleString()}${isOverdue ? ' (OVERDUE)' : ''}`,
+        description: `${d.customer.name} owes ${formatKES(d.balance)}${isOverdue ? ' (OVERDUE)' : ''}`,
         severity: isOverdue ? 'critical' : 'warning',
         timestamp: d.dueDate.toISOString(),
         isRead: false,
@@ -209,7 +212,7 @@ async function getHandler(request: NextRequest): Promise<Response> {
           id: `txn-${t.id}`,
           type: 'recent_transaction',
           title: 'Recent Sale',
-          description: `${t.customer?.name || 'Walk-in'} — KES ${Math.round(t.totalAmount).toLocaleString()} via ${t.paymentMethod}${minutesAgo <= 1 ? ' (just now)' : ` (${minutesAgo}m ago)`}`,
+          description: `${t.customer?.name || 'Walk-in'} — ${formatKES(t.totalAmount)} via ${t.paymentMethod}${minutesAgo <= 1 ? ' (just now)' : ` (${minutesAgo}m ago)`}`,
           severity: 'info',
           timestamp: t.createdAt.toISOString(),
           isRead: false,

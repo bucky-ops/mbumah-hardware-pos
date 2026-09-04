@@ -14,11 +14,12 @@ import {
 import { useAppStore } from '@/lib/stores';
 import {
   deliveryNotesApi, whatsappApi,
-  formatDate, formatDateTime,
+  formatDate, formatDateTime, formatKES,
   type DeliveryNoteItem,
   type DeliveryNoteItemDetail,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
+import { formatQty, unitLabel } from '@/lib/utils/financialMath';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 import { Button } from '@/components/ui/button';
@@ -402,8 +403,8 @@ export default function DeliveryNotesTab() {
         <tr>
           <td>${i + 1}</td>
           <td>${escapeHtml(item.productName)}</td>
-          <td class="text-center">${item.quantity}</td>
-          <td>${escapeHtml(item.unitType)}</td>
+          <td class="text-center">${escapeHtml(formatQty(item.quantity))}</td>
+          <td>${escapeHtml(unitLabel(item.unitType))}</td>
           <td>${escapeHtml(item.notes || '—')}</td>
         </tr>
       `).join('');
@@ -1077,7 +1078,7 @@ export default function DeliveryNotesTab() {
                       </span>
                       <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                       <span className="text-muted-foreground">
-                        KES {noteDetail.transaction.totalAmount}
+                        {formatKES(Number(noteDetail.transaction.totalAmount) || 0)}
                       </span>
                     </div>
                   </div>
@@ -1110,8 +1111,8 @@ export default function DeliveryNotesTab() {
                           <TableRow key={item.id}>
                             <TableCell className="text-muted-foreground text-xs">{i + 1}</TableCell>
                             <TableCell className="font-medium text-sm">{item.productName}</TableCell>
-                            <TableCell className="text-center text-sm">{item.quantity}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground">{item.unitType}</TableCell>
+                            <TableCell className="text-center text-sm">{formatQty(item.quantity)}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{unitLabel(item.unitType)}</TableCell>
                             <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
                               {item.notes || '—'}
                             </TableCell>

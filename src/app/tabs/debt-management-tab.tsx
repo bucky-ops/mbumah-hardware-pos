@@ -26,6 +26,7 @@ import {
 import { useAppStore, useAuthStore } from '@/lib/stores';
 import {
   debtRemindersApi,
+  formatKES,
   type OverdueCustomerItem,
   type ReminderScheduleResult,
 } from '@/lib/api';
@@ -143,15 +144,7 @@ const REMINDER_STATUS_CONFIG: Record<
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatKESLocal(value: number | null | undefined): string {
-  if (value == null) return '—';
-  return new Intl.NumberFormat('en-KE', {
-    style: 'currency',
-    currency: 'KES',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
-}
+// formatKES: canonical en-KE KES formatter imported from '@/lib/api' (task 12-d)
 
 function formatDate(date: string | Date): string {
   return new Date(date).toLocaleDateString('en-GB', {
@@ -191,7 +184,7 @@ function OverdueBoardSection({ storeId }: { storeId: string }) {
       },
       {
         label: 'Total Overdue',
-        value: formatKESLocal(summary.totalOverdue),
+        value: formatKES(summary.totalOverdue),
         color: 'text-rose-600 dark:text-rose-400',
         icon: DollarSign,
       },
@@ -322,7 +315,7 @@ function OverdueCustomerCard({ customer }: { customer: OverdueCustomerItem }) {
             </div>
             <div className="text-right shrink-0">
               <p className="text-lg font-bold text-rose-600 dark:text-rose-400 font-mono">
-                {formatKESLocal(customer.totalOverdue)}
+                {formatKES(customer.totalOverdue)}
               </p>
               <p className="text-xs text-muted-foreground">total overdue</p>
             </div>
@@ -356,7 +349,7 @@ function OverdueCustomerCard({ customer }: { customer: OverdueCustomerItem }) {
                         <TableRow key={debt.debtLedgerId}>
                           <TableCell className="font-mono text-xs py-2">{debt.debtLedgerId}</TableCell>
                           <TableCell className="font-mono text-sm py-2 text-right font-medium">
-                            {formatKESLocal(debt.balance)}
+                            {formatKES(debt.balance)}
                           </TableCell>
                           <TableCell className="text-xs py-2">{formatDate(debt.dueDate)}</TableCell>
                           <TableCell className="text-xs py-2">{late}d</TableCell>
@@ -811,7 +804,7 @@ function HistorySection({ storeId }: { storeId: string }) {
                           )}
                         </TableCell>
                         <TableCell className="text-right font-mono text-sm">
-                          {r.debtLedger ? formatKESLocal(r.debtLedger.balance) : '—'}
+                          {r.debtLedger ? formatKES(r.debtLedger.balance) : '—'}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground max-w-xs">
                           <p className="truncate" title={r.message}>{r.message}</p>

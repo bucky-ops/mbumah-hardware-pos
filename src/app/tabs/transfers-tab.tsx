@@ -26,6 +26,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { formatQty, unitLabel } from '@/lib/utils/financialMath';
 
 // ─── Store type ─────────────────────────────────────────────
 
@@ -173,9 +174,9 @@ function TransferDetailDialog({
                         <TableCell className="text-xs py-2 font-mono text-muted-foreground">
                           {item.product?.sku || '—'}
                         </TableCell>
-                        <TableCell className="text-xs py-2 text-right">{item.quantity}</TableCell>
-                        <TableCell className="text-xs py-2 text-right">{item.receivedQty}</TableCell>
-                        <TableCell className="text-xs py-2">{item.unitType}</TableCell>
+                        <TableCell className="text-xs py-2 text-right">{formatQty(item.quantity)}</TableCell>
+                        <TableCell className="text-xs py-2 text-right">{formatQty(item.receivedQty)}</TableCell>
+                        <TableCell className="text-xs py-2">{unitLabel(item.unitType)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -630,7 +631,7 @@ export default function TransfersTab() {
                           >
                             +
                           </Button>
-                          <span className="text-xs text-muted-foreground w-12">{item.unitType}</span>
+                          <span className="text-xs text-muted-foreground w-12">{unitLabel(item.unitType)}</span>
                           <Button
                             size="sm"
                             variant="ghost"

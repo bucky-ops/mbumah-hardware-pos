@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 
 import { formatDateTime } from '@/lib/api';
+import { formatQtyWithUnit } from '@/lib/utils/financialMath';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -401,7 +402,9 @@ export function StockMovementLog({
                     const Icon = cfg.icon;
                     const qty = Number(m.quantity) || 0;
                     const isNegative = qty < 0;
-                    const displayQty = `${qty > 0 ? '+' : ''}${qty}`;
+                    // Signed display qty with smart unit label; formatQtyWithUnit
+                    // renders "-2.50 m" verbatim so the sign is preserved.
+                    const displayQty = `${qty > 0 ? '+' : ''}${formatQtyWithUnit(qty, m.product?.unitType)}`;
                     return (
                       <TableRow key={m.id} className="hover:bg-muted/40">
                         <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
@@ -433,11 +436,6 @@ export function StockMovementLog({
                           >
                             {displayQty}
                           </span>
-                          {m.product?.unitType && (
-                            <span className="ml-1 text-[10px] uppercase text-muted-foreground">
-                              {m.product.unitType}
-                            </span>
-                          )}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {m.notes || '—'}

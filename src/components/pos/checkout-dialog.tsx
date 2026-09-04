@@ -3,6 +3,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { formatKES, type CustomerItem } from '@/lib/api';
+import Decimal from 'decimal.js';
+import { toDec, round2 } from '@/lib/utils/financialMath';
 import type { PaymentMethod } from '@/lib/types';
 import { StkStatusPanel } from '@/components/pos/stk-status-panel';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
@@ -160,8 +162,19 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
   const showMpesaPanel = (paymentMethod === 'MPESA' || paymentMethod === 'SPLIT');
 
   // Compute derived totals for the order summary
+  // FINANCIAL MATH AUDIT: VAT is INSIDE the (VAT-inclusive) line totals.
+  // The fallback tax preview extracts the per-line VAT component in Decimal
+  // (never `Math.round(subtotal × 0.16)` on top — that double-counted VAT
+  // and diverged from the server's per-line taxRate computation).
   const summarySubtotal = subtotal ?? cartItems?.reduce((sum, i) => sum + i.lineTotal, 0) ?? 0;
-  const summaryTax = taxAmount ?? Math.round((summarySubtotal - totalDiscount) * 0.16);
+  const summaryTax = taxAmount ?? round2(
+    (cartItems ?? []).reduce((sum, i) => {
+      const rate = Math.min(100, Math.max(0, i.taxRate || 0));
+      if (rate === 0) return sum;
+      const gross = toDec(i.lineTotal);
+      return sum.plus(gross.minus(gross.div(1 + rate / 100).toDecimalPlaces(2, Decimal.ROUND_HALF_UP)));
+    }, new Decimal(0))
+  );
   const summaryTotalItems = cartItems?.reduce((sum, i) => sum + i.quantity, 0) ?? 0;
 
   // Validation per step
@@ -394,7 +407,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
         <Separator />
         <div className="space-y-0.5 text-[11px]">
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Subtotal</span>
+            <span className="text-muted-foreground">Subtotal (VAT incl.)</span>
             <span>{formatKES(summarySubtotal)}</span>
           </div>
           {totalDiscount > 0 && (
@@ -404,7 +417,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
             </div>
           )}
           <div className="flex justify-between">
-            <span className="text-muted-foreground">VAT (16%)</span>
+            <span className="text-muted-foreground">VAT (incl. in prices)</span>
             <span>{formatKES(summaryTax)}</span>
           </div>
           <Separator />

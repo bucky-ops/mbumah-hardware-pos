@@ -10,6 +10,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { formatKES } from '@/lib/api';
 
 // --- Date helpers -----------------------------------------------------------
 
@@ -79,7 +80,13 @@ export function AnimatedCounter({ value, prefix = '', suffix = '' }: { value: nu
     return () => cancelAnimationFrame(rafRef.current);
   }, [value]);
 
-  return <>{prefix}{display.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}{suffix}</>;
+  // FORMAT UNIFICATION (task 12-d): the rendered value goes through the ONE
+  // canonical en-KE KES formatter (api.formatKES → currency-utils →
+  // financialMath.formatKES) so animated KPIs render the identical
+  // "Ksh 1,234.56" string as every other money surface. The `prefix` prop is
+  // kept for API compatibility but call sites no longer pass a hardcoded
+  // "Ksh " prefix (the canonical formatter already carries the currency).
+  return <>{prefix}{formatKES(display)}{suffix}</>;
 }
 
 // --- Chart of Accounts visual config ---------------------------------------

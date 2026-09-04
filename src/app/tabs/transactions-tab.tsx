@@ -16,6 +16,7 @@ import { getStoreInfo, getLogoUrl, COMPANY } from '@/lib/store-info';
 import { printReceiptElement, generateReceiptPdf, buildReceiptFileName, RECEIPT_CONTENT_ID } from '@/lib/receipt-pdf';
 import { ReceiptDocument } from '@/components/receipt-print';
 import { handleError } from '@/lib/error-handler';
+import { formatQty, formatQtyWithUnit, unitLabel } from '@/lib/utils/financialMath';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -563,8 +564,8 @@ function TransactionRow({
                         {items.map((item: SaleItemDetail) => (
                           <tr key={item.id} className="border-t border-border/50">
                             <td className="p-2">{item.productName}</td>
-                            <td className="p-2 text-center">{item.quantity}</td>
-                            <td className="p-2 text-center">{item.unitType}</td>
+                            <td className="p-2 text-center">{formatQty(item.quantity)}</td>
+                            <td className="p-2 text-center">{unitLabel(item.unitType)}</td>
                             <td className="p-2 text-right">{formatKES(item.pricePerUnit)}</td>
                             <td className="p-2 text-right font-medium">{formatKES(item.lineTotal)}</td>
                           </tr>
@@ -814,7 +815,7 @@ export default function TransactionsTab() {
     const rows = items.map((item: SaleItemDetail) => `
       <tr>
         <td>${item.productName}</td>
-        <td style="text-align:center">${item.quantity} ${item.unitType}</td>
+        <td style="text-align:center">${formatQtyWithUnit(item.quantity, item.unitType)}</td>
         <td style="text-align:right">${formatKES(item.pricePerUnit)}</td>
         <td style="text-align:right">${formatKES(item.lineTotal)}</td>
       </tr>

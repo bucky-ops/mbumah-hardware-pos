@@ -53,6 +53,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ReceiptPrintPreview } from '@/components/receipt-print';
+import { changeDue as changeDueOf } from '@/lib/utils/financialMath';
 import {
   ShoppingCart, ShoppingBag, Package, Search, Plus, Trash2, CreditCard,
   Smartphone, Loader2, Banknote, Wallet, Gift,
@@ -178,9 +179,11 @@ export default function POSTab() {
   const cart = useCartStore();
   const subtotal = cart.getSubtotal();
   const tax = cart.getTax();
-  // Pre-discount total (subtotal + tax). Used as the base for gift card /
-  // voucher discount math so we don't double-count the cart-level discount.
-  const preDiscountTotal = subtotal + tax;
+  // FINANCIAL MATH AUDIT — VAT-INCLUSIVE pricing: the VAT component is
+  // INSIDE the line totals, so the pre-discount total is simply the gross
+  // subtotal (the old `subtotal + tax` double-counted VAT as a basis for
+  // gift-card / voucher math).
+  const preDiscountTotal = subtotal;
   // Cart total after the cashier's flat discount has been applied.
   const _total = cart.getTotal();
 
@@ -1001,7 +1004,11 @@ export default function POSTab() {
     setReceiptPrintOpen(true);
   };
 
-  const change = paymentMethod === 'CASH' && cashReceived ? Number(cashReceived) - finalTotal : 0;
+  // FINANCIAL MATH AUDIT: Change Due = max(0, cash rendered − total),
+  // Decimal-exact (spec §4) — never a float subtraction artifact.
+  const change = paymentMethod === 'CASH' && cashReceived
+    ? changeDueOf(Number(cashReceived), finalTotal)
+    : 0;
 
   // Sorted products
   const sortedProducts = useMemo(() => {

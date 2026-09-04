@@ -1,6 +1,11 @@
 // Account code lookup with caching
 
 import { db } from '@/lib/db';
+// FINANCIAL MATH AUDIT: all money math flows through the central Decimal
+// utilities — no raw float arithmetic, HALF_UP 2dp/4dp per the audit policy.
+import Decimal from 'decimal.js';
+import { toDec, round2, weightedAverageCost as macWeightedAverageCost } from '@/lib/utils/financialMath';
+// ────────────────────────────────────────────────────────────────────────
 
 const ACCOUNT_CODES = {
   CASH_ON_HAND: '1000',
@@ -311,20 +316,22 @@ export function calculateWeightedAverageCost(inputs: WacInputs): WacResult {
   }
 
   // ── Standard weighted-average blend ──
-  const currentValue = currentStock * currentWac;
-  const incomingValue = incomingStock * incomingUnitCost;
-  const blendedWac = (currentValue + incomingValue) / newStock;
+  // FINANCIAL MATH AUDIT: the blend runs in Decimal (never float) via the
+  // central utility — (oldQty×oldCost + recvQty×newCost) / newQty, 4dp HALF_UP.
+  const blended = macWeightedAverageCost(currentStock, currentWac, incomingStock, incomingUnitCost);
+  const currentValue = toDec(currentStock).mul(toDec(currentWac));
+  const incomingValue = toDec(incomingStock).mul(toDec(incomingUnitCost));
 
   return {
-    newStock,
-    newWac: round4(blendedWac),
-    totalValue: round4(currentValue + incomingValue),
+    newStock: blended.newQty,
+    newWac: blended.newAvgCost,
+    totalValue: round4(currentValue.plus(incomingValue)),
   };
 }
 
-/** Round to 4 decimal places (1/100 of a cent) — KRA eTIMS precision. */
-function round4(n: number): number {
-  return Math.round(n * 10000) / 10000;
+/** Round to 4 decimal places (1/100 of a cent) — KRA eTIMS precision, HALF_UP. */
+function round4(n: number | Decimal): number {
+  return toDec(n).toDecimalPlaces(4, Decimal.ROUND_HALF_UP).toNumber();
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -471,8 +478,14 @@ export async function recordSaleJournalEntry(
     });
   }
 
-  const totalDebits = lines.reduce((s, l) => s + l.debit, 0);
-  const totalCredits = lines.reduce((s, l) => s + l.credit, 0);
+  // FINANCIAL MATH AUDIT: balance check runs in Decimal (float `+` on
+  // journal line amounts is banned — Prisma line columns are Decimal).
+  const totalDebits = lines
+    .reduce<Decimal>((s, l) => s.plus(toDec(l.debit ?? 0)), new Decimal(0))
+    .toNumber();
+  const totalCredits = lines
+    .reduce<Decimal>((s, l) => s.plus(toDec(l.credit ?? 0)), new Decimal(0))
+    .toNumber();
   if (Math.abs(totalDebits - totalCredits) > 0.01) {
     throw new Error(
       `Journal entry unbalanced for ${receiptNumber}: debits=${totalDebits.toFixed(2)} credits=${totalCredits.toFixed(2)}`,
@@ -608,10 +621,16 @@ export async function recordGoodsReceiptEntry(
     ACCOUNT_CODES.VAT_PAYABLE,
   ]);
 
-  // Split gross into net + recoverable input VAT.
-  const gross = roundMoney(grossAmount);
-  const vatPortion = vatRate > 0 ? roundMoney(gross - gross / (1 + vatRate / 100)) : 0;
-  const netAmount = roundMoney(gross - vatPortion);
+  // VAT-EXCLUSIVE B2B treatment (FINANCIAL MATH AUDIT §2 — aligned with
+  // the PO module, which adds VAT on top of net unit costs): the passed
+  // amount is the NET receipt value; recoverable input VAT is computed
+  // ON TOP. (Previously this journal extracted VAT as if the supplier
+  // price were VAT-INCLUSIVE while the PO route added VAT on top — the
+  // two sides of the same purchase disagreed, overstating inventory cost
+  // by the VAT component and understating input-VAT recovery.)
+  const netAmount = roundMoney(grossAmount);
+  const vatPortion = vatRate > 0 ? roundMoney(toDec(netAmount).mul(vatRate).div(100)) : 0;
+  const supplierLiability = roundMoney(toDec(netAmount).plus(vatPortion));
 
   const lines = [
     {
@@ -632,7 +651,7 @@ export async function recordGoodsReceiptEntry(
   lines.push({
     accountId: accounts.ACCOUNTS_PAYABLE,
     debit: 0,
-    credit: gross,
+    credit: supplierLiability,
     description: `Supplier liability for PO ${poNumber}`,
   });
 
@@ -648,7 +667,7 @@ export async function recordGoodsReceiptEntry(
     data: {
       storeId,
       entryNumber: generateJournalEntryNumber(),
-      description: `Goods receipt for PO ${poNumber} — KES ${gross.toLocaleString()}`,
+      description: `Goods receipt for PO ${poNumber} — KES ${supplierLiability.toLocaleString()}`,
       referenceType: 'GOODS_RECEIPT',
       referenceId: poId,
       totalDebit,
@@ -661,7 +680,7 @@ export async function recordGoodsReceiptEntry(
   });
 }
 
-/** 2dp HALF_UP rounding for journal line amounts. */
-function roundMoney(n: number): number {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
+/** 2dp HALF_UP rounding for journal line amounts (central policy). */
+function roundMoney(n: number | Decimal): number {
+  return round2(n);
 }

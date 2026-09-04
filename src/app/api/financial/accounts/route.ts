@@ -2,12 +2,16 @@
 // POST /api/financial/accounts — create a new account in the chart of accounts.
 
 import { type NextRequest } from 'next/server';
+import type Decimal from 'decimal.js';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { LogComponent } from '@/lib/types';
 import { withFinancialAuth, FINANCIAL_ROLES } from '@/lib/auth';
 import { createAccount } from '@/lib/accounting-helpers';
 import { APIError } from '@/lib/api-error';
+// Task 12-b: Prisma Decimal valueOf() returns a STRING — `sum + line.debit`
+// STRING-CONCATENATED. Balances accumulate via toDec() and emit 2dp HALF_UP.
+import { toDec, round2 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,25 +85,24 @@ async function getAccountsHandler(...args: unknown[]): Promise<Response> {
 
   const result = accounts.map((account) => {
     const { journalEntryLines, ...accountData } = account as typeof account & {
-      journalEntryLines?: Array<{ debit: number; credit: number; journalEntry: { isPosted: boolean } }>;
+      journalEntryLines?: Array<{ debit: Decimal; credit: Decimal; journalEntry: { isPosted: boolean } }>;
     };
 
-    let balance = 0;
+    let balance = toDec(0);
     if (includeBalances && journalEntryLines) {
-      const totalDebits = journalEntryLines.reduce((sum, line) => sum + line.debit, 0);
-      const totalCredits = journalEntryLines.reduce((sum, line) => sum + line.credit, 0);
+      // Task 12-b: Decimal-safe debit/credit sums (was `0 + Decimal` concat).
+      const totalDebits = journalEntryLines.reduce((acc, line) => acc.plus(toDec(line.debit)), toDec(0));
+      const totalCredits = journalEntryLines.reduce((acc, line) => acc.plus(toDec(line.credit)), toDec(0));
 
       // Normal balance: Assets & Expenses are debit-normal, Liabilities, Equity, Revenue are credit-normal
-      if (account.normalBalance === 'DEBIT') {
-        balance = totalDebits - totalCredits;
-      } else {
-        balance = totalCredits - totalDebits;
-      }
+      balance = account.normalBalance === 'DEBIT'
+        ? totalDebits.minus(totalCredits)
+        : totalCredits.minus(totalDebits);
     }
 
     return {
       ...accountData,
-      ...(includeBalances ? { balance: Math.round(balance * 100) / 100 } : {}),
+      ...(includeBalances ? { balance: round2(balance) } : {}),
     };
   });
 
@@ -119,7 +122,13 @@ async function getAccountsHandler(...args: unknown[]): Promise<Response> {
   for (const [accountType, accountsOfType] of Object.entries(accountsByType)) {
     summary[accountType] = {
       count: accountsOfType.length,
-      totalBalance: accountsOfType.reduce((sum, a) => sum + ((a as typeof result[0] & { balance?: number }).balance || 0), 0),
+      // Task 12-b: Decimal-safe total (was float sum of 2dp values).
+      totalBalance: round2(
+        accountsOfType.reduce(
+          (acc, a) => acc.plus(toDec((a as typeof result[0] & { balance?: number }).balance)),
+          toDec(0),
+        ),
+      ),
     };
   }
 

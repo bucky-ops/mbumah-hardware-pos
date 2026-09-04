@@ -8,6 +8,10 @@ import { getAccountIds, ACCOUNT_CODES, type AccountCode } from '@/lib/account-he
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { createExpenseSchema, validateInput } from '@/lib/validations';
 import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
+// Task 12-c: canonical financial math (HALF_UP 2dp). Prisma Decimal
+// `valueOf()` returns a STRING — `currentBalance - Number(expense.amount)`
+// coerced through float, and parseFloat() let NaN/dust into Decimal columns.
+import { toDec, round2 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -168,11 +172,14 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
   }
 
     const result = await db.$transaction(async (tx) => {
+      // Task 12-c: Decimal coercion + HALF_UP 2dp (was parseFloat — NaN slipped
+      // straight into the Decimal column and 0.1+0.2-class dust survived).
+      const expenseAmount = round2(toDec(amount));
         const expense = await tx.expense.create({
       data: {
         storeId,
         description,
-        amount: parseFloat(String(amount)),
+        amount: expenseAmount,
         category,
         paidBy,
         paymentMethod: expensePaymentMethod,
@@ -226,7 +233,12 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
         where: { storeId },
         _sum: { amount: true },
       });
-      const currentBalance = Number(drawerAgg._sum.amount ?? 0);
+      // Task 12-c: Decimal running balance (was `currentBalance -
+      // Number(expense.amount)`). NOTE: CashDrawerLog is an APPEND-ONLY ledger
+      // (no mutable balance row), so Prisma's atomic increment/decrement does
+      // not apply — the SUM-derived balance below is the concurrency-safe
+      // equivalent (R6 pattern), now with exact Decimal arithmetic.
+      const drawerBalanceDec = toDec(drawerAgg._sum.amount ?? 0);
 
       await tx.cashDrawerLog.create({
         data: {
@@ -234,7 +246,7 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
           userId: paidBy,
           action: 'CASH_OUT',
           amount: expense.amount,
-          balance: currentBalance - Number(expense.amount),
+          balance: round2(drawerBalanceDec.minus(toDec(expense.amount))),
           notes: `Expense: ${description} (${category})`,
         },
       });

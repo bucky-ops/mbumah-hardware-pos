@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Minus, Plus } from 'lucide-react';
 import type { ProductListItem } from '@/lib/api';
+import { roundQty } from '@/lib/utils/financialMath';
 
 export function QuickAddPopup({
   product,
@@ -36,8 +37,13 @@ export function QuickAddPopup({
             ref={inputRef}
             type="number"
             min={1}
+            inputMode="decimal"
             value={qty}
-            onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))}
+            onChange={(e) => {
+              // Decimal-safe parse: hardware units are sold fractionally (0.25 kg, 2.5 m).
+              const parsed = parseFloat(e.target.value);
+              setQty(Math.max(1, Number.isFinite(parsed) ? roundQty(parsed) : 1));
+            }}
             className="h-7 w-14 text-center text-sm font-semibold px-1"
             onKeyDown={(e) => { if (e.key === 'Enter') { onAdd(qty); onClose(); } if (e.key === 'Escape') onClose(); }}
           />

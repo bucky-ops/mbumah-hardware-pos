@@ -26,6 +26,8 @@
  */
 
 import type { TransactionItem, CustomerItem } from "@/lib/api";
+// FINANCIAL MATH AUDIT: change-due math is Decimal-exact (spec §4).
+import { toNum, changeDue as changeDueOf } from "@/lib/utils/financialMath";
 
 /** A minimal store descriptor used to render the receipt header. */
 export interface ReceiptStoreInfo {
@@ -189,9 +191,16 @@ export function formatWhatsAppReceipt(
     pm === "MPESA" ? "📱 M-Pesa" : pm === "CASH" ? "💵 Cash" : pm === "DEBT" ? "🤝 On Credit" : `💳 ${pm}`;
   lines.push(`Payment: ${methodLabel}`);
 
-  if (pm === "CASH" && options.cashReceived && options.cashReceived > 0) {
-    lines.push(`Cash Received: ${formatKESCompact(options.cashReceived)}`);
-    const change = options.cashReceived - transaction.totalAmount;
+  if (pm === "CASH") {
+    // FINANCIAL MATH AUDIT: prefer server-persisted tender/change (spec §4);
+    // change = max(0, cash rendered − total), Decimal-exact.
+    const tendered = transaction.cashTendered != null ? toNum(transaction.cashTendered) : options.cashReceived ?? 0;
+    const change = transaction.changeDue != null
+      ? toNum(transaction.changeDue)
+      : changeDueOf(tendered, toNum(transaction.totalAmount));
+    if (tendered > 0) {
+      lines.push(`Cash Tendered: ${formatKESCompact(tendered)}`);
+    }
     if (change > 0) {
       lines.push(`*Change: ${formatKESCompact(change)}*`);
     }

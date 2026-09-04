@@ -18,6 +18,10 @@ import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { formatKES, formatDate } from '@/lib/helpers';
+// Task 12-b: Prisma Decimal valueOf() returns a STRING — `number + decimal`
+// concatenates. Totals below accumulate via toDec(); formatKES (canonical 2dp
+// en-KE formatter) is kept from '@/lib/helpers'.
+import { toDec } from '@/lib/utils/financialMath';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
@@ -111,9 +115,9 @@ async function buildSalesReport(ctx: ReportContext): Promise<ReportResult> {
     t.paymentStatus,
   ]);
 
-  const totalSubtotal = transactions.reduce((s, t) => s + t.subtotal, 0);
-  const totalVat = transactions.reduce((s, t) => s + t.taxAmount, 0);
-  const totalAmount = transactions.reduce((s, t) => s + t.totalAmount, 0);
+  const totalSubtotal = transactions.reduce((acc, t) => acc.plus(toDec(t.subtotal)), toDec(0)).toNumber();
+  const totalVat = transactions.reduce((acc, t) => acc.plus(toDec(t.taxAmount)), toDec(0)).toNumber();
+  const totalAmount = transactions.reduce((acc, t) => acc.plus(toDec(t.totalAmount)), toDec(0)).toNumber();
 
   return {
     title: 'Sales Report',
@@ -146,11 +150,16 @@ async function buildInventoryReport(ctx: ReportContext): Promise<ReportResult> {
     String(p.reorderLevel),
     formatKES(p.costPrice),
     formatKES(p.pricePerUnit),
-    formatKES(p.costPrice * p.quantityInStock),
+    formatKES(toDec(p.quantityInStock).mul(toDec(p.costPrice)).toNumber()),
   ]);
 
-  const totalStockValue = products.reduce((s, p) => s + p.costPrice * p.quantityInStock, 0);
-  const lowStock = products.filter((p) => p.quantityInStock <= p.reorderLevel).length;
+  const totalStockValue = products.reduce(
+    (acc, p) => acc.plus(toDec(p.quantityInStock).mul(toDec(p.costPrice))),
+    toDec(0),
+  ).toNumber();
+  // Task 12-b: reorder-level comparison in Decimal — Decimals coerce to STRINGS
+  // under `<=` (lexicographic: "10" <= "5" is true!), so use Decimal.lte.
+  const lowStock = products.filter((p) => toDec(p.quantityInStock).lte(toDec(p.reorderLevel))).length;
 
   return {
     title: 'Inventory Report',
@@ -177,14 +186,16 @@ async function buildDebtReport(ctx: ReportContext): Promise<ReportResult> {
   const rows = debts.map((d) => [
     d.customer?.name || '—',
     d.customer?.phone || '—',
-    formatKES(d.originalAmount),
+    // Task 12-b fix: DebtLedger has no `originalAmount` column — the original
+    // debt is `amountOwed` (was rendering undefined → "KES 0.00").
+    formatKES(d.amountOwed),
     formatKES(d.amountPaid),
     formatKES(d.balance),
     formatDate(d.dueDate),
     d.status,
   ]);
 
-  const totalOutstanding = debts.reduce((s, d) => s + d.balance, 0);
+  const totalOutstanding = debts.reduce((acc, d) => acc.plus(toDec(d.balance)), toDec(0)).toNumber();
   const overdue = debts.filter((d) => d.status === 'OVERDUE').length;
 
   return {
@@ -203,7 +214,12 @@ async function buildDebtReport(ctx: ReportContext): Promise<ReportResult> {
 async function buildRentalsReport(ctx: ReportContext): Promise<ReportResult> {
   const rentals = await db.equipmentRental.findMany({
     where: { storeId: ctx.storeId },
-    include: { customer: { select: { name: true, phone: true } } },
+    include: {
+      customer: { select: { name: true, phone: true } },
+      // Task 12-b fix: EquipmentRental has no `equipmentName` column — the item
+      // is identified through its product relation.
+      product: { select: { name: true } },
+    },
     orderBy: { createdAt: 'desc' },
     take: 500,
   });
@@ -212,7 +228,7 @@ async function buildRentalsReport(ctx: ReportContext): Promise<ReportResult> {
   const rows = rentals.map((r) => [
     r.customer?.name || '—',
     r.customer?.phone || '—',
-    r.equipmentName,
+    r.product?.name || '—',
     formatDate(r.rentalStartDate),
     formatDate(r.expectedReturnDate),
     formatKES(r.ratePerDay),
@@ -221,8 +237,8 @@ async function buildRentalsReport(ctx: ReportContext): Promise<ReportResult> {
     r.status,
   ]);
 
-  const totalCharge = rentals.reduce((s, r) => s + r.totalRentalCharge, 0);
-  const totalDeposits = rentals.reduce((s, r) => s + r.securityDeposit, 0);
+  const totalCharge = rentals.reduce((acc, r) => acc.plus(toDec(r.totalRentalCharge)), toDec(0)).toNumber();
+  const totalDeposits = rentals.reduce((acc, r) => acc.plus(toDec(r.securityDeposit)), toDec(0)).toNumber();
 
   return {
     title: 'Equipment Rentals Report',

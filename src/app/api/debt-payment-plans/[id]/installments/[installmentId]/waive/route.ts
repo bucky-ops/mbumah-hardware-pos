@@ -18,6 +18,21 @@ import {
   recalculatePlanTotals,
   getPlanStatus,
 } from '@/lib/debt-plan-utils';
+// Task 12-c: canonical financial math (HALF_UP 2dp). Prisma Decimal
+// `valueOf()` returns a STRING — `totalAmount − waivedAmount` used to coerce
+// through float, and the waive writes were read-modify-write (double-waive
+// race). Money math below is Decimal; mutations are conditional claims.
+import { toDec, round2 } from '@/lib/utils/financialMath';
+
+// Typed in-transaction conflict for the optimistic claims (count 0).
+// Caught in the handler → client-facing 400 (same pattern as
+// CreditLimitExceededError in src/app/api/transactions/route.ts).
+class InstallmentClaimConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InstallmentClaimConflictError';
+  }
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -97,22 +112,40 @@ async function waiveInstallmentHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  const waivedAmount = toNumber(installment.amountDue);
+  // Task 12-c: Decimal amount (was toNumber float); HALF_UP 2dp emit.
+  const waivedAmountDec = toDec(installment.amountDue);
+  const waivedAmount = round2(waivedAmountDec);
 
   const result = await db.$transaction(async (tx) => {
-    // 1. Mark the installment WAIVED.
-    const updatedInstallment = await tx.debtPlanInstallment.update({
-      where: { id: installmentId },
+    // 1. Mark the installment WAIVED — ATOMIC conditional claim (was an
+    //    unconditional update after an outside-tx status read; two concurrent
+    //    waives both passed and both wrote).
+    const claimedInstallment = await tx.debtPlanInstallment.updateMany({
+      where: {
+        id: installmentId,
+        status: { in: ['SCHEDULED', 'PARTIAL', 'OVERDUE', 'MISSED'] },
+      },
       data: {
         status: 'WAIVED',
         waiverReason,
       },
     });
+    if (claimedInstallment.count === 0) {
+      throw new InstallmentClaimConflictError(
+        'Waiver conflict: the installment is already paid, waived, or concurrently claimed. Refresh and retry.'
+      );
+    }
+    // Re-read INSIDE the tx for the authoritative claimed row.
+    const updatedInstallment = await tx.debtPlanInstallment.findUniqueOrThrow({
+      where: { id: installmentId },
+    });
 
     // 2. Reduce the plan's totalAmount by the waived installment's amountDue
     //    so that `balance = totalAmount - amountPaid` stays consistent
     //    (a waived installment is no longer owed).
-    const newTotalAmount = toNumber(plan.totalAmount) - waivedAmount;
+    //    Task 12-c: exact Decimal subtraction (was float) and the write uses
+    //    an ATOMIC decrement instead of an absolute overwrite.
+    const newTotalAmountDec = toDec(plan.totalAmount).minus(waivedAmountDec);
 
     // 3. Recompute plan totals from installments (with the waived one).
     const refreshedInstallments = plan.installments.map((i) =>
@@ -121,23 +154,25 @@ async function waiveInstallmentHandler(...args: unknown[]): Promise<Response> {
         : i,
     );
     const totals = recalculatePlanTotals(
-      { ...plan, totalAmount: newTotalAmount },
+      { ...plan, totalAmount: newTotalAmountDec },
       refreshedInstallments,
     );
 
     let newPlanStatus = getPlanStatus({
       ...plan,
       ...totals,
-      totalAmount: newTotalAmount,
+      totalAmount: newTotalAmountDec,
     });
-    if (totals.balance <= 0.001) {
+    if (toDec(totals.balance).lte('0.001')) {
       newPlanStatus = 'COMPLETED';
     }
 
     const updatedPlan = await tx.debtPaymentPlan.update({
       where: { id },
       data: {
-        totalAmount: newTotalAmount,
+        // Atomic decrement — the read-then-write absolute totalAmount allowed
+        // a concurrent waive of a different installment to be overwritten.
+        totalAmount: { decrement: waivedAmount },
         amountPaid: totals.amountPaid,
         balance: totals.balance,
         installmentsPaid: totals.installmentsPaid,
@@ -150,19 +185,35 @@ async function waiveInstallmentHandler(...args: unknown[]): Promise<Response> {
     // 4. Mirror the waiver onto the underlying DebtLedger: reduce amountOwed
     //    so the customer's overall debt balance drops accordingly. This is
     //    effectively a write-off of one installment's worth of debt.
+    //    Task 12-c: ATOMIC conditional decrements (was read-modify-write of
+    //    absolute values with a float Math.max(0, …) clamp).
     if (plan.debtLedger) {
       const debt = plan.debtLedger;
-      const newAmountOwed = toNumber(debt.amountOwed) - waivedAmount;
-      const newBalance = Math.max(0, newAmountOwed - toNumber(debt.amountPaid));
+      const claimedDebt = await tx.debtLedger.updateMany({
+        where: {
+          id: debt.id,
+          balance: { gte: waivedAmount },
+        },
+        data: {
+          amountOwed: { decrement: waivedAmount },
+          balance: { decrement: waivedAmount },
+        },
+      });
+      if (claimedDebt.count === 0) {
+        throw new InstallmentClaimConflictError(
+          'Debt ledger waiver conflict: balance changed or already settled. Refresh and retry.'
+        );
+      }
+
+      // Re-read INSIDE the tx for the authoritative post-claim state.
+      const freshDebt = await tx.debtLedger.findUniqueOrThrow({ where: { id: debt.id } });
       let newDebtStatus = debt.status;
-      if (newBalance <= 0.001) {
+      if (toDec(freshDebt.balance).lte('0.001')) {
         newDebtStatus = 'SETTLED';
       }
       await tx.debtLedger.update({
         where: { id: debt.id },
         data: {
-          amountOwed: newAmountOwed,
-          balance: newBalance,
           status: newDebtStatus,
         },
       });
@@ -174,7 +225,21 @@ async function waiveInstallmentHandler(...args: unknown[]): Promise<Response> {
     }
 
     return { updatedInstallment, updatedPlan };
+  }).catch((err: unknown) => {
+    // Map the typed in-transaction claim conflicts to client-facing 400s.
+    if (err instanceof InstallmentClaimConflictError) {
+      return Response.json(
+        { success: false, error: err.message },
+        { status: 400 },
+      );
+    }
+    throw err;
   });
+
+  // Early-return shape for the conflict path (typed narrow).
+  if (result instanceof Response) {
+    return result;
+  }
 
   await systemLog({
     action: 'DEBT_PLAN_INSTALLMENT_WAIVED',

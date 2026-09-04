@@ -29,7 +29,7 @@ import {
   type KraSubmissionItem,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
-import { formatDateTime } from '@/lib/api';
+import { formatDateTime, formatKES } from '@/lib/api';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -97,16 +97,6 @@ const ENVIRONMENT_CONFIG: Record<string, { label: string; color: string }> = {
 const SENIOR_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatKESLocal(value: number | null | undefined): string {
-  if (value == null) return '—';
-  return new Intl.NumberFormat('en-KE', {
-    style: 'currency',
-    currency: 'KES',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
-}
 
 function parseTaxBreakdown(json: string | null): {
   items: Array<{ name: string; quantity: number; unitPrice: number; vatRate: number; vatAmount: number; total: number }>;
@@ -627,7 +617,7 @@ function InvoicesSection({ storeId }: { storeId: string }) {
                             {inv.transaction?.customer?.name || 'Walk-in Customer'}
                           </TableCell>
                           <TableCell className="text-right font-mono text-sm">
-                            {inv.transaction ? formatKESLocal(inv.transaction.totalAmount) : '—'}
+                            {inv.transaction ? formatKES(inv.transaction.totalAmount) : '—'}
                           </TableCell>
                           <TableCell>
                             <Badge className={statusCfg.color}>
@@ -810,7 +800,7 @@ function InvoiceDetailDialog({
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Total Amount</p>
-                <p className="font-mono font-medium">{formatKESLocal(invoice.transaction.totalAmount)}</p>
+                <p className="font-mono font-medium">{formatKES(invoice.transaction.totalAmount)}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Payment Method</p>
@@ -848,25 +838,25 @@ function InvoiceDetailDialog({
                   <div key={i} className="flex items-center justify-between text-xs">
                     <span className="flex-1 truncate">{item.name} × {item.quantity}</span>
                     <span className="text-muted-foreground mx-2">VAT {item.vatRate}%</span>
-                    <span className="font-mono">{formatKESLocal(item.vatAmount)}</span>
+                    <span className="font-mono">{formatKES(item.vatAmount)}</span>
                   </div>
                 ))}
                 <Separator className="my-2" />
                 <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Subtotal</span>
-                  <span className="font-mono">{formatKESLocal(breakdown.subtotal)}</span>
+                  <span className="font-mono">{formatKES(breakdown.subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Discount</span>
-                  <span className="font-mono text-rose-600">-{formatKESLocal(breakdown.totalDiscount)}</span>
+                  <span className="font-mono text-rose-600">-{formatKES(breakdown.totalDiscount)}</span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Total VAT (16%)</span>
-                  <span className="font-mono">{formatKESLocal(breakdown.totalVat)}</span>
+                  <span className="font-mono">{formatKES(breakdown.totalVat)}</span>
                 </div>
                 <div className="flex justify-between text-sm font-bold pt-1 border-t">
                   <span>Total</span>
-                  <span className="font-mono">{formatKESLocal(breakdown.totalAmount)}</span>
+                  <span className="font-mono">{formatKES(breakdown.totalAmount)}</span>
                 </div>
               </div>
             </div>

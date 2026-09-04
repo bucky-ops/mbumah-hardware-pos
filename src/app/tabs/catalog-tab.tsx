@@ -16,6 +16,7 @@ import {
   type ProductListItem, type CategoryItem, type CreateProductPayload,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
+import { formatQtyWithUnit, unitLabel } from '@/lib/utils/financialMath';
 import { ProductImageUpload } from '@/components/product-image-upload';
 import { Button } from '@/components/ui/button';
 import {
@@ -571,7 +572,7 @@ export default function CatalogTab() {
           <p className="text-[11px] text-muted-foreground mb-2">SKU: {product.sku}</p>
           <div className="flex items-baseline gap-2 flex-wrap">
             <span className="text-lg font-bold text-primary">{formatKES(product.pricePerUnit)}</span>
-            <span className="text-[11px] text-muted-foreground">per {product.unitType.toLowerCase()}</span>
+            <span className="text-[11px] text-muted-foreground">per {unitLabel(product.unitType)}</span>
           </div>
           {product.quantityInStock > 0 ? (
             <p className="text-[11px] text-muted-foreground mt-1">
@@ -585,7 +586,7 @@ export default function CatalogTab() {
             <div className="mt-2 rounded-md border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 px-2 py-1 flex items-center gap-1.5">
               <AlertTriangle className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
               <span className="text-[10px] text-amber-700 dark:text-amber-400">
-                Restock hint: reorder below {product.reorderLevel} {product.unitType.toLowerCase()}s
+                Restock hint: reorder below {formatQtyWithUnit(product.reorderLevel, product.unitType)}
               </span>
             </div>
           )}
@@ -688,7 +689,7 @@ export default function CatalogTab() {
           <p className="text-[11px] text-muted-foreground">SKU: {product.sku}</p>
           <div className="flex items-baseline gap-2 mt-1 flex-wrap">
             <span className="font-bold text-primary">{formatKES(product.pricePerUnit)}</span>
-            <span className="text-[11px] text-muted-foreground">per {product.unitType.toLowerCase()}</span>
+            <span className="text-[11px] text-muted-foreground">per {unitLabel(product.unitType)}</span>
             <span className="text-[11px] text-muted-foreground">• {product.quantityInStock} in stock</span>
           </div>
         </div>

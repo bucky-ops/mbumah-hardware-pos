@@ -6,7 +6,11 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateJournalEntryNumber, calculateAgingBucket } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, DebtStatus } from '@/lib/types';
-import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
+import { withSessionAuth, FINANCIAL_ROLES, getSessionFromRequest } from '@/lib/auth';
+// Task 12-c: canonical financial math. Prisma Decimal `valueOf()` returns a
+// STRING — the summary reduce `sum + d.balance` used to STRING-CONCATENATE
+// (0 + Decimal("123.45") → "0123.45").
+import { toDec, round2 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,14 +80,31 @@ async function getDebtHandler(...args: unknown[]): Promise<Response> {
     select: { balance: true, agingBucket: true },
   });
 
+  // Task 12-c: Decimal accumulators (was float `sum + d.balance` string-concat
+  // over Prisma Decimals); HALF_UP 2dp at emit.
+  const sumByBucket: Record<string, ReturnType<typeof toDec>> = {
+    CURRENT: toDec(0),
+    DAYS_30: toDec(0),
+    DAYS_60: toDec(0),
+    DAYS_90_PLUS: toDec(0),
+  };
+  let totalOutstandingDec = toDec(0);
+  for (const d of allDebts) {
+    const bal = toDec(d.balance);
+    totalOutstandingDec = totalOutstandingDec.plus(bal);
+    if (sumByBucket[d.agingBucket]) {
+      sumByBucket[d.agingBucket] = sumByBucket[d.agingBucket].plus(bal);
+    }
+  }
+
   const summary = {
-    totalOutstanding: allDebts.reduce((sum, d) => sum + d.balance, 0),
+    totalOutstanding: round2(totalOutstandingDec),
     countOutstanding: allDebts.length,
     byAgingBucket: {
-      CURRENT: allDebts.filter((d) => d.agingBucket === 'CURRENT').reduce((sum, d) => sum + d.balance, 0),
-      DAYS_30: allDebts.filter((d) => d.agingBucket === 'DAYS_30').reduce((sum, d) => sum + d.balance, 0),
-      DAYS_60: allDebts.filter((d) => d.agingBucket === 'DAYS_60').reduce((sum, d) => sum + d.balance, 0),
-      DAYS_90_PLUS: allDebts.filter((d) => d.agingBucket === 'DAYS_90_PLUS').reduce((sum, d) => sum + d.balance, 0),
+      CURRENT: round2(sumByBucket.CURRENT),
+      DAYS_30: round2(sumByBucket.DAYS_30),
+      DAYS_60: round2(sumByBucket.DAYS_60),
+      DAYS_90_PLUS: round2(sumByBucket.DAYS_90_PLUS),
     },
   };
 
@@ -175,7 +196,9 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  if (paymentAmount > debt.balance) {
+  // Task 12-c: exact Decimal comparison (was `paymentAmount > debt.balance`,
+  // a float-vs-Prisma-Decimal comparison that coerced through valueOf()).
+  if (toDec(paymentAmount).gt(debt.balance)) {
     return Response.json(
       { success: false, error: `Payment amount (KES ${paymentAmount.toLocaleString()}) exceeds outstanding balance (KES ${debt.balance.toLocaleString()}).` },
       { status: 400 }
@@ -333,7 +356,7 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
     await auditTrail.log({
       action: 'CREATE',
       resourceType: 'DebtPayment',
-      resourceId: String(result?.debtPayment?.id || debtLedgerId),
+      resourceId: String(result?.id || debtLedgerId),
       actorId: receivedBy || 'system',
       storeId,
       // AUDIT FIX: referenced out-of-scope `newBalance` (tx-local variable)

@@ -908,11 +908,11 @@ export default function RentalsTab() {
       rental.actualReturnDate ? `Actual Return: ${formatDate(rental.actualReturnDate)}` : null,
       `Duration: ${daysRented} day(s)`,
       ``,
-      `Rate/Day: KES ${rental.ratePerDay.toLocaleString()}`,
-      `Security Deposit: KES ${rental.securityDeposit.toLocaleString()}`,
-      `Total Rental Charge: KES ${rental.totalRentalCharge.toLocaleString()}`,
-      rental.lateFeeAccumulated > 0 ? `Late Fee: KES ${rental.lateFeeAccumulated.toLocaleString()}` : null,
-      rental.damageCharge > 0 ? `Damage Charge: KES ${rental.damageCharge.toLocaleString()}` : null,
+      `Rate/Day: ${formatKES(rental.ratePerDay)}`,
+      `Security Deposit: ${formatKES(rental.securityDeposit)}`,
+      `Total Rental Charge: ${formatKES(rental.totalRentalCharge)}`,
+      rental.lateFeeAccumulated > 0 ? `Late Fee: ${formatKES(rental.lateFeeAccumulated)}` : null,
+      rental.damageCharge > 0 ? `Damage Charge: ${formatKES(rental.damageCharge)}` : null,
       `Status: ${rental.status}`,
       ``,
       `Thank you for doing business with us`,
@@ -961,11 +961,11 @@ export default function RentalsTab() {
         <div class="row"><span>Duration:</span><span>${daysRented} day(s)</span></div>
         <div class="line"></div>
         <div class="bold">Charges</div>
-        <div class="row"><span>Rate/Day:</span><span>KES ${rental.ratePerDay.toLocaleString()}</span></div>
-        <div class="row"><span>Rental Charge:</span><span>KES ${rental.totalRentalCharge.toLocaleString()}</span></div>
-        ${rental.lateFeeAccumulated > 0 ? `<div class="row"><span>Late Fee:</span><span>KES ${rental.lateFeeAccumulated.toLocaleString()}</span></div>` : ''}
-        ${rental.damageCharge > 0 ? `<div class="row"><span>Damage Charge:</span><span>KES ${rental.damageCharge.toLocaleString()}</span></div>` : ''}
-        <div class="row"><span>Security Deposit:</span><span>KES ${rental.securityDeposit.toLocaleString()}</span></div>
+        <div class="row"><span>Rate/Day:</span><span>${formatKES(rental.ratePerDay)}</span></div>
+        <div class="row"><span>Rental Charge:</span><span>${formatKES(rental.totalRentalCharge)}</span></div>
+        ${rental.lateFeeAccumulated > 0 ? `<div class="row"><span>Late Fee:</span><span>${formatKES(rental.lateFeeAccumulated)}</span></div>` : ''}
+        ${rental.damageCharge > 0 ? `<div class="row"><span>Damage Charge:</span><span>${formatKES(rental.damageCharge)}</span></div>` : ''}
+        <div class="row"><span>Security Deposit:</span><span>${formatKES(rental.securityDeposit)}</span></div>
         <div class="line"></div>
         <div class="row bold"><span>Status:</span><span>${rental.status}</span></div>
         <div class="line"></div>

@@ -7,6 +7,10 @@ import { generateJournalEntryNumber } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, UserRole } from '@/lib/types';
 import { withSessionAuth, getSessionFromRequest } from '@/lib/auth';
+// Task 12-c: canonical financial math. Prisma Decimal `valueOf()` returns a
+// STRING — the GET summary reduce `sum + e.amount` STRING-CONCATENATED and
+// the POST balance mixed `Number(_sum) + amount` float dust into the ledger.
+import { toDec, round2 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -86,21 +90,29 @@ async function getCashDrawerHandler(...args: unknown[]): Promise<Response> {
     where: { storeId },
     _sum: { amount: true },
   });
-  const currentDrawerBalance = Number(balanceAgg._sum.amount ?? 0);
+  const currentDrawerBalance = round2(toDec(balanceAgg._sum.amount ?? 0));
 
   const summaryData = await db.cashDrawerLog.findMany({
     where,
     select: { action: true, amount: true },
   });
 
+  // Task 12-c: Decimal accumulators (was `sum + e.amount` string-concat over
+  // Prisma Decimals); HALF_UP 2dp at emit.
+  let totalCashInDec = toDec(0);
+  let totalCashOutDec = toDec(0);
+  for (const e of summaryData) {
+    if (['CASH_IN', 'OPEN', 'SALE'].includes(e.action)) {
+      totalCashInDec = totalCashInDec.plus(toDec(e.amount));
+    } else if (['CASH_OUT', 'REFUND'].includes(e.action)) {
+      totalCashOutDec = totalCashOutDec.plus(toDec(e.amount));
+    }
+  }
+
   const summary = {
     currentBalance: currentDrawerBalance,
-    totalCashIn: summaryData
-      .filter((e) => ['CASH_IN', 'OPEN', 'SALE'].includes(e.action))
-      .reduce((sum, e) => sum + e.amount, 0),
-    totalCashOut: summaryData
-      .filter((e) => ['CASH_OUT', 'REFUND'].includes(e.action))
-      .reduce((sum, e) => sum + e.amount, 0),
+    totalCashIn: round2(totalCashInDec),
+    totalCashOut: round2(totalCashOutDec),
   };
 
   return Response.json({
@@ -143,6 +155,8 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
       { status: 400 }
     );
   }
+  // Task 12-c: money rounded HALF_UP to 2dp before it touches a Decimal column.
+  const amountNum = round2(parsedAmount);
 
     const user = await db.user.findUnique({ where: { id: userId } });
   if (!user || !user.isActive) {
@@ -160,7 +174,9 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
     where: { storeId },
     _sum: { amount: true },
   });
-  const currentBalance = Number(balanceAgg._sum.amount ?? 0);
+  // Task 12-c: Decimal running balance (was `Number(_sum) + amount` float).
+  const currentBalanceDec = toDec(balanceAgg._sum.amount ?? 0);
+  const currentBalance = round2(currentBalanceDec);
 
   // AUDIT FIX: destructive ops (CLOSE/CASH_OUT remove cash from the drawer)
   // are manager-or-above per PERMISSION_MATRIX. OPEN/CASH_IN remain available
@@ -176,30 +192,38 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-    let newBalance = currentBalance;
-  switch (eventType) {
+    // Task 12-c: Decimal balance math (HALF_UP 2dp).
+    // NOTE: CashDrawerLog is an APPEND-ONLY ledger — there is no mutable
+    // balance row, so Prisma's atomic increment/decrement does not apply here
+    // (the `balance` column is an insert-time snapshot of the running sum,
+    // which the SUM-derived derivation below keeps concurrency-safe — see the
+    // R6 remediation notes). The arithmetic itself is exact Decimal.
+    let newBalanceDec = currentBalanceDec;
+    switch (eventType) {
     case 'OPEN':
     case 'CASH_IN':
-      newBalance = currentBalance + parsedAmount;
+      newBalanceDec = currentBalanceDec.plus(amountNum);
       break;
     case 'CLOSE':
-    case 'CASH_OUT':
-      newBalance = currentBalance - parsedAmount;
-      if (newBalance < 0) {
+    case 'CASH_OUT': {
+      newBalanceDec = currentBalanceDec.minus(amountNum);
+      if (newBalanceDec.isNegative()) {
         return Response.json(
-          { success: false, error: `Insufficient cash drawer balance. Current: KES ${currentBalance.toLocaleString()}, Requested: KES ${parsedAmount.toLocaleString()}` },
+          { success: false, error: `Insufficient cash drawer balance. Current: KES ${currentBalance.toLocaleString()}, Requested: KES ${amountNum.toLocaleString()}` },
           { status: 400 }
         );
       }
       break;
-  }
+    }
+    }
+    const newBalance = round2(newBalanceDec);
 
     const logEntry = await db.cashDrawerLog.create({
     data: {
       storeId,
       userId,
       action: eventType,
-      amount: parsedAmount,
+      amount: amountNum,
       balance: newBalance,
       notes: notes || null,
     },
@@ -209,7 +233,7 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
     },
   });
 
-    if ((eventType === 'CASH_IN' || eventType === 'CASH_OUT') && parsedAmount > 0) {
+    if ((eventType === 'CASH_IN' || eventType === 'CASH_OUT') && amountNum > 0) {
     try {
       const orgId = user.organizationId;
       const accounts = await getAccountIds(orgId, [
@@ -227,8 +251,8 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
             description: `Cash drawer - CASH IN: ${notes || 'Cash added to drawer'}`,
             referenceType: 'ADJUSTMENT',
             referenceId: logEntry.id,
-            totalDebit: parsedAmount,
-            totalCredit: parsedAmount,
+            totalDebit: amountNum,
+            totalCredit: amountNum,
             isPosted: true,
             postedAt: new Date(),
             createdBy: userId,
@@ -236,14 +260,14 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
               create: [
                 {
                   accountId: accounts.CASH_ON_HAND,
-                  debit: parsedAmount,
+                  debit: amountNum,
                   credit: 0,
                   description: `Cash added to drawer`,
                 },
                 {
                   accountId: accounts.OWNER_EQUITY,
                   debit: 0,
-                  credit: parsedAmount,
+                  credit: amountNum,
                   description: `Owner equity - cash injection`,
                 },
               ],
@@ -258,8 +282,8 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
             description: `Cash drawer - CASH OUT: ${notes || 'Cash removed from drawer'}`,
             referenceType: 'ADJUSTMENT',
             referenceId: logEntry.id,
-            totalDebit: parsedAmount,
-            totalCredit: parsedAmount,
+            totalDebit: amountNum,
+            totalCredit: amountNum,
             isPosted: true,
             postedAt: new Date(),
             createdBy: userId,
@@ -267,14 +291,14 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
               create: [
                 {
                   accountId: accounts.OWNER_EQUITY,
-                  debit: parsedAmount,
+                  debit: amountNum,
                   credit: 0,
                   description: `Owner draw - cash removed from drawer`,
                 },
                 {
                   accountId: accounts.CASH_ON_HAND,
                   debit: 0,
-                  credit: parsedAmount,
+                  credit: amountNum,
                   description: `Cash removed from drawer`,
                 },
               ],
@@ -292,13 +316,13 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
     action: 'CASH_DRAWER_EVENT',
     component: LogComponent.FINANCIAL,
     severity: LogSeverity.INFO,
-    message: `Cash drawer ${eventType}: KES ${parsedAmount.toLocaleString()} by ${user.name}. New balance: KES ${newBalance.toLocaleString()}`,
+    message: `Cash drawer ${eventType}: KES ${amountNum.toLocaleString()} by ${user.name}. New balance: KES ${newBalance.toLocaleString()}`,
     storeId,
     userId,
     metadata: {
       logId: logEntry.id,
       eventType,
-      amount: parsedAmount,
+      amount: amountNum,
       previousBalance: currentBalance,
       newBalance,
     },

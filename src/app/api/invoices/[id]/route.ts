@@ -5,6 +5,8 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { withSessionAuth } from '@/lib/auth';
+import Decimal from 'decimal.js';
+import { toDec, max0 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,9 +86,17 @@ async function updateInvoiceHandler(...args: unknown[]): Promise<Response> {
   }
 
   if (body.discountAmount !== undefined) {
-    updateData.discountAmount = body.discountAmount;
-    // Recalculate total
-    updateData.totalAmount = existing.subtotal - body.discountAmount + existing.taxAmount;
+    // FINANCIAL MATH AUDIT: Decimal-safe, validated discount — clamped to
+    // [0, subtotal] so a negative discount can never INCREASE the total
+    // and an oversized one can never make it negative. Recomputed from
+    // the stored (unmodified) subtotal/taxAmount.
+    const requested = max0(toDec(body.discountAmount as number)).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+    const capped = Decimal.min(requested, toDec(existing.subtotal));
+    updateData.discountAmount = capped.toNumber();
+    // Recalculate total: subtotal − discount + tax (VAT-exclusive B2B doc).
+    updateData.totalAmount = max0(
+      toDec(existing.subtotal).minus(capped).plus(toDec(existing.taxAmount)),
+    ).toNumber();
   }
 
   if (Object.keys(updateData).length === 0) {

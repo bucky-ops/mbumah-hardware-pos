@@ -24,6 +24,9 @@
 import { db } from '@/lib/db';
 import { systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+// Task 12-b: Prisma Decimal valueOf() returns a STRING — `entry.totalOverdue +=
+// debt.balance` STRING-CONCATENATED. All money math runs through toDec().
+import { toDec } from '@/lib/utils/financialMath';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -187,10 +190,12 @@ export async function identifyOverdueCustomers(
       };
       byCustomer.set(debt.customerId, entry);
     }
-    entry.totalOverdue += debt.balance;
+    // Task 12-b: Decimal-safe accumulation (was `entry.totalOverdue +=
+    // debt.balance` — a `number += Decimal` STRING concatenation).
+    entry.totalOverdue = toDec(entry.totalOverdue).plus(toDec(debt.balance)).toNumber();
     entry.debts.push({
       debtLedgerId: debt.id,
-      balance: debt.balance,
+      balance: toDec(debt.balance).toNumber(),
       dueDate: debt.dueDate,
       agingBucket: bucket,
     });
@@ -322,7 +327,8 @@ export async function scheduleReminders(storeId: string): Promise<ReminderSchedu
     severity: LogSeverity.INFO,
     message: `Scheduled ${result.scheduled} debt reminder(s) for store ${storeId} (${result.skipped} skipped, ${result.errors} errors)`,
     storeId,
-    metadata: result,
+    // TS interfaces lack implicit index signatures — cast for the metadata sink.
+    metadata: result as unknown as Record<string, unknown>,
   });
 
   return result;

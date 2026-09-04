@@ -12,6 +12,11 @@
 // instead of crashing on a cold store with no transactions.
 
 import type { SalesTransaction } from '@prisma/client';
+// FINANCIAL MATH AUDIT (Task 12-b): Prisma Decimal valueOf() returns a STRING —
+// all bucket accumulation flows through toDec() and emits 2dp HALF_UP numbers
+// via round2() at the bucket boundary. Revenue basis is NET of VAT
+// (totalAmount − taxAmount) per the uniform revenue policy.
+import { toDec, round2 } from '@/lib/utils/financialMath';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,7 +25,10 @@ export type AnalyticsPeriod = 'today' | 'week' | 'month' | 'year';
 export interface TransactionSlice {
   id: string;
   createdAt: Date | string;
+  /** Tax-INCLUSIVE gross total (as stored). */
   totalAmount: number;
+  /** VAT component of totalAmount. Optional for legacy callers (defaults 0 → gross == net). */
+  taxAmount?: number;
   paymentMethod: string;
   paymentStatus: string;
   transactionType: string;
@@ -31,7 +39,7 @@ export interface AggregatedBucket {
   key: string;
   /** Human-readable label for the chart axis. */
   label: string;
-  /** Total revenue in the bucket (sum of totalAmount). */
+  /** Total NET (VAT-exclusive) revenue in the bucket (sum of totalAmount − taxAmount). */
   revenue: number;
   /** Number of completed/partial transactions in the bucket. */
   transactions: number;
@@ -64,6 +72,7 @@ export interface KPIResult {
 export interface HeatmapCell {
   day: number; // 0 = Sunday ... 6 = Saturday
   hour: number; // 0..23
+  /** NET (VAT-exclusive) revenue for the cell. */
   revenue: number;
   transactions: number;
 }
@@ -73,7 +82,7 @@ export interface HeatmapMatrix {
   cells: HeatmapCell[][];
   /** Maximum revenue value across all cells (used for color intensity scaling). */
   maxValue: number;
-  /** Total revenue across all cells. */
+  /** Total NET (VAT-exclusive) revenue across all cells. */
   totalRevenue: number;
 }
 
@@ -220,6 +229,9 @@ export function aggregateSalesByPeriod(
 
   // Seed all buckets with zeros so empty periods still render.
   const buckets = new Map<string, AggregatedBucket>();
+  // Task 12-b: revenue accumulated in Decimal per bucket (net of VAT),
+  // rounded to 2dp HALF_UP only at emit.
+  const revenueByBucket = new Map<string, ReturnType<typeof toDec>>();
   let cursor = new Date(window.start);
   for (let i = 0; i < window.bucketCount; i++) {
     const { key, label } = window.keyOf(cursor);
@@ -232,6 +244,7 @@ export function aggregateSalesByPeriod(
       itemsSold: 0,
       date: new Date(cursor),
     });
+    revenueByBucket.set(key, toDec(0));
     cursor = window.step(cursor);
     if (cursor.getTime() > window.end.getTime() + 1) break;
   }
@@ -243,13 +256,17 @@ export function aggregateSalesByPeriod(
     const { key } = window.keyOf(d);
     const b = buckets.get(key);
     if (!b) continue;
-    b.revenue += Number(tx.totalAmount) || 0;
+    // NET revenue = totalAmount − taxAmount (VAT belongs to KRA, not revenue).
+    const net = toDec(tx.totalAmount).minus(toDec(tx.taxAmount));
+    revenueByBucket.set(key, (revenueByBucket.get(key) || toDec(0)).plus(net));
     b.transactions += 1;
   }
 
-  // Compute AOV per bucket.
-  for (const b of buckets.values()) {
-    b.avgOrderValue = b.transactions > 0 ? b.revenue / b.transactions : 0;
+  // Emit rounded revenue + AOV per bucket (2dp HALF_UP).
+  for (const [key, b] of buckets) {
+    const rev = revenueByBucket.get(key) || toDec(0);
+    b.revenue = round2(rev);
+    b.avgOrderValue = b.transactions > 0 ? round2(rev.div(b.transactions)) : 0;
   }
 
   return Array.from(buckets.values());
@@ -363,28 +380,38 @@ export function buildHourlyHeatmap(transactions: TransactionSlice[]): HeatmapMat
     })),
   );
 
-  let maxValue = 0;
-  let totalRevenue = 0;
+  // Task 12-b: Decimal accumulators per cell + total; emit 2dp HALF_UP numbers.
+  const revenueByCell = new Map<string, ReturnType<typeof toDec>>();
+  let totalRevenueDec = toDec(0);
 
   if (Array.isArray(transactions)) {
     for (const tx of transactions) {
       const d = new Date(tx.createdAt);
       const day = d.getDay();
       const hour = d.getHours();
-      const amount = Number(tx.totalAmount) || 0;
-      cells[day][hour].revenue += amount;
+      // NET revenue = totalAmount − taxAmount (VAT-exclusive basis).
+      const net = toDec(tx.totalAmount).minus(toDec(tx.taxAmount));
+      const cellKey = `${day}:${hour}`;
+      revenueByCell.set(cellKey, (revenueByCell.get(cellKey) || toDec(0)).plus(net));
       cells[day][hour].transactions += 1;
-      totalRevenue += amount;
+      // Decimal is immutable — plus() returns a NEW instance, so reassign.
+      totalRevenueDec = totalRevenueDec.plus(net);
     }
   }
 
+  for (const [cellKey, dec] of revenueByCell) {
+    const [day, hour] = cellKey.split(':').map(Number);
+    cells[day][hour].revenue = round2(dec);
+  }
+
+  let maxValue = 0;
   for (let d = 0; d < 7; d++) {
     for (let h = 0; h < 24; h++) {
       if (cells[d][h].revenue > maxValue) maxValue = cells[d][h].revenue;
     }
   }
 
-  return { cells, maxValue, totalRevenue };
+  return { cells, maxValue, totalRevenue: round2(totalRevenueDec) };
 }
 
 /**
@@ -429,7 +456,10 @@ export function toTransactionSlice(tx: SalesTransaction | TransactionSlice): Tra
   return {
     id: tx.id,
     createdAt: tx.createdAt,
-    totalAmount: Number(tx.totalAmount) || 0,
+    totalAmount: toDec(tx.totalAmount).toNumber(),
+    // SalesTransaction.taxAmount is Decimal; TransactionSlice.taxAmount is
+    // optional number — both land in toDec's Numeric union.
+    taxAmount: toDec(tx.taxAmount).toNumber(),
     paymentMethod: tx.paymentMethod,
     paymentStatus: tx.paymentStatus,
     transactionType: tx.transactionType,
@@ -500,24 +530,6 @@ export function heatIntensity(value: number, max: number): 0 | 1 | 2 | 3 | 4 {
 // `formatChartData`) keep working unchanged, while new code can use the
 // spec-named versions for clarity.
 // ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Format a numeric amount as a Kenyan-shilling currency string.
- *
- *   formatKES(1234.5) → "KES 1,234.50"
- *   formatKES(0)      → "KES 0.00"
- *
- * Always emits the "KES " prefix and exactly two decimal places so chart
- * axes, tooltips, and KPI cards render identically everywhere.
- */
-export function formatKES(amount: number): string {
-  const n = Number.isFinite(amount) ? amount : 0;
-  const formatted = n.toLocaleString('en-KE', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  return `KES ${formatted}`;
-}
 
 /**
  * Calculate the percentage change between a current and previous value.

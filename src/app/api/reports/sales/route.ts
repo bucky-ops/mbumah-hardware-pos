@@ -4,6 +4,24 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
+// FINANCIAL MATH AUDIT (Task 12-b): Prisma Decimal valueOf() returns a STRING —
+// `number + decimal` concatenates. All accumulation runs through toDec();
+// plain numbers are emitted only at the JSON boundary. Profit basis:
+// netRevenue = Σ(totalAmount − taxAmount) (VAT-exclusive) − COGS.
+import { toDec, round2 } from '@/lib/utils/financialMath';
+
+/**
+ * NET (VAT-exclusive) revenue for a sale line. `lineTotal` is VAT-inclusive
+ * gross; extract the VAT component at the line's own rate:
+ *   net = lineTotal − lineTotal × taxRate / (100 + taxRate)
+ * Rate 0 (exempt) → the line total as-is. VAT is owed to KRA, not revenue.
+ */
+const lineNetRevenue = (lineTotal: Parameters<typeof toDec>[0], taxRate: Parameters<typeof toDec>[0]) => {
+  const gross = toDec(lineTotal);
+  const rate = toDec(taxRate);
+  if (rate.lte(0)) return gross;
+  return gross.minus(gross.mul(rate).div(rate.plus(100)));
+};
 
 export const dynamic = 'force-dynamic';
 
@@ -124,9 +142,12 @@ async function getSalesReportHandler(...args: unknown[]): Promise<Response> {
     _avg: { totalAmount: true },
   });
 
-  // Group data by specified dimension
+  // Group data by specified dimension — Decimal accumulators (Task 12-b:
+  // was `grouped[key].subtotal += tx.subtotal` which STRING-CONCATENATED).
+  // `total` remains the tax-inclusive tender per group (stored field basis);
+  // the VAT-exclusive net is derived in the summary profit block below.
   type GroupKey = string;
-  const grouped: Record<GroupKey, { count: number; subtotal: number; tax: number; discount: number; total: number }> = {};
+  const grouped: Record<GroupKey, { count: number; subtotal: ReturnType<typeof toDec>; tax: ReturnType<typeof toDec>; discount: ReturnType<typeof toDec>; total: ReturnType<typeof toDec> }> = {};
 
   for (const tx of transactions) {
     let key: string;
@@ -161,58 +182,77 @@ async function getSalesReportHandler(...args: unknown[]): Promise<Response> {
     }
 
     if (!grouped[key]) {
-      grouped[key] = { count: 0, subtotal: 0, tax: 0, discount: 0, total: 0 };
+      grouped[key] = { count: 0, subtotal: toDec(0), tax: toDec(0), discount: toDec(0), total: toDec(0) };
     }
     grouped[key].count += 1;
-    grouped[key].subtotal += tx.subtotal;
-    grouped[key].tax += tx.taxAmount;
-    grouped[key].discount += tx.discountAmount;
-    grouped[key].total += tx.totalAmount;
+    grouped[key].subtotal = grouped[key].subtotal.plus(toDec(tx.subtotal));
+    grouped[key].tax = grouped[key].tax.plus(toDec(tx.taxAmount));
+    grouped[key].discount = grouped[key].discount.plus(toDec(tx.discountAmount));
+    grouped[key].total = grouped[key].total.plus(toDec(tx.totalAmount));
   }
 
-    const productSales: Record<string, { productName: string; sku: string; quantity: number; revenue: number; cost: number; profit: number }> = {};
+    const productSales: Record<string, { productName: string; sku: string; quantity: ReturnType<typeof toDec>; revenue: ReturnType<typeof toDec>; cost: ReturnType<typeof toDec>; profit: ReturnType<typeof toDec> }> = {};
   for (const item of transactionItems) {
     const key = item.productId;
     if (!productSales[key]) {
       productSales[key] = {
         productName: item.productName,
         sku: item.product.sku,
-        quantity: 0,
-        revenue: 0,
-        cost: 0,
-        profit: 0,
+        quantity: toDec(0),
+        revenue: toDec(0),
+        cost: toDec(0),
+        profit: toDec(0),
       };
     }
-    productSales[key].quantity += item.quantity;
-    productSales[key].revenue += item.lineTotal;
-    productSales[key].cost += item.costPrice * item.quantity;
-    productSales[key].profit = productSales[key].revenue - productSales[key].cost;
+    // Task 12-b: Decimal-safe accumulation. Per-product revenue is the
+    // VAT-exclusive net of the line; cost = costPrice × quantity. Discounts are
+    // already embedded in lineTotal — never subtracted twice.
+    const net = lineNetRevenue(item.lineTotal, item.taxRate);
+    const cost = toDec(item.costPrice).mul(toDec(item.quantity));
+    productSales[key].quantity = productSales[key].quantity.plus(toDec(item.quantity));
+    productSales[key].revenue = productSales[key].revenue.plus(net);
+    productSales[key].cost = productSales[key].cost.plus(cost);
+    productSales[key].profit = productSales[key].revenue.minus(productSales[key].cost);
   }
 
-    const categorySales: Record<string, { categoryName: string; quantity: number; revenue: number }> = {};
+    const categorySales: Record<string, { categoryName: string; quantity: ReturnType<typeof toDec>; revenue: ReturnType<typeof toDec> }> = {};
   for (const item of transactionItems) {
     const catId = item.product.categoryId || 'uncategorized';
     const catName = item.product.category?.name || 'Uncategorized';
     if (!categorySales[catId]) {
-      categorySales[catId] = { categoryName: catName, quantity: 0, revenue: 0 };
+      categorySales[catId] = { categoryName: catName, quantity: toDec(0), revenue: toDec(0) };
     }
-    categorySales[catId].quantity += item.quantity;
-    categorySales[catId].revenue += item.lineTotal;
+    categorySales[catId].quantity = categorySales[catId].quantity.plus(toDec(item.quantity));
+    // VAT-exclusive net revenue per line (Task 12-b).
+    categorySales[catId].revenue = categorySales[catId].revenue.plus(lineNetRevenue(item.lineTotal, item.taxRate));
   }
 
-  const totalRevenue = summary._sum.totalAmount || 0;
-  const totalCost = Object.values(productSales).reduce((sum, p) => sum + p.cost, 0);
+  const totalRevenue = toDec(summary._sum.totalAmount).toNumber();
+  // Task 12-b: COGS = Σ(costPrice × quantity) accumulated in Decimal.
+  const totalCostDec = Object.values(productSales).reduce(
+    (acc, p) => acc.plus(p.cost),
+    toDec(0),
+  );
+  // Net (VAT-exclusive) revenue over the FULL summary scope:
+  // netRevenue = Σ(totalAmount) − Σ(taxAmount) — identical to Σ(tx.totalAmount −
+  // tx.taxAmount) and computed over every matching transaction, not just the page.
+  const netRevenue = toDec(summary._sum.totalAmount).minus(toDec(summary._sum.taxAmount));
 
-    const paymentMethodMap: Record<string, { method: string; count: number; amount: number }> = {};
+    const paymentMethodMap: Record<string, { method: string; count: number; amount: ReturnType<typeof toDec> }> = {};
   for (const tx of transactions) {
     const method = tx.paymentMethod || 'CASH';
     if (!paymentMethodMap[method]) {
-      paymentMethodMap[method] = { method, count: 0, amount: 0 };
+      paymentMethodMap[method] = { method, count: 0, amount: toDec(0) };
     }
     paymentMethodMap[method].count += 1;
-    paymentMethodMap[method].amount += tx.totalAmount;
+    // TENDER per method (tax-inclusive) by design — money collected, not revenue.
+    paymentMethodMap[method].amount = paymentMethodMap[method].amount.plus(toDec(tx.totalAmount));
   }
-  const byPaymentMethod = Object.values(paymentMethodMap);
+  const byPaymentMethod = Object.values(paymentMethodMap).map((row) => ({
+    method: row.method,
+    count: row.count,
+    amount: row.amount.toNumber(),
+  }));
 
   return Response.json({
     success: true,
@@ -220,28 +260,54 @@ async function getSalesReportHandler(...args: unknown[]): Promise<Response> {
             period: `${dateFrom} to ${dateTo}`,
       totalSales: totalRevenue,
       totalRevenue,
-      totalTax: summary._sum.taxAmount || 0,
-      totalDiscount: summary._sum.discountAmount || 0,
+      totalTax: toDec(summary._sum.taxAmount).toNumber(),
+      totalDiscount: toDec(summary._sum.discountAmount).toNumber(),
       transactionCount: summary._count,
-      avgTransactionValue: summary._avg.totalAmount || 0,
+      avgTransactionValue: toDec(summary._avg.totalAmount).toNumber(),
       byPaymentMethod,
 
             summary: {
         totalTransactions: summary._count,
         totalRevenue,
-        totalSubtotal: summary._sum.subtotal || 0,
-        totalTax: summary._sum.taxAmount || 0,
-        totalDiscount: summary._sum.discountAmount || 0,
-        averageTransactionValue: summary._avg.totalAmount || 0,
-        grossProfit: totalRevenue - totalCost,
-        profitMargin: totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue) * 100 : 0,
+        totalSubtotal: toDec(summary._sum.subtotal).toNumber(),
+        totalTax: toDec(summary._sum.taxAmount).toNumber(),
+        totalDiscount: toDec(summary._sum.discountAmount).toNumber(),
+        averageTransactionValue: toDec(summary._avg.totalAmount).toNumber(),
+        // Task 12-b PROFIT FORMULA FIX: profit was Σ tax-INCLUSIVE totalAmount −
+        // Σ(cost×qty), overstating profit by the whole VAT component. Now:
+        //   netRevenue = Σ(totalAmount − taxAmount)   (VAT owed to KRA, not revenue)
+        //   cogs       = Σ(costPrice × quantity)      (discounts already embedded
+        //               in totalAmount — never subtracted twice)
+        //   profit     = netRevenue − cogs; margin = profit / netRevenue × 100
+        //               (0 when netRevenue ≤ 0; negative profit stays visible).
+        grossProfit: round2(netRevenue.minus(totalCostDec)),
+        profitMargin: netRevenue.gt(0) ? Math.round(netRevenue.minus(totalCostDec).div(netRevenue).mul(100).toNumber() * 100) / 100 : 0,
       },
       grouped: Object.entries(grouped).map(([key, values]) => ({
         key,
-        ...values,
+        count: values.count,
+        subtotal: values.subtotal.toNumber(),
+        tax: values.tax.toNumber(),
+        discount: values.discount.toNumber(),
+        total: values.total.toNumber(),
       })),
-      byProduct: Object.values(productSales).sort((a, b) => b.revenue - a.revenue),
-      byCategory: Object.values(categorySales).sort((a, b) => b.revenue - a.revenue),
+      byProduct: Object.values(productSales)
+        .map((p) => ({
+          productName: p.productName,
+          sku: p.sku,
+          quantity: p.quantity.toNumber(),
+          revenue: round2(p.revenue),
+          cost: round2(p.cost),
+          profit: round2(p.profit),
+        }))
+        .sort((a, b) => b.revenue - a.revenue),
+      byCategory: Object.values(categorySales)
+        .map((c) => ({
+          categoryName: c.categoryName,
+          quantity: c.quantity.toNumber(),
+          revenue: round2(c.revenue),
+        }))
+        .sort((a, b) => b.revenue - a.revenue),
       transactions,
     },
     pagination: {

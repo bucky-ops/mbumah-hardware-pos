@@ -6,6 +6,11 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { requireStoreAccess, type AuthSession } from '@/lib/auth';
 import { withSequenceRetry } from '@/lib/sequence';
+// Task 12-c: canonical financial math — line totalCost = round2(qty × unitCost)
+// computed in Decimal (HALF_UP). The old `Math.round(qty × unitCost × 100)/100`
+// was a float hack that biased half-cent lines DOWN (x.xx5 → x.xx) and let
+// IEEE-754 dust into the Decimal header totals.
+import { toDec, round2 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -173,11 +178,17 @@ async function createPurchaseOrderHandler(
     });
     const poNumber = `PO-${dateStr}-${String(existingCount + 1).padStart(4, '0')}`;
 
-    let subTotal = 0;
+    // Task 12-c: POs are VAT-EXCLUSIVE B2B documents — VAT is added ON TOP of
+    // the net subtotal (unchanged policy). All sums now run in Decimal:
+    //   line totalCost = round2(qty × unitCost)          (HALF_UP, 2dp)
+    //   subTotal       = Σ(rounded line totalCost)       (exact)
+    //   taxAmount      = round2(subTotal × 16%)
+    //   totalAmount    = subTotal + taxAmount
+    let subTotalDec = toDec(0);
     const poItems = items.map((item: { productId: string; quantity: number; unitCost: number; notes?: string }) => {
       const product = productMap.get(item.productId);
-      const totalCost = Math.round(item.quantity * item.unitCost * 100) / 100;
-      subTotal += totalCost;
+      const totalCost = round2(toDec(item.quantity).mul(toDec(item.unitCost)));
+      subTotalDec = subTotalDec.plus(totalCost);
       return {
         productId: item.productId,
         productName: product?.name || 'Unknown Product',
@@ -187,10 +198,10 @@ async function createPurchaseOrderHandler(
         notes: item.notes || null,
       };
     });
-    subTotal = Math.round(subTotal * 100) / 100;
+    const subTotal = round2(subTotalDec);
 
-    const taxAmount = Math.round(subTotal * (KENYA_VAT_RATE / 100) * 100) / 100;
-    const totalAmount = Math.round((subTotal + taxAmount) * 100) / 100;
+    const taxAmount = round2(subTotalDec.mul(KENYA_VAT_RATE).div(100));
+    const totalAmount = round2(subTotalDec.plus(taxAmount));
 
     const created = await db.purchaseOrder.create({
       data: {
