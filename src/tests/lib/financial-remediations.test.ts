@@ -328,14 +328,16 @@ describe('transactional outbox (F8-4 remediation)', () => {
       delivered = payload;
     });
 
-    const created = await db.$transaction(async (tx) => {
-      await enqueueOutbox(tx, {
-        storeId: STORE_ID,
-        kind: 'AUDIT_TEST_EVENT',
-        payload: { hello: 'outbox' },
-      });
-      return tx.outboxEvent.findFirst({ where: { kind: 'AUDIT_TEST_EVENT' }, orderBy: { createdAt: 'desc' } });
-    });
+    const created = await withDbRetry(async () =>
+      db.$transaction(async (tx) => {
+        await enqueueOutbox(tx, {
+          storeId: STORE_ID,
+          kind: 'AUDIT_TEST_EVENT',
+          payload: { hello: 'outbox' },
+        });
+        return tx.outboxEvent.findFirst({ where: { kind: 'AUDIT_TEST_EVENT' }, orderBy: { createdAt: 'desc' } });
+      })
+    );
     if (created) createdOutboxIds.push(created.id);
     expect(created).toBeDefined();
     expect(created!.status).toBe('PENDING');
@@ -354,16 +356,18 @@ describe('transactional outbox (F8-4 remediation)', () => {
       throw new Error('downstream unavailable');
     });
 
-    const created = await db.$transaction(async (tx) => {
-      await enqueueOutbox(tx, {
-        storeId: STORE_ID,
-        kind: 'AUDIT_TEST_FAILING',
-        payload: {},
-        maxAttempts: 2,
-        availableAt: new Date(Date.now() - 1000), // immediately due
-      });
-      return tx.outboxEvent.findFirst({ where: { kind: 'AUDIT_TEST_FAILING' }, orderBy: { createdAt: 'desc' } });
-    });
+    const created = await withDbRetry(async () =>
+      db.$transaction(async (tx) => {
+        await enqueueOutbox(tx, {
+          storeId: STORE_ID,
+          kind: 'AUDIT_TEST_FAILING',
+          payload: {},
+          maxAttempts: 2,
+          availableAt: new Date(Date.now() - 1000), // immediately due
+        });
+        return tx.outboxEvent.findFirst({ where: { kind: 'AUDIT_TEST_FAILING' }, orderBy: { createdAt: 'desc' } });
+      })
+    );
     if (created) createdOutboxIds.push(created.id);
 
     // Attempt 1 → FAILED, backoff scheduled (availableAt in the future).
@@ -374,9 +378,11 @@ describe('transactional outbox (F8-4 remediation)', () => {
     expect(afterFirst?.availableAt.getTime()).toBeGreaterThan(Date.now());
 
     // Force due again → attempt 2 exhausts maxAttempts → DEAD.
-    await db.outboxEvent.update({
-      where: { id: created!.id },
-      data: { availableAt: new Date(Date.now() - 1000) },
+    await withDbRetry(async () => {
+      await db.outboxEvent.update({
+        where: { id: created!.id },
+        data: { availableAt: new Date(Date.now() - 1000) },
+      });
     });
     await pumpOutbox();
     const afterSecond = await db.outboxEvent.findUnique({ where: { id: created!.id } });
