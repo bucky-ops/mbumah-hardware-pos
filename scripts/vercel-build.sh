@@ -37,17 +37,16 @@ echo "📦 Checking Prisma client..."
 ls -la node_modules/.prisma/client/ 2>/dev/null || echo "⚠️  Prisma client not found in expected location"
 ls -la node_modules/@prisma/client/ 2>/dev/null || echo "⚠️  @prisma/client not found"
 
-# Run migrations if we have a real Neon/PostgreSQL database URL
+# Sync the database schema (migrate deploy → db push drift recovery →
+# baseline resolve). See scripts/sync-db-schema.mjs for the full incident
+# rationale (P2022 checkout 500: deployed code ahead of the DB schema).
+# Exits non-zero when the schema cannot be converged — failing the build is
+# the correct outcome vs. deploying code that 500s on every checkout.
 if [[ "$DATABASE_URL" == *"neon.tech"* ]]; then
-  echo "🗄️  Running prisma migrate deploy..."
-  npx prisma migrate deploy || {
-    echo "⚠️  Migration deploy failed, trying prisma db push..."
-    npx prisma db push --accept-data-loss || {
-      echo "⚠️  DB push also failed, continuing with build anyway..."
-    }
-  }
+  echo "🗄️  Syncing database schema..."
+  node scripts/sync-db-schema.mjs
 else
-  echo "ℹ️  Skipping migrations (not a Neon database URL)"
+  echo "ℹ️  Skipping schema sync (not a Neon database URL)"
 fi
 
 # Build the Next.js app

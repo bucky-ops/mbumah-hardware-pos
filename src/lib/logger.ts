@@ -39,6 +39,55 @@ export async function systemLog(entry: LogEntry): Promise<void> {
   }
 }
 
+/**
+ * Recursively sanitize an arbitrary value for diagnostic logging.
+ *
+ * Used by API routes that log the REQUEST PAYLOAD on unhandled errors (see
+ * the [TRANSACTION-API-ERROR] wrapper in /api/transactions). Goals:
+ *   • never leak credentials / payment PII into stdout or log aggregators
+ *     (M-Pesa phone numbers, gift-card codes, passwords, PINs, tokens);
+ *   • keep entries bounded (arrays capped, strings truncated) so a runaway
+ *     payload cannot flood the Vercel runtime log line.
+ */
+const LOG_REDACT_KEYS = new Set([
+  'password', 'passwordhash', 'pin', 'token', 'secret', 'authorization',
+  'mpesaphone', 'phonenumber', 'phone', 'giftcardcode', 'giftcardid',
+  'mpesareceiptnumber', 'reference', 'otp',
+]);
+const LOG_MAX_STRING = 300;
+const LOG_MAX_ARRAY = 10;
+const LOG_MAX_DEPTH = 4;
+
+export function sanitizeForLog(
+  value: unknown,
+  depth = 0,
+  key?: string,
+): unknown {
+  if (value === null || value === undefined) return value;
+
+  const redactKey =
+    typeof key === 'string' && LOG_REDACT_KEYS.has(key.toLowerCase().replace(/[_-]/g, ''));
+
+  if (typeof value === 'string') {
+    const capped = value.length > LOG_MAX_STRING ? `${value.slice(0, LOG_MAX_STRING)}…` : value;
+    return redactKey ? '[REDACTED]' : capped;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
+  if (typeof value !== 'object') return String(value).slice(0, LOG_MAX_STRING);
+
+  if (depth >= LOG_MAX_DEPTH) return '[depth-limit]';
+
+  if (Array.isArray(value)) {
+    return value.slice(0, LOG_MAX_ARRAY).map((v) => sanitizeForLog(v, depth + 1));
+  }
+
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    out[k] = sanitizeForLog(v, depth + 1, k);
+  }
+  return out;
+}
+
 // Map technical errors to user-friendly messages
 export function mapErrorToUserMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -139,6 +188,31 @@ export function withErrorBoundary(
         // logging failed (likely the same DB issue) — fall through to response
       }
 
+      // ── Structured stdout logging (always, every environment) ──────────
+      // Vercel captures console output in Runtime Logs, so this is the
+      // diagnostic breadcrumb for production 500s whose response body is
+      // sanitized. Previously a production 500 was completely opaque:
+      // "An unexpected error occurred" with NOTHING on stdout.
+      const request = args[0] as { method?: string; url?: string } | undefined;
+      console.error('[API-ERROR]', JSON.stringify({
+        component,
+        method: request?.method,
+        path: request?.url ? (() => { try { return new URL(request.url).pathname; } catch { return undefined; } })() : undefined,
+        errorName,
+        errorCode,
+        error: errorMessage,
+        stack: stackTrace,
+      }));
+
+      // Map Prisma schema-drift errors to an actionable user message.
+      // P2021 = table missing, P2022 = column missing — both mean the
+      // deployed database schema is behind the deployed code (see
+      // scripts/sync-db-schema.mjs which makes that state impossible).
+      const isSchemaDrift = errorCode === 'P2021' || errorCode === 'P2022';
+      const finalUserMessage = isSchemaDrift
+        ? 'A database schema error occurred. The system may need a redeploy. Please contact support if this persists.'
+        : userMessage;
+
       // Determine whether to expose full error details.
       //
       // - In development: always expose (NODE_ENV === 'development').
@@ -155,7 +229,7 @@ export function withErrorBoundary(
         return Response.json(
           {
             success: false,
-            error: userMessage,
+            error: finalUserMessage,
             detail: {
               name: errorName,
               message: errorMessage,
@@ -168,9 +242,22 @@ export function withErrorBoundary(
         );
       }
 
-      // Production default: sanitized response, no internals leaked.
+      // Production default: sanitized response — but now carrying the
+      // NON-SENSITIVE diagnostic pair (error class + Prisma code + component)
+      // so a 500 can be triaged straight from the browser Network tab
+      // (e.g. code P2022 ⇒ schema drift) without leaking stack traces,
+      // SQL fragments or schema details. message + stack remain server-only
+      // (stdout / Runtime Logs).
       return Response.json(
-        { success: false, error: userMessage },
+        {
+          success: false,
+          error: finalUserMessage,
+          detail: {
+            name: errorName,
+            code: errorCode,
+            component,
+          },
+        },
         { status: 500 }
       );
     }
