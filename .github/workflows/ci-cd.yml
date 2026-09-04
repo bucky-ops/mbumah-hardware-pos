@@ -285,11 +285,27 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Deploy to Vercel (Production)
+        id: deploy-prod
+        # The Vercel GitHub App integration is the PRIMARY production deploy path
+        # (push-to-deploy, verified green). This CLI deploy is a redundant path;
+        # when the VERCEL_TOKEN secret is absent or revoked we degrade to a warning
+        # instead of failing the whole run. Remove `continue-on-error` once a valid
+        # owning-account VERCEL_TOKEN is stored (see issue #9).
         # npx: node is preinstalled on runners (bun is not installed here)
+        continue-on-error: true
         run: npx -y vercel@latest --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Deploy token warning
+        if: steps.deploy-prod.outcome == 'failure'
+        run: |
+          echo "::warning::CLI production deploy skipped — VERCEL_TOKEN secret is absent or invalid. The Vercel GitHub App integration remains the primary deploy path (issue #9)."
+          echo "## ⚠️ CLI production deploy skipped" >> $GITHUB_STEP_SUMMARY
+          echo "The \`VERCEL_TOKEN\` secret is absent or invalid, so the redundant CLI deploy did not run." >> $GITHUB_STEP_SUMMARY
+          echo "**The Vercel GitHub App integration is the primary deploy path and deploys every push to main.**" >> $GITHUB_STEP_SUMMARY
+          echo "Track the token rotation unblock in issue #9." >> $GITHUB_STEP_SUMMARY
 
       - name: Health check after deploy
         run: |
@@ -324,6 +340,8 @@ jobs:
 
       - name: Deploy to Vercel (Preview)
         id: deploy-preview
+        # Same graceful degradation as the production deploy job (issue #9).
+        continue-on-error: true
         run: |
           npx -y vercel@latest --yes --token=${{ secrets.VERCEL_TOKEN }} > vercel-output.txt 2>&1
           PREVIEW_URL=$(tail -1 vercel-output.txt)
@@ -333,7 +351,13 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
+      - name: Preview token warning
+        if: steps.deploy-preview.outcome == 'failure'
+        run: |
+          echo "::warning::CLI preview deploy skipped — VERCEL_TOKEN secret is absent or invalid. Vercel provides native PR previews via the GitHub App (issue #9)."
+
       - name: Comment PR with preview URL
+        if: steps.deploy-preview.outcome == 'success' && steps.deploy-preview.outputs.url != ''
         uses: actions/github-script@v7
         with:
           script: |
