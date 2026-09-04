@@ -1,14 +1,33 @@
 'use client';
 
 /**
- * ReceiptPrintPreview — Professional receipt preview dialog for MBUMAH HARDWARE POS.
+ * MBUMAH HARDWARE POS — Receipt generation, preview, print & PDF export.
  *
- * Shows a formatted receipt after checkout with Print, Download PDF,
- * New Sale, and Share via WhatsApp actions. Includes print-specific CSS
- * so window.print() produces a clean, paper-ready receipt.
+ * INCIDENT FIXES (2026-09 — "blank receipts / dead Download button"):
+ *   1. BLANK PRINT — the old @media print rules hid every direct child of
+ *      [role="dialog"] except a `.receipt-printable-wrapper` class that did
+ *      not exist anywhere in the DOM, so the whole dialog (receipt included)
+ *      collapsed to display:none and the printer received a blank page.
+ *      Printing now goes through printReceiptElement() which clones the
+ *      receipt into #print-root; globals.css shows ONLY that container.
+ *   2. DEAD DOWNLOAD — the Download button was disabled / merely called
+ *      window.print(). It now runs generateReceiptPdf()
+ *      (html2canvas-pro → jsPDF, 80mm dynamic-height page) with full
+ *      try/catch + [RECEIPT_DOWNLOAD_ERROR] console logging + toast.
+ *   3. PLACEHOLDER QR — the dashed "QrCode icon" box is replaced by a real,
+ *      scannable QR code encoding the verification payload
+ *      `TX:<receiptNumber>|Date:<createdAt>|Total:<totalAmount>`.
+ *   4. html2canvas (classic) cannot parse Tailwind v4 oklch() colors —
+ *      html2canvas-pro (API-compatible fork) is used instead, otherwise the
+ *      PDF canvas comes out blank/broken.
+ *
+ * Component layout:
+ *   ReceiptDocument      — the printable, branded receipt (colored, QR).
+ *   ReceiptPrintPreview  — ResponsiveDialog wrapper with Print / Download
+ *                          PDF / Copy / WhatsApp / New Sale actions.
  */
 
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -24,11 +43,31 @@ import {
   CreditCard,
   Gift,
   PartyPopper,
+  CheckCircle2,
+  Copy,
+  Check,
+  Loader2,
+  Percent,
+  ScanLine,
 } from 'lucide-react';
 import Image from 'next/image';
-import { formatKES, formatDateTime, type TransactionItem, type SaleItemDetail } from '@/lib/api';
-import { STORE_LIST, COMPANY } from '@/lib/store-info';
+import { QRCodeCanvas } from 'qrcode.react';
+import { toast } from 'sonner';
+import {
+  formatKES,
+  formatDateTime,
+  type TransactionItem,
+  type SaleItemDetail,
+} from '@/lib/api';
+import { STORE_LIST, COMPANY, type StoreInfo } from '@/lib/store-info';
 import { safeMap } from '@/lib/app-config';
+import {
+  RECEIPT_CONTENT_ID,
+  generateReceiptPdf,
+  buildReceiptFileName,
+  printReceiptElement,
+} from '@/lib/receipt-pdf';
+import { buildReceiptQrPayload } from '@/lib/receipt-qr';
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
@@ -49,9 +88,53 @@ export interface ReceiptPrintPreviewProps {
   onNewSale: () => void;
 }
 
+export interface ReceiptDocumentProps {
+  transaction: TransactionItem;
+  storeId: string;
+  cashReceived?: number;
+  mpesaPhone?: string;
+  mpesaReference?: string;
+  giftCardCode?: string;
+  giftCardAmount?: number;
+  voucherCode?: string;
+  voucherAmount?: number;
+  className?: string;
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-/** Payment method → icon + label */
+/** Fractional quantities stay exact: 2.5 → "2.5", 3 → "3" (never 2.50). */
+function formatQuantity(qty: number): string {
+  if (!Number.isFinite(qty)) return String(qty);
+  return Number.isInteger(qty) ? String(qty) : String(Number(qty.toFixed(3)));
+}
+
+/** Unit suffix shown next to the quantity ("2.5 m", "0.5 kg"). */
+function formatQuantityWithUnit(item: SaleItemDetail): string {
+  const unit = (item.unitType || '').trim();
+  const bare = formatQuantity(item.quantity);
+  // "EA" (each) / "UNIT" add no information on paper — print the bare count.
+  if (!unit || /^(ea|unit|pcs?)$/i.test(unit)) return bare;
+  return `${bare} ${unit}`;
+}
+
+/** Payment status → colored pill ("PAID" emerald, "PARTIAL" amber, …). */
+function PaymentStatusBadge({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    PAID: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+    COMPLETED: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+    PARTIAL: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+    PENDING: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
+  };
+  return (
+    <Badge variant="secondary" className={`text-[10px] font-bold uppercase tracking-wide ${map[status] || 'bg-muted text-muted-foreground'}`}>
+      <CheckCircle2 className="h-3 w-3 mr-1" />
+      {status}
+    </Badge>
+  );
+}
+
+/** Payment method → icon + colored pill (M-PESA, CASH, DEBT, SPLIT, GIFT_CARD). */
 function PaymentMethodBadge({ method }: { method: string }) {
   const iconMap: Record<string, React.ReactNode> = {
     CASH: <Banknote className="h-3 w-3 mr-1" />,
@@ -72,10 +155,10 @@ function PaymentMethodBadge({ method }: { method: string }) {
   return (
     <Badge
       variant="secondary"
-      className={`text-[10px] font-semibold ${colorMap[method] || ''}`}
+      className={`text-[10px] font-semibold ${colorMap[method] || 'bg-muted text-muted-foreground'}`}
     >
       {iconMap[method] || null}
-      {method}
+      {method === 'GIFT_CARD' ? 'GIFT CARD' : method}
     </Badge>
   );
 }
@@ -92,8 +175,19 @@ function KenyanFlagBar() {
   );
 }
 
-/** Build a plain-text version of the receipt for WhatsApp sharing */
-function buildReceiptText(tx: TransactionItem, store: ReturnType<typeof STORE_LIST.find>): string {
+/** Build a plain-text version of the receipt for WhatsApp sharing / copying */
+function buildReceiptText(
+  tx: TransactionItem,
+  store: StoreInfo | undefined,
+  opts?: {
+    cashReceived?: number;
+    mpesaReference?: string;
+    giftCardCode?: string;
+    giftCardAmount?: number;
+    voucherCode?: string;
+    voucherAmount?: number;
+  },
+): string {
   const lines: string[] = [];
   const divider = '─'.repeat(32);
 
@@ -101,6 +195,7 @@ function buildReceiptText(tx: TransactionItem, store: ReturnType<typeof STORE_LI
   lines.push(`  ${store?.shortName || 'Juja Main Branch'}`);
   lines.push(`  ${store?.location || ''}`);
   lines.push(`  Tel: ${store?.phone || COMPANY.phone}`);
+  if (store?.email) lines.push(`  Email: ${store.email}`);
   lines.push(divider);
   lines.push(`Receipt #: ${tx.receiptNumber}`);
   lines.push(`Date: ${formatDateTime(tx.createdAt)}`);
@@ -109,14 +204,15 @@ function buildReceiptText(tx: TransactionItem, store: ReturnType<typeof STORE_LI
   lines.push(divider);
 
   if (tx.items?.length) {
-    lines.push('Item                Qty   Total');
+    lines.push('Item              Qty  Price   Total');
     for (const item of tx.items) {
-      const name = item.productName.length > 18
-        ? item.productName.slice(0, 18) + '…'
-        : item.productName.padEnd(19);
+      const name = item.productName.length > 16
+        ? item.productName.slice(0, 16) + '…'
+        : item.productName.padEnd(17);
       const qty = String(item.quantity).padStart(3);
-      const total = formatKES(item.lineTotal).padStart(10);
-      lines.push(`${name}${qty}${total}`);
+      const price = formatKES(item.pricePerUnit ?? 0).padStart(7);
+      const total = formatKES(item.lineTotal).padStart(8);
+      lines.push(`${name}${qty}${price}${total}`);
     }
   }
 
@@ -126,9 +222,30 @@ function buildReceiptText(tx: TransactionItem, store: ReturnType<typeof STORE_LI
   if (tx.discountAmount > 0) {
     lines.push(`Discount:       -${formatKES(tx.discountAmount).padStart(14)}`);
   }
+  if (opts?.voucherCode && opts.voucherAmount && opts.voucherAmount > 0) {
+    lines.push(`Voucher (${opts.voucherCode}): -${formatKES(opts.voucherAmount).padStart(10)}`);
+  }
   lines.push(`TOTAL:           ${formatKES(tx.totalAmount).padStart(14)}`);
   lines.push(divider);
   lines.push(`Payment: ${tx.paymentMethod}`);
+
+  if (tx.paymentMethod === 'CASH' && opts?.cashReceived && opts.cashReceived > 0) {
+    lines.push(`Cash Received:   ${formatKES(opts.cashReceived).padStart(14)}`);
+    const change = opts.cashReceived - tx.totalAmount;
+    if (change > 0) {
+      lines.push(`Change:          ${formatKES(change).padStart(14)}`);
+    }
+  }
+
+  if (tx.paymentMethod === 'MPESA' && opts?.mpesaReference) {
+    lines.push(`M-Pesa Ref: ${opts.mpesaReference}`);
+  }
+
+  if (opts?.giftCardCode && opts?.giftCardAmount && opts.giftCardAmount > 0) {
+    lines.push(`Gift Card: ${opts.giftCardCode}`);
+    lines.push(`Redeemed:  ${formatKES(opts.giftCardAmount)}`);
+  }
+
   lines.push('');
   lines.push('Thank you for shopping at');
   lines.push('MBUMAH HARDWARE!');
@@ -138,7 +255,341 @@ function buildReceiptText(tx: TransactionItem, store: ReturnType<typeof STORE_LI
   return lines.join('\n');
 }
 
-// ─── Component ──────────────────────────────────────────────────────────────
+// ─── ReceiptDocument — the branded, printable receipt ───────────────────────
+
+export function ReceiptDocument({
+  transaction,
+  storeId,
+  cashReceived = 0,
+  mpesaPhone = '',
+  mpesaReference = '',
+  giftCardCode = '',
+  giftCardAmount = 0,
+  voucherCode = '',
+  voucherAmount = 0,
+  className,
+}: ReceiptDocumentProps) {
+  const store = STORE_LIST.find((s) => s.id === storeId);
+
+  const change = transaction.paymentMethod === 'CASH' && cashReceived > 0
+    ? cashReceived - transaction.totalAmount
+    : 0;
+
+  // VAT breakdown (16% standard rate; remainder of the subtotal is
+  // zero-rated/exempt — mirrors the eTIMS invoice classification).
+  const VAT_RATE = 0.16;
+  const taxableAmount = transaction.taxAmount > 0
+    ? transaction.taxAmount / VAT_RATE
+    : 0;
+  const exemptAmount = Math.max(0, transaction.subtotal - taxableAmount);
+
+  const qrPayload = buildReceiptQrPayload(transaction);
+
+  return (
+    <div
+      id={RECEIPT_CONTENT_ID}
+      className={`receipt-printable overflow-hidden rounded-xl border border-border bg-white text-foreground shadow-sm ${className || ''}`}
+    >
+      {/* ─── Branded Header Banner ─── */}
+      <div className="bg-primary px-4 py-4 text-primary-foreground">
+        <div className="flex items-center justify-center gap-2.5">
+          <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/95 p-1">
+            <Image
+              src={COMPANY.logoPath}
+              alt="MBUMAH HARDWARE logo"
+              width={40}
+              height={40}
+              loading="eager"
+              className="object-contain"
+            />
+          </span>
+          <div className="text-center">
+            <h2 className="text-base font-extrabold leading-tight tracking-wide">
+              MBUMAH HARDWARE
+            </h2>
+            <p className="text-[9px] font-medium uppercase tracking-[0.18em] opacity-90">
+              & Building Materials
+            </p>
+          </div>
+        </div>
+        <div className="mt-2.5 space-y-0.5 text-center text-[10px] leading-snug opacity-95">
+          <p className="font-semibold">{store?.name || 'MBUMAH HARDWARE — Juja Main'}</p>
+          <p>{store?.location || COMPANY.tagline}</p>
+          <p>
+            Tel: {store?.phone || COMPANY.phone}
+            {store?.email ? ` · ${store.email}` : ''}
+          </p>
+          {store?.taxPin && (
+            <p className="font-mono tracking-wide">KRA PIN: {store.taxPin}</p>
+          )}
+        </div>
+      </div>
+
+      {/* ─── Status strip ─── */}
+      <div className="flex flex-wrap items-center justify-between gap-1.5 border-b bg-muted/40 px-3 py-2">
+        <PaymentStatusBadge status={transaction.paymentStatus || 'PAID'} />
+        <div className="flex items-center gap-1.5">
+          {transaction.isOffline && (
+            <Badge variant="secondary" className="bg-amber-100 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+              OFFLINE SYNC
+            </Badge>
+          )}
+          <PaymentMethodBadge method={transaction.paymentMethod} />
+        </div>
+      </div>
+
+      {/* ─── Receipt body ─── */}
+      <div className="space-y-3 px-3.5 py-3 text-sm">
+        {/* Meta block */}
+        <div className="space-y-1 text-xs">
+          <div className="flex justify-between gap-2">
+            <span className="shrink-0 text-muted-foreground">Receipt #:</span>
+            <span className="break-all text-right font-mono font-semibold">
+              {transaction.receiptNumber}
+            </span>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span className="shrink-0 text-muted-foreground">Date &amp; Time:</span>
+            <span className="break-words text-right">
+              {formatDateTime(transaction.createdAt)}
+            </span>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span className="shrink-0 text-muted-foreground">Cashier:</span>
+            <span className="break-words text-right">
+              {transaction.cashier?.name || 'N/A'}
+            </span>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span className="shrink-0 text-muted-foreground">Customer:</span>
+            <span className="break-words text-right">
+              {transaction.customer?.name || 'Walk-in'}
+            </span>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Itemized table — striped rows, fractional quantities supported */}
+        <div>
+          <table className="w-full border-collapse text-xs">
+            <thead>
+              <tr className="border-b-2 border-border bg-muted/60 text-[9px] uppercase tracking-wider text-muted-foreground">
+                <th className="px-1 py-1.5 text-left font-bold">Item</th>
+                <th className="px-1 py-1.5 text-center font-bold">Qty</th>
+                <th className="px-1 py-1.5 text-right font-bold">Unit Price</th>
+                <th className="px-1 py-1.5 text-right font-bold">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {safeMap<SaleItemDetail, React.ReactElement>(transaction.items, (item, idx) => (
+                <tr
+                  key={item.id}
+                  className={`border-b border-border/40 ${idx % 2 === 1 ? 'bg-muted/40' : ''}`}
+                >
+                  <td className="px-1 py-1.5 align-top">
+                    <span className="block break-words font-medium leading-snug">
+                      {item.productName}
+                    </span>
+                    {item.discountPercent > 0 && (
+                      <span className="mt-0.5 inline-flex items-center gap-0.5 rounded bg-orange-100 px-1 py-px text-[9px] font-semibold text-orange-800 dark:bg-orange-900/40 dark:text-orange-300">
+                        <Percent className="h-2.5 w-2.5" />
+                        {item.discountPercent}% off
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-1 py-1.5 text-center align-top whitespace-nowrap">
+                    {formatQuantityWithUnit(item)}
+                  </td>
+                  <td className="px-1 py-1.5 text-right align-top whitespace-nowrap">
+                    {formatKES(item.pricePerUnit ?? 0)}
+                  </td>
+                  <td className="px-1 py-1.5 text-right align-top font-medium">
+                    {formatKES(item.lineTotal)}
+                  </td>
+                </tr>
+              ))}
+              {(!transaction.items || transaction.items.length === 0) && (
+                <tr>
+                  <td colSpan={4} className="px-1 py-3 text-center text-muted-foreground">
+                    No line items recorded
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <Separator />
+
+        {/* Financial breakdown */}
+        <div className="space-y-1 text-xs">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Subtotal</span>
+            <span>{formatKES(transaction.subtotal)}</span>
+          </div>
+
+          {/* Discount — highlighted red/orange when applied */}
+          {transaction.discountAmount > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="inline-flex items-center gap-1 rounded bg-orange-100 px-1.5 py-px text-[10px] font-bold text-orange-800 dark:bg-orange-900/40 dark:text-orange-300">
+                <Percent className="h-2.5 w-2.5" />
+                Discount Applied
+              </span>
+              <span className="font-semibold text-red-600 dark:text-red-400">
+                −{formatKES(transaction.discountAmount)}
+              </span>
+            </div>
+          )}
+
+          {/* Voucher */}
+          {voucherCode && voucherAmount > 0 && (
+            <div className="flex justify-between">
+              <span className="inline-flex items-center gap-1 text-purple-700 dark:text-purple-300">
+                <Gift className="h-3 w-3" />
+                Voucher ({voucherCode})
+              </span>
+              <span className="font-semibold text-purple-700 dark:text-purple-300">
+                −{formatKES(voucherAmount)}
+              </span>
+            </div>
+          )}
+
+          {/* VAT / tax breakdown */}
+          {taxableAmount > 0 && (
+            <div className="flex justify-between text-[10px] text-muted-foreground">
+              <span className="pl-2">Taxable Amount (16%)</span>
+              <span>{formatKES(taxableAmount)}</span>
+            </div>
+          )}
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">VAT (16%)</span>
+            <span>{formatKES(transaction.taxAmount)}</span>
+          </div>
+          {exemptAmount > 0 && (
+            <div className="flex justify-between text-[10px] text-muted-foreground">
+              <span className="pl-2">Exempt / Zero-rated</span>
+              <span>{formatKES(exemptAmount)}</span>
+            </div>
+          )}
+
+          {/* Grand total banner */}
+          <div className="mt-1.5 flex items-center justify-between rounded-lg bg-primary px-2.5 py-2 text-primary-foreground">
+            <span className="text-[11px] font-bold uppercase tracking-widest">Grand Total</span>
+            <span className="text-lg font-extrabold tracking-tight">
+              {formatKES(transaction.totalAmount)}
+            </span>
+          </div>
+
+          {/* Tendered / change */}
+          {transaction.paymentMethod === 'CASH' && cashReceived > 0 && (
+            <>
+              <div className="flex justify-between pt-0.5">
+                <span className="text-muted-foreground">Cash Tendered</span>
+                <span className="font-medium">{formatKES(cashReceived)}</span>
+              </div>
+              {change > 0 && (
+                <div className="-mx-1 flex items-center justify-between rounded bg-emerald-50 px-1.5 py-1 font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
+                  <span className="inline-flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Change Due
+                  </span>
+                  <span>{formatKES(change)}</span>
+                </div>
+              )}
+            </>
+          )}
+
+          {transaction.paymentMethod === 'SPLIT' && cashReceived > 0 && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Cash Portion</span>
+              <span>{formatKES(cashReceived)}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Payment reference details */}
+        {(mpesaPhone || mpesaReference || (giftCardCode && giftCardAmount > 0)) && (
+          <>
+            <Separator />
+            <div className="space-y-1 text-xs">
+              {transaction.paymentMethod === 'MPESA' && mpesaPhone && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">M-Pesa Phone</span>
+                  <span className="font-mono">{mpesaPhone}</span>
+                </div>
+              )}
+              {transaction.paymentMethod === 'MPESA' && mpesaReference && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">M-Pesa Ref</span>
+                  <span className="font-mono font-semibold text-green-600 dark:text-green-400">
+                    {mpesaReference}
+                  </span>
+                </div>
+              )}
+              {giftCardCode && giftCardAmount > 0 && (
+                <div className="-mx-1 flex justify-between rounded bg-purple-50 px-1.5 py-1 dark:bg-purple-950/20">
+                  <span className="inline-flex items-center gap-1 text-purple-700 dark:text-purple-300">
+                    <Gift className="h-3 w-3" />
+                    Gift Card ({giftCardCode})
+                  </span>
+                  <span className="font-medium text-purple-700 dark:text-purple-300">
+                    −{formatKES(giftCardAmount)}
+                  </span>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        <Separator />
+
+        {/* ─── QR verification footer ─── */}
+        <div className="flex flex-col items-center gap-1.5 py-1">
+          <div className="rounded-lg border-2 border-border bg-white p-2">
+            <QRCodeCanvas
+              value={qrPayload}
+              size={120}
+              level="M"
+              marginSize={1}
+              bgColor="#FFFFFF"
+              fgColor="#000000"
+              title={`Verification QR for receipt ${transaction.receiptNumber}`}
+              style={{ width: 96, height: 96, display: 'block' }}
+            />
+          </div>
+          <p className="inline-flex items-center gap-1 text-[10px] font-semibold">
+            <ScanLine className="h-3 w-3 text-primary" />
+            Scan to verify this receipt
+          </p>
+          <p className="font-mono text-[9px] tracking-wider text-muted-foreground">
+            {transaction.receiptNumber}
+          </p>
+        </div>
+
+        <Separator />
+
+        {/* ─── Footer ─── */}
+        <div className="space-y-1.5 text-center">
+          <p className="text-xs font-bold">Thank you for your business!</p>
+          <p className="text-[10px] italic text-muted-foreground">Asante sana! 🇰🇪</p>
+          <p className="text-[9px] font-medium text-muted-foreground">
+            Goods once sold are not returnable unless per our returns policy —
+            present this receipt.
+          </p>
+          {store?.taxPin && (
+            <p className="font-mono text-[9px] text-muted-foreground">
+              ETR Invoice · KRA PIN: {store.taxPin}
+            </p>
+          )}
+          <KenyanFlagBar />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ReceiptPrintPreview — dialog wrapper with actions ──────────────────────
 
 export function ReceiptPrintPreview({
   open,
@@ -149,32 +600,82 @@ export function ReceiptPrintPreview({
   storeId,
   onNewSale,
 }: ReceiptPrintPreviewProps) {
-  if (!transaction) return null;
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const store = STORE_LIST.find((s) => s.id === storeId);
-  const change = transaction.paymentMethod === 'CASH' && cashReceived > 0
-    ? cashReceived - transaction.totalAmount
-    : 0;
 
-  // ── Handlers ──
+  // Reveal print state only while the print dialog is actually up.
+  const handlePrint = useCallback(() => {
+    if (!transaction) return;
+    setIsPrinting(true);
+    try {
+      printReceiptElement(RECEIPT_CONTENT_ID);
+    } catch (error) {
+      console.error('[RECEIPT_PRINT_ERROR]', error);
+      toast.error('Failed to open the print dialog. Please try again.');
+    } finally {
+      setTimeout(() => setIsPrinting(false), 1000);
+    }
+  }, [transaction]);
 
-  const handlePrint = () => {
-    window.print();
-  };
+  // Real PDF export: html2canvas-pro capture → jsPDF 80mm page download.
+  const handleDownloadPDF = useCallback(async () => {
+    if (!transaction) return;
+    setIsDownloading(true);
+    try {
+      await generateReceiptPdf({
+        elementId: RECEIPT_CONTENT_ID,
+        fileName: buildReceiptFileName(transaction.receiptNumber, transaction.id),
+      });
+      toast.success('Receipt PDF downloaded.');
+    } catch (error) {
+      console.error('[RECEIPT_DOWNLOAD_ERROR]', error);
+      toast.error('Failed to download receipt. Please try again or use Print to PDF.');
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [transaction]);
 
-  const handleShareWhatsApp = () => {
-    const text = buildReceiptText(transaction, store);
+  // Text-share options: the lightweight preview only knows cashReceived (the
+  // gift-card/voucher/M-Pesa-reference fields belong to EnhancedReceiptPrint,
+  // which builds its own richer text).
+  const receiptTextOpts = () => ({ cashReceived });
+
+  const handleShareWhatsApp = useCallback(() => {
+    if (!transaction) return;
+    const text = buildReceiptText(transaction, store, receiptTextOpts());
     const encoded = encodeURIComponent(text);
     const url = `https://wa.me/?text=${encoded}`;
     window.open(url, '_blank', 'noopener');
-  };
+  }, [transaction, store, receiptTextOpts]);
 
-  const handleNewSale = () => {
+  const handleCopyReceipt = useCallback(() => {
+    if (!transaction) return;
+    const text = buildReceiptText(transaction, store, receiptTextOpts());
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [transaction, store, receiptTextOpts]);
+
+  const handleNewSale = useCallback(() => {
     onOpenChange(false);
     onNewSale();
-  };
+  }, [onOpenChange, onNewSale]);
 
-  // ── Render ──
+  if (!transaction) return null;
 
   return (
     <ResponsiveDialog
@@ -186,188 +687,64 @@ export function ReceiptPrintPreview({
           Receipt Preview
         </span>
       }
-      description="Sale completed successfully. Print, share, or start a new sale."
+      description="Sale completed successfully. Download, print, share, or start a new sale."
       size="sm"
       footer={
         <div className="flex flex-wrap gap-2 w-full no-print">
-          <Button variant="outline" onClick={handlePrint} className="flex-1 min-w-[100px]">
-            <Printer className="mr-2 h-4 w-4" />
-            Print
+          <Button
+            variant="outline"
+            onClick={handleDownloadPDF}
+            disabled={isDownloading}
+            className="flex-1 min-w-[100px] border-primary/40 text-primary hover:bg-primary/10"
+          >
+            {isDownloading ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-1.5 h-4 w-4" />
+            )}
+            {isDownloading ? 'Preparing…' : 'Download PDF'}
           </Button>
-          <Button variant="outline" className="flex-1 min-w-[100px]" disabled>
-            <Download className="mr-2 h-4 w-4" />
-            Download PDF
+          <Button
+            variant="outline"
+            onClick={handlePrint}
+            disabled={isPrinting}
+            className="flex-1 min-w-[90px]"
+          >
+            <Printer className="mr-1.5 h-4 w-4" />
+            {isPrinting ? 'Printing...' : 'Print'}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleCopyReceipt}
+            className="flex-1 min-w-[90px]"
+          >
+            {copied ? <Check className="mr-1.5 h-4 w-4 text-green-500" /> : <Copy className="mr-1.5 h-4 w-4" />}
+            {copied ? 'Copied!' : 'Copy'}
           </Button>
           <Button
             variant="outline"
             onClick={handleShareWhatsApp}
-            className="flex-1 min-w-[100px] text-green-700 dark:text-green-400 border-green-300 dark:border-green-800 hover:bg-green-50 dark:hover:bg-green-950/30"
+            className="flex-1 min-w-[90px] text-green-700 dark:text-green-400 border-green-300 dark:border-green-800 hover:bg-green-50 dark:hover:bg-green-950/30"
           >
-            <Share2 className="mr-2 h-4 w-4" />
+            <Share2 className="mr-1.5 h-4 w-4" />
             WhatsApp
           </Button>
           <Button
             onClick={handleNewSale}
-            className="flex-1 min-w-[100px] bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+            className="flex-1 min-w-[90px] bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
           >
-            <ShoppingCart className="mr-2 h-4 w-4" />
+            <ShoppingCart className="mr-1.5 h-4 w-4" />
             New Sale
           </Button>
         </div>
       }
     >
-      {/* ─── Receipt Content (printable) ─── */}
-      <div className="receipt-printable space-y-3 text-sm" id="receipt-print-preview">
-        {/* Store Header */}
-        <div className="text-center space-y-1">
-          {/* Logo + Store Name */}
-          <div className="flex items-center justify-center gap-2">
-            <Image
-              src={COMPANY.logoPath}
-              alt="MBUMAH HARDWARE logo"
-              width={40}
-              height={40}
-              className="object-contain"
-            />
-            <div>
-              <h2 className="text-lg font-extrabold tracking-wide leading-tight">MBUMAH HARDWARE</h2>
-              <p className="text-[10px] text-muted-foreground font-medium tracking-widest uppercase">
-                {COMPANY.tagline}
-              </p>
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground font-medium">
-            {store?.shortName || 'Juja Main Branch'}
-          </p>
-          <p className="text-[10px] text-muted-foreground">
-            {store?.location || ''}
-          </p>
-          <p className="text-[10px] text-muted-foreground">
-            Tel: {store?.phone || COMPANY.phone}
-          </p>
-          <p className="text-xs font-semibold text-primary mt-1">
-            Thank you for shopping with us!
-          </p>
-        </div>
-
-        <Separator />
-
-        {/* Receipt Meta */}
-        <div className="space-y-1 text-xs">
-          <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground shrink-0">Receipt #:</span>
-            <span className="font-mono font-semibold break-all text-right">
-              {transaction.receiptNumber}
-            </span>
-          </div>
-          <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground shrink-0">Date:</span>
-            <span className="text-right break-words">
-              {formatDateTime(transaction.createdAt)}
-            </span>
-          </div>
-          <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground shrink-0">Cashier:</span>
-            <span className="text-right break-words">
-              {transaction.cashier?.name || 'N/A'}
-            </span>
-          </div>
-          <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground shrink-0">Customer:</span>
-            <span className="text-right break-words">
-              {transaction.customer?.name || 'Walk-in'}
-            </span>
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* Line Items */}
-        <div className="space-y-1">
-          <div className="grid grid-cols-12 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b pb-1">
-            <span className="col-span-5">Item</span>
-            <span className="col-span-2 text-center">Qty</span>
-            <span className="col-span-2 text-center">Price</span>
-            <span className="col-span-3 text-right">Total</span>
-          </div>
-          {safeMap<SaleItemDetail, React.ReactElement>(transaction.items, (item) => (
-            <div key={item.id} className="grid grid-cols-12 text-xs py-0.5">
-              <span className="col-span-5 break-words pr-1">{item.productName}</span>
-              <span className="col-span-2 text-center">{item.quantity}</span>
-              <span className="col-span-2 text-center">{formatKES(item.pricePerUnit ?? 0)}</span>
-              <span className="col-span-3 text-right font-medium">{formatKES(item.lineTotal)}</span>
-            </div>
-          ))}
-        </div>
-
-        <Separator />
-
-        {/* Totals */}
-        <div className="space-y-1 text-xs">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Subtotal</span>
-            <span>{formatKES(transaction.subtotal)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">VAT (16%)</span>
-            <span>{formatKES(transaction.taxAmount)}</span>
-          </div>
-          {transaction.discountAmount > 0 && (
-            <div className="flex justify-between text-green-600 dark:text-green-400">
-              <span>Discount</span>
-              <span>-{formatKES(transaction.discountAmount)}</span>
-            </div>
-          )}
-          <Separator />
-          <div className="flex justify-between font-bold text-base">
-            <span>TOTAL</span>
-            <span className="text-primary">{formatKES(transaction.totalAmount)}</span>
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* Payment Details */}
-        <div className="space-y-1 text-xs">
-          <div className="flex justify-between items-center">
-            <span className="text-muted-foreground">Payment Method</span>
-            <PaymentMethodBadge method={transaction.paymentMethod} />
-          </div>
-          {transaction.paymentMethod === 'CASH' && cashReceived > 0 && (
-            <>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Cash Received</span>
-                <span>{formatKES(cashReceived)}</span>
-              </div>
-              {change > 0 && (
-                <div className="flex justify-between text-green-600 dark:text-green-400 font-semibold">
-                  <span>Change</span>
-                  <span>{formatKES(change)}</span>
-                </div>
-              )}
-            </>
-          )}
-          {transaction.paymentMethod === 'MPESA' && mpesaPhone && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">M-Pesa Phone</span>
-              <span>{mpesaPhone}</span>
-            </div>
-          )}
-        </div>
-
-        <Separator />
-
-        {/* Footer */}
-        <div className="text-center space-y-2">
-          <p className="font-semibold text-xs">Thank you for shopping at MBUMAH HARDWARE!</p>
-          <p className="text-[10px] text-muted-foreground italic">Asante sana!</p>
-          <p className="text-[10px] text-muted-foreground font-medium">
-            Goods sold are not refundable
-          </p>
-          {/* Kenyan flag accent bar */}
-          <KenyanFlagBar />
-        </div>
-      </div>
+      <ReceiptDocument
+        transaction={transaction}
+        storeId={storeId}
+        cashReceived={cashReceived}
+        mpesaPhone={mpesaPhone}
+      />
     </ResponsiveDialog>
   );
 }
