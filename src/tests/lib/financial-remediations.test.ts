@@ -111,7 +111,7 @@ describe('sequence helpers (SYS-7 remediation)', () => {
 describe('crypto-helpers (SYS-9/F9-3 remediation)', () => {
   it('round-trips a secret through AES-256-GCM', () => {
     const plaintextFixture = 'audit-test-plaintext-value-42';
-    const envelope = encryptSecret(secret);
+    const envelope = encryptSecret(plaintextFixture);
     expect(isEncrypted(envelope)).toBe(true);
     expect(envelope.startsWith('v1:')).toBe(true);
     expect(decryptSecret(envelope)).toBe(plaintextFixture);
