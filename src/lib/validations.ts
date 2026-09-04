@@ -31,6 +31,10 @@ export const checkoutSchema = z.object({
   storeId: z.string().min(1),
   customerId: z.string().optional(),
   cashierId: z.string().min(1),
+  // SYS-10: client-generated idempotency key — a replayed checkout (lost
+  // response, offline sync) returns the original transaction instead of
+  // double-applying stock/payments/journals.
+  idempotencyKey: z.string().min(8).max(100).optional(),
   items: z.array(z.object({
     productId: z.string().min(1),
     productName: z.string().min(1),
@@ -45,6 +49,13 @@ export const checkoutSchema = z.object({
     isRentalItem: z.boolean().optional(),
     isBundle: z.boolean().optional(),
   })).min(1, 'At least one item is required'),
+  // F2-1: serialized-asset capture — serials are claimed (IN_STOCK → SOLD)
+  // atomically inside the checkout transaction; a serial that is not IN_STOCK
+  // in this store aborts the sale (double-sell protection).
+  serials: z.array(z.object({
+    productId: z.string().min(1),
+    serial: z.string().min(3).max(100),
+  })).max(200).optional(),
   paymentMethod: z.enum(['CASH', 'MPESA', 'DEBT', 'SPLIT', 'GIFT_CARD']),
   paymentDetails: z.object({
     cashAmount: z.coerce.number().optional(),

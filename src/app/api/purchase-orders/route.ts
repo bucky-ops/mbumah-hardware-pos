@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { requireStoreAccess, type AuthSession } from '@/lib/auth';
+import { withSequenceRetry } from '@/lib/sequence';
 
 export const dynamic = 'force-dynamic';
 
@@ -89,11 +90,11 @@ async function getPurchaseOrdersHandler(
 
 async function createPurchaseOrderHandler(
   request: NextRequest,
-  _session: AuthSession,
+  session: AuthSession,
 ): Promise<Response> {
   const body = await request.json();
 
-  const { storeId, supplierId, items, notes, expectedDate, createdById } = body;
+  const { storeId, supplierId, items, notes, expectedDate } = body;
 
   if (!storeId || !supplierId) {
     return Response.json(
@@ -138,58 +139,88 @@ async function createPurchaseOrderHandler(
 
   const productMap = new Map(products.map((p) => [p.id, p]));
 
-  // Generate PO number: PO-YYYYMMDD-0001
-  const today = new Date();
-  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
-  const existingCount = await db.purchaseOrder.count({
-    where: { storeId, poNumber: { startsWith: `PO-${dateStr}` } },
-  });
-  const poNumber = `PO-${dateStr}-${String(existingCount + 1).padStart(4, '0')}`;
+  // F1-5 remediation: validate quantities/costs BEFORE computing totals.
+  // Negative/zero/NaN/Infinity values used to flow straight into Decimal
+  // columns and corrupt supplier-spend reporting.
+  for (const item of items as Array<{ productId: string; quantity: number; unitCost: number }>) {
+    const qty = Number(item.quantity);
+    const cost = Number(item.unitCost);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      return Response.json(
+        { success: false, error: `Invalid quantity for product ${item.productId}: must be a positive finite number.` },
+        { status: 400 }
+      );
+    }
+    if (!Number.isFinite(cost) || cost < 0) {
+      return Response.json(
+        { success: false, error: `Invalid unitCost for product ${item.productId}: must be a non-negative finite number.` },
+        { status: 400 }
+      );
+    }
+  }
 
-  // Calculate totals
-  let subTotal = 0;
-  const poItems = items.map((item: { productId: string; quantity: number; unitCost: number; notes?: string }) => {
-    const product = productMap.get(item.productId);
-    const totalCost = item.quantity * item.unitCost;
-    subTotal += totalCost;
-    return {
-      productId: item.productId,
-      productName: product?.name || 'Unknown Product',
-      quantity: item.quantity,
-      unitCost: item.unitCost,
-      totalCost,
-      notes: item.notes || null,
-    };
-  });
+  // F1-6 remediation: PO creation is retried on P2002 (concurrent double-
+  // submit) with a re-allocated per-store sequence number. The schema's
+  // uniqueness is now @@unique([storeId, poNumber]) — matching the per-store
+  // counter — so store B no longer collides with store A's numbers.
+  // F1-5 remediation: money rounded 2dp per line BEFORE header summation
+  // (the old path summed raw IEEE-754 products into Decimal columns).
+  const { created: purchaseOrder, poNumber, subTotal, taxAmount, totalAmount } = await withSequenceRetry(async () => {
+    const today = new Date();
+    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+    const existingCount = await db.purchaseOrder.count({
+      where: { storeId, poNumber: { startsWith: `PO-${dateStr}` } },
+    });
+    const poNumber = `PO-${dateStr}-${String(existingCount + 1).padStart(4, '0')}`;
 
-  const taxAmount = subTotal * (KENYA_VAT_RATE / 100);
-  const totalAmount = subTotal + taxAmount;
+    let subTotal = 0;
+    const poItems = items.map((item: { productId: string; quantity: number; unitCost: number; notes?: string }) => {
+      const product = productMap.get(item.productId);
+      const totalCost = Math.round(item.quantity * item.unitCost * 100) / 100;
+      subTotal += totalCost;
+      return {
+        productId: item.productId,
+        productName: product?.name || 'Unknown Product',
+        quantity: item.quantity,
+        unitCost: item.unitCost,
+        totalCost,
+        notes: item.notes || null,
+      };
+    });
+    subTotal = Math.round(subTotal * 100) / 100;
 
-  const purchaseOrder = await db.purchaseOrder.create({
-    data: {
-      storeId,
-      poNumber,
-      supplierId,
-      status: 'DRAFT',
-      subTotal,
-      taxAmount,
-      totalAmount,
-      notes: notes || null,
-      expectedDate: expectedDate ? new Date(expectedDate) : null,
-      createdById: createdById || null,
-      items: {
-        create: poItems,
-      },
-    },
-    include: {
-      supplier: { select: { id: true, name: true } },
-      createdBy: { select: { id: true, name: true } },
-      items: {
-        include: {
-          product: { select: { id: true, name: true, sku: true, unitType: true } },
+    const taxAmount = Math.round(subTotal * (KENYA_VAT_RATE / 100) * 100) / 100;
+    const totalAmount = Math.round((subTotal + taxAmount) * 100) / 100;
+
+    const created = await db.purchaseOrder.create({
+      data: {
+        storeId,
+        poNumber,
+        supplierId,
+        status: 'DRAFT',
+        subTotal,
+        taxAmount,
+        totalAmount,
+        notes: notes || null,
+        expectedDate: expectedDate ? new Date(expectedDate) : null,
+        // F1-3/SYS-2: creator identity from the session, not the body.
+        createdById: session.userId,
+        items: {
+          create: poItems,
         },
       },
-    },
+      include: {
+        supplier: { select: { id: true, name: true } },
+        createdBy: { select: { id: true, name: true } },
+        items: {
+          include: {
+            product: { select: { id: true, name: true, sku: true, unitType: true } },
+          },
+        },
+      },
+    });
+
+    return { created, poNumber, subTotal, taxAmount, totalAmount };
   });
 
   await systemLog({

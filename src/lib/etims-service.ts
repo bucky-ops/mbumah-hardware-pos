@@ -171,6 +171,19 @@ export function getEtimsConfig(): EtimsConfig {
 }
 
 /**
+ * F9-2 remediation: detect when the active eTIMS client is the built-in mock
+ * (no ETIMS_API_URL configured / mock flag). Compliance control — the
+ * issue-invoice route refuses to mark tax invoices as ISSUED when this is
+ * true unless ETIMS_ALLOW_MOCK_ISSUANCE is explicitly set.
+ */
+export function isEtimsMock(): boolean {
+  if (process.env.ETIMS_MODE === 'mock') return true;
+  if (process.env.ETIMS_MODE === 'live') return false;
+  // No explicit mode: mock when no API URL/credentials are configured.
+  return !process.env.ETIMS_API_URL && !process.env.ETIMS_TIN && !process.env.KRA_PIN;
+}
+
+/**
  * Initialize an eTIMS client from a store ID, loading store-specific config from DB.
  */
 export async function initializeEtimsClientFromStore(storeId: string) {

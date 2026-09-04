@@ -14,6 +14,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -220,6 +221,6 @@ async function statusHandler(...args: unknown[]): Promise<Response> {
 }
 
 export const GET = withErrorBoundary(
-  statusHandler,
+  withSessionAuth(statusHandler),
   'MPESA_STK_STATUS',
 );

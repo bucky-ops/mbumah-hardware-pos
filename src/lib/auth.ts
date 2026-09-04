@@ -184,6 +184,67 @@ export function requireRole(...roles: string[]) {
   };
 }
 
+/**
+ * withSessionAuth — the mechanical remediation for the audit's SYS-1 finding:
+ * dozens of money-moving routes exported handlers wrapped ONLY in
+ * `withErrorBoundary`, so the edge proxy's non-empty-Bearer check was the
+ * only gate (any junk token passed). This wrapper keeps the handler's
+ * `(...args: unknown[])` signature (composes with `withErrorBoundary`) while
+ * enforcing:
+ *   1. Full DB-backed session validation (401 on missing/invalid/expired).
+ *   2. Optional role membership (403 + SecurityEvent-style log otherwise).
+ *   3. ORM-level tenant context for the handler body.
+ *
+ * Usage:
+ *   export const POST = withErrorBoundary(
+ *     withSessionAuth(createHandler, FINANCIAL_ROLES.WRITE),
+ *     'EXPENSES_CREATE',
+ *   );
+ */
+export function withSessionAuth(
+  handler: FinancialHandler,
+  allowedRoles?: readonly string[]
+): FinancialHandler {
+  return async (...args: unknown[]): Promise<Response> => {
+    const request = args[0] as NextRequest;
+    const session = await getSessionFromRequest(request);
+
+    if (!session) {
+      return Response.json(
+        { success: false, error: 'Authentication required.' },
+        { status: 401 }
+      );
+    }
+
+    if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(session.role)) {
+      try {
+        await systemLog({
+          action: 'ACCESS_DENIED',
+          component: LogComponent.AUTH,
+          severity: LogSeverity.WARN,
+          message: `User ${session.email} (role: ${session.role}) attempted access requiring: ${allowedRoles.join(', ')}`,
+          userId: session.userId,
+          storeId: session.storeId || undefined,
+          metadata: {
+            requiredRoles: allowedRoles,
+            actualRole: session.role,
+            path: new URL(request.url).pathname,
+            method: request.method,
+          },
+        });
+      } catch {
+        /* logging must never block the auth decision */
+      }
+      return Response.json(
+        { success: false, error: 'Insufficient permissions.' },
+        { status: 403 }
+      );
+    }
+
+    return runWithSessionTenant(session, () => handler(...args));
+  };
+}
+
 // ── Store-scoped access ─────────────────────────────────────────────────────
 
 type StoreScopedHandler = (

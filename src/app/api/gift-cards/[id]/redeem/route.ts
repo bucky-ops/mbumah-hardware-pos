@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -127,4 +128,4 @@ async function redeemGiftCardHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const POST = withErrorBoundary(redeemGiftCardHandler, 'GIFT_CARD_REDEEM');
+export const POST = withErrorBoundary(withSessionAuth(redeemGiftCardHandler), 'GIFT_CARD_REDEEM');

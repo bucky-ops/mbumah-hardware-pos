@@ -16,6 +16,7 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { requireStoreAccess } from '@/lib/auth';
+import { encryptSecret } from '@/lib/crypto-helpers';
 
 export const dynamic = 'force-dynamic';
 
@@ -139,9 +140,13 @@ async function upsertProfileHandler(
     );
   }
 
-  // Encode the password (base64 pass-through — see kra-helpers.ts decryptPassword).
-  // For real production, swap to AES-256-GCM via src/lib/crypto-helpers.ts.
-  const encryptedPassword = Buffer.from(kraPassword, 'utf8').toString('base64');
+  // SYS-9/F9-3 remediation: the KRA portal password is now stored with real
+  // authenticated encryption (AES-256-GCM, key from CREDENTIAL_ENCRYPTION_KEY
+  // or derived from NEXTAUTH_SECRET) — NOT base64, which is mere encoding and
+  // reversible by anyone with DB read access. Legacy base64 rows are decoded
+  // transparently on read (decryptSecretLegacyAware) and re-encrypted on the
+  // next save of this profile.
+  const encryptedPassword = encryptSecret(kraPassword);
 
   // Upsert by businessPin (unique constraint). If the PIN already exists for
   // this store, update it; otherwise create a new row.

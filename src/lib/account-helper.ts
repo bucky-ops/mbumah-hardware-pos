@@ -554,3 +554,114 @@ export async function recordGiftCardIssuance(
     },
   });
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// F1-1 remediation (FINANCIAL_MODULE_AUDIT_REPORT.md): Goods-Receipt posting.
+//
+// The buy side previously NEVER hit the general ledger — Accounts Payable
+// (2000) was defined but unused and the Inventory GL account was only ever
+// CREDITED by COGS at sale time, drifting it negative for every purchased
+// item. This helper posts, inside the SAME transaction as the stock
+// movement:
+//   Dr  Inventory (1300)          — gross receipt value
+//   Cr  Accounts Payable (2000)   — supplier liability
+//
+// VAT treatment: unitCost is treated as the supplier's VAT-INCLUSIVE price
+// (the default for Kenyan hardware-supplier quotes). For VAT-registered
+// buyers the recoverable portion is separated:
+//   Dr Inventory (net) + Dr VAT Payable (2100, debited = input-VAT recovery)
+//   Cr Accounts Payable (gross)
+// When the store/org is not VAT-configured the full gross is capitalised to
+// Inventory — conservative and reversible via a future adjusting entry.
+// ══════════════════════════════════════════════════════════════════════════
+
+export interface GoodsReceiptAccountingParams {
+  organizationId: string;
+  storeId: string;
+  poId: string;
+  poNumber: string;
+  /** GROSS received value for this receipt batch (Σ receivedQty × unitCost). */
+  grossAmount: number;
+  /** VAT rate embedded in the supplier price, 0–100 (default Kenya 16). */
+  vatRate?: number;
+  receivedById?: string | null;
+}
+
+/**
+ * Posts the balanced double-entry journal for a goods receipt (GRN).
+ * MUST be called with the interactive transaction client so the journal
+ * commits atomically with the stock/WAC updates it corresponds to.
+ * Throws if debits ≠ credits (golden rule — same tolerance as sales).
+ */
+export async function recordGoodsReceiptEntry(
+  tx: Prisma.TransactionClient,
+  params: GoodsReceiptAccountingParams
+): Promise<void> {
+  const { organizationId, storeId, poId, poNumber, grossAmount, receivedById } = params;
+  const vatRate = params.vatRate ?? 16;
+
+  if (grossAmount <= 0) return; // zero-value receipt ⇒ nothing to post
+
+  const accounts = await getAccountIds(organizationId, [
+    ACCOUNT_CODES.INVENTORY,
+    ACCOUNT_CODES.ACCOUNTS_PAYABLE,
+    ACCOUNT_CODES.VAT_PAYABLE,
+  ]);
+
+  // Split gross into net + recoverable input VAT.
+  const gross = roundMoney(grossAmount);
+  const vatPortion = vatRate > 0 ? roundMoney(gross - gross / (1 + vatRate / 100)) : 0;
+  const netAmount = roundMoney(gross - vatPortion);
+
+  const lines = [
+    {
+      accountId: accounts.INVENTORY,
+      debit: netAmount,
+      credit: 0,
+      description: `Inventory capitalised from PO ${poNumber}`,
+    },
+  ];
+  if (vatPortion > 0) {
+    lines.push({
+      accountId: accounts.VAT_PAYABLE,
+      debit: vatPortion,
+      credit: 0,
+      description: `Recoverable input VAT from PO ${poNumber}`,
+    });
+  }
+  lines.push({
+    accountId: accounts.ACCOUNTS_PAYABLE,
+    debit: 0,
+    credit: gross,
+    description: `Supplier liability for PO ${poNumber}`,
+  });
+
+  const totalDebit = roundMoney(lines.reduce((s, l) => s + l.debit, 0));
+  const totalCredit = roundMoney(lines.reduce((s, l) => s + l.credit, 0));
+  if (Math.abs(totalDebit - totalCredit) > 0.01) {
+    throw new Error(
+      `GRN journal unbalanced for PO ${poNumber}: debits ${totalDebit} ≠ credits ${totalCredit}`
+    );
+  }
+
+  await tx.journalEntry.create({
+    data: {
+      storeId,
+      entryNumber: generateJournalEntryNumber(),
+      description: `Goods receipt for PO ${poNumber} — KES ${gross.toLocaleString()}`,
+      referenceType: 'GOODS_RECEIPT',
+      referenceId: poId,
+      totalDebit,
+      totalCredit,
+      isPosted: true,
+      postedAt: new Date(),
+      createdBy: receivedById || null,
+      lines: { create: lines },
+    },
+  });
+}
+
+/** 2dp HALF_UP rounding for journal line amounts. */
+function roundMoney(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}

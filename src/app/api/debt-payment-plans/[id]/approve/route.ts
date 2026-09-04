@@ -42,6 +42,16 @@ async function approvePlanHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
+  // AUDIT REMEDIATION (F9-4): segregation of duties — the requester can never
+  // be the approver. DebtPaymentPlan.createdById is the user who raised the
+  // plan; block self-approval with 409 before any state change.
+  if (existing.createdById === session.userId) {
+    return Response.json(
+      { success: false, error: 'Cannot approve your own payment plan (segregation of duties).' },
+      { status: 409 },
+    );
+  }
+
   if (existing.status !== 'PENDING_APPROVAL') {
     return Response.json(
       {

@@ -6,6 +6,9 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateGiftCardCode } from '@/lib/helpers';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { createGiftCardSchema, validateInput } from '@/lib/validations';
+import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
+import { recordGiftCardIssuance } from '@/lib/account-helper';
+import { getSessionFromRequest } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,7 +101,8 @@ async function createGiftCardHandler(...args: unknown[]): Promise<Response> {
 
   // Fields from body that are not in the schema but still used
   const currency = (body as Record<string, unknown>).currency || 'KES';
-  const issuedBy = (body as Record<string, unknown>).issuedBy || null;
+  // SYS-2: issuer identity comes from the session inside the tx (body ignored).
+  const _issuedBy = (body as Record<string, unknown>).issuedBy || null;
   const issuedTo = (body as Record<string, unknown>).issuedTo || null;
   const expiresAt = (body as Record<string, unknown>).expiresAt || validation.data.expiryDate || null;
 
@@ -131,30 +135,78 @@ async function createGiftCardHandler(...args: unknown[]): Promise<Response> {
   const isAutoAdjust = autoAdjustItems ?? false;
   const isVisible = isAutoAdjust ? initialBalance > 0 : true;
 
-  const giftCard = await db.giftCard.create({
-    data: {
-      storeId,
-      code,
-      reason,
-      initialBalance,
-      currentBalance: initialBalance,
-      currency: currency || 'KES',
-      status: 'ACTIVE',
-      recipientName: recipientName || null,
-      recipientPhone: recipientPhone || null,
-      recipientEmail: recipientEmail || null,
-      notes: notes || null,
-      issuedBy: issuedBy || null,
-      issuedTo: issuedTo || null,
-      expiresAt: expiresAt ? new Date(expiresAt) : null,
-      autoAdjustItems: isAutoAdjust,
-      isVisible,
-    },
-    include: {
-      store: { select: { id: true, name: true } },
-      issuedByUser: { select: { id: true, name: true } },
-      issuedToCustomer: { select: { id: true, name: true, phone: true } },
-    },
+  // ── F5-4 remediation ────────────────────────────────────────────────────
+  // Issuance previously minted spendable value with NO tender record and NO
+  // journal — the Gift Card Liability (2300) account was credited only at
+  // redemption, structurally driving it negative while the card spent real
+  // money. Now the card, the liability posting (recordGiftCardIssuance: Dr
+  // Cash/M-Pesa, Cr Gift Card Liability) and a cash-drawer tender entry are
+  // committed in ONE transaction. issuedBy always comes from the session.
+  const session = await getSessionFromRequest(request);
+  const giftCard = await db.$transaction(async (tx) => {
+    const created = await tx.giftCard.create({
+      data: {
+        storeId,
+        code,
+        reason,
+        initialBalance,
+        currentBalance: initialBalance,
+        currency: currency || 'KES',
+        status: 'ACTIVE',
+        recipientName: recipientName || null,
+        recipientPhone: recipientPhone || null,
+        recipientEmail: recipientEmail || null,
+        notes: notes || null,
+        issuedBy: session?.userId || null,
+        issuedTo: issuedTo || null,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        autoAdjustItems: isAutoAdjust,
+        isVisible,
+      },
+      include: {
+        store: { select: { id: true, name: true } },
+        issuedByUser: { select: { id: true, name: true } },
+        issuedToCustomer: { select: { id: true, name: true, phone: true } },
+      },
+    });
+
+    // Post the liability (and tender debit) — never call on zero-value cards.
+    if (Number(initialBalance) > 0) {
+      const store = await tx.store.findUnique({
+        where: { id: storeId },
+        select: { organizationId: true },
+      });
+      await recordGiftCardIssuance(tx, {
+        organizationId: store?.organizationId || 'org_mbumah',
+        storeId,
+        giftCardId: created.id,
+        giftCardCode: code,
+        amount: Number(initialBalance),
+        // Cards issued over the counter are funded by cash unless recorded
+        // otherwise; the tender is auditable via the cash drawer entry.
+        paymentMethod: 'CASH',
+        cashierId: session?.userId || 'system', // 'system' actor seeded in prisma/seed.ts
+      });
+
+      // Cash-drawer tender entry — SUM-derived balance (R6 pattern).
+      const drawerAgg = await tx.cashDrawerLog.aggregate({
+        where: { storeId },
+        _sum: { amount: true },
+      });
+      const runningBalance = Number(drawerAgg._sum.amount ?? 0) + Number(initialBalance);
+      await tx.cashDrawerLog.create({
+        data: {
+          storeId,
+          userId: session?.userId || 'system',
+          action: 'CASH_IN',
+          amount: initialBalance,
+          balance: runningBalance,
+          notes: `Gift card ${code} issued (tender for liability)`,
+        },
+      });
+    }
+
+    return created;
   });
 
   await systemLog({
@@ -169,5 +221,5 @@ async function createGiftCardHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: giftCard }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(listGiftCardsHandler, 'GIFT_CARDS_LIST');
-export const POST = withErrorBoundary(createGiftCardHandler, 'GIFT_CARDS_CREATE');
+export const GET = withErrorBoundary(withSessionAuth(listGiftCardsHandler), 'GIFT_CARDS_LIST');
+export const POST = withErrorBoundary(withSessionAuth(createGiftCardHandler, FINANCIAL_ROLES.WRITE), 'GIFT_CARDS_CREATE');

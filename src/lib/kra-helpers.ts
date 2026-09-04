@@ -32,6 +32,7 @@
 import { db } from '@/lib/db';
 import { systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { decryptSecret, isEncrypted } from '@/lib/crypto-helpers';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -170,9 +171,15 @@ function isRetryableStatus(status: number | undefined): boolean {
  * module compiles and works end-to-end in sandbox mode.
  */
 function decryptPassword(encrypted: string): string {
+  // SYS-9/F9-3 remediation: prefer AES-256-GCM envelopes (crypto-helpers);
+  // fall back to legacy base64 rows so previously stored profiles keep
+  // working until re-saved through the profile route (which re-encrypts).
   try {
     // If the value looks like base64, decode it. Otherwise return as-is.
-    if (/^[A-Za-z0-9+/]+={0,2}$/.test(encrypted) && encrypted.length % 4 === 0) {
+    if (isEncrypted(encrypted)) {
+    return decryptSecret(encrypted);
+  }
+  if (/^[A-Za-z0-9+/]+={0,2}$/.test(encrypted) && encrypted.length % 4 === 0) {
       return Buffer.from(encrypted, 'base64').toString('utf8');
     }
     return encrypted;

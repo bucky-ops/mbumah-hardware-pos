@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -126,4 +127,4 @@ async function adjustGiftCardHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const POST = withErrorBoundary(adjustGiftCardHandler, 'GIFT_CARD_ADJUST');
+export const POST = withErrorBoundary(withSessionAuth(adjustGiftCardHandler, FINANCIAL_ROLES.WRITE), 'GIFT_CARD_ADJUST');

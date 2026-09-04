@@ -83,7 +83,20 @@ function isCSRFValid(request: NextRequest): boolean {
   // Check Origin header against Host
   const origin = request.headers.get('Origin');
   const host = request.headers.get('Host');
-  if (origin && host && origin.includes(host)) return true;
+  if (origin && host) {
+    // AUDIT REMEDIATION (F9-6): exact host equality. The previous
+    // `origin.includes(host)` let hostile lookalike origins through, e.g.
+    // `https://app.example.com.evil.io` contains `example.com`. Parse both
+    // sides and compare hostname+port strings exactly; an unparseable Origin
+    // or Host is treated as NON-matching (fail closed).
+    try {
+      const originHost = new URL(origin).host; // hostname[:port]
+      const requestHost = new URL(`http://${host}`).host; // Host header may include port
+      if (originHost === requestHost) return true;
+    } catch {
+      /* parse failure → treat as non-matching */
+    }
+  }
 
   // Check Referer header
   const referer = request.headers.get('Referer');

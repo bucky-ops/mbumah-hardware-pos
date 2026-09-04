@@ -6,6 +6,7 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateJournalEntryNumber } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, RentalStatus, StockMovementType } from '@/lib/types';
+import { withSessionAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -294,5 +295,5 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: result }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getRentalsHandler, 'RENTALS_LIST');
-export const POST = withErrorBoundary(createRentalHandler, 'RENTALS_CREATE');
+export const GET = withErrorBoundary(withSessionAuth(getRentalsHandler), 'RENTALS_LIST');
+export const POST = withErrorBoundary(withSessionAuth(createRentalHandler), 'RENTALS_CREATE');

@@ -7,6 +7,7 @@ import { generateJournalEntryNumber } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES, type AccountCode } from '@/lib/account-helper';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { createExpenseSchema, validateInput } from '@/lib/validations';
+import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -277,5 +278,5 @@ async function createExpenseHandler(...args: unknown[]): Promise<Response> {
   );
 }
 
-export const GET = withErrorBoundary(getExpensesHandler, 'EXPENSES_LIST');
-export const POST = withErrorBoundary(createExpenseHandler, 'EXPENSES_CREATE');
+export const GET = withErrorBoundary(withSessionAuth(getExpensesHandler, FINANCIAL_ROLES.WRITE), 'EXPENSES_LIST');
+export const POST = withErrorBoundary(withSessionAuth(createExpenseHandler, FINANCIAL_ROLES.WRITE), 'EXPENSES_CREATE');

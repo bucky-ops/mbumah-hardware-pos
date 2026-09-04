@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -138,5 +139,5 @@ async function createSupplierHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: supplier }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getSuppliersHandler, 'SUPPLIERS_LIST');
-export const POST = withErrorBoundary(createSupplierHandler, 'SUPPLIERS_CREATE');
+export const GET = withErrorBoundary(withSessionAuth(getSuppliersHandler), 'SUPPLIERS_LIST');
+export const POST = withErrorBoundary(withSessionAuth(createSupplierHandler), 'SUPPLIERS_CREATE');

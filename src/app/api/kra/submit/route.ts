@@ -36,10 +36,16 @@ import {
   type KraInvoicePayload,
   type KraInvoiceLineItem,
 } from '@/lib/kra-helpers';
+// AUDIT REMEDIATION (F9-3): reuse the app's existing KRA PIN validator.
+// (validateKraPin is exported from etims-utils, not kra-helpers.)
+import { validateKraPin } from '@/lib/etims-utils';
 
 export const dynamic = 'force-dynamic';
 
-const ALLOWED_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'STORE_MANAGER', 'CASHIER'];
+// AUDIT REMEDIATION (F9-4): the role name 'STORE_MANAGER' does not exist in
+// src/lib/types.ts (actual: BRANCH_MANAGER) — the stale name silently excluded
+// branch managers from KRA submission.
+const ALLOWED_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'CASHIER'];
 
 /**
  * Map a SalesTransaction + its items to the KRA invoice payload.
@@ -65,6 +71,14 @@ async function buildKraInvoicePayload(
   });
 
   if (!tx) return null;
+
+  // AUDIT REMEDIATION (F9-3): Customer.idNumber may hold a National ID
+  // (8-digit) — sending that as the KRA customer PIN produces invalid eTIMS
+  // invoices. Only pass the value through when it matches the KRA PIN format
+  // (letter + 9 digits + letter); otherwise send undefined.
+  const rawCustomerPin = tx.customer?.idNumber;
+  const validCustomerPin =
+    rawCustomerPin && validateKraPin(rawCustomerPin) ? rawCustomerPin : undefined;
 
   const invoiceNumber = kraApiService.generateInvoiceNumber(
     businessPin,
@@ -99,7 +113,8 @@ async function buildKraInvoicePayload(
       kraInvoiceNumber: invoiceNumber,
       businessPin,
       issueDate: tx.createdAt.toISOString(),
-      customerPin: tx.customer?.idNumber || undefined,
+      // AUDIT REMEDIATION (F9-3): guarded — National IDs must NOT be sent as PINs.
+      customerPin: validCustomerPin,
       customerName: tx.customer?.name || 'Walk-in Customer',
       items,
       subtotal: Math.round(tx.subtotal * 100) / 100,
@@ -109,7 +124,7 @@ async function buildKraInvoicePayload(
       paymentMethod: tx.paymentMethod,
     },
     customerName: tx.customer?.name || 'Walk-in Customer',
-    customerPin: tx.customer?.idNumber,
+    customerPin: validCustomerPin,
   };
 }
 

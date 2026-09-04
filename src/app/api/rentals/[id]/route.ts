@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent, RentalStatus, StockMovementType } from '@/lib/types';
+import { withSessionAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -143,5 +144,5 @@ async function deleteRentalHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: result });
 }
 
-export const PUT = withErrorBoundary(updateRentalHandler, 'RENTALS_UPDATE');
-export const DELETE = withErrorBoundary(deleteRentalHandler, 'RENTALS_DELETE');
+export const PUT = withErrorBoundary(withSessionAuth(updateRentalHandler), 'RENTALS_UPDATE');
+export const DELETE = withErrorBoundary(withSessionAuth(deleteRentalHandler), 'RENTALS_DELETE');
