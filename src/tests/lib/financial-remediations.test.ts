@@ -67,20 +67,22 @@ async function withDbRetry<T>(fn: () => Promise<T>, attempts = 2): Promise<T> {
 
 async function makeTestProduct(overrides: { quantity?: number; cost?: number } = {}) {
   const suffix = Math.random().toString(36).slice(2, 10);
-  const product = await withDbRetry(() =>
-    db.product.create({
-    data: {
-      storeId: STORE_ID,
-      name: `AUDIT-TEST ${suffix}`,
-      sku: `AUD-${suffix}`,
-      pricePerUnit: 100,
-      costPrice: overrides.cost ?? 50,
-      quantityInStock: overrides.quantity ?? 10,
-      unitType: 'PIECE',
-      isActive: true,
-      reorderLevel: 1,
-    } as never),
-  );
+  const product = await withDbRetry(async () => {
+    const created = await db.product.create({
+      data: {
+        storeId: STORE_ID,
+        name: `AUDIT-TEST ${suffix}`,
+        sku: `AUD-${suffix}`,
+        pricePerUnit: 100,
+        costPrice: overrides.cost ?? 50,
+        quantityInStock: overrides.quantity ?? 10,
+        unitType: 'PIECE',
+        isActive: true,
+        reorderLevel: 1,
+      } as never,
+    });
+    return created;
+  });
   createdProductIds.push(product.id);
   return product;
 }
@@ -180,17 +182,19 @@ describe('conditional decrements (R1/R2 remediation)', () => {
 
   it('refuses a gift-card redemption beyond the remaining balance (R2)', async () => {
     const suffix = Math.random().toString(36).slice(2, 10);
-    const card = await withDbRetry(() =>
-      db.giftCard.create({
-      data: {
-        storeId: STORE_ID,
-        code: `AUDGC-${suffix}`,
-        reason: 'PROMOTION',
-        initialBalance: 1000,
-        currentBalance: 1000,
-        status: 'ACTIVE',
-      }),
-    );
+    const card = await withDbRetry(async () => {
+      const created = await db.giftCard.create({
+        data: {
+          storeId: STORE_ID,
+          code: `AUDGC-${suffix}`,
+          reason: 'PROMOTION',
+          initialBalance: 1000,
+          currentBalance: 1000,
+          status: 'ACTIVE',
+        },
+      });
+      return created;
+    });
     createdGiftCardIds.push(card.id);
 
     // Drain 800 — succeeds.
@@ -222,15 +226,17 @@ describe('serial lifecycle (F2-1 remediation)', () => {
     const product = await makeTestProduct({ quantity: 3 });
     const suffix = Math.random().toString(36).slice(2, 10);
 
-    const serialRow = await withDbRetry(() =>
-      db.serialNumber.create({
-      data: {
-        productId: product.id,
-        storeId: STORE_ID,
-        serial: `AUDSN-${suffix}`,
-        status: 'IN_STOCK',
-      }),
-    );
+    const serialRow = await withDbRetry(async () => {
+      const created = await db.serialNumber.create({
+        data: {
+          productId: product.id,
+          storeId: STORE_ID,
+          serial: `AUDSN-${suffix}`,
+          status: 'IN_STOCK',
+        },
+      });
+      return created;
+    });
     createdSerialIds.push(serialRow.id);
 
     // Sale A claims the serial.
