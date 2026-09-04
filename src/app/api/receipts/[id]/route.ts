@@ -1,7 +1,16 @@
 // GET /api/receipts/[id]
+//
+// AUDIT FIX (6): this route previously had NO server-side auth guard and
+// returned the per-line costPrice (supplier cost) to ANY caller that passed
+// the proxy's Bearer-presence check. It is now wrapped in requireStoreAccess
+// (DB-backed session + ORM-level tenant scoping) and costPrice is omitted
+// unless the caller's role is BRANCH_MANAGER or above (PERMISSION_MATRIX
+// hierarchy in src/lib/types.ts).
 
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
+import { requireStoreAccess, type AuthSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,9 +18,21 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
+// Manager-or-above per PERMISSION_MATRIX (src/lib/types.ts): the roles that
+// hold `financials: read`. CASHIER / ACCOUNTANT do not see supplier cost.
+const PROFIT_VISIBLE_ROLES: readonly string[] = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'];
+
 async function getReceiptDetailHandler(...args: unknown[]): Promise<Response> {
-  const context = args[1] as RouteContext;
+  // requireStoreAccess passes (request, session, ...nextArgs) — for a dynamic
+  // route, args[2] is the original route context ({ params }).
+  const _request = args[0] as NextRequest;
+  const session = args[1] as AuthSession;
+  const context = args[2] as RouteContext;
   const { id } = await context.params;
+
+  // AUDIT FIX (6): cost data is set to undefined (dropped from the JSON
+  // payload) unless the caller is BRANCH_MANAGER or above.
+  const canViewCost = PROFIT_VISIBLE_ROLES.includes(session.role);
 
   const receipt = await db.receipt.findUnique({
     where: { id },
@@ -143,7 +164,9 @@ async function getReceiptDetailHandler(...args: unknown[]): Promise<Response> {
       quantity: item.quantity,
       unitType: item.unitType,
       pricePerUnit: item.pricePerUnit,
-      costPrice: item.costPrice,
+      // AUDIT FIX (6): per-line costPrice is supplier-cost data — omitted
+      // unless the caller's role is BRANCH_MANAGER or above.
+      costPrice: canViewCost ? item.costPrice : undefined,
       discountPercent: item.discountPercent,
       taxRate: item.taxRate,
       lineTotal: item.lineTotal,
@@ -168,4 +191,7 @@ async function getReceiptDetailHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: receiptData });
 }
 
-export const GET = withErrorBoundary(getReceiptDetailHandler, 'RECEIPT_DETAIL');
+export const GET = withErrorBoundary(
+  requireStoreAccess(getReceiptDetailHandler) as (...args: unknown[]) => Promise<Response>,
+  'RECEIPT_DETAIL',
+);

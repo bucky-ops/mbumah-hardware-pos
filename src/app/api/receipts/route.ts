@@ -1,13 +1,21 @@
 // GET /api/receipts
+//
+// AUDIT FIX (6): previously wrapped ONLY in withErrorBoundary, so the edge
+// proxy's Bearer-presence check was the only gate. requireStoreAccess now
+// performs full DB-backed session validation and ORM-level tenant scoping
+// (same pattern as the transactions list route).
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
+import { requireStoreAccess, type AuthSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-async function getReceiptsHandler(...args: unknown[]): Promise<Response> {
-  const request = args[0] as NextRequest;
+async function getReceiptsHandler(
+  request: NextRequest,
+  _session: AuthSession,
+): Promise<Response> {
   const { searchParams } = new URL(request.url);
 
   const storeId = searchParams.get('storeId');
@@ -100,4 +108,7 @@ async function getReceiptsHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const GET = withErrorBoundary(getReceiptsHandler, 'RECEIPTS_LIST');
+export const GET = withErrorBoundary(
+  requireStoreAccess(getReceiptsHandler) as (...args: unknown[]) => Promise<Response>,
+  'RECEIPTS_LIST',
+);

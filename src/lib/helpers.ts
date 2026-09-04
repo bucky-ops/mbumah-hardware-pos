@@ -9,6 +9,7 @@
 //   `withSequenceRetry` (src/lib/sequence.ts) as the P2002 backstop.
 
 import crypto from 'crypto';
+import { KES } from '@/lib/money';
 
 function secureSuffix(): string {
   // 5-char base36 ≈ 60M combinations — collision-safe at retail volumes and
@@ -107,16 +108,41 @@ export function generateGiftCardCode(): string {
   return `GC-${parts.join('-')}`;
 }
 
+/**
+ * Compute a sale line's gross subtotal, line discount, tax and total.
+ *
+ * AUDIT FIX (5): this previously did raw IEEE-754 float math
+ * (`pricePerUnit * quantity`, etc.), so results like 0.1 + 0.2 →
+ * 0.30000000000000004 drifted before being frozen into the Decimal columns —
+ * line-sum vs header mismatches of a cent, exactly what eTIMS reconciliation
+ * flags. Every operation now goes through the `Money` primitive (arbitrary
+ * precision decimal, src/lib/money.ts) and is rounded HALF_EVEN (banker's
+ * rounding — the GAAP/IFRS/KRA-VAT standard) to the currency's minor unit
+ * (2dp for KES):
+ *   subtotal = round(pricePerUnit × quantity)
+ *   discount = round(subtotal × discountPercent / 100)
+ *   taxable  = subtotal − discount          (exact — both are 2dp)
+ *   tax      = round(taxable × taxRate / 100)
+ *   total    = taxable + tax                (exact — both are 2dp)
+ *
+ * The exported signature is UNCHANGED so all existing callers keep
+ * compiling; only the numeric behaviour (exact, rounded) is different.
+ */
 export function calculateLineTotal(
   pricePerUnit: number,
   quantity: number,
   discountPercent: number = 0,
   taxRate: number = 16
 ): { subtotal: number; discount: number; tax: number; total: number } {
-  const subtotal = pricePerUnit * quantity;
-  const discount = subtotal * (discountPercent / 100);
-  const taxable = subtotal - discount;
-  const tax = taxable * (taxRate / 100);
-  const total = taxable + tax;
-  return { subtotal, discount, tax, total };
+  const subtotal = KES(pricePerUnit).multiply(quantity).round();
+  const discount = subtotal.multiply(discountPercent / 100).round();
+  const taxable = subtotal.subtract(discount);
+  const tax = taxable.multiply(taxRate / 100).round();
+  const total = taxable.add(tax).round();
+  return {
+    subtotal: subtotal.toNumber(),
+    discount: discount.toNumber(),
+    tax: tax.toNumber(),
+    total: total.toNumber(),
+  };
 }
