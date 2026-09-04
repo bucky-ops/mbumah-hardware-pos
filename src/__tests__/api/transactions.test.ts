@@ -36,7 +36,7 @@ async function withRollback(
     await db.$transaction(async (tx) => {
       await fn(tx);
       throw ROLLBACK;
-    });
+    }, { timeout: 30_000, maxWait: 10_000 });
   } catch (e) {
     if (e === ROLLBACK) return;
     throw e;
