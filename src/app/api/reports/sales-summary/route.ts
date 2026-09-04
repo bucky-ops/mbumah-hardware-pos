@@ -20,14 +20,43 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
-import { requireStoreAccess, type AuthSession } from '@/lib/auth';
+import { requireStoreAccess, MANAGER_PLUS_ROLES, type AuthSession } from '@/lib/auth';
 import {
   generateSalesCSV,
   formatISODate,
   type SalesSummaryData,
 } from '@/lib/report-utils';
+// AUDIT FIX (Task 3-f): unified, VAT-exclusive profit formulas (single source
+// of truth). Replaces the ad-hoc "tax-inclusive totalAmount − COGS" grossProfit.
+import {
+  grossRevenue,
+  netRevenue,
+  grossProfit,
+  vatExclusiveFromTaxInclusive,
+  PROFIT_FORMULA_VERSION,
+} from '@/lib/profit';
+import { KES, Money } from '@/lib/money';
 
 export const dynamic = 'force-dynamic';
+
+// ── AUDIT FIX (Task 3-d): profit/margin redaction at the response boundary ──
+// Task 3-f owns the aggregation above; this block ONLY redacts profit/margin
+// fields (grossProfit, profitMargin, profit, margin, costOfGoods, per-product
+// cost/profit) for callers below branch-manager level (e.g. CASHIER). JSON
+// drops the keys; CSV keeps its column structure with the values blanked.
+const PROFIT_FIELD_KEYS = new Set(['grossProfit', 'profitMargin', 'profit', 'margin', 'costOfGoods']);
+function redactProfitFields<T>(value: T): T {
+  if (value instanceof Date) return value;
+  if (Array.isArray(value)) return value.map((v) => redactProfitFields(v)) as unknown as T;
+  if (value !== null && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      out[key] = PROFIT_FIELD_KEYS.has(key) ? undefined : redactProfitFields(val);
+    }
+    return out as T;
+  }
+  return value;
+}
 
 async function getSalesSummaryHandler(
   request: NextRequest,
@@ -120,56 +149,83 @@ async function getSalesSummaryHandler(
     transactionType: 'SALE' as const,
     paymentStatus: { in: ['COMPLETED', 'PARTIAL'] },
   };
+  // AUDIT FIX (Task 3-f): also sum taxAmount so the previous revenue is
+  // compared on the SAME VAT-exclusive basis as the current period.
   const prevSummary = await db.salesTransaction.aggregate({
     where: prevWhere,
-    _sum: { totalAmount: true },
+    _sum: { totalAmount: true, taxAmount: true },
     _count: true,
   });
 
-  // ── Totals ──
-  // `totalSubtotal` is fetched for diagnostic purposes (gross sales before
-  // discounts) but is not currently surfaced in the report — kept around so
-  // it can be added to SalesSummaryData.totals without another DB round-trip
-  // when the UI requests it. Prefix with underscore to silence the
-  // unused-vars lint rule until then.
-  const _totalSubtotal = Number(summary._sum.subtotal || 0);
-  const totalRevenue = Number(summary._sum.totalAmount || 0);
-  const totalTax = Number(summary._sum.taxAmount || 0);
-  const totalDiscount = Number(summary._sum.discountAmount || 0);
+  // ── Totals (AUDIT FIX Task 3-f — canonical profit chain, see src/lib/profit.ts)
+  // Stored header fields (SalesTransaction):
+  //   totalAmount    = Σ line (subtotal − lineDiscount + lineTax)  → TAX-INCLUSIVE,
+  //                    ALREADY NET of discounts (helpers.calculateLineTotal)
+  //   taxAmount      = Σ line VAT
+  //   discountAmount = Σ line discounts (already embedded in totalAmount)
+  //   subtotal       = Σ line price×qty (pre-discount, VAT-exclusive)
+  const _totalSubtotal = KES(summary._sum.subtotal || 0).round().toNumber();
+  const storedTenderTotal = KES(summary._sum.totalAmount || 0).round().toNumber();
+  const totalTax = KES(summary._sum.taxAmount || 0).round().toNumber();
+  const totalDiscount = KES(summary._sum.discountAmount || 0).round().toNumber();
   const transactionCount = summary._count;
-  const avgOrderValue = Number(summary._avg.totalAmount || 0);
+  // Revenue is ALWAYS VAT-exclusive (totalAmount − taxAmount). Because the
+  // stored totalAmount is already net of discounts, this value IS the net
+  // revenue; applying netRevenue(..., totalDiscount) again would double-
+  // subtract the discount, so the discount is intentionally NOT re-deducted
+  // here. (Header identity: totalRevenue === netRevenue(_totalSubtotal, totalDiscount).)
+  const totalRevenue = grossRevenue(storedTenderTotal, totalTax);
+  const avgOrderValue = KES(summary._avg.totalAmount || 0).round().toNumber(); // avg tender per order (tax-inclusive), unchanged semantics
 
   // Cost of goods from SaleItem snapshots (costPrice stored at sale time).
-  let costOfGoods = 0;
+  // Accumulated through Money (HALF_EVEN-safe) — no float dust.
+  let cogsAccumulator = Money.zero('KES');
   for (const item of saleItems) {
-    const qty = Number(item.quantity);
-    const cost = Number(item.costPrice);
-    if (Number.isFinite(qty) && Number.isFinite(cost)) {
-      costOfGoods += qty * cost;
-    }
+    cogsAccumulator = cogsAccumulator.add(KES(item.costPrice).multiply(Number(item.quantity)));
   }
-  const grossProfit = totalRevenue - costOfGoods;
-  const profitMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+  const costOfGoods = cogsAccumulator.round().toNumber();
+
+  // grossProfit = netRevenue − COGS. netRevenue here === totalRevenue (the
+  // discount is already embedded in the stored total — see note above); the
+  // canonical chain is expressed via netRevenue(grossRevenue, 0-discount) so
+  // the formula lineage is explicit and version-tracked.
+  const netRevenueValue = netRevenue(totalRevenue, 0);
+  const grossProfitValue = grossProfit(netRevenueValue, costOfGoods);
+  const profitMargin = netRevenueValue > 0 ? (grossProfitValue / netRevenueValue) * 100 : 0;
 
   // ── Payment-method breakdown ──
+  // AUDIT FIX (Task 3-f): amounts remain TAX-INCLUSIVE — this is TENDER
+  // collected (what actually entered the drawer), not revenue. The percent
+  // denominator is now the tax-inclusive tender total so shares still sum to
+  // 100% given `totals.revenue` is VAT-exclusive.
   const paymentMap: Record<string, { count: number; amount: number }> = {};
+  let tenderCollected = Money.zero('KES');
   for (const tx of transactions) {
     const method = tx.paymentMethod || 'CASH';
     if (!paymentMap[method]) paymentMap[method] = { count: 0, amount: 0 };
     paymentMap[method].count += 1;
-    paymentMap[method].amount += Number(tx.totalAmount);
+    paymentMap[method].amount += KES(tx.totalAmount).toNumber();
+    tenderCollected = tenderCollected.add(KES(tx.totalAmount));
   }
+  const tenderCollectedTotal = tenderCollected.round().toNumber();
   const paymentBreakdown = Object.entries(paymentMap).map(([method, v]) => ({
     method,
     count: v.count,
-    amount: v.amount,
-    percent: totalRevenue > 0 ? (v.amount / totalRevenue) * 100 : 0,
+    amount: KES(v.amount).round().toNumber(),
+    percent: tenderCollectedTotal > 0 ? (KES(v.amount).toNumber() / tenderCollectedTotal) * 100 : 0,
   }));
 
   // ── Top 10 products by revenue ──
+  // AUDIT FIX (Task 3-f): SaleItem carries no per-line tax AMOUNT column (only
+  // taxRate), so the VAT component of each tax-inclusive lineTotal is recovered
+  // via vatExclusiveFromTaxInclusive(lineTotal, taxRate) — ±0.01/line round-trip
+  // drift vs checkout math, exact for 0-rated lines. Product revenue is now on
+  // the same VAT-exclusive basis as totals.revenue, and per-product profit uses
+  // the canonical grossProfit(netRevenue − COGS) chain instead of a private
+  // "revenue − cost" formula.
   const productMap: Record<string, {
     productId: string; productName: string; sku: string;
-    quantity: number; revenue: number; cost: number;
+    quantity: number; revenue: Money; cost: Money;
   }> = {};
   for (const item of saleItems) {
     const key = item.productId;
@@ -179,19 +235,30 @@ async function getSalesSummaryHandler(
         productName: item.productName,
         sku: item.product?.sku || '',
         quantity: 0,
-        revenue: 0,
-        cost: 0,
+        revenue: Money.zero('KES'),
+        cost: Money.zero('KES'),
       };
     }
     const qty = Number(item.quantity);
-    const lineTotal = Number(item.lineTotal);
-    const cost = Number(item.costPrice) * qty;
+    const lineNetRevenue = KES(vatExclusiveFromTaxInclusive(item.lineTotal, item.taxRate));
     productMap[key].quantity += qty;
-    productMap[key].revenue += lineTotal;
-    productMap[key].cost += cost;
+    productMap[key].revenue = productMap[key].revenue.add(lineNetRevenue);
+    productMap[key].cost = productMap[key].cost.add(KES(item.costPrice).multiply(qty));
   }
   const topProducts = Object.values(productMap)
-    .map((p) => ({ ...p, profit: p.revenue - p.cost }))
+    .map((p) => {
+      const revenue = p.revenue.round().toNumber();
+      const cost = p.cost.round().toNumber();
+      return {
+        productId: p.productId,
+        productName: p.productName,
+        sku: p.sku,
+        quantity: p.quantity,
+        revenue,
+        cost,
+        profit: grossProfit(revenue, cost), // VAT-exclusive net revenue − COGS
+      };
+    })
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 10);
 
@@ -203,17 +270,20 @@ async function getSalesSummaryHandler(
   for (const tx of transactions) {
     const hour = new Date(tx.createdAt).getHours();
     hourlyBuckets[hour].transactionCount += 1;
-    hourlyBuckets[hour].revenue += Number(tx.totalAmount);
+    // AUDIT FIX (Task 3-f): hourly revenue is VAT-exclusive, same basis as totals.revenue.
+    hourlyBuckets[hour].revenue += grossRevenue(tx.totalAmount, tx.taxAmount);
   }
   const hourlyDistribution = hourlyBuckets.map((h) => ({
     ...h,
+    revenue: KES(h.revenue).round().toNumber(),
     label: `${String(h.hour).padStart(2, '0')}:00`,
   }));
 
   // ── Comparison ──
-  const prevRevenue = Number(prevSummary._sum.totalAmount || 0);
+  // AUDIT FIX (Task 3-f): previous revenue now VAT-exclusive, same basis as totalRevenue.
+  const prevRevenue = grossRevenue(prevSummary._sum.totalAmount, prevSummary._sum.taxAmount);
   const prevTransactions = prevSummary._count;
-  const revenueChange = totalRevenue - prevRevenue;
+  const revenueChange = KES(totalRevenue).subtract(KES(prevRevenue)).toNumber();
   const revenueChangePercent = prevRevenue > 0 ? (revenueChange / prevRevenue) * 100 : null;
   const transactionsChange = transactionCount - prevTransactions;
 
@@ -224,13 +294,15 @@ async function getSalesSummaryHandler(
     },
     store: store || { id: storeId, name: 'Unknown Store' },
     totals: {
+      // AUDIT FIX (Task 3-f): `revenue` is now VAT-exclusive (and, per the
+      // stored schema, net of discounts) — same keys, formula-consistent values.
       revenue: totalRevenue,
       transactions: transactionCount,
       avgOrderValue,
       taxCollected: totalTax,
       totalDiscount,
       costOfGoods,
-      grossProfit,
+      grossProfit: grossProfitValue,
       profitMargin,
     },
     comparison: {
@@ -245,6 +317,11 @@ async function getSalesSummaryHandler(
     hourlyDistribution,
   };
 
+  // AUDIT FIX (Task 3-d): strip profit/margin fields for below-manager callers
+  // (response boundary only — the aggregation above was NOT restructured).
+  const viewerIsManagerPlus = MANAGER_PLUS_ROLES.includes(session.role);
+  const outbound = viewerIsManagerPlus ? report : redactProfitFields(report);
+
   // ── Audit log ──
   await systemLog({
     action: 'REPORT_GENERATED',
@@ -256,6 +333,7 @@ async function getSalesSummaryHandler(
     metadata: {
       reportType: 'SALES_SUMMARY',
       format,
+      profitFormulaVersion: PROFIT_FORMULA_VERSION, // AUDIT FIX (Task 3-f): lineage tracking
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
       transactionCount,
@@ -265,7 +343,7 @@ async function getSalesSummaryHandler(
 
   // ── CSV response ──
   if (format === 'csv') {
-    const csv = generateSalesCSV(report);
+    const csv = generateSalesCSV(outbound);
     const filename = `sales_summary_${formatISODate(startDate)}_to_${formatISODate(endDate)}.csv`;
     return new Response(csv, {
       status: 200,
@@ -276,7 +354,7 @@ async function getSalesSummaryHandler(
     });
   }
 
-  return Response.json({ success: true, data: report });
+  return Response.json({ success: true, data: outbound });
 }
 
 export const GET = withErrorBoundary(
