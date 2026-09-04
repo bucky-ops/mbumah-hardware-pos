@@ -3,6 +3,7 @@
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
+import { requireStoreAccess, OWNER_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -170,5 +171,11 @@ async function createBranchHandler(...args: unknown[]): Promise<Response> {
   }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getBranchesHandler, 'BRANCHES_LIST');
-export const POST = withErrorBoundary(createBranchHandler, 'BRANCHES_CREATE');
+// AUDIT FIX (Task 3-d): GET = any store role; POST = OWNER/SUPER_ADMIN only
+// (org-level store creation). The in-handler role check is kept as
+// defense-in-depth behind this wrapper.
+export const GET = withErrorBoundary(requireStoreAccess(getBranchesHandler), 'BRANCHES_LIST');
+export const POST = withErrorBoundary(
+  requireStoreAccess(createBranchHandler, { roles: OWNER_ROLES }),
+  'BRANCHES_CREATE',
+);

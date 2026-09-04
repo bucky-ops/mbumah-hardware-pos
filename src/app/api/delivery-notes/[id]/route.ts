@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -114,5 +115,13 @@ async function updateDeliveryNoteHandler(...args: unknown[]): Promise<Response> 
   return Response.json({ success: true, data: deliveryNote });
 }
 
-export const GET = withErrorBoundary(getDeliveryNoteHandler, 'DELIVERY_NOTE_DETAIL');
-export const PUT = withErrorBoundary(updateDeliveryNoteHandler, 'DELIVERY_NOTE_UPDATE');
+// AUDIT FIX (Task 3-d): session-validated (was Bearer-presence only).
+// Any store role — delivery status updates are part of the fulfillment flow.
+export const GET = withErrorBoundary(
+  withSessionAuth(getDeliveryNoteHandler),
+  'DELIVERY_NOTE_DETAIL',
+);
+export const PUT = withErrorBoundary(
+  withSessionAuth(updateDeliveryNoteHandler),
+  'DELIVERY_NOTE_UPDATE',
+);

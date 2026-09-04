@@ -3,6 +3,7 @@
 import { type NextRequest } from 'next/server';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,4 +65,9 @@ async function sendWhatsAppHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const POST = withErrorBoundary(sendWhatsAppHandler, 'WHATSAPP_SEND');
+// AUDIT FIX (Task 3-d): WhatsApp outbound messaging = manager-or-above
+// (external communications must not be triggerable by junior roles).
+export const POST = withErrorBoundary(
+  withSessionAuth(sendWhatsAppHandler, { roles: MANAGER_PLUS_ROLES }),
+  'WHATSAPP_SEND',
+);

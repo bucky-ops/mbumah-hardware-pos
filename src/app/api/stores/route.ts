@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { db, runWithoutTenant } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
+import { requireStoreAccess } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,4 +38,7 @@ async function getHandler(request: NextRequest): Promise<Response> {
   });
 }
 
-export const GET = withErrorBoundary(getHandler, 'STORES');
+// AUDIT FIX (Task 3-d): session-validated (was Bearer-presence only).
+// GET = any store role (store selection happens before a store is assigned).
+// The handler keeps its inner runWithoutTenant (cross-tenant listing by org).
+export const GET = withErrorBoundary(requireStoreAccess(getHandler), 'STORES');

@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -135,5 +136,10 @@ async function updateCustomerHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: customer });
 }
 
-export const GET = withErrorBoundary(getCustomerHandler, 'CUSTOMER_DETAIL');
-export const PUT = withErrorBoundary(updateCustomerHandler, 'CUSTOMER_UPDATE');
+// AUDIT FIX (Task 3-d): GET = any store role; PUT = manager-or-above per
+// PERMISSION_MATRIX (CASHIER customers: ['read'] — no 'update').
+export const GET = withErrorBoundary(withSessionAuth(getCustomerHandler), 'CUSTOMER_DETAIL');
+export const PUT = withErrorBoundary(
+  withSessionAuth(updateCustomerHandler, { roles: MANAGER_PLUS_ROLES }),
+  'CUSTOMER_UPDATE',
+);

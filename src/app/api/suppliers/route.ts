@@ -4,7 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
-import { withSessionAuth } from '@/lib/auth';
+import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -139,5 +139,10 @@ async function createSupplierHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: supplier }, { status: 201 });
 }
 
+// AUDIT FIX (Task 3-d): GET = any store role; POST (supplier master data) =
+// manager-or-above (procurement-side write).
 export const GET = withErrorBoundary(withSessionAuth(getSuppliersHandler), 'SUPPLIERS_LIST');
-export const POST = withErrorBoundary(withSessionAuth(createSupplierHandler), 'SUPPLIERS_CREATE');
+export const POST = withErrorBoundary(
+  withSessionAuth(createSupplierHandler, { roles: MANAGER_PLUS_ROLES }),
+  'SUPPLIERS_CREATE',
+);

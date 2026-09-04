@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -134,5 +135,13 @@ async function createLoyaltyCampaignHandler(...args: unknown[]): Promise<Respons
   return Response.json({ success: true, data: campaign }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getLoyaltyCampaignsHandler, 'LOYALTY_CAMPAIGNS_LIST');
-export const POST = withErrorBoundary(createLoyaltyCampaignHandler, 'LOYALTY_CAMPAIGNS_CREATE');
+// AUDIT FIX (Task 3-d): GET = any store role; POST (campaign create) =
+// manager-or-above.
+export const GET = withErrorBoundary(
+  withSessionAuth(getLoyaltyCampaignsHandler),
+  'LOYALTY_CAMPAIGNS_LIST',
+);
+export const POST = withErrorBoundary(
+  withSessionAuth(createLoyaltyCampaignHandler, { roles: MANAGER_PLUS_ROLES }),
+  'LOYALTY_CAMPAIGNS_CREATE',
+);

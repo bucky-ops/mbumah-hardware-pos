@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getEtimsConfig } from '@/lib/etims-service';
+import { withErrorBoundary } from '@/lib/logger';
+import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-// GET /api/etims/settings — Get eTIMS configuration
-export async function GET() {
+// GET /api/etims/settings — Get eTIMS configuration (masked).
+async function getEtimsSettingsHandler(..._args: unknown[]): Promise<Response> {
   const config = getEtimsConfig();
   // Mask sensitive fields
   return NextResponse.json({
@@ -21,8 +23,9 @@ export async function GET() {
   });
 }
 
-// PUT /api/etims/settings — Update eTIMS configuration (SUPER_ADMIN only)
-export async function PUT(request: Request) {
+// PUT /api/etims/settings — Update eTIMS configuration.
+async function putEtimsSettingsHandler(...args: unknown[]): Promise<Response> {
+  const request = args[0] as Request;
   try {
     const body = await request.json();
     const { sandbox, tin, branchId, bvsn, deviceSerial } = body;
@@ -49,3 +52,15 @@ export async function PUT(request: Request) {
     );
   }
 }
+
+// AUDIT FIX (Task 3-d): session-validated (was completely unguarded).
+// GET = any store role (masked config read for the settings UI);
+// PUT (KRA device configuration) = manager-or-above.
+export const GET = withErrorBoundary(
+  withSessionAuth(getEtimsSettingsHandler),
+  'ETIMS_SETTINGS',
+);
+export const PUT = withErrorBoundary(
+  withSessionAuth(putEtimsSettingsHandler, { roles: MANAGER_PLUS_ROLES }),
+  'ETIMS_SETTINGS_UPDATE',
+);

@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -139,5 +140,13 @@ async function createVoucherCampaignHandler(...args: unknown[]): Promise<Respons
   return Response.json({ success: true, data: campaign }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getVoucherCampaignsHandler, 'VOUCHER_CAMPAIGNS_LIST');
-export const POST = withErrorBoundary(createVoucherCampaignHandler, 'VOUCHER_CAMPAIGNS_CREATE');
+// AUDIT FIX (Task 3-d): GET = any store role; POST (campaign create w/ budget)
+// = manager-or-above.
+export const GET = withErrorBoundary(
+  withSessionAuth(getVoucherCampaignsHandler),
+  'VOUCHER_CAMPAIGNS_LIST',
+);
+export const POST = withErrorBoundary(
+  withSessionAuth(createVoucherCampaignHandler, { roles: MANAGER_PLUS_ROLES }),
+  'VOUCHER_CAMPAIGNS_CREATE',
+);

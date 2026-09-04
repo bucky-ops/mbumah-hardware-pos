@@ -5,7 +5,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
-import { requireAuth } from '@/lib/auth';
+import { requireAuth, withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
 import { distributeReceipt } from '@/lib/receipt-distribution';
 import { APIError } from '@/lib/api-error';
 
@@ -237,7 +237,12 @@ async function getExportHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const GET = withErrorBoundary(getExportHandler, 'REPORTS_EXPORT');
+// AUDIT FIX (Task 3-d): CSV export (incl. cost/margin columns) =
+// manager-or-above — exports leak cost & margin data to lower roles.
+export const GET = withErrorBoundary(
+  withSessionAuth(getExportHandler, { roles: MANAGER_PLUS_ROLES }),
+  'REPORTS_EXPORT',
+);
 
 // ── POST /api/reports/export ────────────────────────────────────────────────
 //

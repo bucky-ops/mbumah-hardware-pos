@@ -20,6 +20,7 @@ import { LogSeverity, LogComponent } from '@/lib/types';
 import { formatKES, formatDate } from '@/lib/helpers';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -431,4 +432,9 @@ async function getExportPdfHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-export const GET = withErrorBoundary(getExportPdfHandler, 'REPORTS_EXPORT_PDF');
+// AUDIT FIX (Task 3-d): printable report export (sales/inventory/debt/rentals,
+// cost & margin columns) = manager-or-above — exports leak margin data.
+export const GET = withErrorBoundary(
+  withSessionAuth(getExportPdfHandler, { roles: MANAGER_PLUS_ROLES }),
+  'REPORTS_EXPORT_PDF',
+);

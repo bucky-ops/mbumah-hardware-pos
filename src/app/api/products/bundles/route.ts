@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateSKU } from '@/lib/helpers';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -301,5 +302,10 @@ async function createBundleHandler(...args: unknown[]): Promise<Response> {
   }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getBundlesHandler, 'BUNDLES_LIST');
-export const POST = withErrorBoundary(createBundleHandler, 'BUNDLES_CREATE');
+// AUDIT FIX (Task 3-d): GET = any store role; POST (bundle create w/ cost+price)
+// = manager-or-above per PERMISSION_MATRIX (products: 'create').
+export const GET = withErrorBoundary(withSessionAuth(getBundlesHandler), 'BUNDLES_LIST');
+export const POST = withErrorBoundary(
+  withSessionAuth(createBundleHandler, { roles: MANAGER_PLUS_ROLES }),
+  'BUNDLES_CREATE',
+);

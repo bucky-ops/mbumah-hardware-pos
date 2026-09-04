@@ -4,6 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -104,5 +105,10 @@ async function createCategoryHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: category }, { status: 201 });
 }
 
-export const GET = withErrorBoundary(getCategoriesHandler, 'CATEGORIES_LIST');
-export const POST = withErrorBoundary(createCategoryHandler, 'CATEGORIES_CREATE');
+// AUDIT FIX (Task 3-d): GET = any store role; POST (catalog taxonomy write) =
+// manager-or-above.
+export const GET = withErrorBoundary(withSessionAuth(getCategoriesHandler), 'CATEGORIES_LIST');
+export const POST = withErrorBoundary(
+  withSessionAuth(createCategoryHandler, { roles: MANAGER_PLUS_ROLES }),
+  'CATEGORIES_CREATE',
+);

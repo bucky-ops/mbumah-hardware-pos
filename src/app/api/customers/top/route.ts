@@ -5,11 +5,13 @@
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
+import { withSessionAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-async function getTopCustomersHandler(req: NextRequest): Promise<Response> {
-  const { searchParams } = new URL(req.url);
+async function getTopCustomersHandler(...args: unknown[]): Promise<Response> {
+  const request = args[0] as NextRequest;
+  const { searchParams } = new URL(request.url);
   const storeId = searchParams.get('storeId');
   if (!storeId) {
     return Response.json(
@@ -123,4 +125,9 @@ async function getTopCustomersHandler(req: NextRequest): Promise<Response> {
   });
 }
 
-export const GET = withErrorBoundary(getTopCustomersHandler, 'CUSTOMERS_TOP');
+// AUDIT FIX (Task 3-d): session-validated (was Bearer-presence only).
+// Any store role — read-only top-customers aggregation.
+export const GET = withErrorBoundary(
+  withSessionAuth(getTopCustomersHandler),
+  'CUSTOMERS_TOP',
+);
