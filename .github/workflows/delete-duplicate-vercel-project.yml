@@ -1,0 +1,97 @@
+# ============================================================================
+# MBUMAH HARDWARE POS — Delete duplicate Vercel project (guarded)
+# ============================================================================
+# The repo is linked to TWO Vercel projects, so every commit deploys twice.
+# This workflow deletes the DUPLICATE after verifying:
+#   1. Exactly 2 projects match mbumah-hardware-pos*
+#   2. The keeper is the project serving the live production domain
+#   3. The target has ZERO domains (nothing user-facing points at it)
+#   4. The operator typed the exact project name + DELETE
+# DELETION IS PERMANENT — this cannot be undone.
+# ============================================================================
+
+name: Delete Duplicate Vercel Project
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_name:
+        description: 'Exact Vercel project name to DELETE (the duplicate)'
+        required: true
+        default: ''
+      confirm:
+        description: 'Type DELETE to confirm permanent deletion'
+        required: true
+        default: ''
+
+concurrency:
+  group: delete-dup-project
+  cancel-in-progress: false
+
+env:
+  LIVE_DOMAIN: mbumah-hardware-pos-one.vercel.app
+
+jobs:
+  delete:
+    name: Guarded duplicate deletion
+    runs-on: ubuntu-latest
+    steps:
+      - name: Guard — require confirmation
+        if: github.event.inputs.confirm != 'DELETE'
+        run: |
+          echo "::error::Input 'confirm' must be exactly DELETE. Aborting."
+          exit 1
+
+      - name: Resolve projects and domains
+        run: |
+          TOKEN="${{ secrets.VERCEL_TOKEN }}"
+          ORG="${{ secrets.VERCEL_ORG_ID }}"
+          TEAMQS=""
+          if [[ "$ORG" == team_* ]]; then TEAMQS="?teamId=$ORG"; fi
+          echo "TEAMQS=$TEAMQS" >> $GITHUB_ENV
+          echo "VERCEL_TOKEN=$TOKEN" >> $GITHUB_ENV
+
+          curl -s -H "Authorization: Bearer $TOKEN" \
+            "https://api.vercel.com/v9/projects?limit=100$TEAMQS" > /tmp/projects.json
+          MATCHED=$(jq -r '.projects[] | select(.name | startswith("mbumah-hardware-pos")) | "\(.id) \(.name)"' /tmp/projects.json)
+          echo "Matched projects:"; echo "$MATCHED"
+          COUNT=$(echo "$MATCHED" | grep -c . || true)
+          [ "$COUNT" = "2" ] || { echo "::error::Expected exactly 2 matching projects, found $COUNT. Aborting."; exit 1; }
+
+          # Find the keeper: the project that owns the live domain.
+          KEEPER=""; TARGET=""
+          while IFS=' ' read -r PID PNAME; do
+            curl -s -H "Authorization: Bearer $TOKEN" \
+              "https://api.vercel.com/v9/projects/$PID/domains$TEAMQS" > /tmp/dom-$PID.json
+            HAS_LIVE=$(jq -r --arg d "$LIVE_DOMAIN" '[.domains[]? | .name] | index($d) != null' /tmp/dom-$PID.json)
+            DOM_NAMES=$(jq -r '[.domains[]?.name] | join(", ")' /tmp/dom-$PID.json)
+            echo "Project $PNAME domains: [$DOM_NAMES] — serves live domain: $HAS_LIVE"
+            if [ "$HAS_LIVE" = "true" ]; then KEEPER="$PNAME"; else TARGET="$PNAME"; TARGET_ID="$PID"; TARGET_DOMAINS="$DOM_NAMES"; fi
+          done <<< "$MATCHED"
+
+          [ -n "$KEEPER" ] && [ -n "$TARGET" ] || { echo "::error::Could not uniquely resolve keeper vs target. Aborting."; exit 1; }
+          [ -n "$TARGET_DOMAINS" ] && { echo "::error::Target project '$TARGET' HAS domains [$TARGET_DOMAINS] — refusing to delete something that may serve traffic. Remove its domains first."; exit 1; }
+          echo "KEEPER=$KEEPER" >> $GITHUB_ENV
+          echo "TARGET=$TARGET" >> $GITHUB_ENV
+          echo "TARGET_ID=$TARGET_ID" >> $GITHUB_ENV
+
+      - name: Guard — operator must name the resolved duplicate
+        if: github.event.inputs.project_name != env.TARGET
+        run: |
+          echo "::error::Input project_name '${{ github.event.inputs.project_name }}' does not match resolved duplicate '$TARGET'. Aborting."
+          exit 1
+
+      - name: Delete duplicate project (PERMANENT)
+        run: |
+          CODE=$(curl -s -o /tmp/del.json -w "%{http_code}" -X DELETE \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v9/projects/$TARGET_ID$TEAMQS")
+          echo "DELETE $TARGET -> HTTP $CODE"
+          [ "$CODE" = "200" ] || { cat /tmp/del.json; echo "::error::Deletion failed"; exit 1; }
+
+      - name: Summary
+        run: |
+          echo "## 🧹 Duplicate Vercel project removed" >> $GITHUB_STEP_SUMMARY
+          echo "- Kept: **$KEEPER** (serves $LIVE_DOMAIN)" >> $GITHUB_STEP_SUMMARY
+          echo "- Deleted: **$TARGET** (had no domains)" >> $GITHUB_STEP_SUMMARY
+          echo "- Every commit now produces exactly ONE production deployment" >> $GITHUB_STEP_SUMMARY

@@ -62,3 +62,22 @@ if (typeof globalThis.matchMedia === 'undefined') {
     dispatchEvent: () => false,
   });
 }
+
+// ── Prisma engine warm-up ────────────────────────────────────────────────────
+// The first DB-touching transaction after a cold process start absorbs
+// one-time costs (engine spin-up, connection open, client-extension init).
+// Under CI those costs (~5s) happen INSIDE the test's rollback transaction
+// and trip Prisma's low-level socket timeout. Warming up here — AFTER the
+// DATABASE_URL forcing above, via dynamic import so the client is created
+// with the forced env — makes every timed transaction deterministic.
+import { beforeAll } from 'vitest';
+
+beforeAll(async () => {
+  try {
+    const { db } = await import('@/lib/db');
+    await db.$queryRaw`SELECT 1`;
+  } catch (e) {
+    // Pure-logic test files don't need the DB; never fail them on warm-up.
+    console.warn('[setup] Prisma warm-up skipped:', (e as Error).message);
+  }
+}, 60_000);

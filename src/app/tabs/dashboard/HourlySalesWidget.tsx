@@ -9,7 +9,7 @@
 
 import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Clock, Zap, MoonSun, TrendingUp } from 'lucide-react';
+import { Clock, Zap, SunMoon, TrendingUp } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -201,7 +201,7 @@ export function HourlySalesWidget({ storeId }: HourlySalesWidgetProps) {
 
           <div className="rounded-lg border p-2 text-center bg-muted/20">
             <div className="flex items-center justify-center gap-1 text-[10px] text-muted-foreground">
-              <MoonSun className="h-3 w-3 text-cyan-500" />
+              <SunMoon className="h-3 w-3 text-cyan-500" />
               Quiet Hour
             </div>
             <p className="text-sm font-bold mt-0.5 text-cyan-700 dark:text-cyan-400">

@@ -64,9 +64,9 @@ This script:
 **The exact values to set:**
 
 ```
-DATABASE_URL = postgresql://neondb_owner:npg_aRfWJIn8Neq9@ep-calm-butterfly-aivj6kzm-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&pgbouncer=true&connect_timeout=15
+DATABASE_URL = postgresql://neondb_owner:REDACTED-ROTATED-SEE-SECURITY-ADVISORY@ep-calm-butterfly-aivj6kzm-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&pgbouncer=true&connect_timeout=15
 
-DIRECT_URL = postgresql://neondb_owner:npg_aRfWJIn8Neq9@ep-calm-butterfly-aivj6kzm-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&pgbouncer=true&connect_timeout=30
+DIRECT_URL = postgresql://neondb_owner:REDACTED-ROTATED-SEE-SECURITY-ADVISORY@ep-calm-butterfly-aivj6kzm-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&pgbouncer=true&connect_timeout=30
 
 NEXTAUTH_URL = https://mbumah-hardware-pos-one.vercel.app
 
@@ -163,8 +163,8 @@ Run these commands **locally** with the production `DATABASE_URL` set in your sh
 
 ```bash
 # 1. Set the production DATABASE_URL in your shell (temporarily)
-export DATABASE_URL="postgresql://neondb_owner:npg_aRfWJIn8Neq9@ep-calm-butterfly-aivj6kzm-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&pgbouncer=true&connect_timeout=15"
-export DIRECT_URL="postgresql://neondb_owner:npg_aRfWJIn8Neq9@ep-calm-butterfly-aivj6kzm-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&pgbouncer=true&connect_timeout=30"
+export DATABASE_URL="postgresql://neondb_owner:REDACTED-ROTATED-SEE-SECURITY-ADVISORY@ep-calm-butterfly-aivj6kzm-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&pgbouncer=true&connect_timeout=15"
+export DIRECT_URL="postgresql://neondb_owner:REDACTED-ROTATED-SEE-SECURITY-ADVISORY@ep-calm-butterfly-aivj6kzm-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&pgbouncer=true&connect_timeout=30"
 
 # 2. Push the Prisma schema (creates all 43 tables)
 bun run db:push

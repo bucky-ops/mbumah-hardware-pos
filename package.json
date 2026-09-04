@@ -9,6 +9,7 @@
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "prisma:validate": "prisma validate",
     "typecheck": "tsc --noEmit --strict",
     "test": "vitest run",
     "test:watch": "vitest",

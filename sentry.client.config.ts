@@ -45,7 +45,7 @@ const SENTRY_DSN =
   '';
 
 // ── Environment + release ────────────────────────────────────────────────────
-const ENVIRONMENT =
+const ENVIRONMENT: string =
   process.env.NODE_ENV ||
   (process.env.VERCEL_ENV as string | undefined) ||
   'development';
@@ -97,20 +97,13 @@ if (SENTRY_DSN) {
     //     and clicks for performance traces.
     //   • replayIntegration: records the DOM for error-session replays.
     integrations: [
-      Sentry.browserTracingIntegration({
-        // Instrument navigation and route transitions.
-        traceNavigation: true,
-      }),
+      Sentry.browserTracingIntegration(),
       Sentry.replayIntegration({
         // Mask sensitive input types. `maskAllText` is OFF so we can see
         // button labels / receipts in replays, but inputs are masked.
         maskAllInputs: true,
         maskAllText: false,
         blockAllMedia: false,
-        // Additional CSS selectors to block from replays (e.g. receipt
-        // previews that may contain customer PII).
-        blockSelector: '[data-sentry-block]',
-        maskSelector: '[data-sentry-mask]',
       }),
     ],
 
