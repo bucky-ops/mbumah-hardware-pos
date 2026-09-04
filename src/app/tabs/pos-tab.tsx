@@ -71,12 +71,19 @@ import { ProductCard } from '@/components/pos/product-card';
 import { CartItemRow } from '@/components/pos/cart-item-row';
 import { DashboardStats } from '@/components/pos/dashboard-stats';
 import { CheckoutDialog } from '@/components/pos/checkout-dialog';
+import { HeldCartsDialog, type HeldCartRecord } from '@/components/pos/held-carts-dialog';
 
 // POS TAB (kept inline - core feature)
 
 // Escape HTML special chars for safe inclusion in print-window HTML strings.
 export default function POSTab() {
+  // AUDIT FIX (Task 3-e): search input value is decoupled from the query that
+  // drives the products fetch/grid. searchInput updates instantly (keeps typing
+  // + scanning responsive); searchQuery is debounced (200ms) so rapid barcode
+  // scans don't thrash the products query and grid re-renders.
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [mpesaPhone, setMpesaPhone] = useState('');
@@ -150,6 +157,22 @@ export default function POSTab() {
     () => 0, // SSR snapshot — no queue on the server
   );
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // AUDIT FIX (Task 3-e): held carts (localStorage 'mbt_held_carts') mirrored in
+  // state so the picker is reactive. Replaces the blind LIFO `pop()` recall —
+  // any held cart can now be resumed out of order or deleted.
+  const [heldCarts, setHeldCarts] = useState<HeldCartRecord[]>([]);
+  const [heldCartsOpen, setHeldCartsOpen] = useState(false);
+  const refreshHeldCarts = useCallback(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('mbt_held_carts') || '[]');
+      setHeldCarts(Array.isArray(raw) ? raw : []);
+    } catch {
+      setHeldCarts([]);
+    }
+  }, []);
+
+  useEffect(() => { refreshHeldCarts(); }, [refreshHeldCarts]);
 
   const authUser = useAuthStore((s) => s.user);
   const cart = useCartStore();
@@ -672,62 +695,147 @@ export default function POSTab() {
     toast.success(`${product.name} added to cart`);
   };
 
+  // AUDIT FIX (Task 3-e): debounce the query that drives the products fetch/grid
+  // (200ms) so rapid typing or a burst of scans doesn't thrash re-renders; the
+  // input itself stays instantly responsive.
+  const handleSearchInput = (value: string) => {
+    setSearchInput(value);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => setSearchQuery(value), 200);
+  };
+
+  // AUDIT FIX (Task 3-e): barcode scanner hardening — thermal scanners emit
+  // <code>\n, so Enter means "scan finished". An exact (case-insensitive) match
+  // on barcode OR SKU goes straight to the cart and the input is cleared, making
+  // scan → in-cart deterministic and preventing concatenation between scans.
+  // Non-matches fall through to the normal search/filter behaviour.
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter') return;
+    const code = e.currentTarget.value.trim();
+    if (!code) return;
+    const needle = code.toLowerCase();
+    const matches = products.filter((p) =>
+      (p.barcode || '').toLowerCase() === needle || p.sku.toLowerCase() === needle
+    );
+    if (matches.length === 1) {
+      e.preventDefault();
+      handleAddToCart(matches[0]);
+      // Cancel any pending debounce so the cleared input doesn't re-filter.
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      setSearchInput('');
+      setSearchQuery('');
+      return;
+    }
+    if (matches.length === 0) {
+      // Exact-match miss: non-blocking feedback; the typed/scanned value stays
+      // in the box and the debounced filter proceeds as before.
+      toast.error(`No product matched "${code}" — check the code or add the item manually.`);
+    }
+    // >1 match (duplicate barcode/SKU): keep the filter results for a manual pick.
+  };
+
+  useEffect(() => () => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+  }, []);
+
   // Hold/Recall cart functionality
   const holdCart = () => {
     if (cart.items.length === 0) {
       toast.error('Cart is empty - nothing to hold');
       return;
     }
-    const heldCarts = JSON.parse(localStorage.getItem('mbt_held_carts') || '[]');
+    let heldList: HeldCartRecord[] = [];
+    try {
+      heldList = JSON.parse(localStorage.getItem('mbt_held_carts') || '[]');
+    } catch {
+      heldList = [];
+    }
     const holdId = `hold_${Date.now()}`;
-    heldCarts.push({ id: holdId, items: cart.items, customer: selectedCustomer, notes: cartNotes, timestamp: new Date().toISOString() });
-    localStorage.setItem('mbt_held_carts', JSON.stringify(heldCarts));
+    // AUDIT FIX (Task 3-e): append picker metadata — unit count + pre-tax total
+    // (Σ lineTotal, after line discounts) at hold time, so the picker can render
+    // rows without rebuilding the cart.
+    const heldTotal = cart.items.reduce(
+      (sum, item) => sum + (Number(item.lineTotal) || item.pricePerUnit * item.quantity),
+      0,
+    );
+    heldList.push({
+      id: holdId,
+      items: cart.items,
+      customer: selectedCustomer,
+      notes: cartNotes,
+      timestamp: new Date().toISOString(),
+      count: cart.getItemCount(),
+      total: heldTotal,
+    });
+    localStorage.setItem('mbt_held_carts', JSON.stringify(heldList));
     cart.clearCart();
     setCartNotes({});
     setCartDiscountInput('');
     setSelectedCustomer('');
+    refreshHeldCarts();
     toast.success('Cart held successfully');
   };
 
-  const recallCart = () => {
-    const heldCarts = JSON.parse(localStorage.getItem('mbt_held_carts') || '[]');
-    if (heldCarts.length === 0) {
-      toast.info('No held carts to recall');
+  // AUDIT FIX (Task 3-e): out-of-order resume — restore a specific held cart by
+  // id (was a blind `heldCarts.pop()` LIFO-only recall). Restore logic unchanged.
+  const resumeHeldCart = (holdId: string) => {
+    let heldList: HeldCartRecord[] = [];
+    try {
+      heldList = JSON.parse(localStorage.getItem('mbt_held_carts') || '[]');
+    } catch {
+      heldList = [];
+    }
+    const record = heldList.find((c) => c.id === holdId);
+    if (!record || !Array.isArray(record.items)) {
+      toast.error('Held cart not found — it may have been deleted on another device.');
+      refreshHeldCarts();
       return;
     }
-    const lastHeld = heldCarts.pop();
-    if (lastHeld && lastHeld.items) {
-      // Clear current cart first
-      cart.clearCart();
-      setCartNotes({});
-      // Add all items from held cart
-      lastHeld.items.forEach((item: CartItem) => {
-        cart.addItem({
-          productId: item.productId,
-          productName: item.productName,
-          sku: item.sku,
-          quantity: item.quantity,
-          unitType: item.unitType,
-          pricePerUnit: item.pricePerUnit,
-          costPrice: item.costPrice,
-          discountPercent: item.discountPercent,
-          taxRate: item.taxRate,
-          isRentalItem: item.isRentalItem,
-          isBundle: item.isBundle,
-        });
+    // Clear current cart first
+    cart.clearCart();
+    setCartNotes({});
+    // Add all items from held cart
+    record.items.forEach((item: CartItem) => {
+      cart.addItem({
+        productId: item.productId,
+        productName: item.productName,
+        sku: item.sku,
+        quantity: item.quantity,
+        unitType: item.unitType,
+        pricePerUnit: item.pricePerUnit,
+        costPrice: item.costPrice,
+        discountPercent: item.discountPercent,
+        taxRate: item.taxRate,
+        isRentalItem: item.isRentalItem,
+        isBundle: item.isBundle,
       });
-      if (lastHeld.customer) setSelectedCustomer(lastHeld.customer);
-      if (lastHeld.notes) setCartNotes(lastHeld.notes);
-      localStorage.setItem('mbt_held_carts', JSON.stringify(heldCarts));
-      toast.success('Cart recalled successfully');
-    }
+    });
+    if (record.customer) setSelectedCustomer(record.customer);
+    if (record.notes) setCartNotes(record.notes);
+    localStorage.setItem('mbt_held_carts', JSON.stringify(heldList.filter((c) => c.id !== holdId)));
+    refreshHeldCarts();
+    setHeldCartsOpen(false);
+    toast.success('Cart resumed successfully');
   };
 
-  const heldCartCount = (() => {
+  // AUDIT FIX (Task 3-e): drop a held cart. Stock is never reserved while a cart
+  // is held (hold is localStorage-only, no server call), so nothing needs to be
+  // released — deleting just discards the record.
+  const deleteHeldCart = (holdId: string) => {
+    let heldList: HeldCartRecord[] = [];
     try {
-      return JSON.parse(localStorage.getItem('mbt_held_carts') || '[]').length;
-    } catch { return 0; }
-  })();
+      heldList = JSON.parse(localStorage.getItem('mbt_held_carts') || '[]');
+    } catch {
+      heldList = [];
+    }
+    localStorage.setItem('mbt_held_carts', JSON.stringify(heldList.filter((c) => c.id !== holdId)));
+    refreshHeldCarts();
+    toast.success('Held cart deleted');
+  };
+
+  // AUDIT FIX (Task 3-e): reactive count from the picker state (was re-read from
+  // localStorage on every render).
+  const heldCartCount = heldCarts.length;
 
   const applyDiscountCode = () => {
     if (!discountCode.trim()) {
@@ -1095,9 +1203,11 @@ export default function POSTab() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search products by name, SKU, or barcode..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={searchInput}
+                onChange={(e) => handleSearchInput(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
                 className="pl-10"
+                aria-label="Product search or barcode scanner input"
               />
             </div>
             {/* View Mode Toggle */}
@@ -1358,7 +1468,7 @@ export default function POSTab() {
               </CardTitle>
               <div className="flex items-center gap-1">
                 {heldCartCount > 0 && (
-                  <Button variant="ghost" size="sm" onClick={recallCart} className="text-blue-600 h-7" title="Recall held cart">
+                  <Button variant="ghost" size="sm" onClick={() => setHeldCartsOpen(true)} className="text-blue-600 h-7" title="View held carts (resume any)">
                     <ShoppingBag className="h-3.5 w-3.5 mr-1" /> Recall
                   </Button>
                 )}
@@ -1668,6 +1778,17 @@ export default function POSTab() {
         cartItems={cart.items}
         subtotal={subtotal}
         taxAmount={tax}
+      />
+
+      {/* AUDIT FIX (Task 3-e): held-carts picker — resume any parked cart out of
+          order, or delete it. Replaces the blind LIFO recall. */}
+      <HeldCartsDialog
+        open={heldCartsOpen}
+        onOpenChange={setHeldCartsOpen}
+        heldCarts={heldCarts}
+        customers={customers}
+        onResume={resumeHeldCart}
+        onDelete={deleteHeldCart}
       />
 
       {/* Receipt Dialog (ResponsiveDialog) — Print + WhatsApp + New Sale */}
@@ -2110,7 +2231,7 @@ export default function POSTab() {
               </div>
               <div className="flex items-center gap-1">
                 {heldCartCount > 0 && (
-                  <Button variant="ghost" size="sm" onClick={recallCart} className="text-blue-600 h-7 text-xs">
+                  <Button variant="ghost" size="sm" onClick={() => setHeldCartsOpen(true)} className="text-blue-600 h-7 text-xs" title="View held carts (resume any)">
                     <ShoppingBag className="h-3.5 w-3.5 mr-1" /> Recall
                   </Button>
                 )}
