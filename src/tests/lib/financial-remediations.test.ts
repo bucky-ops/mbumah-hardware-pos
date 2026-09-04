@@ -47,9 +47,28 @@ afterAll(async () => {
   await db.product.deleteMany({ where: { id: { in: createdProductIds } } }).catch(() => {});
 });
 
+// CI runners occasionally hit a one-off Prisma engine cold-start stall
+// (same flake class the rollback helpers fixed with generous timeouts).
+// One retry absorbs it without masking real failures.
+async function withDbRetry<T>(fn: () => Promise<T>, attempts = 2): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!/Socket timeout|timed out/i.test(msg)) throw err;
+      await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 async function makeTestProduct(overrides: { quantity?: number; cost?: number } = {}) {
   const suffix = Math.random().toString(36).slice(2, 10);
-  const product = await db.product.create({
+  const product = await withDbRetry(() =>
+    db.product.create({
     data: {
       storeId: STORE_ID,
       name: `AUDIT-TEST ${suffix}`,
@@ -60,8 +79,8 @@ async function makeTestProduct(overrides: { quantity?: number; cost?: number } =
       unitType: 'PIECE',
       isActive: true,
       reorderLevel: 1,
-    } as never,
-  });
+    } as never),
+  );
   createdProductIds.push(product.id);
   return product;
 }
@@ -161,7 +180,8 @@ describe('conditional decrements (R1/R2 remediation)', () => {
 
   it('refuses a gift-card redemption beyond the remaining balance (R2)', async () => {
     const suffix = Math.random().toString(36).slice(2, 10);
-    const card = await db.giftCard.create({
+    const card = await withDbRetry(() =>
+      db.giftCard.create({
       data: {
         storeId: STORE_ID,
         code: `AUDGC-${suffix}`,
@@ -169,8 +189,8 @@ describe('conditional decrements (R1/R2 remediation)', () => {
         initialBalance: 1000,
         currentBalance: 1000,
         status: 'ACTIVE',
-      },
-    });
+      }),
+    );
     createdGiftCardIds.push(card.id);
 
     // Drain 800 — succeeds.
@@ -202,14 +222,15 @@ describe('serial lifecycle (F2-1 remediation)', () => {
     const product = await makeTestProduct({ quantity: 3 });
     const suffix = Math.random().toString(36).slice(2, 10);
 
-    const serialRow = await db.serialNumber.create({
+    const serialRow = await withDbRetry(() =>
+      db.serialNumber.create({
       data: {
         productId: product.id,
         storeId: STORE_ID,
         serial: `AUDSN-${suffix}`,
         status: 'IN_STOCK',
-      },
-    });
+      }),
+    );
     createdSerialIds.push(serialRow.id);
 
     // Sale A claims the serial.
