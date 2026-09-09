@@ -2,13 +2,26 @@
 //
 // Approve a PENDING_APPROVAL plan: set status → ACTIVE and record the
 // approving user. Only senior financial roles can approve.
+//
+// Task 12-d (debt-plan audit) changes:
+//   - The status check + update are now a single ATOMIC conditional
+//     `updateMany({ where: { id, status: 'PENDING_APPROVAL' } })` — two
+//     concurrent approvals could previously both pass the pre-check and both
+//     write, the second silently overwriting the first approver's record.
+//   - `approvedAt` is now stamped alongside approvedById (schema migration
+//     20260909120000_add_plan_approved_at) so the segregation-of-duties
+//     trail records WHO and WHEN.
+//   - The response is serialized through the shared `serializePlanRow`
+//     helper — this route previously returned the raw Prisma row with
+//     unserialized Decimal fields (JSON.stringify emits those as strings,
+//     which broke numeric consumers of the response).
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { withFinancialAuth, getSessionFromRequest } from '@/lib/auth';
 import { LogSeverity, LogComponent } from '@/lib/types';
-import { toNumber } from '@/lib/debt-plan-utils';
+import { serializePlanRow, toNumber } from '@/lib/debt-plan-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,12 +75,29 @@ async function approvePlanHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  const updated = await db.debtPaymentPlan.update({
-    where: { id },
+  // Task 12-d: ATOMIC conditional approval. The predicate guarantees only the
+  // first concurrent approver wins; a race loser gets a 409 instead of
+  // silently overwriting the winner's approvedById/approvedAt.
+  const claimed = await db.debtPaymentPlan.updateMany({
+    where: { id, status: 'PENDING_APPROVAL' },
     data: {
       status: 'ACTIVE',
       approvedById: session.userId,
+      approvedAt: new Date(),
     },
+  });
+  if (claimed.count === 0) {
+    return Response.json(
+      {
+        success: false,
+        error: 'Approval conflict: the plan was already approved or cancelled concurrently. Refresh and retry.',
+      },
+      { status: 409 },
+    );
+  }
+
+  const updated = await db.debtPaymentPlan.findUnique({
+    where: { id },
     include: {
       customer: { select: { id: true, name: true, phone: true, email: true } },
       debtLedger: { select: { id: true, amountOwed: true, balance: true, status: true } },
@@ -86,11 +116,12 @@ async function approvePlanHandler(...args: unknown[]): Promise<Response> {
       planId: id,
       customerId: existing.customerId,
       approvedById: session.userId,
+      approvedAt: new Date().toISOString(),
       totalAmount: toNumber(existing.totalAmount),
     },
   });
 
-  return Response.json({ success: true, data: updated });
+  return Response.json({ success: true, data: updated ? serializePlanRow(updated) : null });
 }
 
 export const POST = withErrorBoundary(

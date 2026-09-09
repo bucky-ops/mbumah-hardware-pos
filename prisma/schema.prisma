@@ -27,7 +27,7 @@ datasource db {
   // Committed as "postgresql" for Vercel. Auto-switched to "sqlite" by
   // scripts/setup-prisma-provider.mjs during postinstall when DATABASE_URL
   // starts with "file:" (local dev). Do not edit manually.
-  provider  = "postgresql"
+  provider  = "sqlite"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
@@ -2771,6 +2771,9 @@ model DebtPaymentPlan {
   debtLedgerId    String
   createdById     String
   approvedById    String?
+  // Task 12-d (debt-plan audit): when the plan was approved. Complements
+  // approvedById so the segregation-of-duties trail records WHO and WHEN.
+  approvedAt      DateTime?
   // PENDING_APPROVAL, ACTIVE, COMPLETED, DEFAULTED, CANCELLED, PAUSED
   status          String   @default("PENDING_APPROVAL")
   // Total original debt amount (snapshot at plan creation)

@@ -13,6 +13,13 @@
  * HALF_UP on every positive half-cent case; the only divergence is negative
  * half-cent inputs, which never occur in schedule math — balances are
  * clamped ≥ 0). Money arithmetic in this module now flows through `toDec`.
+ *
+ * Task 12-d (debt-plan audit): added `calculateTotalWithInterest` as the
+ * single source of truth for the simple-interest model (pro-rated by plan
+ * duration), fixed `calculateInstallmentAmount` to use it (was a flat rate
+ * that diverged from the schedule), and added shared response serializers so
+ * the six hand-rolled Decimal→number mapping blocks across the API routes
+ * collapse into one implementation.
  */
 
 import { toDec, round2, max0 } from '@/lib/utils/financialMath';
@@ -131,9 +138,8 @@ function addInterval(date: Date, frequency: PlanFrequency, units: number): Date 
  * Compute the per-installment amount (including any simple interest allocation)
  * and the array of scheduled installments.
  *
- * Interest model: simple annual interest split evenly across installments.
- * `totalWithInterest = totalAmount * (1 + (interestRate / 100) * (durationYears))`
- * where `durationYears` is derived from the frequency × count.
+ * Interest model: simple annual interest split evenly across installments,
+ * PRO-RATED by the plan duration (see `calculateTotalWithInterest`).
  * With `interestRate = 0` (default), this is an interest-free plan.
  */
 export function calculateInstallmentSchedule(
@@ -146,17 +152,11 @@ export function calculateInstallmentSchedule(
   const safeCount = Math.max(1, Math.floor(installmentCount));
   // Task 12-c: money math in Decimal (toDec maps NaN/Infinity → 0, matching
   // the old Number.isFinite guards).
-  const safeTotal = max0(toDec(totalAmount));
-  const safeRate = max0(toDec(interestRate));
-
-  // Duration in years (rough — used only for simple-interest allocation).
-  const unitsPerYear =
-    frequency === 'WEEKLY' ? 52 : frequency === 'BI_WEEKLY' ? 26 : 12;
-  const durationYears = safeCount / unitsPerYear;
-
-  // totalWithInterest = total × (1 + (rate/100) × durationYears) — exact Decimal.
-  const growthFactor = toDec(1).plus(safeRate.div(100).mul(durationYears));
-  const totalWithInterest = safeTotal.mul(growthFactor);
+  // Task 12-d: interest model now shared with calculateInstallmentAmount via
+  // calculateTotalWithInterest (pro-rated simple interest).
+  const totalWithInterest = toDec(
+    calculateTotalWithInterest(totalAmount, safeCount, frequency, interestRate),
+  );
   const perInstallment = round2(totalWithInterest.div(safeCount));
 
   // Distribute rounding error onto the final installment so totals reconcile.
@@ -184,17 +184,58 @@ export function calculateEndDate(
   return addInterval(startDate, frequency, safeCount - 1);
 }
 
-/** Compute the per-installment amount without building the full schedule. */
-export function calculateInstallmentAmount(
+/**
+ * Total payable including simple interest, PRO-RATED by the plan duration.
+ *
+ * `totalWithInterest = total × (1 + (rate/100) × durationYears)` where
+ * `durationYears = installmentCount / unitsPerYear(frequency)`.
+ *
+ * Task 12-d (audit fix): this is now the SINGLE source of truth for the
+ * interest model. Previously `calculateInstallmentSchedule` pro-rated the
+ * rate by duration while `calculateInstallmentAmount` applied the rate as a
+ * flat one-off multiplier — so a plan's `installmentAmount` column (computed
+ * via the latter) disagreed with the actual per-installment schedule amounts
+ * (computed via the former) whenever `rate > 0` and the plan spanned less
+ * than one year. Example: 12% on 6 monthly installments — the schedule
+ * charged 1.06× total, the flat helper said 1.12×. Every caller now flows
+ * through this function so previews, the schedule, and the stored column
+ * agree.
+ */
+export function calculateTotalWithInterest(
   totalAmount: number,
   installmentCount: number,
+  frequency: PlanFrequency,
   interestRate: number = 0,
 ): number {
   const safeCount = Math.max(1, Math.floor(installmentCount));
-  // Task 12-c: Decimal money math (same formula, exact).
   const safeTotal = max0(toDec(totalAmount));
   const safeRate = max0(toDec(interestRate));
-  const totalWithInterest = safeTotal.mul(toDec(1).plus(safeRate.div(100)));
+
+  const unitsPerYear =
+    frequency === 'WEEKLY' ? 52 : frequency === 'BI_WEEKLY' ? 26 : 12;
+  const durationYears = safeCount / unitsPerYear;
+
+  const growthFactor = toDec(1).plus(safeRate.div(100).mul(durationYears));
+  return safeTotal.mul(growthFactor);
+}
+
+/**
+ * Compute the per-installment amount without building the full schedule.
+ * Task 12-d (audit fix): now uses the same pro-rated simple-interest model
+ * as `calculateInstallmentSchedule` (was a flat
+ * `total × (1 + rate/100) / count`, which diverged from the schedule for
+ * plans shorter than a year).
+ */
+export function calculateInstallmentAmount(
+  totalAmount: number,
+  installmentCount: number,
+  frequency: PlanFrequency,
+  interestRate: number = 0,
+): number {
+  const safeCount = Math.max(1, Math.floor(installmentCount));
+  const totalWithInterest = toDec(
+    calculateTotalWithInterest(totalAmount, safeCount, frequency, interestRate),
+  );
   return round2(totalWithInterest.div(safeCount));
 }
 
@@ -325,3 +366,68 @@ export const INSTALLMENT_STATUS_LABELS: Record<InstallmentStatus, string> = {
   MISSED: 'Missed',
   WAIVED: 'Waived',
 };
+
+// ── Response serialization (shared) ─────────────────────────────────────────
+
+/**
+ * Serialize a DebtPlanInstallment row for a JSON response.
+ *
+ * Task 12-d (audit fix): every route used to hand-roll the same Decimal→number
+ * mapping (6 copies across the module, and the approve route returned raw
+ * Prisma rows with unserialized Decimals). All routes now share this helper
+ * so response shapes stay consistent.
+ */
+export function serializeInstallmentRow<
+  I extends { amountDue: unknown; amountPaid: unknown; lateFeeApplied: unknown },
+>(installment: I): I & { amountDue: number; amountPaid: number; lateFeeApplied: number } {
+  return {
+    ...installment,
+    amountDue: toNumber(installment.amountDue),
+    amountPaid: toNumber(installment.amountPaid),
+    lateFeeApplied: toNumber(installment.lateFeeApplied),
+  };
+}
+
+/**
+ * Serialize a DebtPaymentPlan row (+ nested installments / debt ledger) for
+ * a JSON response. Handles the slightly different ledger selects used by the
+ * routes (some include amountPaid/dueDate, some don't) by serializing any
+ * money field that is present.
+ */
+export function serializePlanRow<
+  P extends {
+    totalAmount: unknown;
+    installmentAmount: unknown;
+    amountPaid: unknown;
+    balance: unknown;
+    interestRate: unknown;
+    lateFee: unknown;
+    installments?: Array<Record<string, unknown>>;
+    debtLedger?: Record<string, unknown> | null;
+  },
+>(plan: P): Record<string, unknown> {
+  const debtLedger = plan.debtLedger
+    ? (() => {
+        const ledger = plan.debtLedger as Record<string, unknown>;
+        const out: Record<string, unknown> = { ...ledger };
+        if ('amountOwed' in ledger) out.amountOwed = toNumber(ledger.amountOwed);
+        if ('amountPaid' in ledger) out.amountPaid = toNumber(ledger.amountPaid);
+        if ('balance' in ledger) out.balance = toNumber(ledger.balance);
+        return out;
+      })()
+    : null;
+
+  return {
+    ...plan,
+    totalAmount: toNumber(plan.totalAmount),
+    installmentAmount: toNumber(plan.installmentAmount),
+    amountPaid: toNumber(plan.amountPaid),
+    balance: toNumber(plan.balance),
+    interestRate: toNumber(plan.interestRate),
+    lateFee: toNumber(plan.lateFee),
+    installments: plan.installments?.map((i) =>
+      serializeInstallmentRow(i as Parameters<typeof serializeInstallmentRow>[0]),
+    ),
+    debtLedger,
+  };
+}
