@@ -1,0 +1,207 @@
+// Mbumah Hardware POS — Customer Credit Engine schema
+// Path: prisma/schema.prisma
+//
+// Design notes (SQLite dialect: no native enums → String columns + zod unions):
+// - `Customer.outstanding` is a denormalized running balance, kept in sync with
+//   Σ(Invoice.total − amountPaid) atomically inside $transaction blocks only.
+// - Invoice overdue is DERIVED (dueDate vs today) and never stored — this fixes
+//   the upstream repo bug where `status='OVERDUE'` was queried but never written.
+// - Every credit-limit change is captured in CreditLimitChange with approver
+//   identity (the "approved by" requirement), separate from the customer row.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now())
+  customers Customer[]
+  invoices  Invoice[]
+  payments  Payment[]
+  users     User[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  role      String   @default("CASHIER") // OWNER | MANAGER | ACCOUNTANT | CASHIER
+  branchId  String
+  createdAt DateTime @default(now())
+  branch    Branch   @relation(fields: [branchId], references: [id])
+}
+
+model Customer {
+  id             String    @id @default(cuid())
+  branchId       String
+  name           String
+  type           String    @default("INDIVIDUAL") // INDIVIDUAL | COMPANY
+  phone          String?
+  email          String?
+  kraPin         String?
+  address        String?
+  // ── Credit engine core ────────────────────────────────────────────────
+  creditLimit    Decimal   @default(0)
+  outstanding    Decimal   @default(0) // denormalized; Σ(invoice.total − amountPaid)
+  creditStatus   String    @default("ACTIVE") // ACTIVE | SUSPENDED | DEFAULTED
+  creditScore    Int       @default(55) // cached 0–100, recomputed on charge/payment events
+  riskBand       String    @default("NEW") // LOW | MEDIUM | HIGH | NEW (derived from score)
+  // ── Approval trail (who granted the current limit) ───────────────────
+  approvedById   String?
+  approvedByName String?
+  approvedAt     DateTime?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  branch        Branch              @relation(fields: [branchId], references: [id])
+  invoices      Invoice[]
+  payments      Payment[]
+  ledgerEntries CreditLedgerEntry[]
+  reminders     PaymentReminder[]
+  limitChanges  CreditLimitChange[]
+
+  @@index([branchId, createdAt])
+  @@index([branchId, name])
+  @@index([branchId, creditStatus])
+  @@map("customers")
+}
+
+model Invoice {
+  id         String   @id @default(cuid())
+  branchId   String
+  customerId String
+  number     String   @unique // INV-2025-0001
+  subtotal   Decimal 
+  discount   Decimal  @default(0)
+  vatRate    Decimal  @default(0.16)
+  vatAmount  Decimal 
+  total      Decimal  // subtotal − discount + vat (discount applied BEFORE VAT)
+  amountPaid Decimal  @default(0)
+  // status is payment-state only; OVERDUE is derived from dueDate + balance (never stored stale)
+  status     String   @default("UNPAID") // UNPAID | PARTIAL | PAID
+  termsDays  Int      @default(30)
+  issuedAt   DateTime @default(now())
+  dueDate    DateTime
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  customer  Customer     @relation(fields: [customerId], references: [id])
+  branch    Branch       @relation(fields: [branchId], references: [id])
+  items     InvoiceItem[]
+  payments  Payment[]
+
+  @@index([customerId, status])
+  @@index([branchId, issuedAt])
+  @@index([dueDate, status])
+  @@index([customerId, dueDate])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id         String  @id @default(cuid())
+  invoiceId  String
+  description String
+  sku        String?
+  qty        Decimal
+  unitPrice  Decimal
+  lineTotal  Decimal // qty × unitPrice
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("invoice_items")
+}
+
+model Payment {
+  id             String   @id @default(cuid())
+  branchId       String
+  customerId     String
+  invoiceId      String? // null → waterfall allocation across all open invoices
+  amount         Decimal 
+  method         String // CASH | MPESA | BANK | CHEQUE
+  reference      String?
+  note           String?
+  receivedById   String
+  receivedByName String
+  createdAt      DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id])
+  branch   Branch   @relation(fields: [branchId], references: [id])
+  invoice  Invoice? @relation(fields: [invoiceId], references: [id])
+
+  @@index([customerId, createdAt])
+  @@index([branchId, createdAt])
+  @@index([invoiceId])
+  @@map("payments")
+}
+
+// Double-entry-style credit ledger: every balance movement is recorded with the
+// resulting balance so the customer statement is reconstructible and auditable.
+model CreditLedgerEntry {
+  id             String   @id @default(cuid())
+  branchId       String
+  customerId     String
+  type           String // CHARGE | PAYMENT | PENALTY | ADJUSTMENT | WRITE_OFF
+  amount         Decimal  // signed: + increases debt, − decreases
+  balanceAfter   Decimal 
+  refType        String? // INVOICE | PAYMENT | MANUAL
+  refId          String?
+  note           String?
+  createdById    String
+  createdByName  String
+  createdAt      DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([customerId, createdAt])
+  @@index([branchId, createdAt])
+  @@map("credit_ledger_entries")
+}
+
+// Immutable approval log for credit-limit changes (the "approved by" requirement).
+model CreditLimitChange {
+  id              String   @id @default(cuid())
+  customerId      String
+  oldLimit        Decimal 
+  newLimit        Decimal 
+  reason          String
+  requestedById   String
+  requestedByName String
+  approvedById    String
+  approvedByName  String
+  approvedAt      DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([customerId, approvedAt])
+  @@map("credit_limit_changes")
+}
+
+model PaymentReminder {
+  id         String    @id @default(cuid())
+  branchId   String
+  customerId String
+  invoiceId  String?
+  channel    String // SMS | WHATSAPP | EMAIL | IN_APP
+  message    String
+  status     String    @default("QUEUED") // QUEUED | SENT | SIMULATED | FAILED
+  providerRef String?
+  sentAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([customerId, createdAt])
+  @@index([branchId, status])
+  @@map("payment_reminders")
+}

@@ -1,0 +1,902 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→/**
+     4→     4→ * Debt Management Tab — overdue customer board + reminder pipeline controls.
+     5→     5→ *
+     6→     6→ * Three sub-sections (tabs):
+     7→     7→ *   1. Overdue Board  — customers with overdue debts, sorted by aging bucket
+     8→     8→ *                       (worst first) + total overdue. Shows pending-reminder
+     9→     9→ *                       count per customer.
+    10→    10→ *   2. Pipeline       — the two-phase reminder scheduler:
+    11→    11→ *                       (a) Schedule: scan overdue debts → create PENDING rows
+    12→    12→ *                       (b) Process:  send PENDING reminders via SMS/WA/Email
+    13→    13→ *                       Plus a live summary of reminder status counts.
+    14→    14→ *   3. History        — full DebtReminder audit log with filters.
+    15→    15→ */
+    16→    16→
+    17→    17→import React, { useState, useMemo } from 'react';
+    18→    18→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+    19→    19→import { toast } from 'sonner';
+    20→    20→import {
+    21→    21→  AlertTriangle, AlertOctagon, Clock, CheckCircle, XCircle,
+    22→    22→  Loader2, RefreshCw, Send, Zap, Users, DollarSign,
+    23→    23→  Mail, MessageSquare, Smartphone, Bell, ChevronDown, ChevronRight, Phone, TrendingDown, Activity, History, Play,
+    24→    24→} from 'lucide-react';
+    25→    25→
+    26→    26→import { useAppStore, useAuthStore } from '@/lib/stores';
+    27→    27→import {
+    28→    28→  debtRemindersApi,
+    29→    29→  formatKES,
+    30→    30→  type OverdueCustomerItem,
+    31→    31→  type ReminderScheduleResult,
+    32→    32→} from '@/lib/api';
+    33→    33→import { handleError } from '@/lib/error-handler';
+    34→    34→
+    35→    35→import { Button } from '@/components/ui/button';
+    36→    36→import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+    37→    37→import { Badge } from '@/components/ui/badge';
+    38→    38→import {
+    39→    39→  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
+    40→    40→} from '@/components/ui/dialog';
+    41→    41→import {
+    42→    42→  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+    43→    43→} from '@/components/ui/table';
+    44→    44→import {
+    45→    45→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    46→    46→} from '@/components/ui/select';
+    47→    47→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    48→    48→import { ScrollArea } from '@/components/ui/scroll-area';
+    49→    49→import { Skeleton } from '@/components/ui/skeleton';
+    50→    50→import {
+    51→    51→  Collapsible, CollapsibleContent, CollapsibleTrigger,
+    52→    52→} from '@/components/ui/collapsible';
+    53→    53→import { Progress } from '@/components/ui/progress';
+    54→    54→
+    55→    55→// ── Constants ────────────────────────────────────────────────────────────────
+    56→    56→
+    57→    57→const SENIOR_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'];
+    58→    58→
+    59→    59→const AGING_BUCKET_CONFIG: Record<
+    60→    60→  string,
+    61→    61→  { label: string; color: string; bg: string; icon: React.ElementType; description: string }
+    62→    62→> = {
+    63→    63→  CURRENT: {
+    64→    64→    label: 'Current',
+    65→    65→    color: 'text-emerald-700 dark:text-emerald-300',
+    66→    66→    bg: 'bg-emerald-100 dark:bg-emerald-900/30',
+    67→    67→    icon: CheckCircle,
+    68→    68→    description: 'Not yet due',
+    69→    69→  },
+    70→    70→  DAYS_30: {
+    71→    71→    label: '1–30 days',
+    72→    72→    color: 'text-amber-700 dark:text-amber-300',
+    73→    73→    bg: 'bg-amber-100 dark:bg-amber-900/30',
+    74→    74→    icon: Clock,
+    75→    75→    description: 'Weekly reminders (SMS + WhatsApp)',
+    76→    76→  },
+    77→    77→  DAYS_60: {
+    78→    78→    label: '31–60 days',
+    79→    79→    color: 'text-orange-700 dark:text-orange-300',
+    80→    80→    bg: 'bg-orange-100 dark:bg-orange-900/30',
+    81→    81→    icon: AlertTriangle,
+    82→    82→    description: 'Every 3 days (SMS + WhatsApp + Email)',
+    83→    83→  },
+    84→    84→  DAYS_90_PLUS: {
+    85→    85→    label: '61+ days',
+    86→    86→    color: 'text-rose-700 dark:text-rose-300',
+    87→    87→    bg: 'bg-rose-100 dark:bg-rose-900/30',
+    88→    88→    icon: AlertOctagon,
+    89→    89→    description: 'Daily + manager escalation',
+    90→    90→  },
+    91→    91→};
+    92→    92→
+    93→    93→const REMINDER_TYPE_CONFIG: Record<
+    94→    94→  string,
+    95→    95→  { label: string; color: string; icon: React.ElementType }
+    96→    96→> = {
+    97→    97→  SMS: {
+    98→    98→    label: 'SMS',
+    99→    99→    color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+   100→   100→    icon: Smartphone,
+   101→   101→  },
+   102→   102→  WHATSAPP: {
+   103→   103→    label: 'WhatsApp',
+   104→   104→    color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+   105→   105→    icon: MessageSquare,
+   106→   106→  },
+   107→   107→  EMAIL: {
+   108→   108→    label: 'Email',
+   109→   109→    color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+   110→   110→    icon: Mail,
+   111→   111→  },
+   112→   112→  IN_APP: {
+   113→   113→    label: 'In-App',
+   114→   114→    color: 'bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-300',
+   115→   115→    icon: Bell,
+   116→   116→  },
+   117→   117→};
+   118→   118→
+   119→   119→const REMINDER_STATUS_CONFIG: Record<
+   120→   120→  string,
+   121→   121→  { label: string; color: string; icon: React.ElementType }
+   122→   122→> = {
+   123→   123→  PENDING: {
+   124→   124→    label: 'Pending',
+   125→   125→    color: 'bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-300',
+   126→   126→    icon: Clock,
+   127→   127→  },
+   128→   128→  SENT: {
+   129→   129→    label: 'Sent',
+   130→   130→    color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+   131→   131→    icon: CheckCircle,
+   132→   132→  },
+   133→   133→  DELIVERED: {
+   134→   134→    label: 'Delivered',
+   135→   135→    color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+   136→   136→    icon: CheckCircle,
+   137→   137→  },
+   138→   138→  FAILED: {
+   139→   139→    label: 'Failed',
+   140→   140→    color: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
+   141→   141→    icon: XCircle,
+   142→   142→  },
+   143→   143→};
+   144→   144→
+   145→   145→// ── Helpers ──────────────────────────────────────────────────────────────────
+   146→   146→
+   147→   147→// formatKES: canonical en-KE KES formatter imported from '@/lib/api' (task 12-d)
+   148→   148→
+   149→   149→function formatDate(date: string | Date): string {
+   150→   150→  return new Date(date).toLocaleDateString('en-GB', {
+   151→   151→    day: '2-digit',
+   152→   152→    month: 'short',
+   153→   153→    year: 'numeric',
+   154→   154→  });
+   155→   155→}
+   156→   156→
+   157→   157→function daysSince(date: string | Date): number {
+   158→   158→  const d = new Date(date);
+   159→   159→  const now = new Date();
+   160→   160→  return Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+   161→   161→}
+   162→   162→
+   163→   163→// ── Overdue Board Section ────────────────────────────────────────────────────
+   164→   164→
+   165→   165→function OverdueBoardSection({ storeId }: { storeId: string }) {
+   166→   166→  const { data, isLoading, refetch, isFetching } = useQuery({
+   167→   167→    queryKey: ['debt-overdue', storeId],
+   168→   168→    queryFn: () => debtRemindersApi.listOverdue(storeId),
+   169→   169→    enabled: !!storeId,
+   170→   170→  });
+   171→   171→
+   172→   172→  const customers = data?.data ?? [];
+   173→   173→  const summary = data?.summary;
+   174→   174→  const byBucket = summary?.byBucket ?? {};
+   175→   175→
+   176→   176→  const summaryCards = useMemo(() => {
+   177→   177→    if (!summary) return [];
+   178→   178→    return [
+   179→   179→      {
+   180→   180→        label: 'Overdue Customers',
+   181→   181→        value: summary.customerCount,
+   182→   182→        color: 'text-rose-600 dark:text-rose-400',
+   183→   183→        icon: Users,
+   184→   184→      },
+   185→   185→      {
+   186→   186→        label: 'Total Overdue',
+   187→   187→        value: formatKES(summary.totalOverdue),
+   188→   188→        color: 'text-rose-600 dark:text-rose-400',
+   189→   189→        icon: DollarSign,
+   190→   190→      },
+   191→   191→      {
+   192→   192→        label: '1–60 days',
+   193→   193→        value: (byBucket.DAYS_30 ?? 0) + (byBucket.DAYS_60 ?? 0),
+   194→   194→        color: 'text-amber-600 dark:text-amber-400',
+   195→   195→        icon: Clock,
+   196→   196→      },
+   197→   197→      {
+   198→   198→        label: '61+ days',
+   199→   199→        value: byBucket.DAYS_90_PLUS ?? 0,
+   200→   200→        color: 'text-rose-600 dark:text-rose-400',
+   201→   201→        icon: AlertOctagon,
+   202→   202→      },
+   203→   203→    ];
+   204→   204→  }, [summary]);
+   205→   205→
+   206→   206→  if (isLoading) {
+   207→   207→    return (
+   208→   208→      <div className="space-y-4">
+   209→   209→        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   210→   210→          {Array.from({ length: 4 }).map((_, i) => (
+   211→   211→            <Skeleton key={i} className="h-24" />
+   212→   212→          ))}
+   213→   213→        </div>
+   214→   214→        <Skeleton className="h-96 w-full" />
+   215→   215→      </div>
+   216→   216→    );
+   217→   217→  }
+   218→   218→
+   219→   219→  return (
+   220→   220→    <div className="space-y-4">
+   221→   221→      {/* Summary cards */}
+   222→   222→      {summaryCards.length > 0 && (
+   223→   223→        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   224→   224→          {summaryCards.map((card) => (
+   225→   225→            <Card key={card.label} className="py-3">
+   226→   226→              <CardContent className="px-3 flex items-center gap-3">
+   227→   227→                <div className={`p-2 rounded-lg bg-muted ${card.color}`}>
+   228→   228→                  <card.icon className="h-5 w-5" />
+   229→   229→                </div>
+   230→   230→                <div className="space-y-0.5 min-w-0">
+   231→   231→                  <p className="text-xs text-muted-foreground">{card.label}</p>
+   232→   232→                  <p className={`text-xl font-bold ${card.color}`}>{card.value}</p>
+   233→   233→                </div>
+   234→   234→              </CardContent>
+   235→   235→            </Card>
+   236→   236→          ))}
+   237→   237→        </div>
+   238→   238→      )}
+   239→   239→
+   240→   240→      {/* Customer list */}
+   241→   241→      <Card>
+   242→   242→        <CardHeader className="pb-3">
+   243→   243→          <div className="flex items-center justify-between">
+   244→   244→            <div className="space-y-1">
+   245→   245→              <CardTitle className="text-base flex items-center gap-2">
+   246→   246→                <TrendingDown className="h-4 w-4" />
+   247→   247→                Overdue Customers
+   248→   248→              </CardTitle>
+   249→   249→              <CardDescription>Sorted by aging severity (worst first) and overdue amount</CardDescription>
+   250→   250→            </div>
+   251→   251→            <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isFetching}>
+   252→   252→              <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+   253→   253→            </Button>
+   254→   254→          </div>
+   255→   255→        </CardHeader>
+   256→   256→        <CardContent>
+   257→   257→          {customers.length === 0 ? (
+   258→   258→            <div className="text-center py-12 space-y-2">
+   259→   259→              <CheckCircle className="h-10 w-10 text-emerald-500/60 mx-auto" />
+   260→   260→              <p className="text-sm font-medium text-foreground">No overdue customers 🎉</p>
+   261→   261→              <p className="text-xs text-muted-foreground">All customer debts are current. Great job!</p>
+   262→   262→            </div>
+   263→   263→          ) : (
+   264→   264→            <ScrollArea className="max-h-[700px]">
+   265→   265→              <div className="space-y-3">
+   266→   266→                {customers.map((customer) => (
+   267→   267→                  <OverdueCustomerCard key={customer.customerId} customer={customer} />
+   268→   268→                ))}
+   269→   269→              </div>
+   270→   270→            </ScrollArea>
+   271→   271→          )}
+   272→   272→        </CardContent>
+   273→   273→      </Card>
+   274→   274→    </div>
+   275→   275→  );
+   276→   276→}
+   277→   277→
+   278→   278→function OverdueCustomerCard({ customer }: { customer: OverdueCustomerItem }) {
+   279→   279→  const [expanded, setExpanded] = useState(false);
+   280→   280→  const bucketCfg = AGING_BUCKET_CONFIG[customer.agingBucket] || AGING_BUCKET_CONFIG.DAYS_30;
+   281→   281→  const BucketIcon = bucketCfg.icon;
+   282→   282→  const daysLate = daysSince(customer.oldestDueDate);
+   283→   283→
+   284→   284→  return (
+   285→   285→    <Collapsible open={expanded} onOpenChange={setExpanded}>
+   286→   286→      <div className={`rounded-lg border ${expanded ? 'border-foreground/30' : ''} overflow-hidden`}>
+   287→   287→        <CollapsibleTrigger asChild>
+   288→   288→          <button className="w-full flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors text-left">
+   289→   289→            <div className={`p-2 rounded-lg ${bucketCfg.bg}`}>
+   290→   290→              <BucketIcon className={`h-4 w-4 ${bucketCfg.color}`} />
+   291→   291→            </div>
+   292→   292→            <div className="flex-1 min-w-0 space-y-0.5">
+   293→   293→              <div className="flex items-center gap-2 flex-wrap">
+   294→   294→                <span className="font-medium text-sm text-foreground">{customer.customerName}</span>
+   295→   295→                <Badge className={`${bucketCfg.bg} ${bucketCfg.color} border-0`}>
+   296→   296→                  {bucketCfg.label}
+   297→   297→                </Badge>
+   298→   298→                {customer.pendingReminders > 0 && (
+   299→   299→                  <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+   300→   300→                    <Clock className="h-3 w-3 mr-1" />
+   301→   301→                    {customer.pendingReminders} pending
+   302→   302→                  </Badge>
+   303→   303→                )}
+   304→   304→              </div>
+   305→   305→              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+   306→   306→                <span className="flex items-center gap-1">
+   307→   307→                  <Phone className="h-3 w-3" />
+   308→   308→                  {customer.phone || 'No phone'}
+   309→   309→                </span>
+   310→   310→                <span>•</span>
+   311→   311→                <span>{customer.debts.length} {customer.debts.length === 1 ? 'debt' : 'debts'}</span>
+   312→   312→                <span>•</span>
+   313→   313→                <span>Oldest: {daysLate}d overdue</span>
+   314→   314→              </div>
+   315→   315→            </div>
+   316→   316→            <div className="text-right shrink-0">
+   317→   317→              <p className="text-lg font-bold text-rose-600 dark:text-rose-400 font-mono">
+   318→   318→                {formatKES(customer.totalOverdue)}
+   319→   319→              </p>
+   320→   320→              <p className="text-xs text-muted-foreground">total overdue</p>
+   321→   321→            </div>
+   322→   322→            {expanded ? (
+   323→   323→              <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+   324→   324→            ) : (
+   325→   325→              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+   326→   326→            )}
+   327→   327→          </button>
+   328→   328→        </CollapsibleTrigger>
+   329→   329→        <CollapsibleContent>
+   330→   330→          <div className="border-t bg-muted/30 p-3 space-y-3">
+   331→   331→            <div>
+   332→   332→              <p className="text-xs font-medium text-muted-foreground mb-2">DEBT BREAKDOWN</p>
+   333→   333→              <div className="rounded-md border bg-card overflow-hidden">
+   334→   334→                <Table>
+   335→   335→                  <TableHeader>
+   336→   336→                    <TableRow>
+   337→   337→                      <TableHead className="h-8 text-xs">Debt ID</TableHead>
+   338→   338→                      <TableHead className="h-8 text-xs text-right">Balance</TableHead>
+   339→   339→                      <TableHead className="h-8 text-xs">Due Date</TableHead>
+   340→   340→                      <TableHead className="h-8 text-xs">Days Late</TableHead>
+   341→   341→                      <TableHead className="h-8 text-xs">Bucket</TableHead>
+   342→   342→                    </TableRow>
+   343→   343→                  </TableHeader>
+   344→   344→                  <TableBody>
+   345→   345→                    {customer.debts.map((debt) => {
+   346→   346→                      const cfg = AGING_BUCKET_CONFIG[debt.agingBucket] || AGING_BUCKET_CONFIG.DAYS_30;
+   347→   347→                      const late = daysSince(debt.dueDate);
+   348→   348→                      return (
+   349→   349→                        <TableRow key={debt.debtLedgerId}>
+   350→   350→                          <TableCell className="font-mono text-xs py-2">{debt.debtLedgerId}</TableCell>
+   351→   351→                          <TableCell className="font-mono text-sm py-2 text-right font-medium">
+   352→   352→                            {formatKES(debt.balance)}
+   353→   353→                          </TableCell>
+   354→   354→                          <TableCell className="text-xs py-2">{formatDate(debt.dueDate)}</TableCell>
+   355→   355→                          <TableCell className="text-xs py-2">{late}d</TableCell>
+   356→   356→                          <TableCell className="py-2">
+   357→   357→                            <Badge className={`${cfg.bg} ${cfg.color} border-0 text-xs`}>{cfg.label}</Badge>
+   358→   358→                          </TableCell>
+   359→   359→                        </TableRow>
+   360→   360→                      );
+   361→   361→                    })}
+   362→   362→                  </TableBody>
+   363→   363→                </Table>
+   364→   364→              </div>
+   365→   365→            </div>
+   366→   366→            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   367→   367→              <Mail className="h-3.5 w-3.5" />
+   368→   368→              <span>{customer.email || 'No email on file'}</span>
+   369→   369→            </div>
+   370→   370→          </div>
+   371→   371→        </CollapsibleContent>
+   372→   372→      </div>
+   373→   373→    </Collapsible>
+   374→   374→  );
+   375→   375→}
+   376→   376→
+   377→   377→// ── Pipeline Section ─────────────────────────────────────────────────────────
+   378→   378→
+   379→   379→function PipelineSection({ storeId }: { storeId: string }) {
+   380→   380→  const queryClient = useQueryClient();
+   381→   381→  const authUser = useAuthStore((s) => s.user);
+   382→   382→  const canRun = authUser ? SENIOR_ROLES.includes(authUser.role) : false;
+   383→   383→
+   384→   384→  const [showScheduleResult, setShowScheduleResult] = useState(false);
+   385→   385→  const [scheduleResult, setScheduleResult] = useState<ReminderScheduleResult | null>(null);
+   386→   386→
+   387→   387→  // Live reminder status counts.
+   388→   388→  const { data: remindersData, isLoading } = useQuery({
+   389→   389→    queryKey: ['debt-reminders-summary', storeId],
+   390→   390→    queryFn: () => debtRemindersApi.list({ storeId, limit: 1 }),
+   391→   391→    enabled: !!storeId,
+   392→   392→    refetchInterval: 15_000, // Auto-refresh every 15s while the pipeline runs
+   393→   393→  });
+   394→   394→
+   395→   395→  const summary = remindersData?.summary;
+   396→   396→  const byStatus = summary?.byStatus ?? {};
+   397→   397→  const byChannel = summary?.byChannel ?? {};
+   398→   398→
+   399→   399→  const scheduleMutation = useMutation({
+   400→   400→    mutationFn: () => debtRemindersApi.schedule(storeId),
+   401→   401→    onSuccess: (data) => {
+   402→   402→      const result = data.data;
+   403→   403→      setScheduleResult(result);
+   404→   404→      setShowScheduleResult(true);
+   405→   405→      toast.success(data.message || `Scheduled ${result.scheduled} reminder(s).`);
+   406→   406→      queryClient.invalidateQueries({ queryKey: ['debt-reminders-summary', storeId] });
+   407→   407→      queryClient.invalidateQueries({ queryKey: ['debt-overdue', storeId] });
+   408→   408→      queryClient.invalidateQueries({ queryKey: ['debt-reminders', storeId] });
+   409→   409→    },
+   410→   410→    onError: (err) => handleError(err),
+   411→   411→  });
+   412→   412→
+   413→   413→  const processMutation = useMutation({
+   414→   414→    mutationFn: () => debtRemindersApi.process(storeId),
+   415→   415→    onSuccess: (data) => {
+   416→   416→      const result = data.data;
+   417→   417→      toast.success(data.message || `Processed ${result.total} reminders: ${result.sent} sent, ${result.failed} failed.`);
+   418→   418→      queryClient.invalidateQueries({ queryKey: ['debt-reminders-summary', storeId] });
+   419→   419→      queryClient.invalidateQueries({ queryKey: ['debt-reminders', storeId] });
+   420→   420→    },
+   421→   421→    onError: (err) => handleError(err),
+   422→   422→  });
+   423→   423→
+   424→   424→  const pendingCount = byStatus.PENDING ?? 0;
+   425→   425→  const sentCount = byStatus.SENT ?? 0;
+   426→   426→  const deliveredCount = byStatus.DELIVERED ?? 0;
+   427→   427→  const failedCount = byStatus.FAILED ?? 0;
+   428→   428→  const totalReminders = summary?.total ?? 0;
+   429→   429→
+   430→   430→  const successRate = sentCount + deliveredCount + failedCount > 0
+   431→   431→    ? Math.round(((sentCount + deliveredCount) / (sentCount + deliveredCount + failedCount)) * 100)
+   432→   432→    : 0;
+   433→   433→
+   434→   434→  if (isLoading) {
+   435→   435→    return (
+   436→   436→      <div className="space-y-4">
+   437→   437→        <Skeleton className="h-48 w-full" />
+   438→   438→        <Skeleton className="h-64 w-full" />
+   439→   439→      </div>
+   440→   440→    );
+   441→   441→  }
+   442→   442→
+   443→   443→  return (
+   444→   444→    <div className="space-y-4">
+   445→   445→      {/* Pipeline cards */}
+   446→   446→      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   447→   447→        {/* Schedule card */}
+   448→   448→        <Card className="border-blue-200 dark:border-blue-900/40">
+   449→   449→          <CardHeader>
+   450→   450→            <CardTitle className="text-base flex items-center gap-2">
+   451→   451→              <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+   452→   452→                <Zap className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+   453→   453→              </div>
+   454→   454→              Step 1: Schedule Reminders
+   455→   455→            </CardTitle>
+   456→   456→            <CardDescription>
+   457→   457→              Scan overdue debts and create PENDING reminder tasks based on aging escalation rules.
+   458→   458→              Fast — no network calls.
+   459→   459→            </CardDescription>
+   460→   460→          </CardHeader>
+   461→   461→          <CardContent className="space-y-3">
+   462→   462→            <div className="text-xs text-muted-foreground space-y-1">
+   463→   463→              <p>• <span className="font-medium">1–30 days late</span>: weekly (SMS + WhatsApp)</p>
+   464→   464→              <p>• <span className="font-medium">31–60 days late</span>: every 3 days (SMS + WhatsApp + Email)</p>
+   465→   465→              <p>• <span className="font-medium">61+ days late</span>: daily + manager escalation</p>
+   466→   466→            </div>
+   467→   467→            <Button
+   468→   468→              className="w-full"
+   469→   469→              onClick={() => scheduleMutation.mutate()}
+   470→   470→              disabled={!canRun || scheduleMutation.isPending}
+   471→   471→            >
+   472→   472→              {scheduleMutation.isPending ? (
+   473→   473→                <>
+   474→   474→                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+   475→   475→                  Scheduling...
+   476→   476→                </>
+   477→   477→              ) : (
+   478→   478→                <>
+   479→   479→                  <Zap className="h-4 w-4 mr-1.5" />
+   480→   480→                  Schedule Reminders Now
+   481→   481→                </>
+   482→   482→              )}
+   483→   483→            </Button>
+   484→   484→            {!canRun && (
+   485→   485→              <p className="text-xs text-amber-600 dark:text-amber-400 text-center">
+   486→   486→                Manager+ role required to run the scheduler.
+   487→   487→              </p>
+   488→   488→            )}
+   489→   489→          </CardContent>
+   490→   490→        </Card>
+   491→   491→
+   492→   492→        {/* Process card */}
+   493→   493→        <Card className="border-emerald-200 dark:border-emerald-900/40">
+   494→   494→          <CardHeader>
+   495→   495→            <CardTitle className="text-base flex items-center gap-2">
+   496→   496→              <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+   497→   497→                <Send className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+   498→   498→              </div>
+   499→   499→              Step 2: Process Pending
+   500→   500→            </CardTitle>
+   501→   501→            <CardDescription>
+   502→   502→              Send all PENDING reminders via SMS (Twilio), WhatsApp (Twilio), and Email (Resend).
+   503→   503→              Network-bound — batches of 100.
+   504→   504→            </CardDescription>
+   505→   505→          </CardHeader>
+   506→   506→          <CardContent className="space-y-3">
+   507→   507→            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+   508→   508→              <div>
+   509→   509→                <p className="text-xs text-muted-foreground">Pending in queue</p>
+   510→   510→                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{pendingCount}</p>
+   511→   511→              </div>
+   512→   512→              <Activity className="h-8 w-8 text-blue-600/40 dark:text-blue-400/40" />
+   513→   513→            </div>
+   514→   514→            <Button
+   515→   515→              className="w-full"
+   516→   516→              variant="default"
+   517→   517→              onClick={() => processMutation.mutate()}
+   518→   518→              disabled={!canRun || processMutation.isPending || pendingCount === 0}
+   519→   519→            >
+   520→   520→              {processMutation.isPending ? (
+   521→   521→                <>
+   522→   522→                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+   523→   523→                  Processing...
+   524→   524→                </>
+   525→   525→              ) : (
+   526→   526→                <>
+   527→   527→                  <Play className="h-4 w-4 mr-1.5" />
+   528→   528→                  Process {pendingCount > 0 ? `${pendingCount} ` : ''}Pending
+   529→   529→                </>
+   530→   530→              )}
+   531→   531→            </Button>
+   532→   532→            {pendingCount === 0 && (
+   533→   533→              <p className="text-xs text-muted-foreground text-center">
+   534→   534→                No pending reminders. Run Step 1 first.
+   535→   535→              </p>
+   536→   536→            )}
+   537→   537→          </CardContent>
+   538→   538→        </Card>
+   539→   539→      </div>
+   540→   540→
+   541→   541→      {/* Status overview */}
+   542→   542→      <Card>
+   543→   543→        <CardHeader className="pb-3">
+   544→   544→          <CardTitle className="text-base flex items-center gap-2">
+   545→   545→            <Activity className="h-4 w-4" />
+   546→   546→            Reminder Status Overview
+   547→   547→          </CardTitle>
+   548→   548→          <CardDescription>Live counts across all reminders for this store</CardDescription>
+   549→   549→        </CardHeader>
+   550→   550→        <CardContent className="space-y-4">
+   551→   551→          {/* Status grid */}
+   552→   552→          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   553→   553→            <StatusTile label="Pending" value={pendingCount} icon={Clock} color="text-slate-600 dark:text-slate-300" bg="bg-slate-100 dark:bg-slate-900/40" />
+   554→   554→            <StatusTile label="Sent" value={sentCount} icon={CheckCircle} color="text-blue-600 dark:text-blue-400" bg="bg-blue-100 dark:bg-blue-900/30" />
+   555→   555→            <StatusTile label="Delivered" value={deliveredCount} icon={CheckCircle} color="text-emerald-600 dark:text-emerald-400" bg="bg-emerald-100 dark:bg-emerald-900/30" />
+   556→   556→            <StatusTile label="Failed" value={failedCount} icon={XCircle} color="text-rose-600 dark:text-rose-400" bg="bg-rose-100 dark:bg-rose-900/30" />
+   557→   557→          </div>
+   558→   558→
+   559→   559→          {/* Success rate */}
+   560→   560→          {totalReminders > 0 && (
+   561→   561→            <div className="space-y-2">
+   562→   562→              <div className="flex items-center justify-between text-sm">
+   563→   563→                <span className="text-muted-foreground">Delivery success rate</span>
+   564→   564→                <span className="font-medium">{successRate}%</span>
+   565→   565→              </div>
+   566→   566→              <Progress value={successRate} className="h-2" />
+   567→   567→            </div>
+   568→   568→          )}
+   569→   569→
+   570→   570→          {/* Channel breakdown */}
+   571→   571→          {Object.keys(byChannel).length > 0 && (
+   572→   572→            <div className="space-y-2 pt-2 border-t">
+   573→   573→              <p className="text-xs font-medium text-muted-foreground">BY CHANNEL</p>
+   574→   574→              <div className="flex flex-wrap gap-2">
+   575→   575→                {Object.entries(byChannel).map(([channel, count]) => {
+   576→   576→                  const cfg = REMINDER_TYPE_CONFIG[channel] || REMINDER_TYPE_CONFIG.IN_APP;
+   577→   577→                  const Icon = cfg.icon;
+   578→   578→                  return (
+   579→   579→                    <Badge key={channel} className={cfg.color}>
+   580→   580→                      <Icon className="h-3 w-3 mr-1" />
+   581→   581→                      {cfg.label}: {count}
+   582→   582→                    </Badge>
+   583→   583→                  );
+   584→   584→                })}
+   585→   585→              </div>
+   586→   586→            </div>
+   587→   587→          )}
+   588→   588→
+   589→   589→          {totalReminders === 0 && (
+   590→   590→            <div className="text-center py-6 text-sm text-muted-foreground">
+   591→   591→              No reminders have been scheduled yet. Run Step 1 to begin.
+   592→   592→            </div>
+   593→   593→          )}
+   594→   594→        </CardContent>
+   595→   595→      </Card>
+   596→   596→
+   597→   597→      {/* Schedule result dialog */}
+   598→   598→      <Dialog open={showScheduleResult} onOpenChange={setShowScheduleResult}>
+   599→   599→        <DialogContent className="sm:max-w-[525px] max-h-[80vh] overflow-y-auto">
+   600→   600→          <DialogHeader>
+   601→   601→            <DialogTitle className="flex items-center gap-2">
+   602→   602→              <CheckCircle className="h-5 w-5 text-emerald-600" />
+   603→   603→              Scheduling Complete
+   604→   604→            </DialogTitle>
+   605→   605→            <DialogDescription>
+   606→   606→              {scheduleResult?.scheduled} reminder(s) queued for {scheduleResult?.totalEligible} eligible debt(s).
+   607→   607→            </DialogDescription>
+   608→   608→          </DialogHeader>
+   609→   609→          {scheduleResult && (
+   610→   610→            <div className="space-y-4">
+   611→   611→              <div className="grid grid-cols-3 gap-3">
+   612→   612→                <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 text-center">
+   613→   613→                  <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{scheduleResult.scheduled}</p>
+   614→   614→                  <p className="text-xs text-muted-foreground">Scheduled</p>
+   615→   615→                </div>
+   616→   616→                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/20 border text-center">
+   617→   617→                  <p className="text-2xl font-bold text-slate-600 dark:text-slate-400">{scheduleResult.skipped}</p>
+   618→   618→                  <p className="text-xs text-muted-foreground">Skipped</p>
+   619→   619→                </div>
+   620→   620→                <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 text-center">
+   621→   621→                  <p className="text-2xl font-bold text-rose-600 dark:text-rose-400">{scheduleResult.errors}</p>
+   622→   622→                  <p className="text-xs text-muted-foreground">Errors</p>
+   623→   623→                </div>
+   624→   624→              </div>
+   625→   625→              {scheduleResult.details.length > 0 && (
+   626→   626→                <ScrollArea className="max-h-64">
+   627→   627→                  <div className="space-y-1">
+   628→   628→                    {scheduleResult.details.map((d, i) => (
+   629→   629→                      <div key={i} className="flex items-center gap-2 text-xs p-2 rounded border">
+   630→   630→                        {d.scheduled ? (
+   631→   631→                          <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+   632→   632→                        ) : (
+   633→   633→                          <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+   634→   634→                        )}
+   635→   635→                        <span className="font-mono text-muted-foreground">{d.debtLedgerId}</span>
+   636→   636→                        <span className="text-muted-foreground truncate flex-1">
+   637→   637→                          {d.reason || 'Scheduled'}
+   638→   638→                        </span>
+   639→   639→                      </div>
+   640→   640→                    ))}
+   641→   641→                  </div>
+   642→   642→                </ScrollArea>
+   643→   643→              )}
+   644→   644→              <p className="text-xs text-muted-foreground">
+   645→   645→                Run <span className="font-medium">Step 2: Process Pending</span> to actually send the queued reminders.
+   646→   646→              </p>
+   647→   647→            </div>
+   648→   648→          )}
+   649→   649→          <DialogFooter>
+   650→   650→            <Button onClick={() => setShowScheduleResult(false)}>Close</Button>
+   651→   651→          </DialogFooter>
+   652→   652→        </DialogContent>
+   653→   653→      </Dialog>
+   654→   654→    </div>
+   655→   655→  );
+   656→   656→}
+   657→   657→
+   658→   658→function StatusTile({
+   659→   659→  label,
+   660→   660→  value,
+   661→   661→  icon: Icon,
+   662→   662→  color,
+   663→   663→  bg,
+   664→   664→}: {
+   665→   665→  label: string;
+   666→   666→  value: number;
+   667→   667→  icon: React.ElementType;
+   668→   668→  color: string;
+   669→   669→  bg: string;
+   670→   670→}) {
+   671→   671→  return (
+   672→   672→    <div className={`p-3 rounded-lg border ${bg}`}>
+   673→   673→      <div className="flex items-center justify-between mb-1">
+   674→   674→        <Icon className={`h-4 w-4 ${color}`} />
+   675→   675→        <span className="text-xs text-muted-foreground">{label}</span>
+   676→   676→      </div>
+   677→   677→      <p className={`text-2xl font-bold ${color}`}>{value}</p>
+   678→   678→    </div>
+   679→   679→  );
+   680→   680→}
+   681→   681→
+   682→   682→// ── History Section ──────────────────────────────────────────────────────────
+   683→   683→
+   684→   684→function HistorySection({ storeId }: { storeId: string }) {
+   685→   685→  const [statusFilter, setStatusFilter] = useState<string>('all');
+   686→   686→  const [typeFilter, setTypeFilter] = useState<string>('all');
+   687→   687→  const [page, setPage] = useState(1);
+   688→   688→  const [pageSize] = useState(15);
+   689→   689→
+   690→   690→  const { data, isLoading, refetch, isFetching } = useQuery({
+   691→   691→    queryKey: ['debt-reminders', storeId, statusFilter, typeFilter, page],
+   692→   692→    queryFn: () =>
+   693→   693→      debtRemindersApi.list({
+   694→   694→        storeId,
+   695→   695→        status: statusFilter !== 'all' ? statusFilter : undefined,
+   696→   696→        reminderType: typeFilter !== 'all' ? typeFilter : undefined,
+   697→   697→        page,
+   698→   698→        limit: pageSize,
+   699→   699→      }),
+   700→   700→    enabled: !!storeId,
+   701→   701→  });
+   702→   702→
+   703→   703→  const reminders = data?.data ?? [];
+   704→   704→  const pagination = data?.pagination;
+   705→   705→  const _summary = data?.summary;
+   706→   706→
+   707→   707→  return (
+   708→   708→    <Card>
+   709→   709→      <CardHeader className="pb-3">
+   710→   710→        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+   711→   711→          <div className="space-y-1">
+   712→   712→            <CardTitle className="text-base flex items-center gap-2">
+   713→   713→              <History className="h-4 w-4" />
+   714→   714→              Reminder History
+   715→   715→            </CardTitle>
+   716→   716→            <CardDescription>
+   717→   717→              Audit log of every reminder sent (or scheduled / failed)
+   718→   718→            </CardDescription>
+   719→   719→          </div>
+   720→   720→          <div className="flex items-center gap-2 flex-wrap">
+   721→   721→            <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
+   722→   722→              <SelectTrigger className="w-32">
+   723→   723→                <SelectValue />
+   724→   724→              </SelectTrigger>
+   725→   725→              <SelectContent>
+   726→   726→                <SelectItem value="all">All statuses</SelectItem>
+   727→   727→                <SelectItem value="PENDING">Pending</SelectItem>
+   728→   728→                <SelectItem value="SENT">Sent</SelectItem>
+   729→   729→                <SelectItem value="DELIVERED">Delivered</SelectItem>
+   730→   730→                <SelectItem value="FAILED">Failed</SelectItem>
+   731→   731→              </SelectContent>
+   732→   732→            </Select>
+   733→   733→            <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setPage(1); }}>
+   734→   734→              <SelectTrigger className="w-36">
+   735→   735→                <SelectValue />
+   736→   736→              </SelectTrigger>
+   737→   737→              <SelectContent>
+   738→   738→                <SelectItem value="all">All channels</SelectItem>
+   739→   739→                <SelectItem value="SMS">SMS</SelectItem>
+   740→   740→                <SelectItem value="WHATSAPP">WhatsApp</SelectItem>
+   741→   741→                <SelectItem value="EMAIL">Email</SelectItem>
+   742→   742→                <SelectItem value="IN_APP">In-App</SelectItem>
+   743→   743→              </SelectContent>
+   744→   744→            </Select>
+   745→   745→            <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isFetching}>
+   746→   746→              <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+   747→   747→            </Button>
+   748→   748→          </div>
+   749→   749→        </div>
+   750→   750→      </CardHeader>
+   751→   751→      <CardContent>
+   752→   752→        {isLoading ? (
+   753→   753→          <div className="space-y-2">
+   754→   754→            {Array.from({ length: 6 }).map((_, i) => (
+   755→   755→              <Skeleton key={i} className="h-16 w-full" />
+   756→   756→            ))}
+   757→   757→          </div>
+   758→   758→        ) : reminders.length === 0 ? (
+   759→   759→          <div className="text-center py-12 space-y-2">
+   760→   760→            <History className="h-10 w-10 text-muted-foreground/40 mx-auto" />
+   761→   761→            <p className="text-sm text-muted-foreground">No reminders found.</p>
+   762→   762→            <p className="text-xs text-muted-foreground/60">
+   763→   763→              Run the scheduler in the Pipeline tab to create reminders.
+   764→   764→            </p>
+   765→   765→          </div>
+   766→   766→        ) : (
+   767→   767→          <>
+   768→   768→            <div className="rounded-md border overflow-hidden">
+   769→   769→              <Table>
+   770→   770→                <TableHeader>
+   771→   771→                  <TableRow>
+   772→   772→                    <TableHead className="w-28">Channel</TableHead>
+   773→   773→                    <TableHead className="w-28">Status</TableHead>
+   774→   774→                    <TableHead>Customer</TableHead>
+   775→   775→                    <TableHead className="text-right">Balance</TableHead>
+   776→   776→                    <TableHead>Message Preview</TableHead>
+   777→   777→                    <TableHead>Sent</TableHead>
+   778→   778→                  </TableRow>
+   779→   779→                </TableHeader>
+   780→   780→                <TableBody>
+   781→   781→                  {reminders.map((r) => {
+   782→   782→                    const typeCfg = REMINDER_TYPE_CONFIG[r.reminderType] || REMINDER_TYPE_CONFIG.IN_APP;
+   783→   783→                    const statusCfg = REMINDER_STATUS_CONFIG[r.status] || REMINDER_STATUS_CONFIG.PENDING;
+   784→   784→                    const TypeIcon = typeCfg.icon;
+   785→   785→                    const StatusIcon = statusCfg.icon;
+   786→   786→                    return (
+   787→   787→                      <TableRow key={r.id}>
+   788→   788→                        <TableCell>
+   789→   789→                          <Badge className={typeCfg.color}>
+   790→   790→                            <TypeIcon className="h-3 w-3 mr-1" />
+   791→   791→                            {typeCfg.label}
+   792→   792→                          </Badge>
+   793→   793→                        </TableCell>
+   794→   794→                        <TableCell>
+   795→   795→                          <Badge className={statusCfg.color}>
+   796→   796→                            <StatusIcon className="h-3 w-3 mr-1" />
+   797→   797→                            {statusCfg.label}
+   798→   798→                          </Badge>
+   799→   799→                        </TableCell>
+   800→   800→                        <TableCell className="text-sm">
+   801→   801→                          {r.customer?.name || '—'}
+   802→   802→                          {r.customer?.phone && (
+   803→   803→                            <p className="text-xs text-muted-foreground">{r.customer.phone}</p>
+   804→   804→                          )}
+   805→   805→                        </TableCell>
+   806→   806→                        <TableCell className="text-right font-mono text-sm">
+   807→   807→                          {r.debtLedger ? formatKES(r.debtLedger.balance) : '—'}
+   808→   808→                        </TableCell>
+   809→   809→                        <TableCell className="text-xs text-muted-foreground max-w-xs">
+   810→   810→                          <p className="truncate" title={r.message}>{r.message}</p>
+   811→   811→                          {r.errorMessage && (
+   812→   812→                            <p className="text-rose-600 dark:text-rose-400 mt-0.5">{r.errorMessage}</p>
+   813→   813→                          )}
+   814→   814→                        </TableCell>
+   815→   815→                        <TableCell className="text-xs text-muted-foreground">
+   816→   816→                          {formatDate(r.sentAt)}
+   817→   817→                        </TableCell>
+   818→   818→                      </TableRow>
+   819→   819→                    );
+   820→   820→                  })}
+   821→   821→                </TableBody>
+   822→   822→              </Table>
+   823→   823→            </div>
+   824→   824→            {pagination && pagination.totalPages > 1 && (
+   825→   825→              <div className="flex items-center justify-between pt-3">
+   826→   826→                <p className="text-xs text-muted-foreground">
+   827→   827→                  Page {pagination.page} of {pagination.totalPages} • {pagination.total} total
+   828→   828→                </p>
+   829→   829→                <div className="flex gap-2">
+   830→   830→                  <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+   831→   831→                    Previous
+   832→   832→                  </Button>
+   833→   833→                  <Button variant="outline" size="sm" disabled={page >= pagination.totalPages} onClick={() => setPage((p) => p + 1)}>
+   834→   834→                    Next
+   835→   835→                  </Button>
+   836→   836→                </div>
+   837→   837→              </div>
+   838→   838→            )}
+   839→   839→          </>
+   840→   840→        )}
+   841→   841→      </CardContent>
+   842→   842→    </Card>
+   843→   843→  );
+   844→   844→}
+   845→   845→
+   846→   846→// ── Main Component ───────────────────────────────────────────────────────────
+   847→   847→
+   848→   848→export default function DebtManagementTab() {
+   849→   849→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+   850→   850→  const [activeTab, setActiveTab] = useState('board');
+   851→   851→
+   852→   852→  if (!currentStoreId) {
+   853→   853→    return (
+   854→   854→      <div className="flex items-center justify-center h-64 text-muted-foreground">
+   855→   855→        <p className="text-sm">Please select a store to manage debt reminders.</p>
+   856→   856→      </div>
+   857→   857→    );
+   858→   858→  }
+   859→   859→
+   860→   860→  return (
+   861→   861→    <div className="space-y-4">
+   862→   862→      <div className="flex items-center justify-between">
+   863→   863→        <div className="space-y-1">
+   864→   864→          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+   865→   865→            <AlertTriangle className="h-6 w-6 text-amber-600" />
+   866→   866→            Debt Management
+   867→   867→          </h2>
+   868→   868→          <p className="text-sm text-muted-foreground">
+   869→   869→            Track overdue customers and automate reminder escalation across SMS, WhatsApp, and Email.
+   870→   870→          </p>
+   871→   871→        </div>
+   872→   872→      </div>
+   873→   873→
+   874→   874→      <Tabs value={activeTab} onValueChange={setActiveTab}>
+   875→   875→        <TabsList>
+   876→   876→          <TabsTrigger value="board" className="gap-1.5">
+   877→   877→            <Users className="h-4 w-4" />
+   878→   878→            Overdue Board
+   879→   879→          </TabsTrigger>
+   880→   880→          <TabsTrigger value="pipeline" className="gap-1.5">
+   881→   881→            <Zap className="h-4 w-4" />
+   882→   882→            Pipeline
+   883→   883→          </TabsTrigger>
+   884→   884→          <TabsTrigger value="history" className="gap-1.5">
+   885→   885→            <History className="h-4 w-4" />
+   886→   886→            History
+   887→   887→          </TabsTrigger>
+   888→   888→        </TabsList>
+   889→   889→        <TabsContent value="board" className="mt-4">
+   890→   890→          <OverdueBoardSection storeId={currentStoreId} />
+   891→   891→        </TabsContent>
+   892→   892→        <TabsContent value="pipeline" className="mt-4">
+   893→   893→          <PipelineSection storeId={currentStoreId} />
+   894→   894→        </TabsContent>
+   895→   895→        <TabsContent value="history" className="mt-4">
+   896→   896→          <HistorySection storeId={currentStoreId} />
+   897→   897→        </TabsContent>
+   898→   898→      </Tabs>
+   899→   899→    </div>
+   900→   900→  );
+   901→   901→}
+   902→   902→

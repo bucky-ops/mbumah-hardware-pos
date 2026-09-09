@@ -1,0 +1,1336 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useMemo, useRef, useEffect } from 'react';
+     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+     5→import { toast } from 'sonner';
+     6→import {
+     7→  CreditCard, Search, Plus, ArrowUpRight, ArrowDownRight,
+     8→  Minus, RotateCcw, Loader2, Filter, Users, Wallet, Scale, ChevronUp, ChevronDown,
+     9→  FileText, User, CircleDollarSign, AlertCircle, MoreHorizontal,
+    10→  Pencil, Trash2, MessageCircle, Printer,
+    11→} from 'lucide-react';
+    12→
+    13→import { useAppStore } from '@/lib/stores';
+    14→import {
+    15→  customerCreditsApi, customersApi, whatsappApi,
+    16→  formatKES, formatDate, formatDateTime,
+    17→  type CustomerCreditItem,
+    18→  type CustomerItem,
+    19→} from '@/lib/api';
+    20→import { handleError } from '@/lib/error-handler';
+    21→import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
+    22→
+    23→import { Button } from '@/components/ui/button';
+    24→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    25→import { Input } from '@/components/ui/input';
+    26→import { Label } from '@/components/ui/label';
+    27→import { Badge } from '@/components/ui/badge';
+    28→import { Skeleton } from '@/components/ui/skeleton';
+    29→import { Separator } from '@/components/ui/separator';
+    30→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+    31→import {
+    32→  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+    33→  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+    34→} from '@/components/ui/alert-dialog';
+    35→import {
+    36→  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+    37→  DropdownMenuSeparator, DropdownMenuTrigger,
+    38→} from '@/components/ui/dropdown-menu';
+    39→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    40→import { Textarea } from '@/components/ui/textarea';
+    41→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    42→import { Progress } from '@/components/ui/progress';
+    43→
+    44→// Avatar gradient helper
+    45→const AVATAR_GRADIENTS = [
+    46→  'from-rose-500 to-pink-600',
+    47→  'from-violet-500 to-purple-600',
+    48→  'from-cyan-500 to-teal-600',
+    49→  'from-emerald-500 to-green-600',
+    50→  'from-amber-500 to-orange-600',
+    51→  'from-red-500 to-rose-600',
+    52→  'from-teal-500 to-cyan-600',
+    53→  'from-orange-500 to-amber-600',
+    54→  'from-fuchsia-500 to-pink-600',
+    55→  'from-lime-500 to-green-600',
+    56→];
+    57→
+    58→function getAvatarGradient(name: string): string {
+    59→  let hash = 0;
+    60→  for (let i = 0; i < name.length; i++) {
+    61→    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    62→  }
+    63→  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
+    64→}
+    65→
+    66→// Credit type badge styling
+    67→function getCreditTypeBadge(creditType: string) {
+    68→  switch (creditType) {
+    69→    case 'CREDIT':
+    70→      return {
+    71→        class: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+    72→        icon: <ArrowUpRight className="h-3 w-3" />,
+    73→        label: 'Credit',
+    74→      };
+    75→    case 'DEBIT':
+    76→      return {
+    77→        class: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+    78→        icon: <ArrowDownRight className="h-3 w-3" />,
+    79→        label: 'Debit',
+    80→      };
+    81→    case 'ADJUSTMENT':
+    82→      return {
+    83→        class: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+    84→        icon: <Minus className="h-3 w-3" />,
+    85→        label: 'Adjustment',
+    86→      };
+    87→    case 'REFUND':
+    88→      return {
+    89→        class: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+    90→        icon: <RotateCcw className="h-3 w-3" />,
+    91→        label: 'Refund',
+    92→      };
+    93→    default:
+    94→      return {
+    95→        class: 'bg-muted text-muted-foreground',
+    96→        icon: null,
+    97→        label: creditType,
+    98→      };
+    99→  }
+   100→}
+   101→
+   102→// Amount color helper
+   103→function getAmountColor(creditType: string): string {
+   104→  switch (creditType) {
+   105→    case 'CREDIT':
+   106→    case 'REFUND':
+   107→      return 'text-green-600 dark:text-green-400';
+   108→    case 'DEBIT':
+   109→    case 'ADJUSTMENT':
+   110→      return 'text-red-600 dark:text-red-400';
+   111→    default:
+   112→      return 'text-foreground';
+   113→  }
+   114→}
+   115→
+   116→// Amount prefix helper
+   117→function getAmountPrefix(creditType: string): string {
+   118→  switch (creditType) {
+   119→    case 'CREDIT':
+   120→    case 'REFUND':
+   121→      return '+';
+   122→    case 'DEBIT':
+   123→    case 'ADJUSTMENT':
+   124→      return '-';
+   125→    default:
+   126→      return '';
+   127→  }
+   128→}
+   129→
+   130→type SortField = 'date' | 'customer' | 'type' | 'amount' | 'balance';
+   131→type SortDirection = 'asc' | 'desc';
+   132→
+   133→// Sort icon component declared outside render
+   134→function SortIcon({ field, sortField, sortDirection }: { field: SortField; sortField: SortField; sortDirection: SortDirection }) {
+   135→  if (sortField !== field) return <ChevronUp className="h-3 w-3 opacity-30" />;
+   136→  return sortDirection === 'asc'
+   137→    ? <ChevronUp className="h-3 w-3" />
+   138→    : <ChevronDown className="h-3 w-3" />;
+   139→}
+   140→
+   141→export default function CreditsTab() {
+   142→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+   143→  const queryClient = useQueryClient();
+   144→
+   145→  // State
+   146→  const [searchQuery, setSearchQuery] = useState('');
+   147→  const [debouncedSearch, setDebouncedSearch] = useState('');
+   148→  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('all');
+   149→  const [creditTypeFilter, setCreditTypeFilter] = useState<string>('all');
+   150→  const [addDialogOpen, setAddDialogOpen] = useState(false);
+   151→  const [editDialogOpen, setEditDialogOpen] = useState(false);
+   152→  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+   153→  const [showFilters, setShowFilters] = useState(false);
+   154→  const [sortField, setSortField] = useState<SortField>('date');
+   155→  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+   156→
+   157→  // Debounce search (300ms) — search is client-side; this prevents the filter
+   158→  // from running on every keystroke for large ledgers.
+   159→  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+   160→  useEffect(() => {
+   161→    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+   162→    searchTimerRef.current = setTimeout(() => {
+   163→      setDebouncedSearch(searchQuery);
+   164→    }, 300);
+   165→    return () => {
+   166→      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+   167→    };
+   168→  }, [searchQuery]);
+   169→
+   170→  // Add credit/debit form state
+   171→  const [formCustomerId, setFormCustomerId] = useState<string>('');
+   172→  const [formCreditType, setFormCreditType] = useState<string>('CREDIT');
+   173→  const [formAmount, setFormAmount] = useState<string>('');
+   174→  const [formReference, setFormReference] = useState<string>('');
+   175→  const [formDescription, setFormDescription] = useState<string>('');
+   176→  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+   177→
+   178→  // Edit form state
+   179→  const [editingCredit, setEditingCredit] = useState<CustomerCreditItem | null>(null);
+   180→  const [editCreditType, setEditCreditType] = useState<string>('CREDIT');
+   181→  const [editAmount, setEditAmount] = useState<string>('');
+   182→  const [editReference, setEditReference] = useState<string>('');
+   183→  const [editDescription, setEditDescription] = useState<string>('');
+   184→  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+   185→
+   186→  // Delete state
+   187→  const [deletingCredit, setDeletingCredit] = useState<CustomerCreditItem | null>(null);
+   188→
+   189→  // Queries
+   190→  const { data: creditsData, isLoading: creditsLoading } = useQuery({
+   191→    queryKey: ['customer-credits', currentStoreId, selectedCustomerId, creditTypeFilter],
+   192→    queryFn: () => customerCreditsApi.list({
+   193→      storeId: currentStoreId,
+   194→      customerId: selectedCustomerId !== 'all' ? selectedCustomerId : undefined,
+   195→      creditType: creditTypeFilter !== 'all' ? creditTypeFilter : undefined,
+   196→    }),
+   197→    enabled: !!currentStoreId,
+   198→  });
+   199→
+   200→  const { data: customersData, isLoading: customersLoading } = useQuery({
+   201→    queryKey: ['customers', currentStoreId],
+   202→    queryFn: () => customersApi.list({ storeId: currentStoreId, limit: 200 }),
+   203→    enabled: !!currentStoreId,
+   204→  });
+   205→
+   206→  // Mutations
+   207→  const createCreditMutation = useMutation({
+   208→    mutationFn: customerCreditsApi.create,
+   209→    onSuccess: () => {
+   210→      toast.success('Credit/Debit entry created successfully');
+   211→      setAddDialogOpen(false);
+   212→      resetForm();
+   213→      queryClient.invalidateQueries({ queryKey: ['customer-credits', currentStoreId] });
+   214→      queryClient.invalidateQueries({ queryKey: ['customers', currentStoreId] });
+   215→    },
+   216→    onError: (err: unknown) => {
+   217→      const msg = handleError(err, 'Create credit entry');
+   218→      toast.error(msg);
+   219→    },
+   220→  });
+   221→
+   222→  const updateCreditMutation = useMutation({
+   223→    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof customerCreditsApi.update>[1] }) =>
+   224→      customerCreditsApi.update(id, data),
+   225→    onSuccess: () => {
+   226→      toast.success('Credit entry updated successfully');
+   227→      setEditDialogOpen(false);
+   228→      setEditingCredit(null);
+   229→      queryClient.invalidateQueries({ queryKey: ['customer-credits', currentStoreId] });
+   230→      queryClient.invalidateQueries({ queryKey: ['customers', currentStoreId] });
+   231→    },
+   232→    onError: (err: unknown) => {
+   233→      const msg = handleError(err, 'Update credit entry');
+   234→      toast.error(msg);
+   235→    },
+   236→  });
+   237→
+   238→  const deleteCreditMutation = useMutation({
+   239→    mutationFn: (id: string) => customerCreditsApi.delete(id),
+   240→    onSuccess: () => {
+   241→      toast.success('Credit entry voided successfully');
+   242→      setDeleteDialogOpen(false);
+   243→      setDeletingCredit(null);
+   244→      queryClient.invalidateQueries({ queryKey: ['customer-credits', currentStoreId] });
+   245→      queryClient.invalidateQueries({ queryKey: ['customers', currentStoreId] });
+   246→    },
+   247→    onError: (err: unknown) => {
+   248→      const msg = handleError(err, 'Void credit entry');
+   249→      toast.error(msg);
+   250→    },
+   251→  });
+   252→
+   253→  // Helpers
+   254→  const credits: CustomerCreditItem[] = Array.isArray(creditsData?.data) ? creditsData.data : [];
+   255→  const customers: CustomerItem[] = Array.isArray(customersData?.data) ? customersData.data : [];
+   256→
+   257→  const customerMap = useMemo(() => {
+   258→    const map = new Map<string, CustomerItem>();
+   259→    customers.forEach((c) => map.set(c.id, c));
+   260→    return map;
+   261→  }, [customers]);
+   262→
+   263→  // Filter credits by search query
+   264→  const filteredCredits = useMemo(() => {
+   265→    let result = credits;
+   266→
+   267→    if (debouncedSearch) {
+   268→      const q = debouncedSearch.toLowerCase();
+   269→      result = result.filter((c) => {
+   270→        const customer = customerMap.get(c.customerId);
+   271→        const customerName = customer?.name?.toLowerCase() || '';
+   272→        const reference = c.reference?.toLowerCase() || '';
+   273→        const description = c.description?.toLowerCase() || '';
+   274→        return customerName.includes(q) || reference.includes(q) || description.includes(q);
+   275→      });
+   276→    }
+   277→
+   278→    return result;
+   279→  }, [credits, debouncedSearch, customerMap]);
+   280→
+   281→  // Sort credits
+   282→  const sortedCredits = useMemo(() => {
+   283→    const result = [...filteredCredits];
+   284→
+   285→    result.sort((a, b) => {
+   286→      let cmp = 0;
+   287→      switch (sortField) {
+   288→        case 'date':
+   289→          cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+   290→          break;
+   291→        case 'customer': {
+   292→          const nameA = customerMap.get(a.customerId)?.name || '';
+   293→          const nameB = customerMap.get(b.customerId)?.name || '';
+   294→          cmp = nameA.localeCompare(nameB);
+   295→          break;
+   296→        }
+   297→        case 'type':
+   298→          cmp = a.creditType.localeCompare(b.creditType);
+   299→          break;
+   300→        case 'amount':
+   301→          cmp = a.amount - b.amount;
+   302→          break;
+   303→        case 'balance':
+   304→          cmp = a.balance - b.balance;
+   305→          break;
+   306→      }
+   307→      return sortDirection === 'asc' ? cmp : -cmp;
+   308→    });
+   309→
+   310→    return result;
+   311→  }, [filteredCredits, sortField, sortDirection, customerMap]);
+   312→
+   313→  // Stats calculations
+   314→  const stats = useMemo(() => {
+   315→    const activeCredits = credits.filter((c) => c.status !== 'VOIDED');
+   316→
+   317→    const totalCredits = activeCredits
+   318→      .filter((c) => c.creditType === 'CREDIT' || c.creditType === 'REFUND')
+   319→      .reduce((sum, c) => sum + c.amount, 0);
+   320→
+   321→    const totalDebits = activeCredits
+   322→      .filter((c) => c.creditType === 'DEBIT' || c.creditType === 'ADJUSTMENT')
+   323→      .reduce((sum, c) => sum + c.amount, 0);
+   324→
+   325→    const netBalance = totalCredits - totalDebits;
+   326→
+   327→    // Count unique customers with outstanding credit
+   328→    const activeCustomers = new Set(
+   329→      activeCredits.map((c) => c.customerId)
+   330→    ).size;
+   331→
+   332→    return { totalCredits, totalDebits, netBalance, activeCustomers };
+   333→  }, [credits]);
+   334→
+   335→  // Per-customer balance summary
+   336→  const customerBalances = useMemo(() => {
+   337→    const activeCredits = credits.filter((c) => c.status !== 'VOIDED');
+   338→    const balanceMap = new Map<string, { customer: CustomerItem; credits: number; debits: number; balance: number; entries: number }>();
+   339→
+   340→    activeCredits.forEach((c) => {
+   341→      const existing = balanceMap.get(c.customerId);
+   342→      const isCredit = c.creditType === 'CREDIT' || c.creditType === 'REFUND';
+   343→      if (existing) {
+   344→        if (isCredit) existing.credits += c.amount;
+   345→        else existing.debits += c.amount;
+   346→        existing.balance = existing.credits - existing.debits;
+   347→        existing.entries += 1;
+   348→      } else {
+   349→        const customer = customerMap.get(c.customerId);
+   350→        if (customer) {
+   351→          balanceMap.set(c.customerId, {
+   352→            customer,
+   353→            credits: isCredit ? c.amount : 0,
+   354→            debits: isCredit ? 0 : c.amount,
+   355→            balance: isCredit ? c.amount : -c.amount,
+   356→            entries: 1,
+   357→          });
+   358→        }
+   359→      }
+   360→    });
+   361→
+   362→    return Array.from(balanceMap.values()).sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
+   363→  }, [credits, customerMap]);
+   364→
+   365→  // Running balance for the ledger
+   366→  const ledgerWithRunningBalance = useMemo(() => {
+   367→    // Group by customer, then compute running balance per customer
+   368→    const byCustomer = new Map<string, CustomerCreditItem[]>();
+   369→    sortedCredits.forEach((c) => {
+   370→      const arr = byCustomer.get(c.customerId) || [];
+   371→      arr.push(c);
+   372→      byCustomer.set(c.customerId, arr);
+   373→    });
+   374→
+   375→    // Calculate running balance per customer
+   376→    const runningBalances = new Map<string, number>();
+   377→    const result = sortedCredits.map((c) => {
+   378→      const prev = runningBalances.get(c.customerId) || 0;
+   379→      const isVoided = c.status === 'VOIDED';
+   380→      const isCredit = !isVoided && (c.creditType === 'CREDIT' || c.creditType === 'REFUND');
+   381→      const change = isVoided ? 0 : (isCredit ? c.amount : -c.amount);
+   382→      const running = prev + change;
+   383→      runningBalances.set(c.customerId, running);
+   384→      return { ...c, runningBalance: running };
+   385→    });
+   386→
+   387→    return result;
+   388→  }, [sortedCredits]);
+   389→
+   390→  // Form helpers
+   391→  function resetForm() {
+   392→    setFormCustomerId('');
+   393→    setFormCreditType('CREDIT');
+   394→    setFormAmount('');
+   395→    setFormReference('');
+   396→    setFormDescription('');
+   397→    setFormErrors({});
+   398→  }
+   399→
+   400→  function validateForm(): boolean {
+   401→    const errors: Record<string, string> = {};
+   402→    if (!formCustomerId) errors.customerId = 'Please select a customer';
+   403→    if (!formAmount || parseFloat(formAmount) <= 0) errors.amount = 'Amount must be greater than 0';
+   404→    if (formAmount && isNaN(parseFloat(formAmount))) errors.amount = 'Please enter a valid number';
+   405→    setFormErrors(errors);
+   406→    return Object.keys(errors).length === 0;
+   407→  }
+   408→
+   409→  function handleCreateEntry() {
+   410→    if (!validateForm()) return;
+   411→    createCreditMutation.mutate({
+   412→      storeId: currentStoreId,
+   413→      customerId: formCustomerId,
+   414→      amount: parseFloat(formAmount),
+   415→      creditType: formCreditType,
+   416→      reference: formReference || undefined,
+   417→      description: formDescription || undefined,
+   418→    });
+   419→  }
+   420→
+   421→  // Edit helpers
+   422→  async function handleSendCreditWhatsApp(entry: CustomerCreditItem) {
+   423→    try {
+   424→      const customer = customers.find((c: CustomerItem) => c.id === entry.customerId);
+   425→      const phone = prompt('Enter WhatsApp phone number:', customer?.phone || '') || '';
+   426→      if (!phone) return;
+   427→      const res = await whatsappApi.sendDocument({
+   428→        type: 'credit_note',
+   429→        documentId: entry.id,
+   430→        storeId: currentStoreId,
+   431→        phone,
+   432→        customerId: entry.customerId,
+   433→      });
+   434→      if (res.waLink) {
+   435→        window.open(res.waLink, '_blank');
+   436→        toast.success(`${res.documentTitle} sent via WhatsApp`);
+   437→      }
+   438→    } catch (err) {
+   439→      const msg = handleError(err, 'Send credit note via WhatsApp');
+   440→      toast.error(msg);
+   441→    }
+   442→  }
+   443→
+   444→  function handlePrintCredit(entry: CustomerCreditItem) {
+   445→    const customer = customers.find((c: CustomerItem) => c.id === entry.customerId);
+   446→    const customerName = customer?.name || 'Unknown Customer';
+   447→    const customerPhone = customer?.phone || '—';
+   448→    const badge = getCreditTypeBadge(entry.creditType);
+   449→    const printWindow = window.open('', '_blank', 'width=800,height=900');
+   450→    if (!printWindow) {
+   451→      toast.error('Pop-up blocked. Please allow pop-ups to print.');
+   452→      return;
+   453→    }
+   454→    const amt = (entry.creditType === 'CREDIT' || entry.creditType === 'REFUND' ? '+' : '-') + formatKES(entry.amount);
+   455→    printWindow.document.write(`
+   456→      <!doctype html><html><head><title>Credit Note - ${entry.reference || entry.id.slice(0, 8)}</title>
+   457→      <style>
+   458→        body { font-family: Arial, Helvetica, sans-serif; color: #1f2937; margin: 0; padding: 32px; }
+   459→        h1 { color: #047857; margin: 0 0 4px; font-size: 22px; }
+   460→        .muted { color: #6b7280; font-size: 12px; }
+   461→        h2 { font-size: 14px; margin: 24px 0 8px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; }
+   462→        .row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; border-bottom: 1px dashed #e5e7eb; }
+   463→        .label { color: #6b7280; }
+   464→        .value { font-weight: 600; }
+   465→        .amount { font-size: 28px; font-weight: 700; color: ${entry.creditType === 'CREDIT' || entry.creditType === 'REFUND' ? '#047857' : '#b91c1c'}; }
+   466→        .badge { display: inline-block; padding: 4px 10px; border-radius: 9999px; background: #fef3c7; color: #92400e; font-size: 11px; font-weight: 700; }
+   467→        .sign { margin-top: 64px; display: flex; justify-content: space-between; }
+   468→        .sign div { width: 45%; }
+   469→        .sign .line { border-top: 1px solid #9ca3af; margin-top: 36px; padding-top: 4px; font-size: 11px; color: #6b7280; }
+   470→        .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #047857; padding-bottom: 12px; margin-bottom: 16px; }
+   471→      </style></head>
+   472→      <body>
+   473→        <div class="head">
+   474→          <div>
+   475→            <h1>Mbumah Hardware</h1>
+   476→            <p class="muted">Juja, Kiambu County · +254 700 000 000</p>
+   477→          </div>
+   478→          <div style="text-align:right">
+   479→            <span class="badge">${badge.label.toUpperCase()}</span>
+   480→            <p class="muted" style="margin-top:6px">Ref: ${entry.reference || '—'}</p>
+   481→            <p class="muted">Date: ${formatDateTime(entry.createdAt)}</p>
+   482→          </div>
+   483→        </div>
+   484→        <h2>Billed To</h2>
+   485→        <div class="row"><span class="label">Customer</span><span class="value">${customerName}</span></div>
+   486→        <div class="row"><span class="label">Phone</span><span class="value">${customerPhone}</span></div>
+   487→        ${entry.description ? `<div class="row"><span class="label">Description</span><span class="value">${entry.description}</span></div>` : ''}
+   488→        <h2>Amount</h2>
+   489→        <div class="amount">${amt}</div>
+   490→        <p class="muted" style="margin-top:4px">Running balance: ${formatKES(Math.abs(entry.runningBalance))} ${entry.runningBalance < 0 ? 'DR' : 'CR'}${entry.status === 'VOIDED' ? ' · VOIDED' : ''}</p>
+   491→        <div class="sign">
+   492→          <div><div class="line">Authorised Signature</div></div>
+   493→          <div><div class="line">Customer Acknowledgement</div></div>
+   494→        </div>
+   495→        <p class="muted" style="margin-top:32px;text-align:center">This is a computer-generated credit note from Mbumah Hardware POS.</p>
+   496→      </body></html>
+   497→    `);
+   498→    printWindow.document.close();
+   499→    printWindow.focus();
+   500→    setTimeout(() => printWindow.print(), 250);
+   501→  }
+   502→
+   503→  function openEditDialog(credit: CustomerCreditItem) {
+   504→    setEditingCredit(credit);
+   505→    setEditCreditType(credit.creditType);
+   506→    setEditAmount(String(credit.amount));
+   507→    setEditReference(credit.reference || '');
+   508→    setEditDescription(credit.description || '');
+   509→    setEditErrors({});
+   510→    setEditDialogOpen(true);
+   511→  }
+   512→
+   513→  function validateEditForm(): boolean {
+   514→    const errors: Record<string, string> = {};
+   515→    if (!editAmount || parseFloat(editAmount) <= 0) errors.amount = 'Amount must be greater than 0';
+   516→    if (editAmount && isNaN(parseFloat(editAmount))) errors.amount = 'Please enter a valid number';
+   517→    setEditErrors(errors);
+   518→    return Object.keys(errors).length === 0;
+   519→  }
+   520→
+   521→  function handleUpdateEntry() {
+   522→    if (!editingCredit || !validateEditForm()) return;
+   523→    updateCreditMutation.mutate({
+   524→      id: editingCredit.id,
+   525→      data: {
+   526→        amount: parseFloat(editAmount),
+   527→        creditType: editCreditType,
+   528→        reference: editReference || null,
+   529→        description: editDescription || null,
+   530→      },
+   531→    });
+   532→  }
+   533→
+   534→  // Delete helpers
+   535→  function openDeleteDialog(credit: CustomerCreditItem) {
+   536→    setDeletingCredit(credit);
+   537→    setDeleteDialogOpen(true);
+   538→  }
+   539→
+   540→  function handleVoidEntry() {
+   541→    if (!deletingCredit) return;
+   542→    deleteCreditMutation.mutate(deletingCredit.id);
+   543→  }
+   544→
+   545→  function handleSort(field: SortField) {
+   546→    if (sortField === field) {
+   547→      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+   548→    } else {
+   549→      setSortField(field);
+   550→      setSortDirection('asc');
+   551→    }
+   552→  }
+   553→
+   554→  const isLoading = creditsLoading || customersLoading;
+   555→
+   556→  return (
+   557→    <div className="space-y-6">
+   558→      {/* Header */}
+   559→      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+   560→        <div>
+   561→          <h2 className="text-2xl font-bold tracking-tight">Credits & Debits</h2>
+   562→          <p className="text-sm text-muted-foreground">
+   563→            Manage customer credit accounts and track outstanding balances
+   564→          </p>
+   565→        </div>
+   566→        <Button onClick={() => setAddDialogOpen(true)} className="gap-2">
+   567→          <Plus className="h-4 w-4" />
+   568→          Add Entry
+   569→        </Button>
+   570→      </div>
+   571→
+   572→      {/* Stats Cards */}
+   573→      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   574→        <Card>
+   575→          <CardContent className="p-4">
+   576→            <div className="flex items-center justify-between">
+   577→              <div>
+   578→                <p className="text-sm text-muted-foreground">Total Credits</p>
+   579→                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+   580→                  {formatKES(stats.totalCredits)}
+   581→                </p>
+   582→              </div>
+   583→              <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+   584→                <ArrowUpRight className="h-5 w-5 text-green-600 dark:text-green-400" />
+   585→              </div>
+   586→            </div>
+   587→          </CardContent>
+   588→        </Card>
+   589→
+   590→        <Card>
+   591→          <CardContent className="p-4">
+   592→            <div className="flex items-center justify-between">
+   593→              <div>
+   594→                <p className="text-sm text-muted-foreground">Total Debits</p>
+   595→                <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+   596→                  {formatKES(stats.totalDebits)}
+   597→                </p>
+   598→              </div>
+   599→              <div className="h-10 w-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+   600→                <ArrowDownRight className="h-5 w-5 text-red-600 dark:text-red-400" />
+   601→              </div>
+   602→            </div>
+   603→          </CardContent>
+   604→        </Card>
+   605→
+   606→        <Card>
+   607→          <CardContent className="p-4">
+   608→            <div className="flex items-center justify-between">
+   609→              <div>
+   610→                <p className="text-sm text-muted-foreground">Net Balance</p>
+   611→                <p className={`text-2xl font-bold ${stats.netBalance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+   612→                  {stats.netBalance >= 0 ? '+' : ''}{formatKES(stats.netBalance)}
+   613→                </p>
+   614→              </div>
+   615→              <div className={`h-10 w-10 rounded-full flex items-center justify-center ${stats.netBalance >= 0 ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30'}`}>
+   616→                <Scale className={`h-5 w-5 ${stats.netBalance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`} />
+   617→              </div>
+   618→            </div>
+   619→          </CardContent>
+   620→        </Card>
+   621→
+   622→        <Card>
+   623→          <CardContent className="p-4">
+   624→            <div className="flex items-center justify-between">
+   625→              <div>
+   626→                <p className="text-sm text-muted-foreground">Active Accounts</p>
+   627→                <p className="text-2xl font-bold">{stats.activeCustomers}</p>
+   628→              </div>
+   629→              <div className="h-10 w-10 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+   630→                <Users className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+   631→              </div>
+   632→            </div>
+   633→          </CardContent>
+   634→        </Card>
+   635→      </div>
+   636→
+   637→      {/* Filters Row */}
+   638→      <Card>
+   639→        <CardContent className="p-4">
+   640→          <div className="flex flex-col sm:flex-row gap-3">
+   641→            <div className="relative flex-1">
+   642→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   643→              <Input
+   644→                placeholder="Search by customer, reference, or description..."
+   645→                value={searchQuery}
+   646→                onChange={(e) => setSearchQuery(e.target.value)}
+   647→                className="pl-9"
+   648→              />
+   649→            </div>
+   650→            <div className="flex gap-2">
+   651→              <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
+   652→                <SelectTrigger className="w-[180px]">
+   653→                  <SelectValue placeholder="All Customers" />
+   654→                </SelectTrigger>
+   655→                <SelectContent>
+   656→                  <SelectItem value="all">All Customers</SelectItem>
+   657→                  {customers.map((c) => (
+   658→                    <SelectItem key={c.id} value={c.id}>
+   659→                      {c.name}
+   660→                    </SelectItem>
+   661→                  ))}
+   662→                </SelectContent>
+   663→              </Select>
+   664→              <Select value={creditTypeFilter} onValueChange={setCreditTypeFilter}>
+   665→                <SelectTrigger className="w-[150px]">
+   666→                  <SelectValue placeholder="All Types" />
+   667→                </SelectTrigger>
+   668→                <SelectContent>
+   669→                  <SelectItem value="all">All Types</SelectItem>
+   670→                  <SelectItem value="CREDIT">Credits</SelectItem>
+   671→                  <SelectItem value="DEBIT">Debits</SelectItem>
+   672→                  <SelectItem value="ADJUSTMENT">Adjustments</SelectItem>
+   673→                  <SelectItem value="REFUND">Refunds</SelectItem>
+   674→                </SelectContent>
+   675→              </Select>
+   676→              <Button
+   677→                variant="outline"
+   678→                size="icon"
+   679→                onClick={() => setShowFilters(!showFilters)}
+   680→                className={showFilters ? 'bg-accent' : ''}
+   681→              >
+   682→                <Filter className="h-4 w-4" />
+   683→              </Button>
+   684→            </div>
+   685→          </div>
+   686→        </CardContent>
+   687→      </Card>
+   688→
+   689→      {/* Main Content */}
+   690→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+   691→        {/* Credit Ledger Table */}
+   692→        <div className="lg:col-span-2">
+   693→          <Card>
+   694→            <CardHeader className="pb-3">
+   695→              <div className="flex items-center justify-between">
+   696→                <CardTitle className="flex items-center gap-2 text-lg">
+   697→                  <FileText className="h-5 w-5" />
+   698→                  Credit Ledger
+   699→                </CardTitle>
+   700→                <Badge variant="secondary" className="font-normal">
+   701→                  {filteredCredits.length} entries
+   702→                </Badge>
+   703→              </div>
+   704→            </CardHeader>
+   705→            <CardContent className="p-0">
+   706→              {isLoading ? (
+   707→                <div className="space-y-3 p-4">
+   708→                  {[...Array(5)].map((_, i) => (
+   709→                    <div key={i} className="flex items-center gap-4">
+   710→                      <Skeleton className="h-10 w-10 rounded-full" />
+   711→                      <div className="flex-1 space-y-2">
+   712→                        <Skeleton className="h-4 w-1/3" />
+   713→                        <Skeleton className="h-3 w-1/2" />
+   714→                      </div>
+   715→                      <Skeleton className="h-4 w-20" />
+   716→                    </div>
+   717→                  ))}
+   718→                </div>
+   719→              ) : ledgerWithRunningBalance.length === 0 ? (
+   720→                <div className="flex flex-col items-center justify-center py-16 text-center">
+   721→                  <CreditCard className="h-12 w-12 text-muted-foreground/40 mb-4" />
+   722→                  <h3 className="text-lg font-medium text-muted-foreground">No entries found</h3>
+   723→                  <p className="text-sm text-muted-foreground mt-1">
+   724→                    {searchQuery || selectedCustomerId !== 'all' || creditTypeFilter !== 'all'
+   725→                      ? 'Try adjusting your filters'
+   726→                      : 'Add your first credit or debit entry to get started'}
+   727→                  </p>
+   728→                  {!searchQuery && selectedCustomerId === 'all' && creditTypeFilter === 'all' && (
+   729→                    <Button onClick={() => setAddDialogOpen(true)} className="mt-4 gap-2">
+   730→                      <Plus className="h-4 w-4" />
+   731→                      Add Entry
+   732→                    </Button>
+   733→                  )}
+   734→                </div>
+   735→              ) : (
+   736→                <div className="max-h-[520px] overflow-y-auto">
+   737→                  <Table>
+   738→                    <TableHeader>
+   739→                      <TableRow>
+   740→                        <TableHead
+   741→                          className="cursor-pointer hover:bg-muted/50 select-none"
+   742→                          onClick={() => handleSort('date')}
+   743→                        >
+   744→                          <div className="flex items-center gap-1">
+   745→                            Date <SortIcon field="date" sortField={sortField} sortDirection={sortDirection} />
+   746→                          </div>
+   747→                        </TableHead>
+   748→                        <TableHead
+   749→                          className="cursor-pointer hover:bg-muted/50 select-none"
+   750→                          onClick={() => handleSort('customer')}
+   751→                        >
+   752→                          <div className="flex items-center gap-1">
+   753→                            Customer <SortIcon field="customer" sortField={sortField} sortDirection={sortDirection} />
+   754→                          </div>
+   755→                        </TableHead>
+   756→                        <TableHead
+   757→                          className="cursor-pointer hover:bg-muted/50 select-none"
+   758→                          onClick={() => handleSort('type')}
+   759→                        >
+   760→                          <div className="flex items-center gap-1">
+   761→                            Type <SortIcon field="type" sortField={sortField} sortDirection={sortDirection} />
+   762→                          </div>
+   763→                        </TableHead>
+   764→                        <TableHead
+   765→                          className="text-right cursor-pointer hover:bg-muted/50 select-none"
+   766→                          onClick={() => handleSort('amount')}
+   767→                        >
+   768→                          <div className="flex items-center justify-end gap-1">
+   769→                            Amount <SortIcon field="amount" sortField={sortField} sortDirection={sortDirection} />
+   770→                          </div>
+   771→                        </TableHead>
+   772→                        <TableHead className="hidden md:table-cell">Reference</TableHead>
+   773→                        <TableHead className="hidden lg:table-cell">Description</TableHead>
+   774→                        <TableHead
+   775→                          className="text-right cursor-pointer hover:bg-muted/50 select-none"
+   776→                          onClick={() => handleSort('balance')}
+   777→                        >
+   778→                          <div className="flex items-center justify-end gap-1">
+   779→                            Balance <SortIcon field="balance" sortField={sortField} sortDirection={sortDirection} />
+   780→                          </div>
+   781→                        </TableHead>
+   782→                        <TableHead className="w-10" />
+   783→                      </TableRow>
+   784→                    </TableHeader>
+   785→                    <TableBody>
+   786→                      {ledgerWithRunningBalance.map((entry) => {
+   787→                        const customer = customerMap.get(entry.customerId);
+   788→                        const badge = getCreditTypeBadge(entry.creditType);
+   789→                        const amountColor = entry.status === 'VOIDED' ? 'text-muted-foreground line-through' : getAmountColor(entry.creditType);
+   790→                        const amountPrefix = getAmountPrefix(entry.creditType);
+   791→                        const gradient = customer ? getAvatarGradient(customer.name) : '';
+   792→                        const isVoided = entry.status === 'VOIDED';
+   793→
+   794→                        return (
+   795→                          <TableRow key={entry.id} className={`hover:bg-muted/30 ${isVoided ? 'opacity-60' : ''}`}>
+   796→                            <TableCell className="whitespace-nowrap text-sm">
+   797→                              <div className="font-medium">{formatDate(entry.createdAt)}</div>
+   798→                              <div className="text-xs text-muted-foreground">
+   799→                                {new Date(entry.createdAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}
+   800→                              </div>
+   801→                            </TableCell>
+   802→                            <TableCell>
+   803→                              <div className="flex items-center gap-2">
+   804→                                <Avatar className="h-7 w-7">
+   805→                                  <AvatarFallback className={`bg-gradient-to-br ${gradient} text-white text-[10px]`}>
+   806→                                    {customer?.name?.charAt(0)?.toUpperCase() || '?'}
+   807→                                  </AvatarFallback>
+   808→                                </Avatar>
+   809→                                <span className="font-medium text-sm truncate max-w-[120px]">
+   810→                                  {customer?.name || 'Unknown'}
+   811→                                </span>
+   812→                              </div>
+   813→                            </TableCell>
+   814→                            <TableCell>
+   815→                              <div className="flex items-center gap-1.5">
+   816→                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${badge.class}`}>
+   817→                                  {badge.icon}
+   818→                                  {badge.label}
+   819→                                </span>
+   820→                                {isVoided && (
+   821→                                  <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-5">
+   822→                                    VOIDED
+   823→                                  </Badge>
+   824→                                )}
+   825→                              </div>
+   826→                            </TableCell>
+   827→                            <TableCell className={`text-right font-semibold text-sm ${amountColor}`}>
+   828→                              {amountPrefix}{formatKES(entry.amount)}
+   829→                            </TableCell>
+   830→                            <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+   831→                              {entry.reference || '—'}
+   832→                            </TableCell>
+   833→                            <TableCell className="hidden lg:table-cell text-sm text-muted-foreground max-w-[200px] truncate">
+   834→                              {entry.description || '—'}
+   835→                            </TableCell>
+   836→                            <TableCell className={`text-right font-semibold text-sm ${isVoided ? 'text-muted-foreground' : entry.runningBalance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+   837→                              {formatKES(Math.abs(entry.runningBalance))}
+   838→                              {entry.runningBalance < 0 && <span className="text-xs ml-0.5">DR</span>}
+   839→                              {entry.runningBalance > 0 && <span className="text-xs ml-0.5">CR</span>}
+   840→                            </TableCell>
+   841→                            <TableCell>
+   842→                              <DropdownMenu>
+   843→                                <DropdownMenuTrigger asChild>
+   844→                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+   845→                                    <MoreHorizontal className="h-4 w-4" />
+   846→                                    <span className="sr-only">Open menu</span>
+   847→                                  </Button>
+   848→                                </DropdownMenuTrigger>
+   849→                                <DropdownMenuContent align="end">
+   850→                                  {!isVoided && (
+   851→                                    <DropdownMenuItem onClick={() => openEditDialog(entry)} className="gap-2">
+   852→                                      <Pencil className="h-4 w-4" />
+   853→                                      Edit Entry
+   854→                                    </DropdownMenuItem>
+   855→                                  )}
+   856→                                  <DropdownMenuItem
+   857→                                    onClick={() => handleSendCreditWhatsApp(entry)}
+   858→                                    className="gap-2 text-green-600 dark:text-green-400 focus:text-green-600 focus:bg-green-50 dark:focus:bg-green-950/30"
+   859→                                    onSelect={(e) => e.preventDefault()}
+   860→                                  >
+   861→                                    <MessageCircle className="h-4 w-4" />
+   862→                                    Send via WhatsApp
+   863→                                  </DropdownMenuItem>
+   864→                                  <DropdownMenuItem
+   865→                                    onClick={() => handlePrintCredit(entry)}
+   866→                                    className="gap-2 focus:bg-muted/50"
+   867→                                    onSelect={(e) => e.preventDefault()}
+   868→                                  >
+   869→                                    <Printer className="h-4 w-4" />
+   870→                                    Print Credit Note
+   871→                                  </DropdownMenuItem>
+   872→                                  {!isVoided && (
+   873→                                    <>
+   874→                                      <DropdownMenuSeparator />
+   875→                                      <DropdownMenuItem
+   876→                                        onClick={() => openDeleteDialog(entry)}
+   877→                                        className="gap-2 text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/30"
+   878→                                      >
+   879→                                        <Trash2 className="h-4 w-4" />
+   880→                                        Void Entry
+   881→                                      </DropdownMenuItem>
+   882→                                    </>
+   883→                                  )}
+   884→                                  {isVoided && (
+   885→                                    <DropdownMenuItem disabled className="gap-2 text-muted-foreground">
+   886→                                      <Trash2 className="h-4 w-4" />
+   887→                                      Already Voided
+   888→                                    </DropdownMenuItem>
+   889→                                  )}
+   890→                                </DropdownMenuContent>
+   891→                              </DropdownMenu>
+   892→                            </TableCell>
+   893→                          </TableRow>
+   894→                        );
+   895→                      })}
+   896→                    </TableBody>
+   897→                  </Table>
+   898→                </div>
+   899→              )}
+   900→            </CardContent>
+   901→          </Card>
+   902→        </div>
+   903→
+   904→        {/* Customer Balance Cards */}
+   905→        <div className="space-y-4">
+   906→          <Card>
+   907→            <CardHeader className="pb-3">
+   908→              <CardTitle className="flex items-center gap-2 text-lg">
+   909→                <Wallet className="h-5 w-5" />
+   910→                Customer Balances
+   911→              </CardTitle>
+   912→            </CardHeader>
+   913→            <CardContent>
+   914→              {isLoading ? (
+   915→                <div className="space-y-3">
+   916→                  {[...Array(4)].map((_, i) => (
+   917→                    <Skeleton key={i} className="h-20 w-full rounded-lg" />
+   918→                  ))}
+   919→                </div>
+   920→              ) : customerBalances.length === 0 ? (
+   921→                <div className="text-center py-8">
+   922→                  <Users className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
+   923→                  <p className="text-sm text-muted-foreground">No customer balances</p>
+   924→                </div>
+   925→              ) : (
+   926→                <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+   927→                  {customerBalances.slice(0, 15).map((cb) => {
+   928→                    const gradient = getAvatarGradient(cb.customer.name);
+   929→                    const maxBalance = Math.max(...customerBalances.map((b) => Math.abs(b.balance)), 1);
+   930→                    const progressPercent = Math.min((Math.abs(cb.balance) / maxBalance) * 100, 100);
+   931→
+   932→                    return (
+   933→                      <div
+   934→                        key={cb.customer.id}
+   935→                        className="p-3 rounded-lg border hover:bg-muted/30 transition-colors cursor-pointer"
+   936→                        onClick={() => setSelectedCustomerId(cb.customer.id)}
+   937→                      >
+   938→                        <div className="flex items-center gap-3 mb-2">
+   939→                          <Avatar className="h-8 w-8">
+   940→                            <AvatarFallback className={`bg-gradient-to-br ${gradient} text-white text-xs`}>
+   941→                              {cb.customer.name.charAt(0).toUpperCase()}
+   942→                            </AvatarFallback>
+   943→                          </Avatar>
+   944→                          <div className="flex-1 min-w-0">
+   945→                            <p className="font-medium text-sm truncate">{cb.customer.name}</p>
+   946→                            <p className="text-xs text-muted-foreground">{cb.entries} entries</p>
+   947→                          </div>
+   948→                          <div className="text-right">
+   949→                            <p className={`font-bold text-sm ${cb.balance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+   950→                              {formatKES(Math.abs(cb.balance))}
+   951→                            </p>
+   952→                            <p className={`text-[10px] font-medium ${cb.balance >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+   953→                              {cb.balance >= 0 ? 'CR' : 'DR'}
+   954→                            </p>
+   955→                          </div>
+   956→                        </div>
+   957→                        <Progress
+   958→                          value={progressPercent}
+   959→                          className={`h-1.5 ${cb.balance >= 0 ? '[&>div]:bg-green-500' : '[&>div]:bg-red-500'}`}
+   960→                        />
+   961→                        <div className="flex justify-between mt-1.5 text-[10px] text-muted-foreground">
+   962→                          <span className="text-green-600 dark:text-green-400">Credits: {formatKES(cb.credits)}</span>
+   963→                          <span className="text-red-600 dark:text-red-400">Debits: {formatKES(cb.debits)}</span>
+   964→                        </div>
+   965→                      </div>
+   966→                    );
+   967→                  })}
+   968→                </div>
+   969→              )}
+   970→            </CardContent>
+   971→          </Card>
+   972→        </div>
+   973→      </div>
+   974→
+   975→      {/* Add Credit/Debit Dialog */}
+   976→      <ResponsiveDialog
+   977→        open={addDialogOpen}
+   978→        onOpenChange={(open) => { if (!open) resetForm(); setAddDialogOpen(open); }}
+   979→        size="md"
+   980→        title={
+   981→          <span className="flex items-center gap-2">
+   982→            <CircleDollarSign className="h-5 w-5" />
+   983→            Add Credit / Debit Entry
+   984→          </span>
+   985→        }
+   986→        description="Record a new credit, debit, adjustment, or refund for a customer account."
+   987→        footer={
+   988→          <>
+   989→            <Button variant="outline" onClick={() => { resetForm(); setAddDialogOpen(false); }}>
+   990→              Cancel
+   991→            </Button>
+   992→            <Button
+   993→              onClick={handleCreateEntry}
+   994→              disabled={createCreditMutation.isPending}
+   995→              className="gap-2"
+   996→            >
+   997→              {createCreditMutation.isPending ? (
+   998→                <>
+   999→                  <Loader2 className="h-4 w-4 animate-spin" />
+  1000→                  Creating...
+  1001→                </>
+  1002→              ) : (
+  1003→                <>
+  1004→                  <Plus className="h-4 w-4" />
+  1005→                  Create Entry
+  1006→                </>
+  1007→              )}
+  1008→            </Button>
+  1009→          </>
+  1010→        }
+  1011→      >
+  1012→          <div className="space-y-4 py-2">
+  1013→            {/* Customer Selection */}
+  1014→            <div className="space-y-2">
+  1015→              <Label htmlFor="credit-customer">Customer *</Label>
+  1016→              <Select value={formCustomerId} onValueChange={setFormCustomerId}>
+  1017→                <SelectTrigger id="credit-customer" className={formErrors.customerId ? 'border-red-500' : ''}>
+  1018→                  <SelectValue placeholder="Select a customer" />
+  1019→                </SelectTrigger>
+  1020→                <SelectContent>
+  1021→                  {customers.map((c) => (
+  1022→                    <SelectItem key={c.id} value={c.id}>
+  1023→                      <div className="flex items-center gap-2">
+  1024→                        <User className="h-3 w-3" />
+  1025→                        {c.name}
+  1026→                        {c.phone && <span className="text-xs text-muted-foreground">({c.phone})</span>}
+  1027→                      </div>
+  1028→                    </SelectItem>
+  1029→                  ))}
+  1030→                </SelectContent>
+  1031→              </Select>
+  1032→              {formErrors.customerId && (
+  1033→                <p className="text-xs text-red-500 flex items-center gap-1">
+  1034→                  <AlertCircle className="h-3 w-3" /> {formErrors.customerId}
+  1035→                </p>
+  1036→              )}
+  1037→            </div>
+  1038→
+  1039→            {/* Credit Type */}
+  1040→            <div className="space-y-2">
+  1041→              <Label htmlFor="credit-type">Entry Type *</Label>
+  1042→              <Select value={formCreditType} onValueChange={setFormCreditType}>
+  1043→                <SelectTrigger id="credit-type">
+  1044→                  <SelectValue />
+  1045→                </SelectTrigger>
+  1046→                <SelectContent>
+  1047→                  <SelectItem value="CREDIT">
+  1048→                    <div className="flex items-center gap-2">
+  1049→                      <ArrowUpRight className="h-3 w-3 text-green-600" />
+  1050→                      Credit (Add to account)
+  1051→                    </div>
+  1052→                  </SelectItem>
+  1053→                  <SelectItem value="DEBIT">
+  1054→                    <div className="flex items-center gap-2">
+  1055→                      <ArrowDownRight className="h-3 w-3 text-red-600" />
+  1056→                      Debit (Deduct from account)
+  1057→                    </div>
+  1058→                  </SelectItem>
+  1059→                  <SelectItem value="ADJUSTMENT">
+  1060→                    <div className="flex items-center gap-2">
+  1061→                      <Minus className="h-3 w-3 text-amber-600" />
+  1062→                      Adjustment
+  1063→                    </div>
+  1064→                  </SelectItem>
+  1065→                  <SelectItem value="REFUND">
+  1066→                    <div className="flex items-center gap-2">
+  1067→                      <RotateCcw className="h-3 w-3 text-blue-600" />
+  1068→                      Refund
+  1069→                    </div>
+  1070→                  </SelectItem>
+  1071→                </SelectContent>
+  1072→              </Select>
+  1073→            </div>
+  1074→
+  1075→            {/* Amount */}
+  1076→            <div className="space-y-2">
+  1077→              <Label htmlFor="credit-amount">Amount (KES) *</Label>
+  1078→              <Input
+  1079→                id="credit-amount"
+  1080→                type="number"
+  1081→                min="0"
+  1082→                step="0.01"
+  1083→                placeholder="0.00"
+  1084→                value={formAmount}
+  1085→                onChange={(e) => setFormAmount(e.target.value)}
+  1086→                className={formErrors.amount ? 'border-red-500' : ''}
+  1087→              />
+  1088→              {formErrors.amount && (
+  1089→                <p className="text-xs text-red-500 flex items-center gap-1">
+  1090→                  <AlertCircle className="h-3 w-3" /> {formErrors.amount}
+  1091→                </p>
+  1092→              )}
+  1093→            </div>
+  1094→
+  1095→            {/* Reference */}
+  1096→            <div className="space-y-2">
+  1097→              <Label htmlFor="credit-reference">Reference</Label>
+  1098→              <Input
+  1099→                id="credit-reference"
+  1100→                placeholder="e.g. INV-001, PAY-2024-03"
+  1101→                value={formReference}
+  1102→                onChange={(e) => setFormReference(e.target.value)}
+  1103→              />
+  1104→            </div>
+  1105→
+  1106→            {/* Description */}
+  1107→            <div className="space-y-2">
+  1108→              <Label htmlFor="credit-description">Description</Label>
+  1109→              <Textarea
+  1110→                id="credit-description"
+  1111→                placeholder="Add notes about this entry..."
+  1112→                value={formDescription}
+  1113→                onChange={(e) => setFormDescription(e.target.value)}
+  1114→                rows={3}
+  1115→              />
+  1116→            </div>
+  1117→
+  1118→            {/* Preview */}
+  1119→            {formCustomerId && formAmount && parseFloat(formAmount) > 0 && (
+  1120→              <>
+  1121→                <Separator />
+  1122→                <div className="bg-muted/50 rounded-lg p-3 space-y-1">
+  1123→                  <p className="text-xs text-muted-foreground font-medium">Preview</p>
+  1124→                  <div className="flex items-center justify-between">
+  1125→                    <span className="text-sm">
+  1126→                      {customerMap.get(formCustomerId)?.name || 'Customer'}
+  1127→                    </span>
+  1128→                    <span className={`font-bold text-sm ${getAmountColor(formCreditType)}`}>
+  1129→                      {getAmountPrefix(formCreditType)}{formatKES(parseFloat(formAmount))}
+  1130→                    </span>
+  1131→                  </div>
+  1132→                  <div className="flex items-center gap-1">
+  1133→                    {(() => {
+  1134→                      const badge = getCreditTypeBadge(formCreditType);
+  1135→                      return (
+  1136→                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${badge.class}`}>
+  1137→                          {badge.icon}
+  1138→                          {badge.label}
+  1139→                        </span>
+  1140→                      );
+  1141→                    })()}
+  1142→                    {formReference && (
+  1143→                      <span className="text-xs text-muted-foreground">Ref: {formReference}</span>
+  1144→                    )}
+  1145→                  </div>
+  1146→                </div>
+  1147→              </>
+  1148→            )}
+  1149→          </div>
+  1150→      </ResponsiveDialog>
+  1151→
+  1152→      {/* Edit Credit Entry Dialog */}
+  1153→      <ResponsiveDialog
+  1154→        open={editDialogOpen}
+  1155→        onOpenChange={(open) => { if (!open) { setEditingCredit(null); } setEditDialogOpen(open); }}
+  1156→        size="md"
+  1157→        title={
+  1158→          <span className="flex items-center gap-2">
+  1159→            <Pencil className="h-5 w-5" />
+  1160→            Edit Credit Entry
+  1161→          </span>
+  1162→        }
+  1163→        description="Update the details of this credit entry. Changing the amount or type will recalculate running balances."
+  1164→        footer={
+  1165→          <>
+  1166→            <Button variant="outline" onClick={() => { setEditingCredit(null); setEditDialogOpen(false); }}>
+  1167→              Cancel
+  1168→            </Button>
+  1169→            <Button
+  1170→              onClick={handleUpdateEntry}
+  1171→              disabled={updateCreditMutation.isPending}
+  1172→              className="gap-2"
+  1173→            >
+  1174→              {updateCreditMutation.isPending ? (
+  1175→                <>
+  1176→                  <Loader2 className="h-4 w-4 animate-spin" />
+  1177→                  Updating...
+  1178→                </>
+  1179→              ) : (
+  1180→                <>
+  1181→                  <Pencil className="h-4 w-4" />
+  1182→                  Update Entry
+  1183→                </>
+  1184→              )}
+  1185→            </Button>
+  1186→          </>
+  1187→        }
+  1188→      >
+  1189→          {editingCredit && (
+  1190→            <div className="space-y-4 py-2">
+  1191→              {/* Customer (read-only) */}
+  1192→              <div className="space-y-2">
+  1193→                <Label>Customer</Label>
+  1194→                <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-md">
+  1195→                  <Avatar className="h-6 w-6">
+  1196→                    <AvatarFallback className={`bg-gradient-to-br ${getAvatarGradient(customerMap.get(editingCredit.customerId)?.name || '')} text-white text-[9px]`}>
+  1197→                      {customerMap.get(editingCredit.customerId)?.name?.charAt(0)?.toUpperCase() || '?'}
+  1198→                    </AvatarFallback>
+  1199→                  </Avatar>
+  1200→                  <span className="text-sm font-medium">
+  1201→                    {customerMap.get(editingCredit.customerId)?.name || 'Unknown'}
+  1202→                  </span>
+  1203→                </div>
+  1204→              </div>
+  1205→
+  1206→              {/* Credit Type */}
+  1207→              <div className="space-y-2">
+  1208→                <Label htmlFor="edit-credit-type">Entry Type</Label>
+  1209→                <Select value={editCreditType} onValueChange={setEditCreditType}>
+  1210→                  <SelectTrigger id="edit-credit-type">
+  1211→                    <SelectValue />
+  1212→                  </SelectTrigger>
+  1213→                  <SelectContent>
+  1214→                    <SelectItem value="CREDIT">
+  1215→                      <div className="flex items-center gap-2">
+  1216→                        <ArrowUpRight className="h-3 w-3 text-green-600" />
+  1217→                        Credit
+  1218→                      </div>
+  1219→                    </SelectItem>
+  1220→                    <SelectItem value="DEBIT">
+  1221→                      <div className="flex items-center gap-2">
+  1222→                        <ArrowDownRight className="h-3 w-3 text-red-600" />
+  1223→                        Debit
+  1224→                      </div>
+  1225→                    </SelectItem>
+  1226→                    <SelectItem value="ADJUSTMENT">
+  1227→                      <div className="flex items-center gap-2">
+  1228→                        <Minus className="h-3 w-3 text-amber-600" />
+  1229→                        Adjustment
+  1230→                      </div>
+  1231→                    </SelectItem>
+  1232→                    <SelectItem value="REFUND">
+  1233→                      <div className="flex items-center gap-2">
+  1234→                        <RotateCcw className="h-3 w-3 text-blue-600" />
+  1235→                        Refund
+  1236→                      </div>
+  1237→                    </SelectItem>
+  1238→                  </SelectContent>
+  1239→                </Select>
+  1240→              </div>
+  1241→
+  1242→              {/* Amount */}
+  1243→              <div className="space-y-2">
+  1244→                <Label htmlFor="edit-credit-amount">Amount (KES)</Label>
+  1245→                <Input
+  1246→                  id="edit-credit-amount"
+  1247→                  type="number"
+  1248→                  min="0"
+  1249→                  step="0.01"
+  1250→                  placeholder="0.00"
+  1251→                  value={editAmount}
+  1252→                  onChange={(e) => setEditAmount(e.target.value)}
+  1253→                  className={editErrors.amount ? 'border-red-500' : ''}
+  1254→                />
+  1255→                {editErrors.amount && (
+  1256→                  <p className="text-xs text-red-500 flex items-center gap-1">
+  1257→                    <AlertCircle className="h-3 w-3" /> {editErrors.amount}
+  1258→                  </p>
+  1259→                )}
+  1260→              </div>
+  1261→
+  1262→              {/* Reference */}
+  1263→              <div className="space-y-2">
+  1264→                <Label htmlFor="edit-credit-reference">Reference</Label>
+  1265→                <Input
+  1266→                  id="edit-credit-reference"
+  1267→                  placeholder="e.g. INV-001, PAY-2024-03"
+  1268→                  value={editReference}
+  1269→                  onChange={(e) => setEditReference(e.target.value)}
+  1270→                />
+  1271→              </div>
+  1272→
+  1273→              {/* Description */}
+  1274→              <div className="space-y-2">
+  1275→                <Label htmlFor="edit-credit-description">Description</Label>
+  1276→                <Textarea
+  1277→                  id="edit-credit-description"
+  1278→                  placeholder="Add notes about this entry..."
+  1279→                  value={editDescription}
+  1280→                  onChange={(e) => setEditDescription(e.target.value)}
+  1281→                  rows={3}
+  1282→                />
+  1283→              </div>
+  1284→
+  1285→              {/* Created date info */}
+  1286→              <div className="text-xs text-muted-foreground bg-muted/30 rounded-md p-2">
+  1287→                Created: {formatDateTime(editingCredit.createdAt)}
+  1288→                {editingCredit.reference && ` • Ref: ${editingCredit.reference}`}
+  1289→              </div>
+  1290→            </div>
+  1291→          )}
+  1292→      </ResponsiveDialog>
+  1293→
+  1294→      {/* Void Confirmation AlertDialog */}
+  1295→      <AlertDialog open={deleteDialogOpen} onOpenChange={(open) => { if (!open) setDeletingCredit(null); setDeleteDialogOpen(open); }}>
+  1296→        <AlertDialogContent>
+  1297→          <AlertDialogHeader>
+  1298→            <AlertDialogTitle className="flex items-center gap-2">
+  1299→              <Trash2 className="h-5 w-5 text-red-500" />
+  1300→              Void Credit Entry
+  1301→            </AlertDialogTitle>
+  1302→            <AlertDialogDescription>
+  1303→              {deletingCredit && (
+  1304→                <>
+  1305→                  Are you sure you want to void this <strong>{deletingCredit.creditType}</strong> entry of{' '}
+  1306→                  <strong>{formatKES(deletingCredit.amount)}</strong> for{' '}
+  1307→                  <strong>{customerMap.get(deletingCredit.customerId)?.name || 'Unknown'}</strong>?
+  1308→                  <br /><br />
+  1309→                  This action will mark the entry as voided and recalculate running balances. This action cannot be undone.
+  1310→                </>
+  1311→              )}
+  1312→            </AlertDialogDescription>
+  1313→          </AlertDialogHeader>
+  1314→          <AlertDialogFooter>
+  1315→            <AlertDialogCancel>Cancel</AlertDialogCancel>
+  1316→            <AlertDialogAction
+  1317→              onClick={handleVoidEntry}
+  1318→              disabled={deleteCreditMutation.isPending}
+  1319→              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+  1320→            >
+  1321→              {deleteCreditMutation.isPending ? (
+  1322→                <span className="flex items-center gap-2">
+  1323→                  <Loader2 className="h-4 w-4 animate-spin" />
+  1324→                  Voiding...
+  1325→                </span>
+  1326→              ) : (
+  1327→                'Void Entry'
+  1328→              )}
+  1329→            </AlertDialogAction>
+  1330→          </AlertDialogFooter>
+  1331→        </AlertDialogContent>
+  1332→      </AlertDialog>
+  1333→    </div>
+  1334→  );
+  1335→}
+  1336→

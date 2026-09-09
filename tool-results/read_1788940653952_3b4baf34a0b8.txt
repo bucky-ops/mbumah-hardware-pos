@@ -1,0 +1,646 @@
+     1→'use client';
+     2→
+     3→import React, { useMemo, useState } from 'react';
+     4→import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+     5→import { toast } from 'sonner';
+     6→import {
+     7→  AlertTriangle,
+     8→  Ban,
+     9→  CheckCircle2,
+    10→  Clock,
+    11→  Coins,
+    12→  Loader2,
+    13→  PauseCircle,
+    14→  PlayCircle,
+    15→  Receipt,
+    16→  ShieldOff,
+    17→  Trash2,
+    18→  User,
+    19→} from 'lucide-react';
+    20→
+    21→import {
+    22→  debtPaymentPlansApi,
+    23→  formatKES,
+    24→  formatDate,
+    25→  formatDateTime,
+    26→  type DebtPaymentPlanItem,
+    27→  type DebtPlanInstallmentItem,
+    28→} from '@/lib/api';
+    29→import { handleError } from '@/lib/error-handler';
+    30→
+    31→import {
+    32→  Dialog,
+    33→  DialogContent,
+    34→  DialogDescription,
+    35→  DialogHeader,
+    36→  DialogTitle,
+    37→} from '@/components/ui/dialog';
+    38→import {
+    39→  AlertDialog,
+    40→  AlertDialogAction,
+    41→  AlertDialogCancel,
+    42→  AlertDialogContent,
+    43→  AlertDialogDescription,
+    44→  AlertDialogFooter,
+    45→  AlertDialogHeader,
+    46→  AlertDialogTitle,
+    47→} from '@/components/ui/alert-dialog';
+    48→import { Button } from '@/components/ui/button';
+    49→import { Badge } from '@/components/ui/badge';
+    50→import { Progress } from '@/components/ui/progress';
+    51→import { Separator } from '@/components/ui/separator';
+    52→import { Skeleton } from '@/components/ui/skeleton';
+    53→import {
+    54→  Table,
+    55→  TableBody,
+    56→  TableCell,
+    57→  TableHead,
+    58→  TableHeader,
+    59→  TableRow,
+    60→} from '@/components/ui/table';
+    61→import { ScrollArea } from '@/components/ui/scroll-area';
+    62→import {
+    63→  Tabs,
+    64→  TabsContent,
+    65→  TabsList,
+    66→  TabsTrigger,
+    67→} from '@/components/ui/tabs';
+    68→
+    69→import { RecordPaymentDialog } from './record-payment-dialog';
+    70→import { WaiveInstallmentDialog } from './waive-installment-dialog';
+    71→import {
+    72→  getPlanStatusLabel,
+    73→  getPlanStatusBadgeClasses,
+    74→  getInstallmentStatusLabel,
+    75→  getInstallmentStatusBadgeClasses,
+    76→  getFrequencyLabel,
+    77→} from './plan-status-helpers';
+    78→
+    79→interface PlanDetailsDialogProps {
+    80→  open: boolean;
+    81→  onOpenChange: (open: boolean) => void;
+    82→  plan: DebtPaymentPlanItem | null;
+    83→}
+    84→
+    85→export function PlanDetailsDialog({
+    86→  open,
+    87→  onOpenChange,
+    88→  plan,
+    89→}: PlanDetailsDialogProps) {
+    90→  const queryClient = useQueryClient();
+    91→  const [payInstallment, setPayInstallment] = useState<DebtPlanInstallmentItem | null>(null);
+    92→  const [waiveInstallment, setWaiveInstallment] = useState<DebtPlanInstallmentItem | null>(null);
+    93→  const [confirmDelete, setConfirmDelete] = useState(false);
+    94→
+    95→  // Fetch the full plan (with installments) when the dialog opens.
+    96→  const { data: fullPlan, isLoading } = useQuery({
+    97→    queryKey: ['debt-payment-plan', plan?.id],
+    98→    queryFn: async () => {
+    99→      if (!plan) return null;
+   100→      const res = await debtPaymentPlansApi.get(plan.id);
+   101→      return res.data ?? null;
+   102→    },
+   103→    enabled: open && Boolean(plan?.id),
+   104→    staleTime: 5_000,
+   105→  });
+   106→
+   107→  // Reset child dialogs whenever the parent closes — event-driven (not
+   108→  // useEffect-driven) to avoid the set-state-in-effect lint rule.
+   109→  const handleOpenChange = (next: boolean) => {
+   110→    if (!next) {
+   111→      setPayInstallment(null);
+   112→      setWaiveInstallment(null);
+   113→      setConfirmDelete(false);
+   114→    }
+   115→    onOpenChange(next);
+   116→  };
+   117→
+   118→  const current: DebtPaymentPlanItem | null = fullPlan ?? plan;
+   119→
+   120→  const progressPct = useMemo(() => {
+   121→    if (!current) return 0;
+   122→    const total = current.totalAmount || 0;
+   123→    const paid = current.amountPaid || 0;
+   124→    return total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
+   125→  }, [current]);
+   126→
+   127→  // ── Mutations: approve / pause / resume / cancel / delete ──────────────
+   128→  const approveMutation = useMutation({
+   129→    mutationFn: async () => debtPaymentPlansApi.approve(current!.id),
+   130→    onSuccess: () => {
+   131→      toast.success('Plan approved', { description: 'The plan is now ACTIVE.' });
+   132→      queryClient.invalidateQueries({ queryKey: ['debt-payment-plan', current?.id] });
+   133→      queryClient.invalidateQueries({ queryKey: ['debt-payment-plans'] });
+   134→      queryClient.invalidateQueries({ queryKey: ['debt-payment-plans-stats'] });
+   135→    },
+   136→    onError: (err) => toast.error('Failed to approve plan', { description: handleError(err) }),
+   137→  });
+   138→
+   139→  const pauseMutation = useMutation({
+   140→    mutationFn: async () =>
+   141→      debtPaymentPlansApi.update(current!.id, { status: 'PAUSED' }),
+   142→    onSuccess: () => {
+   143→      toast.success('Plan paused');
+   144→      queryClient.invalidateQueries({ queryKey: ['debt-payment-plan', current?.id] });
+   145→      queryClient.invalidateQueries({ queryKey: ['debt-payment-plans'] });
+   146→    },
+   147→    onError: (err) => toast.error('Failed to pause plan', { description: handleError(err) }),
+   148→  });
+   149→
+   150→  const resumeMutation = useMutation({
+   151→    mutationFn: async () =>
+   152→      debtPaymentPlansApi.update(current!.id, { status: 'ACTIVE' }),
+   153→    onSuccess: () => {
+   154→      toast.success('Plan resumed');
+   155→      queryClient.invalidateQueries({ queryKey: ['debt-payment-plan', current?.id] });
+   156→      queryClient.invalidateQueries({ queryKey: ['debt-payment-plans'] });
+   157→    },
+   158→    onError: (err) => toast.error('Failed to resume plan', { description: handleError(err) }),
+   159→  });
+   160→
+   161→  const cancelMutation = useMutation({
+   162→    mutationFn: async () =>
+   163→      debtPaymentPlansApi.update(current!.id, { status: 'CANCELLED' }),
+   164→    onSuccess: () => {
+   165→      toast.success('Plan cancelled');
+   166→      queryClient.invalidateQueries({ queryKey: ['debt-payment-plan', current?.id] });
+   167→      queryClient.invalidateQueries({ queryKey: ['debt-payment-plans'] });
+   168→      queryClient.invalidateQueries({ queryKey: ['debt-payment-plans-stats'] });
+   169→    },
+   170→    onError: (err) => toast.error('Failed to cancel plan', { description: handleError(err) }),
+   171→  });
+   172→
+   173→  const deleteMutation = useMutation({
+   174→    mutationFn: async () => debtPaymentPlansApi.delete(current!.id),
+   175→    onSuccess: () => {
+   176→      toast.success('Plan deleted');
+   177→      queryClient.invalidateQueries({ queryKey: ['debt-payment-plans'] });
+   178→      queryClient.invalidateQueries({ queryKey: ['debt-payment-plans-stats'] });
+   179→      setConfirmDelete(false);
+   180→      handleOpenChange(false);
+   181→    },
+   182→    onError: (err) => toast.error('Failed to delete plan', { description: handleError(err) }),
+   183→  });
+   184→
+   185→  if (!current) {
+   186→    return null;
+   187→  }
+   188→
+   189→  const installments = current.installments ?? [];
+   190→  const canApprove = current.status === 'PENDING_APPROVAL';
+   191→  const canPause = current.status === 'ACTIVE';
+   192→  const canResume = current.status === 'PAUSED';
+   193→  const canCancel = current.status === 'ACTIVE' || current.status === 'PAUSED';
+   194→  const canDelete = current.status === 'PENDING_APPROVAL' || current.status === 'CANCELLED';
+   195→
+   196→  // Next due installment = first SCHEDULED/OVERDUE/PARTIAL.
+   197→  const nextDue = installments.find(
+   198→    (i) => i.status !== 'PAID' && i.status !== 'WAIVED',
+   199→  );
+   200→
+   201→  // Payment history = installments that have been paid or waived, sorted desc.
+   202→  const paymentHistory = installments
+   203→    .filter((i) => i.paidAt || i.status === 'WAIVED')
+   204→    .sort((a, b) => {
+   205→      const aDate = a.paidAt ? new Date(a.paidAt).getTime() : 0;
+   206→      const bDate = b.paidAt ? new Date(b.paidAt).getTime() : 0;
+   207→      return bDate - aDate;
+   208→    });
+   209→
+   210→  return (
+   211→    <>
+   212→      <Dialog open={open} onOpenChange={handleOpenChange}>
+   213→        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+   214→          <DialogHeader>
+   215→            <DialogTitle className="flex items-center justify-between gap-2 pr-6">
+   216→              <span className="flex items-center gap-2">
+   217→                <Coins className="h-5 w-5 text-emerald-500" />
+   218→                Payment Plan Details
+   219→              </span>
+   220→              <Badge
+   221→                variant="outline"
+   222→                className={getPlanStatusBadgeClasses(current.status)}
+   223→              >
+   224→                {getPlanStatusLabel(current.status)}
+   225→              </Badge>
+   226→            </DialogTitle>
+   227→            <DialogDescription>
+   228→              {current.customer?.name} ·{' '}
+   229→              {current.customer?.phone ?? 'No phone'} · Plan created{' '}
+   230→              {formatDate(current.createdAt)}
+   231→            </DialogDescription>
+   232→          </DialogHeader>
+   233→
+   234→          {isLoading ? (
+   235→            <div className="space-y-3 p-1">
+   236→              <Skeleton className="h-20 w-full" />
+   237→              <Skeleton className="h-40 w-full" />
+   238→            </div>
+   239→          ) : (
+   240→            <>
+   241→              {/* Header summary */}
+   242→              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-1">
+   243→                <div className="rounded-lg bg-muted/50 p-3">
+   244→                  <p className="text-[10px] text-muted-foreground">Total Amount</p>
+   245→                  <p className="text-lg font-bold">{formatKES(current.totalAmount)}</p>
+   246→                </div>
+   247→                <div className="rounded-lg bg-muted/50 p-3">
+   248→                  <p className="text-[10px] text-muted-foreground">Collected</p>
+   249→                  <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+   250→                    {formatKES(current.amountPaid)}
+   251→                  </p>
+   252→                </div>
+   253→                <div className="rounded-lg bg-muted/50 p-3">
+   254→                  <p className="text-[10px] text-muted-foreground">Balance</p>
+   255→                  <p className="text-lg font-bold text-rose-600 dark:text-rose-400">
+   256→                    {formatKES(current.balance)}
+   257→                  </p>
+   258→                </div>
+   259→                <div className="rounded-lg bg-muted/50 p-3">
+   260→                  <p className="text-[10px] text-muted-foreground">Frequency</p>
+   261→                  <p className="text-lg font-bold">{getFrequencyLabel(current.frequency)}</p>
+   262→                </div>
+   263→              </div>
+   264→
+   265→              {/* Progress */}
+   266→              <div className="space-y-1 px-1">
+   267→                <div className="flex items-center justify-between text-xs">
+   268→                  <span className="text-muted-foreground">
+   269→                    {current.installmentsPaid} / {current.installmentCount} installments paid
+   270→                    {current.installmentsOverdue > 0 && (
+   271→                      <span className="ml-2 text-rose-600 dark:text-rose-400">
+   272→                        · {current.installmentsOverdue} overdue
+   273→                      </span>
+   274→                    )}
+   275→                  </span>
+   276→                  <span className="font-semibold">{progressPct}%</span>
+   277→                </div>
+   278→                <Progress
+   279→                  value={progressPct}
+   280→                  className={`h-2 ${current.status === 'COMPLETED' ? '[&>div]:bg-emerald-500' : current.installmentsOverdue > 0 ? '[&>div]:bg-rose-500' : '[&>div]:bg-emerald-500'}`}
+   281→                />
+   282→              </div>
+   283→
+   284→              {/* Action buttons */}
+   285→              <div className="flex flex-wrap items-center gap-2 px-1">
+   286→                {canApprove && (
+   287→                  <Button
+   288→                    size="sm"
+   289→                    onClick={() => approveMutation.mutate()}
+   290→                    disabled={approveMutation.isPending}
+   291→                    className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white"
+   292→                  >
+   293→                    {approveMutation.isPending ? (
+   294→                      <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+   295→                    ) : (
+   296→                      <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+   297→                    )}
+   298→                    Approve Plan
+   299→                  </Button>
+   300→                )}
+   301→                {canPause && (
+   302→                  <Button
+   303→                    size="sm"
+   304→                    variant="outline"
+   305→                    onClick={() => pauseMutation.mutate()}
+   306→                    disabled={pauseMutation.isPending}
+   307→                  >
+   308→                    <PauseCircle className="h-3.5 w-3.5 mr-1" />
+   309→                    Pause
+   310→                  </Button>
+   311→                )}
+   312→                {canResume && (
+   313→                  <Button
+   314→                    size="sm"
+   315→                    variant="outline"
+   316→                    onClick={() => resumeMutation.mutate()}
+   317→                    disabled={resumeMutation.isPending}
+   318→                  >
+   319→                    <PlayCircle className="h-3.5 w-3.5 mr-1" />
+   320→                    Resume
+   321→                  </Button>
+   322→                )}
+   323→                {canCancel && (
+   324→                  <Button
+   325→                    size="sm"
+   326→                    variant="outline"
+   327→                    onClick={() => cancelMutation.mutate()}
+   328→                    disabled={cancelMutation.isPending}
+   329→                    className="text-rose-600 hover:text-rose-700 hover:border-rose-300"
+   330→                  >
+   331→                    <Ban className="h-3.5 w-3.5 mr-1" />
+   332→                    Cancel Plan
+   333→                  </Button>
+   334→                )}
+   335→                {canDelete && (
+   336→                  <Button
+   337→                    size="sm"
+   338→                    variant="outline"
+   339→                    onClick={() => setConfirmDelete(true)}
+   340→                    className="text-rose-600 hover:text-rose-700 hover:border-rose-300 ml-auto"
+   341→                  >
+   342→                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+   343→                    Delete
+   344→                  </Button>
+   345→                )}
+   346→              </div>
+   347→
+   348→              {/* Tabs: Schedule / History / Overview */}
+   349→              <Tabs defaultValue="schedule" className="flex-1 overflow-hidden flex flex-col">
+   350→                <TabsList className="mx-1">
+   351→                  <TabsTrigger value="schedule">Installment Schedule</TabsTrigger>
+   352→                  <TabsTrigger value="history">Payment History</TabsTrigger>
+   353→                  <TabsTrigger value="overview">Overview</TabsTrigger>
+   354→                </TabsList>
+   355→
+   356→                <TabsContent value="schedule" className="flex-1 overflow-hidden mt-2">
+   357→                  <ScrollArea className="h-[320px] pr-2">
+   358→                    <Table>
+   359→                      <TableHeader>
+   360→                        <TableRow>
+   361→                          <TableHead className="w-12">#</TableHead>
+   362→                          <TableHead>Due Date</TableHead>
+   363→                          <TableHead className="text-right">Amount Due</TableHead>
+   364→                          <TableHead className="text-right">Paid</TableHead>
+   365→                          <TableHead>Status</TableHead>
+   366→                          <TableHead className="text-right">Actions</TableHead>
+   367→                        </TableRow>
+   368→                      </TableHeader>
+   369→                      <TableBody>
+   370→                        {installments.map((inst) => {
+   371→                          const isActionable =
+   372→                            current.status === 'ACTIVE' &&
+   373→                            inst.status !== 'PAID' &&
+   374→                            inst.status !== 'WAIVED';
+   375→                          return (
+   376→                            <TableRow key={inst.id}>
+   377→                              <TableCell className="font-medium">
+   378→                                {inst.installmentNumber}
+   379→                              </TableCell>
+   380→                              <TableCell>
+   381→                                <div className="flex items-center gap-1 text-xs">
+   382→                                  <Clock className="h-3 w-3 text-muted-foreground" />
+   383→                                  {formatDate(inst.dueDate)}
+   384→                                </div>
+   385→                              </TableCell>
+   386→                              <TableCell className="text-right font-medium">
+   387→                                {formatKES(inst.amountDue)}
+   388→                              </TableCell>
+   389→                              <TableCell className="text-right">
+   390→                                {inst.amountPaid > 0 ? (
+   391→                                  <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+   392→                                    {formatKES(inst.amountPaid)}
+   393→                                  </span>
+   394→                                ) : (
+   395→                                  <span className="text-muted-foreground">—</span>
+   396→                                )}
+   397→                              </TableCell>
+   398→                              <TableCell>
+   399→                                <Badge
+   400→                                  variant="outline"
+   401→                                  className={getInstallmentStatusBadgeClasses(inst.status)}
+   402→                                >
+   403→                                  {getInstallmentStatusLabel(inst.status)}
+   404→                                </Badge>
+   405→                              </TableCell>
+   406→                              <TableCell className="text-right">
+   407→                                {isActionable ? (
+   408→                                  <div className="flex items-center justify-end gap-1">
+   409→                                    <Button
+   410→                                      size="sm"
+   411→                                      variant="ghost"
+   412→                                      className="h-7 px-2 text-emerald-600 hover:text-emerald-700"
+   413→                                      onClick={() => setPayInstallment(inst)}
+   414→                                    >
+   415→                                      <Receipt className="h-3 w-3 mr-0.5" />
+   416→                                      Pay
+   417→                                    </Button>
+   418→                                    <Button
+   419→                                      size="sm"
+   420→                                      variant="ghost"
+   421→                                      className="h-7 px-2 text-violet-600 hover:text-violet-700"
+   422→                                      onClick={() => setWaiveInstallment(inst)}
+   423→                                    >
+   424→                                      <ShieldOff className="h-3 w-3 mr-0.5" />
+   425→                                      Waive
+   426→                                    </Button>
+   427→                                  </div>
+   428→                                ) : inst.status === 'PARTIAL' && current.status === 'ACTIVE' ? (
+   429→                                  <Button
+   430→                                    size="sm"
+   431→                                    variant="ghost"
+   432→                                    className="h-7 px-2 text-emerald-600 hover:text-emerald-700"
+   433→                                    onClick={() => setPayInstallment(inst)}
+   434→                                  >
+   435→                                    <Receipt className="h-3 w-3 mr-0.5" />
+   436→                                    Pay balance
+   437→                                  </Button>
+   438→                                ) : (
+   439→                                  <span className="text-xs text-muted-foreground">—</span>
+   440→                                )}
+   441→                              </TableCell>
+   442→                            </TableRow>
+   443→                          );
+   444→                        })}
+   445→                      </TableBody>
+   446→                    </Table>
+   447→                  </ScrollArea>
+   448→                </TabsContent>
+   449→
+   450→                <TabsContent value="history" className="flex-1 overflow-hidden mt-2">
+   451→                  <ScrollArea className="h-[320px] pr-2">
+   452→                    {paymentHistory.length === 0 ? (
+   453→                      <div className="text-center text-sm text-muted-foreground py-12">
+   454→                        <Receipt className="h-8 w-8 mx-auto mb-2 opacity-50" />
+   455→                        No payments recorded yet.
+   456→                      </div>
+   457→                    ) : (
+   458→                      <div className="space-y-2">
+   459→                        {paymentHistory.map((inst) => (
+   460→                          <div
+   461→                            key={inst.id}
+   462→                            className="flex items-center justify-between rounded-lg border p-3"
+   463→                          >
+   464→                            <div className="space-y-0.5">
+   465→                              <div className="flex items-center gap-2">
+   466→                                <span className="font-medium text-sm">
+   467→                                  Installment #{inst.installmentNumber}
+   468→                                </span>
+   469→                                <Badge
+   470→                                  variant="outline"
+   471→                                  className={getInstallmentStatusBadgeClasses(inst.status)}
+   472→                                >
+   473→                                  {getInstallmentStatusLabel(inst.status)}
+   474→                                </Badge>
+   475→                              </div>
+   476→                              <p className="text-xs text-muted-foreground">
+   477→                                {inst.paidAt
+   478→                                  ? `Paid ${formatDateTime(inst.paidAt)} · ${inst.paymentMethod ?? 'N/A'}`
+   479→                                  : `Waived on ${formatDate(inst.updatedAt)}`}
+   480→                                {inst.paymentReference ? ` · Ref: ${inst.paymentReference}` : ''}
+   481→                              </p>
+   482→                              {inst.waiverReason && (
+   483→                                <p className="text-xs text-violet-600 dark:text-violet-400">
+   484→                                  Reason: {inst.waiverReason}
+   485→                                </p>
+   486→                              )}
+   487→                            </div>
+   488→                            <div className="text-right">
+   489→                              <p className="font-semibold text-emerald-600 dark:text-emerald-400">
+   490→                                {formatKES(inst.amountPaid)}
+   491→                              </p>
+   492→                              {inst.lateFeeApplied > 0 && (
+   493→                                <p className="text-[10px] text-amber-600 dark:text-amber-400">
+   494→                                  +{formatKES(inst.lateFeeApplied)} late fee
+   495→                                </p>
+   496→                              )}
+   497→                            </div>
+   498→                          </div>
+   499→                        ))}
+   500→                      </div>
+   501→                    )}
+   502→                  </ScrollArea>
+   503→                </TabsContent>
+   504→
+   505→                <TabsContent value="overview" className="flex-1 overflow-hidden mt-2">
+   506→                  <ScrollArea className="h-[320px] pr-2">
+   507→                    <div className="space-y-3 text-sm">
+   508→                      <div className="grid grid-cols-2 gap-3">
+   509→                        <div className="rounded-lg border p-3">
+   510→                          <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+   511→                            <User className="h-3 w-3" /> Created By
+   512→                          </p>
+   513→                          <p className="font-medium">
+   514→                            {current.createdBy?.name ?? 'System'}
+   515→                          </p>
+   516→                        </div>
+   517→                        <div className="rounded-lg border p-3">
+   518→                          <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+   519→                            <CheckCircle2 className="h-3 w-3" /> Approved By
+   520→                          </p>
+   521→                          <p className="font-medium">
+   522→                            {current.approvedBy?.name ?? '—'}
+   523→                          </p>
+   524→                        </div>
+   525→                      </div>
+   526→
+   527→                      <div className="grid grid-cols-2 gap-3">
+   528→                        <div className="rounded-lg border p-3">
+   529→                          <p className="text-[10px] text-muted-foreground">Start Date</p>
+   530→                          <p className="font-medium">{formatDate(current.startDate)}</p>
+   531→                        </div>
+   532→                        <div className="rounded-lg border p-3">
+   533→                          <p className="text-[10px] text-muted-foreground">End Date</p>
+   534→                          <p className="font-medium">{formatDate(current.endDate)}</p>
+   535→                        </div>
+   536→                      </div>
+   537→
+   538→                      <div className="grid grid-cols-3 gap-3">
+   539→                        <div className="rounded-lg border p-3">
+   540→                          <p className="text-[10px] text-muted-foreground">Per Installment</p>
+   541→                          <p className="font-medium">{formatKES(current.installmentAmount)}</p>
+   542→                        </div>
+   543→                        <div className="rounded-lg border p-3">
+   544→                          <p className="text-[10px] text-muted-foreground">Interest Rate</p>
+   545→                          <p className="font-medium">{current.interestRate}%</p>
+   546→                        </div>
+   547→                        <div className="rounded-lg border p-3">
+   548→                          <p className="text-[10px] text-muted-foreground">Late Fee</p>
+   549→                          <p className="font-medium">{formatKES(current.lateFee)}</p>
+   550→                        </div>
+   551→                      </div>
+   552→
+   553→                      {nextDue && current.status === 'ACTIVE' && (
+   554→                        <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 p-3 flex items-center gap-2">
+   555→                          <Clock className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+   556→                          <span className="text-sm">
+   557→                            Next installment due{' '}
+   558→                            <strong>{formatDate(nextDue.dueDate)}</strong> —{' '}
+   559→                            {formatKES(nextDue.amountDue - nextDue.amountPaid)}
+   560→                          </span>
+   561→                        </div>
+   562→                      )}
+   563→
+   564→                      {current.installmentsOverdue > 0 && (
+   565→                        <div className="rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 p-3 flex items-center gap-2">
+   566→                          <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+   567→                          <span className="text-sm">
+   568→                            <strong>{current.installmentsOverdue}</strong> installment
+   569→                            {current.installmentsOverdue === 1 ? '' : 's'} overdue. Follow up with the customer.
+   570→                          </span>
+   571→                        </div>
+   572→                      )}
+   573→
+   574→                      {current.autoCharge && (
+   575→                        <div className="rounded-lg bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900 p-3 text-xs text-sky-700 dark:text-sky-300">
+   576→                          Auto-charge via M-Pesa is enabled — STK push will be
+   577→                          attempted on each due date.
+   578→                        </div>
+   579→                      )}
+   580→
+   581→                      {current.notes && (
+   582→                        <>
+   583→                          <Separator />
+   584→                          <div>
+   585→                            <p className="text-[10px] text-muted-foreground mb-1">Notes</p>
+   586→                            <p className="text-sm whitespace-pre-wrap">{current.notes}</p>
+   587→                          </div>
+   588→                        </>
+   589→                      )}
+   590→                    </div>
+   591→                  </ScrollArea>
+   592→                </TabsContent>
+   593→              </Tabs>
+   594→            </>
+   595→          )}
+   596→        </DialogContent>
+   597→      </Dialog>
+   598→
+   599→      {/* Sub-dialogs */}
+   600→      <RecordPaymentDialog
+   601→        open={Boolean(payInstallment)}
+   602→        onOpenChange={(o) => !o && setPayInstallment(null)}
+   603→        planId={current.id}
+   604→        installment={payInstallment}
+   605→      />
+   606→
+   607→      <WaiveInstallmentDialog
+   608→        open={Boolean(waiveInstallment)}
+   609→        onOpenChange={(o) => !o && setWaiveInstallment(null)}
+   610→        planId={current.id}
+   611→        installment={waiveInstallment}
+   612→      />
+   613→
+   614→      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+   615→        <AlertDialogContent>
+   616→          <AlertDialogHeader>
+   617→            <AlertDialogTitle>Delete this payment plan?</AlertDialogTitle>
+   618→            <AlertDialogDescription>
+   619→              This will permanently delete the plan and all its installments.
+   620→              The underlying debt ledger entry will not be affected. This action
+   621→              cannot be undone.
+   622→            </AlertDialogDescription>
+   623→          </AlertDialogHeader>
+   624→          <AlertDialogFooter>
+   625→            <AlertDialogCancel disabled={deleteMutation.isPending}>
+   626→              Cancel
+   627→            </AlertDialogCancel>
+   628→            <AlertDialogAction
+   629→              onClick={() => deleteMutation.mutate()}
+   630→              disabled={deleteMutation.isPending}
+   631→              className="bg-rose-600 hover:bg-rose-700 text-white"
+   632→            >
+   633→              {deleteMutation.isPending ? (
+   634→                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+   635→              ) : (
+   636→                <Trash2 className="h-4 w-4 mr-1" />
+   637→              )}
+   638→              Delete Plan
+   639→            </AlertDialogAction>
+   640→          </AlertDialogFooter>
+   641→        </AlertDialogContent>
+   642→      </AlertDialog>
+   643→    </>
+   644→  );
+   645→}
+   646→

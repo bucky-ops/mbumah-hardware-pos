@@ -1,0 +1,252 @@
+/tmp/mbumah-audit/src/app/tabs/loyalty-tab.tsx:503:              placeholder="Search members by name or phone..."
+/tmp/mbumah-audit/src/app/tabs/loyalty-tab.tsx:511:              <SelectValue placeholder="Filter by tier" />
+/tmp/mbumah-audit/src/app/tabs/loyalty-tab.tsx:674:              <SelectValue placeholder="All Types" />
+/tmp/mbumah-audit/src/app/tabs/loyalty-tab.tsx:690:            placeholder="From"
+/tmp/mbumah-audit/src/app/tabs/loyalty-tab.tsx:697:            placeholder="To"
+/tmp/mbumah-audit/src/app/tabs/loyalty-tab.tsx:790:              <SelectValue placeholder="All Statuses" />
+/tmp/mbumah-audit/src/app/tabs/loyalty-tab.tsx:944:                  placeholder="e.g. Gold"
+/tmp/mbumah-audit/src/app/tabs/loyalty-tab.tsx:962:                  placeholder="Leave blank for no max"
+/tmp/mbumah-audit/src/app/tabs/loyalty-tab.tsx:1020:                placeholder="e.g. Free delivery, priority support..."
+/tmp/mbumah-audit/src/app/tabs/loyalty-tab.tsx:1050:                  placeholder="#CD7F32"
+/tmp/mbumah-audit/src/app/tabs/loyalty-tab.tsx:1121:                placeholder="Enter points (negative to subtract)"
+/tmp/mbumah-audit/src/app/tabs/loyalty-tab.tsx:1130:                placeholder="Reason for adjustment"
+/tmp/mbumah-audit/src/app/tabs/loyalty-tab.tsx:1237:                  <SelectValue placeholder="Select customer" />
+/tmp/mbumah-audit/src/app/tabs/loyalty-tab.tsx:1272:                  placeholder="Negative to subtract"
+/tmp/mbumah-audit/src/app/tabs/loyalty-tab.tsx:1282:                placeholder="e.g. POS-TRX-001"
+/tmp/mbumah-audit/src/app/tabs/loyalty-tab.tsx:1291:                placeholder="Reason for adjustment..."
+/tmp/mbumah-audit/src/app/tabs/loyalty-tab.tsx:1333:                placeholder="e.g. Holiday Bonus Week"
+/tmp/mbumah-audit/src/app/tabs/loyalty-tab.tsx:1342:                placeholder="Describe the campaign..."
+/tmp/mbumah-audit/src/app/tabs/vouchers-tab.tsx:900:                        placeholder="Search by code, name, type..."
+/tmp/mbumah-audit/src/app/tabs/vouchers-tab.tsx:1151:                    <SelectValue placeholder="Status" />
+/tmp/mbumah-audit/src/app/tabs/vouchers-tab.tsx:1163:                    <SelectValue placeholder="Type" />
+/tmp/mbumah-audit/src/app/tabs/vouchers-tab.tsx:1436:                  placeholder="e.g. Summer Sale Discount"
+/tmp/mbumah-audit/src/app/tabs/vouchers-tab.tsx:1500:                    placeholder={vFormType === 'PERCENTAGE' ? '10' : '500'}
+/tmp/mbumah-audit/src/app/tabs/vouchers-tab.tsx:1519:                    placeholder="0"
+/tmp/mbumah-audit/src/app/tabs/vouchers-tab.tsx:1532:                    placeholder="No limit"
+/tmp/mbumah-audit/src/app/tabs/vouchers-tab.tsx:1549:                    placeholder="Unlimited"
+/tmp/mbumah-audit/src/app/tabs/vouchers-tab.tsx:1562:                    placeholder="Unlimited"
+/tmp/mbumah-audit/src/app/tabs/vouchers-tab.tsx:1602:                      <SelectValue placeholder="No campaign" />
+/tmp/mbumah-audit/src/app/tabs/vouchers-tab.tsx:1625:                  placeholder="Optional description for this voucher..."
+/tmp/mbumah-audit/src/app/tabs/vouchers-tab.tsx:1921:                  placeholder="e.g. Holiday Season Promo"
+/tmp/mbumah-audit/src/app/tabs/vouchers-tab.tsx:1952:                  placeholder="e.g. 50000"
+/tmp/mbumah-audit/src/app/tabs/vouchers-tab.tsx:1988:                  placeholder="e.g. All customers, New users, Gold tier"
+/tmp/mbumah-audit/src/app/tabs/vouchers-tab.tsx:1999:                  placeholder="Campaign details and objectives..."
+/tmp/mbumah-audit/src/app/tabs/vouchers-tab.tsx:2087:                placeholder="e.g. SUMMER20"
+/tmp/mbumah-audit/src/app/tabs/vouchers-tab.tsx:2097:                  <SelectTrigger id="redeem-customer"><SelectValue placeholder="Walk-in customer" /></SelectTrigger>
+/tmp/mbumah-audit/src/app/tabs/vouchers-tab.tsx:2114:                  placeholder="KES"
+/tmp/mbumah-audit/src/app/tabs/transfers-tab.tsx:406:                <SelectValue placeholder="All Status" />
+/tmp/mbumah-audit/src/app/tabs/transfers-tab.tsx:419:                <SelectValue placeholder="From Store" />
+/tmp/mbumah-audit/src/app/tabs/transfers-tab.tsx:430:                <SelectValue placeholder="To Store" />
+/tmp/mbumah-audit/src/app/tabs/transfers-tab.tsx:523:                      <SelectValue placeholder="Select source store" />
+/tmp/mbumah-audit/src/app/tabs/transfers-tab.tsx:536:                      <SelectValue placeholder="Select destination store" />
+/tmp/mbumah-audit/src/app/tabs/transfers-tab.tsx:556:                    placeholder="Search products by name or SKU..."
+/tmp/mbumah-audit/src/app/tabs/transfers-tab.tsx:659:                  placeholder="Optional transfer notes..."
+/tmp/mbumah-audit/src/app/tabs/purchase-orders-tab.tsx:364:                <SelectValue placeholder="Select supplier" />
+/tmp/mbumah-audit/src/app/tabs/purchase-orders-tab.tsx:402:              placeholder="Search products by name or SKU..."
+/tmp/mbumah-audit/src/app/tabs/purchase-orders-tab.tsx:537:            placeholder="Order notes..."
+/tmp/mbumah-audit/src/app/tabs/purchase-orders-tab.tsx:1473:            placeholder="Search by PO number or supplier..."
+/tmp/mbumah-audit/src/app/tabs/customers-tab.tsx:814:          <Input placeholder="Search customers... (fuzzy match)" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
+/tmp/mbumah-audit/src/app/tabs/customers-tab.tsx:820:            <SelectValue placeholder="Debt Status" />
+/tmp/mbumah-audit/src/app/tabs/customers-tab.tsx:868:                  placeholder="John Kamau"
+/tmp/mbumah-audit/src/app/tabs/customers-tab.tsx:880:                    placeholder="0712 345 678"
+/tmp/mbumah-audit/src/app/tabs/customers-tab.tsx:891:                    placeholder="john@email.com"
+/tmp/mbumah-audit/src/app/tabs/customers-tab.tsx:901:                  <Input value={newCustomer.idNumber} onChange={(e) => setNewCustomer({ ...newCustomer, idNumber: e.target.value })} placeholder="12345678" />
+/tmp/mbumah-audit/src/app/tabs/customers-tab.tsx:911:                <Textarea value={newCustomer.address} onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })} placeholder="Nairobi, Kenya" rows={2} />
+/tmp/mbumah-audit/src/app/tabs/customers-tab.tsx:916:                <Textarea value={newCustomer.notes} onChange={(e) => setNewCustomer({ ...newCustomer, notes: e.target.value })} placeholder="Additional notes about the customer..." rows={2} />
+/tmp/mbumah-audit/src/app/tabs/customers-tab.tsx:1191:                    <SelectValue placeholder="Select a debt record" />
+/tmp/mbumah-audit/src/app/tabs/customers-tab.tsx:1213:                  placeholder="0"
+/tmp/mbumah-audit/src/app/tabs/customers-tab.tsx:1246:                placeholder={debtPaymentMethod === 'MPESA' ? 'M-Pesa transaction code' : 'Receipt number'}
+/tmp/mbumah-audit/src/app/tabs/customers-tab.tsx:1439:                      onClick={() => toast.info(`SMS reminder would be sent to ${selectedCustomer.phone || 'N/A'}`)}
+/tmp/mbumah-audit/src/app/tabs/gift-cards-tab.tsx:811:              placeholder="Search by code, recipient name, or phone..."
+/tmp/mbumah-audit/src/app/tabs/gift-cards-tab.tsx:1304:                  placeholder="Auto-generated"
+/tmp/mbumah-audit/src/app/tabs/gift-cards-tab.tsx:1352:                placeholder="e.g. 5000"
+/tmp/mbumah-audit/src/app/tabs/gift-cards-tab.tsx:1368:                  placeholder="Recipient name"
+/tmp/mbumah-audit/src/app/tabs/gift-cards-tab.tsx:1375:                    placeholder="Phone number"
+/tmp/mbumah-audit/src/app/tabs/gift-cards-tab.tsx:1381:                    placeholder="Email address"
+/tmp/mbumah-audit/src/app/tabs/gift-cards-tab.tsx:1396:                  placeholder="Search customers by name or phone..."
+/tmp/mbumah-audit/src/app/tabs/gift-cards-tab.tsx:1477:                placeholder="Optional notes about this gift card..."
+/tmp/mbumah-audit/src/app/tabs/gift-cards-tab.tsx:1782:                    placeholder="Recipient name"
+/tmp/mbumah-audit/src/app/tabs/gift-cards-tab.tsx:1788:                      placeholder="Phone number"
+/tmp/mbumah-audit/src/app/tabs/gift-cards-tab.tsx:1793:                      placeholder="Email address"
+/tmp/mbumah-audit/src/app/tabs/gift-cards-tab.tsx:1851:                  placeholder="Optional notes..."
+/tmp/mbumah-audit/src/app/tabs/gift-cards-tab.tsx:1921:                  placeholder="Enter amount"
+/tmp/mbumah-audit/src/app/tabs/gift-cards-tab.tsx:1943:                  placeholder="Transaction ID or receipt number"
+/tmp/mbumah-audit/src/app/tabs/gift-cards-tab.tsx:1954:                  placeholder="Optional notes about this redemption..."
+/tmp/mbumah-audit/src/app/tabs/gift-cards-tab.tsx:2014:                  placeholder="Positive to increase, negative to decrease"
+/tmp/mbumah-audit/src/app/tabs/gift-cards-tab.tsx:2036:                  placeholder="e.g., Customer complaint, Promo bonus"
+/tmp/mbumah-audit/src/app/tabs/gift-cards-tab.tsx:2047:                  placeholder="Additional notes..."
+/tmp/mbumah-audit/src/app/tabs/financial/BudgetsPanel.tsx:248:                <SelectValue placeholder="Select period" />
+/tmp/mbumah-audit/src/app/tabs/financial/BudgetsPanel.tsx:422:                <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
+/tmp/mbumah-audit/src/app/tabs/financial/BudgetsPanel.tsx:438:                placeholder="0.00"
+/tmp/mbumah-audit/src/app/tabs/financial/BudgetsPanel.tsx:447:                placeholder="e.g. Quarterly allocation approved by board."
+/tmp/mbumah-audit/src/app/tabs/financial/BudgetsPanel.tsx:484:                placeholder="0.00"
+/tmp/mbumah-audit/src/app/tabs/financial/BudgetsPanel.tsx:493:                placeholder="Additional notes..."
+/tmp/mbumah-audit/src/app/tabs/financial/FinancialPeriodsPanel.tsx:301:                placeholder="e.g. January 2026, Q1 2026, FY 2026"
+/tmp/mbumah-audit/src/app/tabs/financial/FinancialPeriodsPanel.tsx:353:              placeholder="e.g. Period-close audit passed; locking for archival."
+/tmp/mbumah-audit/src/app/tabs/financial/ReportsPanel.tsx:411:                <SelectTrigger className="h-8 text-xs w-40"><SelectValue placeholder="All" /></SelectTrigger>
+/tmp/mbumah-audit/src/app/tabs/financial/ReportsPanel.tsx:421:                <SelectTrigger className="h-8 text-xs w-40"><SelectValue placeholder="All" /></SelectTrigger>
+/tmp/mbumah-audit/src/app/tabs/invoices-tab.tsx:743:                placeholder="Search invoices..."
+/tmp/mbumah-audit/src/app/tabs/invoices-tab.tsx:752:                <SelectValue placeholder="Status" />
+/tmp/mbumah-audit/src/app/tabs/invoices-tab.tsx:991:                      <SelectValue placeholder="Select a customer..." />
+/tmp/mbumah-audit/src/app/tabs/invoices-tab.tsx:1011:                    placeholder="Customer name"
+/tmp/mbumah-audit/src/app/tabs/invoices-tab.tsx:1019:                    placeholder="Phone number"
+/tmp/mbumah-audit/src/app/tabs/invoices-tab.tsx:1028:                    placeholder="Email address"
+/tmp/mbumah-audit/src/app/tabs/invoices-tab.tsx:1036:                    placeholder="Delivery address"
+/tmp/mbumah-audit/src/app/tabs/invoices-tab.tsx:1089:                                placeholder="Search or type product name"
+/tmp/mbumah-audit/src/app/tabs/invoices-tab.tsx:1106:                                    placeholder="Search products..."
+/tmp/mbumah-audit/src/app/tabs/invoices-tab.tsx:1143:                            placeholder="Description"
+/tmp/mbumah-audit/src/app/tabs/invoices-tab.tsx:1291:                    placeholder="Additional notes for this document"
+/tmp/mbumah-audit/src/app/tabs/invoices-tab.tsx:1301:                    placeholder="Internal notes (not visible to customer)"
+/tmp/mbumah-audit/src/app/tabs/invoices-tab.tsx:1311:                    placeholder="Payment terms, validity, etc."
+/tmp/mbumah-audit/src/app/tabs/rentals-tab.tsx:132:          <SelectTrigger><SelectValue placeholder="Select equipment" /></SelectTrigger>
+/tmp/mbumah-audit/src/app/tabs/rentals-tab.tsx:142:          <SelectTrigger><SelectValue placeholder="Select customer" /></SelectTrigger>
+/tmp/mbumah-audit/src/app/tabs/rentals-tab.tsx:150:        <div className="space-y-2"><Label>Security Deposit (KES)</Label><Input type="number" value={form.securityDeposit} onChange={(e) => setForm({ ...form, securityDeposit: e.target.value })} placeholder="0" /></div>
+/tmp/mbumah-audit/src/app/tabs/rentals-tab.tsx:152:      <div className="space-y-2"><Label>Rate Per Day (KES)</Label><Input type="number" value={form.ratePerDay} onChange={(e) => setForm({ ...form, ratePerDay: e.target.value })} placeholder="0" /></div>
+/tmp/mbumah-audit/src/app/tabs/rentals-tab.tsx:171:      <div className="space-y-2"><Label>Notes</Label><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Any special instructions..." /></div>
+/tmp/mbumah-audit/src/app/tabs/rentals-tab.tsx:273:                placeholder="0"
+/tmp/mbumah-audit/src/app/tabs/rentals-tab.tsx:311:            <Input type="number" value={damageCharge} onChange={(e) => setDamageCharge(e.target.value)} placeholder="0" />
+/tmp/mbumah-audit/src/app/tabs/rentals-tab.tsx:324:          placeholder="Describe the condition of returned equipment, any visible damage, missing parts, etc."
+/tmp/mbumah-audit/src/app/tabs/rentals-tab.tsx:335:          placeholder="Any other notes about the return..."
+/tmp/mbumah-audit/src/app/tabs/rentals-tab.tsx:570:              placeholder="Search equipment..."
+/tmp/mbumah-audit/src/app/tabs/rentals-tab.tsx:1189:              <SelectTrigger className="w-48"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+/tmp/mbumah-audit/src/app/tabs/rentals-tab.tsx:1433:                  <Input type="number" value={editForm.ratePerWeek} onChange={(e) => setEditForm({ ...editForm, ratePerWeek: e.target.value })} placeholder="Optional" />
+/tmp/mbumah-audit/src/app/tabs/rentals-tab.tsx:1437:                  <Input type="number" value={editForm.ratePerMonth} onChange={(e) => setEditForm({ ...editForm, ratePerMonth: e.target.value })} placeholder="Optional" />
+/tmp/mbumah-audit/src/app/tabs/rentals-tab.tsx:1442:                <Textarea value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} placeholder="Any special instructions..." />
+/tmp/mbumah-audit/src/app/tabs/suppliers-tab.tsx:410:              <Input id="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Bamburi Cement Ltd" required />
+/tmp/mbumah-audit/src/app/tabs/suppliers-tab.tsx:416:                <Input id="email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="supplier@email.com" className="pl-10" />
+/tmp/mbumah-audit/src/app/tabs/suppliers-tab.tsx:423:                <Input id="phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+254 700 000 000" className="pl-10" />
+/tmp/mbumah-audit/src/app/tabs/suppliers-tab.tsx:428:              <Input id="address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Street address" />
+/tmp/mbumah-audit/src/app/tabs/suppliers-tab.tsx:432:              <Input id="city" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Nairobi" />
+/tmp/mbumah-audit/src/app/tabs/suppliers-tab.tsx:438:                <Input id="contactPerson" value={form.contactPerson} onChange={(e) => setForm({ ...form, contactPerson: e.target.value })} placeholder="John Doe" className="pl-10" />
+/tmp/mbumah-audit/src/app/tabs/suppliers-tab.tsx:443:              <Input id="taxPin" value={form.taxPin} onChange={(e) => setForm({ ...form, taxPin: e.target.value })} placeholder="P0512345678" />
+/tmp/mbumah-audit/src/app/tabs/suppliers-tab.tsx:463:              <Textarea id="notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Additional notes about this supplier..." rows={3} />
+/tmp/mbumah-audit/src/app/tabs/suppliers-tab.tsx:610:                <SelectTrigger><SelectValue placeholder="Select supplier" /></SelectTrigger>
+/tmp/mbumah-audit/src/app/tabs/suppliers-tab.tsx:649:                placeholder="Search products by name or SKU..."
+/tmp/mbumah-audit/src/app/tabs/suppliers-tab.tsx:766:            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Order notes..." rows={2} />
+/tmp/mbumah-audit/src/app/tabs/suppliers-tab.tsx:1530:              <SelectValue placeholder="Select a purchase order..." />
+/tmp/mbumah-audit/src/app/tabs/suppliers-tab.tsx:1563:            placeholder="Type an optional message to accompany the order…"
+/tmp/mbumah-audit/src/app/tabs/suppliers-tab.tsx:1818:                  placeholder="Search suppliers..."
+/tmp/mbumah-audit/src/app/tabs/credits-tab.tsx:644:                placeholder="Search by customer, reference, or description..."
+/tmp/mbumah-audit/src/app/tabs/credits-tab.tsx:653:                  <SelectValue placeholder="All Customers" />
+/tmp/mbumah-audit/src/app/tabs/credits-tab.tsx:666:                  <SelectValue placeholder="All Types" />
+/tmp/mbumah-audit/src/app/tabs/credits-tab.tsx:1018:                  <SelectValue placeholder="Select a customer" />
+/tmp/mbumah-audit/src/app/tabs/credits-tab.tsx:1083:                placeholder="0.00"
+/tmp/mbumah-audit/src/app/tabs/credits-tab.tsx:1100:                placeholder="e.g. INV-001, PAY-2024-03"
+/tmp/mbumah-audit/src/app/tabs/credits-tab.tsx:1111:                placeholder="Add notes about this entry..."
+/tmp/mbumah-audit/src/app/tabs/credits-tab.tsx:1250:                  placeholder="0.00"
+/tmp/mbumah-audit/src/app/tabs/credits-tab.tsx:1267:                  placeholder="e.g. INV-001, PAY-2024-03"
+/tmp/mbumah-audit/src/app/tabs/credits-tab.tsx:1278:                  placeholder="Add notes about this entry..."
+/tmp/mbumah-audit/src/app/tabs/security-tab.tsx:421:                    <SelectValue placeholder="All Types" />
+/tmp/mbumah-audit/src/app/tabs/security-tab.tsx:440:                    <SelectValue placeholder="All Severities" />
+/tmp/mbumah-audit/src/app/tabs/catalog-tab.tsx:496:        {/* Image / placeholder — prefer product photo, fall back to category image */}
+/tmp/mbumah-audit/src/app/tabs/catalog-tab.tsx:798:            placeholder="Search products by name, SKU, barcode, or category..."
+/tmp/mbumah-audit/src/app/tabs/catalog-tab.tsx:882:                  <SelectValue placeholder="All Categories" />
+/tmp/mbumah-audit/src/app/tabs/catalog-tab.tsx:916:                placeholder="0"
+/tmp/mbumah-audit/src/app/tabs/catalog-tab.tsx:928:                placeholder="∞"
+/tmp/mbumah-audit/src/app/tabs/catalog-tab.tsx:1090:                  placeholder="e.g. 20mm Nails"
+/tmp/mbumah-audit/src/app/tabs/catalog-tab.tsx:1098:                  placeholder="e.g. NAIL-20"
+/tmp/mbumah-audit/src/app/tabs/catalog-tab.tsx:1106:                  placeholder="e.g. 6001234567890"
+/tmp/mbumah-audit/src/app/tabs/catalog-tab.tsx:1112:                  <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+/tmp/mbumah-audit/src/app/tabs/catalog-tab.tsx:1130:                  placeholder="Detailed product description (size, color, brand, specs)..."
+/tmp/mbumah-audit/src/app/tabs/catalog-tab.tsx:1157:                  placeholder="0"
+/tmp/mbumah-audit/src/app/tabs/catalog-tab.tsx:1166:                  placeholder="0"
+/tmp/mbumah-audit/src/app/tabs/catalog-tab.tsx:1175:                  placeholder="16"
+/tmp/mbumah-audit/src/app/tabs/catalog-tab.tsx:1204:                  placeholder="0"
+/tmp/mbumah-audit/src/app/tabs/catalog-tab.tsx:1213:                  placeholder="10"
+/tmp/mbumah-audit/src/app/tabs/catalog-tab.tsx:1317:              placeholder="e.g. 0712345678 or 254712345678"
+/tmp/mbumah-audit/src/app/tabs/banking-tab.tsx:450:                <Input placeholder="Search accounts..." className="pl-9 h-9" readOnly />
+/tmp/mbumah-audit/src/app/tabs/banking-tab.tsx:540:                placeholder="Search reference, description..."
+/tmp/mbumah-audit/src/app/tabs/banking-tab.tsx:548:                <SelectValue placeholder="All Accounts" />
+/tmp/mbumah-audit/src/app/tabs/banking-tab.tsx:559:                <SelectValue placeholder="All Types" />
+/tmp/mbumah-audit/src/app/tabs/banking-tab.tsx:572:                <SelectValue placeholder="Reconciled" />
+/tmp/mbumah-audit/src/app/tabs/banking-tab.tsx:585:              placeholder="From"
+/tmp/mbumah-audit/src/app/tabs/banking-tab.tsx:592:              placeholder="To"
+/tmp/mbumah-audit/src/app/tabs/banking-tab.tsx:798:                <SelectValue placeholder="All Statuses" />
+/tmp/mbumah-audit/src/app/tabs/banking-tab.tsx:893:                  placeholder="e.g. KCB Bank"
+/tmp/mbumah-audit/src/app/tabs/banking-tab.tsx:902:                  placeholder="e.g. Main Operating"
+/tmp/mbumah-audit/src/app/tabs/banking-tab.tsx:913:                  placeholder="e.g. 1234567890"
+/tmp/mbumah-audit/src/app/tabs/banking-tab.tsx:941:                  placeholder="e.g. Nairobi CBD"
+/tmp/mbumah-audit/src/app/tabs/banking-tab.tsx:950:                  placeholder="e.g. KCABOROB"
+/tmp/mbumah-audit/src/app/tabs/banking-tab.tsx:1026:                    <SelectValue placeholder="Select account" />
+/tmp/mbumah-audit/src/app/tabs/banking-tab.tsx:1078:                placeholder="e.g. CHQ-001, MPESA-ABC123"
+/tmp/mbumah-audit/src/app/tabs/banking-tab.tsx:1087:                placeholder="Transaction details..."
+/tmp/mbumah-audit/src/app/tabs/banking-tab.tsx:1157:                  <SelectValue placeholder="Select account" />
+/tmp/mbumah-audit/src/app/tabs/banking-tab.tsx:1210:                placeholder="Reconciliation notes..."
+/tmp/mbumah-audit/src/app/tabs/conversations-tab.tsx:162:            placeholder="Search..."
+/tmp/mbumah-audit/src/app/tabs/conversations-tab.tsx:448:            placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
+/tmp/mbumah-audit/src/app/tabs/conversations-tab.tsx:668:              placeholder="Optional conversation title"
+/tmp/mbumah-audit/src/app/tabs/conversations-tab.tsx:719:                  <SelectValue placeholder="Add a participant..." />
+/tmp/mbumah-audit/src/app/tabs/conversations-tab.tsx:819:              placeholder="e.g. Inventory Restock Discussion"
+/tmp/mbumah-audit/src/app/tabs/pos-tab.tsx:1132:                placeholder="Search products by name, SKU, or barcode..."
+/tmp/mbumah-audit/src/app/tabs/pos-tab.tsx:1454:                    placeholder="Discount code"
+/tmp/mbumah-audit/src/app/tabs/pos-tab.tsx:1473:                    placeholder="Cart discount (Ksh)"
+/tmp/mbumah-audit/src/app/tabs/pos-tab.tsx:1516:                      <SelectValue placeholder="Walk-in Customer" />
+/tmp/mbumah-audit/src/app/tabs/pos-tab.tsx:1916:                placeholder="7XX XXX XXX"
+/tmp/mbumah-audit/src/app/tabs/pos-tab.tsx:1953:                placeholder="e.g. John Kamau"
+/tmp/mbumah-audit/src/app/tabs/pos-tab.tsx:1965:                  placeholder="0712 345 678"
+/tmp/mbumah-audit/src/app/tabs/pos-tab.tsx:1976:                  placeholder="john@example.com"
+/tmp/mbumah-audit/src/app/tabs/pos-tab.tsx:1988:                placeholder="0"
+/tmp/mbumah-audit/src/app/tabs/pos-tab.tsx:2050:                placeholder="e.g. MBT-GC-XXXX-XXXX"
+/tmp/mbumah-audit/src/app/tabs/pos-tab.tsx:2202:                    placeholder="Discount code"
+/tmp/mbumah-audit/src/app/tabs/pos-tab.tsx:2215:                      <SelectValue placeholder="Walk-in Customer" />
+/tmp/mbumah-audit/src/app/tabs/messaging-tab.tsx:924:                      <SelectValue placeholder="Select a customer..." />
+/tmp/mbumah-audit/src/app/tabs/messaging-tab.tsx:941:                      placeholder="Phone e.g. 0712345678"
+/tmp/mbumah-audit/src/app/tabs/messaging-tab.tsx:947:                      placeholder="Email (optional)"
+/tmp/mbumah-audit/src/app/tabs/messaging-tab.tsx:963:                  placeholder="Select a template above or type your message here..."
+/tmp/mbumah-audit/src/app/tabs/messaging-tab.tsx:1138:                      <SelectValue placeholder="Select a customer..." />
+/tmp/mbumah-audit/src/app/tabs/messaging-tab.tsx:1156:                    placeholder="e.g. 0712345678"
+/tmp/mbumah-audit/src/app/tabs/messaging-tab.tsx:1209:                  placeholder="Message subject..."
+/tmp/mbumah-audit/src/app/tabs/messaging-tab.tsx:1237:                  placeholder="Type your message here..."
+/tmp/mbumah-audit/src/app/tabs/messaging-tab.tsx:1448:                  placeholder="e.g. Holiday Greetings from Mbumah Hardware"
+/tmp/mbumah-audit/src/app/tabs/messaging-tab.tsx:1482:                  placeholder="Type your broadcast message here, or pick a holiday template above…"
+/tmp/mbumah-audit/src/app/tabs/messaging-tab.tsx:1672:                    placeholder="Search by name, phone, or content..."
+/tmp/mbumah-audit/src/app/tabs/messaging-tab.tsx:1681:                    <SelectValue placeholder="Channel" />
+/tmp/mbumah-audit/src/app/tabs/messaging-tab.tsx:1692:                    <SelectValue placeholder="Type" />
+/tmp/mbumah-audit/src/app/tabs/messaging-tab.tsx:1705:                    <SelectValue placeholder="Status" />
+/tmp/mbumah-audit/src/app/tabs/messaging-tab.tsx:1923:                  <SelectValue placeholder="Select a customer..." />
+/tmp/mbumah-audit/src/app/tabs/messaging-tab.tsx:1941:                placeholder="e.g. 0712345678"
+/tmp/mbumah-audit/src/app/tabs/messaging-tab.tsx:1994:                placeholder="Message subject..."
+/tmp/mbumah-audit/src/app/tabs/messaging-tab.tsx:2022:                placeholder="Type your message here..."
+/tmp/mbumah-audit/src/app/tabs/financial-tab.tsx:251:              placeholder="Enter amount"
+/tmp/mbumah-audit/src/app/tabs/financial-tab.tsx:2669:                placeholder="e.g. Monthly rent payment"
+/tmp/mbumah-audit/src/app/tabs/financial-tab.tsx:2678:                placeholder="Enter amount"
+/tmp/mbumah-audit/src/app/tabs/financial-tab.tsx:2715:                placeholder="Additional notes..."
+/tmp/mbumah-audit/src/app/tabs/financial-tab.tsx:2746:                  placeholder="e.g. Adjust inventory valuation"
+/tmp/mbumah-audit/src/app/tabs/financial-tab.tsx:2789:                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select account" /></SelectTrigger>
+/tmp/mbumah-audit/src/app/tabs/financial-tab.tsx:2803:                        placeholder="0"
+/tmp/mbumah-audit/src/app/tabs/financial-tab.tsx:2817:                        placeholder="0"
+/tmp/mbumah-audit/src/app/tabs/financial-tab.tsx:2830:                        placeholder="Optional"
+/tmp/mbumah-audit/src/app/tabs/financial-tab.tsx:2906:                  placeholder="e.g. 1010"
+/tmp/mbumah-audit/src/app/tabs/financial-tab.tsx:2933:                placeholder="e.g. Cash on Hand"
+/tmp/mbumah-audit/src/app/tabs/financial-tab.tsx:2945:                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+/tmp/mbumah-audit/src/app/tabs/financial-tab.tsx:2985:                placeholder="e.g. Operating cash drawer — front-of-house."
+/tmp/mbumah-audit/src/app/tabs/financial-tab.tsx:3058:                placeholder="e.g. Monthly rent payment"
+/tmp/mbumah-audit/src/app/tabs/financial-tab.tsx:3067:                placeholder="Enter amount"
+/tmp/mbumah-audit/src/app/tabs/financial-tab.tsx:3104:                placeholder="Additional notes..."
+/tmp/mbumah-audit/src/app/tabs/admin-tab.tsx:240:                placeholder="Search by name or SKU..."
+/tmp/mbumah-audit/src/app/tabs/admin-tab.tsx:250:                <SelectValue placeholder="Select product" />
+/tmp/mbumah-audit/src/app/tabs/admin-tab.tsx:315:              placeholder="Enter quantity"
+/tmp/mbumah-audit/src/app/tabs/admin-tab.tsx:377:              placeholder="Optional additional notes..."
+/tmp/mbumah-audit/src/app/tabs/admin-tab.tsx:478:      <Button variant="outline" size="sm" className="w-full" onClick={() => toast.info('Log export coming soon')}>
+/tmp/mbumah-audit/src/app/tabs/admin-tab.tsx:698:              placeholder="Search logs..."
+/tmp/mbumah-audit/src/app/tabs/admin-tab.tsx:703:            <SelectTrigger className="w-32 h-8 text-xs"><SelectValue placeholder="Type" /></SelectTrigger>
+/tmp/mbumah-audit/src/app/tabs/admin-tab.tsx:716:            <SelectTrigger className="w-32 h-8 text-xs"><SelectValue placeholder="Severity" /></SelectTrigger>
+/tmp/mbumah-audit/src/app/tabs/admin-tab.tsx:731:            placeholder="From"
+/tmp/mbumah-audit/src/app/tabs/admin-tab.tsx:738:            placeholder="To"
+/tmp/mbumah-audit/src/app/tabs/admin-tab.tsx:1308:                  placeholder="John Doe"
+/tmp/mbumah-audit/src/app/tabs/admin-tab.tsx:1319:                  placeholder="john@mbumah.co.ke"
+/tmp/mbumah-audit/src/app/tabs/admin-tab.tsx:1343:                  placeholder="Min. 6 characters"
+/tmp/mbumah-audit/src/app/tabs/admin-tab.tsx:1353:                  placeholder="+254 7XX XXX XXX"
+/tmp/mbumah-audit/src/app/tabs/admin-tab.tsx:1778:              <SelectTrigger className="w-48"><SelectValue placeholder="All Components" /></SelectTrigger>
+/tmp/mbumah-audit/src/app/tabs/admin-tab.tsx:1791:              <SelectTrigger className="w-40"><SelectValue placeholder="All Severities" /></SelectTrigger>
+/tmp/mbumah-audit/src/app/tabs/dashboard-tab.tsx:621:                placeholder="e.g. Transport costs"
+/tmp/mbumah-audit/src/app/tabs/dashboard-tab.tsx:631:                placeholder="0"
+/tmp/mbumah-audit/src/app/tabs/dashboard-tab.tsx:1113:                placeholder="e.g. 50000"
+/tmp/mbumah-audit/src/app/tabs/dashboard-tab.tsx:1234:                  placeholder="Count all cash in the drawer"
+/tmp/mbumah-audit/src/app/tabs/dashboard-tab.tsx:1251:                  placeholder="Cash to leave for next shift"
+/tmp/mbumah-audit/src/app/tabs/dashboard-tab.tsx:1264:                  placeholder="Any notes about this shift"
+/tmp/mbumah-audit/src/app/tabs/etims-tab.tsx:332:                placeholder="P051234567X"
+/tmp/mbumah-audit/src/app/tabs/etims-tab.tsx:343:                placeholder="MBUMAH HARDWARE"
+/tmp/mbumah-audit/src/app/tabs/etims-tab.tsx:353:                  placeholder="mbumah_admin"
+
+[Showing results with pagination = limit: 250]

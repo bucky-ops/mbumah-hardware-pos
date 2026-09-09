@@ -1,0 +1,588 @@
+   749→                          className="cursor-pointer hover:bg-muted/50 select-none"
+   750→                          onClick={() => handleSort('customer')}
+   751→                        >
+   752→                          <div className="flex items-center gap-1">
+   753→                            Customer <SortIcon field="customer" sortField={sortField} sortDirection={sortDirection} />
+   754→                          </div>
+   755→                        </TableHead>
+   756→                        <TableHead
+   757→                          className="cursor-pointer hover:bg-muted/50 select-none"
+   758→                          onClick={() => handleSort('type')}
+   759→                        >
+   760→                          <div className="flex items-center gap-1">
+   761→                            Type <SortIcon field="type" sortField={sortField} sortDirection={sortDirection} />
+   762→                          </div>
+   763→                        </TableHead>
+   764→                        <TableHead
+   765→                          className="text-right cursor-pointer hover:bg-muted/50 select-none"
+   766→                          onClick={() => handleSort('amount')}
+   767→                        >
+   768→                          <div className="flex items-center justify-end gap-1">
+   769→                            Amount <SortIcon field="amount" sortField={sortField} sortDirection={sortDirection} />
+   770→                          </div>
+   771→                        </TableHead>
+   772→                        <TableHead className="hidden md:table-cell">Reference</TableHead>
+   773→                        <TableHead className="hidden lg:table-cell">Description</TableHead>
+   774→                        <TableHead
+   775→                          className="text-right cursor-pointer hover:bg-muted/50 select-none"
+   776→                          onClick={() => handleSort('balance')}
+   777→                        >
+   778→                          <div className="flex items-center justify-end gap-1">
+   779→                            Balance <SortIcon field="balance" sortField={sortField} sortDirection={sortDirection} />
+   780→                          </div>
+   781→                        </TableHead>
+   782→                        <TableHead className="w-10" />
+   783→                      </TableRow>
+   784→                    </TableHeader>
+   785→                    <TableBody>
+   786→                      {ledgerWithRunningBalance.map((entry) => {
+   787→                        const customer = customerMap.get(entry.customerId);
+   788→                        const badge = getCreditTypeBadge(entry.creditType);
+   789→                        const amountColor = entry.status === 'VOIDED' ? 'text-muted-foreground line-through' : getAmountColor(entry.creditType);
+   790→                        const amountPrefix = getAmountPrefix(entry.creditType);
+   791→                        const gradient = customer ? getAvatarGradient(customer.name) : '';
+   792→                        const isVoided = entry.status === 'VOIDED';
+   793→
+   794→                        return (
+   795→                          <TableRow key={entry.id} className={`hover:bg-muted/30 ${isVoided ? 'opacity-60' : ''}`}>
+   796→                            <TableCell className="whitespace-nowrap text-sm">
+   797→                              <div className="font-medium">{formatDate(entry.createdAt)}</div>
+   798→                              <div className="text-xs text-muted-foreground">
+   799→                                {new Date(entry.createdAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}
+   800→                              </div>
+   801→                            </TableCell>
+   802→                            <TableCell>
+   803→                              <div className="flex items-center gap-2">
+   804→                                <Avatar className="h-7 w-7">
+   805→                                  <AvatarFallback className={`bg-gradient-to-br ${gradient} text-white text-[10px]`}>
+   806→                                    {customer?.name?.charAt(0)?.toUpperCase() || '?'}
+   807→                                  </AvatarFallback>
+   808→                                </Avatar>
+   809→                                <span className="font-medium text-sm truncate max-w-[120px]">
+   810→                                  {customer?.name || 'Unknown'}
+   811→                                </span>
+   812→                              </div>
+   813→                            </TableCell>
+   814→                            <TableCell>
+   815→                              <div className="flex items-center gap-1.5">
+   816→                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${badge.class}`}>
+   817→                                  {badge.icon}
+   818→                                  {badge.label}
+   819→                                </span>
+   820→                                {isVoided && (
+   821→                                  <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-5">
+   822→                                    VOIDED
+   823→                                  </Badge>
+   824→                                )}
+   825→                              </div>
+   826→                            </TableCell>
+   827→                            <TableCell className={`text-right font-semibold text-sm ${amountColor}`}>
+   828→                              {amountPrefix}{formatKES(entry.amount)}
+   829→                            </TableCell>
+   830→                            <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+   831→                              {entry.reference || '—'}
+   832→                            </TableCell>
+   833→                            <TableCell className="hidden lg:table-cell text-sm text-muted-foreground max-w-[200px] truncate">
+   834→                              {entry.description || '—'}
+   835→                            </TableCell>
+   836→                            <TableCell className={`text-right font-semibold text-sm ${isVoided ? 'text-muted-foreground' : entry.runningBalance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+   837→                              {formatKES(Math.abs(entry.runningBalance))}
+   838→                              {entry.runningBalance < 0 && <span className="text-xs ml-0.5">DR</span>}
+   839→                              {entry.runningBalance > 0 && <span className="text-xs ml-0.5">CR</span>}
+   840→                            </TableCell>
+   841→                            <TableCell>
+   842→                              <DropdownMenu>
+   843→                                <DropdownMenuTrigger asChild>
+   844→                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+   845→                                    <MoreHorizontal className="h-4 w-4" />
+   846→                                    <span className="sr-only">Open menu</span>
+   847→                                  </Button>
+   848→                                </DropdownMenuTrigger>
+   849→                                <DropdownMenuContent align="end">
+   850→                                  {!isVoided && (
+   851→                                    <DropdownMenuItem onClick={() => openEditDialog(entry)} className="gap-2">
+   852→                                      <Pencil className="h-4 w-4" />
+   853→                                      Edit Entry
+   854→                                    </DropdownMenuItem>
+   855→                                  )}
+   856→                                  <DropdownMenuItem
+   857→                                    onClick={() => handleSendCreditWhatsApp(entry)}
+   858→                                    className="gap-2 text-green-600 dark:text-green-400 focus:text-green-600 focus:bg-green-50 dark:focus:bg-green-950/30"
+   859→                                    onSelect={(e) => e.preventDefault()}
+   860→                                  >
+   861→                                    <MessageCircle className="h-4 w-4" />
+   862→                                    Send via WhatsApp
+   863→                                  </DropdownMenuItem>
+   864→                                  <DropdownMenuItem
+   865→                                    onClick={() => handlePrintCredit(entry)}
+   866→                                    className="gap-2 focus:bg-muted/50"
+   867→                                    onSelect={(e) => e.preventDefault()}
+   868→                                  >
+   869→                                    <Printer className="h-4 w-4" />
+   870→                                    Print Credit Note
+   871→                                  </DropdownMenuItem>
+   872→                                  {!isVoided && (
+   873→                                    <>
+   874→                                      <DropdownMenuSeparator />
+   875→                                      <DropdownMenuItem
+   876→                                        onClick={() => openDeleteDialog(entry)}
+   877→                                        className="gap-2 text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/30"
+   878→                                      >
+   879→                                        <Trash2 className="h-4 w-4" />
+   880→                                        Void Entry
+   881→                                      </DropdownMenuItem>
+   882→                                    </>
+   883→                                  )}
+   884→                                  {isVoided && (
+   885→                                    <DropdownMenuItem disabled className="gap-2 text-muted-foreground">
+   886→                                      <Trash2 className="h-4 w-4" />
+   887→                                      Already Voided
+   888→                                    </DropdownMenuItem>
+   889→                                  )}
+   890→                                </DropdownMenuContent>
+   891→                              </DropdownMenu>
+   892→                            </TableCell>
+   893→                          </TableRow>
+   894→                        );
+   895→                      })}
+   896→                    </TableBody>
+   897→                  </Table>
+   898→                </div>
+   899→              )}
+   900→            </CardContent>
+   901→          </Card>
+   902→        </div>
+   903→
+   904→        {/* Customer Balance Cards */}
+   905→        <div className="space-y-4">
+   906→          <Card>
+   907→            <CardHeader className="pb-3">
+   908→              <CardTitle className="flex items-center gap-2 text-lg">
+   909→                <Wallet className="h-5 w-5" />
+   910→                Customer Balances
+   911→              </CardTitle>
+   912→            </CardHeader>
+   913→            <CardContent>
+   914→              {isLoading ? (
+   915→                <div className="space-y-3">
+   916→                  {[...Array(4)].map((_, i) => (
+   917→                    <Skeleton key={i} className="h-20 w-full rounded-lg" />
+   918→                  ))}
+   919→                </div>
+   920→              ) : customerBalances.length === 0 ? (
+   921→                <div className="text-center py-8">
+   922→                  <Users className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
+   923→                  <p className="text-sm text-muted-foreground">No customer balances</p>
+   924→                </div>
+   925→              ) : (
+   926→                <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+   927→                  {customerBalances.slice(0, 15).map((cb) => {
+   928→                    const gradient = getAvatarGradient(cb.customer.name);
+   929→                    const maxBalance = Math.max(...customerBalances.map((b) => Math.abs(b.balance)), 1);
+   930→                    const progressPercent = Math.min((Math.abs(cb.balance) / maxBalance) * 100, 100);
+   931→
+   932→                    return (
+   933→                      <div
+   934→                        key={cb.customer.id}
+   935→                        className="p-3 rounded-lg border hover:bg-muted/30 transition-colors cursor-pointer"
+   936→                        onClick={() => setSelectedCustomerId(cb.customer.id)}
+   937→                      >
+   938→                        <div className="flex items-center gap-3 mb-2">
+   939→                          <Avatar className="h-8 w-8">
+   940→                            <AvatarFallback className={`bg-gradient-to-br ${gradient} text-white text-xs`}>
+   941→                              {cb.customer.name.charAt(0).toUpperCase()}
+   942→                            </AvatarFallback>
+   943→                          </Avatar>
+   944→                          <div className="flex-1 min-w-0">
+   945→                            <p className="font-medium text-sm truncate">{cb.customer.name}</p>
+   946→                            <p className="text-xs text-muted-foreground">{cb.entries} entries</p>
+   947→                          </div>
+   948→                          <div className="text-right">
+   949→                            <p className={`font-bold text-sm ${cb.balance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+   950→                              {formatKES(Math.abs(cb.balance))}
+   951→                            </p>
+   952→                            <p className={`text-[10px] font-medium ${cb.balance >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+   953→                              {cb.balance >= 0 ? 'CR' : 'DR'}
+   954→                            </p>
+   955→                          </div>
+   956→                        </div>
+   957→                        <Progress
+   958→                          value={progressPercent}
+   959→                          className={`h-1.5 ${cb.balance >= 0 ? '[&>div]:bg-green-500' : '[&>div]:bg-red-500'}`}
+   960→                        />
+   961→                        <div className="flex justify-between mt-1.5 text-[10px] text-muted-foreground">
+   962→                          <span className="text-green-600 dark:text-green-400">Credits: {formatKES(cb.credits)}</span>
+   963→                          <span className="text-red-600 dark:text-red-400">Debits: {formatKES(cb.debits)}</span>
+   964→                        </div>
+   965→                      </div>
+   966→                    );
+   967→                  })}
+   968→                </div>
+   969→              )}
+   970→            </CardContent>
+   971→          </Card>
+   972→        </div>
+   973→      </div>
+   974→
+   975→      {/* Add Credit/Debit Dialog */}
+   976→      <ResponsiveDialog
+   977→        open={addDialogOpen}
+   978→        onOpenChange={(open) => { if (!open) resetForm(); setAddDialogOpen(open); }}
+   979→        size="md"
+   980→        title={
+   981→          <span className="flex items-center gap-2">
+   982→            <CircleDollarSign className="h-5 w-5" />
+   983→            Add Credit / Debit Entry
+   984→          </span>
+   985→        }
+   986→        description="Record a new credit, debit, adjustment, or refund for a customer account."
+   987→        footer={
+   988→          <>
+   989→            <Button variant="outline" onClick={() => { resetForm(); setAddDialogOpen(false); }}>
+   990→              Cancel
+   991→            </Button>
+   992→            <Button
+   993→              onClick={handleCreateEntry}
+   994→              disabled={createCreditMutation.isPending}
+   995→              className="gap-2"
+   996→            >
+   997→              {createCreditMutation.isPending ? (
+   998→                <>
+   999→                  <Loader2 className="h-4 w-4 animate-spin" />
+  1000→                  Creating...
+  1001→                </>
+  1002→              ) : (
+  1003→                <>
+  1004→                  <Plus className="h-4 w-4" />
+  1005→                  Create Entry
+  1006→                </>
+  1007→              )}
+  1008→            </Button>
+  1009→          </>
+  1010→        }
+  1011→      >
+  1012→          <div className="space-y-4 py-2">
+  1013→            {/* Customer Selection */}
+  1014→            <div className="space-y-2">
+  1015→              <Label htmlFor="credit-customer">Customer *</Label>
+  1016→              <Select value={formCustomerId} onValueChange={setFormCustomerId}>
+  1017→                <SelectTrigger id="credit-customer" className={formErrors.customerId ? 'border-red-500' : ''}>
+  1018→                  <SelectValue placeholder="Select a customer" />
+  1019→                </SelectTrigger>
+  1020→                <SelectContent>
+  1021→                  {customers.map((c) => (
+  1022→                    <SelectItem key={c.id} value={c.id}>
+  1023→                      <div className="flex items-center gap-2">
+  1024→                        <User className="h-3 w-3" />
+  1025→                        {c.name}
+  1026→                        {c.phone && <span className="text-xs text-muted-foreground">({c.phone})</span>}
+  1027→                      </div>
+  1028→                    </SelectItem>
+  1029→                  ))}
+  1030→                </SelectContent>
+  1031→              </Select>
+  1032→              {formErrors.customerId && (
+  1033→                <p className="text-xs text-red-500 flex items-center gap-1">
+  1034→                  <AlertCircle className="h-3 w-3" /> {formErrors.customerId}
+  1035→                </p>
+  1036→              )}
+  1037→            </div>
+  1038→
+  1039→            {/* Credit Type */}
+  1040→            <div className="space-y-2">
+  1041→              <Label htmlFor="credit-type">Entry Type *</Label>
+  1042→              <Select value={formCreditType} onValueChange={setFormCreditType}>
+  1043→                <SelectTrigger id="credit-type">
+  1044→                  <SelectValue />
+  1045→                </SelectTrigger>
+  1046→                <SelectContent>
+  1047→                  <SelectItem value="CREDIT">
+  1048→                    <div className="flex items-center gap-2">
+  1049→                      <ArrowUpRight className="h-3 w-3 text-green-600" />
+  1050→                      Credit (Add to account)
+  1051→                    </div>
+  1052→                  </SelectItem>
+  1053→                  <SelectItem value="DEBIT">
+  1054→                    <div className="flex items-center gap-2">
+  1055→                      <ArrowDownRight className="h-3 w-3 text-red-600" />
+  1056→                      Debit (Deduct from account)
+  1057→                    </div>
+  1058→                  </SelectItem>
+  1059→                  <SelectItem value="ADJUSTMENT">
+  1060→                    <div className="flex items-center gap-2">
+  1061→                      <Minus className="h-3 w-3 text-amber-600" />
+  1062→                      Adjustment
+  1063→                    </div>
+  1064→                  </SelectItem>
+  1065→                  <SelectItem value="REFUND">
+  1066→                    <div className="flex items-center gap-2">
+  1067→                      <RotateCcw className="h-3 w-3 text-blue-600" />
+  1068→                      Refund
+  1069→                    </div>
+  1070→                  </SelectItem>
+  1071→                </SelectContent>
+  1072→              </Select>
+  1073→            </div>
+  1074→
+  1075→            {/* Amount */}
+  1076→            <div className="space-y-2">
+  1077→              <Label htmlFor="credit-amount">Amount (KES) *</Label>
+  1078→              <Input
+  1079→                id="credit-amount"
+  1080→                type="number"
+  1081→                min="0"
+  1082→                step="0.01"
+  1083→                placeholder="0.00"
+  1084→                value={formAmount}
+  1085→                onChange={(e) => setFormAmount(e.target.value)}
+  1086→                className={formErrors.amount ? 'border-red-500' : ''}
+  1087→              />
+  1088→              {formErrors.amount && (
+  1089→                <p className="text-xs text-red-500 flex items-center gap-1">
+  1090→                  <AlertCircle className="h-3 w-3" /> {formErrors.amount}
+  1091→                </p>
+  1092→              )}
+  1093→            </div>
+  1094→
+  1095→            {/* Reference */}
+  1096→            <div className="space-y-2">
+  1097→              <Label htmlFor="credit-reference">Reference</Label>
+  1098→              <Input
+  1099→                id="credit-reference"
+  1100→                placeholder="e.g. INV-001, PAY-2024-03"
+  1101→                value={formReference}
+  1102→                onChange={(e) => setFormReference(e.target.value)}
+  1103→              />
+  1104→            </div>
+  1105→
+  1106→            {/* Description */}
+  1107→            <div className="space-y-2">
+  1108→              <Label htmlFor="credit-description">Description</Label>
+  1109→              <Textarea
+  1110→                id="credit-description"
+  1111→                placeholder="Add notes about this entry..."
+  1112→                value={formDescription}
+  1113→                onChange={(e) => setFormDescription(e.target.value)}
+  1114→                rows={3}
+  1115→              />
+  1116→            </div>
+  1117→
+  1118→            {/* Preview */}
+  1119→            {formCustomerId && formAmount && parseFloat(formAmount) > 0 && (
+  1120→              <>
+  1121→                <Separator />
+  1122→                <div className="bg-muted/50 rounded-lg p-3 space-y-1">
+  1123→                  <p className="text-xs text-muted-foreground font-medium">Preview</p>
+  1124→                  <div className="flex items-center justify-between">
+  1125→                    <span className="text-sm">
+  1126→                      {customerMap.get(formCustomerId)?.name || 'Customer'}
+  1127→                    </span>
+  1128→                    <span className={`font-bold text-sm ${getAmountColor(formCreditType)}`}>
+  1129→                      {getAmountPrefix(formCreditType)}{formatKES(parseFloat(formAmount))}
+  1130→                    </span>
+  1131→                  </div>
+  1132→                  <div className="flex items-center gap-1">
+  1133→                    {(() => {
+  1134→                      const badge = getCreditTypeBadge(formCreditType);
+  1135→                      return (
+  1136→                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${badge.class}`}>
+  1137→                          {badge.icon}
+  1138→                          {badge.label}
+  1139→                        </span>
+  1140→                      );
+  1141→                    })()}
+  1142→                    {formReference && (
+  1143→                      <span className="text-xs text-muted-foreground">Ref: {formReference}</span>
+  1144→                    )}
+  1145→                  </div>
+  1146→                </div>
+  1147→              </>
+  1148→            )}
+  1149→          </div>
+  1150→      </ResponsiveDialog>
+  1151→
+  1152→      {/* Edit Credit Entry Dialog */}
+  1153→      <ResponsiveDialog
+  1154→        open={editDialogOpen}
+  1155→        onOpenChange={(open) => { if (!open) { setEditingCredit(null); } setEditDialogOpen(open); }}
+  1156→        size="md"
+  1157→        title={
+  1158→          <span className="flex items-center gap-2">
+  1159→            <Pencil className="h-5 w-5" />
+  1160→            Edit Credit Entry
+  1161→          </span>
+  1162→        }
+  1163→        description="Update the details of this credit entry. Changing the amount or type will recalculate running balances."
+  1164→        footer={
+  1165→          <>
+  1166→            <Button variant="outline" onClick={() => { setEditingCredit(null); setEditDialogOpen(false); }}>
+  1167→              Cancel
+  1168→            </Button>
+  1169→            <Button
+  1170→              onClick={handleUpdateEntry}
+  1171→              disabled={updateCreditMutation.isPending}
+  1172→              className="gap-2"
+  1173→            >
+  1174→              {updateCreditMutation.isPending ? (
+  1175→                <>
+  1176→                  <Loader2 className="h-4 w-4 animate-spin" />
+  1177→                  Updating...
+  1178→                </>
+  1179→              ) : (
+  1180→                <>
+  1181→                  <Pencil className="h-4 w-4" />
+  1182→                  Update Entry
+  1183→                </>
+  1184→              )}
+  1185→            </Button>
+  1186→          </>
+  1187→        }
+  1188→      >
+  1189→          {editingCredit && (
+  1190→            <div className="space-y-4 py-2">
+  1191→              {/* Customer (read-only) */}
+  1192→              <div className="space-y-2">
+  1193→                <Label>Customer</Label>
+  1194→                <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-md">
+  1195→                  <Avatar className="h-6 w-6">
+  1196→                    <AvatarFallback className={`bg-gradient-to-br ${getAvatarGradient(customerMap.get(editingCredit.customerId)?.name || '')} text-white text-[9px]`}>
+  1197→                      {customerMap.get(editingCredit.customerId)?.name?.charAt(0)?.toUpperCase() || '?'}
+  1198→                    </AvatarFallback>
+  1199→                  </Avatar>
+  1200→                  <span className="text-sm font-medium">
+  1201→                    {customerMap.get(editingCredit.customerId)?.name || 'Unknown'}
+  1202→                  </span>
+  1203→                </div>
+  1204→              </div>
+  1205→
+  1206→              {/* Credit Type */}
+  1207→              <div className="space-y-2">
+  1208→                <Label htmlFor="edit-credit-type">Entry Type</Label>
+  1209→                <Select value={editCreditType} onValueChange={setEditCreditType}>
+  1210→                  <SelectTrigger id="edit-credit-type">
+  1211→                    <SelectValue />
+  1212→                  </SelectTrigger>
+  1213→                  <SelectContent>
+  1214→                    <SelectItem value="CREDIT">
+  1215→                      <div className="flex items-center gap-2">
+  1216→                        <ArrowUpRight className="h-3 w-3 text-green-600" />
+  1217→                        Credit
+  1218→                      </div>
+  1219→                    </SelectItem>
+  1220→                    <SelectItem value="DEBIT">
+  1221→                      <div className="flex items-center gap-2">
+  1222→                        <ArrowDownRight className="h-3 w-3 text-red-600" />
+  1223→                        Debit
+  1224→                      </div>
+  1225→                    </SelectItem>
+  1226→                    <SelectItem value="ADJUSTMENT">
+  1227→                      <div className="flex items-center gap-2">
+  1228→                        <Minus className="h-3 w-3 text-amber-600" />
+  1229→                        Adjustment
+  1230→                      </div>
+  1231→                    </SelectItem>
+  1232→                    <SelectItem value="REFUND">
+  1233→                      <div className="flex items-center gap-2">
+  1234→                        <RotateCcw className="h-3 w-3 text-blue-600" />
+  1235→                        Refund
+  1236→                      </div>
+  1237→                    </SelectItem>
+  1238→                  </SelectContent>
+  1239→                </Select>
+  1240→              </div>
+  1241→
+  1242→              {/* Amount */}
+  1243→              <div className="space-y-2">
+  1244→                <Label htmlFor="edit-credit-amount">Amount (KES)</Label>
+  1245→                <Input
+  1246→                  id="edit-credit-amount"
+  1247→                  type="number"
+  1248→                  min="0"
+  1249→                  step="0.01"
+  1250→                  placeholder="0.00"
+  1251→                  value={editAmount}
+  1252→                  onChange={(e) => setEditAmount(e.target.value)}
+  1253→                  className={editErrors.amount ? 'border-red-500' : ''}
+  1254→                />
+  1255→                {editErrors.amount && (
+  1256→                  <p className="text-xs text-red-500 flex items-center gap-1">
+  1257→                    <AlertCircle className="h-3 w-3" /> {editErrors.amount}
+  1258→                  </p>
+  1259→                )}
+  1260→              </div>
+  1261→
+  1262→              {/* Reference */}
+  1263→              <div className="space-y-2">
+  1264→                <Label htmlFor="edit-credit-reference">Reference</Label>
+  1265→                <Input
+  1266→                  id="edit-credit-reference"
+  1267→                  placeholder="e.g. INV-001, PAY-2024-03"
+  1268→                  value={editReference}
+  1269→                  onChange={(e) => setEditReference(e.target.value)}
+  1270→                />
+  1271→              </div>
+  1272→
+  1273→              {/* Description */}
+  1274→              <div className="space-y-2">
+  1275→                <Label htmlFor="edit-credit-description">Description</Label>
+  1276→                <Textarea
+  1277→                  id="edit-credit-description"
+  1278→                  placeholder="Add notes about this entry..."
+  1279→                  value={editDescription}
+  1280→                  onChange={(e) => setEditDescription(e.target.value)}
+  1281→                  rows={3}
+  1282→                />
+  1283→              </div>
+  1284→
+  1285→              {/* Created date info */}
+  1286→              <div className="text-xs text-muted-foreground bg-muted/30 rounded-md p-2">
+  1287→                Created: {formatDateTime(editingCredit.createdAt)}
+  1288→                {editingCredit.reference && ` • Ref: ${editingCredit.reference}`}
+  1289→              </div>
+  1290→            </div>
+  1291→          )}
+  1292→      </ResponsiveDialog>
+  1293→
+  1294→      {/* Void Confirmation AlertDialog */}
+  1295→      <AlertDialog open={deleteDialogOpen} onOpenChange={(open) => { if (!open) setDeletingCredit(null); setDeleteDialogOpen(open); }}>
+  1296→        <AlertDialogContent>
+  1297→          <AlertDialogHeader>
+  1298→            <AlertDialogTitle className="flex items-center gap-2">
+  1299→              <Trash2 className="h-5 w-5 text-red-500" />
+  1300→              Void Credit Entry
+  1301→            </AlertDialogTitle>
+  1302→            <AlertDialogDescription>
+  1303→              {deletingCredit && (
+  1304→                <>
+  1305→                  Are you sure you want to void this <strong>{deletingCredit.creditType}</strong> entry of{' '}
+  1306→                  <strong>{formatKES(deletingCredit.amount)}</strong> for{' '}
+  1307→                  <strong>{customerMap.get(deletingCredit.customerId)?.name || 'Unknown'}</strong>?
+  1308→                  <br /><br />
+  1309→                  This action will mark the entry as voided and recalculate running balances. This action cannot be undone.
+  1310→                </>
+  1311→              )}
+  1312→            </AlertDialogDescription>
+  1313→          </AlertDialogHeader>
+  1314→          <AlertDialogFooter>
+  1315→            <AlertDialogCancel>Cancel</AlertDialogCancel>
+  1316→            <AlertDialogAction
+  1317→              onClick={handleVoidEntry}
+  1318→              disabled={deleteCreditMutation.isPending}
+  1319→              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+  1320→            >
+  1321→              {deleteCreditMutation.isPending ? (
+  1322→                <span className="flex items-center gap-2">
+  1323→                  <Loader2 className="h-4 w-4 animate-spin" />
+  1324→                  Voiding...
+  1325→                </span>
+  1326→              ) : (
+  1327→                'Void Entry'
+  1328→              )}
+  1329→            </AlertDialogAction>
+  1330→          </AlertDialogFooter>
+  1331→        </AlertDialogContent>
+  1332→      </AlertDialog>
+  1333→    </div>
+  1334→  );
+  1335→}
+  1336→

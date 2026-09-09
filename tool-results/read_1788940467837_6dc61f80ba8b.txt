@@ -1,0 +1,1568 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useMemo, useEffect, useRef } from 'react';
+     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+     5→import { toast } from 'sonner';
+     6→import {
+     7→  Users, Search, Plus, CircleDollarSign, AlertTriangle,
+     8→  Eye, Loader2, HandCoins, Banknote, Smartphone, ShoppingBag, Phone, Mail, MapPin, CreditCard, Clock,
+     9→  ArrowUpDown, Filter, UserPlus, TrendingUp, FileText, Bell,
+    10→  History, Send, Tag, Gift, Truck, FileCheck, Receipt, Minus,
+    11→} from 'lucide-react';
+    12→
+    13→import { useAppStore } from '@/lib/stores';
+    14→import {
+    15→  customersApi, debtApi, transactionsApi, whatsappApi,
+    16→  formatKES, formatDate, formatDateTime,
+    17→  type CustomerItem,
+    18→  type TransactionItem,
+    19→  type CustomerHistoryTimelineEntry,
+    20→  type CustomerHistoryResult,
+    21→  type CustomerHistorySummary,
+    22→} from '@/lib/api';
+    23→import { handleError } from '@/lib/error-handler';
+    24→import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
+    25→import { LoyaltyCard } from '@/components/loyalty/loyalty-card';
+    26→
+    27→import { Button } from '@/components/ui/button';
+    28→import { Card, CardContent } from '@/components/ui/card';
+    29→import { Input } from '@/components/ui/input';
+    30→import { Label } from '@/components/ui/label';
+    31→import { Badge } from '@/components/ui/badge';
+    32→import { Skeleton } from '@/components/ui/skeleton';
+    33→import { Separator } from '@/components/ui/separator';
+    34→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+    35→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+    36→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    37→import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+    38→import { Textarea } from '@/components/ui/textarea';
+    39→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    40→import { Progress } from '@/components/ui/progress';
+    41→import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+    42→import { ScrollArea } from '@/components/ui/scroll-area';
+    43→
+    44→const AVATAR_GRADIENTS = [
+    45→  'from-rose-500 to-pink-600',
+    46→  'from-violet-500 to-purple-600',
+    47→  'from-cyan-500 to-teal-600',
+    48→  'from-emerald-500 to-green-600',
+    49→  'from-amber-500 to-orange-600',
+    50→  'from-red-500 to-rose-600',
+    51→  'from-teal-500 to-cyan-600',
+    52→  'from-orange-500 to-amber-600',
+    53→  'from-fuchsia-500 to-pink-600',
+    54→  'from-lime-500 to-green-600',
+    55→];
+    56→
+    57→function getAvatarGradient(name: string): string {
+    58→  let hash = 0;
+    59→  for (let i = 0; i < name.length; i++) {
+    60→    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    61→  }
+    62→  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
+    63→}
+    64→
+    65→function getLoyaltyTier(points: number): { tier: string; color: string; bg: string; icon: string } {
+    66→  if (points >= 1500) return { tier: 'Gold', color: 'text-yellow-700 dark:text-yellow-400', bg: 'bg-yellow-100 dark:bg-yellow-900/30', icon: '🥇' };
+    67→  if (points >= 500) return { tier: 'Silver', color: 'text-gray-600 dark:text-gray-300', bg: 'bg-gray-100 dark:bg-gray-800/50', icon: '🥈' };
+    68→  return { tier: 'Bronze', color: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30', icon: '🥉' };
+    69→}
+    70→
+    71→function getDebtStatus(debtBalance: number, debtLimit: number): { color: string; label: string; bgClass: string } {
+    72→  if (debtBalance <= 0) return { color: 'bg-green-500', label: 'No Debt', bgClass: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' };
+    73→  if (debtLimit > 0 && (debtBalance / debtLimit) > 0.5) return { color: 'bg-red-500', label: 'High Risk', bgClass: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' };
+    74→  return { color: 'bg-amber-500', label: 'Outstanding', bgClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' };
+    75→}
+    76→
+    77→// Debt status badge with full styling
+    78→function DebtStatusBadge({ customer }: { customer: CustomerItem }) {
+    79→  const status = getDebtStatus(customer.currentDebtBalance, customer.debtLimit);
+    80→  return (
+    81→    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold ${status.bgClass}`}>
+    82→      <span className={`w-1.5 h-1.5 rounded-full ${status.color} ${customer.currentDebtBalance > 0 ? 'animate-pulse' : ''}`} />
+    83→      {status.label}
+    84→    </span>
+    85→  );
+    86→}
+    87→
+    88→function getPaymentMethodIcon(method: string) {
+    89→  switch (method) {
+    90→    case 'CASH': return <Banknote className="h-3 w-3" />;
+    91→    case 'MPESA': return <Smartphone className="h-3 w-3" />;
+    92→    case 'DEBT': return <CreditCard className="h-3 w-3" />;
+    93→    default: return null;
+    94→  }
+    95→}
+    96→
+    97→function getPaymentMethodBadge(method: string) {
+    98→  switch (method) {
+    99→    case 'CASH': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+   100→    case 'MPESA': return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+   101→    case 'DEBT': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+   102→    default: return 'bg-muted text-muted-foreground';
+   103→  }
+   104→}
+   105→
+   106→// Auto-format phone number to Kenyan format
+   107→function formatKenyanPhone(value: string): string {
+   108→  const digits = value.replace(/\D/g, '');
+   109→  if (digits.startsWith('254')) {
+   110→    return `+${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 9)}`;
+   111→  }
+   112→  if (digits.startsWith('0') && digits.length >= 4) {
+   113→    return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7, 10)}`.trim();
+   114→  }
+   115→  return value;
+   116→}
+   117→
+   118→type SortField = 'name' | 'debt' | 'loyalty' | 'created';
+   119→type SortDirection = 'asc' | 'desc';
+   120→
+   121→// ─── Customer History Types ──────────────────────────────────────────────────
+   122→
+   123→interface HistoryEntry {
+   124→  id: string;
+   125→  date: string;
+   126→  type: 'sale' | 'invoice' | 'credit' | 'gift_card' | 'voucher' | 'payment' | 'delivery_note';
+   127→  reference: string;
+   128→  amount: number;
+   129→  status?: string;
+   130→  description?: string;
+   131→}
+   132→
+   133→interface CustomerHistoryData {
+   134→  customer: CustomerItem;
+   135→  summary: CustomerHistorySummary;
+   136→  timeline: HistoryEntry[];
+   137→}
+   138→
+   139→const TYPE_FILTERS: { id: string; label: string }[] = [
+   140→  { id: 'all', label: 'All' },
+   141→  { id: 'sale', label: 'Sales' },
+   142→  { id: 'invoice', label: 'Invoices' },
+   143→  { id: 'credit', label: 'Credits' },
+   144→  { id: 'payment', label: 'Payments' },
+   145→];
+   146→
+   147→/**
+   148→ * Map an API timeline entry (uppercase type, `timestamp`/`ref` fields) into
+   149→ * the display shape this dialog expects (lowercase type, `date`/`reference`).
+   150→ * The API returns `CustomerHistoryTimelineEntry` which has an index signature
+   151→ * so we can read amount/discountAmount/status/etc. defensively.
+   152→ */
+   153→function normalizeHistoryEntry(raw: CustomerHistoryTimelineEntry): HistoryEntry {
+   154→  const typeMap: Record<string, HistoryEntry['type']> = {
+   155→    SALE: 'sale',
+   156→    INVOICE: 'invoice',
+   157→    CREDIT: 'credit',
+   158→    GIFT_CARD_REDEMPTION: 'gift_card',
+   159→    VOUCHER_REDEMPTION: 'voucher',
+   160→    DEBT_PAYMENT: 'payment',
+   161→    DELIVERY_NOTE: 'delivery_note',
+   162→  };
+   163→  const type = typeMap[raw.type] ?? 'sale';
+   164→  const reference = String(raw.ref ?? raw.id ?? '');
+   165→  const date = raw.timestamp;
+   166→  // VOUCHER_REDEMPTION uses `discountAmount` instead of `amount`.
+   167→  const rawAmount =
+   168→    raw.type === 'VOUCHER_REDEMPTION'
+   169→      ? (raw.discountAmount as unknown as number | undefined)
+   170→      : (raw.amount as unknown as number | undefined);
+   171→  const amount = typeof rawAmount === 'number' && !Number.isNaN(rawAmount) ? rawAmount : 0;
+   172→  const status =
+   173→    (raw.status as unknown as string | undefined) ??
+   174→    (raw.paymentStatus as unknown as string | undefined) ??
+   175→    (raw.invoiceType as unknown as string | undefined) ??
+   176→    (raw.creditType as unknown as string | undefined);
+   177→  const description =
+   178→    (raw.description as unknown as string | null | undefined) ??
+   179→    (raw.deliveryAddress as unknown as string | null | undefined) ??
+   180→    undefined;
+   181→  return { id: raw.id, date, type, reference, amount, status, description };
+   182→}
+   183→
+   184→function getTypeMeta(type: HistoryEntry['type']): { label: string; icon: React.ElementType; color: string; bg: string } {
+   185→  switch (type) {
+   186→    case 'sale': return { label: 'Sale', icon: ShoppingBag, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-900/30' };
+   187→    case 'invoice': return { label: 'Invoice', icon: FileText, color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-100 dark:bg-violet-900/30' };
+   188→    case 'credit': return { label: 'Credit Note', icon: FileCheck, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30' };
+   189→    case 'gift_card': return { label: 'Gift Card', icon: Gift, color: 'text-pink-600 dark:text-pink-400', bg: 'bg-pink-100 dark:bg-pink-900/30' };
+   190→    case 'voucher': return { label: 'Voucher', icon: Tag, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-100 dark:bg-emerald-900/30' };
+   191→    case 'payment': return { label: 'Payment', icon: HandCoins, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-100 dark:bg-blue-900/30' };
+   192→    case 'delivery_note': return { label: 'Delivery', icon: Truck, color: 'text-cyan-600 dark:text-cyan-400', bg: 'bg-cyan-100 dark:bg-cyan-900/30' };
+   193→    default: return { label: type, icon: Receipt, color: 'text-muted-foreground', bg: 'bg-muted' };
+   194→  }
+   195→}
+   196→
+   197→function CustomerHistoryDialog({
+   198→  customer,
+   199→  open,
+   200→  onOpenChange,
+   201→  storeId,
+   202→}: {
+   203→  customer: CustomerItem | null;
+   204→  open: boolean;
+   205→  onOpenChange: (open: boolean) => void;
+   206→  storeId: string;
+   207→}) {
+   208→  const [typeFilter, setTypeFilter] = useState<string>('all');
+   209→  const [sendingStatement, setSendingStatement] = useState(false);
+   210→
+   211→  const { data, isLoading, isError } = useQuery({
+   212→    queryKey: ['customer-history', customer?.id, storeId],
+   213→    queryFn: async (): Promise<CustomerHistoryData | null> => {
+   214→      if (!customer) return null;
+   215→      // Preferred path — typed API client (returns ApiResponse<CustomerHistoryResult>).
+   216→      try {
+   217→        const response = await customersApi.getHistory(customer.id);
+   218→        const payload: CustomerHistoryResult | undefined = response?.data;
+   219→        if (payload) {
+   220→          return {
+   221→            customer: payload.customer,
+   222→            summary: payload.summary,
+   223→            timeline: Array.isArray(payload.timeline)
+   224→              ? payload.timeline.map(normalizeHistoryEntry)
+   225→              : [],
+   226→          };
+   227→        }
+   228→      } catch {
+   229→        // fall through to direct fetch
+   230→      }
+   231→      // Fallback: direct fetch with same-origin credentials.
+   232→      const res = await fetch(`/api/customers/${customer.id}/history`, {
+   233→        credentials: 'same-origin',
+   234→      });
+   235→      const json = (await res.json()) as {
+   236→        success?: boolean;
+   237→        data?: CustomerHistoryResult;
+   238→        error?: string;
+   239→      };
+   240→      if (!json.success || !json.data) {
+   241→        throw new Error(json.error || 'Failed to load history');
+   242→      }
+   243→      const payload = json.data;
+   244→      return {
+   245→        customer: payload.customer,
+   246→        summary: payload.summary,
+   247→        timeline: Array.isArray(payload.timeline)
+   248→          ? payload.timeline.map(normalizeHistoryEntry)
+   249→          : [],
+   250→      };
+   251→    },
+   252→    enabled: !!customer && open,
+   253→  });
+   254→
+   255→  const summary = data?.summary;
+   256→  const timeline: HistoryEntry[] = data?.timeline ?? [];
+   257→  const filteredTimeline = useMemo(() => {
+   258→    if (typeFilter === 'all') return timeline;
+   259→    return timeline.filter((e) => e.type === typeFilter);
+   260→  }, [timeline, typeFilter]);
+   261→
+   262→  async function handleSendStatement() {
+   263→    if (!customer) return;
+   264→    const phone = prompt('Enter WhatsApp phone number to send the statement to:', customer.phone || '') || '';
+   265→    if (!phone) return;
+   266→    setSendingStatement(true);
+   267→    try {
+   268→      const res = await whatsappApi.sendDocument({
+   269→        type: 'statement',
+   270→        documentId: customer.id,
+   271→        customerId: customer.id,
+   272→        storeId,
+   273→        phone,
+   274→      });
+   275→      // whatsappApi.sendDocument returns ApiResponse<{waLink,...}> — unwrap .data
+   276→      const waLink = res?.data?.waLink;
+   277→      const title = res?.data?.documentTitle;
+   278→      if (waLink) {
+   279→        window.open(waLink, '_blank');
+   280→        toast.success(`${title ?? 'Statement'} sent via WhatsApp`);
+   281→      } else {
+   282→        toast.error('No WhatsApp link returned by the server.');
+   283→      }
+   284→    } catch (err) {
+   285→      const msg = handleError(err, 'Send statement via WhatsApp');
+   286→      toast.error(msg);
+   287→    } finally {
+   288→      setSendingStatement(false);
+   289→    }
+   290→  }
+   291→
+   292→  if (!customer) return null;
+   293→  const loyalty = getLoyaltyTier(customer.loyaltyPoints);
+   294→  const gradient = getAvatarGradient(customer.name);
+   295→
+   296→  return (
+   297→    <ResponsiveDialog
+   298→      open={open}
+   299→      onOpenChange={onOpenChange}
+   300→      size="2xl"
+   301→      title={
+   302→        <span className="flex items-center gap-2">
+   303→          <History className="h-5 w-5 text-primary" />
+   304→          Account History
+   305→        </span>
+   306→      }
+   307→      description={`Full statement & activity timeline for ${customer.name}`}
+   308→      footer={
+   309→        <>
+   310→          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+   311→          <Button
+   312→            onClick={handleSendStatement}
+   313→            disabled={sendingStatement}
+   314→            className="bg-green-600 hover:bg-green-700 text-white gap-2"
+   315→          >
+   316→            {sendingStatement ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+   317→            Send Statement via WhatsApp
+   318→          </Button>
+   319→        </>
+   320→      }
+   321→    >
+   322→      <div className="space-y-5">
+   323→        {/* Customer Summary Card */}
+   324→        <Card className="border-l-4 border-l-primary">
+   325→          <CardContent className="p-4 space-y-4">
+   326→            <div className="flex items-start gap-3">
+   327→              <Avatar className="h-14 w-14 ring-2 ring-primary/20">
+   328→                <AvatarFallback className={`text-lg text-white font-bold bg-gradient-to-br ${gradient}`}>
+   329→                  {customer.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+   330→                </AvatarFallback>
+   331→              </Avatar>
+   332→              <div className="flex-1 min-w-0">
+   333→                <h3 className="font-semibold text-lg truncate">{customer.name}</h3>
+   334→                <div className="flex flex-wrap gap-2 mt-1">
+   335→                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${loyalty.bg} ${loyalty.color}`}>
+   336→                    {loyalty.icon} {loyalty.tier} Member
+   337→                  </span>
+   338→                  <DebtStatusBadge customer={customer} />
+   339→                </div>
+   340→                <div className="flex flex-wrap gap-3 mt-2 text-xs text-muted-foreground">
+   341→                  {customer.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {customer.phone}</span>}
+   342→                  {customer.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {customer.email}</span>}
+   343→                </div>
+   344→              </div>
+   345→            </div>
+   346→
+   347→            {/* Summary stats grid */}
+   348→            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+   349→              <SummaryStat label="Total Spent" value={summary ? formatKES(summary.totalSpent) : '—'} accent="text-green-600 dark:text-green-400" />
+   350→              <SummaryStat label="Outstanding Debt" value={summary ? formatKES(summary.outstandingDebt) : formatKES(customer.currentDebtBalance)} accent={customer.currentDebtBalance > 0 ? 'text-red-600' : 'text-green-600'} />
+   351→              <SummaryStat label="Loyalty Points" value={`${customer.loyaltyPoints} pts`} />
+   352→              <SummaryStat label="Avg Order Value" value={summary && summary.transactionCount > 0 ? formatKES(summary.avgOrderValue) : '—'} />
+   353→              <SummaryStat label="Last Visit" value={summary?.lastVisit ? formatDate(summary.lastVisit) : '—'} />
+   354→              <SummaryStat label="Customer Since" value={formatDate(customer.createdAt)} />
+   355→              <SummaryStat label="Transactions" value={summary ? String(summary.transactionCount) : '—'} />
+   356→              <SummaryStat label="Credit Limit" value={formatKES(customer.debtLimit)} />
+   357→            </div>
+   358→          </CardContent>
+   359→        </Card>
+   360→
+   361→        {/* Timeline filter */}
+   362→        <div className="flex flex-wrap items-center gap-2">
+   363→          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Filter:</span>
+   364→          {TYPE_FILTERS.map((tf) => (
+   365→            <Button
+   366→              key={tf.id}
+   367→              size="sm"
+   368→              variant={typeFilter === tf.id ? 'default' : 'outline'}
+   369→              className="h-7 text-xs"
+   370→              onClick={() => setTypeFilter(tf.id)}
+   371→            >
+   372→              {tf.label}
+   373→            </Button>
+   374→          ))}
+   375→          <span className="ml-auto text-xs text-muted-foreground">
+   376→            {filteredTimeline.length} entr{filteredTimeline.length === 1 ? 'y' : 'ies'}
+   377→          </span>
+   378→        </div>
+   379→
+   380→        {/* Timeline */}
+   381→        {isLoading ? (
+   382→          <div className="space-y-2">
+   383→            {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+   384→          </div>
+   385→        ) : isError ? (
+   386→          <div className="text-center py-10 text-muted-foreground">
+   387→            <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-amber-500" />
+   388→            <p className="text-sm">Failed to load customer history.</p>
+   389→            <p className="text-xs mt-1">The history API may still be initializing. Try again in a moment.</p>
+   390→          </div>
+   391→        ) : filteredTimeline.length === 0 ? (
+   392→          <div className="text-center py-10 text-muted-foreground">
+   393→            <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+   394→            <p className="text-sm">No activity recorded yet.</p>
+   395→          </div>
+   396→        ) : (
+   397→          <ScrollArea className="max-h-[50vh]">
+   398→            <div className="space-y-2 pr-2">
+   399→              {filteredTimeline.map((entry) => {
+   400→                const meta = getTypeMeta(entry.type);
+   401→                const Icon = meta.icon;
+   402→                return (
+   403→                  <div
+   404→                    key={entry.id}
+   405→                    className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-muted/40 transition-colors"
+   406→                  >
+   407→                    <div className={`shrink-0 p-2 rounded-lg ${meta.bg}`}>
+   408→                      <Icon className={`h-4 w-4 ${meta.color}`} />
+   409→                    </div>
+   410→                    <div className="flex-1 min-w-0">
+   411→                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+   412→                        <p className="text-sm font-medium">{meta.label} · {entry.reference}</p>
+   413→                        <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDateTime(entry.date)}</span>
+   414→                      </div>
+   415→                      {entry.description && (
+   416→                        <p className="text-xs text-muted-foreground mt-0.5 break-words">{entry.description}</p>
+   417→                      )}
+   418→                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+   419→                        {entry.amount !== 0 && (
+   420→                          <span className={`text-sm font-semibold ${entry.type === 'payment' || entry.type === 'credit' ? 'text-green-600' : 'text-foreground'}`}>
+   421→                            {entry.type === 'payment' || entry.type === 'credit' ? '+' : ''}{formatKES(entry.amount)}
+   422→                          </span>
+   423→                        )}
+   424→                        {entry.status && (
+   425→                          <Badge variant="outline" className="text-[10px]">{entry.status}</Badge>
+   426→                        )}
+   427→                      </div>
+   428→                    </div>
+   429→                  </div>
+   430→                );
+   431→              })}
+   432→            </div>
+   433→          </ScrollArea>
+   434→        )}
+   435→      </div>
+   436→    </ResponsiveDialog>
+   437→  );
+   438→}
+   439→
+   440→function SummaryStat({ label, value, accent }: { label: string; value: string; accent?: string }) {
+   441→  return (
+   442→    <div className="rounded-lg border bg-muted/20 p-2.5">
+   443→      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+   444→      <p className={`text-sm font-semibold mt-0.5 ${accent ?? ''}`}>{value}</p>
+   445→    </div>
+   446→  );
+   447→}
+   448→
+   449→export default function CustomersTab() {
+   450→  const [searchQuery, setSearchQuery] = useState('');
+   451→  const [debouncedSearch, setDebouncedSearch] = useState('');
+   452→  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+   453→  const [addCustomerOpen, setAddCustomerOpen] = useState(false);
+   454→  const [selectedCustomer, setSelectedCustomer] = useState<CustomerItem | null>(null);
+   455→  const [historyCustomer, setHistoryCustomer] = useState<CustomerItem | null>(null);
+   456→  const [historyOpen, setHistoryOpen] = useState(false);
+   457→  const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '', address: '', idNumber: '', debtLimit: '50000', notes: '' });
+   458→  const [debtPaymentOpen, setDebtPaymentOpen] = useState(false);
+   459→  const [debtPaymentAmount, setDebtPaymentAmount] = useState('');
+   460→  const [debtPaymentMethod, setDebtPaymentMethod] = useState('CASH');
+   461→  const [debtPaymentReference, setDebtPaymentReference] = useState('');
+   462→  const [selectedDebtLedgerId, setSelectedDebtLedgerId] = useState<string>('');
+   463→  const currentStoreId = useAppStore((s) => s.currentStoreId);
+   464→  const setActiveTab = useAppStore((s) => s.setActiveTab);
+   465→  const queryClient = useQueryClient();
+   466→
+   467→  // Filter and sort state
+   468→  const [debtFilter, setDebtFilter] = useState<string>('all');
+   469→  const [sortField, setSortField] = useState<SortField>('name');
+   470→  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+   471→  const [showFilters, setShowFilters] = useState(false);
+   472→  const [regDateFrom, setRegDateFrom] = useState('');
+   473→  const [regDateTo, setRegDateTo] = useState('');
+   474→
+   475→  // Form validation
+   476→  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+   477→
+   478→  // Debounce search input by 300ms so typing doesn't fire a request per keystroke.
+   479→  useEffect(() => {
+   480→    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+   481→    searchDebounceRef.current = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
+   482→    return () => {
+   483→      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+   484→    };
+   485→  }, [searchQuery]);
+   486→
+   487→  const { data: customersData, isLoading } = useQuery({
+   488→    queryKey: ['customers', currentStoreId, debouncedSearch],
+   489→    queryFn: () => customersApi.list({ storeId: currentStoreId, search: debouncedSearch || undefined, limit: 200 }),
+   490→  });
+   491→
+   492→  const { data: debtData } = useQuery({
+   493→    queryKey: ['debt', currentStoreId, selectedCustomer?.id],
+   494→    queryFn: () => debtApi.list({ storeId: currentStoreId, customerId: selectedCustomer?.id, limit: 50 }),
+   495→    enabled: !!selectedCustomer,
+   496→  });
+   497→
+   498→  const { data: customerTransactionsData } = useQuery({
+   499→    queryKey: ['customer-transactions', currentStoreId, selectedCustomer?.id],
+   500→    queryFn: () => transactionsApi.list({ storeId: currentStoreId, limit: 10 }),
+   501→    enabled: !!selectedCustomer,
+   502→  });
+   503→
+   504→  const createCustomerMutation = useMutation({
+   505→    mutationFn: customersApi.create,
+   506→    onSuccess: () => {
+   507→      toast.success('Customer added');
+   508→      setAddCustomerOpen(false);
+   509→      setNewCustomer({ name: '', phone: '', email: '', address: '', idNumber: '', debtLimit: '50000', notes: '' });
+   510→      setFormErrors({});
+   511→    },
+   512→    onError: (err: unknown) => {
+   513→      const msg = handleError(err, 'Create customer');
+   514→      toast.error(msg);
+   515→    },
+   516→  });
+   517→
+   518→  const debtPaymentMutation = useMutation({
+   519→    mutationFn: debtApi.makePayment,
+   520→    onSuccess: (res) => {
+   521→      const newBalance = res.data?.balance ?? 0;
+   522→      toast.success(`Payment recorded! New balance: ${formatKES(newBalance)}`);
+   523→      queryClient.invalidateQueries({ queryKey: ['customers', currentStoreId] });
+   524→      queryClient.invalidateQueries({ queryKey: ['debt', currentStoreId, selectedCustomer?.id] });
+   525→      setDebtPaymentOpen(false);
+   526→      setDebtPaymentAmount('');
+   527→      setDebtPaymentMethod('CASH');
+   528→      setDebtPaymentReference('');
+   529→      setSelectedDebtLedgerId('');
+   530→    },
+   531→    onError: (err: unknown) => {
+   532→      const msg = handleError(err, 'Record debt payment');
+   533→      toast.error(msg);
+   534→    },
+   535→  });
+   536→
+   537→  const rawCustomers = Array.isArray(customersData?.data) ? customersData.data : [];
+   538→  const debts = Array.isArray(debtData?.data) ? debtData.data : [];
+   539→  const customerTransactions: TransactionItem[] = (Array.isArray(customerTransactionsData?.data) ? customerTransactionsData.data : []).slice(0, 10);
+   540→
+   541→  // Filter customers
+   542→  const customers = useMemo(() => {
+   543→    let result = rawCustomers;
+   544→
+   545→    // Debt filter
+   546→    if (debtFilter === 'no_debt') result = result.filter(c => c.currentDebtBalance <= 0);
+   547→    else if (debtFilter === 'outstanding') result = result.filter(c => c.currentDebtBalance > 0 && (c.debtLimit <= 0 || c.currentDebtBalance / c.debtLimit <= 0.5));
+   548→    else if (debtFilter === 'overdue') result = result.filter(c => c.debtLimit > 0 && c.currentDebtBalance / c.debtLimit > 0.5);
+   549→
+   550→    // Registration date filter
+   551→    if (regDateFrom) {
+   552→      const from = new Date(regDateFrom);
+   553→      result = result.filter(c => new Date(c.createdAt) >= from);
+   554→    }
+   555→    if (regDateTo) {
+   556→      const to = new Date(regDateTo);
+   557→      to.setHours(23, 59, 59, 999);
+   558→      result = result.filter(c => new Date(c.createdAt) <= to);
+   559→    }
+   560→
+   561→    // Sort
+   562→    result = [...result].sort((a, b) => {
+   563→      let aVal: number | string;
+   564→      let bVal: number | string;
+   565→      switch (sortField) {
+   566→        case 'name': aVal = a.name.toLowerCase(); bVal = b.name.toLowerCase(); break;
+   567→        case 'debt': aVal = a.currentDebtBalance; bVal = b.currentDebtBalance; break;
+   568→        case 'loyalty': aVal = a.loyaltyPoints; bVal = b.loyaltyPoints; break;
+   569→        case 'created': aVal = new Date(a.createdAt).getTime(); bVal = new Date(b.createdAt).getTime(); break;
+   570→        default: aVal = a.name.toLowerCase(); bVal = b.name.toLowerCase();
+   571→      }
+   572→      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+   573→      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+   574→      return 0;
+   575→    });
+   576→
+   577→    return result;
+   578→  }, [rawCustomers, debtFilter, regDateFrom, regDateTo, sortField, sortDirection]);
+   579→
+   580→  // Statistics
+   581→  const _totalDebt = rawCustomers.reduce((s, c) => s + c.currentDebtBalance, 0);
+   582→  const activeDebts = debts.filter((d) => d.status !== 'SETTLED');
+   583→  const paymentAmountNum = parseFloat(debtPaymentAmount) || 0;
+   584→  const selectedDebt = activeDebts.find((d) => d.id === selectedDebtLedgerId);
+   585→  const currentDebtBalance = selectedDebt ? selectedDebt.amountOwed - selectedDebt.amountPaid : (selectedCustomer?.currentDebtBalance ?? 0);
+   586→  const newBalancePreview = Math.max(0, currentDebtBalance - paymentAmountNum);
+   587→  const _goldCustomers = rawCustomers.filter(c => c.loyaltyPoints >= 1500).length;
+   588→  const customersWithDebt = rawCustomers.filter(c => c.currentDebtBalance > 0).length;
+   589→  const loyaltyMembers = rawCustomers.filter(c => c.loyaltyPoints > 0).length;
+   590→  const activeCustomers = rawCustomers.filter(c => c.isActive).length;
+   591→  const _averageSpend = rawCustomers.length > 0 ? 0 : 0; // Would need total spend data
+   592→  const _newCustomersThisMonth = rawCustomers.filter(c => {
+   593→    const created = new Date(c.createdAt);
+   594→    const now = new Date();
+   595→    return created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear();
+   596→  }).length;
+   597→
+   598→  // Fuzzy search
+   599→  const _fuzzyMatch = (query: string, text: string): boolean => {
+   600→    const q = query.toLowerCase();
+   601→    const t = text.toLowerCase();
+   602→    if (t.includes(q)) return true;
+   603→    // Simple fuzzy: check if all characters appear in order
+   604→    let qi = 0;
+   605→    for (let ti = 0; ti < t.length && qi < q.length; ti++) {
+   606→      if (t[ti] === q[qi]) qi++;
+   607→    }
+   608→    return qi === q.length;
+   609→  };
+   610→
+   611→  // Duplicate detection
+   612→  const duplicateWarning = useMemo(() => {
+   613→    if (!newCustomer.name.trim() || !newCustomer.phone.trim()) return null;
+   614→    const existing = rawCustomers.find(c =>
+   615→      c.name.toLowerCase() === newCustomer.name.toLowerCase() ||
+   616→      (c.phone && c.phone.replace(/\D/g, '') === newCustomer.phone.replace(/\D/g, ''))
+   617→    );
+   618→    return existing ? `Possible duplicate: ${existing.name} (${existing.phone || 'no phone'})` : null;
+   619→  }, [newCustomer.name, newCustomer.phone, rawCustomers]);
+   620→
+   621→  // Form validation
+   622→  const validateForm = (): boolean => {
+   623→    const errors: Record<string, string> = {};
+   624→    if (!newCustomer.name.trim()) errors.name = 'Name is required';
+   625→    if (newCustomer.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newCustomer.email)) errors.email = 'Invalid email format';
+   626→    if (newCustomer.phone && newCustomer.phone.replace(/\D/g, '').length < 9) errors.phone = 'Phone number too short';
+   627→    setFormErrors(errors);
+   628→    return Object.keys(errors).length === 0;
+   629→  };
+   630→
+   631→  // Sort handler
+   632→  const handleSort = (field: SortField) => {
+   633→    if (sortField === field) {
+   634→      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+   635→    } else {
+   636→      setSortField(field);
+   637→      setSortDirection('asc');
+   638→    }
+   639→  };
+   640→
+   641→  // Debt aging breakdown
+   642→  const getDebtAgingBreakdown = () => {
+   643→    const now = new Date();
+   644→    const buckets = { current: 0, thirty: 0, sixty: 0, ninety: 0, overNinety: 0 };
+   645→    debts.forEach(d => {
+   646→      if (d.status === 'SETTLED') return;
+   647→      const dueDate = new Date(d.dueDate);
+   648→      const diffDays = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+   649→      const balance = d.amountOwed - d.amountPaid;
+   650→      if (diffDays <= 0) buckets.current += balance;
+   651→      else if (diffDays <= 30) buckets.thirty += balance;
+   652→      else if (diffDays <= 60) buckets.sixty += balance;
+   653→      else if (diffDays <= 90) buckets.ninety += balance;
+   654→      else buckets.overNinety += balance;
+   655→    });
+   656→    return buckets;
+   657→  };
+   658→
+   659→  // Mini registration trend chart (last 6 months)
+   660→  const registrationTrend = useMemo(() => {
+   661→    const months: { label: string; count: number }[] = [];
+   662→    const now = new Date();
+   663→    for (let i = 5; i >= 0; i--) {
+   664→      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+   665→      const count = rawCustomers.filter(c => {
+   666→        const created = new Date(c.createdAt);
+   667→        return created.getMonth() === d.getMonth() && created.getFullYear() === d.getFullYear();
+   668→      }).length;
+   669→      months.push({
+   670→        label: d.toLocaleDateString('en-KE', { month: 'short' }),
+   671→        count,
+   672→      });
+   673→    }
+   674→    return months;
+   675→  }, [rawCustomers]);
+   676→
+   677→  const maxRegCount = Math.max(...registrationTrend.map(m => m.count), 1);
+   678→
+   679→  return (
+   680→    <div className="space-y-4">
+   681→      {/* Stats Cards — Glass-morphism with gradient icons */}
+   682→      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   683→        <Card className="glass-card stagger-1 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
+   684→          <CardContent className="p-4">
+   685→            <div className="flex items-center gap-3">
+   686→              <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-sm">
+   687→                <Users className="h-5 w-5" />
+   688→              </div>
+   689→              <div className="flex-1 min-w-0">
+   690→                <p className="text-xs text-muted-foreground">Total Customers</p>
+   691→                <p className="text-xl font-bold">{rawCustomers.length}</p>
+   692→              </div>
+   693→              <TrendingUp className="h-4 w-4 text-emerald-500 shrink-0" />
+   694→            </div>
+   695→          </CardContent>
+   696→        </Card>
+   697→        <Card className="glass-card stagger-2 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
+   698→          <CardContent className="p-4">
+   699→            <div className="flex items-center gap-3">
+   700→              <div className="p-2.5 rounded-xl bg-gradient-to-br from-cyan-500 to-cyan-600 text-white shadow-sm">
+   701→                <Users className="h-5 w-5" />
+   702→              </div>
+   703→              <div className="flex-1 min-w-0">
+   704→                <p className="text-xs text-muted-foreground">Active</p>
+   705→                <p className="text-xl font-bold">{activeCustomers}</p>
+   706→              </div>
+   707→              <TrendingUp className="h-4 w-4 text-cyan-500 shrink-0" />
+   708→            </div>
+   709→          </CardContent>
+   710→        </Card>
+   711→        <Card className="glass-card stagger-3 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
+   712→          <CardContent className="p-4">
+   713→            <div className="flex items-center gap-3">
+   714→              <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-sm">
+   715→                <CircleDollarSign className="h-5 w-5" />
+   716→              </div>
+   717→              <div className="flex-1 min-w-0">
+   718→                <p className="text-xs text-muted-foreground">With Debt</p>
+   719→                <p className="text-xl font-bold">{customersWithDebt}</p>
+   720→              </div>
+   721→              {customersWithDebt > 0 ? <TrendingUp className="h-4 w-4 text-amber-500 shrink-0" /> : <Minus className="h-4 w-4 text-muted-foreground shrink-0" />}
+   722→            </div>
+   723→          </CardContent>
+   724→        </Card>
+   725→        <Card className="glass-card stagger-4 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
+   726→          <CardContent className="p-4">
+   727→            <div className="flex items-center gap-3">
+   728→              <div className="p-2.5 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 text-white shadow-sm">
+   729→                <Gift className="h-5 w-5" />
+   730→              </div>
+   731→              <div className="flex-1 min-w-0">
+   732→                <p className="text-xs text-muted-foreground">Loyalty Members</p>
+   733→                <p className="text-xl font-bold">{loyaltyMembers}</p>
+   734→              </div>
+   735→              <TrendingUp className="h-4 w-4 text-purple-500 shrink-0" />
+   736→            </div>
+   737→          </CardContent>
+   738→        </Card>
+   739→      </div>
+   740→
+   741→      {/* Filter Chips + Add Customer Button */}
+   742→      <div className="flex flex-wrap items-center gap-2">
+   743→        {[
+   744→          { key: 'all', label: 'All', count: rawCustomers.length, color: 'emerald' },
+   745→          { key: 'active', label: 'Active', count: activeCustomers, color: 'cyan' },
+   746→          { key: 'debt', label: 'With Debt', count: customersWithDebt, color: 'amber' },
+   747→          { key: 'loyalty', label: 'Loyalty Members', count: loyaltyMembers, color: 'purple' },
+   748→        ].map((chip) => (
+   749→          <button
+   750→            key={chip.key}
+   751→            onClick={() => {
+   752→              if (chip.key === 'all') setDebtFilter('all');
+   753→              else if (chip.key === 'debt') setDebtFilter('outstanding');
+   754→              else if (chip.key === 'loyalty') setDebtFilter('all'); // loyalty filter not in current state
+   755→              else setDebtFilter('all');
+   756→            }}
+   757→            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+   758→              (chip.key === 'all' && debtFilter === 'all') || (chip.key === 'debt' && debtFilter === 'outstanding')
+   759→                ? 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700'
+   760→                : 'bg-white/60 text-muted-foreground border-border/50 hover:bg-white/80 dark:bg-white/5 dark:hover:bg-white/10'
+   761→            }`}
+   762→          >
+   763→            {chip.label}
+   764→            <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+   765→              chip.color === 'emerald' ? 'bg-emerald-200/60 text-emerald-800 dark:bg-emerald-800/40 dark:text-emerald-300' :
+   766→              chip.color === 'cyan' ? 'bg-cyan-200/60 text-cyan-800 dark:bg-cyan-800/40 dark:text-cyan-300' :
+   767→              chip.color === 'amber' ? 'bg-amber-200/60 text-amber-800 dark:bg-amber-800/40 dark:text-amber-300' :
+   768→              'bg-purple-200/60 text-purple-800 dark:bg-purple-800/40 dark:text-purple-300'
+   769→            }`}>
+   770→              {chip.count}
+   771→            </span>
+   772→          </button>
+   773→        ))}
+   774→        <div className="flex-1" />
+   775→        <Button
+   776→          size="sm"
+   777→          className="h-9 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-sm"
+   778→          onClick={() => setAddCustomerOpen(true)}
+   779→        >
+   780→          <UserPlus className="h-4 w-4 mr-1" /> Add Customer
+   781→        </Button>
+   782→      </div>
+   783→
+   784→      {/* Registration Trend Mini Chart */}
+   785→      {rawCustomers.length > 0 && (
+   786→        <Card className="bg-gradient-to-br from-card/80 to-muted/10 backdrop-blur-sm shadow-sm">
+   787→          <CardContent className="p-4">
+   788→            <div className="flex items-center justify-between mb-3">
+   789→              <h3 className="text-sm font-semibold flex items-center gap-2">
+   790→                <TrendingUp className="h-4 w-4 text-primary" /> Customer Registration Trend
+   791→              </h3>
+   792→              <span className="text-xs text-muted-foreground">Last 6 months</span>
+   793→            </div>
+   794→            <div className="flex items-end gap-2 h-16">
+   795→              {registrationTrend.map((m, i) => (
+   796→                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+   797→                  <span className="text-[10px] font-medium text-muted-foreground">{m.count}</span>
+   798→                  <div
+   799→                    className="w-full rounded-t-sm bg-gradient-to-t from-primary/80 to-primary/40 transition-all hover:from-primary hover:to-primary/70"
+   800→                    style={{ height: `${(m.count / maxRegCount) * 100}%`, minHeight: m.count > 0 ? '4px' : '1px' }}
+   801→                  />
+   802→                  <span className="text-[9px] text-muted-foreground">{m.label}</span>
+   803→                </div>
+   804→              ))}
+   805→            </div>
+   806→          </CardContent>
+   807→        </Card>
+   808→      )}
+   809→
+   810→      {/* Toolbar */}
+   811→      <div className="flex flex-col sm:flex-row gap-3">
+   812→        <div className="relative flex-1">
+   813→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   814→          <Input placeholder="Search customers... (fuzzy match)" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
+   815→        </div>
+   816→
+   817→        {/* Sort and Filter */}
+   818→        <Select value={debtFilter} onValueChange={setDebtFilter}>
+   819→          <SelectTrigger className="w-full sm:w-44">
+   820→            <SelectValue placeholder="Debt Status" />
+   821→          </SelectTrigger>
+   822→          <SelectContent>
+   823→            <SelectItem value="all">All Customers</SelectItem>
+   824→            <SelectItem value="no_debt">No Debt</SelectItem>
+   825→            <SelectItem value="outstanding">Outstanding</SelectItem>
+   826→            <SelectItem value="overdue">High Risk</SelectItem>
+   827→          </SelectContent>
+   828→        </Select>
+   829→
+   830→        <TooltipProvider>
+   831→          <Tooltip>
+   832→            <TooltipTrigger asChild>
+   833→              <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => setShowFilters(!showFilters)}>
+   834→                <Filter className="h-4 w-4" />
+   835→              </Button>
+   836→            </TooltipTrigger>
+   837→            <TooltipContent>Advanced Filters</TooltipContent>
+   838→          </Tooltip>
+   839→        </TooltipProvider>
+   840→
+   841→        <Dialog open={addCustomerOpen} onOpenChange={(open) => { setAddCustomerOpen(open); if (!open) setFormErrors({}); }}>
+   842→          <DialogTrigger asChild>
+   843→            <Button className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground">
+   844→              <Plus className="mr-2 h-4 w-4" /> Add Customer
+   845→            </Button>
+   846→          </DialogTrigger>
+   847→          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+   848→            <DialogHeader>
+   849→              <DialogTitle className="flex items-center gap-2">
+   850→                <UserPlus className="h-5 w-5 text-accent-orange" /> Add Customer
+   851→              </DialogTitle>
+   852→              <DialogDescription>Register a new customer</DialogDescription>
+   853→            </DialogHeader>
+   854→            <div className="space-y-4">
+   855→              {/* Duplicate warning */}
+   856→              {duplicateWarning && (
+   857→                <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3 flex items-center gap-2">
+   858→                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+   859→                  <p className="text-xs text-amber-800 dark:text-amber-300">{duplicateWarning}</p>
+   860→                </div>
+   861→              )}
+   862→
+   863→              <div className="space-y-2">
+   864→                <Label>Full Name <span className="text-red-500">*</span></Label>
+   865→                <Input
+   866→                  value={newCustomer.name}
+   867→                  onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
+   868→                  placeholder="John Kamau"
+   869→                  className={formErrors.name ? 'border-red-500' : ''}
+   870→                />
+   871→                {formErrors.name && <p className="text-xs text-red-500">{formErrors.name}</p>}
+   872→              </div>
+   873→
+   874→              <div className="grid grid-cols-2 gap-4">
+   875→                <div className="space-y-2">
+   876→                  <Label>Phone</Label>
+   877→                  <Input
+   878→                    value={newCustomer.phone}
+   879→                    onChange={(e) => setNewCustomer({ ...newCustomer, phone: formatKenyanPhone(e.target.value) })}
+   880→                    placeholder="0712 345 678"
+   881→                    className={formErrors.phone ? 'border-red-500' : ''}
+   882→                  />
+   883→                  {formErrors.phone && <p className="text-xs text-red-500">{formErrors.phone}</p>}
+   884→                  <p className="text-[10px] text-muted-foreground">Auto-formats to Kenyan format</p>
+   885→                </div>
+   886→                <div className="space-y-2">
+   887→                  <Label>Email</Label>
+   888→                  <Input
+   889→                    value={newCustomer.email}
+   890→                    onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
+   891→                    placeholder="john@email.com"
+   892→                    className={formErrors.email ? 'border-red-500' : ''}
+   893→                  />
+   894→                  {formErrors.email && <p className="text-xs text-red-500">{formErrors.email}</p>}
+   895→                </div>
+   896→              </div>
+   897→
+   898→              <div className="grid grid-cols-2 gap-4">
+   899→                <div className="space-y-2">
+   900→                  <Label>ID Number</Label>
+   901→                  <Input value={newCustomer.idNumber} onChange={(e) => setNewCustomer({ ...newCustomer, idNumber: e.target.value })} placeholder="12345678" />
+   902→                </div>
+   903→                <div className="space-y-2">
+   904→                  <Label>Credit Limit (KES)</Label>
+   905→                  <Input type="number" value={newCustomer.debtLimit} onChange={(e) => setNewCustomer({ ...newCustomer, debtLimit: e.target.value })} />
+   906→                </div>
+   907→              </div>
+   908→
+   909→              <div className="space-y-2">
+   910→                <Label>Address</Label>
+   911→                <Textarea value={newCustomer.address} onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })} placeholder="Nairobi, Kenya" rows={2} />
+   912→              </div>
+   913→
+   914→              <div className="space-y-2">
+   915→                <Label>Notes <span className="text-muted-foreground">(optional)</span></Label>
+   916→                <Textarea value={newCustomer.notes} onChange={(e) => setNewCustomer({ ...newCustomer, notes: e.target.value })} placeholder="Additional notes about the customer..." rows={2} />
+   917→              </div>
+   918→            </div>
+   919→            <DialogFooter>
+   920→              <Button variant="outline" onClick={() => { setAddCustomerOpen(false); setFormErrors({}); }}>Cancel</Button>
+   921→              <Button
+   922→                onClick={() => {
+   923→                  if (!validateForm()) return;
+   924→                  createCustomerMutation.mutate({ storeId: currentStoreId, ...newCustomer, debtLimit: Number(newCustomer.debtLimit) });
+   925→                }}
+   926→                disabled={createCustomerMutation.isPending || !newCustomer.name}
+   927→                className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+   928→              >
+   929→                {createCustomerMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+   930→                Add Customer
+   931→              </Button>
+   932→            </DialogFooter>
+   933→          </DialogContent>
+   934→        </Dialog>
+   935→      </div>
+   936→
+   937→      {/* Advanced Filters */}
+   938→      {showFilters && (
+   939→        <div className="rounded-lg border bg-muted/20 p-3 space-y-3 backdrop-blur-sm">
+   940→          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+   941→            <div className="space-y-1.5">
+   942→              <Label className="text-xs">Sort By</Label>
+   943→              <Select value={sortField} onValueChange={(v) => setSortField(v as SortField)}>
+   944→                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+   945→                <SelectContent>
+   946→                  <SelectItem value="name">Name</SelectItem>
+   947→                  <SelectItem value="debt">Debt Balance</SelectItem>
+   948→                  <SelectItem value="loyalty">Loyalty Points</SelectItem>
+   949→                  <SelectItem value="created">Registration Date</SelectItem>
+   950→                </SelectContent>
+   951→              </Select>
+   952→            </div>
+   953→            <div className="space-y-1.5">
+   954→              <Label className="text-xs">Registered From</Label>
+   955→              <Input type="date" value={regDateFrom} onChange={(e) => setRegDateFrom(e.target.value)} className="h-8 text-xs" />
+   956→            </div>
+   957→            <div className="space-y-1.5">
+   958→              <Label className="text-xs">Registered To</Label>
+   959→              <Input type="date" value={regDateTo} onChange={(e) => setRegDateTo(e.target.value)} className="h-8 text-xs" />
+   960→            </div>
+   961→          </div>
+   962→          <div className="flex items-center justify-between">
+   963→            <Button
+   964→              variant="ghost"
+   965→              size="sm"
+   966→              className="h-7 text-xs"
+   967→              onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+   968→            >
+   969→              <ArrowUpDown className="mr-1.5 h-3 w-3" />
+   970→              {sortDirection === 'asc' ? 'Ascending' : 'Descending'}
+   971→            </Button>
+   972→            {(debtFilter !== 'all' || regDateFrom || regDateTo) && (
+   973→              <Button
+   974→                variant="ghost"
+   975→                size="sm"
+   976→                className="h-7 text-xs"
+   977→                onClick={() => { setDebtFilter('all'); setRegDateFrom(''); setRegDateTo(''); }}
+   978→              >
+   979→                Reset Filters
+   980→              </Button>
+   981→            )}
+   982→          </div>
+   983→        </div>
+   984→      )}
+   985→
+   986→      {/* Customer Table */}
+   987→      <Card className="backdrop-blur-sm shadow-sm">
+   988→        <CardContent className="p-0">
+   989→          {/* Customer count summary */}
+   990→          <div className="px-4 py-2 border-b bg-muted/20">
+   991→            <p className="text-xs text-muted-foreground">
+   992→              Showing <span className="font-medium">{customers.length}</span> of <span className="font-medium">{rawCustomers.length}</span> customers
+   993→              {searchQuery && <span> matching &quot;{searchQuery}&quot;</span>}
+   994→              {debtFilter !== 'all' && <span> · {debtFilter === 'no_debt' ? 'No Debt' : debtFilter === 'outstanding' ? 'Outstanding' : 'High Risk'}</span>}
+   995→            </p>
+   996→          </div>
+   997→
+   998→          {isLoading ? (
+   999→            <div className="p-6 space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+  1000→          ) : (
+  1001→            <div className="overflow-x-auto">
+  1002→              <Table>
+  1003→                <TableHeader>
+  1004→                  <TableRow>
+  1005→                    <TableHead>
+  1006→                      <button type="button" className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => handleSort('name')}>
+  1007→                        Customer {sortField === 'name' && (sortDirection === 'asc' ? <ArrowUpDown className="h-3 w-3" /> : <ArrowUpDown className="h-3 w-3 rotate-180" />)}
+  1008→                      </button>
+  1009→                    </TableHead>
+  1010→                    <TableHead>Phone</TableHead>
+  1011→                    <TableHead>
+  1012→                      <button type="button" className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => handleSort('debt')}>
+  1013→                        Debt Balance {sortField === 'debt' && (sortDirection === 'asc' ? <ArrowUpDown className="h-3 w-3" /> : <ArrowUpDown className="h-3 w-3 rotate-180" />)}
+  1014→                      </button>
+  1015→                    </TableHead>
+  1016→                    <TableHead>Debt Status</TableHead>
+  1017→                    <TableHead>
+  1018→                      <button type="button" className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => handleSort('loyalty')}>
+  1019→                        Loyalty {sortField === 'loyalty' && (sortDirection === 'asc' ? <ArrowUpDown className="h-3 w-3" /> : <ArrowUpDown className="h-3 w-3 rotate-180" />)}
+  1020→                      </button>
+  1021→                    </TableHead>
+  1022→                    <TableHead className="w-[100px]">Actions</TableHead>
+  1023→                  </TableRow>
+  1024→                </TableHeader>
+  1025→                <TableBody>
+  1026→                  {customers.length === 0 ? (
+  1027→                    <TableRow>
+  1028→                      <TableCell colSpan={6} className="text-center py-16">
+  1029→                        <div className="flex flex-col items-center gap-4">
+  1030→                          <div className="p-6 rounded-full bg-gradient-to-br from-muted/50 to-muted/20 backdrop-blur-sm">
+  1031→                            <Users className="h-12 w-12 text-muted-foreground/20" />
+  1032→                          </div>
+  1033→                          <div>
+  1034→                            <p className="text-sm font-medium text-muted-foreground">No customers found</p>
+  1035→                            <p className="text-xs text-muted-foreground/70 mt-1">
+  1036→                              {searchQuery || debtFilter !== 'all'
+  1037→                                ? 'Try adjusting your search or filters'
+  1038→                                : 'Add your first customer to get started'}
+  1039→                            </p>
+  1040→                          </div>
+  1041→                          {(searchQuery || debtFilter !== 'all') ? (
+  1042→                            <Button variant="outline" size="sm" className="text-xs" onClick={() => { setSearchQuery(''); setDebtFilter('all'); }}>
+  1043→                              Clear Filters
+  1044→                            </Button>
+  1045→                          ) : (
+  1046→                            <Button size="sm" className="text-xs bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground" onClick={() => setAddCustomerOpen(true)}>
+  1047→                              <Plus className="mr-1.5 h-3.5 w-3.5" /> Add First Customer
+  1048→                            </Button>
+  1049→                          )}
+  1050→                        </div>
+  1051→                      </TableCell>
+  1052→                    </TableRow>
+  1053→                  ) : customers.map((customer, idx) => {
+  1054→                    const _debtStatus = getDebtStatus(customer.currentDebtBalance, customer.debtLimit);
+  1055→                    const loyalty = getLoyaltyTier(customer.loyaltyPoints);
+  1056→                    const gradient = getAvatarGradient(customer.name);
+  1057→                    const initials = customer.name.split(' ').map(n => n[0]).join('').slice(0, 2);
+  1058→
+  1059→                    return (
+  1060→                      <TableRow
+  1061→                        key={customer.id}
+  1062→                        className={`${idx % 2 === 1 ? 'bg-muted/20' : ''} hover:bg-primary/5 transition-colors cursor-pointer group`}
+  1063→                        onClick={() => setSelectedCustomer(customer)}
+  1064→                      >
+  1065→                        <TableCell>
+  1066→                          <div className="flex items-center gap-3">
+  1067→                            <Avatar className="h-9 w-9 ring-2 ring-transparent group-hover:ring-primary/20 transition-all">
+  1068→                              <AvatarFallback className={`text-xs text-white font-semibold bg-gradient-to-br ${gradient}`}>
+  1069→                                {initials}
+  1070→                              </AvatarFallback>
+  1071→                            </Avatar>
+  1072→                            <div>
+  1073→                              <p className="font-medium text-sm group-hover:text-primary transition-colors">{customer.name}</p>
+  1074→                              {customer.email && <p className="text-xs text-muted-foreground">{customer.email}</p>}
+  1075→                            </div>
+  1076→                          </div>
+  1077→                        </TableCell>
+  1078→                        <TableCell className="text-sm">{customer.phone || '—'}</TableCell>
+  1079→                        <TableCell className="text-right font-medium">
+  1080→                          <span className={customer.currentDebtBalance > 0 ? 'text-red-600' : 'text-green-600'}>
+  1081→                            {formatKES(customer.currentDebtBalance)}
+  1082→                          </span>
+  1083→                        </TableCell>
+  1084→                        <TableCell>
+  1085→                          <DebtStatusBadge customer={customer} />
+  1086→                        </TableCell>
+  1087→                        <TableCell>
+  1088→                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${loyalty.bg} ${loyalty.color}`}>
+  1089→                            <span className="text-[10px]">{loyalty.icon}</span> {loyalty.tier}
+  1090→                          </span>
+  1091→                        </TableCell>
+  1092→                        <TableCell>
+  1093→                          <div className="flex items-center gap-1">
+  1094→                            <TooltipProvider>
+  1095→                              <Tooltip>
+  1096→                                <TooltipTrigger asChild>
+  1097→                                  <Button
+  1098→                                    variant="ghost"
+  1099→                                    size="icon"
+  1100→                                    className="h-8 w-8 focus-visible:opacity-100 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+  1101→                                    onClick={(e) => { e.stopPropagation(); setSelectedCustomer(customer); }}
+  1102→                                  >
+  1103→                                    <Eye className="h-4 w-4" />
+  1104→                                  </Button>
+  1105→                                </TooltipTrigger>
+  1106→                                <TooltipContent>View Profile</TooltipContent>
+  1107→                              </Tooltip>
+  1108→                            </TooltipProvider>
+  1109→                            <TooltipProvider>
+  1110→                              <Tooltip>
+  1111→                                <TooltipTrigger asChild>
+  1112→                                  <Button
+  1113→                                    variant="ghost"
+  1114→                                    size="icon"
+  1115→                                    className="h-8 w-8 focus-visible:opacity-100 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-primary hover:text-primary"
+  1116→                                    onClick={(e) => {
+  1117→                                      e.stopPropagation();
+  1118→                                      setHistoryCustomer(customer);
+  1119→                                      setHistoryOpen(true);
+  1120→                                    }}
+  1121→                                  >
+  1122→                                    <History className="h-4 w-4" />
+  1123→                                  </Button>
+  1124→                                </TooltipTrigger>
+  1125→                                <TooltipContent>View Account / History</TooltipContent>
+  1126→                              </Tooltip>
+  1127→                            </TooltipProvider>
+  1128→                          </div>
+  1129→                        </TableCell>
+  1130→                      </TableRow>
+  1131→                    );
+  1132→                  })}
+  1133→                </TableBody>
+  1134→              </Table>
+  1135→            </div>
+  1136→          )}
+  1137→        </CardContent>
+  1138→      </Card>
+  1139→
+  1140→      {/* Debt Payment Dialog */}
+  1141→      <Dialog open={debtPaymentOpen} onOpenChange={(open) => {
+  1142→        setDebtPaymentOpen(open);
+  1143→        if (!open) {
+  1144→          setDebtPaymentAmount('');
+  1145→          setDebtPaymentMethod('CASH');
+  1146→          setDebtPaymentReference('');
+  1147→          setSelectedDebtLedgerId('');
+  1148→        }
+  1149→      }}>
+  1150→        <DialogContent className="sm:max-w-md">
+  1151→          <DialogHeader>
+  1152→            <DialogTitle className="flex items-center gap-2">
+  1153→              <HandCoins className="h-5 w-5 text-accent-orange" />
+  1154→              Record Debt Payment
+  1155→            </DialogTitle>
+  1156→            <DialogDescription>
+  1157→              Record a payment for {selectedCustomer?.name}&apos;s outstanding debt
+  1158→            </DialogDescription>
+  1159→          </DialogHeader>
+  1160→          <div className="space-y-4">
+  1161→            {/* Customer & Balance Info */}
+  1162→            <div className="rounded-lg border bg-gradient-to-r from-muted/30 to-muted/10 p-3 space-y-2">
+  1163→              <div className="flex justify-between items-center">
+  1164→                <span className="text-sm text-muted-foreground">Customer</span>
+  1165→                <span className="text-sm font-medium">{selectedCustomer?.name}</span>
+  1166→              </div>
+  1167→              <div className="flex justify-between items-center">
+  1168→                <span className="text-sm text-muted-foreground">Current Balance</span>
+  1169→                <span className="text-sm font-bold text-red-600">{formatKES(currentDebtBalance)}</span>
+  1170→              </div>
+  1171→              {selectedCustomer && selectedCustomer.debtLimit > 0 && (
+  1172→                <div className="space-y-1">
+  1173→                  <div className="flex justify-between text-xs text-muted-foreground">
+  1174→                    <span>Credit Usage</span>
+  1175→                    <span>{((selectedCustomer.currentDebtBalance / selectedCustomer.debtLimit) * 100).toFixed(0)}%</span>
+  1176→                  </div>
+  1177→                  <Progress
+  1178→                    value={Math.min(100, (selectedCustomer.currentDebtBalance / selectedCustomer.debtLimit) * 100)}
+  1179→                    className="h-1.5"
+  1180→                  />
+  1181→                </div>
+  1182→              )}
+  1183→            </div>
+  1184→
+  1185→            {/* Debt Selection */}
+  1186→            {activeDebts.length > 1 && (
+  1187→              <div className="space-y-2">
+  1188→                <Label>Select Debt Record</Label>
+  1189→                <Select value={selectedDebtLedgerId} onValueChange={setSelectedDebtLedgerId}>
+  1190→                  <SelectTrigger className="w-full">
+  1191→                    <SelectValue placeholder="Select a debt record" />
+  1192→                  </SelectTrigger>
+  1193→                  <SelectContent>
+  1194→                    {activeDebts.map((debt) => (
+  1195→                      <SelectItem key={debt.id} value={debt.id}>
+  1196→                        {formatKES(debt.amountOwed - debt.amountPaid)} owed — Due {formatDate(debt.dueDate)}
+  1197→                      </SelectItem>
+  1198→                    ))}
+  1199→                  </SelectContent>
+  1200→                </Select>
+  1201→              </div>
+  1202→            )}
+  1203→
+  1204→            {/* Payment Amount */}
+  1205→            <div className="space-y-2">
+  1206→              <Label>Payment Amount</Label>
+  1207→              <div className="relative">
+  1208→                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">KES</span>
+  1209→                <Input
+  1210→                  type="number"
+  1211→                  value={debtPaymentAmount}
+  1212→                  onChange={(e) => setDebtPaymentAmount(e.target.value)}
+  1213→                  placeholder="0"
+  1214→                  className="pl-12"
+  1215→                  min="0"
+  1216→                  max={currentDebtBalance}
+  1217→                />
+  1218→              </div>
+  1219→              {/* Quick amount buttons */}
+  1220→              <div className="flex flex-wrap gap-2">
+  1221→                <Button type="button" variant="outline" size="sm" className="text-xs" onClick={() => setDebtPaymentAmount(String(currentDebtBalance))}>Full Amount</Button>
+  1222→                <Button type="button" variant="outline" size="sm" className="text-xs" onClick={() => setDebtPaymentAmount(String(Math.round(currentDebtBalance / 2)))}>Half</Button>
+  1223→                <Button type="button" variant="outline" size="sm" className="text-xs" onClick={() => setDebtPaymentAmount('5000')}>KES 5,000</Button>
+  1224→                <Button type="button" variant="outline" size="sm" className="text-xs" onClick={() => setDebtPaymentAmount('10000')}>KES 10,000</Button>
+  1225→              </div>
+  1226→            </div>
+  1227→
+  1228→            {/* Payment Method */}
+  1229→            <div className="space-y-2">
+  1230→              <Label>Payment Method</Label>
+  1231→              <Select value={debtPaymentMethod} onValueChange={setDebtPaymentMethod}>
+  1232→                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+  1233→                <SelectContent>
+  1234→                  <SelectItem value="CASH"><div className="flex items-center gap-2"><Banknote className="h-4 w-4" /> Cash</div></SelectItem>
+  1235→                  <SelectItem value="MPESA"><div className="flex items-center gap-2"><Smartphone className="h-4 w-4" /> M-Pesa</div></SelectItem>
+  1236→                </SelectContent>
+  1237→              </Select>
+  1238→            </div>
+  1239→
+  1240→            {/* Reference Number */}
+  1241→            <div className="space-y-2">
+  1242→              <Label>Reference Number <span className="text-muted-foreground">(optional)</span></Label>
+  1243→              <Input
+  1244→                value={debtPaymentReference}
+  1245→                onChange={(e) => setDebtPaymentReference(e.target.value)}
+  1246→                placeholder={debtPaymentMethod === 'MPESA' ? 'M-Pesa transaction code' : 'Receipt number'}
+  1247→              />
+  1248→            </div>
+  1249→
+  1250→            {/* New Balance Preview */}
+  1251→            {paymentAmountNum > 0 && (
+  1252→              <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
+  1253→                <div className="flex justify-between items-center">
+  1254→                  <span className="text-sm text-muted-foreground">Payment</span>
+  1255→                  <span className="text-sm font-medium">{formatKES(paymentAmountNum)}</span>
+  1256→                </div>
+  1257→                <div className="flex justify-between items-center">
+  1258→                  <span className="text-sm text-muted-foreground">New Balance</span>
+  1259→                  <span className={`text-sm font-bold ${newBalancePreview === 0 ? 'text-green-600' : 'text-red-600'}`}>
+  1260→                    {formatKES(newBalancePreview)}
+  1261→                  </span>
+  1262→                </div>
+  1263→                {paymentAmountNum > currentDebtBalance && (
+  1264→                  <p className="text-xs text-yellow-600 flex items-center gap-1">
+  1265→                    <AlertTriangle className="h-3 w-3" /> Amount exceeds balance — will be capped at {formatKES(currentDebtBalance)}
+  1266→                  </p>
+  1267→                )}
+  1268→              </div>
+  1269→            )}
+  1270→          </div>
+  1271→          <DialogFooter className="gap-2">
+  1272→            <Button variant="outline" onClick={() => setDebtPaymentOpen(false)}>Cancel</Button>
+  1273→            <Button
+  1274→              className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+  1275→              disabled={debtPaymentMutation.isPending || paymentAmountNum <= 0 || !selectedDebtLedgerId}
+  1276→              onClick={() => {
+  1277→                if (!selectedDebtLedgerId || paymentAmountNum <= 0) return;
+  1278→                debtPaymentMutation.mutate({
+  1279→                  debtLedgerId: selectedDebtLedgerId,
+  1280→                  amount: Math.min(paymentAmountNum, currentDebtBalance),
+  1281→                  paymentMethod: debtPaymentMethod,
+  1282→                  reference: debtPaymentReference || undefined,
+  1283→                });
+  1284→              }}
+  1285→            >
+  1286→              {debtPaymentMutation.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</> : <><HandCoins className="mr-2 h-4 w-4" /> Record Payment</>}
+  1287→            </Button>
+  1288→          </DialogFooter>
+  1289→        </DialogContent>
+  1290→      </Dialog>
+  1291→
+  1292→      {/* Customer Detail Sheet */}
+  1293→      <Sheet open={!!selectedCustomer} onOpenChange={(open) => !open && setSelectedCustomer(null)}>
+  1294→        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+  1295→          <SheetHeader>
+  1296→            <SheetTitle>{selectedCustomer?.name}</SheetTitle>
+  1297→            <SheetDescription>Customer details and history</SheetDescription>
+  1298→          </SheetHeader>
+  1299→          {selectedCustomer && (() => {
+  1300→            const gradient = getAvatarGradient(selectedCustomer.name);
+  1301→            const loyalty = getLoyaltyTier(selectedCustomer.loyaltyPoints);
+  1302→            const _debtStatus = getDebtStatus(selectedCustomer.currentDebtBalance, selectedCustomer.debtLimit);
+  1303→            const hasOverdueDebt = debts.some(d => d.status === 'OVERDUE');
+  1304→            const aging = getDebtAgingBreakdown();
+  1305→            const totalAging = aging.current + aging.thirty + aging.sixty + aging.ninety + aging.overNinety;
+  1306→
+  1307→            return (
+  1308→              <div className="mt-6 space-y-6">
+  1309→                {/* Customer Profile Header */}
+  1310→                <div className="flex items-center gap-4">
+  1311→                  <Avatar className="h-16 w-16 ring-2 ring-primary/10">
+  1312→                    <AvatarFallback className={`text-xl text-white font-bold bg-gradient-to-br ${gradient}`}>
+  1313→                      {selectedCustomer.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+  1314→                    </AvatarFallback>
+  1315→                  </Avatar>
+  1316→                  <div className="flex-1">
+  1317→                    <h3 className="font-semibold text-lg">{selectedCustomer.name}</h3>
+  1318→                    <div className="flex items-center flex-wrap gap-2 mt-1">
+  1319→                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${loyalty.bg} ${loyalty.color}`}>
+  1320→                        {loyalty.icon} {loyalty.tier} Member
+  1321→                      </span>
+  1322→                      <DebtStatusBadge customer={selectedCustomer} />
+  1323→                    </div>
+  1324→                  </div>
+  1325→                </div>
+  1326→
+  1327→                {/* Contact Info */}
+  1328→                <div className="grid grid-cols-2 gap-3">
+  1329→                  {selectedCustomer.phone && (
+  1330→                    <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/20">
+  1331→                      <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+  1332→                      <span className="text-sm">{selectedCustomer.phone}</span>
+  1333→                    </div>
+  1334→                  )}
+  1335→                  {selectedCustomer.email && (
+  1336→                    <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/20">
+  1337→                      <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+  1338→                      <span className="text-sm truncate">{selectedCustomer.email}</span>
+  1339→                    </div>
+  1340→                  )}
+  1341→                  {selectedCustomer.idNumber && (
+  1342→                    <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/20">
+  1343→                      <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
+  1344→                      <span className="text-sm">ID: {selectedCustomer.idNumber}</span>
+  1345→                    </div>
+  1346→                  )}
+  1347→                  {selectedCustomer.address && (
+  1348→                    <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/20">
+  1349→                      <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+  1350→                      <span className="text-sm">{selectedCustomer.address}</span>
+  1351→                    </div>
+  1352→                  )}
+  1353→                </div>
+  1354→
+  1355→                {/* Debt Summary */}
+  1356→                <div className="rounded-lg border bg-gradient-to-r from-muted/30 to-muted/10 p-4 space-y-3">
+  1357→                  <div className="flex justify-between items-center">
+  1358→                    <span className="text-sm font-medium">Debt Balance</span>
+  1359→                    <span className="text-lg font-bold text-red-600">{formatKES(selectedCustomer.currentDebtBalance)}</span>
+  1360→                  </div>
+  1361→                  <div className="flex justify-between items-center">
+  1362→                    <span className="text-sm text-muted-foreground">Credit Limit</span>
+  1363→                    <span className="text-sm font-medium">{formatKES(selectedCustomer.debtLimit)}</span>
+  1364→                  </div>
+  1365→                  {selectedCustomer.debtLimit > 0 && (
+  1366→                    <div className="space-y-1">
+  1367→                      <div className="flex justify-between text-xs text-muted-foreground">
+  1368→                        <span>Credit Usage</span>
+  1369→                        <span>{((selectedCustomer.currentDebtBalance / selectedCustomer.debtLimit) * 100).toFixed(0)}%</span>
+  1370→                      </div>
+  1371→                      <Progress
+  1372→                        value={Math.min(100, (selectedCustomer.currentDebtBalance / selectedCustomer.debtLimit) * 100)}
+  1373→                        className="h-2"
+  1374→                      />
+  1375→                    </div>
+  1376→                  )}
+  1377→                  <Separator />
+  1378→                  <div className="flex justify-between items-center">
+  1379→                    <span className="text-sm text-muted-foreground">Member Since</span>
+  1380→                    <span className="text-sm font-medium">{formatDate(selectedCustomer.createdAt)}</span>
+  1381→                  </div>
+  1382→                </div>
+  1383→
+  1384→                {/* Loyalty Card — Phase 3 loyalty points system */}
+  1385→                <LoyaltyCard
+  1386→                  customerId={selectedCustomer.id}
+  1387→                  onRedeemed={() => {
+  1388→                    // Refresh the customers list so the loyaltyPoints column
+  1389→                    // in the table stays in sync after a redemption.
+  1390→                    void queryClient.invalidateQueries({ queryKey: ['customers'] });
+  1391→                  }}
+  1392→                />
+  1393→
+  1394→                {/* Debt Aging Breakdown */}
+  1395→                {totalAging > 0 && (
+  1396→                  <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
+  1397→                    <h3 className="font-semibold text-sm flex items-center gap-2">
+  1398→                      <Clock className="h-4 w-4" /> Debt Aging Breakdown
+  1399→                    </h3>
+  1400→                    <div className="space-y-2">
+  1401→                      {[
+  1402→                        { label: 'Current', amount: aging.current, color: 'bg-green-500' },
+  1403→                        { label: '1-30 days', amount: aging.thirty, color: 'bg-yellow-500' },
+  1404→                        { label: '31-60 days', amount: aging.sixty, color: 'bg-orange-500' },
+  1405→                        { label: '61-90 days', amount: aging.ninety, color: 'bg-red-500' },
+  1406→                        { label: '90+ days', amount: aging.overNinety, color: 'bg-red-800' },
+  1407→                      ].map(bucket => (
+  1408→                        <div key={bucket.label} className="flex items-center gap-2">
+  1409→                          <span className={`w-2.5 h-2.5 rounded-full ${bucket.color} shrink-0`} />
+  1410→                          <span className="text-xs text-muted-foreground w-20">{bucket.label}</span>
+  1411→                          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+  1412→                            <div className={`h-full ${bucket.color} rounded-full`} style={{ width: `${totalAging > 0 ? (bucket.amount / totalAging * 100) : 0}%` }} />
+  1413→                          </div>
+  1414→                          <span className="text-xs font-medium w-20 text-right">{formatKES(bucket.amount)}</span>
+  1415→                        </div>
+  1416→                      ))}
+  1417→                    </div>
+  1418→                  </div>
+  1419→                )}
+  1420→
+  1421→                {/* Quick Actions */}
+  1422→                <div className="space-y-2">
+  1423→                  {selectedCustomer.currentDebtBalance > 0 && (
+  1424→                    <Button
+  1425→                      className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+  1426→                      onClick={() => {
+  1427→                        const firstActiveDebt = activeDebts[0];
+  1428→                        if (firstActiveDebt) setSelectedDebtLedgerId(firstActiveDebt.id);
+  1429→                        setDebtPaymentOpen(true);
+  1430→                      }}
+  1431→                    >
+  1432→                      <HandCoins className="mr-2 h-4 w-4" /> Record Payment
+  1433→                    </Button>
+  1434→                  )}
+  1435→                  {hasOverdueDebt && (
+  1436→                    <Button
+  1437→                      variant="outline"
+  1438→                      className="w-full"
+  1439→                      onClick={() => toast.info(`SMS reminder would be sent to ${selectedCustomer.phone || 'N/A'}`)}
+  1440→                    >
+  1441→                      <Bell className="mr-2 h-4 w-4" /> Send Reminder
+  1442→                    </Button>
+  1443→                  )}
+  1444→                  <Button
+  1445→                    variant="outline"
+  1446→                    className="w-full"
+  1447→                    onClick={() => {
+  1448→                      setSelectedCustomer(null);
+  1449→                      setActiveTab('transactions');
+  1450→                    }}
+  1451→                  >
+  1452→                    <ShoppingBag className="mr-2 h-4 w-4" /> View Transactions
+  1453→                  </Button>
+  1454→                  <Button
+  1455→                    variant="outline"
+  1456→                    className="w-full gap-2"
+  1457→                    onClick={() => {
+  1458→                      if (selectedCustomer) {
+  1459→                        setHistoryCustomer(selectedCustomer);
+  1460→                        setHistoryOpen(true);
+  1461→                        setSelectedCustomer(null);
+  1462→                      }
+  1463→                    }}
+  1464→                  >
+  1465→                    <History className="h-4 w-4" /> View Account / History
+  1466→                  </Button>
+  1467→                </div>
+  1468→
+  1469→                <Separator />
+  1470→
+  1471→                {/* Transaction History */}
+  1472→                <div>
+  1473→                  <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+  1474→                    <ShoppingBag className="h-4 w-4" /> Recent Transactions
+  1475→                  </h3>
+  1476→                  {customerTransactions.length === 0 ? (
+  1477→                    <div className="flex flex-col items-center py-6 gap-2">
+  1478→                      <div className="p-3 rounded-full bg-muted/30">
+  1479→                        <FileText className="h-6 w-6 text-muted-foreground/30" />
+  1480→                      </div>
+  1481→                      <p className="text-sm text-muted-foreground">No recent transactions</p>
+  1482→                    </div>
+  1483→                  ) : (
+  1484→                    <div className="space-y-2 max-h-[250px] overflow-y-auto">
+  1485→                      {customerTransactions.map((txn) => (
+  1486→                        <div key={txn.id} className="flex items-center justify-between p-2.5 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
+  1487→                          <div className="space-y-0.5">
+  1488→                            <p className="text-sm font-medium">{txn.receiptNumber}</p>
+  1489→                            <p className="text-xs text-muted-foreground">{formatDateTime(txn.createdAt)}</p>
+  1490→                          </div>
+  1491→                          <div className="flex items-center gap-2">
+  1492→                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${getPaymentMethodBadge(txn.paymentMethod)}`}>
+  1493→                              {getPaymentMethodIcon(txn.paymentMethod)}
+  1494→                              {txn.paymentMethod}
+  1495→                            </span>
+  1496→                            <span className="text-sm font-semibold">{formatKES(txn.totalAmount)}</span>
+  1497→                          </div>
+  1498→                        </div>
+  1499→                      ))}
+  1500→                    </div>
+  1501→                  )}
+  1502→                </div>
+  1503→
+  1504→                <Separator />
+  1505→
+  1506→                {/* Debt History */}
+  1507→                <div>
+  1508→                  <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+  1509→                    <CircleDollarSign className="h-4 w-4" /> Debt History
+  1510→                  </h3>
+  1511→                  {debts.length === 0 ? (
+  1512→                    <div className="flex flex-col items-center py-6 gap-2">
+  1513→                      <div className="p-3 rounded-full bg-muted/30">
+  1514→                        <CircleDollarSign className="h-6 w-6 text-muted-foreground/30" />
+  1515→                      </div>
+  1516→                      <p className="text-sm text-muted-foreground">No debt records</p>
+  1517→                    </div>
+  1518→                  ) : (
+  1519→                    <div className="space-y-3 max-h-[300px] overflow-y-auto">
+  1520→                      {debts.map((debt) => (
+  1521→                        <Card key={debt.id} className="bg-muted/5">
+  1522→                          <CardContent className="p-3">
+  1523→                            <div className="flex justify-between items-start">
+  1524→                              <div>
+  1525→                                <p className="text-sm font-medium">{formatKES(debt.amountOwed)}</p>
+  1526→                                <p className="text-xs text-muted-foreground">Due: {formatDate(debt.dueDate)}</p>
+  1527→                              </div>
+  1528→                              <Badge
+  1529→                                variant={debt.status === 'OVERDUE' ? 'destructive' : debt.status === 'SETTLED' ? 'secondary' : 'outline'}
+  1530→                                className="text-[10px]"
+  1531→                              >
+  1532→                                {debt.status}
+  1533→                              </Badge>
+  1534→                            </div>
+  1535→                            <Progress
+  1536→                              value={debt.amountOwed > 0 ? (debt.amountPaid / debt.amountOwed) * 100 : 0}
+  1537→                              className="mt-2 h-1.5"
+  1538→                            />
+  1539→                            <div className="flex justify-between mt-1">
+  1540→                              <p className="text-xs text-muted-foreground">Paid: {formatKES(debt.amountPaid)}</p>
+  1541→                              <p className="text-xs text-muted-foreground">of {formatKES(debt.amountOwed)}</p>
+  1542→                            </div>
+  1543→                          </CardContent>
+  1544→                        </Card>
+  1545→                      ))}
+  1546→                    </div>
+  1547→                  )}
+  1548→                </div>
+  1549→              </div>
+  1550→            );
+  1551→          })()}
+  1552→        </SheetContent>
+  1553→      </Sheet>
+  1554→
+  1555→      {/* Customer History Dialog */}
+  1556→      <CustomerHistoryDialog
+  1557→        customer={historyCustomer}
+  1558→        open={historyOpen}
+  1559→        onOpenChange={(open) => {
+  1560→          setHistoryOpen(open);
+  1561→          if (!open) setHistoryCustomer(null);
+  1562→        }}
+  1563→        storeId={currentStoreId}
+  1564→      />
+  1565→    </div>
+  1566→  );
+  1567→}
+  1568→

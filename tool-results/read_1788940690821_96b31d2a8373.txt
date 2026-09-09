@@ -1,0 +1,967 @@
+     1→'use client';
+     2→
+     3→import React, { useEffect, useState, useMemo } from 'react';
+     4→import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+     5→import { formatKES, type CustomerItem } from '@/lib/api';
+     6→import Decimal from 'decimal.js';
+     7→import { toDec, round2 } from '@/lib/utils/financialMath';
+     8→import type { PaymentMethod } from '@/lib/types';
+     9→import { StkStatusPanel } from '@/components/pos/stk-status-panel';
+    10→import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
+    11→import { Button } from '@/components/ui/button';
+    12→import { Input } from '@/components/ui/input';
+    13→import { Label } from '@/components/ui/label';
+    14→import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+    15→import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+    16→import { Separator } from '@/components/ui/separator';
+    17→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    18→import { Badge } from '@/components/ui/badge';
+    19→import {
+    20→  CreditCard, Banknote, Wallet, Split, Smartphone,
+    21→  AlertCircle, Loader2, AlertTriangle, CheckCircle, ExternalLink,
+    22→  Check, ChevronLeft, ChevronRight, ShoppingCart, User, Tag, Receipt,
+    23→} from 'lucide-react';
+    24→
+    25→// ─── Shared checkout dialog (ResponsiveDialog) ───────────────────────────────
+    26→// Used by both desktop & mobile POS so the payment flow stays consistent.
+    27→// Order: Cash → Debt → Either/Split → M-Pesa.
+    28→//
+    29→// Multi-step flow (added enhancement):
+    30→//   Step 1 — Customer & Payment Method
+    31→//   Step 2 — Payment Details (amounts, split payments, M-Pesa phone)
+    32→//   Step 3 — Review & Confirm (order summary + Process Payment)
+    33→
+    34→export interface CheckoutDialogProps {
+    35→  open: boolean;
+    36→  onOpenChange: (open: boolean) => void;
+    37→  finalTotal: number;
+    38→  totalDiscount: number;
+    39→  paymentMethod: PaymentMethod;
+    40→  setPaymentMethod: (m: PaymentMethod) => void;
+    41→  cashReceived: string;
+    42→  setCashReceived: (v: string) => void;
+    43→  change: number;
+    44→  selectedCustomer: string;
+    45→  customers: CustomerItem[];
+    46→  splitCashAmount: string;
+    47→  setSplitCashAmount: (v: string) => void;
+    48→  splitMpesaAmount: string;
+    49→  setSplitMpesaAmount: (v: string) => void;
+    50→  mpesaPhone: string;
+    51→  setMpesaPhone: (v: string) => void;
+    52→  mpesaStatus: 'idle' | 'processing' | 'success' | 'failed';
+    53→  setMpesaStatus: (s: 'idle' | 'processing' | 'success' | 'failed') => void;
+    54→  stkCheckoutRequestId: string;
+    55→  stkResultDesc: string;
+    56→  stkPolling: boolean;
+    57→  mpesaMutation: { isPending: boolean; mutate: (data: { phoneNumber: string; amount: number; accountReference: string; transactionDesc: string }) => void };
+    58→  checkoutMutation: { isPending: boolean };
+    59→  onSendStkPush: () => void;
+    60→  onRetryStk: () => void;
+    61→  onCompleteSale: () => void;
+    62→  /** Optional cart items for the review/confirm step order summary */
+    63→  cartItems?: Array<{
+    64→    productId: string;
+    65→    productName: string;
+    66→    quantity: number;
+    67→    pricePerUnit: number;
+    68→    lineTotal: number;
+    69→    discountPercent?: number;
+    70→  }>;
+    71→  /** Subtotal (pre-discount, pre-tax) for the order summary */
+    72→  subtotal?: number;
+    73→  /** Tax amount for the order summary */
+    74→  taxAmount?: number;
+    75→}
+    76→
+    77→const PAYMENT_METHODS: {
+    78→  value: PaymentMethod;
+    79→  label: string;
+    80→  icon: React.ElementType;
+    81→  desc: string;
+    82→  color: string;
+    83→  /** Tailwind gradient classes for the selected state border + icon tint */
+    84→  selectedGradient: string;
+    85→  /** Tailwind gradient for the icon circle when selected */
+    86→  iconGradient: string;
+    87→}[] = [
+    88→  {
+    89→    value: 'CASH', label: 'Cash', icon: Banknote, desc: 'Receive cash & give change', color: 'text-green-600',
+    90→    selectedGradient: 'from-emerald-500 to-green-600',
+    91→    iconGradient: 'bg-gradient-to-br from-emerald-500 to-green-600 text-white',
+    92→  },
+    93→  {
+    94→    value: 'DEBT', label: 'Debt', icon: Wallet, desc: 'Put it on a customer account', color: 'text-amber-600',
+    95→    selectedGradient: 'from-amber-500 to-orange-600',
+    96→    iconGradient: 'bg-gradient-to-br from-amber-500 to-orange-600 text-white',
+    97→  },
+    98→  {
+    99→    value: 'SPLIT', label: 'Either / Split', icon: Split, desc: 'Cash + M-Pesa combined', color: 'text-purple-600',
+   100→    selectedGradient: 'from-fuchsia-500 to-purple-600',
+   101→    iconGradient: 'bg-gradient-to-br from-fuchsia-500 to-purple-600 text-white',
+   102→  },
+   103→  {
+   104→    value: 'MPESA', label: 'M-Pesa', icon: Smartphone, desc: 'STK push to customer phone', color: 'text-blue-600',
+   105→    selectedGradient: 'from-sky-500 to-blue-600',
+   106→    iconGradient: 'bg-gradient-to-br from-sky-500 to-blue-600 text-white',
+   107→  },
+   108→];
+   109→
+   110→type Step = 1 | 2 | 3;
+   111→
+   112→export function CheckoutDialog(props: CheckoutDialogProps) {
+   113→  const {
+   114→    open, onOpenChange, finalTotal, totalDiscount,
+   115→    paymentMethod, setPaymentMethod,
+   116→    cashReceived, setCashReceived, change,
+   117→    selectedCustomer, customers,
+   118→    splitCashAmount, setSplitCashAmount, splitMpesaAmount, setSplitMpesaAmount,
+   119→    mpesaPhone, setMpesaPhone, mpesaStatus, setMpesaStatus,
+   120→    stkCheckoutRequestId, stkResultDesc, stkPolling,
+   121→    mpesaMutation, checkoutMutation,
+   122→    onSendStkPush, onRetryStk, onCompleteSale,
+   123→    cartItems, subtotal, taxAmount,
+   124→  } = props;
+   125→
+   126→  const customer = customers.find((c) => c.id === selectedCustomer);
+   127→  const debtAvailable = customer ? Math.max(0, customer.debtLimit - customer.currentDebtBalance) : 0;
+   128→  const exceedsDebt = customer ? finalTotal > debtAvailable : false;
+   129→
+   130→  const cashValid = !!cashReceived && Number(cashReceived) >= finalTotal;
+   131→  const splitValid = (Number(splitCashAmount) || 0) + (Number(splitMpesaAmount) || 0) >= finalTotal && (Number(splitMpesaAmount) || 0) > 0 ? !!mpesaPhone && mpesaPhone.length >= 9 : true;
+   132→  const mpesaValid = !!mpesaPhone && mpesaPhone.length >= 9;
+   133→
+   134→  // Step state — start at step 1 (Customer & Payment Method)
+   135→  const [step, setStep] = useState<Step>(1);
+   136→  // Direction of step transition (for slide animation)
+   137→  const [stepDirection, setStepDirection] = useState<'right' | 'left'>('right');
+   138→
+   139→  // Respect prefers-reduced-motion: when true, framer-motion transitions are
+   140→  // reduced to opacity-only (no translate/scale) for vestibular safety.
+   141→  const prefersReducedMotion = useReducedMotion();
+   142→
+   143→  // Reset M-Pesa status when payment method changes (away from MPESA)
+   144→  useEffect(() => {
+   145→    if (paymentMethod !== 'MPESA' && paymentMethod !== 'SPLIT' && mpesaStatus !== 'idle') {
+   146→      setMpesaStatus('idle');
+   147→    }
+   148→  }, [paymentMethod, mpesaStatus, setMpesaStatus]);
+   149→
+   150→  // Reset to step 1 when dialog opens
+   151→  // (deferred via requestAnimationFrame to avoid cascading-renders lint warning)
+   152→  useEffect(() => {
+   153→    if (!open) return;
+   154→    const id = requestAnimationFrame(() => {
+   155→      setStep(1);
+   156→      setStepDirection('right');
+   157→    });
+   158→    return () => cancelAnimationFrame(id);
+   159→  }, [open]);
+   160→
+   161→  const isProcessingMpesa = mpesaStatus === 'processing' || mpesaStatus === 'success' || mpesaStatus === 'failed';
+   162→  const showMpesaPanel = (paymentMethod === 'MPESA' || paymentMethod === 'SPLIT');
+   163→
+   164→  // Compute derived totals for the order summary
+   165→  // FINANCIAL MATH AUDIT: VAT is INSIDE the (VAT-inclusive) line totals.
+   166→  // The fallback tax preview extracts the per-line VAT component in Decimal
+   167→  // (never `Math.round(subtotal × 0.16)` on top — that double-counted VAT
+   168→  // and diverged from the server's per-line taxRate computation).
+   169→  const summarySubtotal = subtotal ?? cartItems?.reduce((sum, i) => sum + i.lineTotal, 0) ?? 0;
+   170→  const summaryTax = taxAmount ?? round2(
+   171→    (cartItems ?? []).reduce((sum, i) => {
+   172→      const rate = Math.min(100, Math.max(0, i.taxRate || 0));
+   173→      if (rate === 0) return sum;
+   174→      const gross = toDec(i.lineTotal);
+   175→      return sum.plus(gross.minus(gross.div(1 + rate / 100).toDecimalPlaces(2, Decimal.ROUND_HALF_UP)));
+   176→    }, new Decimal(0))
+   177→  );
+   178→  const summaryTotalItems = cartItems?.reduce((sum, i) => sum + i.quantity, 0) ?? 0;
+   179→
+   180→  // Validation per step
+   181→  const step1Valid = true; // Payment method is always selected (defaults to CASH)
+   182→  const step2Valid = useMemo(() => {
+   183→    if (paymentMethod === 'CASH') return cashValid;
+   184→    if (paymentMethod === 'DEBT') return !!selectedCustomer && selectedCustomer !== 'walk-in' && !exceedsDebt;
+   185→    if (paymentMethod === 'SPLIT') return splitValid;
+   186→    if (paymentMethod === 'MPESA') return mpesaValid;
+   187→    return false;
+   188→  }, [paymentMethod, cashValid, selectedCustomer, exceedsDebt, splitValid, mpesaValid]);
+   189→
+   190→  // Show the M-Pesa processing panel as a special "step 2.5" — when mpesa is processing/success/failed,
+   191→  // we still show step 2 content (STK status) but the footer changes via renderFooter.
+   192→  const goToStep = (nextStep: Step) => {
+   193→    if (nextStep > step) setStepDirection('right');
+   194→    else setStepDirection('left');
+   195→    setStep(nextStep);
+   196→  };
+   197→
+   198→  // Build the footer buttons depending on state
+   199→  const renderFooter = () => {
+   200→    // M-Pesa processing/success/failed states override step navigation
+   201→    if (mpesaStatus === 'processing') {
+   202→      return (
+   203→        <>
+   204→          <Button variant="outline" onClick={() => { onRetryStk(); }} disabled={stkPolling}>
+   205→            Cancel
+   206→          </Button>
+   207→          <a
+   208→            href="https://daraja.safaricom.co.ke"
+   209→            target="_blank"
+   210→            rel="noopener noreferrer"
+   211→            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-input bg-background text-sm font-medium hover:bg-muted"
+   212→          >
+   213→            <ExternalLink className="h-3.5 w-3.5" /> Open M-Pesa Daraja
+   214→          </a>
+   215→        </>
+   216→      );
+   217→    }
+   218→    if (mpesaStatus === 'success') {
+   219→      return (
+   220→        <>
+   221→          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+   222→          <Button
+   223→            onClick={onCompleteSale}
+   224→            disabled={checkoutMutation.isPending}
+   225→            className="bg-green-600 hover:bg-green-700 text-white btn-press"
+   226→          >
+   227→            {checkoutMutation.isPending ? (
+   228→              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Completing…</>
+   229→            ) : (
+   230→              <><CheckCircle className="mr-2 h-4 w-4" />Complete Sale</>
+   231→            )}
+   232→          </Button>
+   233→        </>
+   234→      );
+   235→    }
+   236→    if (mpesaStatus === 'failed') {
+   237→      return (
+   238→        <>
+   239→          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+   240→          <Button onClick={onRetryStk}>Try Again</Button>
+   241→        </>
+   242→      );
+   243→    }
+   244→
+   245→    // Step-aware footer: Back/Next/Process Payment
+   246→    if (step === 1) {
+   247→      return (
+   248→        <>
+   249→          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+   250→          <Button
+   251→            onClick={() => goToStep(2)}
+   252→            disabled={!step1Valid}
+   253→            className="btn-press"
+   254→          >
+   255→            Next: Payment Details
+   256→            <ChevronRight className="ml-1.5 h-4 w-4" />
+   257→          </Button>
+   258→        </>
+   259→      );
+   260→    }
+   261→    if (step === 2) {
+   262→      // For M-Pesa: show "Send STK Push" instead of "Next"
+   263→      if (showMpesaPanel && !isProcessingMpesa) {
+   264→        return (
+   265→          <>
+   266→            <Button variant="outline" onClick={() => goToStep(1)}>
+   267→              <ChevronLeft className="mr-1.5 h-4 w-4" />
+   268→              Back
+   269→            </Button>
+   270→            <Button
+   271→              onClick={onSendStkPush}
+   272→              disabled={mpesaMutation.isPending || !mpesaValid}
+   273→              className="bg-green-600 hover:bg-green-700 text-white btn-press"
+   274→            >
+   275→              {mpesaMutation.isPending ? (
+   276→                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending STK…</>
+   277→              ) : (
+   278→                <><Smartphone className="mr-2 h-4 w-4" />Send STK Push</>
+   279→              )}
+   280→            </Button>
+   281→          </>
+   282→        );
+   283→      }
+   284→      return (
+   285→        <>
+   286→          <Button variant="outline" onClick={() => goToStep(1)}>
+   287→            <ChevronLeft className="mr-1.5 h-4 w-4" />
+   288→            Back
+   289→          </Button>
+   290→          <Button
+   291→            onClick={() => goToStep(3)}
+   292→            disabled={!step2Valid}
+   293→            className="btn-press"
+   294→          >
+   295→            Next: Review
+   296→            <ChevronRight className="ml-1.5 h-4 w-4" />
+   297→          </Button>
+   298→        </>
+   299→      );
+   300→    }
+   301→    // Step 3: Review & Confirm — "Process Payment" with gradient + loading spinner
+   302→    return (
+   303→      <>
+   304→        <Button variant="outline" onClick={() => goToStep(2)} disabled={isProcessingMpesa}>
+   305→          <ChevronLeft className="mr-1.5 h-4 w-4" />
+   306→          Back
+   307→        </Button>
+   308→        <Button
+   309→          onClick={onCompleteSale}
+   310→          disabled={checkoutMutation.isPending || !step2Valid}
+   311→          className="relative overflow-hidden bg-gradient-to-r from-emerald-600 via-emerald-500 to-amber-500 hover:from-emerald-700 hover:via-emerald-600 hover:to-amber-600 text-white shadow-lg shadow-emerald-500/30 btn-press"
+   312→        >
+   313→          {/* Glossy gradient sheen on top */}
+   314→          <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/20 to-transparent" aria-hidden />
+   315→          {checkoutMutation.isPending ? (
+   316→            <span className="relative z-10 flex items-center">
+   317→              <Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing…
+   318→            </span>
+   319→          ) : (
+   320→            <span className="relative z-10 flex items-center">
+   321→              <CheckCircle className="mr-2 h-4 w-4" />Process Payment
+   322→            </span>
+   323→          )}
+   324→        </Button>
+   325→      </>
+   326→    );
+   327→  };
+   328→
+   329→  // Step indicator (3 steps with checkmarks for completed steps)
+   330→  const renderStepIndicator = () => {
+   331→    const steps = [
+   332→      { n: 1 as Step, label: 'Customer & Method', icon: User },
+   333→      { n: 2 as Step, label: 'Payment Details', icon: CreditCard },
+   334→      { n: 3 as Step, label: 'Review & Confirm', icon: Receipt },
+   335→    ];
+   336→    return (
+   337→      <div className="flex items-center justify-between gap-2 mb-4 select-none">
+   338→        {steps.map((s, idx) => {
+   339→          const StepIcon = s.icon;
+   340→          const isComplete = step > s.n;
+   341→          const isCurrent = step === s.n;
+   342→          return (
+   343→            <React.Fragment key={s.n}>
+   344→              <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+   345→                <div
+   346→                  className={`relative flex items-center justify-center h-8 w-8 rounded-full border-2 transition-all ${
+   347→                    isComplete
+   348→                      ? 'bg-green-600 border-green-600 text-white'
+   349→                      : isCurrent
+   350→                        ? 'bg-primary border-primary text-primary-foreground animate-pulse-active'
+   351→                        : 'bg-muted border-border text-muted-foreground'
+   352→                  }`}
+   353→                  aria-current={isCurrent ? 'step' : undefined}
+   354→                  aria-label={`Step ${s.n}: ${s.label}${isComplete ? ' (completed)' : isCurrent ? ' (current)' : ''}`}
+   355→                >
+   356→                  {isComplete ? (
+   357→                    <Check className="h-4 w-4" />
+   358→                  ) : (
+   359→                    <StepIcon className="h-3.5 w-3.5" />
+   360→                  )}
+   361→                </div>
+   362→                <span className={`text-[9px] font-medium text-center leading-tight truncate w-full ${isCurrent ? 'text-foreground' : 'text-muted-foreground'}`}>
+   363→                  {s.label}
+   364→                </span>
+   365→              </div>
+   366→              {idx < steps.length - 1 && (
+   367→                <div
+   368→                  className={`h-0.5 flex-1 mt-[-12px] rounded transition-colors ${step > s.n ? 'bg-green-600' : 'bg-border'}`}
+   369→                  aria-hidden
+   370→                />
+   371→              )}
+   372→            </React.Fragment>
+   373→          );
+   374→        })}
+   375→      </div>
+   376→    );
+   377→  };
+   378→
+   379→  // Order summary sidebar (used in steps 2 & 3)
+   380→  const renderOrderSummary = (compact: boolean = false) => {
+   381→    if (!cartItems || cartItems.length === 0) return null;
+   382→    return (
+   383→      <div className={`rounded-lg border bg-muted/30 p-3 space-y-2 ${compact ? 'text-xs' : 'text-sm'}`}>
+   384→        <div className="flex items-center justify-between">
+   385→          <span className="font-medium flex items-center gap-1.5">
+   386→            <ShoppingCart className="h-3.5 w-3.5" />
+   387→            Order Summary
+   388→          </span>
+   389→          <Badge variant="secondary" className="text-[10px]">
+   390→            {summaryTotalItems} item{summaryTotalItems !== 1 ? 's' : ''}
+   391→          </Badge>
+   392→        </div>
+   393→        <div className={`max-h-32 overflow-y-auto scrollbar-thin space-y-1 ${compact ? 'text-[11px]' : ''}`}>
+   394→          {cartItems.map((item) => (
+   395→            <div key={item.productId} className="flex items-center justify-between gap-2 py-0.5">
+   396→              <div className="min-w-0 flex-1">
+   397→                <p className="truncate">{item.productName}</p>
+   398→                <p className="text-[10px] text-muted-foreground">
+   399→                  {item.quantity} × {formatKES(item.pricePerUnit)}
+   400→                  {item.discountPercent && item.discountPercent > 0 ? ` · -${item.discountPercent}%` : ''}
+   401→                </p>
+   402→              </div>
+   403→              <span className="font-medium shrink-0">{formatKES(item.lineTotal)}</span>
+   404→            </div>
+   405→          ))}
+   406→        </div>
+   407→        <Separator />
+   408→        <div className="space-y-0.5 text-[11px]">
+   409→          <div className="flex justify-between">
+   410→            <span className="text-muted-foreground">Subtotal (VAT incl.)</span>
+   411→            <span>{formatKES(summarySubtotal)}</span>
+   412→          </div>
+   413→          {totalDiscount > 0 && (
+   414→            <div className="flex justify-between text-green-600">
+   415→              <span className="flex items-center gap-0.5"><Tag className="h-2.5 w-2.5" />Discount</span>
+   416→              <span>-{formatKES(totalDiscount)}</span>
+   417→            </div>
+   418→          )}
+   419→          <div className="flex justify-between">
+   420→            <span className="text-muted-foreground">VAT (incl. in prices)</span>
+   421→            <span>{formatKES(summaryTax)}</span>
+   422→          </div>
+   423→          <Separator />
+   424→          <div className="flex justify-between font-bold">
+   425→            <span>Total</span>
+   426→            <span className="text-gradient">{formatKES(finalTotal)}</span>
+   427→          </div>
+   428→        </div>
+   429→      </div>
+   430→    );
+   431→  };
+   432→
+   433→  // Success screen — shown briefly when mpesaStatus === 'success'
+   434→  const renderSuccessScreen = () => (
+   435→    <div className="text-center py-6 space-y-3 animate-scale-in">
+   436→      <div className="relative mx-auto w-16 h-16">
+   437→        <div className="absolute inset-0 rounded-full bg-green-100 dark:bg-green-950/40 animate-ping opacity-75" />
+   438→        <div className="relative flex items-center justify-center w-16 h-16 rounded-full bg-green-600 text-white shadow-lg">
+   439→          <Check className="h-8 w-8" />
+   440→        </div>
+   441→      </div>
+   442→      <div>
+   443→        <p className="text-lg font-bold text-green-700 dark:text-green-400">Payment Authorised!</p>
+   444→        <p className="text-sm text-muted-foreground">
+   445→          M-Pesa STK push was accepted. Tap &ldquo;Complete Sale&rdquo; to finalise the receipt.
+   446→        </p>
+   447→      </div>
+   448→    </div>
+   449→  );
+   450→
+   451→  // Framer-motion variants for step slide transitions (respects prefers-reduced-motion)
+   452→  const stepVariants = {
+   453→    enter: (dir: 'right' | 'left') => ({
+   454→      opacity: 0,
+   455→      x: prefersReducedMotion ? 0 : dir === 'right' ? 24 : -24,
+   456→    }),
+   457→    center: {
+   458→      opacity: 1,
+   459→      x: 0,
+   460→    },
+   461→    exit: (dir: 'right' | 'left') => ({
+   462→      opacity: 0,
+   463→      x: prefersReducedMotion ? 0 : dir === 'right' ? -24 : 24,
+   464→    }),
+   465→  };
+   466→
+   467→  const stepTransition = {
+   468→    duration: prefersReducedMotion ? 0.15 : 0.3,
+   469→    ease: [0.16, 1, 0.3, 1] as [number, number, number, number],
+   470→  };
+   471→
+   472→  return (
+   473→    <ResponsiveDialog
+   474→      open={open}
+   475→      onOpenChange={(o) => {
+   476→        // Prevent closing while STK push is actively processing
+   477→        if (!o && mpesaStatus === 'processing') return;
+   478→        onOpenChange(o);
+   479→      }}
+   480→      title={
+   481→        <span className="flex items-center gap-2">
+   482→          <CreditCard className="h-5 w-5 text-primary" />
+   483→          Complete Payment
+   484→          {step > 1 && (
+   485→            <Badge variant="outline" className="text-[10px] ml-1">Step {step}/3</Badge>
+   486→          )}
+   487→        </span>
+   488→      }
+   489→      description={
+   490→        <span className="break-words">
+   491→          Total: <span className="font-bold text-primary">{formatKES(finalTotal)}</span>
+   492→          {totalDiscount > 0 && (
+   493→            <span className="text-green-600 text-xs ml-2">(Save {formatKES(totalDiscount)})</span>
+   494→          )}
+   495→        </span>
+   496→      }
+   497→      size="md"
+   498→      footer={renderFooter()}
+   499→    >
+   500→      <div className="space-y-4">
+   501→        {/* Step progress indicator — always visible */}
+   502→        {mpesaStatus !== 'success' && renderStepIndicator()}
+   503→
+   504→        {/* === SUCCESS SCREEN (overrides steps) === */}
+   505→        {mpesaStatus === 'success' ? (
+   506→          renderSuccessScreen()
+   507→        ) : (
+   508→          <AnimatePresence mode="wait" custom={stepDirection} initial={false}>
+   509→            {/* === STEP 1: Customer & Payment Method === */}
+   510→            {step === 1 && (
+   511→              <motion.div
+   512→                key="step-1"
+   513→                custom={stepDirection}
+   514→                variants={stepVariants}
+   515→                initial="enter"
+   516→                animate="center"
+   517→                exit="exit"
+   518→                transition={stepTransition}
+   519→                className="space-y-4"
+   520→              >
+   521→                {/* Customer summary */}
+   522→                <div>
+   523→                  <Label className="text-sm font-medium flex items-center gap-1.5">
+   524→                    <User className="h-3.5 w-3.5" />
+   525→                    Customer
+   526→                  </Label>
+   527→                  <div className="mt-2 p-3 rounded-lg border bg-muted/30 flex items-center gap-2">
+   528→                    {customer ? (
+   529→                      <>
+   530→                        <Avatar className="h-8 w-8">
+   531→                          <AvatarFallback>{customer.name.charAt(0).toUpperCase()}</AvatarFallback>
+   532→                        </Avatar>
+   533→                        <div className="min-w-0 flex-1">
+   534→                          <p className="text-sm font-medium truncate">{customer.name}</p>
+   535→                          <p className="text-xs text-muted-foreground truncate">
+   536→                            {customer.phone || 'No phone'} · Debt limit {formatKES(customer.debtLimit)}
+   537→                          </p>
+   538→                        </div>
+   539→                      </>
+   540→                    ) : (
+   541→                      <>
+   542→                        <Avatar className="h-8 w-8">
+   543→                          <AvatarFallback>W</AvatarFallback>
+   544→                        </Avatar>
+   545→                        <div className="min-w-0 flex-1">
+   546→                          <p className="text-sm font-medium">Walk-in Customer</p>
+   547→                          <p className="text-xs text-muted-foreground">No customer account selected</p>
+   548→                        </div>
+   549→                      </>
+   550→                    )}
+   551→                  </div>
+   552→                  <p className="text-[11px] text-muted-foreground mt-1">
+   553→                    Change customer from the cart sidebar before opening checkout.
+   554→                  </p>
+   555→                </div>
+   556→
+   557→                <Separator />
+   558→
+   559→                {/* Payment Method Selector — Cash, Debt, Either/Split, M-Pesa
+   560→                     Each card has icon, name, and selected state with gradient border */}
+   561→                <div>
+   562→                  <Label className="text-sm font-medium">Payment Method</Label>
+   563→                  <RadioGroup
+   564→                    value={paymentMethod}
+   565→                    onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}
+   566→                    className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2"
+   567→                  >
+   568→                    {PAYMENT_METHODS.map((m) => {
+   569→                      const Icon = m.icon;
+   570→                      const isSelected = paymentMethod === m.value;
+   571→                      return (
+   572→                        <div key={m.value} className="relative">
+   573→                          <RadioGroupItem value={m.value} id={`pm-${m.value}`} className="peer sr-only" />
+   574→                          <Label
+   575→                            htmlFor={`pm-${m.value}`}
+   576→                            className={`payment-method-card relative flex flex-col items-center gap-1.5 p-3 rounded-lg cursor-pointer hover:bg-muted/50 text-center min-h-[80px] justify-center overflow-hidden transition-all ${
+   577→                              isSelected
+   578→                                ? `text-white bg-gradient-to-br ${m.selectedGradient} shadow-md`
+   579→                                : 'border-2 border-border text-foreground'
+   580→                            }`}
+   581→                          >
+   582→                            {/* Selected state sheen */}
+   583→                            {isSelected && (
+   584→                              <span
+   585→                                className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/20 to-transparent"
+   586→                                aria-hidden
+   587→                              />
+   588→                            )}
+   589→                            {/* Icon — circle with gradient when selected, plain when not */}
+   590→                            <span
+   591→                              className={`relative z-10 flex items-center justify-center h-9 w-9 rounded-full ${
+   592→                                isSelected
+   593→                                  ? 'bg-white/25 backdrop-blur-sm text-white'
+   594→                                  : m.iconGradient
+   595→                              }`}
+   596→                            >
+   597→                              <Icon className="h-4 w-4" />
+   598→                            </span>
+   599→                            <span className="relative z-10 text-xs font-semibold leading-tight">{m.label}</span>
+   600→                            <span className={`relative z-10 text-[10px] leading-tight line-clamp-2 break-words ${isSelected ? 'text-white/85' : 'text-muted-foreground'}`}>{m.desc}</span>
+   601→                          </Label>
+   602→                        </div>
+   603→                      );
+   604→                    })}
+   605→                  </RadioGroup>
+   606→                </div>
+   607→
+   608→                {/* Order summary preview at bottom of step 1 */}
+   609→                {renderOrderSummary(true)}
+   610→              </motion.div>
+   611→            )}
+   612→
+   613→            {/* === STEP 2: Payment Details === */}
+   614→            {step === 2 && (
+   615→              <motion.div
+   616→                key="step-2"
+   617→                custom={stepDirection}
+   618→                variants={stepVariants}
+   619→                initial="enter"
+   620→                animate="center"
+   621→                exit="exit"
+   622→                transition={stepTransition}
+   623→                className="space-y-4"
+   624→              >
+   625→                {/* === CASH === */}
+   626→                {paymentMethod === 'CASH' && (
+   627→                  <div className="space-y-3">
+   628→                    <div>
+   629→                      <Label htmlFor="cashReceived">Cash Received</Label>
+   630→                      <Input
+   631→                        id="cashReceived"
+   632→                        type="number"
+   633→                        placeholder="0"
+   634→                        value={cashReceived}
+   635→                        onChange={(e) => setCashReceived(e.target.value)}
+   636→                        className="text-lg font-semibold mt-1"
+   637→                        autoFocus
+   638→                      />
+   639→                      {/* Quick cash buttons — exact, round up to 100/500/1000 */}
+   640→                      <div className="flex flex-wrap gap-1.5 mt-2">
+   641→                        {[
+   642→                          { label: 'Exact', amt: finalTotal },
+   643→                          { label: 'Round ↑', amt: Math.ceil(finalTotal / 100) * 100 },
+   644→                          { label: '+500', amt: Math.ceil(finalTotal / 500) * 500 },
+   645→                          { label: '+1000', amt: Math.ceil(finalTotal / 1000) * 1000 },
+   646→                        ].map((q, i) => (
+   647→                          <button
+   648→                            key={i}
+   649→                            type="button"
+   650→                            onClick={() => setCashReceived(String(q.amt))}
+   651→                            className="quick-amount-btn px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-background hover:bg-gradient-to-br hover:from-emerald-50 hover:to-green-50 hover:border-emerald-300 dark:hover:from-emerald-950/40 dark:hover:to-green-950/30 dark:hover:border-emerald-700 hover:text-emerald-700 dark:hover:text-emerald-300 transition-all min-h-[40px] flex-1"
+   652→                          >
+   653→                            <span className="block text-[10px] text-muted-foreground leading-tight">{q.label}</span>
+   654→                            <span className="block font-bold leading-tight tabular-nums">{formatKES(q.amt)}</span>
+   655→                          </button>
+   656→                        ))}
+   657→                      </div>
+   658→                    </div>
+   659→                    {change > 0 && (
+   660→                      <div className="relative overflow-hidden p-4 rounded-lg bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-950/40 dark:to-green-950/30 border-2 border-emerald-200 dark:border-emerald-900 flex items-center justify-between animate-scale-in shadow-sm">
+   661→                        {/* Decorative gradient sweep on the left edge */}
+   662→                        <span className="pointer-events-none absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-emerald-400 to-green-600" aria-hidden />
+   663→                        <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5 pl-1.5">
+   664→                          <Wallet className="h-5 w-5" />
+   665→                          Change Due
+   666→                        </span>
+   667→                        <span className="text-2xl sm:text-3xl font-extrabold text-emerald-700 dark:text-emerald-300 tabular-nums tracking-tight">
+   668→                          {formatKES(change)}
+   669→                        </span>
+   670→                      </div>
+   671→                    )}
+   672→                    {cashReceived && Number(cashReceived) < finalTotal && (
+   673→                      <Alert variant="destructive">
+   674→                        <AlertCircle className="h-4 w-4" />
+   675→                        <AlertTitle>Insufficient amount</AlertTitle>
+   676→                        <AlertDescription>Need {formatKES(finalTotal - Number(cashReceived))} more</AlertDescription>
+   677→                      </Alert>
+   678→                    )}
+   679→                  </div>
+   680→                )}
+   681→
+   682→                {/* === DEBT === */}
+   683→                {paymentMethod === 'DEBT' && (
+   684→                  <div className="space-y-3">
+   685→                    {!selectedCustomer || selectedCustomer === 'walk-in' ? (
+   686→                      <Alert>
+   687→                        <AlertCircle className="h-4 w-4" />
+   688→                        <AlertTitle>Customer Required</AlertTitle>
+   689→                        <AlertDescription>
+   690→                          Please select a customer (not walk-in) from the cart sidebar before proceeding with debt payment.
+   691→                        </AlertDescription>
+   692→                      </Alert>
+   693→                    ) : customer ? (
+   694→                      <>
+   695→                        <div className="p-3 rounded-lg border bg-muted/30 space-y-2">
+   696→                          <div className="flex items-center gap-2">
+   697→                            <Avatar className="h-9 w-9">
+   698→                              <AvatarFallback>{customer.name.charAt(0).toUpperCase()}</AvatarFallback>
+   699→                            </Avatar>
+   700→                            <div className="min-w-0">
+   701→                              <p className="font-medium text-sm truncate">{customer.name}</p>
+   702→                              <p className="text-xs text-muted-foreground truncate">{customer.phone || 'No phone on file'}</p>
+   703→                            </div>
+   704→                          </div>
+   705→                          <Separator />
+   706→                          <div className="grid grid-cols-2 gap-2 text-xs">
+   707→                            <div>
+   708→                              <p className="text-muted-foreground">Debt Limit</p>
+   709→                              <p className="font-semibold">{formatKES(customer.debtLimit)}</p>
+   710→                            </div>
+   711→                            <div>
+   712→                              <p className="text-muted-foreground">Current Debt</p>
+   713→                              <p className="font-semibold">{formatKES(customer.currentDebtBalance)}</p>
+   714→                            </div>
+   715→                            <div>
+   716→                              <p className="text-muted-foreground">Available</p>
+   717→                              <p className="font-semibold text-green-600">{formatKES(debtAvailable)}</p>
+   718→                            </div>
+   719→                            <div>
+   720→                              <p className="text-muted-foreground">This Sale</p>
+   721→                              <p className="font-semibold text-primary">{formatKES(finalTotal)}</p>
+   722→                            </div>
+   723→                          </div>
+   724→                        </div>
+   725→                        {exceedsDebt && (
+   726→                          <Alert variant="destructive">
+   727→                            <AlertTriangle className="h-4 w-4" />
+   728→                            <AlertTitle>Exceeds Debt Limit</AlertTitle>
+   729→                            <AlertDescription>
+   730→                              This sale ({formatKES(finalTotal)}) exceeds the customer&rsquo;s available debt ({formatKES(debtAvailable)}).
+   731→                              Collect partial cash or increase the debt limit on the customer record.
+   732→                            </AlertDescription>
+   733→                          </Alert>
+   734→                        )}
+   735→                        <p className="text-xs text-muted-foreground">
+   736→                          On checkout, this sale will create a debt ledger entry against <span className="font-semibold">{customer.name}</span>&rsquo;s account.
+   737→                        </p>
+   738→                      </>
+   739→                    ) : null}
+   740→                  </div>
+   741→                )}
+   742→
+   743→                {/* === SPLIT (Either) === */}
+   744→                {paymentMethod === 'SPLIT' && (
+   745→                  <div className="space-y-3 p-3 rounded-lg border bg-muted/30">
+   746→                    <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+   747→                      <Split className="h-3 w-3" /> Split payment between Cash and M-Pesa
+   748→                    </p>
+   749→                    <div className="grid grid-cols-2 gap-3">
+   750→                      <div>
+   751→                        <Label htmlFor="splitCash" className="text-xs flex items-center gap-1">
+   752→                          <Banknote className="h-3 w-3" /> Cash Amount
+   753→                        </Label>
+   754→                        <Input
+   755→                          id="splitCash"
+   756→                          type="number"
+   757→                          placeholder="0"
+   758→                          value={splitCashAmount}
+   759→                          onChange={(e) => {
+   760→                            setSplitCashAmount(e.target.value);
+   761→                            const remaining = finalTotal - Number(e.target.value);
+   762→                            if (remaining > 0) setSplitMpesaAmount(String(remaining));
+   763→                          }}
+   764→                          className="mt-1 text-sm font-semibold"
+   765→                          autoFocus
+   766→                        />
+   767→                      </div>
+   768→                      <div>
+   769→                        <Label htmlFor="splitMpesa" className="text-xs flex items-center gap-1">
+   770→                          <Smartphone className="h-3 w-3" /> M-Pesa Amount
+   771→                        </Label>
+   772→                        <Input
+   773→                          id="splitMpesa"
+   774→                          type="number"
+   775→                          placeholder="0"
+   776→                          value={splitMpesaAmount}
+   777→                          onChange={(e) => {
+   778→                            setSplitMpesaAmount(e.target.value);
+   779→                            const remaining = finalTotal - Number(e.target.value);
+   780→                            if (remaining > 0) setSplitCashAmount(String(remaining));
+   781→                          }}
+   782→                          className="mt-1 text-sm font-semibold"
+   783→                        />
+   784→                      </div>
+   785→                    </div>
+   786→                    <div>
+   787→                      <Label htmlFor="splitMpesaPhone" className="text-xs">M-Pesa Phone</Label>
+   788→                      <Input
+   789→                        id="splitMpesaPhone"
+   790→                        type="tel"
+   791→                        placeholder="0712 345 678"
+   792→                        value={mpesaPhone}
+   793→                        onChange={(e) => setMpesaPhone(e.target.value)}
+   794→                        className="mt-1 text-sm"
+   795→                      />
+   796→                    </div>
+   797→                    <div className="text-xs flex justify-between">
+   798→                      <span className="text-muted-foreground">Total Entered:</span>
+   799→                      <span className={`font-semibold ${(Number(splitCashAmount) || 0) + (Number(splitMpesaAmount) || 0) >= finalTotal ? 'text-green-600' : 'text-amber-600'}`}>
+   800→                        {formatKES((Number(splitCashAmount) || 0) + (Number(splitMpesaAmount) || 0))}
+   801→                        {((Number(splitCashAmount) || 0) + (Number(splitMpesaAmount) || 0)) < finalTotal && (
+   802→                          <span className="ml-1">· short {formatKES(finalTotal - (Number(splitCashAmount) || 0) - (Number(splitMpesaAmount) || 0))}</span>
+   803→                        )}
+   804→                      </span>
+   805→                    </div>
+   806→                    {/* Show STK push state for split's mpesa portion */}
+   807→                    {isProcessingMpesa && <StkStatusPanel
+   808→                      status={mpesaStatus}
+   809→                      stkCheckoutRequestId={stkCheckoutRequestId}
+   810→                      stkResultDesc={stkResultDesc}
+   811→                      stkPolling={stkPolling}
+   812→                      amount={Number(splitMpesaAmount) || 0}
+   813→                    />}
+   814→                  </div>
+   815→                )}
+   816→
+   817→                {/* === MPESA === */}
+   818→                {paymentMethod === 'MPESA' && (
+   819→                  <div className="space-y-3">
+   820→                    {mpesaStatus === 'idle' && (
+   821→                      <>
+   822→                        <div>
+   823→                          <Label htmlFor="mpesaPhone">M-Pesa Phone Number</Label>
+   824→                          <Input
+   825→                            id="mpesaPhone"
+   826→                            type="tel"
+   827→                            placeholder="0712 345 678"
+   828→                            value={mpesaPhone}
+   829→                            onChange={(e) => setMpesaPhone(e.target.value)}
+   830→                            className="mt-1"
+   831→                            autoFocus
+   832→                          />
+   833→                          <p className="text-[11px] text-muted-foreground mt-1">
+   834→                            An STK push will be sent to this number. The customer must enter their M-Pesa PIN to authorise the payment of <span className="font-semibold">{formatKES(finalTotal)}</span>.
+   835→                          </p>
+   836→                        </div>
+   837→                        <div className="flex items-center gap-2 p-2.5 rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900">
+   838→                          <Smartphone className="h-4 w-4 text-green-600 shrink-0" />
+   839→                          <p className="text-[11px] text-green-700 dark:text-green-300">
+   840→                            Using Safaricom Daraja API. Need to check credentials or test callback?{' '}
+   841→                            <a href="https://daraja.safaricom.co.ke" target="_blank" rel="noopener noreferrer" className="font-semibold underline inline-flex items-center gap-0.5">
+   842→                              Open M-Pesa Daraja <ExternalLink className="h-3 w-3" />
+   843→                            </a>
+   844→                          </p>
+   845→                        </div>
+   846→                      </>
+   847→                    )}
+   848→                    {isProcessingMpesa && (
+   849→                      <StkStatusPanel
+   850→                        status={mpesaStatus}
+   851→                        stkCheckoutRequestId={stkCheckoutRequestId}
+   852→                        stkResultDesc={stkResultDesc}
+   853→                        stkPolling={stkPolling}
+   854→                        amount={finalTotal}
+   855→                      />
+   856→                    )}
+   857→                  </div>
+   858→                )}
+   859→              </motion.div>
+   860→            )}
+   861→
+   862→            {/* === STEP 3: Review & Confirm === */}
+   863→            {step === 3 && (
+   864→              <motion.div
+   865→                key="step-3"
+   866→                custom={stepDirection}
+   867→                variants={stepVariants}
+   868→                initial="enter"
+   869→                animate="center"
+   870→                exit="exit"
+   871→                transition={stepTransition}
+   872→                className="space-y-4"
+   873→              >
+   874→                <div>
+   875→                  <Label className="text-sm font-medium flex items-center gap-1.5">
+   876→                    <Receipt className="h-3.5 w-3.5" />
+   877→                    Review Your Order
+   878→                  </Label>
+   879→                  <p className="text-[11px] text-muted-foreground mt-1">
+   880→                    Please review the order details below. Tap &ldquo;Process Payment&rdquo; to complete the sale.
+   881→                  </p>
+   882→                </div>
+   883→
+   884→                {/* Customer & payment method recap */}
+   885→                <div className="grid grid-cols-2 gap-2">
+   886→                  <div className="p-2.5 rounded-lg border bg-muted/30">
+   887→                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+   888→                      <User className="h-2.5 w-2.5" />
+   889→                      Customer
+   890→                    </p>
+   891→                    <p className="text-sm font-medium truncate">
+   892→                      {customer ? customer.name : 'Walk-in Customer'}
+   893→                    </p>
+   894→                  </div>
+   895→                  <div className="p-2.5 rounded-lg border bg-muted/30">
+   896→                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+   897→                      <CreditCard className="h-2.5 w-2.5" />
+   898→                      Payment Method
+   899→                    </p>
+   900→                    <p className="text-sm font-medium">
+   901→                      {PAYMENT_METHODS.find(m => m.value === paymentMethod)?.label || paymentMethod}
+   902→                    </p>
+   903→                  </div>
+   904→                </div>
+   905→
+   906→                {/* Order summary */}
+   907→                {renderOrderSummary(false)}
+   908→
+   909→                {/* Method-specific confirmation details */}
+   910→                {paymentMethod === 'CASH' && (
+   911→                  <div className="p-3 rounded-lg border bg-muted/30 space-y-1.5 text-sm">
+   912→                    <div className="flex justify-between">
+   913→                      <span className="text-muted-foreground">Cash Received</span>
+   914→                      <span className="font-semibold">{cashReceived ? formatKES(Number(cashReceived)) : '—'}</span>
+   915→                    </div>
+   916→                    {change > 0 && (
+   917→                      <div className="flex justify-between text-green-600">
+   918→                        <span>Change Due</span>
+   919→                        <span className="font-bold">{formatKES(change)}</span>
+   920→                      </div>
+   921→                    )}
+   922→                  </div>
+   923→                )}
+   924→                {paymentMethod === 'DEBT' && customer && (
+   925→                  <Alert>
+   926→                    <Wallet className="h-4 w-4" />
+   927→                    <AlertTitle>Debt Payment</AlertTitle>
+   928→                    <AlertDescription>
+   929→                      {formatKES(finalTotal)} will be added to {customer.name}&rsquo;s debt account.
+   930→                      Available credit after sale: {formatKES(Math.max(0, debtAvailable - finalTotal))}.
+   931→                    </AlertDescription>
+   932→                  </Alert>
+   933→                )}
+   934→                {paymentMethod === 'SPLIT' && (
+   935→                  <div className="p-3 rounded-lg border bg-muted/30 space-y-1.5 text-sm">
+   936→                    <div className="flex justify-between">
+   937→                      <span className="text-muted-foreground flex items-center gap-1">
+   938→                        <Banknote className="h-3 w-3" /> Cash Portion
+   939→                      </span>
+   940→                      <span className="font-semibold">{formatKES(Number(splitCashAmount) || 0)}</span>
+   941→                    </div>
+   942→                    <div className="flex justify-between">
+   943→                      <span className="text-muted-foreground flex items-center gap-1">
+   944→                        <Smartphone className="h-3 w-3" /> M-Pesa Portion
+   945→                      </span>
+   946→                      <span className="font-semibold">{formatKES(Number(splitMpesaAmount) || 0)}</span>
+   947→                    </div>
+   948→                  </div>
+   949→                )}
+   950→                {paymentMethod === 'MPESA' && (
+   951→                  <Alert>
+   952→                    <Smartphone className="h-4 w-4" />
+   953→                    <AlertTitle>M-Pesa Payment</AlertTitle>
+   954→                    <AlertDescription>
+   955→                      STK push will be sent to <span className="font-semibold">{mpesaPhone || '—'}</span> for <span className="font-semibold">{formatKES(finalTotal)}</span>.
+   956→                    </AlertDescription>
+   957→                  </Alert>
+   958→                )}
+   959→              </motion.div>
+   960→            )}
+   961→          </AnimatePresence>
+   962→        )}
+   963→      </div>
+   964→    </ResponsiveDialog>
+   965→  );
+   966→}
+   967→
