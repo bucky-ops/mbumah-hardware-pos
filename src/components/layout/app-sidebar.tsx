@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { useAuthStore, useAppStore, type AppTab } from '@/lib/stores';
 import { STORE_LIST } from '@/lib/store-info';
 import { filterTabsByRole, NAV_GROUPS } from '@/lib/app-config';
+import { preloadTab } from '@/lib/tab-preload';
 import { useNotificationCount } from '@/hooks/use-notification-count';
 import { NotificationCenter } from '@/components/notification-center';
 import { Button } from '@/components/ui/button';
@@ -114,6 +115,11 @@ export function AppSidebar() {
       <button
         key={id}
         onClick={() => handleNav(id)}
+        // AUDIT FIX (Finding 2.2): prefetch the tab's chunk on hover/focus so
+        // the first switch to a tab doesn't wait on a cold chunk fetch.
+        // Fire-and-forget (see preloadTab) — safe to call repeatedly.
+        onPointerEnter={() => preloadTab(id)}
+        onFocus={() => preloadTab(id)}
         className={`w-full flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-300 ease-out relative group sidebar-nav-item ${
           collapsed ? 'px-0 py-2.5 justify-center' : 'px-4 py-2.5'
         } ${

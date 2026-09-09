@@ -4,7 +4,8 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
-import { createCustomerSchema, validateInput } from '@/lib/validations';
+import { createCustomerSchema, validationErrorResponse } from '@/lib/validations';
+import { parsePagination, buildPaginationMeta } from '@/lib/api-pagination';
 import { withSessionAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -24,8 +25,12 @@ async function getCustomersHandler(...args: unknown[]): Promise<Response> {
   const search = searchParams.get('search') || '';
   const isActive = searchParams.get('isActive');
   const hasDebt = searchParams.get('hasDebt') === 'true';
-  const page = parseInt(searchParams.get('page') || '1');
-  const limit = parseInt(searchParams.get('limit') || '50');
+  // AUDIT FIX (Finding 2.1): pagination parsing centralised + sanitised
+  // (page clamped to ≥ 1, limit clamped to [1, 500], NaN → default 50).
+  const { page, limit, skip } = parsePagination(searchParams, {
+    defaultLimit: 50,
+    maxLimit: 500,
+  });
   const sortBy = searchParams.get('sortBy') || 'name';
   const sortOrder = searchParams.get('sortOrder') || 'asc';
 
@@ -64,7 +69,7 @@ async function getCustomersHandler(...args: unknown[]): Promise<Response> {
         },
       },
       orderBy: { [sortField]: orderDirection },
-      skip: (page - 1) * limit,
+      skip,
       take: limit,
     }),
     db.customer.count({ where }),
@@ -82,12 +87,7 @@ async function getCustomersHandler(...args: unknown[]): Promise<Response> {
   return Response.json({
     success: true,
     data: result,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
+    pagination: buildPaginationMeta(page, limit, total),
   });
 }
 
@@ -95,9 +95,13 @@ async function createCustomerHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const body = await request.json();
 
-  const validation = validateInput(createCustomerSchema, body);
-  if (!validation.success) {
-    return Response.json({ success: false, error: validation.error }, { status: 400 });
+  // AUDIT FIX (Finding 1.4): same schema and status code as before, but the
+  // failure response now uses the canonical validation shape — a summary
+  // string plus a machine-readable per-field `errors` map clients can use
+  // for form highlighting.
+  const parsed = createCustomerSchema.safeParse(body);
+  if (!parsed.success) {
+    return validationErrorResponse(parsed.error);
   }
   const {
     storeId,
@@ -107,7 +111,7 @@ async function createCustomerHandler(...args: unknown[]): Promise<Response> {
     address,
     idNumber,
     debtLimit,
-  } = validation.data;
+  } = parsed.data;
 
   const preferredChannel = (body as Record<string, unknown>).preferredChannel || 'SMS';
   const isActive = (body as Record<string, unknown>).isActive ?? true;

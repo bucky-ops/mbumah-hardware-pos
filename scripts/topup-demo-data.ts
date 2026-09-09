@@ -506,17 +506,20 @@ async function main() {
     if ((await prisma.giftCardRedemption.count({ where: { giftCardId } })) > 0) {
       skipped.push(`redemption:${group.code}`); continue;
     }
-    let any = false;
+    // AUDIT FIX (Finding 1.3): renamed shadow variable `any` →
+    // `hasValidRedemptions` — the old name collided with the TypeScript type
+    // keyword, confused readers, and masked its boolean intent.
+    let hasValidRedemptions = false;
     for (const r of group.rows) {
       const redeemedBy = userOrUndefined(r.redeemedBy);
       if (!redeemedBy) { failed.push({ item: `redemption:${group.code}/${r.amount}`, err: `user ${r.redeemedBy} missing` }); continue; }
       try {
         if (APPLY) await prisma.giftCardRedemption.create({ data: { giftCardId, ...r, redeemedBy } });
         created.push(`redemption:${group.code}/${r.amount}`);
-        any = true;
+        hasValidRedemptions = true;
       } catch (e) { failed.push({ item: `redemption:${group.code}/${r.amount}`, err: String(e).slice(0, 160) }); }
     }
-    if (!any) skipped.push(`redemption:${group.code}`);
+    if (!hasValidRedemptions) skipped.push(`redemption:${group.code}`);
   }
 
   // ── 10. AUDIT TRAIL ────────────────────────────────────────────────────────

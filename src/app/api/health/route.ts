@@ -128,12 +128,24 @@ export async function GET() {
   const allOk = Object.values(checks).every(c => c.status === 'ok' || c.status === 'warning');
   const hasErrors = Object.values(checks).some(c => c.status === 'error');
 
+  // AUDIT FIX (Finding 7.2 — health response contract): expose uptime and
+  // process memory so load balancers / monitoring can distinguish "app
+  // starting up" (tiny uptime) from "app degraded" (bloated heap) instead of
+  // guessing from HTTP status alone. Additive fields only — existing
+  // consumers (CI health check, uptime monitors) read status/checks.
+  const memory = process.memoryUsage();
+
   return Response.json({
     status: hasErrors ? 'unhealthy' : allOk ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
     nodeEnv: process.env.NODE_ENV,
     responseTime: `${totalResponseTime}ms`,
     version: process.env.npm_package_version || '1.0.0',
+    uptimeSeconds: Math.floor(process.uptime()),
+    memory: {
+      heapUsedMB: Math.round(memory.heapUsed / 1024 / 1024),
+      rssMB: Math.round(memory.rss / 1024 / 1024),
+    },
     checks,
   }, { status: hasErrors ? 503 : 200 });
 }

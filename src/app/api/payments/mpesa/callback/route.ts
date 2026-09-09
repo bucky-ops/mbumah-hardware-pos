@@ -34,6 +34,8 @@ import nodeCrypto from 'crypto';
 import { db, withImmutabilityBypass } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent, PaymentStatus } from '@/lib/types';
+import { isRateLimited } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
@@ -191,6 +193,28 @@ function extractCallbackData(body: MpesaCallbackBody) {
 
 async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
+
+  // AUDIT FIX (Finding 5.2 — rate limiting on public endpoints): the callback
+  // is a PUBLIC (credentialed) webhook, so cap request floods per source IP
+  // before any DB work. 60 req/min/IP absorbs legitimate Daraja retries; a
+  // flood is rejected 429 (with Retry-After) and written to SecurityEvent.
+  // Idempotency of legitimate duplicate callbacks is unaffected — they are
+  // deduplicated downstream by the atomic PENDING claim + receipt unique
+  // constraint, not by this throttle.
+  const clientIp = getClientIp(request) || 'unknown';
+  const rl = isRateLimited(`mpesa-callback:${clientIp}`, 'WEBHOOK');
+  if (rl.limited) {
+    await logSecurityEvent({
+      eventType: 'RATE_LIMIT_EXCEEDED',
+      severity: 'WARN',
+      request,
+      details: { reason: 'callback_rate_limited', ip: clientIp, retryAfter: rl.retryAfter },
+    });
+    return Response.json(
+      { success: false, error: 'Too many callback requests. Retry later.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 60) } },
+    );
+  }
 
   // F6-1 — credential / IP gate before anything else.
   const rejection = await authorizeCallback(request);

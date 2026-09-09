@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, Keyboard } from 'lucide-react';
 
 import { useAuthStore, useAppStore } from '@/lib/stores';
+import { TAB_LOADERS } from '@/lib/tab-preload';
 import { ErrorBoundary, SectionErrorBoundary } from '@/components/error-boundary';
 import { FloatingHomeButton } from '@/components/floating-home-button';
 import { LoginScreen } from '@/components/login-screen';
@@ -19,36 +20,41 @@ import { TopBar } from '@/components/layout/top-bar';
 import { KeyboardShortcutsHelp } from '@/components/keyboard-shortcuts-help';
 
 // LAZY-LOADED TAB COMPONENTS
-const LazyDashboardTab = lazy(() => import('./tabs/dashboard-tab'));
-const LazyInventoryTab = lazy(() => import('./tabs/inventory-tab'));
-const LazyCustomersTab = lazy(() => import('./tabs/customers-tab'));
-const LazyRentalsTab = lazy(() => import('./tabs/rentals-tab'));
-const LazyFinancialTab = lazy(() => import('./tabs/financial-tab'));
-const LazyAnalyticsTab = lazy(() => import('./tabs/analytics-tab'));
-const LazyReportsTab = lazy(() => import('./tabs/reports-tab'));
-const LazyAdminTab = lazy(() => import('./tabs/admin-tab'));
-const LazyTransactionsTab = lazy(() => import('./tabs/transactions-tab'));
-const LazySuppliersTab = lazy(() => import('./tabs/suppliers-tab'));
-const LazyCatalogTab = lazy(() => import('./tabs/catalog-tab'));
-const LazyGiftCardsTab = lazy(() => import('./tabs/gift-cards-tab'));
-const LazyVouchersTab = lazy(() => import('./tabs/vouchers-tab'));
-const LazyInvoicesTab = lazy(() => import('./tabs/invoices-tab'));
-const LazyDeliveryTab = lazy(() => import('./tabs/delivery-notes-tab'));
-const LazyCreditsTab = lazy(() => import('./tabs/credits-tab'));
-const LazyMessagingTab = lazy(() => import('./tabs/messaging-tab'));
-const LazyTransfersTab = lazy(() => import('./tabs/transfers-tab'));
-const LazyBankingTab = lazy(() => import('./tabs/banking-tab'));
-const LazyLoyaltyTab = lazy(() => import('./tabs/loyalty-tab'));
-const LazySecurityTab = lazy(() => import('./tabs/security-tab'));
-const LazyPayrollTab = lazy(() => import('./tabs/payroll-tab'));
-const LazyEtimsTab = lazy(() => import('./tabs/etims-tab'));
-const LazyDebtManagementTab = lazy(() => import('./tabs/debt-management-tab'));
-const LazyDebtPlansTab = lazy(() => import('./tabs/debt-plans-tab'));
-const LazyDataExportsTab = lazy(() => import('./tabs/data-exports-tab'));
-const LazyConversationsTab = lazy(() => import('./tabs/conversations-tab'));
-const LazyPurchaseOrdersTab = lazy(() => import('./tabs/purchase-orders-tab'));
-const LazyShiftSchedulingTab = lazy(() => import('./tabs/shift-scheduling-tab'));
-const LazyPOSTab = lazy(() => import('./tabs/pos-tab'));
+//
+// AUDIT FIX (Finding 2.2): the import thunks moved to src/lib/tab-preload.ts
+// so the sidebar can prefetch a tab's chunk on pointerenter/focus (see
+// preloadTab) — the first switch to a tab no longer waits on a cold chunk
+// fetch. Specifiers are unchanged, so chunking is identical to before.
+const LazyDashboardTab = lazy(TAB_LOADERS.dashboard);
+const LazyInventoryTab = lazy(TAB_LOADERS.inventory);
+const LazyCustomersTab = lazy(TAB_LOADERS.customers);
+const LazyRentalsTab = lazy(TAB_LOADERS.rentals);
+const LazyFinancialTab = lazy(TAB_LOADERS.financial);
+const LazyAnalyticsTab = lazy(TAB_LOADERS.analytics);
+const LazyReportsTab = lazy(TAB_LOADERS.reports);
+const LazyAdminTab = lazy(TAB_LOADERS.admin);
+const LazyTransactionsTab = lazy(TAB_LOADERS.transactions);
+const LazySuppliersTab = lazy(TAB_LOADERS.suppliers);
+const LazyCatalogTab = lazy(TAB_LOADERS.catalog);
+const LazyGiftCardsTab = lazy(TAB_LOADERS['gift-cards']);
+const LazyVouchersTab = lazy(TAB_LOADERS.vouchers);
+const LazyInvoicesTab = lazy(TAB_LOADERS.invoices);
+const LazyDeliveryTab = lazy(TAB_LOADERS.delivery);
+const LazyCreditsTab = lazy(TAB_LOADERS.credits);
+const LazyMessagingTab = lazy(TAB_LOADERS.messaging);
+const LazyTransfersTab = lazy(TAB_LOADERS.transfers);
+const LazyBankingTab = lazy(TAB_LOADERS.banking);
+const LazyLoyaltyTab = lazy(TAB_LOADERS.loyalty);
+const LazySecurityTab = lazy(TAB_LOADERS.security);
+const LazyPayrollTab = lazy(TAB_LOADERS.payroll);
+const LazyEtimsTab = lazy(TAB_LOADERS.etims);
+const LazyDebtManagementTab = lazy(TAB_LOADERS['debt-management']);
+const LazyDebtPlansTab = lazy(TAB_LOADERS['debt-plans']);
+const LazyDataExportsTab = lazy(TAB_LOADERS['data-exports']);
+const LazyConversationsTab = lazy(TAB_LOADERS.conversations);
+const LazyPurchaseOrdersTab = lazy(TAB_LOADERS['purchase-orders']);
+const LazyShiftSchedulingTab = lazy(TAB_LOADERS['shift-scheduling']);
+const LazyPOSTab = lazy(TAB_LOADERS.pos);
 
 function TabLoadingFallback() {
   return (

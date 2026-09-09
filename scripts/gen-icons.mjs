@@ -1,8 +1,16 @@
 import sharp from 'sharp';
 import { readFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { dirname, join, resolve } from 'path';
+import { fileURLToPath } from 'url';
 
-const root = '/home/z/my-project';
+// AUDIT FIX (Finding 7.1 — hardcoded project path removed):
+// The root is now resolved relative to this script's own location (works in
+// any checkout, CI, or Docker), with an optional PROJECT_ROOT override for
+// non-standard layouts. The previous `/home/z/my-project` constant broke the
+// script everywhere outside the original author's machine and leaked the
+// developer's home directory into source control.
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const root = process.env.PROJECT_ROOT || resolve(scriptDir, '..');
 const src = join(root, 'public/logo.png');
 const outDir = join(root, 'public/icons');
 mkdirSync(outDir, { recursive: true });

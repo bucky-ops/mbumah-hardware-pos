@@ -10,13 +10,16 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { withFinancialAuth, getSessionFromRequest } from '@/lib/auth';
 import { LogSeverity, LogComponent } from '@/lib/types';
+import { resolveExportsDir } from '@/lib/export-paths';
 
 export const dynamic = 'force-dynamic';
 
 const FINANCIAL_READ_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'] as const;
 const FINANCIAL_WRITE_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'] as const;
 
-const EXPORTS_DIR = '/home/z/my-project/download/exports';
+// AUDIT FIX (Finding 1.2): was the hardcoded '/home/z/my-project/download/
+// exports' — see src/lib/export-paths.ts for why that broke production.
+const EXPORTS_DIR = resolveExportsDir();
 
 interface RouteContext {
   params: Promise<{ id: string }>;
