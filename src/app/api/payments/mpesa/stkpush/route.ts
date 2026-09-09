@@ -12,6 +12,8 @@ import { type NextRequest } from 'next/server';
 import { withErrorBoundary } from '@/lib/logger';
 import { requireAuth } from '@/lib/auth';
 import { initiateStkPush } from '@/lib/mpesa-daraja';
+import { isRateLimited } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +31,18 @@ async function stkPushHandler(
   request: NextRequest,
   ..._args: unknown[]
 ): Promise<Response> {
+  // AUDIT FIX (Finding 5.2 — rate limiting): each STK push costs a Daraja API
+  // call (rate-limited by Safaricom and billable); a runaway client loop or a
+  // compromised session could otherwise hammer it. Per-IP PAYMENT-tier cap
+  // (20/min) with 429 + Retry-After. Session auth already ran via requireAuth.
+  const rl = isRateLimited(`mpesa-stkpush:${getClientIp(request)}`, 'PAYMENT');
+  if (rl.limited) {
+    return Response.json(
+      { success: false, error: 'Too many STK push requests. Retry later.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 60) } },
+    );
+  }
+
   const body = (await request.json()) as StkPushBody;
 
   const rawPhone = body.phone || body.phoneNumber;

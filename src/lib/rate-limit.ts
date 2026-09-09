@@ -26,6 +26,11 @@ export const RATE_LIMIT_TIERS = {
   SEARCH: { max: 30, windowMs: 60 * 1000 },             // 30 req / min
   // WhatsApp/messaging - strict
   MESSAGING: { max: 10, windowMs: 60 * 1000 },          // 10 req / min
+  // Inbound webhooks (M-Pesa Daraja callback). Generous enough for legitimate
+  // Daraja retry bursts, tight enough to cap flood/replay attempts. The
+  // callback endpoint is PUBLIC-but-credentialed, so a per-instance cap is
+  // the last line of defence after credential + IP-allowlist validation.
+  WEBHOOK: { max: 60, windowMs: 60 * 1000 },            // 60 req / min per IP
 } as const;
 
 export type RateLimitTier = keyof typeof RATE_LIMIT_TIERS;
