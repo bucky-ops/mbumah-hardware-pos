@@ -35,7 +35,10 @@ async function statsHandler(...args: unknown[]): Promise<Response> {
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
   // Active = ACTIVE or PAUSED (in-progress) plans.
-  const [activePlans, pendingPlans, completedThisMonthRows, overduePlans] = await Promise.all([
+  // Task 12-d: DEFAULTED plan balances are also tracked separately — they
+  // are the most at-risk exposure and were previously invisible on the
+  // dashboard (Outstanding counted only ACTIVE/PAUSED plans).
+  const [activePlans, pendingPlans, completedThisMonthRows, overduePlans, defaultedPlans] = await Promise.all([
     db.debtPaymentPlan.findMany({
       where: { storeId, status: { in: ['ACTIVE', 'PAUSED'] } },
       select: { id: true, balance: true },
@@ -54,6 +57,10 @@ async function statsHandler(...args: unknown[]): Promise<Response> {
     db.debtPaymentPlan.findMany({
       where: { storeId, installmentsOverdue: { gt: 0 } },
       select: { id: true },
+    }),
+    db.debtPaymentPlan.findMany({
+      where: { storeId, status: 'DEFAULTED' },
+      select: { id: true, balance: true },
     }),
   ]);
 
@@ -74,6 +81,13 @@ async function statsHandler(...args: unknown[]): Promise<Response> {
     0,
   );
 
+  // Task 12-d: DEFAULTED exposure — visible separately so the dashboard can
+  // surface at-risk balances that the Outstanding card intentionally excludes.
+  const totalDefaultedOutstanding = defaultedPlans.reduce(
+    (sum, p) => sum + toNumber(p.balance),
+    0,
+  );
+
   // Collected this month = sum of (each installment's amountPaid) — this is
   // a reasonable lower bound for cash collected against plans this month.
   // (We could refine further with a payment ledger, but this is accurate
@@ -88,6 +102,7 @@ async function statsHandler(...args: unknown[]): Promise<Response> {
     data: {
       totalActivePlans: activePlans.length,
       totalOutstandingBalance,
+      totalDefaultedOutstanding,
       plansWithOverdueInstallments: overduePlans.length,
       completedThisMonth: completedThisMonthRows.length,
       totalCollectedThisMonth,
