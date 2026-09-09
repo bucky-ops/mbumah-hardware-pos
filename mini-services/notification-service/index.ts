@@ -1,6 +1,56 @@
 import { createServer, IncomingMessage, ServerResponse } from 'http'
 import { Server, Socket } from 'socket.io'
 
+// ── AUDIT FIX (Findings 3.3 + 2.3 — structured logging & heartbeat lifecycle) ─
+//
+// The service previously mixed console.log/console.error with ad-hoc
+// [TAG] prefixes, emitted a heartbeat from an anonymous setInterval that was
+// never cleared on shutdown, and logged disconnect reasons without
+// classification. That made production issues hard to correlate and risked
+// leaking intervals across dev HMR reloads.
+//
+// Everything below now goes through `log()` — one JSON object per line
+// (level, component, message + queryable context fields) that Vercel/Docker
+// log drains can parse and filter — and the heartbeat interval is owned by
+// startHeartbeat()/stopHeartbeat() so SIGTERM/SIGINT clears it.
+
+// ── Structured logger ────────────────────────────────────────────────────
+
+type LogLevel = 'debug' | 'info' | 'warn' | 'error'
+
+const LOG_LEVEL_WEIGHT: Record<LogLevel, number> = {
+  debug: 10,
+  info: 20,
+  warn: 30,
+  error: 40,
+}
+
+const activeLogLevel: LogLevel =
+  (process.env.LOG_LEVEL as LogLevel | undefined) &&
+  LOG_LEVEL_WEIGHT[process.env.LOG_LEVEL as LogLevel] !== undefined
+    ? (process.env.LOG_LEVEL as LogLevel)
+    : 'info'
+
+/**
+ * Emit ONE structured JSON log line. Context fields are spread at the top
+ * level (not nested) so log aggregators can index them directly.
+ */
+function log(level: LogLevel, component: string, message: string, context: Record<string, unknown> = {}): void {
+  if (LOG_LEVEL_WEIGHT[level] < LOG_LEVEL_WEIGHT[activeLogLevel]) return
+  const entry = {
+    ts: new Date().toISOString(),
+    level,
+    component,
+    message,
+    ...context,
+  }
+  // JSON.stringify guards against accidental prototype pollution from
+  // untrusted payloads re-logged as context.
+  const line = JSON.stringify(entry)
+  if (level === 'error') console.error(line)
+  else console.log(line)
+}
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 interface NotificationPayload {
@@ -121,7 +171,11 @@ const generateId = () => `notif_${Date.now()}_${Math.random().toString(36).subst
 
 io.on('connection', (socket: Socket) => {
   const connectedAt = new Date().toISOString()
-  console.log(`[CONNECT] Socket ${socket.id} connected at ${connectedAt}`)
+  log('info', 'WebSocket', 'Socket connected', {
+    socketId: socket.id,
+    connectedAt,
+    handshakeAddress: socket.handshake.address,
+  })
 
   // ── Room management ──────────────────────────────────────────────────────
 
@@ -132,7 +186,7 @@ io.on('connection', (socket: Socket) => {
     }
     const room = `store_${storeId}`
     socket.join(room)
-    console.log(`[ROOM] Socket ${socket.id} joined room: ${room}`)
+    log('debug', 'WebSocket', 'Socket joined store room', { socketId: socket.id, room })
     socket.emit('room-joined', { room, type: 'store' })
   })
 
@@ -140,7 +194,7 @@ io.on('connection', (socket: Socket) => {
     if (!storeId || typeof storeId !== 'string') return
     const room = `store_${storeId}`
     socket.leave(room)
-    console.log(`[ROOM] Socket ${socket.id} left room: ${room}`)
+    log('debug', 'WebSocket', 'Socket left store room', { socketId: socket.id, room })
     socket.emit('room-left', { room, type: 'store' })
   })
 
@@ -151,7 +205,7 @@ io.on('connection', (socket: Socket) => {
     }
     const room = `user_${userId}`
     socket.join(room)
-    console.log(`[ROOM] Socket ${socket.id} joined room: ${room}`)
+    log('debug', 'WebSocket', 'Socket joined user room', { socketId: socket.id, room })
     socket.emit('room-joined', { room, type: 'user' })
   })
 
@@ -159,7 +213,7 @@ io.on('connection', (socket: Socket) => {
     if (!userId || typeof userId !== 'string') return
     const room = `user_${userId}`
     socket.leave(room)
-    console.log(`[ROOM] Socket ${socket.id} left room: ${room}`)
+    log('debug', 'WebSocket', 'Socket left user room', { socketId: socket.id, room })
     socket.emit('room-left', { room, type: 'user' })
   })
 
@@ -178,7 +232,11 @@ io.on('connection', (socket: Socket) => {
       storeId,
     }
     io.to(`store_${storeId}`).emit('notification', notification)
-    console.log(`[NOTIFY] Notification sent to store_${storeId}: ${notification.type}`)
+    log('info', 'Notification', 'Notification delivered to store room', {
+      storeId,
+      type: notification.type,
+      notificationId: notification.id,
+    })
   })
 
   // ── Low stock alert ──────────────────────────────────────────────────────
@@ -199,7 +257,10 @@ io.on('connection', (socket: Socket) => {
       storeId,
     }
     io.to(`store_${storeId}`).emit('low-stock-alert', notification)
-    console.log(`[LOW-STOCK] ${products.length} product(s) alert sent to store_${storeId}`)
+    log('warn', 'LowStock', 'Low stock alert delivered', {
+      storeId,
+      productCount: products.length,
+    })
   })
 
   // ── New transaction ──────────────────────────────────────────────────────
@@ -220,7 +281,13 @@ io.on('connection', (socket: Socket) => {
       storeId,
     }
     io.to(`store_${storeId}`).emit('new-transaction', notification)
-    console.log(`[TRANSACTION] New ${transaction.type} (${transaction.currency} ${transaction.total}) notified to store_${storeId}`)
+    log('info', 'Transaction', 'New transaction broadcast', {
+      storeId,
+      transactionId: transaction.transactionId,
+      type: transaction.type,
+      total: transaction.total,
+      currency: transaction.currency,
+    })
   })
 
   // ── Payment received ─────────────────────────────────────────────────────
@@ -241,7 +308,14 @@ io.on('connection', (socket: Socket) => {
       storeId,
     }
     io.to(`store_${storeId}`).emit('payment-received', notification)
-    console.log(`[PAYMENT] ${payment.method} ${payment.currency} ${payment.amount} received for store_${storeId}`)
+    log('info', 'Payment', 'Payment received broadcast', {
+      storeId,
+      paymentId: payment.paymentId,
+      transactionId: payment.transactionId,
+      method: payment.method,
+      amount: payment.amount,
+      currency: payment.currency,
+    })
   })
 
   // ── Loyalty tier upgrade ─────────────────────────────────────────────────
@@ -262,7 +336,13 @@ io.on('connection', (socket: Socket) => {
       storeId,
     }
     io.to(`store_${storeId}`).emit('loyalty-tier-upgrade', notification)
-    console.log(`[LOYALTY] ${upgrade.customerName} upgraded to ${upgrade.newTier} in store_${storeId}`)
+    log('info', 'Loyalty', 'Loyalty tier upgrade broadcast', {
+      storeId,
+      customerId: upgrade.customerId,
+      oldTier: upgrade.oldTier,
+      newTier: upgrade.newTier,
+      points: upgrade.points,
+    })
   })
 
   // ── Stock movement ───────────────────────────────────────────────────────
@@ -283,53 +363,104 @@ io.on('connection', (socket: Socket) => {
       storeId,
     }
     io.to(`store_${storeId}`).emit('stock-movement', notification)
-    console.log(`[STOCK-MOVE] ${movement.type} ${movement.productName} × ${movement.quantity} in store_${storeId}`)
+    log('info', 'StockMovement', 'Stock movement broadcast', {
+      storeId,
+      movementId: movement.movementId,
+      productId: movement.productId,
+      type: movement.type,
+      quantity: movement.quantity,
+      previousStock: movement.previousStock,
+      newStock: movement.newStock,
+    })
   })
 
   // ── Disconnect ───────────────────────────────────────────────────────────
 
-  socket.on('disconnect', (reason) => {
-    console.log(`[DISCONNECT] Socket ${socket.id} disconnected: ${reason}`)
+  socket.on('disconnect', (reason: string) => {
+    // AUDIT FIX (Finding 3.3): classify disconnect reasons so log drains can
+    // separate routine lifecycle events from network trouble.
+    //   • clean:  transport close / server-namespace disconnect / client ping
+    //     timeout by explicit client close — normal churn, logged at debug.
+    //   • error:  transport errors, ping timeouts, everything else — warn.
+    const cleanReasons = new Set([
+      'transport close',
+      'server namespace disconnect',
+      'client namespace disconnect',
+    ])
+    const isClean = cleanReasons.has(reason)
+    log(isClean ? 'debug' : 'warn', 'WebSocket', 'Socket disconnected', {
+      socketId: socket.id,
+      reason,
+      clean: isClean,
+    })
   })
 
-  socket.on('error', (error) => {
-    console.error(`[ERROR] Socket ${socket.id} error:`, error)
+  socket.on('error', (error: Error) => {
+    log('error', 'WebSocket', 'Socket error', {
+      socketId: socket.id,
+      errorName: error?.name,
+      errorMessage: error?.message,
+      stack: error?.stack,
+    })
   })
 })
 
 // ── Heartbeat / ping every 30s ──────────────────────────────────────────────
+// AUDIT FIX (Finding 2.3): the interval handle is now owned and CLEARED on
+// shutdown (previous anonymous setInterval kept firing across dev HMR
+// reloads and could never be stopped). Emission skips instantly when no
+// clients are connected.
 
-setInterval(() => {
-  const connectedSockets = io.sockets.sockets.size
-  if (connectedSockets > 0) {
+const HEARTBEAT_INTERVAL_MS = 30000
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+
+function startHeartbeat(): void {
+  if (heartbeatTimer !== null) return // idempotent — never double-schedule
+  heartbeatTimer = setInterval(() => {
+    const connectedSockets = io.sockets.sockets.size
+    if (connectedSockets === 0) return // nothing to heartbeat — cheap no-op
     io.emit('heartbeat', {
       timestamp: new Date().toISOString(),
       connections: connectedSockets,
     })
+    log('debug', 'Heartbeat', 'Heartbeat emitted', { connections: connectedSockets })
+  }, HEARTBEAT_INTERVAL_MS)
+}
+
+function stopHeartbeat(): void {
+  if (heartbeatTimer !== null) {
+    clearInterval(heartbeatTimer)
+    heartbeatTimer = null
   }
-}, 30000)
+}
+
+startHeartbeat()
 
 // ── Start server ────────────────────────────────────────────────────────────
 
 const PORT = 3003
 httpServer.listen(PORT, () => {
-  console.log(`[MBUMAH] Notification service running on port ${PORT}`)
-  console.log(`[MBUMAH] Health check: http://localhost:${PORT}/health`)
-  console.log(`[MBUMAH] WebSocket path: /`)
+  log('info', 'Server', 'Notification service listening', {
+    port: PORT,
+    healthCheckPath: '/health',
+    webSocketPath: '/',
+    logLevel: activeLogLevel,
+  })
 })
 
 // ── Graceful shutdown ───────────────────────────────────────────────────────
 
 const shutdown = (signal: string) => {
-  console.log(`[SHUTDOWN] Received ${signal}, closing server...`)
+  log('info', 'Server', 'Shutdown requested', { signal })
+  stopHeartbeat() // AUDIT FIX (Finding 2.3): no lingering interval after exit
   io.disconnectSockets(true)
   httpServer.close(() => {
-    console.log('[SHUTDOWN] Notification service stopped')
+    log('info', 'Server', 'Notification service stopped')
     process.exit(0)
   })
   // Force exit after 5s if graceful shutdown hangs
   setTimeout(() => {
-    console.error('[SHUTDOWN] Forced exit after timeout')
+    log('error', 'Server', 'Forced exit after shutdown timeout')
     process.exit(1)
   }, 5000)
 }
