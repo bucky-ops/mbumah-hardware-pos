@@ -157,6 +157,10 @@ const PUBLIC_PATHS = [
   // crashes on the login page). Must be public so the error boundary can
   // report crashes even when the user is not authenticated.
   '/api/logs/client-error',
+  // AUDIT FIX (Finding 6.2): the OpenAPI contract is metadata-only (shapes,
+  // no secrets, no data) — same public class as /api/health — so it must be
+  // reachable without a session for Swagger UI / Postman / client-SDK gen.
+  '/api/openapi',
 ];
 
 const CSRF_EXEMPT_PATHS = [
