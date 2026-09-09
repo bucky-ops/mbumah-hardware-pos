@@ -8,6 +8,7 @@ import { Banknote, Loader2, Smartphone } from 'lucide-react';
 import {
   debtPaymentPlansApi,
   formatKES,
+  formatDate,
   type DebtPlanInstallmentItem,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
@@ -36,7 +37,6 @@ interface RecordPaymentDialogProps {
   onOpenChange: (open: boolean) => void;
   planId: string;
   installment: DebtPlanInstallmentItem | null;
-  onPaid?: () => void;
 }
 
 const PAYMENT_METHODS = [
@@ -51,7 +51,6 @@ export function RecordPaymentDialog({
   onOpenChange,
   planId,
   installment,
-  onPaid,
 }: RecordPaymentDialogProps) {
   const queryClient = useQueryClient();
 
@@ -62,20 +61,22 @@ export function RecordPaymentDialog({
     return Math.max(0, due - paid);
   }, [installment]);
 
-  const [amount, setAmount] = useState<string>('');
+  // Task 12-d (debt-plan audit, HIGH): pre-fill the amount from the selected
+  // installment's remaining balance. The old prefill lived in an onOpenChange
+  // wrapper, but the parent opens this dialog programmatically
+  // (`open={Boolean(payInstallment)}`) and Radix only fires onOpenChange for
+  // *user-initiated* transitions — so the prefill never ran, and after a
+  // payment the stale amount from the previous installment persisted into the
+  // next open (it could even be silently submitted when ≤ the new remaining
+  // balance). The parent now remounts this dialog per open via a `key`, so
+  // these initializers run fresh every time — no effects needed.
+  const [amount, setAmount] = useState<string>(() =>
+    installment
+      ? Math.max(0, (installment.amountDue ?? 0) - (installment.amountPaid ?? 0)).toFixed(2)
+      : '',
+  );
   const [paymentMethod, setPaymentMethod] = useState<string>('CASH');
   const [paymentReference, setPaymentReference] = useState<string>('');
-
-  // Pre-fill amount with the remaining balance whenever the dialog opens.
-  // Event-driven (not effect-driven) to avoid the set-state-in-effect rule.
-  const handleOpenChange = (next: boolean) => {
-    if (next && installment) {
-      setAmount(remaining.toFixed(2));
-      setPaymentMethod('CASH');
-      setPaymentReference('');
-    }
-    onOpenChange(next);
-  };
 
   const validationError = useMemo<string | null>(() => {
     if (!installment) return 'No installment selected.';
@@ -105,7 +106,11 @@ export function RecordPaymentDialog({
       queryClient.invalidateQueries({ queryKey: ['debt-payment-plans'] });
       queryClient.invalidateQueries({ queryKey: ['debt-payment-plans-stats'] });
       queryClient.invalidateQueries({ queryKey: ['debt-payment-plan', planId] });
-      onPaid?.();
+      // Clear the form so a reopened dialog never shows the previous
+      // payment's amount (the open-effect re-prefills from the new
+      // installment's remaining balance anyway).
+      setAmount('');
+      setPaymentReference('');
       onOpenChange(false);
     },
     onError: (err) => {
@@ -123,7 +128,7 @@ export function RecordPaymentDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -132,9 +137,7 @@ export function RecordPaymentDialog({
           </DialogTitle>
           <DialogDescription>
             Installment #{installment?.installmentNumber} · Due{' '}
-            {installment
-              ? new Date(installment.dueDate).toLocaleDateString('en-KE')
-              : ''}
+            {installment ? formatDate(installment.dueDate) : ''}
           </DialogDescription>
         </DialogHeader>
 
@@ -213,7 +216,7 @@ export function RecordPaymentDialog({
         <DialogFooter className="gap-2">
           <Button
             variant="outline"
-            onClick={() => handleOpenChange(false)}
+            onClick={() => onOpenChange(false)}
             disabled={payMutation.isPending}
           >
             Cancel

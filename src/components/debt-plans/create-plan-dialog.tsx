@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -24,7 +24,7 @@ import {
   type CreateDebtPaymentPlanPayload,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
-import { calculateInstallmentAmount, calculateEndDate } from '@/lib/debt-plan-utils';
+import { calculateInstallmentSchedule, calculateEndDate } from '@/lib/debt-plan-utils';
 
 import {
   Dialog,
@@ -53,9 +53,6 @@ interface CreatePlanDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   storeId: string;
-  onCreated?: () => void;
-  /** Pre-selected customer (e.g. when launched from the Customers tab). */
-  presetCustomerId?: string;
 }
 
 interface CustomerOption {
@@ -65,12 +62,19 @@ interface CustomerOption {
   currentDebtBalance: number;
 }
 
+/** Parse a `YYYY-MM-DD` input value as a LOCAL date (not UTC midnight). */
+function parseLocalDate(value: string): Date {
+  const [y, m, d] = value.split('-').map(Number);
+  if (!y || !m || !d) return new Date(value);
+  return new Date(y, m - 1, d);
+}
+
+const MAX_INSTALLMENT_COUNT = 60; // matches the server-side policy bound
+
 export function CreatePlanDialog({
   open,
   onOpenChange,
   storeId,
-  onCreated,
-  presetCustomerId,
 }: CreatePlanDialogProps) {
   const queryClient = useQueryClient();
 
@@ -89,13 +93,22 @@ export function CreatePlanDialog({
   const [notes, setNotes] = useState<string>('');
   const [autoCharge, setAutoCharge] = useState<boolean>(false);
 
-  // ── Customer search query (debounced via React-Query's staleTime) ───────
+  // Task 12-d (debt-plan audit, MEDIUM): debounce the customer search. The
+  // old comment claimed "debounced via React-Query's staleTime" — staleTime
+  // does not debounce, so every keystroke fired a GET /api/customers.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(customerSearch), 300);
+    return () => clearTimeout(timer);
+  }, [customerSearch]);
+
+  // ── Customer search query ────────────────────────────────────────────────
   const { data: customersData, isLoading: isLoadingCustomers } = useQuery({
-    queryKey: ['customers-search', 'debt-plans', customerSearch, storeId],
+    queryKey: ['customers-search', 'debt-plans', debouncedSearch, storeId],
     queryFn: async () => {
       const res = await customersApi.list({
         storeId,
-        search: customerSearch || undefined,
+        search: debouncedSearch || undefined,
         limit: 30,
       });
       return res.data ?? [];
@@ -132,26 +145,27 @@ export function CreatePlanDialog({
     );
   }, [customerDebts]);
 
-  // Wrap the parent onOpenChange so we can reset the form when the dialog
-  // closes (without setState-in-effect) and pre-select a customer when it
-  // opens. This avoids the cascading-render pattern flagged by the
-  // react-hooks/set-state-in-effect rule.
+  const resetForm = () => {
+    setCustomerSearch('');
+    setDebouncedSearch('');
+    setCustomerId('');
+    setDebtLedgerId('');
+    setTotalAmount('');
+    setInstallmentCount(6);
+    setFrequency('MONTHLY');
+    setStartDate(new Date().toISOString().slice(0, 10));
+    setInterestRate('0');
+    setLateFee('0');
+    setNotes('');
+    setAutoCharge(false);
+  };
+
+  // Task 12-d (debt-plan audit, MEDIUM): the success path previously called
+  // the raw onOpenChange prop, bypassing the reset — reopening the dialog
+  // showed the previous customer/debt/amount still selected.
   const handleOpenChange = (next: boolean) => {
     if (!next) {
-      // Reset the form.
-      setCustomerSearch('');
-      setCustomerId('');
-      setDebtLedgerId('');
-      setTotalAmount('');
-      setInstallmentCount(6);
-      setFrequency('MONTHLY');
-      setStartDate(new Date().toISOString().slice(0, 10));
-      setInterestRate('0');
-      setLateFee('0');
-      setNotes('');
-      setAutoCharge(false);
-    } else if (presetCustomerId) {
-      setCustomerId(presetCustomerId);
+      resetForm();
     }
     onOpenChange(next);
   };
@@ -167,15 +181,29 @@ export function CreatePlanDialog({
   };
 
   // ── Live preview of installment amount + end date ──────────────────────
+  // Task 12-d (debt-plan audit, HIGH): the preview now runs the EXACT server
+  // schedule (calculateInstallmentSchedule, pro-rated simple interest with
+  // the final-installment rounding absorber). It previously used a flat
+  // `total × (1 + rate/100) / count`, so e.g. 12% over 6 monthly installments
+  // showed 1.12× total while the created plan charged 1.06×.
   const preview = useMemo(() => {
     const total = parseFloat(totalAmount);
     const rate = parseFloat(interestRate) || 0;
     if (!Number.isFinite(total) || total <= 0) {
-      return { installmentAmount: 0, endDate: null as Date | null };
+      return { installmentAmount: 0, totalPayable: 0, endDate: null as Date | null };
     }
-    const start = startDate ? new Date(startDate) : new Date();
+    const start = startDate ? parseLocalDate(startDate) : new Date();
+    const schedule = calculateInstallmentSchedule(
+      total,
+      installmentCount,
+      frequency,
+      start,
+      rate,
+    );
+    const totalPayable = schedule.reduce((sum, s) => sum + s.amountDue, 0);
     return {
-      installmentAmount: calculateInstallmentAmount(total, installmentCount, rate),
+      installmentAmount: schedule[0]?.amountDue ?? 0,
+      totalPayable,
       endDate: calculateEndDate(start, installmentCount, frequency),
     };
   }, [totalAmount, installmentCount, interestRate, startDate, frequency]);
@@ -188,18 +216,26 @@ export function CreatePlanDialog({
     if (!Number.isFinite(total) || total <= 0) {
       return 'Total amount must be greater than zero.';
     }
-    if (installmentCount < 1 || installmentCount > 24) {
-      return 'Installment count must be between 1 and 24.';
+    if (installmentCount < 1 || installmentCount > MAX_INSTALLMENT_COUNT) {
+      return `Installment count must be between 1 and ${MAX_INSTALLMENT_COUNT}.`;
     }
     if (!startDate) return 'Start date is required.';
-    const start = new Date(startDate);
+    const start = parseLocalDate(startDate);
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     if (start.getTime() < yesterday.getTime()) {
       return 'Start date cannot be in the past.';
     }
+    const rate = parseFloat(interestRate) || 0;
+    if (rate < 0 || rate > 100) {
+      return 'Interest rate must be between 0 and 100 (annual %).';
+    }
+    const fee = parseFloat(lateFee) || 0;
+    if (fee < 0) {
+      return 'Late fee cannot be negative.';
+    }
     return null;
-  }, [customerId, debtLedgerId, totalAmount, installmentCount, startDate]);
+  }, [customerId, debtLedgerId, totalAmount, installmentCount, startDate, interestRate, lateFee]);
 
   // ── Create mutation ────────────────────────────────────────────────────
   const createMutation = useMutation({
@@ -207,12 +243,11 @@ export function CreatePlanDialog({
       debtPaymentPlansApi.create(payload),
     onSuccess: () => {
       toast.success('Payment plan created', {
-        description: 'It is now pending approval. A manager can approve it to activate.',
+        description: 'It is now pending approval. Another manager can approve it to activate it (the creator cannot self-approve).',
       });
       queryClient.invalidateQueries({ queryKey: ['debt-payment-plans'] });
       queryClient.invalidateQueries({ queryKey: ['debt-payment-plans-stats'] });
-      onCreated?.();
-      onOpenChange(false);
+      handleOpenChange(false);
     },
     onError: (err) => {
       const msg = handleError(err, 'Create debt payment plan');
@@ -232,7 +267,7 @@ export function CreatePlanDialog({
       totalAmount: parseFloat(totalAmount),
       installmentCount,
       frequency,
-      startDate: new Date(startDate).toISOString(),
+      startDate: parseLocalDate(startDate).toISOString(),
       interestRate: parseFloat(interestRate) || 0,
       lateFee: parseFloat(lateFee) || 0,
       notes: notes.trim() || undefined,
@@ -339,7 +374,7 @@ export function CreatePlanDialog({
             )}
 
             {/* Total amount + start date */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="total-amount">Total Amount (KES)</Label>
                 <Input
@@ -369,26 +404,28 @@ export function CreatePlanDialog({
             {/* Installment count slider */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>Installment Count</Label>
+                <Label htmlFor="installment-count">Installment Count</Label>
                 <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
                   {installmentCount} × {formatKES(preview.installmentAmount)}
                 </span>
               </div>
               <Slider
+                id="installment-count"
+                aria-label="Installment count"
                 value={[installmentCount]}
                 min={1}
-                max={24}
+                max={MAX_INSTALLMENT_COUNT}
                 step={1}
                 onValueChange={(v) => setInstallmentCount(v[0] ?? 6)}
               />
               <div className="flex justify-between text-[10px] text-muted-foreground">
                 <span>1</span>
-                <span>24</span>
+                <span>{MAX_INSTALLMENT_COUNT}</span>
               </div>
             </div>
 
             {/* Frequency + interest rate */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Frequency</Label>
                 <Select
@@ -411,6 +448,7 @@ export function CreatePlanDialog({
                   id="interest-rate"
                   type="number"
                   min={0}
+                  max={100}
                   step="0.01"
                   value={interestRate}
                   onChange={(e) => setInterestRate(e.target.value)}
@@ -485,9 +523,7 @@ export function CreatePlanDialog({
                   <p className="text-muted-foreground">Total payable</p>
                   <p className="font-semibold flex items-center gap-1">
                     <TrendingUp className="h-3 w-3" />
-                    {formatKES(
-                      preview.installmentAmount * installmentCount,
-                    )}
+                    {formatKES(preview.totalPayable)}
                   </p>
                 </div>
               </div>

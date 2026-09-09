@@ -27,7 +27,6 @@ import { useAppStore } from '@/lib/stores';
 import {
   debtPaymentPlansApi,
   type DebtPaymentPlanItem,
-  type DebtPlanStatus,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
 
@@ -100,12 +99,16 @@ export function DebtPlansTab() {
   }, [statsError]);
 
   // ── Data: plans list (filtered) ──────────────────────────────────────────
-  // We always fetch the full list and filter client-side, so filter chips are
-  // instant and don't trigger extra network round-trips.
-  const queryParams = useMemo(() => ({ storeId: currentStoreId }), [currentStoreId]);
+  // We fetch one large bounded page and filter client-side, so filter chips
+  // are instant and don't trigger extra network round-trips (truncation is
+  // surfaced via the pagination envelope).
+  const queryParams = useMemo(
+    () => ({ storeId: currentStoreId, page: 1, pageSize: 100 }),
+    [currentStoreId],
+  );
 
   const {
-    data: plans,
+    data: listData,
     isLoading: plansLoading,
     error: plansError,
     refetch: refetchPlans,
@@ -113,11 +116,20 @@ export function DebtPlansTab() {
   } = useQuery({
     queryKey: ['debt-payment-plans', queryParams],
     queryFn: async () => {
+      // Task 12-d: request is now server-capped (pageSize 100) and reports
+      // truncation via the pagination envelope — the old call was an
+      // unbounded findMany.
       const res = await debtPaymentPlansApi.list(queryParams);
-      return res.data ?? [];
+      return {
+        rows: res.data ?? [],
+        pagination: res.pagination ?? null,
+      };
     },
     staleTime: 15_000,
   });
+
+  const plans = listData?.rows;
+  const plansTotal = listData?.pagination?.total ?? null;
 
   useEffect(() => {
     if (plansError) {
@@ -207,6 +219,7 @@ export function DebtPlansTab() {
               key={chip.key}
               type="button"
               onClick={() => setFilter(chip.key)}
+              aria-pressed={isActive}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                 isActive
                   ? CHIP_ACTIVE_CLASSES[chip.color]
@@ -235,6 +248,24 @@ export function DebtPlansTab() {
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-56" />
           ))}
+        </div>
+      ) : plansError ? (
+        // Task 12-d: a load failure previously looked identical to the empty
+        // state (toast only) — show an explicit error banner with a retry.
+        <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-rose-200 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20 rounded-xl">
+          <AlertTriangle className="h-12 w-12 text-rose-400 mb-3" />
+          <h3 className="text-lg font-semibold">Failed to load payment plans</h3>
+          <p className="text-sm text-muted-foreground mt-1 max-w-md">
+            {handleError(plansError, 'Load debt payment plans')}
+          </p>
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() => refetchPlans()}
+          >
+            <RefreshCw className="h-4 w-4 mr-1" />
+            Retry
+          </Button>
         </div>
       ) : filteredPlans.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed rounded-xl">
@@ -265,15 +296,22 @@ export function DebtPlansTab() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredPlans.map((plan) => (
-            <PaymentPlanCard
-              key={plan.id}
-              plan={plan}
-              onViewDetails={setDetailsPlan}
-            />
-          ))}
-        </div>
+        <>
+          {plansTotal !== null && plansTotal > (plans?.length ?? 0) && (
+            <p className="text-xs text-muted-foreground">
+              Showing the most recent {plans?.length} of {plansTotal} plans.
+            </p>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredPlans.map((plan) => (
+              <PaymentPlanCard
+                key={plan.id}
+                plan={plan}
+                onViewDetails={setDetailsPlan}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {/* Floating loading indicator when refreshing in background */}
@@ -299,6 +337,3 @@ export function DebtPlansTab() {
     </div>
   );
 }
-
-// Re-export status type for consumers that want to type filter values.
-export type { DebtPlanStatus };

@@ -37,9 +37,14 @@ export function PaymentPlanCard({ plan, onViewDetails }: PaymentPlanCardProps) {
   const progressPct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
 
   // Next due installment = first non-paid, non-waived installment.
-  const upcomingInstallment = plan.installments?.find(
-    (i) => i.status !== 'PAID' && i.status !== 'WAIVED',
-  );
+  // Task 12-d: the list API now returns `nextInstallment` directly (the list
+  // payload has no installments array, so the old `find` here was always
+  // undefined and the next-due date / overdue date / Payable badge below
+  // never rendered). The `find` fallback keeps the detail-view usage working.
+  const upcomingInstallment =
+    plan.nextInstallment ??
+    plan.installments?.find((i) => i.status !== 'PAID' && i.status !== 'WAIVED') ??
+    null;
 
   const isOverdue = (plan.installmentsOverdue ?? 0) > 0;
   const isPaused = plan.status === 'PAUSED';
@@ -48,7 +53,16 @@ export function PaymentPlanCard({ plan, onViewDetails }: PaymentPlanCardProps) {
   return (
     <Card
       className="glass-card hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer overflow-hidden"
+      role="button"
+      tabIndex={0}
+      aria-label={`View payment plan for ${plan.customer?.name ?? 'customer'}`}
       onClick={() => onViewDetails?.(plan)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onViewDetails?.(plan);
+        }
+      }}
     >
       <CardContent className="p-4 space-y-3">
         {/* Header: customer + status */}
@@ -108,7 +122,9 @@ export function PaymentPlanCard({ plan, onViewDetails }: PaymentPlanCardProps) {
           {isCompleted ? (
             <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
               <CheckCircle2 className="h-3.5 w-3.5" />
-              Completed {plan.completedAt ? formatDate(plan.completedAt) : ''}
+              {plan.completedAt
+                ? `Completed ${formatDate(plan.completedAt)}`
+                : 'Completed'}
             </span>
           ) : isPaused ? (
             <span className="flex items-center gap-1 text-sky-600 dark:text-sky-400">
