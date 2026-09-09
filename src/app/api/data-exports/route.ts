@@ -8,7 +8,7 @@
 // POST flow:
 //   1. Create a DataExport row with status=PROCESSING
 //   2. Call the appropriate generator from `src/lib/data-export-utils.ts`
-//   3. Write the file to `/home/z/my-project/download/exports/{id}.{ext}`
+//   3. Write the file to the resolved exports dir (see src/lib/export-paths.ts)
 //   4. Update the row: status=COMPLETED, recordCount, fileSizeBytes,
 //      filePath, completedAt, expiresAt (now + 7 days)
 //   5. Return the updated row
@@ -28,13 +28,16 @@ import {
   type ExportType,
   type ExportFormat,
 } from '@/lib/data-export-utils';
+import { resolveExportsDir } from '@/lib/export-paths';
 
 export const dynamic = 'force-dynamic';
 
 const FINANCIAL_READ_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'] as const;
 const FINANCIAL_WRITE_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'] as const;
 
-const EXPORTS_DIR = '/home/z/my-project/download/exports';
+// AUDIT FIX (Finding 1.2): was the hardcoded '/home/z/my-project/download/
+// exports' — see src/lib/export-paths.ts for why that broke production.
+const EXPORTS_DIR = resolveExportsDir();
 const EXPIRY_DAYS = 7;
 
 const VALID_EXPORT_TYPES: ExportType[] = [
