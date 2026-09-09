@@ -1767,3 +1767,26 @@ Stage Summary:
 7. Add E2E tests (Playwright) for checkout, loyalty, debt plans, exports flows
 8. Resolve /api/health schema drift with `prisma db push --force-reset` +
   re-seed (low priority — only affects health checks, not core functionality)
+
+---
+Task ID: 12-d
+Agent: Z.ai Code (Principal Full-Stack Engineer / Security Lead)
+Task: DEBT PLAN MODULE — comprehensive audit (empty code, defects, optimizations, enhancements) with all corrections implemented on feature/debt-plan-hardening
+
+Work Log:
+- Audited the full module end-to-end: 7 API routes under /api/debt-payment-plans/**, debt-plan-utils.ts, debt-helpers.ts, db.ts tenancy layer, all 7 debt-plans UI components, debt-plans-tab, api.ts client, schema (DebtPaymentPlan/DebtPlanInstallment), tests. 14 confirmed defects (1 critical security, 5 high, 8 medium) + 9 low + 4 dead-code items.
+- CRITICAL C1 (IDOR): debtPaymentPlan was missing from STORE_SCOPED_MODELS — single-plan routes (GET/PATCH/DELETE [id], approve, pay, waive, installments) loaded plans by bare findUnique({where:{id}}) with no tenancy → cross-store read/approve/pay/cancel/delete by ID. Fixed by adding the model to the allowlist (injectTenant now narrows every plan query, incl. uniques).
+- HIGH H1: waive route forgave the FULL amountDue even for PARTIAL installments — double-credited the already-collected portion against the debt ledger + customer.currentDebtBalance and understated plan balance. Now waives only amountDue − amountPaid, computed from the authoritative in-transaction row (also closes outside-read→claim race); plan totalAmount/ledger/customer all decrement by the remainder.
+- HIGH H2: interest divergence — calculateInstallmentSchedule pro-rated by duration but calculateInstallmentAmount applied a flat rate, so the stored installmentAmount disagreed with the actual schedule for sub-year plans. New calculateTotalWithInterest is the single source of truth; create route derives installmentAmount FROM the schedule; dialog preview runs the exact server schedule.
+- HIGH H3: DEFAULTED plans were bricked (pay/waive required ACTIVE/PAUSED, PATCH had no DEFAULTED transition, DELETE rejected) — now accepts catch-up pay/waive with auto-recovery to ACTIVE, plus DEFAULTED→CANCELLED, plus a UI banner.
+- HIGH H4: plan-row totals were read-modify-write from an outside-tx snapshot (lost update under concurrent pay/waive on different installments) — now recomputed from a fresh in-tx findMany.
+- HIGH H5: list endpoint returned no installment data → plan cards' next-due/overdue-date/Payable never rendered. List now returns nextInstallment (take:1 nested include).
+- MEDIUM: atomic approval with approvedAt stamp (additive migration 20260909120000_add_plan_approved_at) + race loser 409 + serialized response; list pagination (page/pageSize, cap 100, ApiResponse.pagination envelope) with live overdue predicate + idempotent stale-overdue sweep + groupBy live counts; create validation (interestRate 0-100, lateFee 0-100k, strict frequency, JSON 400 guard, epsilon 0.01, customer store check for SUPER_ADMIN bypass); totalDefaultedOutstanding stat surfaced on the dashboard; stale payment-amount + waiver-reason resets via per-open remount keys; create-form reset after success; 300ms search debounce; error-vs-empty state with retry.
+- LOW/hygiene: single-fetch GET using markOverdueInstallments (removed triple refetch + void-import hack); shared serializePlanRow/serializeInstallmentRow replaced 6 hand-rolled copies (approve previously returned raw Decimals); dead exports/props removed (getPaymentHistory, getInstallmentDateLabel, presetCustomerId/onCreated, DebtPlanStatus re-export, unused _count include); a11y (aria-pressed chips, card keyboard parity, slider aria-label, responsive grids); cancel-plan AlertDialog; Math.max(0, …) clamps; local date parsing.
+- Tests: debt-helpers.test.ts updated to the new calculateInstallmentAmount(total, count, frequency, rate) signature + new pro-rating case — 85/85 green. financial-remediations.test.ts has 7 failures that reproduce identically on pristine main (pre-existing, environment-dependent; untouched).
+- Full findings/fix mapping in DEBT_PLAN_MODULE_AUDIT.md (root).
+
+Stage Summary:
+- Deliverables: hardened debt plan module on feature/debt-plan-hardening + DEBT_PLAN_MODULE_AUDIT.md report + additive approvedAt migration.
+- Key decisions: waive the REMAINDER (not amountDue); interest model pro-rated with one shared function; DEFAULTED is curable, not terminal; tenancy fixed at the ORM layer (one line) rather than per-route checks; response shapes additive-only (no breaking changes).
+- Risks/next: per-plan payment ledger for exact "collected this month"; cron driver for overdue sweep/late fees/auto-charge; MISSED status currently never written; installment-level storeId if ever queried directly.
