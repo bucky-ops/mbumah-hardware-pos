@@ -17,7 +17,7 @@ import { withFinancialAuth, getSessionFromRequest } from '@/lib/auth';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { generateJournalEntryNumber, calculateAgingBucket } from '@/lib/helpers';
 import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
-import { toNumber, recalculatePlanTotals, getPlanStatus } from '@/lib/debt-plan-utils';
+import { toNumber, recalculatePlanTotals, getPlanStatus, serializePlanRow, serializeInstallmentRow } from '@/lib/debt-plan-utils';
 // Task 12-c: canonical financial math (HALF_UP 2dp). Prisma Decimal
 // `valueOf()` returns a STRING — the old float/tolerance math and the
 // read-then-write on the installment + DebtLedger allowed concurrent
@@ -96,11 +96,18 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  if (plan.status !== 'ACTIVE' && plan.status !== 'PAUSED') {
+  // Task 12-d (debt-plan audit): DEFAULTED plans accept catch-up payments.
+  // getPlanStatus flips a plan to DEFAULTED at ≥25% overdue installments, and
+  // the old guard then made it impossible to record the very payments that
+  // would cure the default (pay/waive required ACTIVE/PAUSED, and PATCH had
+  // no transition out of DEFAULTED — the plan was bricked). The status
+  // re-derivation below automatically promotes the plan back to ACTIVE once
+  // the overdue ratio drops under the threshold.
+  if (!['ACTIVE', 'PAUSED', 'DEFAULTED'].includes(plan.status)) {
     return Response.json(
       {
         success: false,
-        error: `Cannot record payment on a plan with status "${plan.status}". Plan must be ACTIVE.`,
+        error: `Cannot record payment on a plan with status "${plan.status}". Only ACTIVE, PAUSED, or DEFAULTED plans accept payments.`,
       },
       { status: 400 },
     );
@@ -192,11 +199,19 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
       },
     });
 
-    // 2. Recompute plan totals from all installments.
-    const refreshedInstallments = plan.installments.map((i) =>
-      i.id === installmentId ? { ...i, ...updatedInstallment } : i,
-    );
-    const totals = recalculatePlanTotals(plan, refreshedInstallments);
+    // 2. Recompute plan totals from a FRESH in-transaction read of all
+    //    installments. Task 12-d: the old code re-used the outside-tx
+    //    snapshot with only this installment patched — a concurrent pay or
+    //    waive on a DIFFERENT installment of the same plan could land between
+    //    our read and our absolute totals write, and the loser silently
+    //    reverted the winner's amountPaid/balance (lost update). The
+    //    installment-level claims were atomic, but the plan-row totals write
+    //    was read-modify-write; re-reading inside the tx closes that window.
+    const freshInstallments = await tx.debtPlanInstallment.findMany({
+      where: { planId: id },
+      orderBy: { installmentNumber: 'asc' },
+    });
+    const totals = recalculatePlanTotals(plan, freshInstallments);
 
     // 3. Derive new plan status — COMPLETED if balance is now 0 (exact
     // Decimal comparison, was float `totals.balance <= 0.001`).
@@ -398,39 +413,13 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
     },
   });
 
-  const serialized = finalPlan && {
-    ...finalPlan,
-    totalAmount: toNumber(finalPlan.totalAmount),
-    installmentAmount: toNumber(finalPlan.installmentAmount),
-    amountPaid: toNumber(finalPlan.amountPaid),
-    balance: toNumber(finalPlan.balance),
-    interestRate: toNumber(finalPlan.interestRate),
-    lateFee: toNumber(finalPlan.lateFee),
-    installments: finalPlan.installments.map((i) => ({
-      ...i,
-      amountDue: toNumber(i.amountDue),
-      amountPaid: toNumber(i.amountPaid),
-      lateFeeApplied: toNumber(i.lateFeeApplied),
-    })),
-    debtLedger: finalPlan.debtLedger
-      ? {
-          ...finalPlan.debtLedger,
-          amountOwed: toNumber(finalPlan.debtLedger.amountOwed),
-          balance: toNumber(finalPlan.debtLedger.balance),
-        }
-      : null,
-  };
+  const serialized = finalPlan ? serializePlanRow(finalPlan) : null;
 
   return Response.json({
     success: true,
     data: {
       plan: serialized,
-      installment: {
-        ...result.updatedInstallment,
-        amountDue: toNumber(result.updatedInstallment.amountDue),
-        amountPaid: toNumber(result.updatedInstallment.amountPaid),
-        lateFeeApplied: toNumber(result.updatedInstallment.lateFeeApplied),
-      },
+      installment: serializeInstallmentRow(result.updatedInstallment),
     },
   });
 }

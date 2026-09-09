@@ -415,22 +415,37 @@ describe('calculateEndDate', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('calculateInstallmentAmount', () => {
+  // Task 12-d: signature gained a `frequency` parameter — the interest model
+  // is now pro-rated by plan duration (shared with calculateInstallmentSchedule
+  // via calculateTotalWithInterest), so every call site passes a frequency.
+
   it('divides evenly without interest', () => {
-    expect(calculateInstallmentAmount(1000, 4, 0)).toBe(250);
+    expect(calculateInstallmentAmount(1000, 4, 'MONTHLY', 0)).toBe(250);
   });
 
   it('adds interest to the amount', () => {
-    const withInterest = calculateInstallmentAmount(1000, 12, 10);
-    const without = calculateInstallmentAmount(1000, 12, 0);
+    const withInterest = calculateInstallmentAmount(1000, 12, 'MONTHLY', 10);
+    const without = calculateInstallmentAmount(1000, 12, 'MONTHLY', 0);
     expect(withInterest).toBeGreaterThan(without);
   });
 
+  it('pro-rates interest by plan duration (Task 12-d fix)', () => {
+    // Same rate, shorter plan → less TOTAL interest. The old flat-rate model
+    // charged 10% regardless of duration, diverging from the schedule.
+    // 6 monthly installments = 0.5 years → total 1050, per = 175.00 (exact).
+    const halfYearPer = calculateInstallmentAmount(1000, 6, 'MONTHLY', 10);
+    expect(halfYearPer).toBe(175);
+    // Full year → total 1100 → strictly more total interest than half a year.
+    const fullYearPer = calculateInstallmentAmount(1000, 12, 'MONTHLY', 10);
+    expect(halfYearPer * 6 - 1000).toBeLessThan(fullYearPer * 12 - 1000);
+  });
+
   it('handles minimum count of 1', () => {
-    expect(calculateInstallmentAmount(5000, 0, 0)).toBe(5000);
+    expect(calculateInstallmentAmount(5000, 0, 'MONTHLY', 0)).toBe(5000);
   });
 
   it('rounds to 2 decimal places', () => {
-    const amount = calculateInstallmentAmount(1000, 3, 0);
+    const amount = calculateInstallmentAmount(1000, 3, 'MONTHLY', 0);
     // 1000 / 3 = 333.333... → should be 333.33
     expect(round2(amount * 3)).toBeCloseTo(1000, 1);
   });

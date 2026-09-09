@@ -14,9 +14,10 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { withFinancialAuth, getSessionFromRequest } from '@/lib/auth';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import {
-  toNumber,
   recalculatePlanTotals,
   getPlanStatus,
+  serializePlanRow,
+  serializeInstallmentRow,
 } from '@/lib/debt-plan-utils';
 // Task 12-c: canonical financial math (HALF_UP 2dp). Prisma Decimal
 // `valueOf()` returns a STRING — `totalAmount − waivedAmount` used to coerce
@@ -84,7 +85,10 @@ async function waiveInstallmentHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  if (plan.status !== 'ACTIVE' && plan.status !== 'PAUSED') {
+  // Task 12-d (debt-plan audit): DEFAULTED plans accept waivers so a
+  // delinquent plan can be cured (or fully waived to completion) — the old
+  // guard left DEFAULTED plans with no exit at all.
+  if (!['ACTIVE', 'PAUSED', 'DEFAULTED'].includes(plan.status)) {
     return Response.json(
       {
         success: false,
@@ -112,9 +116,14 @@ async function waiveInstallmentHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Task 12-c: Decimal amount (was toNumber float); HALF_UP 2dp emit.
-  const waivedAmountDec = toDec(installment.amountDue);
-  const waivedAmount = round2(waivedAmountDec);
+  // Task 12-d: the waived amount is NO LONGER computed here from the
+  // outside-tx read — only the UNPAID remainder of the installment is
+  // forgiven, and that must be derived from the authoritative in-transaction
+  // row (see below). The old code waived the full amountDue even for a
+  // PARTIAL installment: the paid portion had already been collected (the
+  // pay route decrements the debt ledger + customer balance at pay time), so
+  // waiving the full amount double-credited the customer by amountPaid and
+  // understated the plan balance by the same amount.
 
   const result = await db.$transaction(async (tx) => {
     // 1. Mark the installment WAIVED — ATOMIC conditional claim (was an
@@ -140,22 +149,40 @@ async function waiveInstallmentHandler(...args: unknown[]): Promise<Response> {
       where: { id: installmentId },
     });
 
-    // 2. Reduce the plan's totalAmount by the waived installment's amountDue
+    // Task 12-d: waive only the UNPAID remainder (amountDue − amountPaid).
+    // Computing this from the in-tx row also closes the outside-read → claim
+    // race where a concurrent pay would have been missed by a stale snapshot.
+    const remainingDueDec = toDec(updatedInstallment.amountDue).minus(
+      toDec(updatedInstallment.amountPaid),
+    );
+    if (remainingDueDec.lte('0.001')) {
+      throw new InstallmentClaimConflictError(
+        'Waiver conflict: the installment was fully paid concurrently. Refresh and retry.'
+      );
+    }
+    const waivedAmountDec = remainingDueDec;
+    const waivedAmount = round2(waivedAmountDec);
+
+    // 2. Reduce the plan totalAmount by the WAIVED REMAINDER (not amountDue)
     //    so that `balance = totalAmount - amountPaid` stays consistent
     //    (a waived installment is no longer owed).
     //    Task 12-c: exact Decimal subtraction (was float) and the write uses
     //    an ATOMIC decrement instead of an absolute overwrite.
     const newTotalAmountDec = toDec(plan.totalAmount).minus(waivedAmountDec);
 
-    // 3. Recompute plan totals from installments (with the waived one).
-    const refreshedInstallments = plan.installments.map((i) =>
-      i.id === installmentId
-        ? { ...i, status: 'WAIVED' as const }
-        : i,
-    );
+    // 3. Recompute plan totals from a FRESH in-transaction read of all
+    //    installments (the claim above is already visible to this read).
+    //    Task 12-d: the old code re-used the outside-tx snapshot — a
+    //    concurrent pay or waive on a DIFFERENT installment of the same plan
+    //    could be silently reverted by this absolute totals write (lost
+    //    update). Reading inside the tx closes that window.
+    const freshInstallments = await tx.debtPlanInstallment.findMany({
+      where: { planId: id },
+      orderBy: { installmentNumber: 'asc' },
+    });
     const totals = recalculatePlanTotals(
       { ...plan, totalAmount: newTotalAmountDec },
-      refreshedInstallments,
+      freshInstallments,
     );
 
     let newPlanStatus = getPlanStatus({
@@ -185,8 +212,10 @@ async function waiveInstallmentHandler(...args: unknown[]): Promise<Response> {
     // 4. Mirror the waiver onto the underlying DebtLedger: reduce amountOwed
     //    so the customer's overall debt balance drops accordingly. This is
     //    effectively a write-off of one installment's worth of debt.
-    //    Task 12-c: ATOMIC conditional decrements (was read-modify-write of
-    //    absolute values with a float Math.max(0, …) clamp).
+    //    Task 12-d: decrement by the UNPAID remainder (was the full
+    //    amountDue — double-credited the paid portion), and ATOMIC
+    //    conditional decrements (was read-modify-write of absolute values
+    //    with a float Math.max(0, …) clamp).
     if (plan.debtLedger) {
       const debt = plan.debtLedger;
       const claimedDebt = await tx.debtLedger.updateMany({
@@ -271,39 +300,13 @@ async function waiveInstallmentHandler(...args: unknown[]): Promise<Response> {
     },
   });
 
-  const serialized = finalPlan && {
-    ...finalPlan,
-    totalAmount: toNumber(finalPlan.totalAmount),
-    installmentAmount: toNumber(finalPlan.installmentAmount),
-    amountPaid: toNumber(finalPlan.amountPaid),
-    balance: toNumber(finalPlan.balance),
-    interestRate: toNumber(finalPlan.interestRate),
-    lateFee: toNumber(finalPlan.lateFee),
-    installments: finalPlan.installments.map((i) => ({
-      ...i,
-      amountDue: toNumber(i.amountDue),
-      amountPaid: toNumber(i.amountPaid),
-      lateFeeApplied: toNumber(i.lateFeeApplied),
-    })),
-    debtLedger: finalPlan.debtLedger
-      ? {
-          ...finalPlan.debtLedger,
-          amountOwed: toNumber(finalPlan.debtLedger.amountOwed),
-          balance: toNumber(finalPlan.debtLedger.balance),
-        }
-      : null,
-  };
+  const serialized = finalPlan ? serializePlanRow(finalPlan) : null;
 
   return Response.json({
     success: true,
     data: {
       plan: serialized,
-      installment: {
-        ...result.updatedInstallment,
-        amountDue: toNumber(result.updatedInstallment.amountDue),
-        amountPaid: toNumber(result.updatedInstallment.amountPaid),
-        lateFeeApplied: toNumber(result.updatedInstallment.lateFeeApplied),
-      },
+      installment: serializeInstallmentRow(result.updatedInstallment),
     },
   });
 }

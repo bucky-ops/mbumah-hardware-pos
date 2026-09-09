@@ -29,6 +29,10 @@ interface StatCardConfig {
 }
 
 export function PlansStatsCards({ stats, isLoading }: PlansStatsCardsProps) {
+  // Task 12-d: DEFAULTED exposure is now tracked by the stats endpoint and
+  // surfaced here — it was previously invisible (Outstanding only counts
+  // ACTIVE/PAUSED plans, so defaulted balances vanished from the dashboard).
+  const defaultedOutstanding = stats?.totalDefaultedOutstanding ?? 0;
   const cards: StatCardConfig[] = [
     {
       label: 'Active Plans',
@@ -44,6 +48,10 @@ export function PlansStatsCards({ stats, isLoading }: PlansStatsCardsProps) {
       icon: HandCoins,
       gradient: 'from-amber-500 to-amber-600',
       iconColor: 'text-amber-500',
+      trend:
+        defaultedOutstanding > 0
+          ? `${formatKES(defaultedOutstanding)} in defaulted plans`
+          : undefined,
     },
     {
       label: 'Overdue Plans',

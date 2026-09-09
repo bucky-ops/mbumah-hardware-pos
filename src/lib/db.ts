@@ -255,6 +255,15 @@ const STORE_SCOPED_MODELS = new Set<string>([
   "mpesaTransaction",
   "debtLedger",
   "debtPayment",
+  // Task 12-d (debt-plan audit, security): DebtPaymentPlan carries a storeId
+  // but was missing from this set — every plan query escaped Layer-4 tenancy.
+  // The list route self-scopes via a validated query param, but the
+  // single-plan routes ([id] GET/PATCH/DELETE, approve, pay, waive) looked up
+  // rows by bare `findUnique({ where: { id } })`, so a financial user from
+  // store A could read/modify/approve/pay a store B plan by ID (IDOR).
+  // Adding the model here auto-narrows ALL plan queries to the caller's
+  // store (injectTenant ANDs storeId into every where, including uniques).
+  "debtPaymentPlan",
   "equipmentRental",
   "journalEntry",
   "cashDrawerLog",

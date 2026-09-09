@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2, ShieldOff } from 'lucide-react';
@@ -9,8 +9,6 @@ import {
   debtPaymentPlansApi,
   formatKES,
   formatDate,
-  formatDateTime,
-  type DebtPaymentPlanItem,
   type DebtPlanInstallmentItem,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
@@ -31,7 +29,6 @@ interface WaiveInstallmentDialogProps {
   onOpenChange: (open: boolean) => void;
   planId: string;
   installment: DebtPlanInstallmentItem | null;
-  onWaived?: () => void;
 }
 
 export function WaiveInstallmentDialog({
@@ -39,20 +36,31 @@ export function WaiveInstallmentDialog({
   onOpenChange,
   planId,
   installment,
-  onWaived,
 }: WaiveInstallmentDialogProps) {
   const queryClient = useQueryClient();
+  // Reset the reason on each open. Task 12-d: the old event-driven reset in
+  // an onOpenChange wrapper never ran because the parent opens this dialog
+  // programmatically, so the previous waiver's reason text persisted into the
+  // next open. The parent remounts this dialog per open via a `key`, so the
+  // initializer below runs fresh every time — no effects needed.
   const [waiverReason, setWaiverReason] = useState<string>('');
 
-  // Reset the waiver reason when the dialog opens — event-driven (not
-  // effect-driven) to avoid the set-state-in-effect lint rule.
-  const handleOpenChange = (next: boolean) => {
-    if (next) {
-      setWaiverReason('');
-    }
-    onOpenChange(next);
-  };
+  // Remaining (unpaid) balance on the installment. Task 12-d (debt-plan
+  // audit, HIGH): only this remainder is actually forgiven — the server
+  // waives `amountDue − amountPaid` and leaves the already-collected portion
+  // untouched. The dialog previously displayed the full `amountDue`, which
+  // misrepresented partial installments.
+  const remainingToWaive = useMemo(() => {
+    if (!installment) return 0;
+    return Math.max(0, (installment.amountDue ?? 0) - (installment.amountPaid ?? 0));
+  }, [installment]);
 
+  const isPartial = Boolean(
+    installment && (installment.amountPaid ?? 0) > 0.001 && installment.status !== 'PAID',
+  );
+
+  // Reset the reason on each open — handled by the parent's per-open
+  // remount (`key`), no effects needed.
   const waiveMutation = useMutation({
     mutationFn: async () => {
       if (!installment) throw new Error('No installment selected.');
@@ -67,7 +75,6 @@ export function WaiveInstallmentDialog({
       queryClient.invalidateQueries({ queryKey: ['debt-payment-plans'] });
       queryClient.invalidateQueries({ queryKey: ['debt-payment-plans-stats'] });
       queryClient.invalidateQueries({ queryKey: ['debt-payment-plan', planId] });
-      onWaived?.();
       onOpenChange(false);
     },
     onError: (err) => {
@@ -85,7 +92,7 @@ export function WaiveInstallmentDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -93,8 +100,9 @@ export function WaiveInstallmentDialog({
             Waive Installment
           </DialogTitle>
           <DialogDescription>
-            Waiving removes the installment from the customer's outstanding
-            balance. This action is irreversible and will be logged in the audit trail.
+            Waiving removes the unpaid remainder of the installment from the
+            customer&apos;s outstanding balance. This action is irreversible and
+            will be logged in the audit trail.
           </DialogDescription>
         </DialogHeader>
 
@@ -110,13 +118,29 @@ export function WaiveInstallmentDialog({
                 {installment ? formatDate(installment.dueDate) : ''}
               </span>
             </div>
+            {isPartial && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Already collected</span>
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                  {formatKES(installment?.amountPaid ?? 0)}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Amount to waive</span>
               <span className="font-semibold text-violet-600 dark:text-violet-400">
-                {formatKES(installment?.amountDue ?? 0)}
+                {formatKES(remainingToWaive)}
               </span>
             </div>
           </div>
+
+          {isPartial && (
+            <p className="text-[11px] text-amber-600 dark:text-amber-400">
+              This installment was partially paid — only the unpaid remainder
+              ({formatKES(remainingToWaive)}) will be forgiven; the collected
+              portion stays in the ledger.
+            </p>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="waiver-reason">Waiver Reason</Label>
@@ -133,7 +157,7 @@ export function WaiveInstallmentDialog({
         <DialogFooter className="gap-2">
           <Button
             variant="outline"
-            onClick={() => handleOpenChange(false)}
+            onClick={() => onOpenChange(false)}
             disabled={waiveMutation.isPending}
           >
             Cancel
@@ -155,26 +179,3 @@ export function WaiveInstallmentDialog({
     </Dialog>
   );
 }
-
-/** Small helper to keep the parent component readable. */
-export function getPaymentHistory(installments: DebtPlanInstallmentItem[] | undefined) {
-  if (!installments) return [];
-  return installments
-    .filter((i) => i.paidAt || i.status === 'WAIVED')
-    .sort((a, b) => {
-      const aDate = a.paidAt ? new Date(a.paidAt).getTime() : 0;
-      const bDate = b.paidAt ? new Date(b.paidAt).getTime() : 0;
-      return bDate - aDate;
-    });
-}
-
-/** Status badge label shorthand used in the details table. */
-export function getInstallmentDateLabel(installment: DebtPlanInstallmentItem): string {
-  if (installment.paidAt) {
-    return `Paid ${formatDateTime(installment.paidAt)}`;
-  }
-  return `Due ${formatDate(installment.dueDate)}`;
-}
-
-/** Inline type-only re-export for consumers. */
-export type { DebtPaymentPlanItem };

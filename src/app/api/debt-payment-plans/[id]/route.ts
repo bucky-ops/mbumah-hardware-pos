@@ -3,6 +3,24 @@
 // Single-plan operations. PENDING_APPROVAL plans can be edited freely;
 // ACTIVE plans may only be PAUSED or CANCELLED; DELETE is allowed only on
 // PENDING_APPROVAL or CANCELLED plans.
+//
+// Task 12-d (debt-plan audit) changes:
+//   - Tenant isolation now relies on Layer-4 tenancy: `debtPaymentPlan` was
+//     added to STORE_SCOPED_MODELS in src/lib/db.ts, so this bare
+//     `findUnique({ where: { id } })` is auto-narrowed to the caller's store
+//     (previously any financial user could touch another store's plan by ID).
+//   - GET applies the overdue sweep with the shared `markOverdueInstallments`
+//     util and recomputes/persists totals with a single in-memory merge — the
+//     old implementation re-fetched the whole plan twice more (3 queries +
+//     2 reloads for one GET) and carried a dead `void markOverdueInstallments`
+//     import hack instead of using the helper that was exported for exactly
+//     this purpose.
+//   - PATCH allows DEFAULTED → CANCELLED. The old transition table made a
+//     DEFAULTED plan a dead end: payments/waivers were blocked (pay/waive
+//     required ACTIVE/PAUSED), PATCH rejected every target, and DELETE only
+//     accepted PENDING_APPROVAL/CANCELLED — the plan could never leave
+//     DEFAULTED. (Pay/waive on DEFAULTED plans is separately enabled in
+//     those routes so customers can catch up.)
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -13,7 +31,7 @@ import {
   recalculatePlanTotals,
   markOverdueInstallments,
   getPlanStatus,
-  toNumber,
+  serializePlanRow,
   type PlanStatus,
 } from '@/lib/debt-plan-utils';
 
@@ -28,25 +46,28 @@ interface RouteContext {
 
 const ALLOWED_PATCH_STATUSES: PlanStatus[] = ['PAUSED', 'CANCELLED', 'ACTIVE'];
 
+// Shared include shape for the plan detail query (used by all fetches here).
+const PLAN_INCLUDE = {
+  customer: {
+    select: { id: true, name: true, phone: true, email: true, currentDebtBalance: true, debtLimit: true },
+  },
+  debtLedger: {
+    select: { id: true, amountOwed: true, amountPaid: true, balance: true, status: true, dueDate: true },
+  },
+  createdBy: { select: { id: true, name: true } },
+  approvedBy: { select: { id: true, name: true } },
+  installments: { orderBy: { installmentNumber: 'asc' } },
+} as const;
+
 // ── GET: single plan with installments ───────────────────────────────────────
 
 async function getPlanHandler(...args: unknown[]): Promise<Response> {
   const context = args[1] as RouteContext;
   const { id } = await context.params;
 
-  const plan = await db.debtPaymentPlan.findUnique({
+  let plan = await db.debtPaymentPlan.findUnique({
     where: { id },
-    include: {
-      customer: {
-        select: { id: true, name: true, phone: true, email: true, currentDebtBalance: true, debtLimit: true },
-      },
-      debtLedger: {
-        select: { id: true, amountOwed: true, amountPaid: true, balance: true, status: true, dueDate: true },
-      },
-      createdBy: { select: { id: true, name: true } },
-      approvedBy: { select: { id: true, name: true } },
-      installments: { orderBy: { installmentNumber: 'asc' } },
-    },
+    include: PLAN_INCLUDE,
   });
 
   if (!plan) {
@@ -57,12 +78,13 @@ async function getPlanHandler(...args: unknown[]): Promise<Response> {
   }
 
   // Lazily apply overdue marking on read so the UI always reflects reality.
+  // Task 12-d: uses the shared util; after persisting the status flips the
+  // refreshed totals/status are merged IN MEMORY instead of re-fetching the
+  // plan twice (the old code issued up to 3 full plan queries per GET).
   const now = new Date();
+  const marked = markOverdueInstallments(plan.installments, now);
   const overdueInstallmentIds = plan.installments
-    .filter((i) => {
-      if (i.status === 'PAID' || i.status === 'WAIVED') return false;
-      return new Date(i.dueDate).getTime() < now.getTime() && i.status !== 'OVERDUE';
-    })
+    .filter((i, idx) => marked[idx].status === 'OVERDUE' && i.status !== 'OVERDUE')
     .map((i) => i.id);
 
   if (overdueInstallmentIds.length > 0) {
@@ -70,79 +92,23 @@ async function getPlanHandler(...args: unknown[]): Promise<Response> {
       where: { id: { in: overdueInstallmentIds } },
       data: { status: 'OVERDUE' },
     });
-    // Re-fetch with updated statuses.
-    const refreshed = await db.debtPaymentPlan.findUnique({
+
+    const planWithMarked = { ...plan, installments: marked };
+    const totals = recalculatePlanTotals(planWithMarked, marked);
+    const derivedStatus = getPlanStatus({ ...planWithMarked, ...totals });
+    await db.debtPaymentPlan.update({
       where: { id },
-      include: {
-        customer: {
-          select: { id: true, name: true, phone: true, email: true, currentDebtBalance: true, debtLimit: true },
-        },
-        debtLedger: {
-          select: { id: true, amountOwed: true, amountPaid: true, balance: true, status: true, dueDate: true },
-        },
-        createdBy: { select: { id: true, name: true } },
-        approvedBy: { select: { id: true, name: true } },
-        installments: { orderBy: { installmentNumber: 'asc' } },
-      },
+      data: { ...totals, status: derivedStatus },
     });
-    if (refreshed) {
-      // Recompute totals and persist.
-      const totals = recalculatePlanTotals(refreshed, refreshed.installments);
-      const derivedStatus = getPlanStatus({
-        ...refreshed,
-        ...totals,
-      });
-      await db.debtPaymentPlan.update({
-        where: { id },
-        data: { ...totals, status: derivedStatus },
-      });
-      const finalPlan = await db.debtPaymentPlan.findUnique({
-        where: { id },
-        include: {
-          customer: {
-            select: { id: true, name: true, phone: true, email: true, currentDebtBalance: true, debtLimit: true },
-          },
-          debtLedger: {
-            select: { id: true, amountOwed: true, amountPaid: true, balance: true, status: true, dueDate: true },
-          },
-          createdBy: { select: { id: true, name: true } },
-          approvedBy: { select: { id: true, name: true } },
-          installments: { orderBy: { installmentNumber: 'asc' } },
-        },
-      });
-      if (finalPlan) {
-        return Response.json({ success: true, data: serializePlan(finalPlan) });
-      }
-    }
+
+    plan = {
+      ...planWithMarked,
+      ...totals,
+      status: derivedStatus,
+    } as typeof plan;
   }
 
-  return Response.json({ success: true, data: serializePlan(plan) });
-}
-
-function serializePlan<T extends { installments: Array<Record<string, unknown>> }>(plan: T): Record<string, unknown> {
-  return {
-    ...plan,
-    totalAmount: toNumber((plan as unknown as { totalAmount: unknown }).totalAmount),
-    installmentAmount: toNumber((plan as unknown as { installmentAmount: unknown }).installmentAmount),
-    amountPaid: toNumber((plan as unknown as { amountPaid: unknown }).amountPaid),
-    balance: toNumber((plan as unknown as { balance: unknown }).balance),
-    interestRate: toNumber((plan as unknown as { interestRate: unknown }).interestRate),
-    lateFee: toNumber((plan as unknown as { lateFee: unknown }).lateFee),
-    installments: plan.installments.map((i) => ({
-      ...i,
-      amountDue: toNumber(i.amountDue),
-      amountPaid: toNumber(i.amountPaid),
-      lateFeeApplied: toNumber(i.lateFeeApplied),
-    })),
-    debtLedger: (plan as unknown as { debtLedger: Record<string, unknown> | null }).debtLedger
-      ? {
-          ...(plan as unknown as { debtLedger: Record<string, unknown> }).debtLedger,
-          amountOwed: toNumber((plan as unknown as { debtLedger: { amountOwed: unknown } }).debtLedger.amountOwed),
-          amountPaid: toNumber((plan as unknown as { debtLedger: { amountPaid: unknown } }).debtLedger.amountPaid),
-          balance: toNumber((plan as unknown as { debtLedger: { balance: unknown } }).debtLedger.balance),
-        }
-      : null,
-  };
+  return Response.json({ success: true, data: serializePlanRow(plan) });
 }
 
 // ── PATCH: update notes/status (with state-machine rules) ───────────────────
@@ -151,7 +117,17 @@ async function patchPlanHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const context = args[1] as RouteContext;
   const { id } = await context.params;
-  const body = await request.json();
+
+  // Task 12-d: malformed JSON is a client bug → 400 (was a 500 via boundary).
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json(
+      { success: false, error: 'Request body is not valid JSON.' },
+      { status: 400 },
+    );
+  }
 
   const existing = await db.debtPaymentPlan.findUnique({ where: { id } });
   if (!existing) {
@@ -201,6 +177,14 @@ async function patchPlanHandler(...args: unknown[]): Promise<Response> {
     ) {
       updates.status = 'CANCELLED';
       updates.cancelledAt = new Date();
+    } else if (existing.status === 'DEFAULTED' && target === 'CANCELLED') {
+      // Task 12-d: DEFAULTED plans were a state-machine dead end (no PATCH
+      // transition accepted, pay/waive blocked, DELETE rejected) — the plan
+      // could never leave DEFAULTED even when both parties agreed to abort.
+      // Cancelling is the correct escape hatch; the underlying debt remains
+      // collectible via the debt ledger outside the plan.
+      updates.status = 'CANCELLED';
+      updates.cancelledAt = new Date();
     } else {
       return Response.json(
         {
@@ -239,7 +223,7 @@ async function patchPlanHandler(...args: unknown[]): Promise<Response> {
     metadata: { planId: id, updates },
   });
 
-  return Response.json({ success: true, data: serializePlan(updated) });
+  return Response.json({ success: true, data: serializePlanRow(updated) });
 }
 
 // ── DELETE: only PENDING_APPROVAL or CANCELLED ──────────────────────────────
@@ -291,10 +275,6 @@ async function deletePlanHandler(...args: unknown[]): Promise<Response> {
     message: 'Payment plan deleted successfully.',
   });
 }
-
-// Silence unused import — markOverdueInstallments is exported by the util
-// module and may be reused by callers that operate on bulk installment lists.
-void markOverdueInstallments;
 
 export const GET = withErrorBoundary(
   withFinancialAuth(getPlanHandler, FINANCIAL_READ_ROLES),

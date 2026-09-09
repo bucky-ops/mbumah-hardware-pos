@@ -3,6 +3,18 @@
 // Debt Payment Plans — installment-based repayment schedules for outstanding
 // customer debts. Mirrors the auth/tenancy pattern of /api/debt and the
 // financial routes: `withErrorBoundary(withFinancialAuth(...))`.
+//
+// Task 12-d (debt-plan audit) changes:
+//   GET  — pagination (page/pageSize), a store-wide stale-overdue sweep, live
+//          per-plan overdue counts, and a `nextInstallment` on every row so
+//          plan cards can render the next due date without loading details.
+//          The overdue filter now uses a live installment predicate instead
+//          of the previously-stale denormalized counter.
+//   POST — malformed-JSON guard, strict frequency validation, bounded
+//          interestRate/lateFee, a customer↔store consistency check (defense
+//          for the SUPER_ADMIN tenant bypass), a tighter ledger-balance
+//          epsilon, and `installmentAmount` derived from the actual schedule
+//          (fixes the flat-vs-pro-rated interest divergence).
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -12,7 +24,8 @@ import { LogSeverity, LogComponent } from '@/lib/types';
 import {
   calculateInstallmentSchedule,
   calculateEndDate,
-  calculateInstallmentAmount,
+  serializePlanRow,
+  serializeInstallmentRow,
   toNumber,
   type PlanFrequency,
 } from '@/lib/debt-plan-utils';
@@ -24,7 +37,17 @@ const FINANCIAL_WRITE_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', '
 
 const VALID_FREQUENCIES: PlanFrequency[] = ['WEEKLY', 'BI_WEEKLY', 'MONTHLY'];
 
-// ── GET: list plans ──────────────────────────────────────────────────────────
+// Policy bounds (Task 12-d): previously interestRate/lateFee were accepted
+// verbatim from the request body — a typo like 120 instead of 12 silently
+// doubled the plan total, and there was nothing stopping a 1000000% rate.
+const MAX_INTEREST_RATE_PCT = 100; // annual %
+const MAX_LATE_FEE_KES = 100_000;
+const MAX_NOTES_LENGTH = 2000;
+const MAX_INSTALLMENT_COUNT = 60;
+const DEFAULT_PAGE_SIZE = 20;
+const MAX_PAGE_SIZE = 100;
+
+// ── GET: list plans (paginated) ──────────────────────────────────────────────
 
 async function listPlansHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
@@ -42,10 +65,56 @@ async function listPlansHandler(...args: unknown[]): Promise<Response> {
   const status = searchParams.get('status') || '';
   const overdueOnly = searchParams.get('overdue') === 'true';
 
+  // ── Pagination (Task 12-d): the list used to be an unbounded findMany. ──
+  const pageParam = parseInt(searchParams.get('page') ?? '1', 10);
+  const pageSizeParam = parseInt(searchParams.get('pageSize') ?? String(DEFAULT_PAGE_SIZE), 10);
+  const pageSize = Math.min(
+    MAX_PAGE_SIZE,
+    Math.max(1, Number.isFinite(pageSizeParam) ? pageSizeParam : DEFAULT_PAGE_SIZE),
+  );
+  const requestedPage = Math.max(1, Number.isFinite(pageParam) ? pageParam : 1);
+
+  const now = new Date();
+
+  // ── Stale-overdue sweep (Task 12-d) ─────────────────────────────────────
+  // `installmentsOverdue` and installment OVERDUE statuses were only refreshed
+  // when a plan's detail view / pay / waive ran, so the Overdue chip and
+  // filter on this list silently under-reported. One idempotent conditional
+  // update per list request keeps statuses honest (counts are recomputed
+  // live below; the denormalized column heals on the next detail visit).
+  const staleOverdue = await db.debtPlanInstallment.findFirst({
+    where: {
+      dueDate: { lt: now },
+      status: { in: ['SCHEDULED', 'PARTIAL'] },
+      plan: { storeId },
+    },
+    select: { id: true },
+  });
+  if (staleOverdue) {
+    await db.debtPlanInstallment.updateMany({
+      where: {
+        dueDate: { lt: now },
+        status: { in: ['SCHEDULED', 'PARTIAL'] },
+        plan: { storeId },
+      },
+      data: { status: 'OVERDUE' },
+    });
+  }
+
   const where: Record<string, unknown> = { storeId };
   if (customerId) where.customerId = customerId;
   if (status) where.status = status;
-  if (overdueOnly) where.installmentsOverdue = { gt: 0 };
+  if (overdueOnly) {
+    // Live predicate (Task 12-d): was `installmentsOverdue: { gt: 0 }`, a
+    // denormalized counter that could be stale for plans never re-opened.
+    where.installments = {
+      some: { dueDate: { lt: now }, status: { in: ['SCHEDULED', 'PARTIAL', 'MISSED'] } },
+    };
+  }
+
+  const total = await db.debtPaymentPlan.count({ where });
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(requestedPage, totalPages);
 
   const plans = await db.debtPaymentPlan.findMany({
     where,
@@ -64,43 +133,77 @@ async function listPlansHandler(...args: unknown[]): Promise<Response> {
       },
       createdBy: { select: { id: true, name: true } },
       approvedBy: { select: { id: true, name: true } },
-      _count: { select: { installments: true } },
+      // Task 12-d: next unpaid installment for card display ("Next: 12 Mar").
+      // The list previously included only `_count`, so the card's next-due /
+      // overdue-date / Payable badge never rendered (always undefined).
+      installments: {
+        where: { status: { in: ['SCHEDULED', 'PARTIAL', 'OVERDUE', 'MISSED'] } },
+        orderBy: { installmentNumber: 'asc' },
+        take: 1,
+      },
     },
     orderBy: { createdAt: 'desc' },
+    skip: (page - 1) * pageSize,
+    take: pageSize,
   });
 
-  // Serialize Decimal fields to numbers for the API response.
-  const serialized = plans.map((plan) => ({
-    ...plan,
-    totalAmount: toNumber(plan.totalAmount),
-    installmentAmount: toNumber(plan.installmentAmount),
-    amountPaid: toNumber(plan.amountPaid),
-    balance: toNumber(plan.balance),
-    interestRate: toNumber(plan.interestRate),
-    lateFee: toNumber(plan.lateFee),
-    startDate: plan.startDate,
-    endDate: plan.endDate,
-    completedAt: plan.completedAt,
-    cancelledAt: plan.cancelledAt,
-    createdAt: plan.createdAt,
-    updatedAt: plan.updatedAt,
-    debtLedger: plan.debtLedger
-      ? {
-          ...plan.debtLedger,
-          amountOwed: toNumber(plan.debtLedger.amountOwed),
-          balance: toNumber(plan.debtLedger.balance),
-        }
-      : null,
-  }));
+  // ── Live overdue counts for the page (single groupBy) ──────────────────
+  const pageIds = plans.map((p) => p.id);
+  const overdueGroups = pageIds.length
+    ? await db.debtPlanInstallment.groupBy({
+        by: ['planId'],
+        where: { planId: { in: pageIds }, status: 'OVERDUE' },
+        _count: { _all: true },
+      })
+    : [];
+  const overdueByPlan = new Map(
+    overdueGroups.map((g) => [g.planId, g._count._all]),
+  );
 
-  return Response.json({ success: true, data: serialized });
+  // Serialize Decimal fields to numbers for the API response; expose the
+  // fetched unpaid installment as `nextInstallment` (list rows no longer
+  // carry the unused `_count` include).
+  const serialized = plans.map((plan) => {
+    const row = serializePlanRow(plan) as Record<string, unknown>;
+    const installments = row.installments as
+      | Array<ReturnType<typeof serializeInstallmentRow>>
+      | undefined;
+    delete row.installments;
+    row.installmentsOverdue = overdueByPlan.get(plan.id) ?? 0;
+    row.nextInstallment = installments && installments.length > 0 ? installments[0] : null;
+    return row;
+  });
+
+  return Response.json({
+    success: true,
+    data: serialized,
+    // Shape matches ApiResponse.pagination ({page, limit, total, totalPages}).
+    pagination: {
+      page,
+      limit: pageSize,
+      total,
+      totalPages,
+      hasNextPage: page < totalPages,
+    },
+  });
 }
 
 // ── POST: create a new plan + scheduled installments ────────────────────────
 
 async function createPlanHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
-  const body = await request.json();
+
+  // Task 12-d: malformed JSON previously escaped as a 500 via the error
+  // boundary — a client bug is a 400, not a server fault.
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json(
+      { success: false, error: 'Request body is not valid JSON.' },
+      { status: 400 },
+    );
+  }
 
   const {
     storeId,
@@ -114,7 +217,7 @@ async function createPlanHandler(...args: unknown[]): Promise<Response> {
     lateFee,
     notes,
     autoCharge,
-  } = body ?? {};
+  } = (body ?? {}) as Record<string, unknown>;
 
   // ── Validate required fields ──────────────────────────────────────────────
   if (!storeId || !customerId || !debtLedgerId) {
@@ -136,18 +239,30 @@ async function createPlanHandler(...args: unknown[]): Promise<Response> {
   }
 
   const count = parseInt(String(installmentCount), 10);
-  if (!Number.isFinite(count) || count < 1 || count > 60) {
+  if (!Number.isFinite(count) || count < 1 || count > MAX_INSTALLMENT_COUNT) {
     return Response.json(
-      { success: false, error: 'installmentCount must be between 1 and 60.' },
+      {
+        success: false,
+        error: `installmentCount must be between 1 and ${MAX_INSTALLMENT_COUNT}.`,
+      },
       { status: 400 },
     );
   }
 
-  const freq: PlanFrequency = VALID_FREQUENCIES.includes(frequency as PlanFrequency)
-    ? (frequency as PlanFrequency)
-    : 'MONTHLY';
+  // Task 12-d: strict frequency validation (invalid values were previously
+  // silently coerced to MONTHLY, masking client bugs).
+  if (!VALID_FREQUENCIES.includes(frequency as PlanFrequency)) {
+    return Response.json(
+      {
+        success: false,
+        error: `frequency must be one of: ${VALID_FREQUENCIES.join(', ')}.`,
+      },
+      { status: 400 },
+    );
+  }
+  const freq = frequency as PlanFrequency;
 
-  const start = startDate ? new Date(startDate) : new Date();
+  const start = startDate ? new Date(String(startDate)) : new Date();
   if (Number.isNaN(start.getTime())) {
     return Response.json(
       { success: false, error: 'startDate is not a valid date.' },
@@ -164,8 +279,33 @@ async function createPlanHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
+  // Task 12-d: policy bounds on interest and late fee.
   const rate = toNumber(interestRate);
+  if (!Number.isFinite(rate) || rate < 0 || rate > MAX_INTEREST_RATE_PCT) {
+    return Response.json(
+      {
+        success: false,
+        error: `interestRate must be between 0 and ${MAX_INTEREST_RATE_PCT} (annual %).`,
+      },
+      { status: 400 },
+    );
+  }
   const fee = toNumber(lateFee);
+  if (!Number.isFinite(fee) || fee < 0 || fee > MAX_LATE_FEE_KES) {
+    return Response.json(
+      {
+        success: false,
+        error: `lateFee must be between 0 and ${MAX_LATE_FEE_KES} KES.`,
+      },
+      { status: 400 },
+    );
+  }
+  if (typeof notes === 'string' && notes.length > MAX_NOTES_LENGTH) {
+    return Response.json(
+      { success: false, error: `notes must be at most ${MAX_NOTES_LENGTH} characters.` },
+      { status: 400 },
+    );
+  }
 
   // ── Validate referenced entities ──────────────────────────────────────────
   const session = await getSessionFromRequest(request);
@@ -200,10 +340,24 @@ async function createPlanHandler(...args: unknown[]): Promise<Response> {
       { status: 404 },
     );
   }
+  // Task 12-d: the ledger was store-checked but the customer was not. For
+  // regular users Layer-4 tenancy already narrows the customer lookup, but
+  // SUPER_ADMIN runs with tenant bypass — this explicit check closes that
+  // gap so a plan can never couple a ledger in store A with a customer in
+  // store B.
+  if (customer.storeId !== storeId) {
+    return Response.json(
+      { success: false, error: 'Customer does not belong to this store.' },
+      { status: 403 },
+    );
+  }
 
-  // Don't allow a plan larger than the outstanding debt balance (+ tiny epsilon).
+  // Don't allow a plan larger than the outstanding debt balance. Task 12-d:
+  // epsilon tightened from 0.5 to 0.01 — the old slack let a plan exceed the
+  // debt by up to half a KES, which then made the ledger's final
+  // reconciliation drift.
   const debtBalance = toNumber(debtLedger.balance);
-  if (total > debtBalance + 0.5) {
+  if (total > debtBalance + 0.01) {
     return Response.json(
       {
         success: false,
@@ -234,7 +388,12 @@ async function createPlanHandler(...args: unknown[]): Promise<Response> {
   // ── Calculate schedule ────────────────────────────────────────────────────
   const schedule = calculateInstallmentSchedule(total, count, freq, start, rate);
   const endDate = calculateEndDate(start, count, freq);
-  const installmentAmount = calculateInstallmentAmount(total, count, rate);
+  // Task 12-d: `installmentAmount` is now taken FROM the actual schedule
+  // (regular installments; the final one absorbs rounding). It previously
+  // came from `calculateInstallmentAmount`, which applied interest as a flat
+  // one-off and disagreed with the schedule whenever rate > 0 and the plan
+  // spanned less than a year.
+  const installmentAmount = schedule[0]?.amountDue ?? 0;
 
   // ── Persist plan + installments atomically ────────────────────────────────
   const created = await db.$transaction(async (tx) => {
@@ -311,33 +470,10 @@ async function createPlanHandler(...args: unknown[]): Promise<Response> {
     },
   });
 
-  // Serialize decimals before returning.
-  const serialized = fullPlan
-    ? {
-        ...fullPlan,
-        totalAmount: toNumber(fullPlan.totalAmount),
-        installmentAmount: toNumber(fullPlan.installmentAmount),
-        amountPaid: toNumber(fullPlan.amountPaid),
-        balance: toNumber(fullPlan.balance),
-        interestRate: toNumber(fullPlan.interestRate),
-        lateFee: toNumber(fullPlan.lateFee),
-        installments: fullPlan.installments.map((i) => ({
-          ...i,
-          amountDue: toNumber(i.amountDue),
-          amountPaid: toNumber(i.amountPaid),
-          lateFeeApplied: toNumber(i.lateFeeApplied),
-        })),
-        debtLedger: fullPlan.debtLedger
-          ? {
-              ...fullPlan.debtLedger,
-              amountOwed: toNumber(fullPlan.debtLedger.amountOwed),
-              balance: toNumber(fullPlan.debtLedger.balance),
-            }
-          : null,
-      }
-    : null;
-
-  return Response.json({ success: true, data: serialized }, { status: 201 });
+  return Response.json(
+    { success: true, data: fullPlan ? serializePlanRow(fullPlan) : null },
+    { status: 201 },
+  );
 }
 
 export const GET = withErrorBoundary(

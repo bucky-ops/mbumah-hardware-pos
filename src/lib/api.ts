@@ -873,6 +873,7 @@ export interface DebtPaymentPlanItem {
   debtLedgerId: string;
   createdById: string;
   approvedById: string | null;
+  approvedAt?: string | null;
   status: DebtPlanStatus;
   totalAmount: number;
   installmentCount: number;
@@ -911,12 +912,24 @@ export interface DebtPaymentPlanItem {
   createdBy?: { id: string; name: string };
   approvedBy?: { id: string; name: string } | null;
   installments?: DebtPlanInstallmentItem[];
+  /**
+   * Next unpaid installment (list endpoint only). Task 12-d: the list API
+   * now returns this so plan cards can render the next due date without
+   * loading the full detail payload.
+   */
+  nextInstallment?: DebtPlanInstallmentItem | null;
   _count?: { installments: number };
 }
 
 export interface DebtPaymentPlanStats {
   totalActivePlans: number;
   totalOutstandingBalance: number;
+  /**
+   * Task 12-d: outstanding balance of DEFAULTED plans — the most at-risk
+   * exposure, previously invisible because Outstanding only counts
+   * ACTIVE/PAUSED plans.
+   */
+  totalDefaultedOutstanding: number;
   plansWithOverdueInstallments: number;
   completedThisMonth: number;
   totalCollectedThisMonth: number;
@@ -943,13 +956,22 @@ export const debtPaymentPlansApi = {
     customerId?: string;
     status?: DebtPlanStatus | '';
     overdue?: boolean;
+    /** Task 12-d: server-side pagination (defaults: page 1, limit 20). */
+    page?: number;
+    pageSize?: number;
   }) => {
     const query = new URLSearchParams();
     if (params?.storeId) query.set('storeId', params.storeId);
     if (params?.customerId) query.set('customerId', params.customerId);
     if (params?.status) query.set('status', params.status);
     if (params?.overdue) query.set('overdue', 'true');
-    return request<DebtPaymentPlanItem[]>(`/debt-payment-plans?${query.toString()}`);
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.pageSize) query.set('pageSize', String(params.pageSize));
+    // ApiResponse already models the pagination envelope (page/limit/total/
+    // totalPages); intersect it back in so callers can read it.
+    return request<DebtPaymentPlanItem[]>(
+      `/debt-payment-plans?${query.toString()}`,
+    ) as Promise<ApiResponse<DebtPaymentPlanItem[]> & { pagination?: ApiResponse['pagination'] }>;
   },
 
   get: async (id: string) => {

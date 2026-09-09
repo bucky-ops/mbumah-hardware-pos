@@ -27,6 +27,7 @@ import {
   type DebtPlanInstallmentItem,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
+import { useAuthStore } from '@/lib/stores';
 
 import {
   Dialog,
@@ -91,6 +92,11 @@ export function PlanDetailsDialog({
   const [payInstallment, setPayInstallment] = useState<DebtPlanInstallmentItem | null>(null);
   const [waiveInstallment, setWaiveInstallment] = useState<DebtPlanInstallmentItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  // Task 12-d: current user id — used to hide the Approve button from the
+  // plan creator (the server 409s self-approval; showing the button was a
+  // guaranteed-failure UX trap).
+  const sessionUserId = useAuthStore((s) => s.user?.id ?? null);
 
   // Fetch the full plan (with installments) when the dialog opens.
   const { data: fullPlan, isLoading } = useQuery({
@@ -111,6 +117,7 @@ export function PlanDetailsDialog({
       setPayInstallment(null);
       setWaiveInstallment(null);
       setConfirmDelete(false);
+      setConfirmCancel(false);
     }
     onOpenChange(next);
   };
@@ -187,11 +194,21 @@ export function PlanDetailsDialog({
   }
 
   const installments = current.installments ?? [];
-  const canApprove = current.status === 'PENDING_APPROVAL';
+  // Task 12-d: the plan creator cannot approve (segregation of duties — the
+  // server returns 409). Hide the button and explain why instead of showing
+  // a guaranteed-failing action.
+  const isCreator = Boolean(current.createdById && sessionUserId && current.createdById === sessionUserId);
+  const canApprove = current.status === 'PENDING_APPROVAL' && !isCreator;
   const canPause = current.status === 'ACTIVE';
   const canResume = current.status === 'PAUSED';
-  const canCancel = current.status === 'ACTIVE' || current.status === 'PAUSED';
+  // Task 12-d: DEFAULTED plans can now be cancelled (the old state machine
+  // left them with no exit — payments/waivers were blocked server-side too).
+  const canCancel =
+    current.status === 'ACTIVE' || current.status === 'PAUSED' || current.status === 'DEFAULTED';
   const canDelete = current.status === 'PENDING_APPROVAL' || current.status === 'CANCELLED';
+  // Task 12-d: DEFAULTED plans accept catch-up payments and waivers again.
+  const canActOnInstallments =
+    current.status === 'ACTIVE' || current.status === 'PAUSED' || current.status === 'DEFAULTED';
 
   // Next due installment = first SCHEDULED/OVERDUE/PARTIAL.
   const nextDue = installments.find(
@@ -298,6 +315,14 @@ export function PlanDetailsDialog({
                     Approve Plan
                   </Button>
                 )}
+                {current.status === 'PENDING_APPROVAL' && isCreator && (
+                  <span
+                    className="text-xs text-muted-foreground border border-dashed rounded-md px-2.5 py-1.5"
+                    title="Segregation of duties: the plan creator cannot approve their own plan."
+                  >
+                    Awaiting approval by another manager (creator cannot self-approve)
+                  </span>
+                )}
                 {canPause && (
                   <Button
                     size="sm"
@@ -324,7 +349,7 @@ export function PlanDetailsDialog({
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => cancelMutation.mutate()}
+                    onClick={() => setConfirmCancel(true)}
                     disabled={cancelMutation.isPending}
                     className="text-rose-600 hover:text-rose-700 hover:border-rose-300"
                   >
@@ -368,8 +393,10 @@ export function PlanDetailsDialog({
                       </TableHeader>
                       <TableBody>
                         {installments.map((inst) => {
+                          // Task 12-d: PAUSED and DEFAULTED plans also accept
+                          // payments/waivers server-side (catch-up + cure).
                           const isActionable =
-                            current.status === 'ACTIVE' &&
+                            canActOnInstallments &&
                             inst.status !== 'PAID' &&
                             inst.status !== 'WAIVED';
                           return (
@@ -425,7 +452,7 @@ export function PlanDetailsDialog({
                                       Waive
                                     </Button>
                                   </div>
-                                ) : inst.status === 'PARTIAL' && current.status === 'ACTIVE' ? (
+                                ) : inst.status === 'PARTIAL' && canActOnInstallments ? (
                                   <Button
                                     size="sm"
                                     variant="ghost"
@@ -550,13 +577,13 @@ export function PlanDetailsDialog({
                         </div>
                       </div>
 
-                      {nextDue && current.status === 'ACTIVE' && (
+                      {nextDue && canActOnInstallments && (
                         <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 p-3 flex items-center gap-2">
                           <Clock className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                           <span className="text-sm">
                             Next installment due{' '}
                             <strong>{formatDate(nextDue.dueDate)}</strong> —{' '}
-                            {formatKES(nextDue.amountDue - nextDue.amountPaid)}
+                            {formatKES(Math.max(0, nextDue.amountDue - nextDue.amountPaid))}
                           </span>
                         </div>
                       )}
@@ -567,6 +594,19 @@ export function PlanDetailsDialog({
                           <span className="text-sm">
                             <strong>{current.installmentsOverdue}</strong> installment
                             {current.installmentsOverdue === 1 ? '' : 's'} overdue. Follow up with the customer.
+                          </span>
+                        </div>
+                      )}
+
+                      {current.status === 'DEFAULTED' && (
+                        <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-3 flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                          <span className="text-sm">
+                            This plan has <strong>defaulted</strong> (≥25% of
+                            installments overdue). Catch-up payments and
+                            waivers are still accepted, and the plan
+                            automatically returns to ACTIVE once the overdue
+                            ratio drops below the threshold.
                           </span>
                         </div>
                       )}
@@ -596,8 +636,10 @@ export function PlanDetailsDialog({
         </DialogContent>
       </Dialog>
 
-      {/* Sub-dialogs */}
+      {/* Sub-dialogs — keyed per open so each opens with fresh state
+          (Task 12-d: stale payment amount / waiver reason reset). */}
       <RecordPaymentDialog
+        key={payInstallment?.id ?? 'none'}
         open={Boolean(payInstallment)}
         onOpenChange={(o) => !o && setPayInstallment(null)}
         planId={current.id}
@@ -605,11 +647,43 @@ export function PlanDetailsDialog({
       />
 
       <WaiveInstallmentDialog
+        key={waiveInstallment?.id ?? 'none'}
         open={Boolean(waiveInstallment)}
         onOpenChange={(o) => !o && setWaiveInstallment(null)}
         planId={current.id}
         installment={waiveInstallment}
       />
+
+      <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel this payment plan?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cancelling stops the installment schedule. Amounts already
+              collected are kept, and the underlying debt remains collectible
+              through the debt ledger. Cancelled plans can be deleted
+              afterwards. This action will be recorded in the audit trail.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelMutation.isPending}>
+              Keep Plan
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => cancelMutation.mutate()}
+              disabled={cancelMutation.isPending}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {cancelMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <Ban className="h-4 w-4 mr-1" />
+              )}
+              Cancel Plan
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
