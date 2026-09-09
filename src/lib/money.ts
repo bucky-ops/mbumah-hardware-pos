@@ -542,9 +542,18 @@ export class Money {
  */
 export function KES(value: number | string | Decimal | null | undefined): Money {
   if (value === null || value === undefined) return Money.zero("KES");
-  if (value instanceof Decimal) return new Money(value, "KES");
   if (typeof value === "number") return Money.fromNumber(value, "KES");
-  return Money.fromString(value, "KES");
+  if (typeof value === "string") return Money.fromString(value, "KES");
+  // Task 12-e (production hotfix): do NOT rely on `value instanceof Decimal`.
+  // A Prisma Decimal field can be an instance of a DIFFERENT decimal.js copy
+  // than the one bundled for the app (dual-package identity), so instanceof
+  // fails and the value used to fall through to Money.fromString(value) with
+  // an OBJECT — cleanNumericString rejected it and every DEBT checkout died
+  // with 'Money.fromString: cannot parse "…" as a number.' after the sale was
+  // otherwise fully validated. Normalize through the Decimal's exact string
+  // form instead: decimal.js toString() is lossless, and fromString keeps the
+  // strict validation + currency handling.
+  return Money.fromString(String(value), "KES");
 }
 
 // ── Helpers for bulk conversion of Prisma result rows ────────────────────────
