@@ -165,3 +165,48 @@ export function validateInput<T>(schema: z.ZodSchema<T>, data: unknown): { succe
   const errors = issues.map((e: { path: (string | number)[]; message: string }) => `${e.path.join('.')}: ${e.message}`).join('; ');
   return { success: false, error: errors };
 }
+
+// ── AUDIT FIX (Finding 1.4 — standardized validation response format) ────────
+//
+// The audit found API routes answered validation failures inconsistently —
+// some returned 400 with a flat string, some leaked 500s, and no route
+// exposed machine-readable per-field errors, so clients could not highlight
+// the offending input. `validationErrorResponse` gives every route ONE
+// canonical 400 shape:
+//
+//   {
+//     "success": false,
+//     "error": "human-readable summary",
+//     "errors": { "fieldName": ["message", …], … }   // flat-field map
+//   }
+//
+// Usage in a route handler:
+//   const parsed = createProductSchema.safeParse(body);
+//   if (!parsed.success) return validationErrorResponse(parsed.error);
+//
+// (The existing `validateInput` string form is kept for the routes already
+// using it; both share the same status code and `success:false` contract.)
+
+export interface ValidationFailure {
+  success: false;
+  error: string;
+  /** Per-field map for client-side form highlighting. */
+  errors: Record<string, string[]>;
+}
+
+export function validationErrorResponse(error: z.ZodError): Response {
+  const issues = error.issues || [];
+  const errors: Record<string, string[]> = {};
+  for (const issue of issues) {
+    const field = issue.path.length > 0 ? issue.path.join('.') : '_root';
+    if (!errors[field]) errors[field] = [];
+    errors[field].push(issue.message);
+  }
+  const summary = issues
+    .map((e: { path: (string | number)[]; message: string }) => `${e.path.join('.')}: ${e.message}`)
+    .join('; ');
+  return Response.json(
+    { success: false, error: summary || 'Validation failed.', errors },
+    { status: 400 },
+  );
+}

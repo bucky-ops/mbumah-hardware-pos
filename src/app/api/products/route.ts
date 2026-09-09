@@ -6,6 +6,7 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateSKU } from '@/lib/helpers';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { requireStoreAccess, MANAGER_PLUS_ROLES, type AuthSession } from '@/lib/auth';
+import { parsePagination, buildPaginationMeta } from '@/lib/api-pagination';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,8 +30,15 @@ async function getProductsHandler(
   const isBundle = searchParams.get('isBundle');
   const lowStock = searchParams.get('lowStock') === 'true';
   const isActive = searchParams.get('isActive');
-  const page = parseInt(searchParams.get('page') || '1');
-  const limit = parseInt(searchParams.get('limit') || '50');
+  // AUDIT FIX (Finding 2.1): pagination parsing centralised + sanitised.
+  // Previously `parseInt(searchParams.get('page') || '1')` with no clamping
+  // — `?page=-5` produced a negative skip (Prisma throws) and a NaN limit
+  // from `?limit=abc` reached the query. Defaults unchanged (page 1, limit
+  // 50); limit is now clamped to [1, 500].
+  const { page, limit, skip } = parsePagination(searchParams, {
+    defaultLimit: 50,
+    maxLimit: 500,
+  });
   const sortBy = searchParams.get('sortBy') || 'name';
   const sortOrder = searchParams.get('sortOrder') || 'asc';
 
@@ -86,7 +94,7 @@ async function getProductsHandler(
         },
       },
       orderBy: { [sortField]: orderDirection },
-      skip: (page - 1) * limit,
+      skip,
       take: limit,
     }),
     db.product.count({ where }),
@@ -95,12 +103,7 @@ async function getProductsHandler(
   return Response.json({
     success: true,
     data: products,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
+    pagination: buildPaginationMeta(page, limit, total),
   });
 }
 
