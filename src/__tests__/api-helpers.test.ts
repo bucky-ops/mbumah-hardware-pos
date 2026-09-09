@@ -59,6 +59,7 @@ describe('buildPaginationMeta', () => {
     expect(buildPaginationMeta(1, 50, 120)).toEqual({
       page: 1,
       limit: 50,
+      skip: 0,
       total: 120,
       totalPages: 3,
       hasNextPage: true,

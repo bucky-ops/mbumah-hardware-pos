@@ -41,7 +41,13 @@ export interface PaginationOptions {
   maxLimit?: number;
 }
 
-export interface PaginationMeta extends PaginationParams {
+export interface PaginationMeta {
+  /** 1-based page number (always ≥ 1). */
+  page: number;
+  /** Effective page size after clamping (always ≥ 1). */
+  limit: number;
+  /** Pre-computed Prisma-style skip offset (mirrors parsePagination). */
+  skip: number;
   total: number;
   totalPages: number;
   hasNextPage: boolean;
@@ -101,6 +107,7 @@ export function buildPaginationMeta(
   return {
     page,
     limit,
+    skip: (page - 1) * limit,
     total: safeTotal,
     totalPages,
     hasNextPage: page < totalPages,

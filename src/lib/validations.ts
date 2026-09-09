@@ -162,7 +162,7 @@ export function validateInput<T>(schema: z.ZodSchema<T>, data: unknown): { succe
   }
   // Zod v4 uses error.issues instead of error.errors
   const issues = result.error.issues || [];
-  const errors = issues.map((e: { path: (string | number)[]; message: string }) => `${e.path.join('.')}: ${e.message}`).join('; ');
+  const errors = issues.map((e) => `${e.path.join('.')}: ${e.message}`).join('; ');
   return { success: false, error: errors };
 }
 
@@ -203,7 +203,7 @@ export function validationErrorResponse(error: z.ZodError): Response {
     errors[field].push(issue.message);
   }
   const summary = issues
-    .map((e: { path: (string | number)[]; message: string }) => `${e.path.join('.')}: ${e.message}`)
+    .map((e) => `${e.path.join('.')}: ${e.message}`)
     .join('; ');
   return Response.json(
     { success: false, error: summary || 'Validation failed.', errors },
