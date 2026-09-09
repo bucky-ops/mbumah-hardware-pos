@@ -253,7 +253,14 @@ async function waiveInstallmentHandler(...args: unknown[]): Promise<Response> {
       });
     }
 
-    return { updatedInstallment, updatedPlan };
+    // Task 12-e (production hotfix): return `waivedAmount` so the post-tx
+    // systemLog can reference it. It was previously scoped to this callback
+    // only — the log statement below raised `ReferenceError: waivedAmount is
+    // not defined`, so every SUCCESSFUL waiver committed the transaction and
+    // then answered HTTP 500 (withErrorBoundary). Money moved; the UI showed
+    // an error. invisibleBuildErrors (ts ignoreBuildErrors + advisory
+    // typecheck) let the scoping bug ship.
+    return { updatedInstallment, updatedPlan, waivedAmount };
   }).catch((err: unknown) => {
     // Map the typed in-transaction claim conflicts to client-facing 400s.
     if (err instanceof InstallmentClaimConflictError) {
@@ -274,13 +281,13 @@ async function waiveInstallmentHandler(...args: unknown[]): Promise<Response> {
     action: 'DEBT_PLAN_INSTALLMENT_WAIVED',
     component: LogComponent.FINANCIAL,
     severity: LogSeverity.WARN,
-    message: `Installment ${installment.installmentNumber} on plan ${id} waived (KES ${waivedAmount.toLocaleString()}). Reason: ${waiverReason}`,
+    message: `Installment ${installment.installmentNumber} on plan ${id} waived (KES ${result.waivedAmount.toLocaleString()}). Reason: ${waiverReason}`,
     storeId: plan.storeId,
     userId: session.userId,
     metadata: {
       planId: id,
       installmentId,
-      waivedAmount,
+      waivedAmount: result.waivedAmount,
       waiverReason,
       newPlanStatus: result.updatedPlan.status,
     },
