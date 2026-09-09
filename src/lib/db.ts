@@ -393,6 +393,56 @@ export function withImmutabilityBypass<T>(
 
 // ── 6. Prisma Client Extension ────────────────────────────────────────────────
 
+/**
+ * Strictly-typed shape of the parameters Prisma passes to every query
+ * interceptor registered via `$extends({ query: ... })`.
+ *
+ * AUDIT FIX (Finding 1.1 — `any` removed from the ORM extension): all
+ * interceptor handlers below previously annotated their parameter as `any`,
+ * which meant a refactor that changed the argument shape would silently
+ * bypass tenant injection instead of failing to compile. The handlers are
+ * still assigned into the extension via `Object.fromEntries(...) as Record<
+ * string, object>`, so Prisma never checks these types itself — but the
+ * function bodies are now statically verified: `args` must carry a
+ * filterable `where` before `injectTenant` can touch it, and `query` must
+ * be invoked with the same shape it received.
+ *
+ * @typeParam TArgs - The query-argument shape this interceptor accepts.
+ *   For store-scoped (tenant-filterable) handlers this is
+ *   {@link TenantFilterableArgs}; `model`/`operation` are present on every
+ *   interceptor callback whether or not the handler destructures them.
+ */
+interface QueryInterceptorArgs<
+  TArgs extends object = TenantFilterableArgs,
+> {
+  /** Prisma model name, PascalCase (e.g. "JournalEntry", "Product"). */
+  model: string;
+  /** Prisma operation name (e.g. "findMany", "updateMany", "delete"). */
+  operation: string;
+  /** Query arguments — forwarded (possibly modified) to {@link QueryInterceptorArgs.query}. */
+  args: TArgs;
+  /**
+   * Continuation: run the next handler / the actual query with the given
+   * (possibly modified) arguments. MUST be called exactly once with the
+   * args you intend to execute.
+   */
+  query: (args: TArgs) => Promise<unknown>;
+}
+
+/**
+ * Argument shape accepted by {@link injectTenant}: any Prisma query whose
+ * `where` clause may carry a `storeId` filter. The index signature keeps the
+ * type compatible with every model's argument bag (select/orderBy/data/…)
+ * while still guaranteeing that `where` — the only key tenancy injection
+ * reads or writes — is statically known.
+ */
+interface TenantFilterableArgs {
+  /** Filter clause; tenancy injection ANDs `storeId` into it. */
+  where?: { storeId?: string } | null;
+  /** Remaining Prisma argument keys (select, orderBy, take, data, …). */
+  [key: string]: unknown;
+}
+
 const hardenedClient = baseClient.$extends({
   name: "mbumahHardened",
 
@@ -407,34 +457,34 @@ const hardenedClient = baseClient.$extends({
         return [
           model,
           {
-            async findMany({ args, query }: any) {
+            async findMany({ args, query }: QueryInterceptorArgs) {
               return query(injectTenant(args));
             },
-            async findFirst({ args, query }: any) {
+            async findFirst({ args, query }: QueryInterceptorArgs) {
               return query(injectTenant(args));
             },
-            async findUnique({ args, query }: any) {
+            async findUnique({ args, query }: QueryInterceptorArgs) {
               return query(injectTenant(args));
             },
-            async count({ args, query }: any) {
+            async count({ args, query }: QueryInterceptorArgs) {
               return query(injectTenant(args));
             },
-            async aggregate({ args, query }: any) {
+            async aggregate({ args, query }: QueryInterceptorArgs) {
               return query(injectTenant(args));
             },
-            async groupBy({ args, query }: any) {
+            async groupBy({ args, query }: QueryInterceptorArgs) {
               return query(injectTenant(args));
             },
-            async update({ args, query }: any) {
+            async update({ args, query }: QueryInterceptorArgs) {
               return query(injectTenant(args));
             },
-            async updateMany({ args, query }: any) {
+            async updateMany({ args, query }: QueryInterceptorArgs) {
               return query(injectTenant(args));
             },
-            async delete({ args, query }: any) {
+            async delete({ args, query }: QueryInterceptorArgs) {
               return query(injectTenant(args));
             },
-            async deleteMany({ args, query }: any) {
+            async deleteMany({ args, query }: QueryInterceptorArgs) {
               return query(injectTenant(args));
             },
           },
@@ -444,111 +494,111 @@ const hardenedClient = baseClient.$extends({
 
     // ── Immutability: block mutations on financial/audit models ──
     journalEntry: {
-      async update({ model, operation, args, query }: any) {
+      async update({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
-      async updateMany({ model, operation, args, query }: any) {
+      async updateMany({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
-      async delete({ model, operation, args, query }: any) {
+      async delete({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
-      async deleteMany({ model, operation, args, query }: any) {
+      async deleteMany({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
     },
     journalEntryLine: {
-      async update({ model, operation, args, query }: any) {
+      async update({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
-      async updateMany({ model, operation, args, query }: any) {
+      async updateMany({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
-      async delete({ model, operation, args, query }: any) {
+      async delete({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
-      async deleteMany({ model, operation, args, query }: any) {
+      async deleteMany({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
     },
     systemLog: {
-      async update({ model, operation, args, query }: any) {
+      async update({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
-      async updateMany({ model, operation, args, query }: any) {
+      async updateMany({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
-      async delete({ model, operation, args, query }: any) {
+      async delete({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
-      async deleteMany({ model, operation, args, query }: any) {
+      async deleteMany({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
     },
     payrollDetail: {
-      async update({ model, operation, args, query }: any) {
+      async update({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
-      async updateMany({ model, operation, args, query }: any) {
+      async updateMany({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
-      async delete({ model, operation, args, query }: any) {
+      async delete({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
-      async deleteMany({ model, operation, args, query }: any) {
+      async deleteMany({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
     },
     // ── v2.1.0: AuditLog is tamper-proof (ISO 27001 A.12.4.2) ──
     auditLog: {
-      async update({ model, operation, args, query }: any) {
+      async update({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
-      async updateMany({ model, operation, args, query }: any) {
+      async updateMany({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
-      async delete({ model, operation, args, query }: any) {
+      async delete({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
-      async deleteMany({ model, operation, args, query }: any) {
+      async deleteMany({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
     },
     // ── v2.1.0: TrialBalanceSnapshot is immutable once captured ──
     trialBalanceSnapshot: {
-      async update({ model, operation, args, query }: any) {
+      async update({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
-      async updateMany({ model, operation, args, query }: any) {
+      async updateMany({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
-      async delete({ model, operation, args, query }: any) {
+      async delete({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
-      async deleteMany({ model, operation, args, query }: any) {
+      async deleteMany({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
         return query(args);
       },
@@ -560,6 +610,14 @@ const hardenedClient = baseClient.$extends({
 
 /**
  * Merge the active tenant's `storeId` into a query's `where` clause.
+ *
+ * This is the core of zero-trust multi-tenancy: every store-scoped query run
+ * inside `runWithTenant(storeId, fn)` is automatically narrowed to that
+ * store at the ORM layer, so a developer cannot "forget" to scope a query.
+ * It is invoked by the query interceptor of every model in
+ * `STORE_SCOPED_MODELS` (see section 4) — 30+ handlers across find/count/
+ * aggregate/groupBy/update/delete operations.
+ *
  * Rules:
  *   • No active context (login, seeding, internal) → passthrough unchanged.
  *   • Context with `bypass=true` (SUPER_ADMIN) → passthrough unchanged.
@@ -569,8 +627,32 @@ const hardenedClient = baseClient.$extends({
  *
  * This never WIDENS access: it only ever narrows a query to the caller's
  * own store.
+ *
+ * @typeParam TArgs - The Prisma query-argument bag (extends
+ *   {@link TenantFilterableArgs} so the `where` clause is statically known).
+ * @param args - The query arguments, e.g. `{ where: { isActive: true },
+ *   take: 10 }`. Never mutated — a shallow copy is returned when injection
+ *   is needed, because Prisma extension args can be reused or logged.
+ * @returns The args to execute: either the original object (passthrough) or
+ *   a shallow copy whose `where` now includes the tenant's `storeId`.
+ *
+ * @example
+ * // Inside a request handler wrapped by runWithTenant("store_juja", …):
+ * await db.product.findMany({ where: { isActive: true } });
+ * // injectTenant rewrites the args to:
+ * //   { where: { isActive: true, storeId: "store_juja" } }
+ *
+ * @remarks
+ * - SECURITY-CRITICAL: tenant isolation for every store-scoped model depends
+ *   on this function. Changes require review from someone who owns the
+ *   tenancy model, plus a cross-tenant regression test.
+ * - `where.storeId` already set is RESPECTED, not overwritten — safe because
+ *   `requireStoreAccess` guarantees non-admin callers can only request their
+ *   own store (see section 4 commentary).
+ * - Handles `undefined`, `null`, and absent `where` uniformly by creating
+ *   `{ where: { storeId } }`.
  */
-function injectTenant<T extends { where?: any }>(args: T): T {
+function injectTenant<TArgs extends TenantFilterableArgs>(args: TArgs): TArgs {
   const ctx = tenantStorage.getStore();
 
   // No tenant context active — passthrough (login, seeding, SUPER_ADMIN).
@@ -578,7 +660,7 @@ function injectTenant<T extends { where?: any }>(args: T): T {
     return args;
   }
 
-  const where = (args as any).where;
+  const where = args.where;
 
   // No where clause at all → create one.
   if (where === undefined || where === null) {
