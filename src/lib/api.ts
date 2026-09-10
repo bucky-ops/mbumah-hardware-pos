@@ -187,12 +187,20 @@ async function request<T>(
       if (retryJson && retryJson.success && retryJson.data !== undefined && retryJson.data !== null) {
         if (!Array.isArray(retryJson.data) && typeof retryJson.data === 'object') {
           const d = retryJson.data as Record<string, unknown>;
-          if (d.data !== undefined && Array.isArray(d.data)) {
-            (retryJson as Record<string, unknown>).data = d.data;
-          } else if (d.items !== undefined && Array.isArray(d.items)) {
-            (retryJson as Record<string, unknown>).data = d.items;
-          } else if (d.products !== undefined && Array.isArray(d.products)) {
-            (retryJson as Record<string, unknown>).data = d.products;
+          // RECEIPT-INCIDENT FIX (2026-09-10): unwrap ENVELOPES only — never
+          // ENTITIES. An entity row always carries an `id`; envelopes don't.
+          // Without this guard the checkout response { data: fullTransaction }
+          // was unwrapped to fullTransaction.items, so the receipt printed the
+          // items ARRAY → blank receipt (Invalid Date, Ksh 0.00 totals).
+          const isEntity = d.id !== undefined;
+          if (!isEntity) {
+            if (d.data !== undefined && Array.isArray(d.data)) {
+              (retryJson as Record<string, unknown>).data = d.data;
+            } else if (d.items !== undefined && Array.isArray(d.items)) {
+              (retryJson as Record<string, unknown>).data = d.items;
+            } else if (d.products !== undefined && Array.isArray(d.products)) {
+              (retryJson as Record<string, unknown>).data = d.products;
+            }
           }
         }
       }
@@ -258,18 +266,29 @@ async function request<T>(
 
   // Nested-structure unwrap: if the API wrapped the array inside an object
   // (e.g. { data: { items: [...] } }), unwrap it to a flat array.
+  // RECEIPT-INCIDENT FIX (2026-09-10): unwrap ENVELOPES only — never ENTITIES.
+  // An entity (single record: transaction, receipt, product detail…) always
+  // carries an `id`. The checkout response { data: fullTransaction } contains
+  // fullTransaction.items, so the old unconditional unwrap replaced the
+  // transaction with its LINE-ITEM ARRAY: lastTransaction became an array and
+  // the printed receipt came out blank ("Invalid Date", "No line items
+  // recorded", GRAND TOTAL Ksh 0.00 — the incident PDF). Entities now pass
+  // through untouched; envelope shapes keep the legacy unwrap behaviour.
   if (json.success && json.data !== undefined && json.data !== null) {
     if (!Array.isArray(json.data) && typeof json.data === 'object') {
       const d = json.data as Record<string, unknown>;
-      if (d.data !== undefined && Array.isArray(d.data)) {
-        // API returned { success: true, data: { data: [...items...] } }
-        (json as Record<string, unknown>).data = d.data;
-      } else if (d.items !== undefined && Array.isArray(d.items)) {
-        // API returned { success: true, data: { items: [...items...] } }
-        (json as Record<string, unknown>).data = d.items;
-      } else if (d.products !== undefined && Array.isArray(d.products)) {
-        // API returned { success: true, data: { products: [...items...] } }
-        (json as Record<string, unknown>).data = d.products;
+      const isEntity = d.id !== undefined; // entity records always have an id
+      if (!isEntity) {
+        if (d.data !== undefined && Array.isArray(d.data)) {
+          // API returned { success: true, data: { data: [...items...] } }
+          (json as Record<string, unknown>).data = d.data;
+        } else if (d.items !== undefined && Array.isArray(d.items)) {
+          // API returned { success: true, data: { items: [...items...] } }
+          (json as Record<string, unknown>).data = d.items;
+        } else if (d.products !== undefined && Array.isArray(d.products)) {
+          // API returned { success: true, data: { products: [...items...] } }
+          (json as Record<string, unknown>).data = d.products;
+        }
       }
     }
   }
@@ -2026,6 +2045,34 @@ export const usersApi = {
     return request<UserItem>('/users', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  },
+
+  /** EMPLOYEE-CRUD FIX (2026-09-10): full DML for user records. */
+  get: async (id: string) => {
+    return request<UserItem>(`/users/${id}`);
+  },
+
+  /**
+   * Update an existing user (name / phone / role / isActive / store reset).
+   * Role changes follow the same segregation-of-duties rule as create:
+   * only SUPER_ADMIN may grant SUPER_ADMIN or ACCOUNTANT.
+   */
+  update: async (id: string, data: { name?: string; phone?: string; role?: string; isActive?: boolean; password?: string }) => {
+    return request<UserItem>(`/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Soft-delete (deactivate) a user. The server never hard-deletes users —
+   * sales/audit history must keep referring to a real row. Self-deletion and
+   * removing the last active SUPER_ADMIN are rejected server-side.
+   */
+  deactivate: async (id: string) => {
+    return request<{ message: string }>(`/users/${id}`, {
+      method: 'DELETE',
     });
   },
 };

@@ -1759,7 +1759,7 @@ export default function POSTab() {
         }
       >
         {lastTransaction && (
-          <div className="receipt-content receipt-printable space-y-4 text-sm" id="receipt-content">
+          <div className="receipt-content receipt-printable space-y-4 text-sm" id="receipt-content-legacy">
             {/* Store Header */}
             <div className="text-center space-y-0.5">
               <h2 className="text-lg font-bold">MBUMAH HARDWARE</h2>

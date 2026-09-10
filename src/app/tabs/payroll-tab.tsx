@@ -23,7 +23,7 @@ import {
   Search, Plus, Edit, Eye, Check, X, AlertCircle, Loader2,
   Banknote, Phone, Mail, Briefcase,
   CheckCircle, XCircle, Clock3, FileText, User,
-  IdCard, Building2, AlertTriangle, Calendar, PiggyBank, Play,
+  IdCard, Building2, AlertTriangle, Calendar, PiggyBank, Play, UserX,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
@@ -417,6 +417,32 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // EMPLOYEE-CRUD FIX (2026-09-10): editing previously re-POSTed the form —
+  // creating a DUPLICATE employee instead of updating the record (the old
+  // comment admitted "editing would use PUT /api/employees/[id]", which did
+  // not exist). Edits now PATCH /api/employees/[id]; termination (delete)
+  // soft-deletes via DELETE /api/employees/[id] so payroll history survives.
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) =>
+      apiFetch(`/api/employees/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+    onSuccess: () => {
+      toast.success('Employee updated successfully');
+      qc.invalidateQueries({ queryKey: ['payroll-employees', storeId] });
+      setDialogOpen(false);
+      setEditingId(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const terminateMutation = useMutation({
+    mutationFn: (id: string) => apiFetch(`/api/employees/${id}`, { method: 'DELETE' }),
+    onSuccess: (res: { message?: string; data?: { fullName?: string } }) => {
+      toast.success(res?.message || 'Employee terminated — payroll history preserved');
+      qc.invalidateQueries({ queryKey: ['payroll-employees', storeId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const filtered = useMemo(() => {
     return employees.filter((e) => {
       if (statusFilter !== 'ALL' && e.status !== statusFilter) return false;
@@ -492,9 +518,15 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
       emergencyContactPhone: form.emergencyContactPhone || undefined,
       notes: form.notes || undefined,
     };
-    // Note: editing would use PUT /api/employees/[id] — the create endpoint handles POST.
-    // For edits we still POST (the API may upsert) — adjust if a PUT endpoint exists.
-    createMutation.mutate(payload);
+    if (editingId) {
+      // EMPLOYEE-CRUD FIX: real update via PATCH /api/employees/[id]
+      // (storeId is immutable on the detail route — strip it from the payload).
+      const patchBody: Record<string, unknown> = { ...payload };
+      delete patchBody.storeId;
+      updateMutation.mutate({ id: editingId, payload: patchBody });
+    } else {
+      createMutation.mutate(payload);
+    }
   }
 
   function monthlyGross(e: Employee): number {
@@ -619,6 +651,22 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
                           <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(e)} title="Edit">
                             <Edit className="h-4 w-4" />
                           </Button>
+                          {e.status !== 'TERMINATED' && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                              disabled={terminateMutation.isPending}
+                              onClick={() => {
+                                if (window.confirm(`Terminate ${e.fullName}? Their record and payroll history are kept (status becomes TERMINATED).`)) {
+                                  terminateMutation.mutate(e.id);
+                                }
+                              }}
+                              title="Terminate (soft delete)"
+                            >
+                              {terminateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserX className="h-4 w-4" />}
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
