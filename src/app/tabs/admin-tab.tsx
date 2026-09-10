@@ -1250,13 +1250,49 @@ function UserManagement({ storeId }: { storeId: string }) {
     setEditForm({ name: user.name, email: user.email, role: user.role, phone: user.phone || '' });
   };
 
+  // EMPLOYEE-CRUD FIX (2026-09-10): these handlers previously showed success
+  // toasts WITHOUT calling the server — edits and deactivations were silently
+  // lost. They now hit the real PATCH/DELETE /api/users/[id] endpoints.
+  const updateUserMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { name?: string; phone?: string; role?: string; isActive?: boolean } }) =>
+      usersApi.update(id, data),
+    onSuccess: (res) => {
+      toast.success(`User ${res.data?.name || 'record'} updated successfully`);
+      queryClient.invalidateQueries({ queryKey: ['users', storeId] });
+      setEditUser(null);
+      setFormErrors({});
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to update user'),
+  });
+
+  const toggleUserActiveMutation = useMutation({
+    mutationFn: (user: UserItem) =>
+      user.isActive ? usersApi.deactivate(user.id) : usersApi.update(user.id, { isActive: true }),
+    onSuccess: (_res, user) => {
+      toast.success(`User ${user.name} has been ${user.isActive ? 'deactivated' : 'activated'}`);
+      queryClient.invalidateQueries({ queryKey: ['users', storeId] });
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to update user status'),
+  });
+
   const handleSaveEdit = () => {
-    toast.success(`User ${editForm.name} updated successfully`);
-    setEditUser(null);
+    if (!editUser) return;
+    if (!editForm.name.trim()) {
+      setFormErrors({ name: 'Name is required' });
+      return;
+    }
+    updateUserMutation.mutate({
+      id: editUser.id,
+      data: {
+        name: editForm.name.trim(),
+        role: editForm.role,
+        phone: editForm.phone.trim() || undefined,
+      },
+    });
   };
 
   const handleDeactivate = (user: UserItem) => {
-    toast.success(`User ${user.name} has been ${user.isActive ? 'deactivated' : 'activated'}`);
+    toggleUserActiveMutation.mutate(user);
   };
 
   const getInitials = (name: string) => {
@@ -1464,11 +1500,13 @@ function UserManagement({ storeId }: { storeId: string }) {
               />
             </div>
             <div className="space-y-2">
-              <Label>Email</Label>
+              <Label>Email (login identity — cannot be changed here)</Label>
               <Input
                 type="email"
                 value={editForm.email}
-                onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                disabled
+                className="opacity-70"
+                title="Email is the login identity. Contact a SUPER_ADMIN to change it."
               />
             </div>
             <div className="space-y-2">
@@ -1494,8 +1532,8 @@ function UserManagement({ storeId }: { storeId: string }) {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditUser(null)}>Cancel</Button>
-            <Button onClick={handleSaveEdit}>
-              <Save className="mr-2 h-4 w-4" /> Save Changes
+            <Button onClick={handleSaveEdit} disabled={updateUserMutation.isPending}>
+              <Save className="mr-2 h-4 w-4" /> {updateUserMutation.isPending ? 'Saving…' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </DialogContent>
