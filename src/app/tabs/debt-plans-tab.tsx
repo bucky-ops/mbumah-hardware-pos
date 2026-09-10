@@ -337,3 +337,9 @@ export function DebtPlansTab() {
     </div>
   );
 }
+
+// React.lazy() loaders (see src/lib/tab-preload.ts) expect a default export.
+// Its absence made `default` undefined at render time → React error #306
+// ("Element type is invalid") → SectionErrorBoundary showed "Unable to load
+// Debt Plans". Export the component as default to match every other tab.
+export default DebtPlansTab;
