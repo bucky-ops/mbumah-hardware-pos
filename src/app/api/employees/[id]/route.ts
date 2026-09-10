@@ -38,7 +38,7 @@ async function loadEmployee(id: string) {
     where: { id },
     include: {
       user: { select: { id: true, email: true, name: true, role: true } },
-      _count: { select: { payrollDetails: true, leaves: true } },
+      _count: { select: { payrollDetails: true, leaveRequests: true } },
     },
   });
 }
@@ -99,7 +99,7 @@ function serializeEmployee(e: NonNullable<Awaited<ReturnType<typeof loadEmployee
     updatedAt: e.updatedAt,
     user: e.user,
     payrollCount: e._count.payrollDetails,
-    leaveCount: e._count.leaves,
+    leaveRequestCount: e._count.leaveRequests,
   };
 }
 
@@ -264,7 +264,7 @@ async function updateEmployeeHandler(
     data: data as never,
     include: {
       user: { select: { id: true, email: true, name: true, role: true } },
-      _count: { select: { payrollDetails: true, leaves: true } },
+      _count: { select: { payrollDetails: true, leaveRequests: true } },
     },
   });
 
@@ -310,7 +310,7 @@ async function terminateEmployeeHandler(
     data: { status: 'TERMINATED', terminationDate: new Date() },
     include: {
       user: { select: { id: true, email: true, name: true, role: true } },
-      _count: { select: { payrollDetails: true, leaves: true } },
+      _count: { select: { payrollDetails: true, leaveRequests: true } },
     },
   });
 
