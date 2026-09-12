@@ -61,7 +61,11 @@ async function getJournalEntriesHandler(...args: unknown[]): Promise<Response> {
       include: {
         lines: {
           include: {
-            account: { select: { id: true, code: true, name: true, type: true } },
+            // subType is REQUIRED by the frontend P&L breakdown (Sales vs
+            // Rental vs Late Fee vs COGS). It was missing here, so every
+            // subType-based filter client-side matched nothing and all revenue
+            // landed in "Other Revenue" while COGS showed 0.
+            account: { select: { id: true, code: true, name: true, type: true, subType: true } },
           },
           orderBy: { id: 'asc' },
         },
@@ -79,13 +83,36 @@ async function getJournalEntriesHandler(...args: unknown[]): Promise<Response> {
     _count: true,
   });
 
+  // DECIMAL SERIALIZATION GUARD (financial audit — P&L 3.8e+89 incident):
+  // Prisma Decimal fields pass through Response.json as STRINGS (decimal.js
+  // toJSON). Client-side aggregations then string-concatenate instead of
+  // adding ("0" + "3800" → "03800", then "03800" + "120" → "03800120"…),
+  // which produced astronomically wrong figures (Ksh 3.8e+89 "Net Loss").
+  // Convert EVERY monetary field to a JS number so the documented api.ts
+  // contract (debit: number; totalDebit: number) actually holds at runtime.
+  const toNum = (v: unknown): number => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
   return Response.json({
     success: true,
-    data: entries,
+    data: entries.map((entry) => ({
+      ...entry,
+      totalDebit: toNum(entry.totalDebit),
+      totalCredit: toNum(entry.totalCredit),
+      lines: entry.lines.map((line) => ({
+        ...line,
+        debit: toNum(line.debit),
+        credit: toNum(line.credit),
+        taxRateApplied: line.taxRateApplied === null ? null : toNum(line.taxRateApplied),
+        taxAmount: line.taxAmount === null ? null : toNum(line.taxAmount),
+      })),
+    })),
     summary: {
       postedEntries: summary._count,
-      totalDebits: summary._sum.totalDebit || 0,
-      totalCredits: summary._sum.totalCredit || 0,
+      totalDebits: toNum(summary._sum.totalDebit),
+      totalCredits: toNum(summary._sum.totalCredit),
     },
     pagination: {
       page,

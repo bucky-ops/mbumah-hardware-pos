@@ -288,6 +288,22 @@ function RecordPaymentDialog({ debt, open, onOpenChange, onRecordPayment }: {
 
 // Main Component
 
+/**
+ * FINANCIAL AUDIT GUARD — Decimal-safe numeric coercion.
+ *
+ * Monetary fields from API payloads historically arrived as STRINGS (Prisma
+ * Decimal → decimal.js toJSON). Any `+` against a string CONCATENATES
+ * ("0" + "3800" → "03800", then "03800" + "120" → "03800120"…), which built
+ * astronomically wrong P&L figures (the Ksh 3.8e+89 "Net Loss" incident).
+ * The server now serializes numbers (matching the api.ts contract), but every
+ * monetary value MUST still pass through this guard before arithmetic so a
+ * cached/legacy string payload can never corrupt the math again.
+ */
+function toNum(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export default function FinancialTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
   const authUser = useAuthStore((s) => s.user);
@@ -703,8 +719,10 @@ export default function FinancialTab() {
       toast.error('At least 2 journal lines with amounts are required');
       return;
     }
-    const totalDebit = validLines.reduce((s, l) => s + l.debit, 0);
-    const totalCredit = validLines.reduce((s, l) => s + l.credit, 0);
+    // Form line values are raw input strings — parse them explicitly (a bare
+    // `s + l.debit` string-concatenates: "0100" + "50" → "010050").
+    const totalDebit = validLines.reduce((s, l) => s + (parseFloat(String(l.debit)) || 0), 0);
+    const totalCredit = validLines.reduce((s, l) => s + (parseFloat(String(l.credit)) || 0), 0);
     if (Math.abs(totalDebit - totalCredit) > 0.01) {
       toast.error(`Journal must balance. Debit: ${formatKES(totalDebit)}, Credit: ${formatKES(totalCredit)}`);
       return;
@@ -799,48 +817,71 @@ export default function FinancialTab() {
     return [];
   }, [paymentBreakdown, revenueTrendData]);
 
-  // Profit & Loss calculations
+  // Profit & Loss calculations — every operand passes through toNum(); a
+  // single raw string in these reduce chains digit-concatenates the running
+  // total (financial audit: Ksh 3.8e+89 Net Loss incident).
   const totalRevenue = journals.reduce((s, je) => {
     const revenueLines = je.lines?.filter((l) => l.account?.type === 'REVENUE') || [];
-    return s + revenueLines.reduce((ls, l) => ls + l.credit - l.debit, 0);
+    return s + revenueLines.reduce((ls, l) => ls + toNum(l.credit) - toNum(l.debit), 0);
   }, 0);
 
   const totalExpenses = journals.reduce((s, je) => {
     const expenseLines = je.lines?.filter((l) => l.account?.type === 'EXPENSE') || [];
-    return s + expenseLines.reduce((ls, l) => ls + l.debit - l.credit, 0);
+    return s + expenseLines.reduce((ls, l) => ls + toNum(l.debit) - toNum(l.credit), 0);
   }, 0);
 
   const grossProfit = totalRevenue - totalExpenses;
   const _profitMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 
+  // Sanity guard (financial audit): expenses exceeding revenue 100x signals a
+  // data/serialization anomaly — surface it loudly instead of rendering a
+  // nonsense statement.
+  if (totalRevenue > 0 && totalExpenses > totalRevenue * 100) {
+    console.warn(
+      `[P&L AUDIT] Expenses (KES ${totalExpenses}) exceed revenue (KES ${totalRevenue}) by >100x — possible data anomaly.`
+    );
+  }
+
   // P&L detailed breakdowns
   const plBreakdown = useMemo(() => {
+    // Revenue breakdown by CANONICAL ACCOUNT CODE (4000 Sales, 4100 Rental,
+    // 4200 Late Fee — see src/lib/account-helper.ts ACCOUNT_DEFAULTS) with a
+    // subType fallback for custom charts. The previous subType-only filter
+    // ('SALES'/'RENTAL'/'LATE_FEE') never matched the seeded chart (whose
+    // subTypes are OPERATING_REVENUE / OTHER_REVENUE), so Sales / Rental /
+    // Late Fee always showed KES 0.00 and every shilling fell into "Other
+    // Revenue".
     const salesRevenue = journals.reduce((s, je) => {
-      const lines = je.lines?.filter((l) => l.account?.type === 'REVENUE' && l.account?.subType === 'SALES') || [];
-      return s + lines.reduce((ls, l) => ls + l.credit - l.debit, 0);
+      const lines = je.lines?.filter((l) => l.account?.type === 'REVENUE' && (l.account?.code === '4000' || l.account?.subType === 'SALES')) || [];
+      return s + lines.reduce((ls, l) => ls + toNum(l.credit) - toNum(l.debit), 0);
     }, 0);
     const rentalRevenue = journals.reduce((s, je) => {
-      const lines = je.lines?.filter((l) => l.account?.type === 'REVENUE' && l.account?.subType === 'RENTAL') || [];
-      return s + lines.reduce((ls, l) => ls + l.credit - l.debit, 0);
+      const lines = je.lines?.filter((l) => l.account?.type === 'REVENUE' && (l.account?.code === '4100' || l.account?.subType === 'RENTAL')) || [];
+      return s + lines.reduce((ls, l) => ls + toNum(l.credit) - toNum(l.debit), 0);
     }, 0);
     const lateFeeRevenue = journals.reduce((s, je) => {
-      const lines = je.lines?.filter((l) => l.account?.type === 'REVENUE' && l.account?.subType === 'LATE_FEE') || [];
-      return s + lines.reduce((ls, l) => ls + l.credit - l.debit, 0);
+      const lines = je.lines?.filter((l) => l.account?.type === 'REVENUE' && (l.account?.code === '4200' || l.account?.subType === 'LATE_FEE')) || [];
+      return s + lines.reduce((ls, l) => ls + toNum(l.credit) - toNum(l.debit), 0);
     }, 0);
     const otherRevenue = totalRevenue - salesRevenue - rentalRevenue - lateFeeRevenue;
 
+    // COGS: the canonical Cost of Goods Sold account is 5000 (seeded with
+    // subType 'OPERATING_EXPENSE', NOT 'COGS' — the old subType-only filter
+    // matched nothing, so Direct Costs always showed KES 0.00).
+    const isCogsLine = (l: { account?: { code?: string; subType?: string | null } | null }) =>
+      l.account?.code === '5000' || l.account?.subType === 'COGS';
     const cogs = journals.reduce((s, je) => {
-      const lines = je.lines?.filter((l) => l.account?.type === 'EXPENSE' && l.account?.subType === 'COGS') || [];
-      return s + lines.reduce((ls, l) => ls + l.debit - l.credit, 0);
+      const lines = je.lines?.filter((l) => l.account?.type === 'EXPENSE' && isCogsLine(l)) || [];
+      return s + lines.reduce((ls, l) => ls + toNum(l.debit) - toNum(l.credit), 0);
     }, 0);
 
     const operatingExpenses: { name: string; amount: number }[] = [];
     const opExpCategories: Record<string, number> = {};
     journals.forEach((je) => {
       je.lines?.forEach((line) => {
-        if (line.account?.type === 'EXPENSE' && line.account?.subType !== 'COGS' && line.debit > 0) {
+        if (line.account?.type === 'EXPENSE' && !isCogsLine(line) && toNum(line.debit) > 0) {
           const name = line.account?.name || 'Other';
-          opExpCategories[name] = (opExpCategories[name] || 0) + line.debit;
+          opExpCategories[name] = (opExpCategories[name] || 0) + toNum(line.debit);
         }
       });
     });
@@ -895,9 +936,9 @@ export default function FinancialTab() {
     const categories: Record<string, number> = {};
     journals.forEach((je) => {
       je.lines?.forEach((line) => {
-        if (line.account?.type === 'EXPENSE' && line.debit > 0) {
+        if (line.account?.type === 'EXPENSE' && toNum(line.debit) > 0) {
           const name = line.account.name || 'Other';
-          categories[name] = (categories[name] || 0) + line.debit;
+          categories[name] = (categories[name] || 0) + toNum(line.debit);
         }
       });
     });
@@ -978,8 +1019,8 @@ export default function FinancialTab() {
       journals.forEach((je) => {
         je.lines?.forEach((line) => {
           if (line.accountId === account.id) {
-            debit += line.debit;
-            credit += line.credit;
+            debit += toNum(line.debit);
+            credit += toNum(line.credit);
           }
         });
       });
@@ -1010,8 +1051,8 @@ export default function FinancialTab() {
     { key: 'year', label: 'This Year' },
   ];
 
-  const journalTotalDebit = journals.reduce((s, je) => s + je.totalDebit, 0);
-  const journalTotalCredit = journals.reduce((s, je) => s + je.totalCredit, 0);
+  const journalTotalDebit = journals.reduce((s, je) => s + toNum(je.totalDebit), 0);
+  const journalTotalCredit = journals.reduce((s, je) => s + toNum(je.totalCredit), 0);
 
   // Debt aging chart data
   const agingChartData = useMemo(() => [
@@ -1941,7 +1982,7 @@ export default function FinancialTab() {
               <Badge variant="outline" className="text-xs">{expenses.length} records</Badge>
               {expenses.length > 0 && (
                 <span className="text-xs font-medium text-orange-600">
-                  Total: {formatKES(expenses.filter(e => e.status !== 'VOIDED').reduce((s, e) => s + e.amount, 0))}
+                  Total: {formatKES(expenses.filter(e => e.status !== 'VOIDED').reduce((s, e) => s + toNum(e.amount), 0))}
                 </span>
               )}
               <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowExpenseDialog(true)}>
@@ -2069,8 +2110,8 @@ export default function FinancialTab() {
 
                 // Calculate group total balance
                 const groupBalance = group.reduce((s, a) => {
-                  const accountDebit = journals.reduce((ds, je) => ds + (je.lines?.filter(l => l.accountId === a.id).reduce((ls, l) => ls + l.debit, 0) || 0), 0);
-                  const accountCredit = journals.reduce((cs, je) => cs + (je.lines?.filter(l => l.accountId === a.id).reduce((ls, l) => ls + l.credit, 0) || 0), 0);
+                  const accountDebit = journals.reduce((ds, je) => ds + (je.lines?.filter(l => l.accountId === a.id).reduce((ls, l) => ls + toNum(l.debit), 0) || 0), 0);
+                  const accountCredit = journals.reduce((cs, je) => cs + (je.lines?.filter(l => l.accountId === a.id).reduce((ls, l) => ls + toNum(l.credit), 0) || 0), 0);
                   return s + (type === 'ASSET' || type === 'EXPENSE' ? accountDebit - accountCredit : accountCredit - accountDebit);
                 }, 0);
 
@@ -2101,8 +2142,8 @@ export default function FinancialTab() {
                       <div className="divide-y">
                         {group.map((account) => {
                           // Calculate running balance for this account
-                          const accountDebit = journals.reduce((ds, je) => ds + (je.lines?.filter(l => l.accountId === account.id).reduce((ls, l) => ls + l.debit, 0) || 0), 0);
-                          const accountCredit = journals.reduce((cs, je) => cs + (je.lines?.filter(l => l.accountId === account.id).reduce((ls, l) => ls + l.credit, 0) || 0), 0);
+                          const accountDebit = journals.reduce((ds, je) => ds + (je.lines?.filter(l => l.accountId === account.id).reduce((ls, l) => ls + toNum(l.debit), 0) || 0), 0);
+                          const accountCredit = journals.reduce((cs, je) => cs + (je.lines?.filter(l => l.accountId === account.id).reduce((ls, l) => ls + toNum(l.credit), 0) || 0), 0);
                           const isDebitAccount = type === 'ASSET' || type === 'EXPENSE';
                           const runningBalance = isDebitAccount ? accountDebit - accountCredit : accountCredit - accountDebit;
 

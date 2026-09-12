@@ -100,18 +100,28 @@ function ProfitAndLossReport({ storeId }: { storeId: string }) {
 
   const revenueAccounts = (tb?.accounts || []).filter((a) => a.accountType === 'REVENUE' && a.netBalance !== 0);
   const expenseAccounts = (tb?.accounts || []).filter((a) => a.accountType === 'EXPENSE' && a.netBalance !== 0);
-  const totalRevenue = revenueAccounts.reduce((s, a) => s + a.netBalance, 0);
-  const totalExpenses = expenseAccounts.reduce((s, a) => s + a.netBalance, 0);
+
+  // SIGN CONVENTION (financial audit): the trial balance reports every
+  // account's netBalance as debits − credits. Revenue accounts are
+  // credit-normal, so a healthy revenue balance arrives NEGATIVE here — flip
+  // the sign for display, otherwise Total Revenue is negative and
+  // Net Profit = revenue − expenses is ALWAYS a loss. Expense accounts are
+  // debit-normal (netBalance already positive) and display as-is.
+  const revenueAmount = (a: { netBalance: number }) => -a.netBalance;
+  const expenseAmount = (a: { netBalance: number }) => a.netBalance;
+
+  const totalRevenue = revenueAccounts.reduce((s, a) => s + revenueAmount(a), 0);
+  const totalExpenses = expenseAccounts.reduce((s, a) => s + expenseAmount(a), 0);
   const netProfit = totalRevenue - totalExpenses;
 
   const handleExport = () => {
     if (!tb) return;
     const rows: Record<string, unknown>[] = [];
     rows.push({ Section: 'REVENUE', Account: '', Amount: '' });
-    revenueAccounts.forEach((a) => rows.push({ Section: '', Account: `${a.accountCode} ${a.accountName}`, Amount: a.netBalance.toFixed(2) }));
+    revenueAccounts.forEach((a) => rows.push({ Section: '', Account: `${a.accountCode} ${a.accountName}`, Amount: revenueAmount(a).toFixed(2) }));
     rows.push({ Section: '', Account: 'Total Revenue', Amount: totalRevenue.toFixed(2) });
     rows.push({ Section: 'EXPENSES', Account: '', Amount: '' });
-    expenseAccounts.forEach((a) => rows.push({ Section: '', Account: `${a.accountCode} ${a.accountName}`, Amount: a.netBalance.toFixed(2) }));
+    expenseAccounts.forEach((a) => rows.push({ Section: '', Account: `${a.accountCode} ${a.accountName}`, Amount: expenseAmount(a).toFixed(2) }));
     rows.push({ Section: '', Account: 'Total Expenses', Amount: totalExpenses.toFixed(2) });
     rows.push({ Section: '', Account: 'Net Profit', Amount: netProfit.toFixed(2) });
     exportToCSV(rows, 'profit_and_loss');
@@ -152,7 +162,7 @@ function ProfitAndLossReport({ storeId }: { storeId: string }) {
                 {revenueAccounts.map((a) => (
                   <div key={a.accountCode} className="flex justify-between pl-4">
                     <span className="text-muted-foreground">{a.accountCode} — {a.accountName}</span>
-                    <span className="font-medium">{formatKES(a.netBalance)}</span>
+                    <span className="font-medium">{formatKES(revenueAmount(a))}</span>
                   </div>
                 ))}
                 <Separator className="my-1" />
@@ -217,8 +227,12 @@ function BalanceSheetReport({ storeId }: { storeId: string }) {
   const equity = (tb?.accounts || []).filter((a) => a.accountType === 'EQUITY' && a.netBalance !== 0);
 
   const totalAssets = assets.reduce((s, a) => s + a.netBalance, 0);
-  const totalLiabilities = liabilities.reduce((s, a) => s + a.netBalance, 0);
-  const totalEquity = equity.reduce((s, a) => s + a.netBalance, 0);
+  // Credit-normal accounts (liabilities, equity) carry NEGATIVE netBalance in
+  // the trial balance (debits − credits) — flip for display so they read as
+  // positive balances and the accounting equation (A = L + E) holds.
+  const creditNormalAmount = (a: { netBalance: number }) => -a.netBalance;
+  const totalLiabilities = liabilities.reduce((s, a) => s + creditNormalAmount(a), 0);
+  const totalEquity = equity.reduce((s, a) => s + creditNormalAmount(a), 0);
   const totalLiabEquity = totalLiabilities + totalEquity;
   const balanced = Math.abs(totalAssets - totalLiabEquity) < 1;
 
@@ -229,10 +243,10 @@ function BalanceSheetReport({ storeId }: { storeId: string }) {
     assets.forEach((a) => rows.push({ Section: '', Account: `${a.accountCode} ${a.accountName}`, Amount: a.netBalance.toFixed(2) }));
     rows.push({ Section: '', Account: 'Total Assets', Amount: totalAssets.toFixed(2) });
     rows.push({ Section: 'LIABILITIES', Account: '', Amount: '' });
-    liabilities.forEach((a) => rows.push({ Section: '', Account: `${a.accountCode} ${a.accountName}`, Amount: a.netBalance.toFixed(2) }));
+    liabilities.forEach((a) => rows.push({ Section: '', Account: `${a.accountCode} ${a.accountName}`, Amount: creditNormalAmount(a).toFixed(2) }));
     rows.push({ Section: '', Account: 'Total Liabilities', Amount: totalLiabilities.toFixed(2) });
     rows.push({ Section: 'EQUITY', Account: '', Amount: '' });
-    equity.forEach((a) => rows.push({ Section: '', Account: `${a.accountCode} ${a.accountName}`, Amount: a.netBalance.toFixed(2) }));
+    equity.forEach((a) => rows.push({ Section: '', Account: `${a.accountCode} ${a.accountName}`, Amount: creditNormalAmount(a).toFixed(2) }));
     rows.push({ Section: '', Account: 'Total Equity', Amount: totalEquity.toFixed(2) });
     rows.push({ Section: '', Account: 'Total Liabilities + Equity', Amount: totalLiabEquity.toFixed(2) });
     exportToCSV(rows, 'balance_sheet');
@@ -291,7 +305,7 @@ function BalanceSheetReport({ storeId }: { storeId: string }) {
                   {liabilities.map((a) => (
                     <div key={a.accountCode} className="flex justify-between pl-2">
                       <span className="text-muted-foreground">{a.accountCode} — {a.accountName}</span>
-                      <span className="font-medium">{formatKES(a.netBalance)}</span>
+                      <span className="font-medium">{formatKES(creditNormalAmount(a))}</span>
                     </div>
                   ))}
                   <Separator className="my-1" />
@@ -307,7 +321,7 @@ function BalanceSheetReport({ storeId }: { storeId: string }) {
                   {equity.map((a) => (
                     <div key={a.accountCode} className="flex justify-between pl-2">
                       <span className="text-muted-foreground">{a.accountCode} — {a.accountName}</span>
-                      <span className="font-medium">{formatKES(a.netBalance)}</span>
+                      <span className="font-medium">{formatKES(creditNormalAmount(a))}</span>
                     </div>
                   ))}
                   <Separator className="my-1" />
