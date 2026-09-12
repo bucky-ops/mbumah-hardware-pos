@@ -99,8 +99,13 @@ export default function TrialBalancePanel() {
       const params = new URLSearchParams();
       params.set('storeId', currentStoreId);
       params.set('asOfDate', asOfDate);
+      // AUTH FIX (financial audit): attach the Bearer session token (see
+      // src/lib/api.ts request()) — a bare fetch 401s on this endpoint and
+      // the Trial Balance panel never rendered data.
+      const tbToken = typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null;
       const res = await fetch(`/api/financial/trial-balance?${params.toString()}`, {
         credentials: 'same-origin',
+        headers: tbToken ? { Authorization: `Bearer ${tbToken}` } : {},
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

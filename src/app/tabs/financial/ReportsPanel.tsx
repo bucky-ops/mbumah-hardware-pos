@@ -71,8 +71,15 @@ function useTrialBalance(storeId: string, asOfDate: string) {
       const params = new URLSearchParams();
       params.set('storeId', storeId);
       params.set('asOfDate', asOfDate);
+      // AUTH FIX (financial audit): this call used a bare fetch with no
+      // Authorization header, but the API requires a Bearer session token —
+      // every request 401'd and P&L / Balance Sheet always rendered
+      // "No revenue or expense activity". Mirror src/lib/api.ts request():
+      // attach the Bearer token from localStorage (GET needs no CSRF).
+      const tbToken = typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null;
       const res = await fetch(`/api/financial/trial-balance?${params.toString()}`, {
         credentials: 'same-origin',
+        headers: tbToken ? { Authorization: `Bearer ${tbToken}` } : {},
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
