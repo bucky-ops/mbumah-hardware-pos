@@ -58,6 +58,13 @@ async function listEmployeesHandler(
     take: limit,
   });
 
+  // MONEY FIX (v2.3.1): Prisma Decimal arrives here as a decimal.js object and
+  // Response.json serializes it as a STRING. The frontend payroll reducer then
+  // string-concatenates salaries (33603 + 5040 + ... -> "336035040201616800").
+  // Serialize every money field as a JS number at the API boundary so the
+  // documented contract (number) holds at runtime.
+  const toMoney = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
+
   const data = employees.map((e) => ({
     id: e.id,
     storeId: e.storeId,
@@ -80,12 +87,12 @@ async function listEmployeesHandler(
     hireDate: e.hireDate.toISOString(),
     terminationDate: e.terminationDate?.toISOString() ?? null,
     status: e.status,
-    basicSalary: e.basicSalary,
-    hourlyRate: e.hourlyRate,
-    houseAllowance: e.houseAllowance,
-    transportAllowance: e.transportAllowance,
-    medicalAllowance: e.medicalAllowance,
-    otherAllowances: e.otherAllowances,
+    basicSalary: toMoney(e.basicSalary),
+    hourlyRate: toMoney(e.hourlyRate),
+    houseAllowance: toMoney(e.houseAllowance),
+    transportAllowance: toMoney(e.transportAllowance),
+    medicalAllowance: toMoney(e.medicalAllowance),
+    otherAllowances: toMoney(e.otherAllowances),
     payeExempt: e.payeExempt,
     nssfExempt: e.nssfExempt,
     nhifExempt: e.nhifExempt,
@@ -276,7 +283,7 @@ async function createEmployeeHandler(
       employmentType: employee.employmentType,
       hireDate: employee.hireDate.toISOString(),
       status: employee.status,
-      basicSalary: employee.basicSalary,
+      basicSalary: toMoney(employee.basicSalary),
     },
   }, { status: 201 });
 }
