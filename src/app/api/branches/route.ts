@@ -1,9 +1,15 @@
 // GET/POST /api/branches
+//
+// BRANCH CODES (v2.3.0): every branch carries a short unique code (2-6
+// uppercase letters, derived from the town/county name — e.g. JUJ, THI, RUI,
+// NAI, NAK). The code is used in product SKUs, employee staff numbers and
+// stock-movement references so every record traces back to its branch.
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { requireStoreAccess, OWNER_ROLES } from '@/lib/auth';
+import { normalizeBranchCode } from '@/lib/helpers';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +32,7 @@ async function getBranchesHandler(...args: unknown[]): Promise<Response> {
     select: {
       id: true,
       organizationId: true,
+      code: true,
       name: true,
       location: true,
       address: true,
@@ -117,6 +124,34 @@ async function createBranchHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
+  // ── 3b. Branch code: normalize, auto-derive from the branch name when
+  // omitted (first 3 letters, disambiguated with a digit if taken) and
+  // guarantee uniqueness inside the organization.
+  let code = normalizeBranchCode(body.code);
+  if (!code) {
+    const letters = String(name).toUpperCase().replace(/[^A-Z]/g, '') || 'BR';
+    const base = letters.slice(0, 3);
+    code = base;
+    for (let n = 2; n <= 9; n++) {
+      const clash = await db.store.findUnique({ where: { code }, select: { id: true } });
+      if (!clash) break;
+      code = `${base}${n}`; // e.g. NAK → NAK2 when NAK is taken
+    }
+  }
+  if (code.length < 2 || code.length > 6) {
+    return Response.json(
+      { success: false, error: 'Branch code must be 2-6 letters/digits (e.g. NAK, JUJ, NCBD).' },
+      { status: 400 }
+    );
+  }
+  const codeClash = await db.store.findUnique({ where: { code }, select: { id: true } });
+  if (codeClash) {
+    return Response.json(
+      { success: false, error: `Branch code "${code}" is already used by another branch.` },
+      { status: 409 }
+    );
+  }
+
   // ── 4. Check for duplicate branch name in organization ───────────
   const existing = await db.store.findFirst({
     where: { organizationId, name },
@@ -134,6 +169,7 @@ async function createBranchHandler(...args: unknown[]): Promise<Response> {
     data: {
       organizationId,
       name,
+      code,
       location: location || null,
       address: address || null,
       phone: phone || null,
@@ -144,6 +180,7 @@ async function createBranchHandler(...args: unknown[]): Promise<Response> {
     select: {
       id: true,
       organizationId: true,
+      code: true,
       name: true,
       location: true,
       address: true,
@@ -159,10 +196,10 @@ async function createBranchHandler(...args: unknown[]): Promise<Response> {
     action: 'BRANCH_CREATED',
     component: 'AUTH',
     severity: 'INFO',
-    message: `Branch "${name}" created by "${requestingUser.name}" (${requestingUser.role})`,
+    message: `Branch "${name}" (${code}) created by "${requestingUser.name}" (${requestingUser.role})`,
     userId: requestingUser.id,
     storeId: requestingUser.storeId || undefined,
-    metadata: { branchId: branch.id, branchName: name, createdByRole: requestingUser.role },
+    metadata: { branchId: branch.id, branchName: name, branchCode: code, createdByRole: requestingUser.role },
   });
 
   return Response.json({

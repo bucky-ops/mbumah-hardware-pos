@@ -9,6 +9,7 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { requireStoreAccess } from '@/lib/auth';
+import { formatEmployeeCode } from '@/lib/helpers';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,6 +61,7 @@ async function listEmployeesHandler(
   const data = employees.map((e) => ({
     id: e.id,
     storeId: e.storeId,
+    employeeCode: e.employeeCode,
     userId: e.userId,
     user: e.user,
     firstName: e.firstName,
@@ -134,6 +136,61 @@ async function createEmployeeHandler(
     );
   }
 
+  // ── Employee staff number (branch-coded) ─────────────────────────
+  // Format MBM-<branchCode>-E<NNN> so every payslip/leave form traces to
+  // its branch. When the caller supplies one it is normalized + checked
+  // for uniqueness; otherwise the next per-branch sequence is allocated
+  // from the highest existing suffix (e.g. JUJ E007 → E008). The store's
+  // branch code must exist — uncoded stores cannot mint staff numbers.
+  let employeeCode: string | null = null;
+  const store = await db.store.findUnique({
+    where: { id: storeId },
+    select: { code: true, organizationId: true },
+  });
+  if (!store) {
+    return Response.json(
+      { success: false, error: 'Store not found.' },
+      { status: 404 }
+    );
+  }
+  if (body.employeeCode !== undefined && body.employeeCode !== null && body.employeeCode !== '') {
+    // Explicit code: accept either a bare suffix ("E012") or a full staff
+    // number ("MBM-JUJ-E012"). Uppercase, keep alphanumerics and dashes.
+    const raw = String(body.employeeCode).trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
+    if (!/^[A-Z0-9-]{2,20}$/.test(raw)) {
+      return Response.json(
+        { success: false, error: 'employeeCode must be 2-20 letters/digits/dashes (e.g. "E012" or "MBM-JUJ-E012").' },
+        { status: 400 }
+      );
+    }
+    employeeCode = raw.startsWith('MBM-') ? raw : `MBM-${store.code || 'GEN'}-${raw}`;
+  } else if (store.code) {
+    const existing = await db.employee.findMany({
+      where: { employeeCode: { startsWith: `MBM-${store.code}-E` } },
+      select: { employeeCode: true },
+    });
+    let maxSeq = 0;
+    for (const row of existing) {
+      const seq = parseInt(row.employeeCode?.split('-E')[1] || '0', 10);
+      if (Number.isFinite(seq) && seq > maxSeq) maxSeq = seq;
+    }
+    employeeCode = formatEmployeeCode(store.code, maxSeq + 1);
+  } else {
+    return Response.json(
+      { success: false, error: 'This branch has no branch code yet. Set the branch code first (PATCH /api/branches/[id]) so employee staff numbers can be generated.' },
+      { status: 400 }
+    );
+  }
+  if (employeeCode) {
+    const codeClash = await db.employee.findUnique({ where: { employeeCode }, select: { id: true } });
+    if (codeClash) {
+      return Response.json(
+        { success: false, error: `Employee code "${employeeCode}" is already in use.` },
+        { status: 409 }
+      );
+    }
+  }
+
   const hireDateParsed = new Date(hireDate);
   if (isNaN(hireDateParsed.getTime())) {
     return Response.json(
@@ -159,6 +216,7 @@ async function createEmployeeHandler(
   const employee = await db.employee.create({
     data: {
       storeId,
+      employeeCode,
       userId: userId || null,
       firstName: firstName.trim(),
       lastName: lastName.trim(),
@@ -200,7 +258,7 @@ async function createEmployeeHandler(
     message: `Employee created: ${employee.firstName} ${employee.lastName} (${employee.jobTitle || 'No title'})`,
     storeId,
     userId: session.userId,
-    metadata: { employeeId: employee.id, role: employee.role, employmentType: employee.employmentType },
+    metadata: { employeeId: employee.id, employeeCode: employee.employeeCode, role: employee.role, employmentType: employee.employmentType },
   });
 
   return Response.json({
@@ -208,6 +266,7 @@ async function createEmployeeHandler(
     data: {
       id: employee.id,
       storeId: employee.storeId,
+      employeeCode: employee.employeeCode,
       firstName: employee.firstName,
       lastName: employee.lastName,
       fullName: `${employee.firstName} ${employee.lastName}`,

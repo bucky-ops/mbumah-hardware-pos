@@ -27,7 +27,7 @@ datasource db {
   // Committed as "postgresql" for Vercel. Auto-switched to "sqlite" by
   // scripts/setup-prisma-provider.mjs during postinstall when DATABASE_URL
   // starts with "file:" (local dev). Do not edit manually.
-  provider  = "postgresql"
+  provider = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
@@ -54,6 +54,11 @@ model Store {
   id             String   @id @default(cuid())
   organizationId String
   name           String
+  // Branch code: short unique identifier for the branch, used in product SKUs,
+  // employee staff numbers and stock-movement references so every record can be
+  // traced back to the branch that owns it (e.g. JUJ, THI, RUI, NAI, NAK).
+  // Convention: 2-6 uppercase letters derived from the town/county name.
+  code           String?  @unique
   location       String?
   address        String?
   phone          String?
@@ -1378,6 +1383,11 @@ model SecurityEvent {
 model Employee {
   id      String @id @default(cuid())
   storeId String
+
+  // Staff number that carries the branch code, e.g. "MBM-JUJ-E001".
+  // Format: MBM-<branchCode>-E<3-digit sequence per branch>. Unique across the
+  // organization so payslips, leave forms and IDs are traceable to a branch.
+  employeeCode String? @unique
 
   // Optional link to a system User account. When set, the employee can log in
   // and access the self-service portal (view payslips, request leave, clock in).

@@ -87,6 +87,29 @@ async function updateProductHandler(...args: unknown[]): Promise<Response> {
     'isRental', 'isBundle', 'imageUrl', 'isActive',
   ];
 
+  // SKU is editable so legacy products can be re-coded to the branch-code
+  // convention (MBM-<branchCode>-…) without deleting historical records.
+  // Globally unique — 409 on a clash.
+  if (body.sku !== undefined) {
+    const newSku = String(body.sku).trim();
+    if (newSku.length < 2) {
+      return Response.json(
+        { success: false, error: 'SKU must be at least 2 characters.' },
+        { status: 400 }
+      );
+    }
+    if (newSku !== existing.sku) {
+      const clash = await db.product.findUnique({ where: { sku: newSku }, select: { id: true } });
+      if (clash && clash.id !== id) {
+        return Response.json(
+          { success: false, error: 'A product with this SKU already exists.' },
+          { status: 409 }
+        );
+      }
+      updateData.sku = newSku;
+    }
+  }
+
   for (const field of allowedFields) {
     if (body[field] !== undefined) {
       updateData[field] = body[field];

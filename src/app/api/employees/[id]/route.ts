@@ -65,6 +65,7 @@ function serializeEmployee(e: NonNullable<Awaited<ReturnType<typeof loadEmployee
   return {
     id: e.id,
     storeId: e.storeId,
+    employeeCode: e.employeeCode,
     userId: e.userId,
     firstName: e.firstName,
     lastName: e.lastName,
@@ -180,6 +181,36 @@ async function updateEmployeeHandler(
       );
     }
     data.email = (data.email as string).toLowerCase();
+  }
+
+  // ── Employee staff number (branch-coded, globally unique) ──
+  // Accepts a bare suffix ("E012") or a full staff number ("MBM-JUJ-E012").
+  if (body.employeeCode !== undefined) {
+    if (body.employeeCode === null || body.employeeCode === '') {
+      return Response.json(
+        { success: false, error: 'employeeCode cannot be removed. Replace it with a new staff number instead.' },
+        { status: 400 }
+      );
+    }
+    const raw = String(body.employeeCode).trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
+    if (!/^[A-Z0-9-]{2,20}$/.test(raw)) {
+      return Response.json(
+        { success: false, error: 'employeeCode must be 2-20 letters/digits/dashes (e.g. "E012" or "MBM-JUJ-E012").' },
+        { status: 400 }
+      );
+    }
+    const store = await db.store.findUnique({ where: { id: existing.storeId }, select: { code: true } });
+    const normalized = raw.startsWith('MBM-') ? raw : `MBM-${store?.code || 'GEN'}-${raw}`;
+    if (normalized !== existing.employeeCode) {
+      const clash = await db.employee.findUnique({ where: { employeeCode: normalized }, select: { id: true } });
+      if (clash && clash.id !== id) {
+        return Response.json(
+          { success: false, error: `Employee code "${normalized}" is already in use.` },
+          { status: 409 }
+        );
+      }
+      data.employeeCode = normalized;
+    }
   }
 
   // ── Enums ──
