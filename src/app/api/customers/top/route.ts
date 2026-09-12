@@ -35,10 +35,16 @@ async function getTopCustomersHandler(...args: unknown[]): Promise<Response> {
     dateFilter = { gte: new Date(now.getFullYear(), 0, 1) };
   }
 
-  // Aggregate total spend per customer from completed transactions
+  // QA FIX (Kenya Plumbing Co. incident audit): SalesTransaction has NO
+  // `status` column — the field is `paymentStatus` (PENDING, COMPLETED,
+  // FAILED, REFUNDED, PARTIAL). The invalid groupBy filter made this endpoint
+  // 500 on every call ("Unknown argument `status`"), so the Top Customers
+  // widget never loaded. Also restrict to SALE rows so REFUND/VOID entries
+  // don't pollute spend totals.
   const where: Record<string, unknown> = {
     storeId,
-    status: { in: ['COMPLETED', 'PAID', 'PARTIAL'] },
+    paymentStatus: { in: ['COMPLETED', 'PARTIAL'] },
+    transactionType: 'SALE',
   };
   if (dateFilter.gte) {
     where.createdAt = dateFilter;

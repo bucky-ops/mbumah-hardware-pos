@@ -12,6 +12,8 @@
 
 export interface StoreInfo {
   id: string;
+  /** Unique branch code (matches Store.code in the DB, e.g. "JUJ"). */
+  code: string;
   shortName: string;
   name: string;
   location: string;
@@ -23,6 +25,7 @@ export interface StoreInfo {
 export const STORE_LIST: StoreInfo[] = [
   {
     id: 'store_juja_main',
+    code: 'JUJ',
     shortName: 'Juja Main',
     name: 'MBUMAH HARDWARE — Juja Main',
     location: 'Salama M-Store, Juja, Kiambu County',
@@ -32,6 +35,7 @@ export const STORE_LIST: StoreInfo[] = [
   },
   {
     id: 'store_thika',
+    code: 'THI',
     shortName: 'Thika',
     name: 'MBUMAH HARDWARE — Thika',
     location: 'Thika Town Center, Kiambu County',
@@ -41,6 +45,7 @@ export const STORE_LIST: StoreInfo[] = [
   },
   {
     id: 'store_ruiru',
+    code: 'RUI',
     shortName: 'Ruiru',
     name: 'MBUMAH HARDWARE — Ruiru',
     location: 'Ruiru Town, Kiambu County',
@@ -50,6 +55,7 @@ export const STORE_LIST: StoreInfo[] = [
   },
   {
     id: 'store_nairobi_cbd',
+    code: 'NAI',
     shortName: 'Nairobi CBD',
     name: 'MBUMAH HARDWARE — Nairobi CBD',
     location: 'Kenyatta Avenue, Nairobi',
@@ -59,6 +65,7 @@ export const STORE_LIST: StoreInfo[] = [
   },
   {
     id: 'store_nakuru',
+    code: 'NAK',
     shortName: 'Nakuru',
     name: 'MBUMAH HARDWARE — Nakuru',
     location: 'Nakuru Town, Nakuru County',

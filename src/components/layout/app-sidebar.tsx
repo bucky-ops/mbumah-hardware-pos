@@ -265,12 +265,16 @@ export function AppSidebar() {
                       </button>
                     </TooltipTrigger>
                     <TooltipContent side="right" sideOffset={8}>
-                      {STORE_LIST.find(s => s.id === currentStoreId)?.shortName || 'Select Branch'}
+                      {(() => { const s = STORE_LIST.find(x => x.id === currentStoreId); return s ? `${s.code} · ${s.shortName}` : 'Select Branch'; })()}
                     </TooltipContent>
                   </Tooltip>
                 ) : (
                   <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-sidebar-border bg-sidebar-accent/50 text-xs text-sidebar-foreground/80 hover:bg-sidebar-accent transition-colors">
                     <Store className="h-3.5 w-3.5 shrink-0" />
+                    {/* Branch code surfacing (v2.3.0 codes: JUJ/THI/RUI/NAI/NAK) */}
+                    <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary tracking-wide">
+                      {STORE_LIST.find(s => s.id === currentStoreId)?.code || '—'}
+                    </span>
                     <span className="truncate font-medium">{STORE_LIST.find(s => s.id === currentStoreId)?.shortName || 'Select Branch'}</span>
                     <ChevronDown className="h-3 w-3 ml-auto shrink-0" />
                   </button>
@@ -287,7 +291,10 @@ export function AppSidebar() {
                   >
                     <Store className="h-3.5 w-3.5 mr-2 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">{s.shortName}</div>
+                      <div className="text-sm font-medium truncate flex items-center gap-1.5">
+                        <span className="rounded bg-primary/10 px-1 py-0.5 font-mono text-[10px] font-semibold text-primary tracking-wide">{s.code}</span>
+                        {s.shortName}
+                      </div>
                       <div className="text-[10px] text-muted-foreground truncate">{s.location}</div>
                     </div>
                     {currentStoreId === s.id && <CheckCircle className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />}

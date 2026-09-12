@@ -27,7 +27,7 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-import { formatKES, formatDateTime, formatRelativeTime } from '@/lib/api';
+import { formatKES, formatDateTime, formatRelativeTime, authorizedFetchJson } from '@/lib/api';
 import {
   TIER_CONFIG,
   type LoyaltyTierName,
@@ -191,14 +191,15 @@ export function LoyaltyCard({
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey,
     queryFn: async () => {
-      const res = await fetch(`/api/customers/${customerId}/loyalty`, {
-        credentials: 'same-origin',
-      });
-      const json = await res.json();
-      if (!json.success) {
-        throw new Error(json.error || 'Failed to load loyalty data');
+      // QA FIX (Kenya Plumbing Co. incident): this app authenticates with a
+      // Bearer token (localStorage) — a bare same-origin fetch has no session
+      // cookie, so the loyalty card 401'd forever with "Authentication
+      // required." and the redeem button always failed.
+      const res = await authorizedFetchJson(`/api/customers/${customerId}/loyalty`);
+      if (!res.ok || !res.json?.success) {
+        throw new Error(res.json?.error || 'Failed to load loyalty data');
       }
-      return json.data as CustomerLoyaltyData;
+      return res.json.data as CustomerLoyaltyData;
     },
     enabled: !!customerId,
     staleTime: 30_000,
@@ -206,17 +207,14 @@ export function LoyaltyCard({
 
   const redeemMutation = useMutation({
     mutationFn: async (points: number) => {
-      const res = await fetch(`/api/customers/${customerId}/loyalty/redeem`, {
+      const res = await authorizedFetchJson(`/api/customers/${customerId}/loyalty/redeem`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
         body: JSON.stringify({ points }),
       });
-      const json = await res.json();
-      if (!json.success) {
-        throw new Error(json.error || 'Redemption failed');
+      if (!res.ok || !res.json?.success) {
+        throw new Error(res.json?.error || 'Redemption failed');
       }
-      return json.data as RedeemResponse;
+      return res.json.data as RedeemResponse;
     },
     onSuccess: (result) => {
       toast.success(
