@@ -359,6 +359,12 @@ async function loadCustomerStatement(storeId: string, customerId: string): Promi
     purchases += n(t.totalAmount);
     if (t.paymentStatus === 'COMPLETED') amountPaidSales += n(t.totalAmount);
     const isDebt = t.paymentMethod === 'DEBT';
+    // R15 FIX (v2.5.1): a DEBT-method sale and the debt-ledger row auto-created
+    // from it are the SAME credit event — the ledger row (which carries the
+    // due date + status) is the authoritative charge. The sale row is shown
+    // balance-neutral here so the running balance does not DOUBLE-COUNT the
+    // amount (Caroline's statement showed 12,696 instead of 6,348). Cash /
+    // M-Pesa sales are settled instantly (debit = credit = total, net zero).
     entries.push({
       at: t.createdAt,
       activity: t.transactionType === 'REFUND' ? 'Sales refund' : 'Purchase (sale)',
@@ -368,8 +374,8 @@ async function loadCustomerStatement(storeId: string, customerId: string): Promi
       details:
         `${t._count.items} item(s) · ${t.paymentMethod}` +
         (t.cashier?.name ? ` · served by ${t.cashier.name}` : '') +
-        (isDebt ? ' · taken on store credit' : ''),
-      debit: t.transactionType === 'REFUND' ? 0 : n(t.totalAmount),
+        (isDebt ? ' · taken on store credit (charged to account below)' : ''),
+      debit: t.transactionType === 'REFUND' ? 0 : (isDebt ? 0 : n(t.totalAmount)),
       credit: t.transactionType === 'REFUND' ? n(t.totalAmount) : (isDebt ? 0 : n(t.totalAmount)),
       memo: false,
     });
