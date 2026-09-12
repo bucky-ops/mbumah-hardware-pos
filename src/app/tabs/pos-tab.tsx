@@ -1425,10 +1425,11 @@ export default function POSTab() {
 
       {/* Cart Sidebar - Desktop only (2 of 5 columns) */}
       <div className="hidden lg:block lg:col-span-2">
-        {/* v2.5.0: dvh (not vh) — the cart fits the REAL viewport on every
-            device, including mobile browsers whose chrome collapses. The
-            inner list scrolls in its own always-visible cart-scrollbar. */}
-        <Card className="relative sticky top-20 flex flex-col h-[calc(100dvh-130px)] overflow-hidden bg-gradient-to-b from-card/95 to-card/90 backdrop-blur-sm shadow-lg border border-border/50">
+        {/* v2.5.0: dvh (not vh) — fits the REAL viewport. `gap-0` overrides
+            the shadcn Card's default gap-6: 5 flex gaps × 24px starved the
+            scroll list at short viewports and collapsed it to 0px height
+            (items invisible exactly when space is tight). */}
+        <Card className="relative sticky top-20 flex flex-col gap-0 h-[calc(100dvh-130px)] overflow-hidden bg-gradient-to-b from-card/95 to-card/90 backdrop-blur-sm shadow-lg border border-border/50">
           <CardHeader className="pb-3 shrink-0">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
