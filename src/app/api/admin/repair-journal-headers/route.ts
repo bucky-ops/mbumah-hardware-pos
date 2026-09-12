@@ -24,6 +24,10 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { requireAuth } from '@/lib/auth';
 import { round2 } from '@/lib/utils/financialMath';
+// Financial immutability guard: journal entries are update-locked by a Prisma
+// client extension. Header re-derivation is a SANCTIONED correction flow, so
+// the writes run inside withImmutabilityBypass() (audited via systemLog below).
+import { withImmutabilityBypass } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,22 +84,26 @@ async function repairJournalHeadersHandler(request: NextRequest): Promise<Respon
     oldDebit: number; oldCredit: number; newTotal: number;
   }[] = [];
 
-  for (const e of candidates) {
-    const lineDebitTotal = round2(e.lines.reduce((acc, l) => acc + Number(l.debit), 0));
-    const lineCreditTotal = round2(e.lines.reduce((acc, l) => acc + Number(l.credit), 0));
-    const updated = await db.journalEntry.update({
-      where: { id: e.id },
-      data: { totalDebit: lineDebitTotal, totalCredit: lineCreditTotal },
-      select: { id: true, entryNumber: true },
-    });
-    repaired.push({
-      id: updated.id,
-      entryNumber: updated.entryNumber,
-      oldDebit: Number(e.totalDebit),
-      oldCredit: Number(e.totalCredit),
-      newTotal: lineDebitTotal,
-    });
-  }
+  // SANCTIONED CORRECTION (R12): header totals only, re-derived from the
+  // entry's own immutable lines; lines are never modified.
+  await withImmutabilityBypass(async () => {
+    for (const e of candidates) {
+      const lineDebitTotal = round2(e.lines.reduce((acc, l) => acc + Number(l.debit), 0));
+      const lineCreditTotal = round2(e.lines.reduce((acc, l) => acc + Number(l.credit), 0));
+      const updated = await db.journalEntry.update({
+        where: { id: e.id },
+        data: { totalDebit: lineDebitTotal, totalCredit: lineCreditTotal },
+        select: { id: true, entryNumber: true },
+      });
+      repaired.push({
+        id: updated.id,
+        entryNumber: updated.entryNumber,
+        oldDebit: Number(e.totalDebit),
+        oldCredit: Number(e.totalCredit),
+        newTotal: lineDebitTotal,
+      });
+    }
+  }, 'R12_rental_journal_header_repair');
 
   await systemLog({
     action: 'JOURNAL_HEADERS_REPAIRED',
