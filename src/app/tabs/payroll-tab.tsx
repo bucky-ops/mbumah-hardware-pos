@@ -23,7 +23,7 @@ import {
   Search, Plus, Edit, Eye, Check, X, AlertCircle, Loader2,
   Banknote, Phone, Mail, Briefcase,
   CheckCircle, XCircle, Clock3, FileText, User,
-  IdCard, Building2, AlertTriangle, Calendar, PiggyBank, Play, UserX,
+  IdCard, Building2, AlertTriangle, Calendar, PiggyBank, Play, UserX, Ban,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
@@ -220,6 +220,7 @@ const STATUS_STYLES: Record<string, string> = {
   PROCESSING: 'bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900',
   COMPLETED: 'bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-900',
   FAILED: 'bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900',
+  VOIDED: 'bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-900 line-through',
   PAID: 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
   PRESENT: 'bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-900',
   LATE: 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900',
@@ -1314,6 +1315,27 @@ function RunsSubTab({ storeId }: { storeId: string }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // QA FIX (June 2026 supplemental run): void a never-paid, never-posted run
+  // (the API refuses PAID runs and runs with posted journal entries).
+  const voidRunMutation = useMutation({
+    mutationFn: ({ runId, reason }: { runId: string; reason: string }) =>
+      apiFetch(`/api/payroll/runs/${runId}/void`, { method: 'POST', body: JSON.stringify({ reason }) }),
+    onSuccess: () => {
+      toast.success('Pay run voided');
+      qc.invalidateQueries({ queryKey: ['payroll-runs', storeId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  function handleVoid(run: PayrollRun) {
+    const reason = window.prompt(
+      `Void the ${run.runType} pay run for ${run.periodName}?\n\nTotals stay visible for audit; status becomes VOIDED.\nOnly possible because nothing was paid and nothing was posted to the ledger.\n\nReason:`,
+      'Deductions booked without earnings — superseded by corrected run'
+    );
+    if (reason === null) return;
+    voidRunMutation.mutate({ runId: run.id, reason: reason.trim() || 'Voided by admin' });
+  }
+
   const completedRuns = runs.filter((r) => r.status === 'COMPLETED' || r.status === 'PAID').length;
   const totalNet = runs.filter((r) => r.status === 'COMPLETED' || r.status === 'PAID').reduce((s, r) => s + (r.totalNet || 0), 0);
 
@@ -1375,6 +1397,7 @@ function RunsSubTab({ storeId }: { storeId: string }) {
                     <th className="px-2 py-2 font-medium text-muted-foreground text-right hidden md:table-cell">Deductions</th>
                     <th className="px-2 py-2 font-medium text-muted-foreground text-right">Net</th>
                     <th className="px-2 py-2 font-medium text-muted-foreground">Status</th>
+                    <th className="px-2 py-2 font-medium text-muted-foreground text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1396,6 +1419,20 @@ function RunsSubTab({ storeId }: { storeId: string }) {
                           {r.status === 'PROCESSING' && <Loader2 className="h-3 w-3 animate-spin text-blue-500" />}
                           <StatusBadge status={r.status} />
                         </div>
+                      </td>
+                      <td className="px-2 py-2.5 text-right">
+                        {(r.status === 'COMPLETED' || r.status === 'FAILED') && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30"
+                            disabled={voidRunMutation.isPending}
+                            title="Void run (only when nothing was paid and nothing was posted)"
+                            onClick={() => handleVoid(r)}
+                          >
+                            {voidRunMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}
