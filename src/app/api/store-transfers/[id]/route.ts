@@ -327,11 +327,16 @@ async function updateStoreTransferHandler(
         // receive path credited ONLY the legacy Inventory ledger — so a
         // completed transfer never appeared in the destination catalog.
         // Product.sku is globally unique, so the destination row is matched by
-        // a deterministic derived SKU (`<originSku>--<toStoreId>`); if it does
-        // not exist yet, the origin product is cloned into the destination
-        // store with the received quantity.
+        // a deterministic derived SKU (`<originSku>--<branchCode>` when the
+        // destination branch has a code, else `--<toStoreId>` for legacy
+        // pairs); if it does not exist yet, the origin product is cloned into
+        // the destination store with the received quantity.
         const itemProduct = await tx.product.findUnique({ where: { id: item.productId } });
-        const destSku = deriveTransferDestinationSku(itemProduct?.sku, existing.toStoreId);
+        const destStore = await tx.store.findUnique({
+          where: { id: existing.toStoreId },
+          select: { code: true },
+        });
+        const destSku = deriveTransferDestinationSku(itemProduct?.sku, existing.toStoreId, destStore?.code);
         if (destSku && itemProduct) {
           const destProduct = await tx.product.findUnique({ where: { sku: destSku } });
           if (destProduct) {

@@ -36,10 +36,36 @@ export function generateJournalEntryNumber(): string {
   return `JE-${dateStr}-${random}`;
 }
 
-// Format: MBM-CAT-XXXX
-export function generateSKU(categoryCode: string = 'GEN'): string {
+// Format: MBM-<BRANCH>-CAT-XXXX when a branch code is supplied, MBM-CAT-XXXX otherwise.
+// Branch-coded SKUs make every product traceable to the branch that stocks it
+// (e.g. MBM-JUJ-CEM-0042 = Juja Main, Cement category).
+export function generateSKU(categoryCode: string = 'GEN', branchCode?: string | null): string {
   const random = String(Math.floor(Math.random() * 9999)).padStart(4, '0');
-  return `MBM-${categoryCode.toUpperCase()}-${random}`;
+  const branch = normalizeBranchCode(branchCode);
+  const cat = categoryCode.toUpperCase();
+  return branch ? `MBM-${branch}-${cat}-${random}` : `MBM-${cat}-${random}`;
+}
+
+/**
+ * Normalize a human branch code: trim, uppercase, keep A-Z/0-9 only, 2-6 chars.
+ * Returns null for anything that cannot form a valid code (used to reject or
+ * auto-derive branch codes at the API boundary).
+ */
+export function normalizeBranchCode(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const code = String(raw).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return code.length >= 2 && code.length <= 6 ? code : null;
+}
+
+/**
+ * Staff number format: MBM-<branchCode>-E<NNN> (e.g. MBM-JUJ-E001).
+ * `seq` is the per-branch 1-based sequence. Returns null without a valid
+ * branch code (callers must resolve the store's code first).
+ */
+export function formatEmployeeCode(branchCode: string, seq: number): string | null {
+  const branch = normalizeBranchCode(branchCode);
+  if (!branch || !Number.isFinite(seq) || seq < 1) return null;
+  return `MBM-${branch}-E${String(Math.floor(seq)).padStart(3, '0')}`;
 }
 
 /**
@@ -154,16 +180,23 @@ export function calculateLineTotal(
  *
  * Product.sku is GLOBALLY unique in this schema, so a destination store can
  * never reuse the origin product's SKU. Transfers therefore derive the
- * destination catalog row's SKU as `<originSku>--<toStoreId>` — stable per
- * (origin product, destination store) pair so repeated transfers always
- * increment the same destination row instead of creating duplicates.
+ * destination catalog row's SKU as `<originSku>--<toStoreCode>` using the
+ * destination branch's human code (e.g. MBM-THI-0042--NAK) so the received
+ * stock carries the branch code of the store it now belongs to. Falls back
+ * to `<originSku>--<toStoreId>` when the store has no code yet (legacy data),
+ * which also keeps every historical transfer SKU stable.
+ *
+ * Stable per (origin product, destination store) pair so repeated transfers
+ * always increment the same destination row instead of creating duplicates.
  *
  * Returns null when the origin product has no SKU (nothing to derive from).
  */
 export function deriveTransferDestinationSku(
   originSku: string | null | undefined,
-  toStoreId: string
+  toStoreId: string,
+  toStoreCode?: string | null
 ): string | null {
   if (!originSku || !toStoreId) return null;
-  return `${originSku}--${toStoreId}`;
+  const code = normalizeBranchCode(toStoreCode);
+  return `${originSku}--${code || toStoreId}`;
 }

@@ -138,7 +138,30 @@ async function createProductHandler(
     );
   }
 
-    const productSku = sku || generateSKU(categoryId || 'GEN');
+    // SKU generation (v2.3.0): auto-generated SKUs carry the branch code so
+    // every restocked product traces back to the branch that stocks it —
+    // MBM-<branchCode>-<cat>-XXXX (e.g. MBM-NAK-CEM-0042). The category code
+    // is derived from the category name's first 3 letters when a categoryId
+    // is supplied. Explicit caller SKUs pass through unchanged.
+    let autoSku = null;
+    if (!sku) {
+      const storeForSku = await db.store.findUnique({
+        where: { id: storeId },
+        select: { code: true },
+      });
+      let catCode = 'GEN';
+      if (categoryId) {
+        const category = await db.productCategory.findUnique({
+          where: { id: categoryId },
+          select: { name: true },
+        });
+        if (category?.name) {
+          catCode = category.name.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) || 'GEN';
+        }
+      }
+      autoSku = generateSKU(catCode, storeForSku?.code);
+    }
+    const productSku = sku || autoSku || generateSKU(categoryId || 'GEN');
 
     const existingSku = await db.product.findUnique({ where: { sku: productSku } });
   if (existingSku) {
