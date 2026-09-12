@@ -26,6 +26,8 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
+// R8 FIX (v2.5): friendly, branch-aware lookup error messages.
+import { ApiRequestError, friendlyLookupError } from '@/lib/error-handler';
 
 import { formatKES, formatDateTime, formatRelativeTime, authorizedFetchJson } from '@/lib/api';
 import {
@@ -197,7 +199,9 @@ export function LoyaltyCard({
       // required." and the redeem button always failed.
       const res = await authorizedFetchJson(`/api/customers/${customerId}/loyalty`);
       if (!res.ok || !res.json?.success) {
-        throw new Error(res.json?.error || 'Failed to load loyalty data');
+        // R8: carry the real status so friendlyLookupError can tell
+        // "belongs to another branch" (403/404) apart from transient faults.
+        throw new ApiRequestError(res.json?.error || 'Failed to load loyalty data', res.status);
       }
       return res.json.data as CustomerLoyaltyData;
     },
@@ -212,7 +216,7 @@ export function LoyaltyCard({
         body: JSON.stringify({ points }),
       });
       if (!res.ok || !res.json?.success) {
-        throw new Error(res.json?.error || 'Redemption failed');
+        throw new ApiRequestError(res.json?.error || 'Redemption failed', res.status);
       }
       return res.json.data as RedeemResponse;
     },
@@ -240,15 +244,22 @@ export function LoyaltyCard({
 
   // ─── Error state ──
   if (isError) {
+    // R8 FIX (v2.5): branch-blocked lookups (record lives in another store)
+    // used to render the raw API text ("Customer not found.") with a Retry
+    // button that could never succeed. Classify and phrase them humanely.
+    const friendly = friendlyLookupError(error);
     return (
       <Card className={className}>
         <CardContent className="p-6 text-center space-y-3">
-          <p className="text-sm text-destructive">
-            {error instanceof Error ? error.message : 'Failed to load loyalty data'}
-          </p>
-          <Button variant="outline" size="sm" onClick={() => void refetch()}>
-            Retry
-          </Button>
+          <p className="text-sm font-medium text-destructive">{friendly.title}</p>
+          {friendly.detail ? (
+            <p className="text-xs text-muted-foreground">{friendly.detail}</p>
+          ) : null}
+          {friendly.retryable ? (
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+              Retry
+            </Button>
+          ) : null}
         </CardContent>
       </Card>
     );

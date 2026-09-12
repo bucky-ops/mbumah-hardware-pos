@@ -22,6 +22,10 @@ import type {
 
 // Canonical currency display formatting (delegates KES to financialMath.formatKES).
 import { formatCurrency } from '@/lib/currency-utils';
+// R2 FIX (v2.5): throw ApiRequestError (carries the real HTTP status) instead
+// of a plain Error so normaliseError() can label 4xx correctly instead of
+// mislabelling every failed request as UNKNOWN_ERROR / 500.
+import { ApiRequestError } from '@/lib/error-handler';
 
 // Re-export types so consumers can import from this module
 export type { GiftCardItem } from './types';
@@ -214,19 +218,20 @@ async function request<T>(
         } catch {
           // Non-JSON body — fall through
         }
+        // R2 FIX: ApiRequestError carries the real status.
         switch (retryResponse.status) {
           case 404:
-            throw new Error(retryServerError || 'Resource not found');
+            throw new ApiRequestError(retryServerError || 'Resource not found', 404);
           case 429:
-            throw new Error(retryServerError || 'Too many requests. Please try again in a moment.');
+            throw new ApiRequestError(retryServerError || 'Too many requests. Please try again in a moment.', 429);
           case 500:
-            throw new Error(retryServerError || 'Server error. Please try again later.');
+            throw new ApiRequestError(retryServerError || 'Server error. Please try again later.', 500);
           case 502:
           case 503:
           case 504:
-            throw new Error(retryServerError || 'Service temporarily unavailable. Please try again.');
+            throw new ApiRequestError(retryServerError || 'Service temporarily unavailable. Please try again.', retryResponse.status);
           default:
-            throw new Error(retryServerError || `Request failed: ${retryResponse.status}`);
+            throw new ApiRequestError(retryServerError || `Request failed: ${retryResponse.status}`, retryResponse.status);
         }
       }
       const retryJson = await retryResponse.json();
@@ -256,7 +261,9 @@ async function request<T>(
       }
       return retryJson;
     }
-    throw new Error(errorMsg || `Request failed: ${response.status}`);
+    // R2 FIX: the retry also failed with 403 (non-CSRF reason — e.g. role or
+    // store-scope denial) — carry the real status.
+    throw new ApiRequestError(errorMsg || `Request failed: ${response.status}`, response.status);
   }
 
   if (!response.ok) {
@@ -269,19 +276,21 @@ async function request<T>(
     }
 
     // Specific error messages for common HTTP status codes
+    // R2 FIX: throw ApiRequestError(status) — the real status travels with
+    // the error (400 stays 400 in the console, not UNKNOWN_ERROR/500).
     switch (response.status) {
       case 404:
-        throw new Error(serverError || 'Resource not found');
+        throw new ApiRequestError(serverError || 'Resource not found', 404);
       case 429:
-        throw new Error(serverError || 'Too many requests. Please try again in a moment.');
+        throw new ApiRequestError(serverError || 'Too many requests. Please try again in a moment.', 429);
       case 500:
-        throw new Error(serverError || 'Server error. Please try again later.');
+        throw new ApiRequestError(serverError || 'Server error. Please try again later.', 500);
       case 502:
       case 503:
       case 504:
-        throw new Error(serverError || 'Service temporarily unavailable. Please try again.');
+        throw new ApiRequestError(serverError || 'Service temporarily unavailable. Please try again.', response.status);
       default:
-        throw new Error(serverError || `Request failed: ${response.status}`);
+        throw new ApiRequestError(serverError || `Request failed: ${response.status}`, response.status);
     }
   }
 

@@ -304,8 +304,130 @@ export function withSessionAuth(
       );
     }
 
+    // R7/R9 (v2.5): shared store-scope validation — a non-admin whose
+    // explicit `storeId`/`store` query param points at ANOTHER store gets a
+    // clear 403 (instead of a silently empty list) and the probe is recorded
+    // in the security feed. SUPER_ADMIN passes through untouched.
+    const storeScopeDenied = await assertStoreScope(request, session);
+    if (storeScopeDenied) return storeScopeDenied;
+
     return runWithSessionTenant(session, () => handler(...args));
   };
+}
+
+// ── Store-scope validation (R7/R9 — QA 2026-09, v2.5) ──────────────────────
+//
+// Rejects (403) and SECURITY-LOGS any request from a non-SUPER_ADMIN session
+// whose explicit `storeId`/`store` query param points at ANOTHER store.
+//
+// Why: v2.4.1 made the ORM layer (injectTenant) always-narrow so cross-store
+// reads return empty lists — but an empty list is a SILENT denial. Several
+// list routes (debt, customers, transactions, reports, …) accept a storeId
+// query param and are wrapped in withSessionAuth WITHOUT requireStoreAccess,
+// so a probing user got an empty grid with no explanation and no trace.
+// Centralising the check here gives BOTH wrappers (withSessionAuth,
+// requireStoreAccess) the same behaviour:
+//
+//   • clear 403 "You can only access data from your own store." (R7)
+//   • a SecurityEvent (UNAUTHORIZED_ACCESS, blocked) + a systemLog
+//     (CROSS_STORE_ACCESS_DENIED) so probing shows up in the security feed
+//     and the ops log (R9)
+//
+// SUPER_ADMIN is exempt (org-wide role). Sessions without a store assignment
+// are still rejected — they can never be safely scoped.
+async function denyCrossStoreAccess(
+  request: NextRequest,
+  session: AuthSession,
+  requestedStoreId: string,
+): Promise<Response> {
+  const path = new URL(request.url).pathname;
+
+  // Ops log (existing behaviour from requireStoreAccess, now shared).
+  try {
+    await systemLog({
+      action: 'CROSS_STORE_ACCESS_DENIED',
+      component: LogComponent.AUTH,
+      severity: LogSeverity.WARN,
+      message: `User ${session.email} attempted to access store ${requestedStoreId} (assigned: ${session.storeId})`,
+      userId: session.userId,
+      storeId: session.storeId || undefined,
+      metadata: {
+        requestedStoreId,
+        assignedStoreId: session.storeId,
+        path,
+        method: request.method,
+      },
+    });
+  } catch {
+    /* logging must never block the auth decision */
+  }
+
+  // Security feed (R9): record the probe so it is visible in the security
+  // dashboard even when the ops log is filtered away. The event is filed
+  // against the TARGETED store (so that branch's admins see attempts against
+  // their data) with both ids in details.
+  try {
+    await db.securityEvent.create({
+      data: {
+        eventType: 'UNAUTHORIZED_ACCESS',
+        severity: 'WARN',
+        userId: session.userId,
+        storeId: requestedStoreId,
+        resource: path,
+        action: `${request.method} ${path}`,
+        details: JSON.stringify({
+          requestedStoreId,
+          assignedStoreId: session.storeId,
+          role: session.role,
+          email: session.email,
+        }),
+        userAgent: request.headers.get('user-agent') || undefined,
+        ipAddress:
+          request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+          undefined,
+        blocked: true,
+      },
+    });
+  } catch {
+    /* logging must never block the auth decision */
+  }
+
+  return Response.json(
+    { success: false, error: 'You can only access data from your own store.' },
+    { status: 403 }
+  );
+}
+
+/**
+ * Validate that a non-SUPER_ADMIN session is not probing another store via
+ * explicit query params. Returns a 403 Response (already security-logged) to
+ * pass straight through, or `null` when the request may proceed.
+ */
+export async function assertStoreScope(
+  request: NextRequest,
+  session: AuthSession,
+): Promise<Response | null> {
+  if (session.role === 'SUPER_ADMIN') return null;
+
+  if (!session.storeId) {
+    return Response.json(
+      {
+        success: false,
+        error: 'You are not assigned to a store. Contact an administrator.',
+      },
+      { status: 403 }
+    );
+  }
+
+  const { searchParams } = new URL(request.url);
+  const requestedStoreId =
+    searchParams.get('storeId') || searchParams.get('store');
+
+  if (requestedStoreId && requestedStoreId !== session.storeId) {
+    return denyCrossStoreAccess(request, session, requestedStoreId);
+  }
+
+  return null;
 }
 
 // ── Store-scoped access ─────────────────────────────────────────────────────
@@ -383,45 +505,11 @@ export function requireStoreAccess(
       return handler(request, session, ...args.slice(1));
     }
 
-    // Non-admin must have a store assignment
-    if (!session.storeId) {
-      return Response.json(
-        {
-          success: false,
-          error: 'You are not assigned to a store. Contact an administrator.',
-        },
-        { status: 403 }
-      );
-    }
-
-    // Enforce that query params or body storeId matches the user's store
-    const { searchParams } = new URL(request.url);
-    const requestedStoreId =
-      searchParams.get('storeId') || searchParams.get('store');
-
-    if (requestedStoreId && requestedStoreId !== session.storeId) {
-      try {
-        await systemLog({
-          action: 'CROSS_STORE_ACCESS_DENIED',
-          component: LogComponent.AUTH,
-          severity: LogSeverity.WARN,
-          message: `User ${session.email} attempted to access store ${requestedStoreId} (assigned: ${session.storeId})`,
-          userId: session.userId,
-          storeId: session.storeId,
-          metadata: {
-            requestedStoreId,
-            assignedStoreId: session.storeId,
-          },
-        });
-      } catch {
-        /* ignore */
-      }
-
-      return Response.json(
-        { success: false, error: 'You can only access data from your own store.' },
-        { status: 403 }
-      );
-    }
+    // R7/R9 (v2.5): shared store-scope validation — replaces the previous
+    // inline no-store-assignment + query-param checks (identical 403 bodies,
+    // now with the SecurityEvent feed write added).
+    const storeScopeDenied = await assertStoreScope(request, session);
+    if (storeScopeDenied) return storeScopeDenied;
 
     // Run the handler inside the ORM-level tenant context. Non-admin users
     // are scoped to their own store; SUPER_ADMIN runs without enforcement.

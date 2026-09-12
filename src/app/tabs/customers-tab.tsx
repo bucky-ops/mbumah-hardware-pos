@@ -20,7 +20,7 @@ import {
   type CustomerHistoryResult,
   type CustomerHistorySummary,
 } from '@/lib/api';
-import { handleError } from '@/lib/error-handler';
+import { handleError, friendlyLookupError } from '@/lib/error-handler';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 import { LoyaltyCard } from '@/components/loyalty/loyalty-card';
 
@@ -208,7 +208,7 @@ function CustomerHistoryDialog({
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [sendingStatement, setSendingStatement] = useState(false);
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['customer-history', customer?.id, storeId],
     queryFn: async (): Promise<CustomerHistoryData | null> => {
       if (!customer) return null;
@@ -377,11 +377,22 @@ function CustomerHistoryDialog({
             {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
           </div>
         ) : isError ? (
-          <div className="text-center py-10 text-muted-foreground">
-            <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-amber-500" />
-            <p className="text-sm">Failed to load customer history.</p>
-            <p className="text-xs mt-1">The history API may still be initializing. Try again in a moment.</p>
-          </div>
+          (() => {
+            // R8 FIX (v2.5): a record that lives in ANOTHER branch (or was
+            // removed) must not read like a bug — phrase it as a branch
+            // limitation, and only blame "initialization" on real 5xx faults.
+            const friendly = friendlyLookupError(error);
+            return (
+              <div className="text-center py-10 text-muted-foreground">
+                <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-amber-500" />
+                <p className="text-sm font-medium">{friendly.title}</p>
+                <p className="text-xs mt-1">
+                  {friendly.detail ||
+                    'The history API may still be initializing. Try again in a moment.'}
+                </p>
+              </div>
+            );
+          })()
         ) : filteredTimeline.length === 0 ? (
           <div className="text-center py-10 text-muted-foreground">
             <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
