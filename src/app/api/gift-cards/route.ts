@@ -70,7 +70,13 @@ async function listGiftCardsHandler(...args: unknown[]): Promise<Response> {
 
   return Response.json({
     success: true,
-    data: giftCards,
+    // DECIMAL-STRING AUDIT FIX (v2.5.0): Decimal balances → numbers at the
+    // API boundary (string balances corrupted gift-card math historically).
+    data: giftCards.map((g) => ({
+      ...g,
+      initialBalance: Number(g.initialBalance),
+      currentBalance: Number(g.currentBalance),
+    })),
     pagination: {
       page,
       limit,

@@ -156,7 +156,29 @@ async function getTransactionsHandler(
 
   return Response.json({
     success: true,
-    data: transactions,
+    // DECIMAL-STRING AUDIT FIX (v2.5.0): Prisma Decimals serialize as STRINGS
+    // through Response.json (decimal.js toJSON). The api.ts contract says
+    // numbers — emit numbers so client money math (totals, discounts,
+    // change-due, daily-takings sums) can never string-concatenate. Same
+    // class of bug as the v2.3.0 P&L 3.8e+90 incident.
+    data: transactions.map((t) => ({
+      ...t,
+      subtotal: Number(t.subtotal),
+      taxAmount: Number(t.taxAmount),
+      discountAmount: Number(t.discountAmount),
+      totalAmount: Number(t.totalAmount),
+      cashTendered: t.cashTendered === null ? null : Number(t.cashTendered),
+      changeDue: t.changeDue === null ? null : Number(t.changeDue),
+      items: t.items?.map((i) => ({
+        ...i,
+        quantity: Number(i.quantity),
+        pricePerUnit: Number(i.pricePerUnit),
+        costPrice: Number(i.costPrice),
+        discountPercent: Number(i.discountPercent),
+        taxRate: Number(i.taxRate),
+        lineTotal: Number(i.lineTotal),
+      })),
+    })),
     pagination: {
       page,
       limit,

@@ -102,7 +102,20 @@ async function getProductsHandler(
 
   return Response.json({
     success: true,
-    data: products,
+    // DECIMAL-STRING AUDIT FIX (v2.5.0): Decimal money fields → numbers at
+    // the API boundary (string totals corrupted client math historically).
+    data: products.map((p) => ({
+      ...p,
+      pricePerUnit: Number(p.pricePerUnit),
+      costPrice: Number(p.costPrice),
+      taxRate: Number(p.taxRate),
+      bundleItems: p.bundleItems?.map((b) => ({
+        ...b,
+        childProduct: b.childProduct
+          ? { ...b.childProduct, pricePerUnit: Number(b.childProduct.pricePerUnit) }
+          : b.childProduct,
+      })),
+    })),
     pagination: buildPaginationMeta(page, limit, total),
   });
 }

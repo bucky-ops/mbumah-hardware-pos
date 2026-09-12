@@ -104,6 +104,23 @@ export default function POSTab() {
   const [clearCartConfirmOpen, setClearCartConfirmOpen] = useState(false);
   const currentStoreId = useAppStore((s) => s.currentStoreId);
 
+  // v2.5.0 (cart scrollbar feature): keep the newly-added cart row in view.
+  // Long carts scroll inside their own always-visible cart-scrollbar; without
+  // this, adding an item to a scrolled cart gives no visual confirmation —
+  // the row is added BELOW the fold and the cashier thinks the tap failed.
+  const cartListRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!addedItemId) return;
+    const scroller = cartListRef.current;
+    if (!scroller) return;
+    const row = scroller.querySelector<HTMLElement>(
+      `[data-cart-item="${addedItemId}"]`
+    );
+    if (row) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [addedItemId]);
+
   // Add Customer dialog state
   const [addCustomerOpen, setAddCustomerOpen] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState('');
@@ -1408,7 +1425,10 @@ export default function POSTab() {
 
       {/* Cart Sidebar - Desktop only (2 of 5 columns) */}
       <div className="hidden lg:block lg:col-span-2">
-        <Card className="relative sticky top-20 flex flex-col h-[calc(100vh-120px)] overflow-hidden bg-gradient-to-b from-card/95 to-card/90 backdrop-blur-sm shadow-lg border border-border/50">
+        {/* v2.5.0: dvh (not vh) — the cart fits the REAL viewport on every
+            device, including mobile browsers whose chrome collapses. The
+            inner list scrolls in its own always-visible cart-scrollbar. */}
+        <Card className="relative sticky top-20 flex flex-col h-[calc(100dvh-130px)] overflow-hidden bg-gradient-to-b from-card/95 to-card/90 backdrop-blur-sm shadow-lg border border-border/50">
           <CardHeader className="pb-3 shrink-0">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
@@ -1457,21 +1477,22 @@ export default function POSTab() {
             )}
           </CardHeader>
           <Separator className="shrink-0" />
-          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+          <div ref={cartListRef} className="flex-1 min-h-0 overflow-y-auto cart-scrollbar">
             {cart.items.length === 0 ? (
               <EmptyCartState />
             ) : (
               <div className="p-3 space-y-2">
                 {cart.items.map((item) => (
-                  <CartItemRow
-                    key={item.productId}
-                    item={item}
-                    onUpdateQty={cart.updateQuantity}
-                    onRemove={cart.removeItem}
-                    isNew={addedItemId === item.productId}
-                    note={cartNotes[item.productId]}
-                    onNoteChange={handleCartNoteChange}
-                  />
+                  <div key={item.productId} data-cart-item={item.productId}>
+                    <CartItemRow
+                      item={item}
+                      onUpdateQty={cart.updateQuantity}
+                      onRemove={cart.removeItem}
+                      isNew={addedItemId === item.productId}
+                      note={cartNotes[item.productId]}
+                      onNoteChange={handleCartNoteChange}
+                    />
+                  </div>
                 ))}
               </div>
             )}
@@ -2246,21 +2267,22 @@ export default function POSTab() {
               </div>
             </div>
           </SheetHeader>
-          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+          <div className="flex-1 min-h-0 overflow-y-auto cart-scrollbar">
             {cart.items.length === 0 ? (
               <EmptyCartState />
             ) : (
               <div className="p-3 space-y-2">
                 {cart.items.map((item) => (
-                  <CartItemRow
-                    key={item.productId}
-                    item={item}
-                    onUpdateQty={cart.updateQuantity}
-                    onRemove={cart.removeItem}
-                    isNew={addedItemId === item.productId}
-                    note={cartNotes[item.productId]}
-                    onNoteChange={handleCartNoteChange}
-                  />
+                  <div key={item.productId} data-cart-item={item.productId}>
+                    <CartItemRow
+                      item={item}
+                      onUpdateQty={cart.updateQuantity}
+                      onRemove={cart.removeItem}
+                      isNew={addedItemId === item.productId}
+                      note={cartNotes[item.productId]}
+                      onNoteChange={handleCartNoteChange}
+                    />
+                  </div>
                 ))}
               </div>
             )}
