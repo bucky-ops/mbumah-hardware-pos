@@ -29,7 +29,7 @@ export const OPENAPI_SPEC = {
   openapi: '3.0.3',
   info: {
     title: 'MBUMAH HARDWARE POS & ERP API',
-    version: '2.4.0',
+    version: '2.4.1',
     description:
       'Multi-tenant Point-of-Sale and ERP API for Kenyan hardware stores. ' +
       'All authenticated endpoints require the session cookie issued by ' +

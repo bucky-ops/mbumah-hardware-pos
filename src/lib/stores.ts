@@ -26,6 +26,32 @@ interface AuthState {
   hydrateFromStorage: () => void;
 }
 
+/**
+ * SECURITY (QA 2026-09, v2.4.1): keep `currentStoreId` aligned with the
+ * authenticated user's OWN store for everyone except SUPER_ADMIN.
+ *
+ * `currentStoreId` is persisted in localStorage (`mbt_app_store`) and defaults
+ * to `store_juja_main` — previously a non-admin user (who cannot switch
+ * branches) silently kept whatever store id the last browser session had.
+ * Every tab then queried `/api/...?storeId=<that store>` so a Nakuru cashier
+ * could end up reading ANOTHER branch's customers, debts and transactions.
+ *
+ * SUPER_ADMIN is exempt: they legitimately switch branches and the sidebar
+ * persists their choice. Users without a store assignment (org-level roles)
+ * keep the persisted value — the server treats them as unscoped.
+ */
+function syncStoreScopeToUser(user: AuthUser | null | undefined): void {
+  try {
+    if (!user || user.role === 'SUPER_ADMIN' || !user.storeId) return;
+    const app = useAppStore.getState();
+    if (app.currentStoreId !== user.storeId) {
+      app.setCurrentStoreId(user.storeId);
+    }
+  } catch {
+    // Never block authentication flow on UI state syncing.
+  }
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   // Initialize with server-safe defaults (null/false) to avoid hydration
   // mismatch. The store is hydrated from localStorage in the first
@@ -48,6 +74,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           isAuthenticated: true,
           isLoading: false,
         });
+        syncStoreScopeToUser(res.data.user);
       } else {
         throw new Error(res.error || 'Login failed');
       }
@@ -71,6 +98,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (res.data) {
         set({ user: res.data, isAuthenticated: true });
         localStorage.setItem('mbt_user', JSON.stringify(res.data));
+        syncStoreScopeToUser(res.data);
       }
     } catch {
       set({ user: null, token: null, isAuthenticated: false });
@@ -79,19 +107,27 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  setUser: (user) => set({ user, isAuthenticated: !!user }),
+  setUser: (user) => {
+    set({ user, isAuthenticated: !!user });
+    syncStoreScopeToUser(user);
+  },
 
   hydrateFromStorage: () => {
     try {
       const token = localStorage.getItem('mbt_token');
       const storedUser = localStorage.getItem('mbt_user');
+      let user: AuthUser | null = null;
       if (token) {
+        user = storedUser ? JSON.parse(storedUser) : null;
         set({
           token,
-          user: storedUser ? JSON.parse(storedUser) : null,
+          user,
           isAuthenticated: true,
         });
       }
+      // SECURITY: re-align the persisted branch choice with the user's own
+      // store on every boot (see syncStoreScopeToUser docstring).
+      syncStoreScopeToUser(user);
     } catch {
       // Corrupted localStorage — clear and start fresh
       localStorage.removeItem('mbt_token');
