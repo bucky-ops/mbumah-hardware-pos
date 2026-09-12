@@ -280,6 +280,13 @@ export interface CartItem {
   lineTotal: number;
   isRentalItem: boolean;
   isBundle: boolean;
+  // ── Low-stock UX metadata (snapshot captured at add-to-cart time) ──
+  // Optional so previously persisted carts (localStorage/IndexedDB) stay
+  // valid. The checkout API strips unknown keys via its Zod schema, so these
+  // never leak into the sale payload's validated shape.
+  stockSnapshot?: number;
+  minimumStockLevel?: number;
+  reorderLevel?: number;
 }
 
 export interface CheckoutPayload {

@@ -398,6 +398,7 @@ export interface ProductListItem {
   unitType: string;
   quantityInStock: number;
   reorderLevel: number;
+  minimumStockLevel?: number;
   pricePerUnit: number;
   costPrice: number;
   taxRate: number;

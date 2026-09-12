@@ -60,7 +60,7 @@ import {
   Printer, ChevronDown, Tag, LayoutGrid, List, ArrowUpDown,
   ArrowUp, ArrowDown, RefreshCw, Wifi, WifiOff, CloudOff, CloudLightning,
   Send, Pause, UserPlus, Award, Ticket,
-  Lightbulb, PartyPopper,
+  Lightbulb, PartyPopper, AlertTriangle,
 } from 'lucide-react';
 
 // Extracted sub-components
@@ -93,6 +93,10 @@ export default function POSTab() {
   const [cashReceived, setCashReceived] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<string>('');
   const [lowStockAlertOpen, setLowStockAlertOpen] = useState(false);
+  // Popup state for "Low Stock: Item cannot be sold until restocked." (QA Phase 5)
+  const [lowStockPopupItem, setLowStockPopupItem] = useState<{
+    productId: string; name: string; stock: number; minimumStockLevel: number;
+  } | null>(null);
   const [discountCode, setDiscountCode] = useState('');
   const [cartBadgeShake, setCartBadgeShake] = useState(false);
   const [addedItemId, setAddedItemId] = useState<string | null>(null);
@@ -668,10 +672,13 @@ export default function POSTab() {
   const finalTotal = Math.max(0, preDiscountTotal - totalDiscount);
 
   const handleAddToCart = (product: ProductListItem, qty?: number) => {
-    if (product.quantityInStock <= 0 && !product.isRental) {
-      toast.error('Product is out of stock');
-      return;
-    }
+    // Low-stock UX (QA Phase 5): below-minimum stock items CAN be added to the
+    // cart so the cashier sees them glow red in the cart + a popup alert, but
+    // they CANNOT be sold until restocked (checkout guard + server-side guard).
+    const stock = Number(product.quantityInStock) || 0;
+    const minStock = Number(product.minimumStockLevel) || 0;
+    const reorder = Number(product.reorderLevel) || 0;
+    const sellBlocked = stock <= minStock && !product.isRental;
     const existingItem = cart.items.find(i => i.productId === product.id);
     if (existingItem && qty !== undefined) {
       // Update quantity directly from Quick Add popup
@@ -689,13 +696,28 @@ export default function POSTab() {
         taxRate: Number(product.taxRate) || 16,
         isRentalItem: product.isRental,
         isBundle: product.isBundle,
+        stockSnapshot: stock,
+        minimumStockLevel: minStock,
+        reorderLevel: reorder,
       });
     }
     // Trigger animations
     setAddedItemId(product.id);
     setCartBadgeShake(true);
     setTimeout(() => { setAddedItemId(null); setCartBadgeShake(false); }, 500);
-    toast.success(`${product.name} added to cart`);
+    if (sellBlocked) {
+      // Exact spec wording: "Low Stock: Item cannot be sold until restocked."
+      setLowStockPopupItem({
+        productId: product.id,
+        name: product.name,
+        stock,
+        minimumStockLevel: minStock,
+      });
+    } else if (stock <= reorder && !product.isRental) {
+      toast.warning(`${product.name}: Low stock — only ${stock} left (reorder at ${reorder}). Restock soon.`);
+    } else {
+      toast.success(`${product.name} added to cart`);
+    }
   };
 
   // AUDIT FIX (Task 3-e): debounce the query that drives the products fetch/grid
@@ -855,6 +877,16 @@ export default function POSTab() {
     console.log('[HANDLE-CHECKOUT] called, online=', navigator.onLine, 'items=', cart.items.length);
     if (cart.items.length === 0) {
       toast.error('Cart is empty');
+      return;
+    }
+
+    // Low-stock guard (QA Phase 5): items at/below their minimum stock level
+    // cannot be sold until restocked. The server enforces the same rule.
+    const unsellable = cart.items.filter(
+      (i) => !i.isRentalItem && (i.stockSnapshot ?? 0) <= (i.minimumStockLevel ?? 0)
+    );
+    if (unsellable.length > 0) {
+      toast.error(`${unsellable[0].productName}: Low Stock — Item cannot be sold until restocked. Remove it from the cart to continue.`, { duration: 6000 });
       return;
     }
 
@@ -1278,10 +1310,10 @@ export default function POSTab() {
                         <td className="p-2.5 text-right">
                           <Button
                             size="sm"
-                            variant={isOutOfStock ? 'ghost' : 'outline'}
-                            disabled={isOutOfStock && !product.isRental}
+                            variant={isOutOfStock ? 'outline' : 'outline'}
                             onClick={() => handleAddToCart(product)}
-                            className="h-7 text-xs"
+                            className={`h-7 text-xs ${isOutOfStock ? 'border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-950' : ''}`}
+                            title={isOutOfStock ? 'Low Stock: Item cannot be sold until restocked.' : 'Add to cart'}
                           >
                             <Plus className="h-3 w-3 mr-1" />
                             Add
@@ -2027,6 +2059,45 @@ export default function POSTab() {
         onOpenChange={setLowStockAlertOpen}
         storeId={currentStoreId}
       />
+
+      {/* Low-stock popup (QA Phase 5): exact spec wording "Low Stock: Item
+          cannot be sold until restocked." — shown when an at/below-minimum
+          stock item is added to the cart. */}
+      <Dialog open={!!lowStockPopupItem} onOpenChange={(o) => { if (!o) setLowStockPopupItem(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
+              <AlertTriangle className="h-5 w-5" />
+              Low Stock
+            </DialogTitle>
+            <DialogDescription>
+              <span className="font-semibold text-foreground">{lowStockPopupItem?.name}</span>
+              {' '}— Item cannot be sold until restocked.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Current stock: <span className="font-semibold text-red-600 dark:text-red-400">{lowStockPopupItem?.stock}</span>
+            {' '}· Minimum stock level: <span className="font-semibold">{lowStockPopupItem?.minimumStockLevel}</span>.
+            The item stays in the cart (glowing red) but checkout is blocked until it is restocked or removed.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setLowStockPopupItem(null)}>
+              Keep in cart
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                if (lowStockPopupItem) cart.removeItem(lowStockPopupItem.productId);
+                setLowStockPopupItem(null);
+              }}
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              Remove from cart
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Pay with Gift Card Dialog — redeem a gift card code against the cart */}
       <Dialog open={payWithGiftCardOpen} onOpenChange={setPayWithGiftCardOpen}>

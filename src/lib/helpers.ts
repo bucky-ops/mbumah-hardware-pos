@@ -148,3 +148,22 @@ export function calculateLineTotal(
     total: line.lineGrossTotal,
   };
 }
+
+/**
+ * Deterministic destination SKU for inter-store transfers.
+ *
+ * Product.sku is GLOBALLY unique in this schema, so a destination store can
+ * never reuse the origin product's SKU. Transfers therefore derive the
+ * destination catalog row's SKU as `<originSku>--<toStoreId>` — stable per
+ * (origin product, destination store) pair so repeated transfers always
+ * increment the same destination row instead of creating duplicates.
+ *
+ * Returns null when the origin product has no SKU (nothing to derive from).
+ */
+export function deriveTransferDestinationSku(
+  originSku: string | null | undefined,
+  toStoreId: string
+): string | null {
+  if (!originSku || !toStoreId) return null;
+  return `${originSku}--${toStoreId}`;
+}

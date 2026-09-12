@@ -28,6 +28,15 @@ export function CartItemRow({
   const [isEditingQty, setIsEditingQty] = useState(false);
   const [qtyInput, setQtyInput] = useState(String(item.quantity));
 
+  // ── Low-stock UX (QA Phase 5) ──
+  // Red glow: item at/below its minimum stock level — cannot be sold until
+  // restocked (checkout guard blocks the sale). Amber: below reorder level.
+  const hasStockMeta = item.stockSnapshot !== undefined;
+  const isBelowMinimum = hasStockMeta && !item.isRentalItem
+    && (item.stockSnapshot as number) <= (item.minimumStockLevel ?? 0);
+  const isLowStockRow = !isBelowMinimum && hasStockMeta && !item.isRentalItem
+    && (item.stockSnapshot as number) <= (item.reorderLevel ?? 0);
+
   const commitQtyInput = () => {
     // Decimal-safe parse: hardware units are sold fractionally (0.25 kg, 2.5 m).
     const parsed = parseFloat(qtyInput);
@@ -41,7 +50,23 @@ export function CartItemRow({
   };
 
   return (
-    <div className={`cart-item-row group flex gap-2 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-all duration-200 ${isNew ? 'animate-slide-in' : 'animate-stagger-item'}`}>
+    <div
+      className={`cart-item-row group relative flex gap-2 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-all duration-200 ${isNew ? 'animate-slide-in' : 'animate-stagger-item'} ${
+        isBelowMinimum
+          ? 'ring-2 ring-red-500 bg-red-50 dark:bg-red-950/40'
+          : isLowStockRow
+            ? 'ring-1 ring-amber-400 bg-amber-50/60 dark:bg-amber-950/30'
+            : ''
+      }`}
+      data-lowstock={isBelowMinimum ? 'blocked' : isLowStockRow ? 'warn' : undefined}
+      title={isBelowMinimum ? 'Low Stock: Item cannot be sold until restocked.' : undefined}
+    >
+      {/* Low-stock banner (below minimum — cannot be sold) */}
+      {isBelowMinimum && (
+        <span className="absolute -top-2 left-2 z-10 text-[9px] px-1.5 py-0.5 rounded bg-red-500 text-white font-bold shadow">
+          LOW STOCK — CANNOT BE SOLD
+        </span>
+      )}
       {/* Image placeholder */}
       <div className="shrink-0 w-9 h-9 rounded-md bg-muted flex items-center justify-center">
         <Package className="h-3.5 w-3.5 text-muted-foreground/40" />

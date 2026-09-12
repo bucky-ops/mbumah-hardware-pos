@@ -125,17 +125,19 @@ export function ProductCard({
     }
   };
 
-  // Out-of-stock disables interaction (rentals can still be added)
-  const disabled = isOutOfStock && !product.isRental;
+  // Low-stock UX: out-of-stock products stay CLICKABLE so the cashier can add
+  // them to the cart — the cart row glows red, a popup explains the item
+  // cannot be sold until restocked, and checkout blocks the sale. Selling the
+  // item itself is enforced server-side (minimum stock level guard).
+  const sellBlocked = isOutOfStock && !product.isRental;
 
   return (
     <Card
-      className={`overflow-hidden transition-all duration-200 group relative h-full flex flex-col min-h-[210px] product-card-lift ${isBouncing ? 'animate-bounce-add' : ''} ${disabled ? 'opacity-60 grayscale pointer-events-none' : 'cursor-pointer'}`}
+      className={`overflow-hidden transition-all duration-200 group relative h-full flex flex-col min-h-[210px] product-card-lift ${isBouncing ? 'animate-bounce-add' : ''} ${sellBlocked ? 'opacity-80 grayscale-[30%] cursor-pointer' : 'cursor-pointer'}`}
       style={{ borderTopColor: categoryColor, borderTopWidth: '4px' }}
-      onClick={disabled ? undefined : handleClick}
+      onClick={handleClick}
       role="button"
-      aria-label={`${product.name}, ${formatKES(product.pricePerUnit)}, ${isOutOfStock ? 'out of stock' : `${product.quantityInStock} in stock`}`}
-      aria-disabled={disabled}
+      aria-label={`${product.name}, ${formatKES(product.pricePerUnit)}, ${isOutOfStock ? 'out of stock — cannot be sold until restocked' : `${product.quantityInStock} in stock`}`}
     >
       {/* Category accent strip on left side of card */}
       <span
@@ -145,7 +147,7 @@ export function ProductCard({
       />
 
       {/* Quick Add Popup Overlay (bulk quantity selector) */}
-      {showQuickAdd && !disabled && (
+      {showQuickAdd && (
         <QuickAddPopup
           product={product}
           currentQty={cartQuantity || 0}
