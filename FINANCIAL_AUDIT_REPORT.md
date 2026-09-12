@@ -42,7 +42,12 @@ All issues found were fixed in PR #27 (this PR). Employee CRUD and the blank-rec
 - **What:** the trial balance reports `netBalance = debits − credits` for every account. Revenue accounts are **credit-normal**, so healthy revenue arrived **negative** → Total Revenue displayed negative and *Net Profit = revenue − expenses was always a loss*. The Balance Sheet had the same problem for liabilities and equity (the accounting equation could never balance).
 - **Fix:** credit-normal accounts are flipped for display (`revenueAmount`, `creditNormalAmount`); expenses/assets stay as-is. CSV exports updated to match.
 
-### Finding F5 — already-healthy areas verified, left alone
+### Finding F5 — Trial-balance calls in the browser had no auth token (HIGH, found post-deploy)
+- **Where:** `src/app/tabs/financial/ReportsPanel.tsx` (`useTrialBalance`) and `src/app/tabs/financial/TrialBalancePanel.tsx`.
+- **What:** both used a bare `fetch()` without the `Authorization: Bearer` header the API requires. Every request returned **401**, so the Reports-panel **P&L and Balance Sheet always showed "No revenue or expense activity"** and the Trial Balance tab never rendered data. Discovered during live browser verification (network log showed the 401s).
+- **Fix:** both hooks now attach the Bearer session token from localStorage, mirroring the canonical `request()` wrapper in `src/lib/api.ts` (GET needs no CSRF).
+
+### Finding F6 — already-healthy areas verified, left alone
 - `src/lib/money.ts` (Money primitive) and `src/lib/profit.ts` (canonical profit formulas) are correct — arbitrary-precision Decimal, banker's rounding, NaN guards.
 - `/api/financial/trial-balance` already serializes with `.toNumber()` — correct.
 - `/api/financial/revenue-trend` and `/api/reports/sales-summary` were already fixed in earlier PRs (they use `KES(...).toNumber()`).
