@@ -184,3 +184,128 @@ other customer) is fully functional, with a balanced audit trail.**
 *Report produced by the QA engagement of 12 Sept 2026. Test evidence:
 API request/response transcripts, browser console captures and database
 state checks recorded in the work log.*
+
+---
+
+# Supplement (v2.4.1) — Follow-up QA round of 12 Sept 2026
+
+**Report version:** 2.0 · App version: 2.4.0 (re-tested) → 2.4.1 (fix verified live)
+
+## S1. What we re-tested
+
+With v2.4.0 live, we re-ran the full engagement end to end:
+
+1. **Release verification** — `/api/health` reported `2.4.0`; both Vercel
+   deployments green on the release commit; GitHub Releases `v2.3.0` and
+   `v2.4.0` published.
+2. **Role matrix re-probe (API)** — the same five personas, same operation.
+3. **Browser golden path** — fresh SUPER_ADMIN login → branch switch to
+   Nakuru → Customers → Kenya Plumbing Co. → **Record Payment**: amount
+   `10,000`, method `M-Pesa`, reference `QGH7X2KM9P` → submit.
+4. **CASHIER browser check** — fresh login as a Nakuru cashier.
+
+### Golden-path result (all verified against the live database)
+
+| Check | Result |
+|---|---|
+| Toast | `Payment recorded! New balance: Ksh 43,610.00` (53,610 − 10,000 exact) |
+| Debt ledger | `amountOwed 53,610 · amountPaid 10,000 · balance 43,610 · PARTIAL` |
+| Customer | `currentDebtBalance 43,610` |
+| Journal entry | `JE-20260912-BF78C` "Debt payment received from Kenya Plumbing Co. — KES 10,000" — Debit 10,000 = Credit 10,000 (balanced) |
+| Audit trail | `DEBT_PAYMENT_RECORDED` row written |
+| UI | Dialog live-updated to `Ksh 43,610.00 / PARTIAL` without reload |
+
+The dialog form also behaved correctly before submit: the submit button is
+disabled while the amount is empty, choosing `M-Pesa` reveals a transaction
+code field, and quick-fill buttons (Full / Half / 5,000 / 10,000) work.
+
+**The originally reported defect is fixed and stays fixed.**
+
+## S2. NEW defect found during this round — cross-tenant data reads (critical)
+
+While documenting role differences we found a **tenant-isolation hole**, now
+fixed in **v2.4.1** (PR #40).
+
+### How it showed up
+
+- A **juja STORE_OWNER** could `GET /api/debt?storeId=store_nakuru` and read
+  **Nakuru's 20 debt ledgers**.
+- A **Nakuru CASHIER** could `GET /api/customers?storeId=store_thika` and read
+  **Thika's customers** — and the cashier's own **UI Customers tab silently
+  rendered Juja's customers**, because the app persists the last-selected
+  branch in localStorage (default `store_juja_main`) and non-admin users
+  cannot switch branches.
+
+### Root cause (two layers)
+
+1. **Backend — `injectTenant()` (src/lib/db.ts) trusted routes to validate
+   `storeId`.** The ORM helper passed through any explicitly-provided
+   `where.storeId` "because requireStoreAccess guarantees non-admin callers
+   can only request their own store". That guarantee only holds for the 44
+   routes that actually use `requireStoreAccess`; list routes such as
+   `/api/debt` and `/api/customers` read `storeId` straight from the query
+   string. Result: role checks passed (a cashier *may* read customers), but
+   the *store* filter was whatever the caller typed.
+2. **Frontend — persisted `currentStoreId`.** The Zustand app store persists
+   `currentStoreId` (default `store_juja_main`) and syncs nothing to the
+   logged-in user, so branch-scoped staff could end up querying another
+   branch's data at the UI layer too.
+
+### The fix (v2.4.1, PR #40, verified live)
+
+1. **`injectTenant()` always narrows.** Pass-through only when the caller's
+   `where.storeId` *equals* the tenant store (exact string match); any other
+   value (different store id, or object filters like `{in:[...]}`) is
+   AND-narrowed with the tenant store id — a query can now only ever
+   **shrink** its scope, never widen it, for all 27 store-scoped models at
+   once. Existing `AND` clauses are preserved.
+2. **`syncStoreScopeToUser()`** re-aligns the persisted branch with the
+   session user's own store on login, `fetchUser`, `setUser` and boot
+   hydration. SUPER_ADMIN keeps branch switching.
+3. **10 new regression tests** (`src/__tests__/lib/tenant-scoping.test.ts`);
+   full suite 414/414.
+
+### Post-fix verification (live on production, v2.4.1)
+
+| Probe | Before | After |
+|---|---|---|
+| Nakuru CASHIER → Juja customers | 30 rows | **0 rows** |
+| Nakuru CASHIER → Thika customers | 30 rows | **0 rows** |
+| Juja STORE_OWNER → Nakuru debt ledgers | 20 rows | **0 rows** |
+| Own-store reads (all roles) | 30 customers / 20 debts | unchanged ✓ |
+| SUPER_ADMIN cross-store reads | all stores | unchanged ✓ |
+| Nakuru cashier UI Customers tab | showed Juja customers | shows **Nakuru** customers incl. Kenya Plumbing Co. ✓ |
+| `/api/health` | — | `2.4.1 healthy` |
+
+## S3. Additional observations (minor, non-blocking)
+
+- **RBAC in the UI is correct**: the CASHIER sees **no** "Record Payment"
+  button (server would 403 anyway); "Redeem Points" IS shown and works for
+  cashiers (a POS-counter capability — intended).
+- **Customer-history mismatch UX**: pre-fix, a cashier viewing an
+  out-of-store customer saw "Customer not found. [Retry]" because single-row
+  lookups were already tenant-narrowed while list reads leaked. Post-fix the
+  mismatch is gone; consider a friendlier "Not available in your branch"
+  message for blocked lookups in future.
+- **Error normaliser still labels 4xx as `UNKNOWN_ERROR / 500`** (v2.4.0
+  report R2) — the misleading label that started this investigation remains
+  on the backlog.
+
+## S4. Updated recommendation list
+
+| # | Recommendation | Status |
+|---|---|---|
+| R1–R5 | (as in v1.0 of this report) | R2/R3 partially delivered; rest open |
+| R6 | Rotate `password123` on all populated test accounts | **open — do before go-live** |
+| R7 | Sweep ALL routes that accept a `storeId` query param and add `requireStoreAccess` (the ORM fix already enforces isolation; route-level validation improves error messages from "empty list" to explicit 403) | open |
+| R8 | Friendly tenant-blocked messaging in UI ("Not available in your branch") instead of "Customer not found. Retry" | open |
+| R9 | Consider surfacing tenant-denied reads in the security event feed to detect probing | open |
+
+**Bottom line:** the debt-payment feature works end to end with a balanced
+journal trail, and this round's deeper role-matrix testing surfaced and fixed
+a genuine cross-tenant read isolation hole (v2.4.1). Data for every branch is
+now provably scoped to the logged-in user's own store, with SUPER_ADMIN
+retaining org-wide access.
+
+*Supplement produced by the QA engagement of 12 Sept 2026 (round 2).
+Evidence: live API transcripts, browser captures, database state checks.*
