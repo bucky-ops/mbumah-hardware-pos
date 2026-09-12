@@ -3,6 +3,7 @@
 // to avoid leaking secrets.
 
 import { db } from '@/lib/db';
+import pkg from '../../../../package.json';
 
 export const dynamic = 'force-dynamic';
 
@@ -140,7 +141,10 @@ export async function GET() {
     timestamp: new Date().toISOString(),
     nodeEnv: process.env.NODE_ENV,
     responseTime: `${totalResponseTime}ms`,
-    version: process.env.npm_package_version || '1.0.0',
+    // npm_package_version is an npm-lifecycle env var and is NOT present in
+    // the Vercel runtime — import the version from package.json instead so
+    // /api/health always reports the true release version.
+    version: pkg.version,
     uptimeSeconds: Math.floor(process.uptime()),
     memory: {
       heapUsedMB: Math.round(memory.heapUsed / 1024 / 1024),
