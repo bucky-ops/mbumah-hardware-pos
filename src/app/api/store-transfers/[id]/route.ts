@@ -25,6 +25,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { requireStoreAccess, type AuthSession } from '@/lib/auth';
+import { deriveTransferDestinationSku } from '@/lib/helpers';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -171,29 +172,33 @@ async function updateStoreTransferHandler(
       if (claimed.count === 0) return { ok: false as const, reason: 'not_claimable' };
 
       for (const item of existing.items) {
+        const shippedQty = Number(item.quantity);
+        // QA FIX (dual source of truth): ship MUST operate on
+        // Product.quantityInStock — the same ledger POS sales and stock
+        // movements use. The legacy Inventory table is maintained by nothing
+        // else in the system, so keying ship on it stranded every product
+        // created through the catalog API ("Origin store has no inventory
+        // record") and made transfers impossible for the whole live catalog.
+        // Atomic conditional decrement (row lock + `gte` predicate re-check);
+        // count === 0 throws InsufficientStockError which aborts the ENTIRE
+        // ship tx (no partial shipment) and surfaces as a typed 409.
+        const claimedProduct = await tx.product.updateMany({
+          where: { id: item.productId, quantityInStock: { gte: shippedQty } },
+          data: { quantityInStock: { decrement: shippedQty } },
+        });
+        if (claimedProduct.count === 0) {
+          throw new InsufficientStockError(item.productId);
+        }
+        // Best-effort sync of the legacy Inventory ledger when a row exists
+        // (a missing row no longer aborts shipping).
         const inventory = await tx.inventory.findFirst({
           where: { productId: item.productId, storeId: existing.fromStoreId },
         });
-        if (!inventory) {
-          // Origin has no inventory row ⇒ zero stock — abort the whole ship.
-          throw new Error(
-            `Origin store has no inventory record for product ${item.productId}`
-          );
-        }
-        // AUDIT FIX (oversell): this was a blind decrement — the status claim
-        // above prevents double-ship but the inventory row itself could still
-        // go negative when a concurrent POS sale consumed the same stock
-        // between the findFirst above and this write. The decrement is now a
-        // conditional updateMany (row lock + atomic `gte shippedQty` predicate
-        // re-check); count === 0 throws InsufficientStockError which aborts the
-        // ENTIRE ship tx (no partial shipment) and surfaces as a typed 409.
-        const shippedQty = Number(item.quantity);
-        const claimed = await tx.inventory.updateMany({
-          where: { id: inventory.id, quantityInStock: { gte: shippedQty } },
-          data: { quantityInStock: { decrement: shippedQty } },
-        });
-        if (claimed.count === 0) {
-          throw new InsufficientStockError(item.productId);
+        if (inventory) {
+          await tx.inventory.update({
+            where: { id: inventory.id },
+            data: { quantityInStock: { decrement: shippedQty } },
+          });
         }
         await tx.stockMovement.create({
           data: {
@@ -317,7 +322,45 @@ async function updateStoreTransferHandler(
           data: { receivedQty: newTotal },
         });
 
-        // Credit destination inventory (create when the row is missing).
+        // QA FIX (destination credit): received stock must become SELLABLE at
+        // the destination. POS sales read Product.quantityInStock, but the old
+        // receive path credited ONLY the legacy Inventory ledger — so a
+        // completed transfer never appeared in the destination catalog.
+        // Product.sku is globally unique, so the destination row is matched by
+        // a deterministic derived SKU (`<originSku>--<toStoreId>`); if it does
+        // not exist yet, the origin product is cloned into the destination
+        // store with the received quantity.
+        const itemProduct = await tx.product.findUnique({ where: { id: item.productId } });
+        const destSku = deriveTransferDestinationSku(itemProduct?.sku, existing.toStoreId);
+        if (destSku && itemProduct) {
+          const destProduct = await tx.product.findUnique({ where: { sku: destSku } });
+          if (destProduct) {
+            await tx.product.update({
+              where: { id: destProduct.id },
+              data: { quantityInStock: { increment: qty } },
+            });
+          } else {
+            await tx.product.create({
+              data: {
+                storeId: existing.toStoreId,
+                sku: destSku,
+                name: itemProduct.name,
+                description: itemProduct.description,
+                unitType: itemProduct.unitType,
+                quantityInStock: qty,
+                reorderLevel: itemProduct.reorderLevel,
+                pricePerUnit: itemProduct.pricePerUnit,
+                costPrice: itemProduct.costPrice,
+                taxRate: itemProduct.taxRate,
+                categoryId: itemProduct.categoryId,
+                isActive: true,
+              },
+            });
+          }
+        }
+
+        // Credit destination inventory (legacy ledger — keep in sync, create
+        // when the row is missing).
         const destInventory = await tx.inventory.findFirst({
           where: { productId: item.productId, storeId: existing.toStoreId },
         });

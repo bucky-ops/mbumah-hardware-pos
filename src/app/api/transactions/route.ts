@@ -412,6 +412,19 @@ async function createTransactionInner(
     } else {
       // Regular product
       if (!product.isRental) {
+        // Low-stock guard (QA Phase 5): a product at/below its configured
+        // minimum stock level cannot be sold until restocked. Default
+        // minimumStockLevel is 0, so only genuinely empty stock is blocked
+        // unless the store raises the floor.
+        if (Number(product.quantityInStock) <= Number(product.minimumStockLevel ?? 0)) {
+          return Response.json(
+            {
+              success: false,
+              error: `Low Stock: "${product.name}" cannot be sold until restocked (stock ${Number(product.quantityInStock)}, minimum ${Number(product.minimumStockLevel ?? 0)}).`,
+            },
+            { status: 409 }
+          );
+        }
         const existing = stockDeductions.get(product.id);
         const totalNeeded = (existing?.quantity || 0) + quantity;
 
