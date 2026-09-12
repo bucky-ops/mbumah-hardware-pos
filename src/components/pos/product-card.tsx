@@ -190,7 +190,7 @@ export function ProductCard({
         )}
 
         {/* Hover overlay with quick actions */}
-        {!disabled && (
+        {!sellBlocked && (
           <div className="product-hover-overlay">
             <Button
               type="button"
@@ -291,18 +291,17 @@ export function ProductCard({
           <Button
             type="button"
             size="icon"
-            variant={disabled ? 'ghost' : 'default'}
+            variant={sellBlocked ? 'ghost' : 'default'}
             className={`relative overflow-hidden h-10 w-10 shrink-0 shadow-md btn-press ${
-              disabled
+              sellBlocked
                 ? ''
                 : 'bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-emerald-500/30'
             }`}
-            disabled={disabled}
             onClick={handleAddClick}
             aria-label={`Add ${product.name} to cart`}
           >
             {/* Glossy gradient sheen on top */}
-            {!disabled && (
+            {!sellBlocked && (
               <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-md bg-gradient-to-b from-white/25 to-transparent" aria-hidden />
             )}
             {cartQuantity && cartQuantity > 0 ? <Zap className="h-4 w-4 relative z-10" /> : <Plus className="h-4 w-4 relative z-10" />}
