@@ -580,7 +580,7 @@ export function ReceiptDocument({
           </div>
           <p className="inline-flex items-center gap-1 text-[10px] font-semibold">
             <ScanLine className="h-3 w-3 text-primary" />
-            Scan to verify this receipt
+            Scan for your digital receipt
           </p>
           <p className="font-mono text-[9px] tracking-wider text-muted-foreground">
             {transaction.receiptNumber}

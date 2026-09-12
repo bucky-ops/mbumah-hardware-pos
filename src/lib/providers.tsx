@@ -7,6 +7,8 @@ import { ThemeProvider } from 'next-themes';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { ErrorBoundary } from '@/components/error-boundary';
+// v2.5.0: 45-second ALERT POPUPS host (bottom-left stack + notification poller).
+import { AlertPopupHost } from '@/components/alerts/alert-popup-host';
 import { useState, useEffect, type ReactNode } from 'react';
 
 function GlobalErrorHandler({ children }: { children: ReactNode }) {
@@ -81,6 +83,9 @@ export function Providers({ children }: { children: ReactNode }) {
           <GlobalErrorHandler>
             {children}
           </GlobalErrorHandler>
+          {/* v2.5.0: 45-second ALERT POPUPS (bottom-left stack) — mounted
+              inside QueryClientProvider so its notification poller can run. */}
+          <AlertPopupHost />
           <Toaster position="top-right" richColors closeButton />
         </ThemeProvider>
       </QueryClientProvider>

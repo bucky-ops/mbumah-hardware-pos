@@ -160,6 +160,68 @@
   background: oklch(0.55 0.02 250);
 }
 
+/* ── CART SCROLLBAR (v2.5.0 — cart fits any window size) ─────────────────
+   The POS cart list needs a scrollbar that is always DISCOVERABLE (a 6px
+   invisible-until-hover thumb is too subtle for a busy cashier), so the
+   cart uses its own class: wider thumb, faint persistent track, amber
+   hover accent that matches the cart header. Firefox gets scrollbar-width
+   / scrollbar-color; WebKit gets the full styling below. */
+.cart-scrollbar {
+  scrollbar-width: auto;
+  scrollbar-color: oklch(0.65 0.12 70) oklch(0.5 0.01 80 / 18%);
+}
+
+.cart-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.cart-scrollbar::-webkit-scrollbar-track {
+  background: oklch(0.5 0.01 80 / 14%);
+  border-radius: 6px;
+}
+
+.cart-scrollbar::-webkit-scrollbar-thumb {
+  background: oklch(0.65 0.12 70);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  min-height: 32px;
+}
+
+.cart-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.55 0.15 70);
+  background-clip: content-box;
+}
+
+.dark .cart-scrollbar::-webkit-scrollbar-track {
+  background: oklch(1 0 0 / 6%);
+}
+
+.dark .cart-scrollbar::-webkit-scrollbar-thumb {
+  background: oklch(0.6 0.12 70);
+  background-clip: content-box;
+}
+
+/* ── ALERT POPUP countdown bar (v2.5.0 — 45-second alerts) ───────────────
+   Drains linearly from 100% to 0 over the popup's lifetime. The JS host
+   sets animation-duration per popup and pauses it on hover via
+   animation-play-state, so one keyframe serves every popup. */
+@keyframes alert-countdown-drain {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.alert-countdown-bar {
+  animation-name: alert-countdown-drain;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    Receipt PRINT isolation (2026-09 overhaul)
 

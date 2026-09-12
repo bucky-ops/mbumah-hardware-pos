@@ -105,15 +105,24 @@ async function getRentalsHandler(...args: unknown[]): Promise<Response> {
 
   return Response.json({
     success: true,
+    // DECIMAL-STRING AUDIT FIX (v2.5.0): Decimal money fields → numbers at
+    // the API boundary (same class as the P&L 3.8e+90 incident).
     data: rentals.map((r) => ({
       ...r,
       status: overdueRentals.some((o) => o.id === r.id) ? RentalStatus.OVERDUE : r.status,
+      securityDeposit: Number(r.securityDeposit),
+      ratePerDay: Number(r.ratePerDay),
+      ratePerWeek: r.ratePerWeek === null ? null : Number(r.ratePerWeek),
+      ratePerMonth: r.ratePerMonth === null ? null : Number(r.ratePerMonth),
+      totalRentalCharge: Number(r.totalRentalCharge),
+      lateFeeAccumulated: Number(r.lateFeeAccumulated),
+      damageCharge: Number(r.damageCharge),
     })),
     summary: {
       activeRentals: rentalSummary._count,
-      totalCharges: rentalSummary._sum.totalRentalCharge || 0,
-      totalDeposits: rentalSummary._sum.securityDeposit || 0,
-      totalLateFees: rentalSummary._sum.lateFeeAccumulated || 0,
+      totalCharges: Number(rentalSummary._sum.totalRentalCharge ?? 0),
+      totalDeposits: Number(rentalSummary._sum.securityDeposit ?? 0),
+      totalLateFees: Number(rentalSummary._sum.lateFeeAccumulated ?? 0),
     },
     pagination: {
       page,
