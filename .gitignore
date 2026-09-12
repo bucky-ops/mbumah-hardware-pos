@@ -88,3 +88,5 @@ nginx/ssl/live/
 nginx/ssl/archive/
 # Nginx logs (generated at runtime)
 nginx/logs/*.log
+scripts/populate/state.json
+scripts/populate/*.log

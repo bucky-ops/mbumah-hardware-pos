@@ -138,7 +138,13 @@ export async function verifyEntryBalance(
   const debitMoney = new Money(debitSum);
   const creditMoney = new Money(creditSum);
 
-  if (!debitMoney.eq(creditMoney)) {
+  // F1 dust tolerance: comparisons are made at the currency's 2dp scale.
+  // Raw 30-dp columns can carry sub-cent dust from pre-remediation VAT
+  // extraction; entries that balance to the cent are healthy.
+  const eq2 = (a: Money, b: Money) =>
+    a.amount.toDecimalPlaces(2).eq(b.amount.toDecimalPlaces(2));
+
+  if (!eq2(debitMoney, creditMoney)) {
     return {
       type: "UNBALANCED_ENTRY",
       severity: "CRITICAL",
@@ -155,7 +161,7 @@ export async function verifyEntryBalance(
   const headerDebit = Money.fromPrisma(entry.totalDebit);
   const headerCredit = Money.fromPrisma(entry.totalCredit);
 
-  if (!headerDebit.eq(debitMoney)) {
+  if (!eq2(headerDebit, debitMoney)) {
     return {
       type: "UNBALANCED_ENTRY",
       severity: "HIGH",
@@ -168,7 +174,7 @@ export async function verifyEntryBalance(
     };
   }
 
-  if (!headerCredit.eq(creditMoney)) {
+  if (!eq2(headerCredit, creditMoney)) {
     return {
       type: "UNBALANCED_ENTRY",
       severity: "HIGH",
@@ -350,7 +356,7 @@ export async function runFinancialAudit(
       new Money(0).amount,
     );
 
-    if (!debitSum.equals(creditSum)) {
+    if (!debitSum.toDecimalPlaces(2).equals(creditSum.toDecimalPlaces(2))) {
       const issue: IntegrityIssue = {
         type: "UNBALANCED_ENTRY",
         severity: "CRITICAL",
@@ -493,7 +499,7 @@ export async function quickIntegrityCheck(): Promise<{
       (s, l) => s.plus(l.credit.toString()),
       new Money(0).amount,
     );
-    if (!debitSum.equals(creditSum)) {
+    if (!debitSum.toDecimalPlaces(2).equals(creditSum.toDecimalPlaces(2))) {
       unbalanced++;
     }
   }
