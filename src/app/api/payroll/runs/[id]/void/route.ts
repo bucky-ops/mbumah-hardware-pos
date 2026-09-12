@@ -23,13 +23,26 @@ import { requireStoreAccess } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
+interface RouteContext {
+  params: Promise<{ id: string }>;
+}
+
 async function voidRunHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null; email: string },
   ...args: unknown[]
 ): Promise<Response> {
-  const params = args[0] as { id: string };
-  const runId = params?.id;
+  // NEXT-16 FIX: dynamic route context arrives as { params: Promise<{ id }> }
+  // — the wrapper forwards it via args.slice(1), so args[0] is the context,
+  // NOT the params object itself.
+  const context = args[0] as RouteContext | undefined;
+  if (!context?.params) {
+    return Response.json(
+      { success: false, error: 'Payroll run ID is required.' },
+      { status: 400 }
+    );
+  }
+  const { id: runId } = await context.params;
 
   if (!runId) {
     return Response.json(
