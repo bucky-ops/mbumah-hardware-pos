@@ -385,14 +385,21 @@ export function calculatePayForPeriod(input: PayrollCalculationInput): PayrollCa
 
   // ── Statutory deductions ──
 
+  // GUARD: statutory deductions may only be levied on earnings ACTUALLY PAID.
+  // When grossPay <= 0 (e.g. zero attendance on a supplemental run) every
+  // statutory deduction must be zero — charging NSSF/SHIF/Housing Levy against
+  // zero earnings produces a NEGATIVE netPay (incident June 2026: supplemental
+  // run stored housingLevy 2,699.99 against grossPay 0 → netPay −2,699.99).
+  const hasEarnings = grossPay > 0;
+
   // NSSF: based on pensionable earnings (= basic salary, capped at 72,000)
-  const nssfResult = calculateNSSF(input.basicSalary, input.nssfExempt);
+  const nssfResult = calculateNSSF(input.basicSalary, input.nssfExempt || !hasEarnings);
 
-  // SHIF: 2.75% of gross pay, min 300
-  const nhif = calculateSHIF(grossPay, input.nhifExempt);
+  // SHIF: 2.75% of gross pay, min 300 — only when there are earnings
+  const nhif = hasEarnings ? calculateSHIF(grossPay, input.nhifExempt) : 0;
 
-  // Housing Levy: 1.5% of basic salary
-  const housingLevy = calculateHousingLevy(input.basicSalary);
+  // Housing Levy: 1.5% of basic salary — only when there are earnings
+  const housingLevy = hasEarnings ? calculateHousingLevy(input.basicSalary) : 0;
 
   // PAYE: taxable income = grossPay - NSSF - SHIF - Housing Levy
   // (NSSF, SHIF, and Housing Levy are all deductible before PAYE per 2024 law)
@@ -459,7 +466,7 @@ export function calculatePayForPeriod(input: PayrollCalculationInput): PayrollCa
       shifRate: SHIF_RATES.rate,
       shifBase: grossPay,
       housingLevyRate: HOUSING_LEVY_RATES.employeeRate,
-      housingLevyBase: input.basicSalary,
+      housingLevyBase: hasEarnings ? input.basicSalary : 0,
       payeBands: payeResult.bands,
       payeGrossTax: payeResult.grossTax,
       payePersonalRelief: payeResult.personalRelief,
