@@ -646,13 +646,28 @@ const hardenedClient = baseClient.$extends({
  * - SECURITY-CRITICAL: tenant isolation for every store-scoped model depends
  *   on this function. Changes require review from someone who owns the
  *   tenancy model, plus a cross-tenant regression test.
- * - `where.storeId` already set is RESPECTED, not overwritten — safe because
- *   `requireStoreAccess` guarantees non-admin callers can only request their
- *   own store (see section 4 commentary).
+ * - `where.storeId` already set is only passed through when it EQUALS the
+ *   tenant store (exact string match — ANDing would be a no-op). Any other
+ *   value — a DIFFERENT store id, or a non-string filter shape — is
+ *   AND-narrowed so a query can only ever NARROW access, never widen it.
+ *   SECURITY (QA 2026-09, v2.4.1): the previous behaviour respected ANY
+ *   explicit `where.storeId`, trusting every route to have validated the
+ *   param via `requireStoreAccess`. Several GET routes (debt, customers, …)
+ *   never do — so a store-scoped CASHIER could read any store's customers
+ *   and debt ledgers just by passing another store's `storeId` query param.
+ *   The ORM layer is now the enforcement point, not the route layer.
  * - Handles `undefined`, `null`, and absent `where` uniformly by creating
  *   `{ where: { storeId } }`.
  */
-function injectTenant<TArgs extends TenantFilterableArgs>(args: TArgs): TArgs {
+/**
+ * Apply the active tenant context to a query's `where` clause.
+ *
+ * Exported PURELY for the cross-tenant regression tests
+ * (src/__tests__/lib/tenant-scoping.test.ts). Application code must never
+ * call this directly — the `$extends` query interceptors above invoke it for
+ * every store-scoped model operation.
+ */
+export function injectTenant<TArgs extends TenantFilterableArgs>(args: TArgs): TArgs {
   const ctx = tenantStorage.getStore();
 
   // No tenant context active — passthrough (login, seeding, SUPER_ADMIN).
@@ -667,16 +682,28 @@ function injectTenant<TArgs extends TenantFilterableArgs>(args: TArgs): TArgs {
     return { ...args, where: { storeId: ctx.storeId } };
   }
 
-  // Caller already specified storeId — respect their intent (do not overwrite).
-  // This is safe because requireStoreAccess already guarantees non-admin
-  // callers can only ever request their own store.
-  if (where.storeId !== undefined) {
+  // Caller already specified a storeId filter. Only pass through when it is
+  // the EXACT tenant store (string equality — ANDing would be a no-op).
+  // Everything else is AND-narrowed: we never overwrite the caller's filter
+  // (preserving intent and any OR semantics inside it), we just constrain
+  // the result set to the tenant. Non-string shapes (`{ in: [...] }`,
+  // `{ not: ... }`, …) always take this branch — cheap and always safe.
+  if (where.storeId === ctx.storeId) {
     return args;
   }
 
-  // Merge storeId into the existing where. We spread to avoid mutating the
-  // caller's object (Prisma extension args can be reused / logged).
-  return { ...args, where: { ...where, storeId: ctx.storeId } };
+  const tenantFilter = { storeId: ctx.storeId };
+
+  // Preserve any existing AND array/object — spread-merging must not drop it.
+  const existingAnd = Array.isArray(where.AND)
+    ? where.AND
+    : where.AND !== undefined
+      ? [where.AND]
+      : [];
+
+  // We spread to avoid mutating the caller's object (Prisma extension args
+  // can be reused / logged).
+  return { ...args, where: { ...where, AND: [...existingAnd, tenantFilter] } };
 }
 
 /**
