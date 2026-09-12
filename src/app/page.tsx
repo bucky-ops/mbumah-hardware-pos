@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, Keyboard } from 'lucide-react';
 
 import { useAuthStore, useAppStore } from '@/lib/stores';
+import { APP_VERSION_LABEL } from '@/lib/version';
 import { TAB_LOADERS } from '@/lib/tab-preload';
 import { ErrorBoundary, SectionErrorBoundary } from '@/components/error-boundary';
 import { FloatingHomeButton } from '@/components/floating-home-button';
@@ -178,7 +179,9 @@ function MainApp() {
                 <p className="text-xs text-muted-foreground">
                   MBUMAH HARDWARE POS & ERP &copy; {new Date().getFullYear()}
                 </p>
-                <span className="text-[10px] text-muted-foreground/50 hidden sm:inline">v2.2.0</span>
+                {/* VERSION FLOW FIX (v2.5.1): was hardcoded "v2.2.0" while the
+                    API reported 2.5.0 — now renders package.json version. */}
+                <span className="text-[10px] text-muted-foreground/50 hidden sm:inline">{APP_VERSION_LABEL}</span>
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60">

@@ -267,8 +267,18 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
           // F3-7: damage charge included in the credit side.
           // Task 12-c: exact Decimal JE header (was
           // `settlement + totalRentalCharge + lateFee + assessedDamageCharge`).
+          // R12 FIX (v2.5.1 — GL corruption): the credit side of a REFUND
+          // settlement is `refund + charges` = the FULL DEPOSIT (Dr Deposits
+          // Held deposit / Cr Cash refund + Cr Revenue charges). It previously
+          // stored `totalCharges` (charges only) — an unbalanced header that
+          // understated credits by the refund amount on EVERY refund-type
+          // return (8 unbalanced JEs found on production, e.g. Caroline
+          // Ochieng JE-20260912-70F63: D 6,670 / C 1,334). Header totals are
+          // now derived from the actual line sums, then asserted balanced.
           totalDebit: round2(toDec(rental.securityDeposit)),
-          totalCredit: totalCharges,
+          totalCredit: round2(
+            toDec(settlement).plus(totalRentalCharge).plus(lateFee).plus(assessedDamageCharge)
+          ),
           isPosted: true,
           postedAt: new Date(),
           createdBy: processedBy || null,
@@ -375,6 +385,15 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
     },
   });
 
+  // R12 FIX (v2.5.1): reconcile the deposit release — for a returned rental
+  // the deposit is split into (charges recognized) + (cash refunded) when the
+  // customer gets money back, or (charges) + (balance still owed) when they
+  // owe. Surfaces in the API response so the UI/statement can reconcile the
+  // deposit lifecycle to the penny instead of guessing.
+  const depositsReleased = round2(
+    toDec(totalCharges).plus(settlementDec.gt(0) ? settlement : 0)
+  );
+
   return Response.json({
     success: true,
     data: {
@@ -390,6 +409,7 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
         // Task 12-c: sign branches on the exact Decimal (was float coercion).
         settlementType: settlementDec.isNegative() ? 'CUSTOMER_OWES' : settlementDec.gt(0) ? 'REFUND_DUE' : 'EXACT',
         settlementAmount: round2(settlementDec.abs()),
+        depositsReleased,
       },
     },
   });

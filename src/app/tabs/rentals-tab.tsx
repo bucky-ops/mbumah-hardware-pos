@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
+// R13 FIX: Decimal-safe money aggregation (decimal-string concat audit).
+import { toDec, round2 } from '@/lib/utils/financialMath';
 import {
   rentalsApi, productsApi, customersApi,
   formatKES, formatDate, openWhatsApp,
@@ -844,16 +846,41 @@ export default function RentalsTab() {
     total: rentals.length,
   }), [rentals]);
 
-  // Revenue summary
+  // Revenue summary — R13 FIX (v2.5.1, decimal-string concat audit):
+  // every sum now runs through Decimal (toDec) so a string money value can
+  // never CONCATENATE again (the old `s + r.securityDeposit` produced
+  // "066701334…"-style garbage the moment any Decimal arrived unserialized —
+  // the exact "Total Deposits Decimal Concatenation" defect reported on
+  // Caroline Ochieng's account). Deposit semantics are also corrected:
+  //   • depositsHeld    — deposits on ACTIVE/OVERDUE rentals (real liability)
+  //   • depositsCollected — deposits on every listed rental (all-time)
+  // Returned rentals no longer inflate "Total Deposits" — their deposits
+  // were already released/refunded at return time.
   const revenueSummary = useMemo(() => {
-    const totalRevenue = rentals.reduce((s, r) => s + r.totalRentalCharge, 0);
-    const totalDeposits = rentals.reduce((s, r) => s + r.securityDeposit, 0);
-    const totalLateFees = rentals.reduce((s, r) => s + r.lateFeeAccumulated, 0);
-    const totalDamageCharges = rentals.reduce((s, r) => s + r.damageCharge, 0);
-    return { totalRevenue, totalDeposits, totalLateFees, totalDamageCharges };
+    const zero = toDec(0);
+    const sum = (pick: (r: RentalItem) => number | string) =>
+      rentals.reduce((acc, r) => acc.plus(toDec(pick(r))), zero).toNumber();
+    const charges = sum((r) => r.totalRentalCharge);
+    const lateFees = sum((r) => r.lateFeeAccumulated);
+    const damageCharges = sum((r) => r.damageCharge);
+    const depositsHeld = rentals
+      .filter((r) => r.status === 'ACTIVE' || r.status === 'OVERDUE')
+      .reduce((acc, r) => acc.plus(toDec(r.securityDeposit)), zero)
+      .toNumber();
+    const depositsCollected = sum((r) => r.securityDeposit);
+    return {
+      charges,
+      lateFees,
+      damageCharges,
+      depositsHeld,
+      depositsCollected,
+      // Revenue RECOGNIZED = rental charges + late fees + damage charges
+      // (matches the GL: RENTAL_REVENUE + LATE_FEE_REVENUE credits).
+      revenue: round2(toDec(charges).plus(lateFees).plus(damageCharges)),
+    };
   }, [rentals]);
 
-  const totalRentalRevenue = revenueSummary.totalRevenue + revenueSummary.totalLateFees + revenueSummary.totalDamageCharges;
+  const totalRentalRevenue = revenueSummary.revenue;
 
   // Equipment availability
   const equipmentAvailable = useMemo(() => {
@@ -1136,8 +1163,9 @@ export default function RentalsTab() {
                     <DollarSign className="h-5 w-5 text-emerald-600" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Rental Revenue</p>
-                    <p className="text-xl font-bold">{formatKES(revenueSummary.totalRevenue)}</p>
+                    <p className="text-sm text-muted-foreground">Rental Charges</p>
+                    <p className="text-xl font-bold">{formatKES(revenueSummary.charges)}</p>
+                    <p className="text-[10px] text-muted-foreground/70">before fees &amp; damage</p>
                   </div>
                 </div>
               </CardContent>
@@ -1149,8 +1177,11 @@ export default function RentalsTab() {
                     <Layers className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Deposits</p>
-                    <p className="text-xl font-bold">{formatKES(revenueSummary.totalDeposits)}</p>
+                    <p className="text-sm text-muted-foreground">Deposits Held</p>
+                    <p className="text-xl font-bold">{formatKES(revenueSummary.depositsHeld)}</p>
+                    <p className="text-[10px] text-muted-foreground/70">
+                      collected all-time {formatKES(revenueSummary.depositsCollected)}
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -1163,7 +1194,7 @@ export default function RentalsTab() {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Late Fees</p>
-                    <p className="text-xl font-bold">{formatKES(revenueSummary.totalLateFees)}</p>
+                    <p className="text-xl font-bold">{formatKES(revenueSummary.lateFees)}</p>
                   </div>
                 </div>
               </CardContent>
@@ -1176,7 +1207,7 @@ export default function RentalsTab() {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Damage Charges</p>
-                    <p className="text-xl font-bold">{formatKES(revenueSummary.totalDamageCharges)}</p>
+                    <p className="text-xl font-bold">{formatKES(revenueSummary.damageCharges)}</p>
                   </div>
                 </div>
               </CardContent>
