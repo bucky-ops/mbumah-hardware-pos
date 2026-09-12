@@ -9,7 +9,7 @@ import {
   Minus, BarChart3, ChevronUp, ChevronDown, ChevronsUpDown,
   Download, History, RotateCcw, X, ImageIcon,
   Filter, ChevronRight, Tag, Palette, Zap, ShoppingCart, Info,
-  MessageCircle, RefreshCw
+  MessageCircle, RefreshCw, Pencil, Settings2, Check
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
@@ -229,6 +229,10 @@ export default function InventoryTab() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryColor, setNewCategoryColor] = useState('#6B7280');
   const [newCategoryDesc, setNewCategoryDesc] = useState('');
+  // DML audit: manage mode enables edit/delete on existing categories
+  const [manageCategories, setManageCategories] = useState(false);
+  const [editCategoryOpen, setEditCategoryOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<{ id: string; name: string; color: string; description: string } | null>(null);
 
   const [newProduct, setNewProduct] = useState({
     name: '', sku: '', barcode: '', pricePerUnit: '', costPrice: '', quantityInStock: '',
@@ -355,7 +359,53 @@ export default function InventoryTab() {
     },
   });
 
-  // Bulk adjust mutation
+  // DML audit: categories were create-only. Edit + delete mutations so the
+  // catalog taxonomy can be maintained (rename, recolor, remove unused).
+  const updateCategoryMutation = useMutation({
+    mutationFn: ({ id, ...data }: { id: string; name?: string; description?: string | null; color?: string | null }) =>
+      categoriesApi.update(id, data),
+    onSuccess: () => {
+      toast.success('Category updated');
+      setEditCategoryOpen(false);
+      setEditingCategory(null);
+      queryClient.invalidateQueries({ queryKey: ['categories', currentStoreId] });
+      queryClient.invalidateQueries({ queryKey: ['products', currentStoreId] });
+    },
+    onError: (err: unknown) => {
+      toast.error(handleError(err, 'Update category'));
+    },
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: (id: string) => categoriesApi.remove(id),
+    onSuccess: () => {
+      toast.success('Category deleted');
+      setSelectedCategory('all');
+      queryClient.invalidateQueries({ queryKey: ['categories', currentStoreId] });
+    },
+    onError: (err: unknown) => {
+      toast.error(handleError(err, 'Delete category'));
+    },
+  });
+
+  const handleDeleteCategory = (category: { id: string; name: string }) => {
+    if (window.confirm(`Delete category "${category.name}"? Categories still used by products cannot be deleted.`)) {
+      deleteCategoryMutation.mutate(category.id);
+    }
+  };
+
+  const handleSaveCategoryEdit = () => {
+    if (!editingCategory || !editingCategory.name.trim()) {
+      toast.error('Category name is required');
+      return;
+    }
+    updateCategoryMutation.mutate({
+      id: editingCategory.id,
+      name: editingCategory.name.trim(),
+      color: editingCategory.color,
+      description: editingCategory.description || null,
+    });
+  };
   const bulkAdjustMutation = useMutation({
     mutationFn: async ({ productIds, amount, reason }: { productIds: string[]; amount: number; reason: string }) => {
       const results = await Promise.all(
@@ -793,6 +843,22 @@ export default function InventoryTab() {
             <TooltipContent>Add Category</TooltipContent>
           </Tooltip>
         </TooltipProvider>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={manageCategories ? 'default' : 'outline'}
+                size="icon"
+                className="h-10 w-10 shrink-0"
+                aria-pressed={manageCategories}
+                onClick={() => setManageCategories((v) => !v)}
+              >
+                <Settings2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{manageCategories ? 'Done managing categories' : 'Manage categories (edit / delete)'}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
         <Button
           className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-sm"
@@ -951,6 +1017,39 @@ export default function InventoryTab() {
           {categories.map((c) => {
             const count = categoryProductCounts[c.id] || 0;
             const color = c.color || getCategoryColor(c.name);
+            // DML audit manage-mode chips: inline edit / delete actions
+            if (manageCategories) {
+              return (
+                <div
+                  key={c.id}
+                  className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full text-xs font-medium bg-muted/50 text-muted-foreground border"
+                >
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                  {c.name}
+                  <span className="rounded-full px-1.5 py-0.5 text-[10px] bg-muted">{count}</span>
+                  <button
+                    type="button"
+                    aria-label={`Edit category ${c.name}`}
+                    className="p-1 rounded-full hover:bg-muted transition-colors"
+                    onClick={() => {
+                      setEditingCategory({ id: c.id, name: c.name, color, description: c.description || '' });
+                      setEditCategoryOpen(true);
+                    }}
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete category ${c.name}`}
+                    disabled={deleteCategoryMutation.isPending}
+                    className="p-1 rounded-full hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950/40 transition-colors disabled:opacity-50"
+                    onClick={() => handleDeleteCategory(c)}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              );
+            }
             return (
               <button
                 key={c.id}
@@ -1982,6 +2081,75 @@ export default function InventoryTab() {
             </div>
           )}
         </div>
+      </ResponsiveDialog>
+
+      {/* Edit Category Dialog — DML audit: categories must be editable */}
+      <ResponsiveDialog
+        open={editCategoryOpen}
+        onOpenChange={setEditCategoryOpen}
+        title={(
+          <span className="flex items-center gap-2">
+            <Pencil className="h-5 w-5 text-accent-orange" />
+            Edit Category
+          </span>
+        )}
+        description="Update the category details"
+        size="md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setEditCategoryOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+              disabled={updateCategoryMutation.isPending || !editingCategory?.name.trim()}
+              onClick={handleSaveCategoryEdit}
+            >
+              {updateCategoryMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+              Save Changes
+            </Button>
+          </>
+        }
+      >
+        {editingCategory && (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Category Name</Label>
+              <Input
+                value={editingCategory.name}
+                onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
+                placeholder="Category name"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Description <span className="text-muted-foreground">(optional)</span></Label>
+              <Input
+                value={editingCategory.description}
+                onChange={(e) => setEditingCategory({ ...editingCategory, description: e.target.value })}
+                placeholder="Category description..."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Palette className="h-4 w-4" /> Color
+              </Label>
+              <div className="flex flex-wrap gap-2">
+                {CATEGORY_COLOR_PALETTE.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    className={`w-7 h-7 rounded-full transition-all hover:scale-110 ${
+                      editingCategory.color === color ? 'ring-2 ring-offset-2 ring-primary scale-110' : ''
+                    }`}
+                    style={{ backgroundColor: color }}
+                    onClick={() => setEditingCategory({ ...editingCategory, color })}
+                    aria-label={`Select color ${color}`}
+                    aria-pressed={editingCategory.color === color}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </ResponsiveDialog>
     </div>
   );

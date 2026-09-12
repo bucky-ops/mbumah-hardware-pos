@@ -82,11 +82,17 @@ async function getExpensesHandler(...args: unknown[]): Promise<Response> {
     _count: true,
   });
 
+  // DECIMAL SERIALIZATION GUARD (financial audit): `amount` is a Prisma
+  // Decimal — raw pass-through makes Response.json emit a STRING (decimal.js
+  // toJSON), and client-side sums like `reduce((s, e) => s + e.amount, 0)`
+  // then string-concatenate ("0" + "500" → "0500"…) producing corrupt
+  // totals. Serialize as a JS number to honor the api.ts contract
+  // (ExpenseItem.amount: number).
   return Response.json({
     success: true,
-    data: expenses,
+    data: expenses.map((expense) => ({ ...expense, amount: Number(expense.amount) })),
     summary: {
-      totalAmount: expenseSummary._sum.amount || 0,
+      totalAmount: Number(expenseSummary._sum.amount ?? 0),
       totalCount: expenseSummary._count,
     },
     pagination: {

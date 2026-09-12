@@ -501,6 +501,25 @@ export const categoriesApi = {
       body: JSON.stringify(data),
     });
   },
+
+  // DML audit: categories were create-only — full SELECT/UPDATE/DELETE
+  // lifecycle added so catalog taxonomy can be maintained like every entity.
+  get: async (id: string) => {
+    return request<CategoryItem>(`/categories/${id}`);
+  },
+
+  update: async (id: string, data: { name?: string; description?: string | null; icon?: string | null; color?: string | null; sortOrder?: number; isActive?: boolean }) => {
+    return request<CategoryItem>(`/categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  remove: async (id: string) => {
+    return request<{ id: string }>(`/categories/${id}`, {
+      method: 'DELETE',
+    });
+  },
 };
 
 
