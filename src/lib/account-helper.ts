@@ -403,11 +403,18 @@ export async function recordSaleJournalEntry(
   const lines: Prisma.JournalEntryLineCreateManyJournalEntryInput[] = [];
 
   // ── Credits: revenue + tax ──
+  // F1 dust remediation: VAT extraction (total ÷ 1.16) yields repeating
+  // decimals. Lines are stored at 30-dp column scale, so unrounded splits
+  // leave sub-cent dust that the integrity auditor reports as an
+  // UNBALANCED_ENTRY (its comparisons are exact). Every journal line is
+  // therefore rounded to the central 2dp HALF_UP policy below, and any
+  // remaining residual is absorbed into the tender (debit) leg so that
+  // debits === credits EXACTLY at 2dp.
   if (grossRevenue > 0) {
     lines.push({
       accountId: accounts.SALES_REVENUE,
       debit: 0,
-      credit: grossRevenue,
+      credit: roundMoney(grossRevenue),
       description: `Sales revenue for ${receiptNumber}`,
     });
   }
@@ -415,7 +422,7 @@ export async function recordSaleJournalEntry(
     lines.push({
       accountId: accounts.VAT_PAYABLE,
       debit: 0,
-      credit: taxAmount,
+      credit: roundMoney(taxAmount),
       description: `VAT collected on ${receiptNumber}`,
     });
   }
@@ -464,18 +471,35 @@ export async function recordSaleJournalEntry(
 
   // ── COGS ──
   if (cogsAmount > 0) {
+    const cogs2 = roundMoney(cogsAmount);
     lines.push({
       accountId: accounts.COST_OF_GOODS_SOLD,
-      debit: cogsAmount,
+      debit: cogs2,
       credit: 0,
       description: `COGS for ${receiptNumber}`,
     });
     lines.push({
       accountId: accounts.INVENTORY,
       debit: 0,
-      credit: cogsAmount,
+      credit: cogs2,
       description: `Inventory reduction for ${receiptNumber}`,
     });
+  }
+
+  // F1 dust remediation (continued): VAT extraction can leave sub-cent
+  // rounding residue between the credit and debit sides. Absorb it into the
+  // first tender leg ONLY at rounding scale (≤ 2 cents) so the posted entry
+  // balances exactly at 2dp. A caller bug producing a real imbalance is NOT
+  // masked — anything larger falls through to the golden-rule backstop below,
+  // which still throws (guarded by account-helper.test.ts).
+  const preDebits = lines.reduce<Decimal>((s, l) => s.plus(Number(l.debit ?? 0)), new Decimal(0));
+  const preCredits = lines.reduce<Decimal>((s, l) => s.plus(Number(l.credit ?? 0)), new Decimal(0));
+  const residual = roundMoney(preCredits.minus(preDebits));
+  if (residual !== 0 && Math.abs(residual) <= 0.02) {
+    const tenderLeg = lines.find((l) => Number(l.debit ?? 0) > 0);
+    if (tenderLeg) {
+      tenderLeg.debit = roundMoney(Number(tenderLeg.debit ?? 0) + residual);
+    }
   }
 
   // FINANCIAL MATH AUDIT: balance check runs in Decimal (float `+` on
