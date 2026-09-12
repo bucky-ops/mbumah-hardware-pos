@@ -29,6 +29,15 @@ import {
 import { useAppStore } from '@/lib/stores';
 import { formatKES, formatDate, formatDateTime } from '@/lib/api';
 
+// MONEY GUARD (v2.3.1): salary fields were typed as number in the contract but
+// the API (before the v2.3.1 boundary fix) delivered Prisma Decimals as
+// strings, so `+` concatenated them into 18-digit "salaries". toNum() makes
+// every arithmetic site robust regardless of what the API returns.
+function toNum(v: unknown): number {
+  const n = typeof v === 'number' ? v : parseFloat(String(v ?? 0));
+  return Number.isFinite(n) ? n : 0;
+}
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -465,7 +474,7 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
   const onLeaveCount = employees.filter((e) => e.status === 'ON_LEAVE').length;
   const monthlyPayroll = employees
     .filter((e) => e.status === 'ACTIVE')
-    .reduce((sum, e) => sum + e.basicSalary + e.houseAllowance + e.transportAllowance + e.medicalAllowance + e.otherAllowances, 0);
+    .reduce((sum, e) => sum + toNum(e.basicSalary) + toNum(e.houseAllowance) + toNum(e.transportAllowance) + toNum(e.medicalAllowance) + toNum(e.otherAllowances), 0);
 
   function openCreate() {
     setForm(EMPTY_FORM);
@@ -530,7 +539,7 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
   }
 
   function monthlyGross(e: Employee): number {
-    return e.basicSalary + e.houseAllowance + e.transportAllowance + e.medicalAllowance + e.otherAllowances;
+    return toNum(e.basicSalary) + toNum(e.houseAllowance) + toNum(e.transportAllowance) + toNum(e.medicalAllowance) + toNum(e.otherAllowances);
   }
 
   return (
@@ -848,7 +857,7 @@ function EmployeeFormDialog({ open, onOpenChange, form, setForm, editingId, onSu
 
 function EmployeeDetailDialog({ employee, onClose }: { employee: Employee | null; onClose: () => void }) {
   if (!employee) return null;
-  const monthlyGross = employee.basicSalary + employee.houseAllowance + employee.transportAllowance + employee.medicalAllowance + employee.otherAllowances;
+  const monthlyGross = toNum(employee.basicSalary) + toNum(employee.houseAllowance) + toNum(employee.transportAllowance) + toNum(employee.medicalAllowance) + toNum(employee.otherAllowances);
   return (
     <Dialog open={!!employee} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -880,7 +889,7 @@ function EmployeeDetailDialog({ employee, onClose }: { employee: Employee | null
           <div>
             <h4 className="text-sm font-semibold mb-2 flex items-center gap-2"><Banknote className="h-4 w-4" /> Compensation</h4>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <DetailItem label="Basic Salary" value={formatKES(employee.basicSalary)} />
+              <DetailItem label="Basic Salary" value={formatKES(toNum(employee.basicSalary))} />
               <DetailItem label="House Allowance" value={formatKES(employee.houseAllowance)} />
               <DetailItem label="Transport" value={formatKES(employee.transportAllowance)} />
               <DetailItem label="Medical" value={formatKES(employee.medicalAllowance)} />
@@ -1145,7 +1154,7 @@ function PeriodsSubTab({ storeId }: { storeId: string }) {
     });
   }
 
-  const totalNet = periods.reduce((s, p) => s + (p.totalNet || 0), 0);
+  const totalNet = periods.reduce((s, p) => s + toNum(p.totalNet), 0);
 
   return (
     <div className="space-y-4">

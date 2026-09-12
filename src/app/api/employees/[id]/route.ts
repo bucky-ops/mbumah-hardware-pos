@@ -62,6 +62,9 @@ function tenantCheck(
 }
 
 function serializeEmployee(e: NonNullable<Awaited<ReturnType<typeof loadEmployee>>>) {
+  // MONEY FIX (v2.3.1): serialize Prisma Decimal money fields as numbers at the
+  // API boundary (see /api/employees route for the incident rationale).
+  const toMoney = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
   return {
     id: e.id,
     storeId: e.storeId,
@@ -82,12 +85,12 @@ function serializeEmployee(e: NonNullable<Awaited<ReturnType<typeof loadEmployee
     hireDate: e.hireDate,
     terminationDate: e.terminationDate,
     status: e.status,
-    basicSalary: e.basicSalary,
-    hourlyRate: e.hourlyRate,
-    houseAllowance: e.houseAllowance,
-    transportAllowance: e.transportAllowance,
-    medicalAllowance: e.medicalAllowance,
-    otherAllowances: e.otherAllowances,
+    basicSalary: toMoney(e.basicSalary),
+    hourlyRate: e.hourlyRate === null ? null : Number(e.hourlyRate),
+    houseAllowance: toMoney(e.houseAllowance),
+    transportAllowance: toMoney(e.transportAllowance),
+    medicalAllowance: toMoney(e.medicalAllowance),
+    otherAllowances: toMoney(e.otherAllowances),
     payeExempt: e.payeExempt,
     nssfExempt: e.nssfExempt,
     nhifExempt: e.nhifExempt,

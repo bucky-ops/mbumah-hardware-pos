@@ -46,6 +46,11 @@ async function listRunsHandler(
     take: limit,
   });
 
+  // MONEY FIX (v2.3.1): serialize Prisma Decimal totals as numbers at the API
+  // boundary (Response.json would deliver decimal.js values as strings and the
+  // frontend period reducer would string-concatenate them).
+  const toMoney = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
+
   const data = runs.map((r) => ({
     id: r.id,
     payrollPeriodId: r.payrollPeriodId,
@@ -55,9 +60,9 @@ async function listRunsHandler(
     initiatedBy: r.initiatedBy,
     processedAt: r.processedAt?.toISOString() ?? null,
     paidAt: r.paidAt?.toISOString() ?? null,
-    totalGross: r.totalGross,
-    totalDeductions: r.totalDeductions,
-    totalNet: r.totalNet,
+    totalGross: toMoney(r.totalGross),
+    totalDeductions: toMoney(r.totalDeductions),
+    totalNet: toMoney(r.totalNet),
     employeeCount: r.employeeCount,
     errorMessage: r.errorMessage,
     detailCount: r._count.details,
