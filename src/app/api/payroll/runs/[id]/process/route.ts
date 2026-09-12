@@ -15,14 +15,27 @@ import { processPayrollRun } from '@/lib/payroll-helpers';
 
 export const dynamic = 'force-dynamic';
 
+interface RouteContext {
+  params: Promise<{ id: string }>;
+}
+
 async function processRunHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null; email: string },
   ...args: unknown[]
 ): Promise<Response> {
-  // Extract the run ID from the route params (Next.js 16 passes params via args)
-  const params = args[0] as { id: string };
-  const runId = params?.id;
+  // NEXT-16 FIX: dynamic route context arrives as { params: Promise<{ id }> }.
+  // The old code cast args[0] to { id } — params.id was always undefined, so
+  // this endpoint 400'd "Payroll run ID is required." on EVERY call and could
+  // never have processed a run by id.
+  const context = args[0] as RouteContext | undefined;
+  if (!context?.params) {
+    return Response.json(
+      { success: false, error: 'Payroll run ID is required.' },
+      { status: 400 }
+    );
+  }
+  const { id: runId } = await context.params;
 
   if (!runId) {
     return Response.json(
