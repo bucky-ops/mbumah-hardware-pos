@@ -65,6 +65,7 @@ type SubTab = 'employees' | 'leave' | 'periods' | 'runs' | 'attendance';
 interface Employee {
   id: string;
   storeId: string;
+  employeeCode: string | null;
   userId: string | null;
   user?: { id: string; email: string; name: string; role: string } | null;
   firstName: string;
@@ -618,6 +619,7 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
                 <thead className="sticky top-0 bg-card z-10">
                   <tr className="border-b text-left">
                     <th className="px-2 py-2 font-medium text-muted-foreground">Employee</th>
+                    <th className="px-2 py-2 font-medium text-muted-foreground hidden xl:table-cell">Staff No.</th>
                     <th className="px-2 py-2 font-medium text-muted-foreground hidden md:table-cell">Contact</th>
                     <th className="px-2 py-2 font-medium text-muted-foreground hidden lg:table-cell">Type</th>
                     <th className="px-2 py-2 font-medium text-muted-foreground hidden lg:table-cell">Hired</th>
@@ -641,6 +643,13 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
                             <p className="text-xs text-muted-foreground truncate">{e.jobTitle || 'No title'}</p>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-2 py-2.5 hidden xl:table-cell">
+                        {e.employeeCode ? (
+                          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground tracking-wide whitespace-nowrap">{e.employeeCode}</span>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground">—</span>
+                        )}
                       </td>
                       <td className="px-2 py-2.5 hidden md:table-cell">
                         <div className="text-xs space-y-0.5">
@@ -869,7 +878,12 @@ function EmployeeDetailDialog({ employee, onClose }: { employee: Employee | null
               </AvatarFallback>
             </Avatar>
             <div>
-              <div>{employee.fullName}</div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {employee.fullName}
+                {employee.employeeCode && (
+                  <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground tracking-wide">{employee.employeeCode}</span>
+                )}
+              </div>
               <DialogDescription>{employee.jobTitle || 'No title'} · <EmploymentTypeBadge type={employee.employmentType} /></DialogDescription>
             </div>
           </DialogTitle>

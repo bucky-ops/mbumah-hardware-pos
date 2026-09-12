@@ -74,6 +74,27 @@ async function getDebtHandler(...args: unknown[]): Promise<Response> {
     db.debtLedger.count({ where }),
   ]);
 
+  // QA FIX (Kenya Plumbing Co. incident): Prisma Decimal rows serialize as
+  // STRINGS through Response.json (decimal.js toJSON). The api.ts contract
+  // says numbers — emit numbers so client arithmetic (balance previews,
+  // Math.min caps, aging math) can never string-concatenate.
+  const numericDebts = debts.map((d) => ({
+    ...d,
+    amountOwed: Number(d.amountOwed),
+    amountPaid: Number(d.amountPaid),
+    balance: Number(d.balance),
+    customer: d.customer
+      ? {
+          ...d.customer,
+          debtLimit: Number(d.customer.debtLimit ?? 0),
+          currentDebtBalance: Number(d.customer.currentDebtBalance ?? 0),
+        }
+      : d.customer,
+    transaction: d.transaction
+      ? { ...d.transaction, totalAmount: Number(d.transaction.totalAmount) }
+      : d.transaction,
+  }));
+
   // Calculate summary
   const allDebts = await db.debtLedger.findMany({
     where: { storeId, status: { in: ['OUTSTANDING', 'PARTIAL', 'OVERDUE'] } },
@@ -110,7 +131,7 @@ async function getDebtHandler(...args: unknown[]): Promise<Response> {
 
   return Response.json({
     success: true,
-    data: debts,
+    data: numericDebts,
     summary,
     pagination: {
       page,
@@ -139,19 +160,32 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
   const session = await getSessionFromRequest(request);
   const receivedBy = session?.userId ?? null;
 
+  // QA FIX (Kenya Plumbing Co. incident): validate REQUIRED-FIELD PRESENCE
+  // first, and name exactly which fields are missing. The old order checked
+  // the paymentMethod whitelist before presence, and treated `amount: 0` as
+  // "missing" (falsy) — producing a misleading "required fields" message for
+  // a zero amount instead of the "greater than zero" one.
+  const missing: string[] = [];
+  if (!storeId) missing.push('storeId');
+  if (!debtLedgerId) missing.push('debtLedgerId');
+  if (amount === undefined || amount === null || amount === '') missing.push('amount');
+  if (!paymentMethod) missing.push('paymentMethod');
+  if (missing.length > 0) {
+    const label = missing.length === 1
+      ? `${missing[0]} is required.`
+      : `${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]} are required.`;
+    return Response.json(
+      { success: false, error: label },
+      { status: 400 }
+    );
+  }
+
   // F9 (journal integrity): only tender methods backed by a real asset
   // account are accepted — arbitrary strings used to debit whichever
   // account the journal mapping resolved to.
   if (!['CASH', 'MPESA'].includes(paymentMethod)) {
     return Response.json(
       { success: false, error: 'paymentMethod must be CASH or MPESA for debt payments.' },
-      { status: 400 }
-    );
-  }
-
-  if (!storeId || !debtLedgerId || !amount || !paymentMethod) {
-    return Response.json(
-      { success: false, error: 'storeId, debtLedgerId, amount, and paymentMethod are required.' },
       { status: 400 }
     );
   }
@@ -371,7 +405,18 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
     console.error('Failed to write tamper-evident audit entry for debt payment:', error);
   }
 
-  return Response.json({ success: true, data: result });
+  // QA FIX: the updated ledger row carries Prisma Decimals — serialize the
+  // money fields as numbers (the api.ts contract) so the success toast's
+  // "New balance" (and any further client math) can't hit string values.
+  return Response.json({
+    success: true,
+    data: {
+      ...result,
+      amountOwed: Number(result.amountOwed),
+      amountPaid: Number(result.amountPaid),
+      balance: Number(result.balance),
+    },
+  });
 }
 
 export const GET = withErrorBoundary(withSessionAuth(getDebtHandler, FINANCIAL_ROLES.WRITE), 'DEBT_LIST');

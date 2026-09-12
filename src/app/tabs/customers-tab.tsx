@@ -10,9 +10,9 @@ import {
   History, Send, Tag, Gift, Truck, FileCheck, Receipt, Minus,
 } from 'lucide-react';
 
-import { useAppStore } from '@/lib/stores';
+import { useAppStore, useAuthStore } from '@/lib/stores';
 import {
-  customersApi, debtApi, transactionsApi, whatsappApi,
+  customersApi, debtApi, transactionsApi, whatsappApi, authorizedFetchJson,
   formatKES, formatDate, formatDateTime,
   type CustomerItem,
   type TransactionItem,
@@ -228,19 +228,13 @@ function CustomerHistoryDialog({
       } catch {
         // fall through to direct fetch
       }
-      // Fallback: direct fetch with same-origin credentials.
-      const res = await fetch(`/api/customers/${customer.id}/history`, {
-        credentials: 'same-origin',
-      });
-      const json = (await res.json()) as {
-        success?: boolean;
-        data?: CustomerHistoryResult;
-        error?: string;
-      };
-      if (!json.success || !json.data) {
-        throw new Error(json.error || 'Failed to load history');
+      // Fallback: direct fetch — QA FIX: attach Bearer auth (session is
+      // Bearer-token based, NOT cookie based; a bare same-origin fetch 401s).
+      const res = await authorizedFetchJson(`/api/customers/${customer.id}/history`);
+      if (!res.ok || !res.json?.success || !res.json.data) {
+        throw new Error(res.json?.error || 'Failed to load history');
       }
-      const payload = json.data;
+      const payload = res.json.data as CustomerHistoryResult;
       return {
         customer: payload.customer,
         summary: payload.summary,
@@ -462,6 +456,7 @@ export default function CustomersTab() {
   const [selectedDebtLedgerId, setSelectedDebtLedgerId] = useState<string>('');
   const currentStoreId = useAppStore((s) => s.currentStoreId);
   const setActiveTab = useAppStore((s) => s.setActiveTab);
+  const authUser = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
 
   // Filter and sort state
@@ -536,6 +531,16 @@ export default function CustomersTab() {
 
   const rawCustomers = Array.isArray(customersData?.data) ? customersData.data : [];
   const debts = Array.isArray(debtData?.data) ? debtData.data : [];
+
+  // QA FIX (Kenya Plumbing Co. incident): POST /api/debt is gated by
+  // FINANCIAL_ROLES.WRITE — CASHIER and BRANCH_MANAGER get a 403 at submit
+  // time. Hide the entry points instead of letting staff fill a dialog that
+  // can never succeed.
+  const canRecordDebtPayments = (
+    authUser?.role === 'SUPER_ADMIN' ||
+    authUser?.role === 'STORE_OWNER' ||
+    authUser?.role === 'ACCOUNTANT'
+  );
   const customerTransactions: TransactionItem[] = (Array.isArray(customerTransactionsData?.data) ? customerTransactionsData.data : []).slice(0, 10);
 
   // Filter customers
@@ -581,8 +586,19 @@ export default function CustomersTab() {
   const _totalDebt = rawCustomers.reduce((s, c) => s + c.currentDebtBalance, 0);
   const activeDebts = debts.filter((d) => d.status !== 'SETTLED');
   const paymentAmountNum = parseFloat(debtPaymentAmount) || 0;
-  const selectedDebt = activeDebts.find((d) => d.id === selectedDebtLedgerId);
-  const currentDebtBalance = selectedDebt ? selectedDebt.amountOwed - selectedDebt.amountPaid : (selectedCustomer?.currentDebtBalance ?? 0);
+  // QA FIX (Kenya Plumbing Co. incident): when the customer has exactly ONE
+  // active debt the record selector is hidden — derive the effective selection
+  // so the submit button is never silently stuck disabled for an entry path
+  // that didn't preselect (derived value, no setState-in-effect).
+  const effectiveSelectedDebtLedgerId =
+    selectedDebtLedgerId || (activeDebts.length === 1 ? activeDebts[0]?.id || '' : '');
+  const selectedDebt = activeDebts.find((d) => d.id === effectiveSelectedDebtLedgerId);
+  // QA FIX (Kenya Plumbing Co. incident): money fields can arrive as Decimal
+  // strings — coerce with Number() before arithmetic/comparisons so Math.min,
+  // the >-check and the preview can never misbehave.
+  const currentDebtBalance = selectedDebt
+    ? Number(selectedDebt.amountOwed) - Number(selectedDebt.amountPaid)
+    : Number(selectedCustomer?.currentDebtBalance ?? 0);
   const newBalancePreview = Math.max(0, currentDebtBalance - paymentAmountNum);
   const _goldCustomers = rawCustomers.filter(c => c.loyaltyPoints >= 1500).length;
   const customersWithDebt = rawCustomers.filter(c => c.currentDebtBalance > 0).length;
@@ -1186,7 +1202,7 @@ export default function CustomersTab() {
             {activeDebts.length > 1 && (
               <div className="space-y-2">
                 <Label>Select Debt Record</Label>
-                <Select value={selectedDebtLedgerId} onValueChange={setSelectedDebtLedgerId}>
+                <Select value={effectiveSelectedDebtLedgerId} onValueChange={setSelectedDebtLedgerId}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select a debt record" />
                   </SelectTrigger>
@@ -1272,11 +1288,17 @@ export default function CustomersTab() {
             <Button variant="outline" onClick={() => setDebtPaymentOpen(false)}>Cancel</Button>
             <Button
               className="bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
-              disabled={debtPaymentMutation.isPending || paymentAmountNum <= 0 || !selectedDebtLedgerId}
+              disabled={debtPaymentMutation.isPending || paymentAmountNum <= 0 || !effectiveSelectedDebtLedgerId}
               onClick={() => {
-                if (!selectedDebtLedgerId || paymentAmountNum <= 0) return;
+                if (!effectiveSelectedDebtLedgerId || paymentAmountNum <= 0) return;
+                // QA FIX (Kenya Plumbing Co. incident): the payload MUST carry
+                // storeId — POST /api/debt validates presence of all four
+                // required fields and rejected every payment recorded from
+                // this dialog with "storeId, debtLedgerId, amount, and
+                // paymentMethod are required." (HTTP 400).
                 debtPaymentMutation.mutate({
-                  debtLedgerId: selectedDebtLedgerId,
+                  storeId: currentStoreId,
+                  debtLedgerId: effectiveSelectedDebtLedgerId,
                   amount: Math.min(paymentAmountNum, currentDebtBalance),
                   paymentMethod: debtPaymentMethod,
                   reference: debtPaymentReference || undefined,
@@ -1420,7 +1442,7 @@ export default function CustomersTab() {
 
                 {/* Quick Actions */}
                 <div className="space-y-2">
-                  {selectedCustomer.currentDebtBalance > 0 && (
+                  {canRecordDebtPayments && selectedCustomer.currentDebtBalance > 0 && (
                     <Button
                       className="w-full bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
                       onClick={() => {

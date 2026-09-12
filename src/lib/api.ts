@@ -78,6 +78,56 @@ if (typeof window !== 'undefined') {
   fetchCSRFToken().catch(() => {});
 }
 
+/**
+ * QA FIX (Kenya Plumbing Co. incident): authenticated raw-fetch helper.
+ *
+ * This app's auth is BEARER-TOKEN based (localStorage `mbt_token`), NOT
+ * cookie-based — `credentials: 'same-origin'` alone always 401s. Several
+ * components (loyalty card, customer history fallback) used bare fetch()
+ * and silently broke. Use this helper anywhere `request()` is too heavy but
+ * Authorization + CSRF headers are required. Returns status + parsed body
+ * and never throws on HTTP errors.
+ */
+export async function authorizedFetchJson(
+  url: string,
+  init: RequestInit = {}
+): Promise<{ ok: boolean; status: number; json: { success?: boolean; error?: string; data?: unknown } | null }> {
+  const method = (init.method || 'GET').toUpperCase();
+  const isStateChanging = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+  const token = typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null;
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...((init.headers as Record<string, string>) || {}),
+  };
+
+  if (isStateChanging) {
+    let csrf = csrfToken;
+    if (!csrf) csrf = await fetchCSRFToken();
+    if (!csrf && typeof document !== 'undefined') {
+      const cookieMatch = document.cookie.match(/csrf_token=([^;]+)/);
+      if (cookieMatch) csrf = cookieMatch[1];
+    }
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+  }
+
+  try {
+    // Accept both "/api/..." full paths and "/..." endpoint paths.
+    const target = url.startsWith('/api') ? url : `${API_BASE}${url}`;
+    const response = await fetch(target, {
+      ...init,
+      headers,
+      credentials: 'same-origin',
+    });
+    let json = null;
+    try { json = await response.json(); } catch { /* non-JSON body */ }
+    return { ok: response.ok, status: response.status, json };
+  } catch {
+    return { ok: false, status: 0, json: null };
+  }
+}
+
 async function request<T>(
   endpoint: string,
   options: RequestInit = {}
