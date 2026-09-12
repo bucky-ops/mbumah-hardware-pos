@@ -346,6 +346,11 @@ async function createStockAdjustmentHandler(
   }
 
   // ── WAC recompute (PURCHASE only) ──
+  // R11 FIX (v2.5.1): `currentStockNum` was referenced but never declared —
+  // every PURCHASE movement crashed with ReferenceError → 500. The advisory
+  // typecheck (issue #8) masked it because the identifier came from a stale
+  // refactor. Defined here from the authoritative product row fetched above.
+  const currentStockNum = Number(product.quantityInStock);
   let newWac: number | null = null;
   if (movementTypeValue === StockMovementType.PURCHASE && parsedUnitCost !== null) {
     const wac = calculateWeightedAverageCost({

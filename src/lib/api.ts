@@ -33,6 +33,31 @@ export type { GiftCardItem } from './types';
 
 const API_BASE = '/api';
 
+/**
+ * R10 FIX (v2.5.1 — login flash/reload loop).
+ *
+ * OLD behaviour on ANY 401: clear localStorage tokens and call
+ * `window.location.reload()`. Combined with globally-mounted pollers that run
+ * BEFORE login (the v2.5.0 AlertPopupHost notification poll), an unauthenticated
+ * visitor got: page load → poll → 401 → reload → page load → poll → 401 → …
+ * an INFINITE reload loop. The login screen kept flashing and popping error
+ * toasts and nobody could type their credentials.
+ *
+ * NEW behaviour: clear the stale tokens and dispatch `mbt:session-expired`.
+ * The auth store (stores.ts) listens for that event and flips the SPA to the
+ * LoginScreen WITHOUT a page reload. Loop impossible — after the tokens are
+ * cleared there is nothing left to trigger another reload.
+ */
+function handleSessionExpired(): void {
+  if (typeof window === 'undefined') return;
+  const hadToken = !!localStorage.getItem('mbt_token');
+  localStorage.removeItem('mbt_token');
+  localStorage.removeItem('mbt_user');
+  if (hadToken) {
+    window.dispatchEvent(new CustomEvent('mbt:session-expired'));
+  }
+}
+
 interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
@@ -171,12 +196,15 @@ async function request<T>(
   });
 
   if (response.status === 401) {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('mbt_token');
-      localStorage.removeItem('mbt_user');
-      window.location.reload();
-    }
-    throw new Error('Session expired. Please login again.');
+    handleSessionExpired();
+    // R10 FIX (v2.5.1, login flash loop): throw the REAL status. The old
+    // plain Error made the global handler report UNKNOWN_ERROR/500.
+    throw new ApiRequestError(
+      token
+        ? 'Your session has expired. Please sign in again.'
+        : 'Authentication required. Please sign in.',
+      401,
+    );
   }
 
   // Handle CSRF failure: retry once with a fresh token
@@ -203,12 +231,13 @@ async function request<T>(
         credentials: 'same-origin',
       });
       if (retryResponse.status === 401) {
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('mbt_token');
-          localStorage.removeItem('mbt_user');
-          window.location.reload();
-        }
-        throw new Error('Session expired. Please login again.');
+        handleSessionExpired();
+        throw new ApiRequestError(
+          token
+            ? 'Your session has expired. Please sign in again.'
+            : 'Authentication required. Please sign in.',
+          401,
+        );
       }
       if (!retryResponse.ok) {
         let retryServerError = '';
@@ -1963,10 +1992,28 @@ export const stockMovementsApi = {
     return request<StockMovementItem[]>(`/stock-movements?${query.toString()}`);
   },
 
+  /**
+   * R11 FIX (v2.5.1 — "Adjust stock" UNKNOWN_ERROR / Resource not found):
+   * the client used to POST to `/stock-movements/adjustment`, a route that
+   * does NOT exist — every adjustment from the Inventory tab returned 404
+   * ("Resource not found", mislabelled UNKNOWN_ERROR/500 by the old error
+   * normalizer). The real endpoint is POST /stock-movements and REQUIRES a
+   * `type` field (PURCHASE | ADJUSTMENT | RETURN | TRANSFER) plus `note`
+   * (legacy `reason` accepted). We map the friendly UI payload onto that
+   * contract here so all three callers (dialog, quick-adjust, bulk-adjust)
+   * are fixed in one place.
+   */
   createAdjustment: async (data: { storeId: string; productId: string; quantity: number; notes?: string }) => {
-    return request<StockMovementItem>('/stock-movements/adjustment', {
+    return request<StockMovementItem>('/stock-movements', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        storeId: data.storeId,
+        productId: data.productId,
+        quantity: data.quantity,
+        type: 'ADJUSTMENT',
+        reason: data.notes || undefined,
+        note: data.notes || undefined,
+      }),
     });
   },
 };

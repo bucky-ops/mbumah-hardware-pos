@@ -136,6 +136,25 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 }));
 
+// R10 FIX (v2.5.1 — login flash/reload loop): the API layer dispatches
+// `mbt:session-expired` instead of calling window.location.reload() when a
+// request comes back 401 (see api.ts handleSessionExpired). React by flipping
+// the SPA to the LoginScreen in place — no reload, no flash loop, cart and
+// UI state simply reset alongside the session.
+if (typeof window !== 'undefined') {
+  window.addEventListener('mbt:session-expired', () => {
+    try {
+      const s = useAuthStore.getState();
+      if (s.isAuthenticated || s.token) {
+        useAuthStore.setState({ user: null, token: null, isAuthenticated: false });
+        useCartStore.getState().clearCart();
+      }
+    } catch {
+      // Never crash the page from a session-event handler.
+    }
+  });
+}
+
 interface CartState {
   items: CartItem[];
   discount: number;

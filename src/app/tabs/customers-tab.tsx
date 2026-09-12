@@ -7,7 +7,7 @@ import {
   Users, Search, Plus, CircleDollarSign, AlertTriangle,
   Eye, Loader2, HandCoins, Banknote, Smartphone, ShoppingBag, Phone, Mail, MapPin, CreditCard, Clock,
   ArrowUpDown, Filter, UserPlus, TrendingUp, FileText, Bell,
-  History, Send, Tag, Gift, Truck, FileCheck, Receipt, Minus,
+  History, Send, Tag, Gift, Truck, FileCheck, Receipt, Minus, Printer,
 } from 'lucide-react';
 
 import { useAppStore, useAuthStore } from '@/lib/stores';
@@ -552,6 +552,58 @@ export default function CustomersTab() {
     authUser?.role === 'STORE_OWNER' ||
     authUser?.role === 'ACCOUNTANT'
   );
+  // R14: the statement endpoint is gated by MANAGER_PLUS_ROLES server-side —
+  // mirror that here so the button only shows for roles that can succeed.
+  const canPrintStatement = (
+    authUser?.role === 'SUPER_ADMIN' ||
+    authUser?.role === 'STORE_OWNER' ||
+    authUser?.role === 'BRANCH_MANAGER'
+  );
+  const [statementPending, setStatementPending] = useState(false);
+
+  // R14 (v2.5.1): print the customer's ACCOUNT STATEMENT (full history,
+  // timeline, graphs, highlights) from the server-side PDF-ready HTML. The
+  // request is Bearer-authenticated, so the HTML is fetched here and opened
+  // from a Blob URL (a plain window.open URL could not carry the header).
+  const handlePrintStatement = async (customer: CustomerItem) => {
+    setStatementPending(true);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null;
+      const url =
+        `/api/reports/export-pdf?type=customer-statement` +
+        `&storeId=${encodeURIComponent(currentStoreId)}` +
+        `&customerId=${encodeURIComponent(customer.id)}`;
+      const res = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'same-origin',
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(j?.error || `Statement failed (${res.status})`);
+      }
+      const html = await res.text();
+      const blob = new Blob([html], { type: 'text/html' });
+      const blobUrl = URL.createObjectURL(blob);
+      const win = window.open(blobUrl, '_blank');
+      if (!win) {
+        // Popup blocked — fall back to a programmatic anchor click.
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+      // Revoke late — the print dialog may still be open.
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000);
+      toast.success('Account statement ready — Ctrl/Cmd+P to save as PDF.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not generate statement');
+    } finally {
+      setStatementPending(false);
+    }
+  };
   const customerTransactions: TransactionItem[] = (Array.isArray(customerTransactionsData?.data) ? customerTransactionsData.data : []).slice(0, 10);
 
   // Filter customers
@@ -1497,6 +1549,19 @@ export default function CustomersTab() {
                   >
                     <History className="h-4 w-4" /> View Account / History
                   </Button>
+                  {canPrintStatement && (
+                    <Button
+                      variant="outline"
+                      className="w-full gap-2 border-primary/40 hover:bg-primary/5"
+                      disabled={statementPending}
+                      onClick={() => void handlePrintStatement(selectedCustomer)}
+                    >
+                      {statementPending
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <Printer className="h-4 w-4" />}
+                      {statementPending ? 'Preparing statement…' : 'Print Account Statement (PDF)'}
+                    </Button>
+                  )}
                 </div>
 
                 <Separator />

@@ -23,7 +23,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { X, Info, CheckCircle2, AlertTriangle, AlertOctagon } from 'lucide-react';
 import { notificationsApi } from '@/lib/api';
-import { useAppStore } from '@/lib/stores';
+import { useAppStore, useAuthStore } from '@/lib/stores';
 import {
   useAlertStore,
   showAlert,
@@ -155,6 +155,19 @@ export function AlertPopupHost() {
   // Live branch from the app store — re-renders on branch switch / hydration,
   // no setState-in-effect needed (react-hooks lint).
   const currentStoreId = useAppStore((s) => s.currentStoreId);
+  // R10 FIX (v2.5.1 — login flash loop): the notification poll fires Bearer-
+  // authenticated requests. Before login there IS no token, so the poll got a
+  // 401 on every cycle and (with the old reload-on-401 handler) reloaded the
+  // page in an infinite loop. The host now only polls and renders once the
+  // user is AUTHENTICATED — the login screen is completely silent.
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+  // Drop any popups left over from the previous session on logout/expiry.
+  useEffect(() => {
+    if (!isAuthenticated) {
+      useAlertStore.getState().clearAll();
+    }
+  }, [isAuthenticated]);
 
   // ── Load the "already alerted" memory before the first poll ──
   useEffect(() => {
@@ -198,7 +211,7 @@ export function AlertPopupHost() {
       return res?.data ?? null;
     },
     refetchInterval: 60_000,
-    enabled: !!currentStoreId,
+    enabled: isAuthenticated && !!currentStoreId,
     staleTime: 30_000,
   });
 
