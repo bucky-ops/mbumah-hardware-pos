@@ -196,13 +196,23 @@ async function request<T>(
   });
 
   if (response.status === 401) {
+    // v2.5.3: surface the server's SPECIFIC message (e.g. "Invalid email or
+    // password." + the lockout warning) instead of generic copy — the inline
+    // login banner shows exactly what the API said. Generic copy remains for
+    // session-expiry paths. (R10 v2.5.1: still throws the REAL status.)
+    const errBody = await response.clone().json().catch(() => ({}));
+    const serverMsg: string = errBody?.error || errBody?.message || '';
+    const lockoutWarning: string = errBody?.warning || '';
+    const isLoginAttempt = endpoint === '/auth/login';
     handleSessionExpired();
-    // R10 FIX (v2.5.1, login flash loop): throw the REAL status. The old
-    // plain Error made the global handler report UNKNOWN_ERROR/500.
     throw new ApiRequestError(
-      token
-        ? 'Your session has expired. Please sign in again.'
-        : 'Authentication required. Please sign in.',
+      isLoginAttempt && serverMsg
+        ? lockoutWarning
+          ? `${serverMsg} ${lockoutWarning}`
+          : serverMsg
+        : token
+          ? 'Your session has expired. Please sign in again.'
+          : 'Authentication required. Please sign in.',
       401,
     );
   }
