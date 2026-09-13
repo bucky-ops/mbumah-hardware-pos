@@ -86,12 +86,15 @@ async function getHandler(request: NextRequest): Promise<Response> {
     });
 
     for (const p of lowStockProducts) {
-      if (p.quantityInStock <= p.reorderLevel) {
+      // v2.5.8 FIX: Decimal valueOf() degrades `<=` to lexicographic STRING
+      // comparison ("100" <= "9" → true) which fabricated low-stock alerts
+      // for healthy stock. Coerce to numbers before comparing.
+      if (Number(p.quantityInStock) <= Number(p.reorderLevel)) {
         notifications.push({
           id: `low-${p.id}`,
           type: 'low_stock',
           title: 'Low Stock Alert',
-          description: `${p.name} has only ${Math.round(p.quantityInStock)} ${p.unitType.toLowerCase()}s left (reorder at ${Math.round(p.reorderLevel)})`,
+          description: `${p.name} has only ${Math.round(Number(p.quantityInStock))} ${p.unitType.toLowerCase()}s left (reorder at ${Math.round(Number(p.reorderLevel))})`,
           severity: 'warning',
           timestamp: p.updatedAt.toISOString(),
           isRead: false,
