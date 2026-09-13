@@ -221,6 +221,20 @@ async function createExportHandler(...args: unknown[]): Promise<Response> {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
+    // DOWNLOAD FIX (v2.5.5): the download endpoint previously did not exist,
+    // so every click produced `Download failed (HTTP 404)`. Beyond adding the
+    // route, the payload itself must survive Vercel serverless — the tmp
+    // filesystem is ephemeral per Lambda instance, so a file written during
+    // POST is usually gone (or on another instance) by download time. The
+    // generated CSV/JSON text is therefore also stored inline in the DB
+    // (capped at 10 MB as a safety valve; larger exports fall back to the
+    // self-hosted file path).
+    const MAX_INLINE_CONTENT_BYTES = 10 * 1024 * 1024;
+    const inlineContent =
+      Buffer.byteLength(fileContent, 'utf8') <= MAX_INLINE_CONTENT_BYTES
+        ? fileContent
+        : null;
+
     const updated = await db.dataExport.update({
       where: { id: exportRow.id },
       data: {
@@ -228,6 +242,7 @@ async function createExportHandler(...args: unknown[]): Promise<Response> {
         recordCount: result.recordCount,
         fileSizeBytes: stat.size,
         filePath: fileName,
+        content: inlineContent,
         completedAt: now,
         expiresAt,
       },

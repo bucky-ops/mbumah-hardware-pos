@@ -2895,6 +2895,12 @@ model DataExport {
   fileSizeBytes   Int      @default(0)
   // Relative path to the generated file (under /downloads/)
   filePath        String?
+  // Inline copy of the generated file content (CSV/JSON text). This is the
+  // authoritative source for the download endpoint on serverless platforms
+  // (Vercel/Lambda), where the on-disk tmp file is ephemeral per instance
+  // and cannot be shared across invocations. Self-hosted deployments keep
+  // the file copy as a fast-path fallback.
+  content         String?
   // PENDING, PROCESSING, COMPLETED, FAILED, EXPIRED
   status          String   @default("PENDING")
   // Error message if failed

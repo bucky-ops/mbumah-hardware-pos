@@ -1334,7 +1334,14 @@ export const dataExportsApi = {
       } catch {
         /* ignore parse error */
       }
-      throw new Error(errMsg);
+      // R2 FIX (v2.5.5): throw ApiRequestError (carries the real HTTP status)
+      // instead of a plain Error. Previously normaliseError() saw a plain
+      // Error and mislabelled every download failure as
+      // UNKNOWN_ERROR / statusCode 500 in the console — e.g. the missing
+      // download route surfaced as "Download failed (HTTP 404)" with
+      // code UNKNOWN_ERROR and statusCode 500. Now the console shows the
+      // truthful code (NOT_FOUND/404, GONE/410, FORBIDDEN/403, …).
+      throw new ApiRequestError(errMsg, res.status);
     }
 
     const blob = await res.blob();
