@@ -3850,6 +3850,8 @@ export interface ConversationItem {
   storeId: string;
   type: 'INTERNAL' | 'CUSTOMER_SUPPORT';
   title: string | null;
+  /** v2.5.6 OWNER-VISIBILITY: true when the caller is in participantIds. */
+  isParticipant?: boolean;
   participantIds: string[];
   participants?: Array<{
     id: string;
@@ -3878,11 +3880,38 @@ export interface ConversationMessageItem {
   isOwn: boolean;
 }
 
+/**
+ * ChatParticipantItem — minimal active-staff row for the chat participant
+ * picker (v2.5.6 CHAT PRESENCE FIX). Served by GET /api/messages/participants
+ * to ANY authenticated staff member, own-store only, active-only,
+ * caller-excluded. Replaces the previous admin-only usersApi.list() call
+ * that gave managers/cashiers a 403 and the dead-end
+ * "No other active users in this store." message.
+ */
+export interface ChatParticipantItem {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  avatarUrl: string | null;
+  lastLoginAt: string | null;
+}
+
 export const conversationsApi = {
-  list: async (storeId: string, type?: string, limit = 50) => {
+  list: async (storeId: string, type?: string, limit = 50, scope?: 'mine' | 'store') => {
     const query = new URLSearchParams({ storeId, limit: String(limit) });
     if (type) query.set('type', type);
+    if (scope && scope !== 'mine') query.set('scope', scope);
     return request<ConversationItem[]>(`/messages/conversations?${query.toString()}`);
+  },
+
+  /**
+   * Active teammates for the participant picker (v2.5.6). Works for every
+   * staff role — the server always narrows to the caller's own store.
+   */
+  listParticipants: async (storeId: string) => {
+    const query = new URLSearchParams({ storeId });
+    return request<ChatParticipantItem[]>(`/messages/participants?${query.toString()}`);
   },
 
   create: async (data: {

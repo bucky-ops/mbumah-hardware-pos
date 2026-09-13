@@ -13,6 +13,12 @@
 //   storeId — required (enforced by requireAuth; SUPER_ADMIN may pass any)
 //   type    — INTERNAL | CUSTOMER_SUPPORT (optional filter)
 //   limit   — default 50, max 200
+//   scope   — "store" returns ALL threads in the store (including ones the
+//             caller has not joined), each flagged with isParticipant. Only
+//             honoured for SUPER_ADMIN / STORE_OWNER / BRANCH_MANAGER —
+//             OWNER-VISIBILITY TOGGLE (v2.5.6): by design staff only see
+//             threads they joined; owners/managers can now browse and then
+//             join any store thread from the UI toggle.
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -41,6 +47,16 @@ async function listConversationsHandler(
 
   const type = searchParams.get('type') || '';
   const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '50', 10), 1), 200);
+  const scope = searchParams.get('scope') || '';
+
+  // OWNER-VISIBILITY (v2.5.6): privileged roles may browse every thread in
+  // the store via ?scope=store. Everyone else only ever sees threads they
+  // participate in. SUPER_ADMIN already saw all threads (participant filter
+  // skipped) — for consistency we now compute isParticipant for them too.
+  const canSeeStoreThreads = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'].includes(
+    session.role,
+  );
+  const storeScope = scope === 'store' && canSeeStoreThreads;
 
   const where: Record<string, unknown> = { storeId };
   if (type && VALID_TYPES.includes(type)) where.type = type;
@@ -48,7 +64,7 @@ async function listConversationsHandler(
   // Non-admins only see conversations they're a participant in. We store
   // participantIds as a JSON array string, so we use a `contains` filter
   // on the userId. (SQLite-compatible; for PG we'd use the array operator.)
-  if (session.role !== 'SUPER_ADMIN') {
+  if (session.role !== 'SUPER_ADMIN' && !storeScope) {
     where.participantIds = { contains: session.userId };
   }
 
@@ -94,6 +110,7 @@ async function listConversationsHandler(
       storeId: c.storeId,
       type: c.type,
       title: c.title,
+      isParticipant: ids.includes(session.userId),
       participantIds: ids,
       participants: ids
         .map((id) => participantMap.get(id))
