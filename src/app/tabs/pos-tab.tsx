@@ -9,9 +9,9 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, useSyncExtern
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useAuthStore, useCartStore, useAppStore } from '@/lib/stores';
-import { getCategoryImage, safeMap } from '@/lib/app-config';
 import { STORE_LIST } from '@/lib/store-info';
 import { ConfettiOverlay } from '@/components/confetti-overlay';
+import { ProductImage } from '@/components/product-image';
 import {
   productsApi, categoriesApi, customersApi, transactionsApi,
   paymentsApi, giftCardsApi, vouchersApi, whatsappApi,
@@ -55,7 +55,7 @@ import {
 import { ReceiptPrintPreview } from '@/components/receipt-print';
 import { changeDue as changeDueOf } from '@/lib/utils/financialMath';
 import {
-  ShoppingCart, ShoppingBag, Package, Search, Plus, Trash2, CreditCard,
+  ShoppingCart, ShoppingBag, Search, Plus, Trash2, CreditCard,
   Smartphone, Loader2, Banknote, Wallet, Gift,
   Printer, ChevronDown, Tag, LayoutGrid, List, ArrowUpDown,
   ArrowUp, ArrowDown, RefreshCw, Wifi, WifiOff, CloudOff, CloudLightning,
@@ -1296,12 +1296,8 @@ export default function POSTab() {
                       <tr key={product.id} className="border-b hover:bg-muted/30 transition-colors">
                         <td className="p-2.5">
                           <div className="flex items-center gap-2">
-                            <div className="shrink-0 w-8 h-8 rounded-md bg-muted flex items-center justify-center">
-                              {product.imageUrl || getCategoryImage(product.categoryId) ? (
-                                <img src={product.imageUrl || getCategoryImage(product.categoryId)!} alt="" className="h-8 w-8 rounded-md object-cover" />
-                              ) : (
-                                <Package className="h-4 w-4 text-muted-foreground/40" />
-                              )}
+                            <div className="shrink-0 w-8 h-8 rounded-md bg-muted overflow-hidden flex items-center justify-center">
+                              <ProductImage imageUrl={product.imageUrl} categoryId={product.categoryId} name={product.name} className="h-8 w-8 rounded-md" />
                             </div>
                             <div className="min-w-0">
                               <p className="font-medium text-sm truncate">{product.name}</p>
@@ -1385,7 +1381,6 @@ export default function POSTab() {
                       const name = rec.product?.name || rec.productName || 'Product';
                       const price = rec.product?.pricePerUnit ?? rec.pricePerUnit ?? 0;
                       const unit = rec.product?.unitType || rec.unitType || 'PIECE';
-                      const img = rec.product?.imageUrl || rec.imageUrl || getCategoryImage(rec.product?.categoryId);
                       const co = rec.coOccurrence ?? rec.count ?? 0;
                       const stock = rec.product?.quantityInStock ?? rec.quantityInStock ?? 0;
                       return (
@@ -1397,11 +1392,7 @@ export default function POSTab() {
                           title={`Add ${name} to cart`}
                         >
                           <div className="h-8 w-8 rounded-full bg-muted overflow-hidden flex items-center justify-center shrink-0">
-                            {img ? (
-                              <img src={img} alt="" className="h-full w-full object-cover" />
-                            ) : (
-                              <Package className="h-4 w-4 text-muted-foreground/40" />
-                            )}
+                            <ProductImage imageUrl={rec.product?.imageUrl ?? rec.imageUrl} categoryId={rec.product?.categoryId} name={name} className="h-8 w-8 rounded-full" />
                           </div>
                           <div className="flex flex-col items-start leading-tight min-w-0">
                             <span className="text-xs font-medium line-clamp-1 break-words max-w-[160px]">{name}</span>

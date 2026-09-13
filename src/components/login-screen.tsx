@@ -1,16 +1,39 @@
 'use client';
 
+/**
+ * LOGIN POPUP FIX (v2.5.2 — "remove the pops from login"):
+ *
+ * The login screen used sonner TOASTS for three things:
+ *   1. `toast.success('Welcome…')` after sign-in
+ *   2. `toast.error(message)` when credentials were wrong
+ *   3. `toast.info(…)` when "Forgot password?" was clicked
+ *
+ * Toasts are top-right overlays owned by the WHOLE app. During login they
+ * collided with the app's alert-popup host and (in older builds) the reload
+ * loop, so the screen kept "flashing and popping" and users could not reach
+ * the form. UX best practice for authentication surfaces:
+ *   • feedback lives INLINE next to the form (never an overlay),
+ *   • a successful login needs NO confirmation pop — the dashboard appearing
+ *     IS the confirmation,
+ *   • help content (forgot password) opens in place, not as a popup.
+ *
+ * All three toasts were therefore removed and replaced by the inline error
+ * banner (role=alert, aria-live) and the inline forgot-password panel below.
+ * Popups remain exclusively for PRODUCT interactions (select / hover / cart)
+ * in the Point-of-Sale surface — see LOGIN_POPUP_FIX_GUIDE.md.
+ */
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/lib/stores';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Wrench, Hammer, Package, Store, ShieldCheck, Smartphone,
   LogOut, Loader2, Eye, EyeOff, Mail, Sparkles,
+  CircleAlert, ChevronDown, ChevronUp, X,
 } from 'lucide-react';
 
 /** Generate floating particle positions (deterministic via useMemo) */
@@ -50,17 +73,22 @@ export function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showForgotHelp, setShowForgotHelp] = useState(false);
   const login = useAuthStore((s) => s.login);
   const isLoading = useAuthStore((s) => s.isLoading);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
     try {
+      // No success toast — the dashboard rendering is the confirmation.
       await login(email, password);
-      toast.success('Welcome to MBUMAH HARDWARE POS!');
     } catch (err: unknown) {
+      // INLINE feedback instead of a popup toast: the error appears inside
+      // the card, announced to screen readers, and clears on the next try.
       const message = err instanceof Error ? err.message : 'Login failed';
-      toast.error(message);
+      setErrorMessage(message);
     }
   };
 
@@ -152,6 +180,38 @@ export function LoginScreen() {
               </motion.div>
             </CardHeader>
             <CardContent>
+              {/* INLINE error banner — replaces the old toast.error popup.
+                  Announced via role=alert; dismissible; never an overlay. */}
+              <AnimatePresence initial={false}>
+                {errorMessage ? (
+                  <motion.div
+                    key="login-error"
+                    initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                    animate={{ opacity: 1, height: 'auto', marginBottom: 16 }}
+                    exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <Alert
+                      variant="destructive"
+                      aria-live="assertive"
+                      className="relative pr-10"
+                    >
+                      <CircleAlert className="h-4 w-4" />
+                      <AlertDescription className="font-medium text-destructive">
+                        {errorMessage}
+                      </AlertDescription>
+                      <button
+                        type="button"
+                        onClick={() => setErrorMessage(null)}
+                        aria-label="Dismiss error"
+                        className="absolute right-2 top-2 rounded-md p-1 text-destructive/70 transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </Alert>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -175,15 +235,39 @@ export function LoginScreen() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="password" className="text-sm font-medium">Password</Label>
+                    {/* INLINE forgot-password help — replaces the old
+                        toast.info popup; help opens in place. */}
                     <button
                       type="button"
-                      onClick={() => toast.info('Contact your branch manager on 0795 191 909 to reset your password.')}
-                      className="text-[11px] font-medium text-primary/80 hover:text-primary underline-offset-2 hover:underline transition-colors"
-                      tabIndex={-1}
+                      onClick={() => setShowForgotHelp((v) => !v)}
+                      aria-expanded={showForgotHelp}
+                      aria-controls="forgot-password-help"
+                      className="inline-flex items-center gap-0.5 text-[11px] font-medium text-primary/80 hover:text-primary underline-offset-2 hover:underline transition-colors"
                     >
                       Forgot password?
+                      {showForgotHelp ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                     </button>
                   </div>
+                  <AnimatePresence initial={false}>
+                    {showForgotHelp ? (
+                      <motion.div
+                        id="forgot-password-help"
+                        key="forgot-help"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <p className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:text-amber-300">
+                          Password resets are handled by your branch manager — call{" "}
+                          <a href="tel:+254795191909" className="font-semibold underline underline-offset-2">0795 191 909</a>
+                          {" "}or email{" "}
+                          <a href="mailto:info@mbumahhardware.co.ke" className="font-semibold underline underline-offset-2">info@mbumahhardware.co.ke</a>.
+                        </p>
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
                   <div className="relative">
                     <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
