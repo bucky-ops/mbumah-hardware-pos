@@ -29,7 +29,7 @@ export const OPENAPI_SPEC = {
   openapi: '3.0.3',
   info: {
     title: 'MBUMAH HARDWARE POS & ERP API',
-    version: '2.5.6',
+    version: '2.5.7',
     description:
       'Multi-tenant Point-of-Sale and ERP API for Kenyan hardware stores. ' +
       'All authenticated endpoints require the session cookie issued by ' +
@@ -40,12 +40,51 @@ export const OPENAPI_SPEC = {
   tags: [
     { name: 'Health', description: 'Liveness / readiness' },
     { name: 'Auth', description: 'Session authentication' },
+    { name: 'Admin', description: 'SUPER_ADMIN maintenance utilities (bulk demo-data loader)' },
     { name: 'Products', description: 'Inventory catalogue' },
     { name: 'Customers', description: 'Customer book including credit' },
     { name: 'Debt Payment Plans', description: 'Structured debt repayment plans' },
     { name: 'Payments', description: 'M-Pesa STK push + Daraja callback' },
   ],
   paths: {
+    '/api/admin/bulk-seed': {
+      post: {
+        tags: ['Admin'],
+        summary: 'Bulk-load idempotent demo data (SUPER_ADMIN only)',
+        description:
+          'Loads pre-generated demo rows in chunks. Tables: products, customers, '
+          + 'suppliers, employees, transactions, stock-movements, chats. Every row '
+          + 'must carry a deterministic id with the prefix `seed` so re-runs are '
+          + 'no-ops (skipDuplicates / P2002 tolerance) and future cleanup can '
+          + 'purge by id prefix. Chunk limits: 400 flat rows, 40 transactions, '
+          + '8 chats per call. Each call is audit-logged (ADMIN_BULK_SEED).',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['table', 'rows'],
+                properties: {
+                  table: {
+                    type: 'string',
+                    enum: ['products', 'customers', 'suppliers', 'employees', 'transactions', 'stock-movements', 'chats'],
+                  },
+                  rows: { type: 'array', items: { type: 'object' } },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Chunk inserted (count of inserted/skipped rows)' },
+          '400': { description: 'Validation failed — per-row errors returned' },
+          '403': { description: 'CSRF validation failed' },
+          '409': { description: 'Unknown referenced ids (FK safety net)' },
+          '413': { description: 'Chunk too large' },
+        },
+      },
+    },
     '/api/openapi': {
       get: {
         tags: ['Health'],
