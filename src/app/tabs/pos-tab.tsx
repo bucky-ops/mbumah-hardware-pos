@@ -9,6 +9,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, useSyncExtern
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useAuthStore, useCartStore, useAppStore } from '@/lib/stores';
+import { safeMap } from '@/lib/app-config';
 import { STORE_LIST } from '@/lib/store-info';
 import { ConfettiOverlay } from '@/components/confetti-overlay';
 import { ProductImage } from '@/components/product-image';
