@@ -53,6 +53,7 @@ type SeedTable =
   | 'employees'
   | 'transactions'
   | 'stock-movements'
+  | 'receipts'
   | 'chats';
 
 const ALLOWED_TABLES: readonly SeedTable[] = [
@@ -62,6 +63,7 @@ const ALLOWED_TABLES: readonly SeedTable[] = [
   'employees',
   'transactions',
   'stock-movements',
+  'receipts',
   'chats',
 ];
 
@@ -107,6 +109,7 @@ interface FkRefs {
   categories: Set<string>;
   subcategories: Set<string>;
   customers: Set<string>;
+  transactions: Set<string>;
 }
 
 function newFkRefs(): FkRefs {
@@ -117,6 +120,7 @@ function newFkRefs(): FkRefs {
     categories: new Set(),
     subcategories: new Set(),
     customers: new Set(),
+    transactions: new Set(),
   };
 }
 
@@ -139,6 +143,10 @@ function collectFks(table: SeedTable, rows: Record<string, unknown>[], refs: FkR
       const u = str(row.performedBy);
       if (p) refs.products.add(p);
       if (u) refs.users.add(u);
+    }
+    if (table === 'receipts') {
+      const t = str(row.transactionId);
+      if (t) refs.transactions.add(t);
     }
     if (table === 'transactions') {
       const cashier = str(row.cashierId);
@@ -179,6 +187,7 @@ async function filterExistingIds(table: SeedTable, ids: string[]): Promise<Set<s
     case 'suppliers': return new Set((await db.supplier.findMany({ where: inFilter, select: { id: true } })).map((r) => r.id));
     case 'employees': return new Set((await db.employee.findMany({ where: inFilter, select: { id: true } })).map((r) => r.id));
     case 'stock-movements': return new Set((await db.stockMovement.findMany({ where: inFilter, select: { id: true } })).map((r) => r.id));
+    case 'receipts': return new Set((await db.receipt.findMany({ where: inFilter, select: { id: true } })).map((r) => r.id));
     case 'transactions': return new Set((await db.salesTransaction.findMany({ where: inFilter, select: { id: true } })).map((r) => r.id));
     default: return new Set((await db.conversation.findMany({ where: inFilter, select: { id: true } })).map((r) => r.id));
   }
@@ -192,6 +201,7 @@ async function findMissingFks(refs: FkRefs): Promise<string[]> {
     categories,
     subcategories,
     customers,
+    transactions,
   ] = await Promise.all([
     refs.stores.size ? db.store.findMany({ where: { id: { in: [...refs.stores] } }, select: { id: true } }) : [],
     refs.users.size ? db.user.findMany({ where: { id: { in: [...refs.users] } }, select: { id: true } }) : [],
@@ -199,6 +209,7 @@ async function findMissingFks(refs: FkRefs): Promise<string[]> {
     refs.categories.size ? db.productCategory.findMany({ where: { id: { in: [...refs.categories] } }, select: { id: true } }) : [],
     refs.subcategories.size ? db.subCategory.findMany({ where: { id: { in: [...refs.subcategories] } }, select: { id: true } }) : [],
     refs.customers.size ? db.customer.findMany({ where: { id: { in: [...refs.customers] } }, select: { id: true } }) : [],
+    refs.transactions.size ? db.salesTransaction.findMany({ where: { id: { in: [...refs.transactions] } }, select: { id: true } }) : [],
   ]);
   const found = new Set<string>([
     ...stores.map((r) => r.id),
@@ -207,6 +218,7 @@ async function findMissingFks(refs: FkRefs): Promise<string[]> {
     ...categories.map((r) => r.id),
     ...subcategories.map((r) => r.id),
     ...customers.map((r) => r.id),
+    ...transactions.map((r) => r.id),
   ]);
   const all = new Set<string>([
     ...refs.stores,
@@ -215,6 +227,7 @@ async function findMissingFks(refs: FkRefs): Promise<string[]> {
     ...refs.categories,
     ...refs.subcategories,
     ...refs.customers,
+    ...refs.transactions,
   ]);
   return [...all].filter((id) => !found.has(id));
 }
@@ -361,6 +374,27 @@ function buildEmployee(r: Record<string, unknown>): RowResult<Prisma.EmployeeCre
       notes: str(r.notes) ?? undefined,
       createdAt: isoDate(r.createdAt),
       updatedAt: isoDate(r.updatedAt),
+    },
+  };
+}
+
+function buildReceipt(r: Record<string, unknown>): RowResult<Prisma.ReceiptCreateManyInput> {
+  const storeId = str(r.storeId);
+  const transactionId = str(r.transactionId);
+  const receiptNumber = str(r.receiptNumber);
+  if (!storeId || !transactionId || !receiptNumber) {
+    return { ok: null, error: 'receipts require storeId, transactionId, receiptNumber' };
+  }
+  return {
+    ok: {
+      id: str(r.id) ?? undefined,
+      storeId,
+      transactionId,
+      receiptNumber,
+      receiptType: str(r.receiptType) ?? 'PRINTED',
+      sentTo: str(r.sentTo) ?? undefined,
+      sentAt: isoDate(r.sentAt),
+      createdAt: isoDate(r.createdAt),
     },
   };
 }
@@ -565,6 +599,7 @@ async function bulkSeedHandler(request: NextRequest): Promise<Response> {
     suppliers: buildSupplier,
     employees: buildEmployee,
     'stock-movements': buildStockMovement,
+    receipts: buildReceipt,
     transactions: buildTransaction,
     chats: buildChat,
   };
@@ -653,6 +688,9 @@ async function bulkSeedHandler(request: NextRequest): Promise<Response> {
       inserted = res.count;
     } else if (table === 'stock-movements' && freshRows.length) {
       const res = await db.stockMovement.createMany({ data: freshRows as Prisma.StockMovementCreateManyInput[] });
+      inserted = res.count;
+    } else if (table === 'receipts' && freshRows.length) {
+      const res = await db.receipt.createMany({ data: freshRows as Prisma.ReceiptCreateManyInput[] });
       inserted = res.count;
     }
   }

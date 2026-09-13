@@ -68,7 +68,7 @@ export const OPENAPI_SPEC = {
                 properties: {
                   table: {
                     type: 'string',
-                    enum: ['products', 'customers', 'suppliers', 'employees', 'transactions', 'stock-movements', 'chats'],
+                    enum: ['products', 'customers', 'suppliers', 'employees', 'transactions', 'stock-movements', 'receipts', 'chats'],
                   },
                   rows: { type: 'array', items: { type: 'object' } },
                 },
