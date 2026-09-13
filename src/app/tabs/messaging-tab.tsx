@@ -1391,10 +1391,10 @@ export default function MessagingTab() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Send one message to many customers at once. We generate a wa.me deep link
-                per recipient (and log every send to the Messages table for audit).
-                Open each link to dispatch it in WhatsApp. SMS channel skips the link step
-                and just logs the message.
+                Send one message to many customers at once. WhatsApp generates a
+                wa.me deep link per recipient; SMS builds an sms: draft per
+                recipient right in your browser. Every send is logged to the
+                Messages table for audit. Open each link to dispatch it.
               </p>
 
               {/* Audience + Channel + Scheduled At */}
@@ -1425,7 +1425,7 @@ export default function MessagingTab() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="WHATSAPP">WhatsApp (wa.me link per recipient)</SelectItem>
-                      <SelectItem value="SMS">SMS (log only)</SelectItem>
+                      <SelectItem value="SMS">SMS (sms: link per recipient)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1593,6 +1593,20 @@ export default function MessagingTab() {
                                     Open
                                   </a>
                                 </Button>
+                              ) : bulkChannel === 'SMS' && r.phone ? (
+                                // SMS broadcasts return no server waLink — open an
+                                // sms: deep link for this recipient client-side
+                                // (openSMS normalizes 07xx → 2547xx).
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs gap-1.5 bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800"
+                                  onClick={() => openSMS(r.phone, bulkMessage.trim())}
+                                  title="Open SMS draft for this recipient"
+                                >
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                  Open
+                                </Button>
                               ) : (
                                 <span className="text-xs text-muted-foreground">—</span>
                               )}
@@ -1628,6 +1642,22 @@ export default function MessagingTab() {
                     variant="outline"
                     size="sm"
                     onClick={() => {
+                      // SMS channel: build sms: deep links client-side per
+                      // recipient via openSMS (the API returns waLink=null).
+                      if (bulkChannel === 'SMS') {
+                        const phones = bulkResult.sent
+                          .map((r) => r.phone)
+                          .filter((p): p is string => Boolean(p));
+                        if (phones.length === 0) {
+                          toast.info('No SMS recipients to open');
+                          return;
+                        }
+                        if (phones.length > 10) {
+                          toast.info(`Opening first 10 of ${phones.length} SMS drafts (browsers block mass pop-ups).`);
+                        }
+                        phones.slice(0, 10).forEach((p) => openSMS(p, bulkMessage.trim()));
+                        return;
+                      }
                       // Open every waLink sequentially (browser will throttle but most will open).
                       const links = bulkResult.sent
                         .map((r) => r.waLink)

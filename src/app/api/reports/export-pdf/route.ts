@@ -22,6 +22,7 @@ import { formatKES, formatDate } from '@/lib/helpers';
 // concatenates. Totals below accumulate via toDec(); formatKES (canonical 2dp
 // en-KE formatter) is kept from '@/lib/helpers'.
 import { toDec, round2 } from '@/lib/utils/financialMath';
+import { buildDocumentQrDataUrl } from '@/lib/document-print';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
@@ -638,13 +639,13 @@ async function buildCustomerStatement(storeId: string, customerId: string): Prom
 
 // ── Statement HTML template (R14) ────────────────────────────────────────────
 
-function buildHtmlStatement(
+async function buildHtmlStatement(
   report: StatementReport,
   storeName: string,
   storeLocation: string,
   storePhone: string,
   storeTaxPin: string | undefined,
-): string {
+): Promise<string> {
   const generatedAt = new Date().toLocaleString('en-KE', { timeZone: 'Africa/Nairobi' });
   const logoDataUri = getLogoDataUri();
   const logoHtml = logoDataUri
@@ -734,6 +735,26 @@ function buildHtmlStatement(
 
   const highlightsHtml = highlights.map((h) => `<li>${escapeHtml(h)}</li>`).join('');
 
+  // Task 35-b: verification QR — self-contained payload (no public statement
+  // page exists, so the QR carries the totals it verifies). Generated (awaited)
+  // BEFORE template assembly as a base64 data URI so the printed HTML works
+  // fully offline. QR is additive: a failure never blocks the statement.
+  const outstanding = formatKES(debtBalance);
+  let statementQrHtml = '';
+  try {
+    const qrDataUrl = await buildDocumentQrDataUrl(
+      `MBUMAH|STATEMENT|${c.name}|Outstanding:${outstanding}`,
+    );
+    statementQrHtml = `
+  <div class="qr-card">
+    <img src="${qrDataUrl}" alt="Verification QR code" />
+    <div class="qr-caption">Scan to verify statement totals</div>
+    <div class="qr-doc">Outstanding: ${escapeHtml(outstanding)}</div>
+  </div>`;
+  } catch {
+    // QR is decorative verification — statement must still print without it.
+  }
+
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -796,6 +817,10 @@ function buildHtmlStatement(
     .highlights { background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px; padding: 12px 18px 12px 30px; margin-top: 10px; }
     .highlights li { margin: 5px 0; line-height: 1.5; }
     .print-hint { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 8px; padding: 10px 14px; margin: 14px 0; font-size: 11px; }
+    .qr-card { width: 250px; margin: 30px auto 0; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; text-align: center; }
+    .qr-card img { width: 110px; height: 110px; display: block; margin: 0 auto; }
+    .qr-caption { font-size: 11px; font-weight: 600; color: #334155; margin-top: 8px; }
+    .qr-doc { font-family: 'Courier New', monospace; font-size: 11px; color: #64748b; margin-top: 2px; }
     @media print { body { padding: 0; } .print-hint { display: none; } .header { page-break-after: avoid; } thead { display: table-header-group; } }
   </style>
 </head>
@@ -858,6 +883,8 @@ function buildHtmlStatement(
 
   <h2>Activity Timeline (latest first)</h2>
   <div class="timeline">${timeline || '<p class="no-data">No activity yet.</p>'}</div>
+
+  ${statementQrHtml}
 
   <div class="footer" style="margin-top:32px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;display:flex;justify-content:space-between">
     <span>Generated: ${escapeHtml(generatedAt)} (EAT)</span>
@@ -1061,7 +1088,7 @@ async function getExportPdfHandler(...args: unknown[]): Promise<Response> {
         creditBalance: round2(toDec(statement.data.totals.debtCharged).minus(statement.data.totals.debtPaid)),
       },
     });
-    const html = buildHtmlStatement(statement, storeName, storeLocation, storePhone, storeTaxPin);
+    const html = await buildHtmlStatement(statement, storeName, storeLocation, storePhone, storeTaxPin);
     return new Response(html, {
       status: 200,
       headers: {

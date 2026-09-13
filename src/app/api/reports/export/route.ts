@@ -247,15 +247,15 @@ export const GET = withErrorBoundary(
 // ── POST /api/reports/export ────────────────────────────────────────────────
 //
 // Receipt distribution endpoint. Accepts a transaction ID and channel
-// ('EMAIL' or 'WHATSAPP') and sends the branded receipt to the customer via
-// Resend (email) or Twilio (WhatsApp). See src/lib/receipt-distribution.ts
-// for the full implementation, provider config, and graceful-degradation
-// behaviour when API keys are absent.
+// ('EMAIL', 'WHATSAPP' or 'SMS') and sends the branded receipt to the customer
+// via Resend (email) or Twilio (WhatsApp/SMS). See
+// src/lib/receipt-distribution.ts for the full implementation, provider
+// config, and graceful-degradation behaviour when API keys are absent.
 //
 // Body:
 //   {
 //     "transactionId": "clx...",
-//     "channel": "EMAIL" | "WHATSAPP",
+//     "channel": "EMAIL" | "WHATSAPP" | "SMS",
 //     "email"?:    "customer@example.com",
 //     "phone"?:    "+254712345678",
 //     "customMessage"?: "Thank you for your purchase!"
@@ -275,7 +275,7 @@ async function distributeReceiptHandler(
     storeId: bodyStoreId,
   } = body as {
     transactionId?: string;
-    channel?: 'EMAIL' | 'WHATSAPP';
+    channel?: 'EMAIL' | 'WHATSAPP' | 'SMS';
     email?: string;
     phone?: string;
     customMessage?: string;
@@ -288,9 +288,9 @@ async function distributeReceiptHandler(
       { status: 400 },
     );
   }
-  if (!channel || (channel !== 'EMAIL' && channel !== 'WHATSAPP')) {
+  if (!channel || (channel !== 'EMAIL' && channel !== 'WHATSAPP' && channel !== 'SMS')) {
     return Response.json(
-      { success: false, error: "channel must be 'EMAIL' or 'WHATSAPP'." },
+      { success: false, error: "channel must be 'EMAIL', 'WHATSAPP' or 'SMS'." },
       { status: 400 },
     );
   }

@@ -8,17 +8,26 @@ import {
   CheckCircle, Loader2, Clock, ArrowRight, Wrench,
   ShieldAlert, ShieldCheck, ShieldOff, CalendarDays, Activity, Package, Search, LayoutGrid,
   List, Camera,
-  Phone, Printer, Pencil, Trash2,
+  Phone, Printer, Pencil, Trash2, Smartphone,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
+import { handleError } from '@/lib/error-handler';
 // R13 FIX: Decimal-safe money aggregation (decimal-string concat audit).
 import { toDec, round2 } from '@/lib/utils/financialMath';
 import {
   rentalsApi, productsApi, customersApi,
-  formatKES, formatDate, openWhatsApp,
+  formatKES, formatDate, openWhatsApp, openSMS,
   type ProductListItem, type CustomerItem, type RentalItem,
 } from '@/lib/api';
+import {
+  buildDocumentQrDataUrl,
+  buildDocumentQrPayload,
+  escapeHtml,
+  getDocumentLogoSrc,
+  printHtmlDocument,
+  resolveDocumentStore,
+} from '@/lib/document-print';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -668,7 +677,7 @@ function EquipmentCatalog({ products, rentals }: { products: ProductListItem[]; 
 
 // Rental Card View Component
 
-function RentalCardView({ rentals, onReturn, onEdit, onDelete, onSendReceipt, onPrintReceipt }: { rentals: RentalItem[]; onReturn: (rental: RentalItem) => void; onEdit: (rental: RentalItem) => void; onDelete: (rental: RentalItem) => void; onSendReceipt: (rental: RentalItem) => void; onPrintReceipt: (rental: RentalItem) => void }) {
+function RentalCardView({ rentals, onReturn, onEdit, onDelete, onSendReceipt, onSendReceiptSms, onPrintReceipt }: { rentals: RentalItem[]; onReturn: (rental: RentalItem) => void; onEdit: (rental: RentalItem) => void; onDelete: (rental: RentalItem) => void; onSendReceipt: (rental: RentalItem) => void; onSendReceiptSms: (rental: RentalItem) => void; onPrintReceipt: (rental: RentalItem) => void }) {
   const statusBorder: Record<string, string> = {
     ACTIVE: 'border-l-green-500',
     OVERDUE: 'border-l-red-500',
@@ -755,6 +764,9 @@ function RentalCardView({ rentals, onReturn, onEdit, onDelete, onSendReceipt, on
                 )}
                 <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/30" onClick={() => onSendReceipt(rental)}>
                   <Phone className="h-3 w-3 mr-1" /> WhatsApp
+                </Button>
+                <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30" onClick={() => onSendReceiptSms(rental)} title="Send via SMS">
+                  <Smartphone className="h-3 w-3 mr-1" /> SMS
                 </Button>
                 <Button variant="outline" size="sm" className="h-7 text-[10px] px-2" onClick={() => onPrintReceipt(rental)}>
                   <Printer className="h-3 w-3 mr-1" /> Print
@@ -914,16 +926,11 @@ export default function RentalsTab() {
     setDeleteDialogOpen(true);
   };
 
-  const handleSendReceipt = (rental: RentalItem) => {
-    const phone = rental.customer?.phone || '';
-    if (!phone) {
-      toast.error('Customer has no phone number on file');
-      return;
-    }
+  const buildRentalReceiptText = (rental: RentalItem) => {
     const daysRented = Math.ceil(
       ((rental.actualReturnDate ? new Date(rental.actualReturnDate).getTime() : Date.now()) - new Date(rental.rentalStartDate).getTime()) / 86400000
     );
-    const message = [
+    return [
       `*Mbumah Hardware - Rental Receipt*`,
       ``,
       `Rental ID: ${rental.id.slice(-8).toUpperCase()}`,
@@ -944,70 +951,131 @@ export default function RentalsTab() {
       ``,
       `Thank you for doing business with us`,
     ].filter(Boolean).join('\n');
-    openWhatsApp(phone, message);
   };
 
-  const handlePrintReceipt = (rental: RentalItem) => {
-    const daysRented = Math.ceil(
-      ((rental.actualReturnDate ? new Date(rental.actualReturnDate).getTime() : Date.now()) - new Date(rental.rentalStartDate).getTime()) / 86400000
-    );
-    const printContent = `
+  const handleSendReceipt = (rental: RentalItem) => {
+    const phone = rental.customer?.phone || '';
+    if (!phone) {
+      toast.error('Customer has no phone number on file');
+      return;
+    }
+    openWhatsApp(phone, buildRentalReceiptText(rental));
+  };
+
+  // SMS twin of handleSendReceipt — same receipt text opened as an sms:
+  // deep link (openSMS normalizes 07xx → 2547xx).
+  const handleSendReceiptSms = (rental: RentalItem) => {
+    const phone = rental.customer?.phone || '';
+    if (!phone) {
+      toast.error('Customer has no phone number on file');
+      return;
+    }
+    try {
+      openSMS(phone, buildRentalReceiptText(rental));
+      toast.success('Rental receipt opened in SMS');
+    } catch (err) {
+      toast.error(handleError(err, 'Send rental receipt via SMS'));
+    }
+  };
+
+  // Task 35-b: branded thermal-style rental receipt (logo + QR + thank-you).
+  const handlePrintReceipt = async (rental: RentalItem) => {
+    try {
+      const daysRented = Math.ceil(
+        ((rental.actualReturnDate ? new Date(rental.actualReturnDate).getTime() : Date.now()) - new Date(rental.rentalStartDate).getTime()) / 86400000
+      );
+      const store = resolveDocumentStore(currentStoreId);
+      const logoSrc = getDocumentLogoSrc();
+      const receiptNo = rental.id.slice(-8).toUpperCase();
+      const qrDataUrl = await buildDocumentQrDataUrl(
+        buildDocumentQrPayload('RENTAL', receiptNo, {
+          total: formatKES(rental.totalRentalCharge),
+          date: formatDate(rental.createdAt),
+        }),
+      );
+      const generatedAt = new Date().toLocaleString('en-KE', { timeZone: 'Africa/Nairobi' });
+      const storeLinesHtml = [store.storeName, ...store.storeLines]
+        .map((line) => `<div class="store-line">${escapeHtml(line)}</div>`)
+        .join('');
+      const printContent = `
       <!DOCTYPE html>
       <html>
-      <head><title>Rental Receipt</title>
+      <head><title>Rental Receipt ${escapeHtml(receiptNo)}</title>
       <style>
-        body { font-family: 'Courier New', monospace; max-width: 320px; margin: 0 auto; padding: 20px; font-size: 12px; }
+        * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        @page { margin: 8mm; }
+        body { font-family: 'Courier New', monospace; max-width: 340px; margin: 0 auto; padding: 16px; font-size: 12px; color: #111827; }
         .center { text-align: center; }
         .bold { font-weight: bold; }
-        .line { border-top: 1px dashed #000; margin: 8px 0; }
-        .row { display: flex; justify-content: space-between; margin: 2px 0; }
-        .title { font-size: 16px; font-weight: bold; }
+        .line { border-top: 1px dashed #9ca3af; margin: 8px 0; }
+        .row { display: flex; justify-content: space-between; margin: 2px 0; gap: 8px; }
+        .title { font-size: 15px; font-weight: bold; color: #b45309; letter-spacing: 1px; }
+        .store-line { font-size: 10px; color: #6b7280; line-height: 1.5; }
+        .logo { max-width: 52px; max-height: 52px; margin-bottom: 4px; }
+        .qr { width: 90px; height: 90px; display: block; margin: 10px auto 2px; }
+        .qr-caption { font-size: 10px; color: #374151; font-weight: bold; }
+        .receipt-no { font-size: 10px; color: #6b7280; }
+        .thanks-big { font-weight: bold; font-size: 12.5px; }
+        .asante { font-style: italic; color: #b45309; margin-top: 2px; }
+        .policy { font-size: 9.5px; color: #9ca3af; margin-top: 6px; }
+        .footer { border-top: 1px dashed #9ca3af; margin-top: 10px; padding-top: 6px; font-size: 9.5px; color: #9ca3af; text-align: center; }
       </style>
       </head>
       <body>
         <div class="center">
+          ${logoSrc ? `<img class="logo" src="${escapeHtml(logoSrc)}" alt="MBUMAH HARDWARE logo" />` : ''}
           <div class="title">MBUMAH HARDWARE</div>
-          <div>Rental Receipt</div>
+          ${storeLinesHtml}
+          <div class="bold" style="margin-top:6px">RENTAL RECEIPT</div>
         </div>
         <div class="line"></div>
-        <div class="row"><span>Receipt #:</span><span>${rental.id.slice(-8).toUpperCase()}</span></div>
-        <div class="row"><span>Date:</span><span>${formatDate(rental.createdAt)}</span></div>
+        <div class="row"><span>Receipt #:</span><span>${escapeHtml(receiptNo)}</span></div>
+        <div class="row"><span>Date:</span><span>${escapeHtml(formatDate(rental.createdAt))}</span></div>
         <div class="line"></div>
         <div class="bold">Customer Details</div>
-        <div class="row"><span>Name:</span><span>${rental.customer?.name || 'N/A'}</span></div>
-        <div class="row"><span>Phone:</span><span>${rental.customer?.phone || 'N/A'}</span></div>
+        <div class="row"><span>Name:</span><span>${escapeHtml(rental.customer?.name || 'N/A')}</span></div>
+        <div class="row"><span>Phone:</span><span>${escapeHtml(rental.customer?.phone || 'N/A')}</span></div>
         <div class="line"></div>
         <div class="bold">Equipment Details</div>
-        <div class="row"><span>Item:</span><span>${rental.product?.name || 'N/A'}</span></div>
-        <div class="row"><span>SKU:</span><span>${rental.product?.sku || 'N/A'}</span></div>
+        <div class="row"><span>Item:</span><span>${escapeHtml(rental.product?.name || 'N/A')}</span></div>
+        <div class="row"><span>SKU:</span><span>${escapeHtml(rental.product?.sku || 'N/A')}</span></div>
         <div class="line"></div>
         <div class="bold">Rental Period</div>
-        <div class="row"><span>Start:</span><span>${formatDate(rental.rentalStartDate)}</span></div>
-        <div class="row"><span>Expected Return:</span><span>${formatDate(rental.expectedReturnDate)}</span></div>
-        ${rental.actualReturnDate ? `<div class="row"><span>Actual Return:</span><span>${formatDate(rental.actualReturnDate)}</span></div>` : ''}
+        <div class="row"><span>Start:</span><span>${escapeHtml(formatDate(rental.rentalStartDate))}</span></div>
+        <div class="row"><span>Expected Return:</span><span>${escapeHtml(formatDate(rental.expectedReturnDate))}</span></div>
+        ${rental.actualReturnDate ? `<div class="row"><span>Actual Return:</span><span>${escapeHtml(formatDate(rental.actualReturnDate))}</span></div>` : ''}
         <div class="row"><span>Duration:</span><span>${daysRented} day(s)</span></div>
         <div class="line"></div>
         <div class="bold">Charges</div>
-        <div class="row"><span>Rate/Day:</span><span>${formatKES(rental.ratePerDay)}</span></div>
-        <div class="row"><span>Rental Charge:</span><span>${formatKES(rental.totalRentalCharge)}</span></div>
-        ${rental.lateFeeAccumulated > 0 ? `<div class="row"><span>Late Fee:</span><span>${formatKES(rental.lateFeeAccumulated)}</span></div>` : ''}
-        ${rental.damageCharge > 0 ? `<div class="row"><span>Damage Charge:</span><span>${formatKES(rental.damageCharge)}</span></div>` : ''}
-        <div class="row"><span>Security Deposit:</span><span>${formatKES(rental.securityDeposit)}</span></div>
+        <div class="row"><span>Rate/Day:</span><span>${escapeHtml(formatKES(rental.ratePerDay))}</span></div>
+        <div class="row"><span>Rental Charge:</span><span>${escapeHtml(formatKES(rental.totalRentalCharge))}</span></div>
+        ${rental.lateFeeAccumulated > 0 ? `<div class="row"><span>Late Fee:</span><span>${escapeHtml(formatKES(rental.lateFeeAccumulated))}</span></div>` : ''}
+        ${rental.damageCharge > 0 ? `<div class="row"><span>Damage Charge:</span><span>${escapeHtml(formatKES(rental.damageCharge))}</span></div>` : ''}
+        <div class="row"><span>Security Deposit:</span><span>${escapeHtml(formatKES(rental.securityDeposit))}</span></div>
         <div class="line"></div>
-        <div class="row bold"><span>Status:</span><span>${rental.status}</span></div>
+        <div class="row bold"><span>Status:</span><span>${escapeHtml(rental.status)}</span></div>
         <div class="line"></div>
-        <div class="center" style="margin-top: 12px;">
-          <div>Thank you for doing business with us</div>
+        <div class="center">
+          <img class="qr" src="${escapeHtml(qrDataUrl)}" alt="Verification QR code" />
+          <div class="qr-caption">Scan to verify this rental</div>
+          <div class="receipt-no">${escapeHtml(receiptNo)}</div>
         </div>
+        <div class="center" style="margin-top: 12px;">
+          <div class="thanks-big">Thank you for your business!</div>
+          <div class="asante">Asante sana! 🇰🇪</div>
+          <div class="policy">Keep this receipt — it is required for equipment return &amp; deposit release.</div>
+        </div>
+        <div class="footer">Generated by MBUMAH HARDWARE POS &amp; ERP · ${escapeHtml(generatedAt)} (EAT)</div>
       </body>
       </html>
     `;
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
-    if (printWindow) {
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-      printWindow.focus();
-      printWindow.print();
+      const printed = printHtmlDocument(printContent, `Rental Receipt ${receiptNo}`, { width: 400, height: 640 });
+      if (!printed) {
+        toast.error('Pop-up blocked. Please allow pop-ups for this site to print.');
+      }
+    } catch (err) {
+      console.error('[RENTAL_RECEIPT_PRINT_ERROR]', err);
+      toast.error('Failed to build the rental receipt. Please try again.');
     }
   };
 
@@ -1255,7 +1323,7 @@ export default function RentalsTab() {
               <Skeleton className="h-64" />
             </div>
           ) : viewMode === 'cards' ? (
-            <RentalCardView rentals={rentals} onReturn={handleReturn} onEdit={handleEdit} onDelete={handleDelete} onSendReceipt={handleSendReceipt} onPrintReceipt={handlePrintReceipt} />
+            <RentalCardView rentals={rentals} onReturn={handleReturn} onEdit={handleEdit} onDelete={handleDelete} onSendReceipt={handleSendReceipt} onSendReceiptSms={handleSendReceiptSms} onPrintReceipt={handlePrintReceipt} />
           ) : (
             <Card className="backdrop-blur-sm bg-card/80 border-border/50">
               <CardContent className="p-0">
@@ -1350,6 +1418,9 @@ export default function RentalsTab() {
                                   )}
                                   <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/30" onClick={() => handleSendReceipt(rental)}>
                                     <Phone className="h-3 w-3" />
+                                  </Button>
+                                  <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30" onClick={() => handleSendReceiptSms(rental)} title="Send via SMS" aria-label="Send receipt via SMS">
+                                    <Smartphone className="h-3 w-3" />
                                   </Button>
                                   <Button variant="outline" size="sm" className="h-7 text-[10px] px-2" onClick={() => handlePrintReceipt(rental)}>
                                     <Printer className="h-3 w-3" />

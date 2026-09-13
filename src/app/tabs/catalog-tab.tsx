@@ -7,12 +7,12 @@ import {
   Package, Search, LayoutGrid, List, ShoppingCart,
   Plus, Minus, Tag, X, SlidersHorizontal,
   Pencil, Trash2, MessageCircle, AlertTriangle, MoreVertical,
-  Loader2, Copy,
+  Loader2, Copy, Smartphone,
 } from 'lucide-react';
 import { useCartStore, useAppStore } from '@/lib/stores';
 import {
   productsApi, categoriesApi, whatsappApi, formatKES,
-  openWhatsApp,
+  openWhatsApp, openSMS,
   type ProductListItem, type CategoryItem, type CreateProductPayload,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
@@ -455,6 +455,40 @@ export default function CatalogTab() {
         // surface the underlying fallback error in console only
         handleError(e2, 'WhatsApp fallback');
       }
+    }
+  };
+
+  // SMS twin of handleSendCatalogWhatsApp — the backend has no SMS catalog
+  // sender, so build the same locally-generated list client-side (capped to
+  // 10 items to keep the multi-part SMS reasonable) and open it via openSMS
+  // (normalizes 07xx → 2547xx).
+  const handleSendCatalogSms = () => {
+    const phone = waPhone.trim();
+    if (!phone) {
+      toast.error('Please enter an SMS phone number');
+      return;
+    }
+    try {
+      const items = safeFilteredProducts.slice(0, 10);
+      const lines = items.map(
+        (p, i) => `${i + 1}. ${p.name} — ${formatKES(p.pricePerUnit)}`,
+      );
+      const remaining = safeFilteredProducts.length - items.length;
+      const message = [
+        `MBUMAH HARDWARE Catalog — ${safeFilteredProducts.length} item(s) available:`,
+        '',
+        ...lines,
+        remaining > 0 ? `…and ${remaining} more — visit us or ask for the full list.` : '',
+        '',
+        'Reply to order. Thank you!',
+      ].filter(Boolean).join('\n');
+      openSMS(phone, message);
+      toast.success('Catalog opened in SMS');
+      setWaOpen(false);
+      setWaPhone('');
+    } catch (e2) {
+      const msg = handleError(e2, 'Send catalog via SMS');
+      toast.error(msg || 'Failed to send catalog');
     }
   };
 
@@ -1259,12 +1293,12 @@ export default function CatalogTab() {
         </div>
       </ResponsiveDialog>
 
-      {/* ---- WhatsApp catalog send ---- */}
+      {/* ---- WhatsApp / SMS catalog send ---- */}
       <ResponsiveDialog
         open={waOpen}
         onOpenChange={setWaOpen}
-        title="Send Catalog via WhatsApp"
-        description="Generate a wa.me link with your current product list (name + price)"
+        title="Send Catalog via WhatsApp / SMS"
+        description="Generate a wa.me link or an sms: draft with your current product list (name + price)"
         size="sm"
         footer={
           <>
@@ -1276,12 +1310,21 @@ export default function CatalogTab() {
               <MessageCircle className="h-4 w-4 mr-2" />
               Send
             </Button>
+            <Button
+              onClick={handleSendCatalogSms}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              title="Send catalog via SMS"
+              aria-label="Send catalog via SMS"
+            >
+              <Smartphone className="h-4 w-4 mr-2" />
+              Send via SMS
+            </Button>
           </>
         }
       >
         <div className="space-y-3">
           <div className="space-y-2">
-            <Label>WhatsApp Phone Number</Label>
+            <Label>Phone Number</Label>
             <Input
               value={waPhone}
               onChange={(e) => setWaPhone(e.target.value)}
@@ -1289,8 +1332,8 @@ export default function CatalogTab() {
               autoFocus
             />
             <p className="text-xs text-muted-foreground">
-              We&apos;ll normalize the number (e.g. 07xx → 2547xx) and open WhatsApp with a pre-filled
-              message containing up to 40 of your current products.
+              We&apos;ll normalize the number (e.g. 07xx → 2547xx) and open WhatsApp or the SMS app
+              with a pre-filled message containing your current products.
             </p>
           </div>
           <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">

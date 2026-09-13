@@ -8,13 +8,13 @@ import {
   ArrowRightLeft, XCircle, DollarSign, Clock,
   TrendingUp, AlertCircle, Receipt,
   FileCheck, FileMinus, FilePlus, ChevronDown,
-  Trash2, ArrowUpDown, Send, CheckCircle2, Phone,
+  Trash2, ArrowUpDown, Send, CheckCircle2, Phone, MessageSquare,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
   invoicesApi, productsApi, customersApi, whatsappApi,
-  formatKES, formatDate, formatDateTime,
+  formatKES, formatDate, formatDateTime, openSMS,
   type InvoiceItem,
   type InvoiceItemDetail,
   type ProductListItem,
@@ -22,6 +22,15 @@ import {
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
 import { formatQtyWithUnit } from '@/lib/utils/financialMath';
+import {
+  buildBrandedDocumentHtml,
+  buildDocumentQrDataUrl,
+  buildDocumentQrPayload,
+  escapeHtml,
+  getDocumentLogoSrc,
+  printHtmlDocument,
+  resolveDocumentStore,
+} from '@/lib/document-print';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 import { Button } from '@/components/ui/button';
@@ -125,55 +134,22 @@ function computeLineTax(item: LineItemDraft): number {
   return (base - discount) * (item.taxRate / 100);
 }
 
-// ─── Reusable print helper ───────────────────────────────────────────────────
-// Opens a new window with print-friendly HTML. Falls back to window.print()
-// if popups are blocked.
-
-function printDocument(html: string, title = 'Print') {
-  const printWindow = window.open('', '_blank', 'width=820,height=920');
-  if (!printWindow) {
-    toast.error('Pop-up blocked. Showing inline print dialog instead.');
-    window.print();
-    return;
-  }
-  printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
-    <style>
-      @page { margin: 14mm; }
-      body { font-family: 'Segoe UI', Arial, Helvetica, sans-serif; color: #1f2937; margin: 0; padding: 22px; }
-      h1, h2, h3, h4 { margin: 0; }
-      .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #047857; padding-bottom: 12px; margin-bottom: 16px; }
-      .head h1 { color: #047857; font-size: 22px; }
-      .muted { color: #6b7280; font-size: 12px; }
-      table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-      th { background: #f3f4f6; text-align: left; padding: 8px 10px; border: 1px solid #e5e7eb; font-weight: 600; font-size: 12px; }
-      td { padding: 8px 10px; border: 1px solid #e5e7eb; font-size: 12px; }
-      .text-right { text-align: right; }
-      .text-center { text-align: center; }
-      .totals { display: flex; justify-content: flex-end; margin-top: 12px; }
-      .totals table { width: 280px; }
-      .totals td { border: none; padding: 4px 8px; }
-      .totals .grand { border-top: 2px solid #1f2937; font-weight: 700; font-size: 14px; }
-      .sign { margin-top: 48px; display: flex; justify-content: space-between; }
-      .sign div { width: 45%; }
-      .sign .line { border-top: 1px solid #9ca3af; margin-top: 28px; padding-top: 4px; font-size: 11px; color: #6b7280; }
-      .badge { display: inline-block; padding: 3px 10px; border-radius: 9999px; background: #fef3c7; color: #92400e; font-size: 11px; font-weight: 700; }
-      .footer { margin-top: 28px; text-align: center; font-size: 11px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 10px; }
-    </style></head><body>${html}</body></html>`);
-  printWindow.document.close();
-  printWindow.focus();
-  setTimeout(() => printWindow.print(), 250);
-}
-
-// Escape a string for safe inclusion in raw HTML (prevents breaking the print document).
-function escapeHtml(str: unknown): string {
-  if (str === null || str === undefined) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+// ─── Branded print document mapping (Task 35-b) ────────────────────────────
+// Per-document accent colors + print labels for every invoiceType.
+const PRINT_DOC_LABELS: Record<string, string> = {
+  INVOICE: 'INVOICE',
+  QUOTATION: 'QUOTATION',
+  PROFORMA: 'PROFORMA INVOICE',
+  CREDIT_NOTE: 'CREDIT NOTE',
+  DEBIT_NOTE: 'DEBIT NOTE',
+};
+const PRINT_DOC_ACCENTS: Record<string, string> = {
+  INVOICE: '#ea580c',
+  QUOTATION: '#0d9488',
+  PROFORMA: '#7c3aed',
+  CREDIT_NOTE: '#dc2626',
+  DEBIT_NOTE: '#ea580c',
+};
 
 let lineItemCounter = 0;
 function newLineItemKey(): string {
@@ -541,6 +517,7 @@ export default function InvoicesTab() {
     updateMutation.mutate({ id: invoice.id, data: { status } });
   };
 
+  // Task 35-b: branded print document (accent band + logo + QR + thank-you).
   const handlePrint = useCallback(async (invoice: InvoiceItem) => {
     try {
       // Fetch full detail (with line items) if not already loaded.
@@ -552,75 +529,88 @@ export default function InvoicesTab() {
       const items = detail.items || [];
       const rows = items.map((item, i) => `
         <tr>
-          <td>${i + 1}</td>
+          <td class="text-center">${i + 1}</td>
           <td>
             <div><strong>${escapeHtml(item.productName)}</strong></div>
             ${item.description ? `<div class="muted">${escapeHtml(item.description)}</div>` : ''}
           </td>
           <td class="text-center">${escapeHtml(formatQtyWithUnit(item.quantity, item.unitType))}</td>
-          <td class="text-right">${formatKES(item.pricePerUnit)}</td>
-          <td class="text-center">${item.discountPercent}%</td>
-          <td class="text-center">${item.taxRate}%</td>
-          <td class="text-right">${formatKES(item.lineTotal)}</td>
+          <td class="text-right">${escapeHtml(formatKES(item.pricePerUnit))}</td>
+          <td class="text-center">${escapeHtml(String(item.discountPercent))}%</td>
+          <td class="text-center">${escapeHtml(String(item.taxRate))}%</td>
+          <td class="text-right">${escapeHtml(formatKES(item.lineTotal))}</td>
         </tr>
       `).join('');
-      const html = `
-        <div class="head">
-          <div>
-            <h1>Mbumah Hardware</h1>
-            <p class="muted">Juja, Kiambu County · +254 700 000 000</p>
-          </div>
-          <div style="text-align:right">
-            <span class="badge">${escapeHtml(detail.invoiceType)}</span>
-            <p class="muted" style="margin-top:6px"><strong>${escapeHtml(detail.invoiceNumber)}</strong></p>
-            <p class="muted">Issued: ${formatDate(detail.issueDate)}</p>
-            ${detail.dueDate ? `<p class="muted">Due: ${formatDate(detail.dueDate)}</p>` : ''}
-            <p class="muted">Status: ${escapeHtml(detail.status)}</p>
-          </div>
-        </div>
-        <h3 style="font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Bill To</h3>
-        <div style="font-size:13px;margin-bottom:12px">
-          <div><strong>${escapeHtml(detail.customerName)}</strong></div>
+      const store = resolveDocumentStore(currentStoreId);
+      const docLabel = PRINT_DOC_LABELS[detail.invoiceType] || detail.invoiceType.toUpperCase();
+      const qrDataUrl = await buildDocumentQrDataUrl(
+        buildDocumentQrPayload(detail.invoiceType, detail.invoiceNumber, {
+          total: formatKES(detail.totalAmount),
+          date: formatDate(detail.issueDate),
+        }),
+      );
+      const html = buildBrandedDocumentHtml({
+        docTypeLabel: docLabel,
+        accentColor: PRINT_DOC_ACCENTS[detail.invoiceType] || '#ea580c',
+        docNumber: detail.invoiceNumber,
+        logoSrc: getDocumentLogoSrc(),
+        storeName: store.storeName,
+        storeLines: store.storeLines,
+        taxPin: store.taxPin,
+        metaRows: [
+          { label: 'Issued', value: formatDate(detail.issueDate) },
+          ...(detail.dueDate ? [{ label: 'Due', value: formatDate(detail.dueDate) }] : []),
+          { label: 'Status', value: detail.status },
+        ],
+        billToHtml: `
+          <div class="who">${escapeHtml(detail.customerName)}</div>
           ${detail.customerPhone ? `<div class="muted">${escapeHtml(detail.customerPhone)}</div>` : ''}
           ${detail.customerEmail ? `<div class="muted">${escapeHtml(detail.customerEmail)}</div>` : ''}
           ${detail.customerAddress ? `<div class="muted">${escapeHtml(detail.customerAddress)}</div>` : ''}
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Item</th>
-              <th class="text-center">Qty</th>
-              <th class="text-right">Unit Price</th>
-              <th class="text-center">Disc %</th>
-              <th class="text-center">Tax %</th>
-              <th class="text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody>${rows || '<tr><td colspan="7" class="text-center muted">No line items</td></tr>'}</tbody>
-        </table>
-        <div class="totals">
-          <table>
-            <tr><td class="muted">Subtotal</td><td class="text-right">${formatKES(detail.subtotal)}</td></tr>
-            ${detail.discountAmount > 0 ? `<tr><td class="muted">Discount</td><td class="text-right">-${formatKES(detail.discountAmount)}</td></tr>` : ''}
-            <tr><td class="muted">Tax</td><td class="text-right">${formatKES(detail.taxAmount)}</td></tr>
-            <tr class="grand"><td>Total</td><td class="text-right">${formatKES(detail.totalAmount)}</td></tr>
+        `,
+        itemsTableHtml: `
+          <table class="items">
+            <thead>
+              <tr>
+                <th class="text-center">#</th>
+                <th>Item</th>
+                <th class="text-center">Qty</th>
+                <th class="text-right">Unit Price</th>
+                <th class="text-center">Disc %</th>
+                <th class="text-center">Tax %</th>
+                <th class="text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody>${rows || '<tr><td colspan="7" class="text-center muted">No line items</td></tr>'}</tbody>
           </table>
-        </div>
-        ${detail.notes ? `<div style="margin-top:16px"><strong>Notes:</strong> <span style="font-size:12px">${escapeHtml(detail.notes)}</span></div>` : ''}
-        ${detail.terms ? `<div style="margin-top:8px"><strong>Terms:</strong> <span style="font-size:12px">${escapeHtml(detail.terms)}</span></div>` : ''}
-        <div class="sign">
-          <div><div class="line">Authorised Signature</div></div>
-          <div><div class="line">Customer Acceptance</div></div>
-        </div>
-        <div class="footer">This document was generated by Mbumah Hardware POS · ${formatDateTime(new Date())}</div>
-      `;
-      printDocument(html, `${detail.invoiceType}-${detail.invoiceNumber}`);
+        `,
+        totalsHtml: `
+          <div class="totals">
+            <table>
+              <tr><td class="muted">Subtotal</td><td class="text-right">${escapeHtml(formatKES(detail.subtotal))}</td></tr>
+              ${detail.discountAmount > 0 ? `<tr><td class="muted">Discount</td><td class="text-right">-${escapeHtml(formatKES(detail.discountAmount))}</td></tr>` : ''}
+              <tr><td class="muted">Tax</td><td class="text-right">${escapeHtml(formatKES(detail.taxAmount))}</td></tr>
+              <tr class="grand"><td>Total</td><td class="text-right">${escapeHtml(formatKES(detail.totalAmount))}</td></tr>
+            </table>
+          </div>
+        `,
+        extraSectionsHtml: `
+          ${detail.notes ? `<div class="note-block"><strong>Notes:</strong> ${escapeHtml(detail.notes)}</div>` : ''}
+          ${detail.terms ? `<div class="note-block"><strong>Terms:</strong> ${escapeHtml(detail.terms)}</div>` : ''}
+        `,
+        signatureLabels: ['Authorised Signature', 'Customer Acceptance'],
+        qrDataUrl,
+        qrCaption: 'Scan to verify this document',
+      });
+      const printed = printHtmlDocument(html, `${docLabel}-${detail.invoiceNumber}`);
+      if (!printed) {
+        toast.error('Pop-up blocked. Please allow pop-ups for this site to print.');
+      }
     } catch (err) {
       const msg = handleError(err, 'Print invoice');
       toast.error(msg);
     }
-  }, []);
+  }, [currentStoreId]);
 
   const handleSendWhatsApp = async (invoice: InvoiceItem) => {
     try {
@@ -639,6 +629,27 @@ export default function InvoicesTab() {
       }
     } catch (err) {
       const msg = handleError(err, 'Send invoice via WhatsApp');
+      toast.error(msg);
+    }
+  };
+
+  // SMS twin of handleSendWhatsApp — compact (~<=320 chars) sms: deep link
+  // built client-side (no server round-trip); openSMS normalizes 07xx → 2547xx.
+  const handleSendSms = async (invoice: InvoiceItem) => {
+    try {
+      const phone = prompt('Enter SMS phone number:', invoice.customerPhone || '') || '';
+      if (!phone) return;
+      const text = [
+        `MBUMAH HARDWARE ${invoice.invoiceType} ${invoice.invoiceNumber}`,
+        `Total: ${formatKES(invoice.totalAmount)}`,
+        `Issued: ${formatDate(invoice.issueDate)}`,
+        `Status: ${invoice.status}`,
+        'Thank you for your business! Asante sana!',
+      ].join('\n');
+      openSMS(phone, text);
+      toast.success(`${invoice.invoiceType} ${invoice.invoiceNumber} opened in SMS`);
+    } catch (err) {
+      const msg = handleError(err, 'Send invoice via SMS');
       toast.error(msg);
     }
   };
@@ -919,6 +930,17 @@ export default function InvoicesTab() {
                             title="Send via WhatsApp"
                           >
                             <Phone className="h-4 w-4" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                            onClick={() => handleSendSms(inv)}
+                            title="Send via SMS"
+                            aria-label="Send via SMS"
+                          >
+                            <MessageSquare className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -1499,6 +1521,15 @@ export default function InvoicesTab() {
                     title="Send via WhatsApp"
                   >
                     <Phone className="h-4 w-4" /> WhatsApp
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => handleSendSms(invoiceDetail)}
+                    title="Send via SMS"
+                    aria-label="Send via SMS"
+                  >
+                    <MessageSquare className="h-4 w-4" /> SMS
                   </Button>
                 </div>
 
