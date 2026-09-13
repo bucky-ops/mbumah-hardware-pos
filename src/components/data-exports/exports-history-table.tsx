@@ -69,6 +69,17 @@ interface ExportsHistoryTableProps {
 
 type FilterKey = 'all' | 'completed' | 'failed' | 'processing';
 
+/**
+ * A COMPLETED export whose expiresAt (created + 7 days) has passed is no
+ * longer downloadable — the download endpoint answers 410 Gone for these.
+ * Surfacing it here prevents a pointless click and a confusing error toast.
+ */
+function isExportExpired(item: DataExportItem): boolean {
+  if (!item.expiresAt) return false;
+  const t = new Date(item.expiresAt).getTime();
+  return Number.isFinite(t) && t < Date.now();
+}
+
 const FILTER_CHIPS: Array<{ key: FilterKey; label: string; color: string }> = [
   { key: 'all', label: 'All', color: 'emerald' },
   { key: 'completed', label: 'Completed', color: 'green' },
@@ -341,25 +352,40 @@ export function ExportsHistoryTable({
                     {item.fileSizeBytes > 0 ? formatBytes(item.fileSizeBytes) : '—'}
                   </TableCell>
                   <TableCell>
-                    {item.status === 'FAILED' && item.errorMessage ? (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex cursor-help">
-                              <StatusBadge status={item.status} />
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-sm">
-                            <span className="flex items-start gap-1.5 text-xs">
-                              <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                              <span>{item.errorMessage}</span>
-                            </span>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    ) : (
-                      <StatusBadge status={item.status} />
-                    )}
+                    {(() => {
+                      const expired = isExportExpired(item);
+                      const statusNode = (
+                        <span className="inline-flex items-center gap-1.5">
+                          <StatusBadge status={item.status} />
+                          {expired && (
+                            <Badge variant="outline" className="gap-1 border-amber-300 bg-amber-50 px-1.5 py-0 text-[10px] font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
+                              <Clock className="h-3 w-3" />
+                              Expired
+                            </Badge>
+                          )}
+                        </span>
+                      );
+                      if (item.status === 'FAILED' && item.errorMessage) {
+                        return (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex cursor-help">
+                                  {statusNode}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-sm">
+                                <span className="flex items-start gap-1.5 text-xs">
+                                  <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                                  <span>{item.errorMessage}</span>
+                                </span>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        );
+                      }
+                      return statusNode;
+                    })()}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {formatDateTime(item.createdAt)}
@@ -373,9 +399,14 @@ export function ExportsHistoryTable({
                         onClick={() => downloadMutation.mutate(item)}
                         disabled={
                           item.status !== 'COMPLETED' ||
+                          isExportExpired(item) ||
                           downloadMutation.isPending
                         }
-                        title="Download"
+                        title={
+                          isExportExpired(item)
+                            ? 'Expired — files are kept for 7 days. Generate a new export.'
+                            : 'Download'
+                        }
                       >
                         {downloadMutation.isPending &&
                         downloadMutation.variables?.id === item.id ? (
