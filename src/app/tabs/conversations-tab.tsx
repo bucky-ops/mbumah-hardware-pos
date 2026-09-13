@@ -27,7 +27,7 @@ import {
 import { useAppStore, useAuthStore } from '@/lib/stores';
 import {
   conversationsApi,
-  usersApi,
+  type ChatParticipantItem,
   type ConversationItem,
   type ConversationMessageItem,
 } from '@/lib/api';
@@ -114,17 +114,62 @@ function ConversationList({
   onSelect: (id: string) => void;
   onNewConversation: () => void;
 }) {
+  const authUser = useAuthStore((s) => s.user);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
 
+  // OWNER-VISIBILITY TOGGLE (v2.5.6): owners/managers/admins can browse ALL
+  // store threads ("store" scope) and join the ones they care about. Staff
+  // (cashiers, accountants) always see "mine" — they keep the original
+  // behaviour of only seeing threads they participate in.
+  const canBrowseStore =
+    authUser?.role === 'SUPER_ADMIN' ||
+    authUser?.role === 'STORE_OWNER' ||
+    authUser?.role === 'BRANCH_MANAGER';
+  const [scope, setScope] = useState<'mine' | 'store'>('mine');
+
   const { data, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ['conversations', storeId, typeFilter],
-    queryFn: () => conversationsApi.list(storeId, typeFilter !== 'all' ? typeFilter : undefined),
+    queryKey: ['conversations', storeId, typeFilter, scope],
+    queryFn: () =>
+      conversationsApi.list(
+        storeId,
+        typeFilter !== 'all' ? typeFilter : undefined,
+        50,
+        scope,
+      ),
     enabled: !!storeId,
     refetchInterval: 10_000, // Poll for new conversations every 10s
   });
 
   const conversations = Array.isArray(data?.data) ? data.data : [];
+
+  // SELF-JOIN (v2.5.6): clicking a store-scoped thread the caller has not
+  // joined first joins it (server allows same-store owners/managers to add
+  // only themselves), then opens it.
+  const joinMutation = useMutation({
+    mutationFn: (conversationId: string) => {
+      const selfId = authUser?.id;
+      if (!selfId) return Promise.reject(new Error('You must be signed in to join a chat.'));
+      return conversationsApi.update(conversationId, {
+        addParticipantIds: [selfId],
+      });
+    },
+    onSuccess: (_res, conversationId) => {
+      toast.success('Joined conversation.');
+      queryClient.invalidateQueries({ queryKey: ['conversations', storeId] });
+      onSelect(conversationId);
+    },
+    onError: (err) => handleError(err),
+  });
+
+  const handleSelect = (conv: ConversationItem) => {
+    if (conv.isParticipant === false) {
+      joinMutation.mutate(conv.id);
+      return;
+    }
+    onSelect(conv.id);
+  };
 
   const filtered = useMemo(() => {
     if (!search) return conversations;
@@ -175,6 +220,30 @@ function ConversationList({
             <SelectItem value="CUSTOMER_SUPPORT">Customer support</SelectItem>
           </SelectContent>
         </Select>
+        {canBrowseStore && (
+          <div
+            className="flex items-center gap-1 rounded-md border p-0.5"
+            role="group"
+            aria-label="Conversation scope"
+          >
+            <Button
+              variant={scope === 'mine' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-6 flex-1 text-[11px] px-2"
+              onClick={() => setScope('mine')}
+            >
+              My chats
+            </Button>
+            <Button
+              variant={scope === 'store' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-6 flex-1 text-[11px] px-2"
+              onClick={() => setScope('store')}
+            >
+              All store
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* List */}
@@ -205,7 +274,8 @@ function ConversationList({
                 key={conv.id}
                 conversation={conv}
                 selected={conv.id === selectedId}
-                onClick={() => onSelect(conv.id)}
+                joining={joinMutation.isPending && joinMutation.variables === conv.id}
+                onClick={() => handleSelect(conv)}
               />
             ))}
           </div>
@@ -218,10 +288,12 @@ function ConversationList({
 function ConversationListItem({
   conversation,
   selected,
+  joining,
   onClick,
 }: {
   conversation: ConversationItem;
   selected: boolean;
+  joining?: boolean;
   onClick: () => void;
 }) {
   const title =
@@ -230,6 +302,9 @@ function ConversationListItem({
     'Untitled conversation';
   const preview = conversation.lastMessagePreview || 'No messages yet';
   const lastAt = conversation.lastMessageAt;
+  // OWNER-VISIBILITY (v2.5.6): in "All store" scope, threads the caller has
+  // not joined show a Join chip instead of the message count.
+  const notJoined = conversation.isParticipant === false;
 
   return (
     <button
@@ -263,16 +338,34 @@ function ConversationListItem({
             )}
           </div>
           <p className="text-xs text-muted-foreground truncate">{preview}</p>
-          {conversation.messageCount != null && conversation.messageCount > 0 && (
+          {notJoined ? (
             <div className="flex items-center gap-1.5">
-              <Badge variant="outline" className="text-[10px] h-4 px-1.5">
-                <Hash className="h-2.5 w-2.5 mr-0.5" />
-                {conversation.messageCount}
+              <Badge className="text-[10px] h-4 px-1.5 bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/15">
+                {joining ? (
+                  <>
+                    <Loader2 className="h-2.5 w-2.5 mr-0.5 animate-spin" />
+                    Joining…
+                  </>
+                ) : (
+                  'Tap to join'
+                )}
               </Badge>
               <span className="text-[10px] text-muted-foreground">
                 {conversation.participants?.length || 0} participants
               </span>
             </div>
+          ) : (
+            conversation.messageCount != null && conversation.messageCount > 0 && (
+              <div className="flex items-center gap-1.5">
+                <Badge variant="outline" className="text-[10px] h-4 px-1.5">
+                  <Hash className="h-2.5 w-2.5 mr-0.5" />
+                  {conversation.messageCount}
+                </Badge>
+                <span className="text-[10px] text-muted-foreground">
+                  {conversation.participants?.length || 0} participants
+                </span>
+              </div>
+            )
           )}
         </div>
       </div>
@@ -589,16 +682,21 @@ function ConversationSettingsDialog({
   const [title, setTitle] = useState(conversation.title || '');
   const [type, setType] = useState(conversation.type);
 
-  // Load store users for the "add participant" selector.
+  // CHAT PRESENCE FIX (v2.5.6): load active teammates for the "add
+  // participant" selector via the dedicated chat endpoint. The old
+  // usersApi.list() call was admin-only (403 for managers/cashiers) and was
+  // also called with the wrong argument shape, which left this selector
+  // empty — "No other active users in this store." — even when teammates
+  // were active. listParticipants() works for every staff role and returns
+  // active users of the store only (caller excluded).
   const { data: usersData } = useQuery({
-    queryKey: ['store-users', storeId],
-    queryFn: () => usersApi.list(storeId),
+    queryKey: ['chat-participants', storeId],
+    queryFn: () => conversationsApi.listParticipants(storeId),
     enabled: open && !!storeId,
   });
   const storeUsers = Array.isArray(usersData?.data) ? usersData.data : [];
   const eligibleUsers = storeUsers.filter(
-    (u: { id: string; isActive: boolean }) =>
-      u.isActive && !conversation.participantIds.includes(u.id),
+    (u: ChatParticipantItem) => !conversation.participantIds.includes(u.id),
   );
 
   const [addUserId, setAddUserId] = useState('');
@@ -712,25 +810,23 @@ function ConversationSettingsDialog({
           </div>
 
           {/* Add participant */}
-          {eligibleUsers.length > 0 && (
-            <div className="flex gap-2">
-              <Select value={addUserId} onValueChange={setAddUserId}>
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="Add a participant..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {eligibleUsers.map((u: { id: string; name: string; role: string }) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.name} ({u.role})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button onClick={handleAddParticipant} disabled={!addUserId || updateMutation.isPending}>
-                Add
-              </Button>
-            </div>
-          )}
+          <div className="flex gap-2">
+            <Select value={addUserId} onValueChange={setAddUserId}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder={eligibleUsers.length > 0 ? 'Add a participant...' : 'All active teammates are already in this chat'} />
+              </SelectTrigger>
+              <SelectContent>
+                {eligibleUsers.map((u: ChatParticipantItem) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.name} ({u.role})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button onClick={handleAddParticipant} disabled={!addUserId || eligibleUsers.length === 0 || updateMutation.isPending}>
+              Add
+            </Button>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
@@ -762,12 +858,16 @@ function NewConversationDialog({
   const [type, setType] = useState<'INTERNAL' | 'CUSTOMER_SUPPORT'>('INTERNAL');
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
 
+  // CHAT PRESENCE FIX (v2.5.6): active teammates via the chat participants
+  // endpoint (any staff role, own store, active only, caller excluded).
+  // Previously usersApi.list(storeId) — an admin-only route called with the
+  // wrong signature — so most staff saw an empty picker.
   const { data: usersData, isLoading } = useQuery({
-    queryKey: ['store-users', storeId],
-    queryFn: () => usersApi.list(storeId),
+    queryKey: ['chat-participants', storeId],
+    queryFn: () => conversationsApi.listParticipants(storeId),
     enabled: open && !!storeId,
   });
-  const storeUsers = (Array.isArray(usersData?.data) ? usersData.data : []).filter((u: { isActive: boolean }) => u.isActive);
+  const storeUsers = Array.isArray(usersData?.data) ? usersData.data : [];
 
   // State defaults are already correct. The parent remounts this component
   // (via `key`) whenever the dialog opens, so state is always fresh — no
@@ -840,11 +940,19 @@ function NewConversationDialog({
                 ))}
               </div>
             ) : storeUsers.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No other active users in this store.</p>
+              <div className="rounded-md border border-dashed p-3 space-y-1">
+                <p className="text-sm text-muted-foreground">
+                  No other active teammates found in this store.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Ask your manager to add staff in Admin → Users, or check that
+                  your teammates have logged in at least once.
+                </p>
+              </div>
             ) : (
               <ScrollArea className="max-h-48 rounded-md border">
                 <div className="divide-y">
-                  {storeUsers.map((u: { id: string; name: string; email: string; role: string }) => (
+                  {storeUsers.map((u: ChatParticipantItem) => (
                     <label
                       key={u.id}
                       className="flex items-center gap-3 p-2.5 hover:bg-muted/50 cursor-pointer"
@@ -862,7 +970,10 @@ function NewConversationDialog({
                       </Avatar>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{u.name}</p>
-                        <p className="text-xs text-muted-foreground truncate">{u.email} • {u.role}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {u.email} • {u.role}
+                          {u.lastLoginAt ? ` • last active ${formatFullTime(u.lastLoginAt)}` : ''}
+                        </p>
                       </div>
                     </label>
                   ))}

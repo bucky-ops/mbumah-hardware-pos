@@ -151,6 +151,22 @@ export const RETENTION_POLICIES: RetentionPolicy[] = [
     modelName: 'session',
     dateField: 'expiresAt',
   },
+  {
+    // EXPORT-CLEANUP (v2.5.6): a DataExport row already carries expiresAt =
+    // createdAt + 7 business days (download is refused after that). This
+    // policy deletes the whole row 7 days AFTER it expired, so users still
+    // see the amber "Expired" badge for a week, then the stale row (and its
+    // bulk payload copy) is purged automatically by the nightly cron.
+    category: 'data_exports',
+    retentionDays: 7,
+    graceDays: 0,
+    description:
+      'Data exports expire after 7 days (download refused); expired rows kept a further 7 days for the Expired badge, then purged with their payload content.',
+    isoReference: 'ISO 27001 A.8.3.2',
+    isConfigurable: true,
+    modelName: 'dataExport',
+    dateField: 'expiresAt',
+  },
 ];
 
 // ── Data Retention Service ───────────────────────────────────────────────────
@@ -296,6 +312,37 @@ export const dataRetention = {
         return result.count;
       }
 
+      case 'data_exports': {
+        // EXPORT-CLEANUP (v2.5.6): exports carry a `content` inline payload
+        // copy (up to 10 MB) plus a best-effort file on disk. Read the
+        // doomed rows first so we can unlink their files, then delete the
+        // rows. File removal is best-effort — on Vercel the tmpdir files
+        // are already ephemeral per Lambda instance.
+        const doomed = await db.dataExport.findMany({
+          where: { expiresAt: { lte: cutoff } },
+          select: { id: true, filePath: true },
+          take: 500,
+        });
+        if (doomed.length > 0) {
+          const { unlink } = await import('node:fs/promises');
+          await Promise.all(
+            doomed.map(async (row) => {
+              if (!row.filePath) return;
+              try {
+                await unlink(row.filePath);
+              } catch {
+                // file already gone (ephemeral tmpdir) — fine
+              }
+            }),
+          );
+          const result = await db.dataExport.deleteMany({
+            where: { id: { in: doomed.map((r) => r.id) } },
+          });
+          return result.count;
+        }
+        return 0;
+      }
+
       default:
         return 0;
     }
@@ -346,6 +393,11 @@ export const dataRetention = {
             break;
           case 'sessions':
             estimates[policy.category] = await db.session.count({
+              where: { expiresAt: { lte: cutoff } },
+            });
+            break;
+          case 'data_exports':
+            estimates[policy.category] = await db.dataExport.count({
               where: { expiresAt: { lte: cutoff } },
             });
             break;

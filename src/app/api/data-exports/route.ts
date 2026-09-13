@@ -29,6 +29,7 @@ import {
   type ExportFormat,
 } from '@/lib/data-export-utils';
 import { resolveExportsDir } from '@/lib/export-paths';
+import { dataRetention } from '@/lib/data-retention';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,6 +68,19 @@ async function listExportsHandler(...args: unknown[]): Promise<Response> {
       { success: false, error: 'storeId is required.' },
       { status: 400 },
     );
+  }
+
+  // EXPORT-CLEANUP (v2.5.6): lazily purge rows that expired more than 7
+  // days ago (retention policy `data_exports`) even if the nightly cron
+  // hasn't run yet, so history lists stay lean. Failure never blocks the
+  // listing. Runs once per request, scoped server-wide (not per store).
+  const exportRetention = dataRetention.getPolicy('data_exports');
+  if (exportRetention) {
+    try {
+      await dataRetention.purgeCategory(exportRetention);
+    } catch {
+      // cleanup is best-effort — listing proceeds regardless
+    }
   }
 
   const status = searchParams.get('status') || '';

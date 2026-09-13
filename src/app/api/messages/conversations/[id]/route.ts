@@ -16,6 +16,14 @@ export const dynamic = 'force-dynamic';
 const VALID_TYPES = ['INTERNAL', 'CUSTOMER_SUPPORT'];
 
 /**
+ * Privileged roles that may JOIN any thread in their own store (v2.5.6
+ * OWNER-VISIBILITY): the owner/manager browses store threads via the scope
+ * toggle and joins the ones they want. They still cannot view, post or edit
+ * threads they have NOT joined — joining is the explicit gate.
+ */
+const CAN_JOIN_STORE_THREADS = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'];
+
+/**
  * Helper — load a conversation + verify the caller is a participant
  * (or SUPER_ADMIN). Returns the conversation row or a 403/404 Response.
  */
@@ -121,10 +129,6 @@ async function patchConversationHandler(
   const context = args[0] as { params: Promise<{ id: string }> };
   const { id: conversationId } = await context.params;
 
-  const loaded = await loadConversationForCaller(conversationId, session);
-  if (!loaded.ok) return loaded.response;
-  const existing = loaded.conversation;
-
   const body = await request.json().catch(() => null);
   if (!body) {
     return Response.json(
@@ -139,6 +143,35 @@ async function patchConversationHandler(
     addParticipantIds?: string[];
     removeParticipantIds?: string[];
   };
+
+  const loaded = await loadConversationForCaller(conversationId, session);
+
+  // SELF-JOIN BYPASS (v2.5.6 OWNER-VISIBILITY): a store owner / branch
+  // manager who is not yet a participant may add ONLY themselves to a
+  // thread in their own store. Everything else stays participant-gated.
+  let existing: Awaited<ReturnType<typeof db.conversation.findUnique>> = null;
+  if (loaded.ok) {
+    existing = loaded.conversation;
+  } else {
+    const isPureSelfJoin =
+      Array.isArray(addParticipantIds) &&
+      addParticipantIds.length === 1 &&
+      addParticipantIds[0] === session.userId &&
+      !removeParticipantIds?.length &&
+      typeof title !== 'string' &&
+      !type;
+    const sameStorePrivileged =
+      CAN_JOIN_STORE_THREADS.includes(session.role) &&
+      loaded.response.status === 403;
+    if (isPureSelfJoin && sameStorePrivileged) {
+      const conv = await db.conversation.findUnique({ where: { id: conversationId } });
+      if (conv && (session.role === 'SUPER_ADMIN' || conv.storeId === session.storeId)) {
+        existing = conv;
+      }
+    }
+  }
+
+  if (!existing) return loaded.response;
 
   // Resolve current participant IDs.
   let currentIds: string[] = [];
