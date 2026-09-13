@@ -108,8 +108,15 @@ async function getProductsHandler(
     success: true,
     // DECIMAL-STRING AUDIT FIX (v2.5.0): Decimal money fields → numbers at
     // the API boundary (string totals corrupted client math historically).
+    // v2.5.8: quantityInStock/reorderLevel are Decimal(65,30) too — they were
+    // still serialized as strings, so client comparisons like
+    // `p.quantityInStock <= p.reorderLevel` compared LEXICOGRAPHICALLY
+    // ("9" <= "10" → false, "10" <= "9" → true) and produced phantom
+    // low-stock states across inventory, POS and dashboard consumers.
     data: products.map((p) => ({
       ...p,
+      quantityInStock: Number(p.quantityInStock),
+      reorderLevel: Number(p.reorderLevel),
       pricePerUnit: Number(p.pricePerUnit),
       costPrice: Number(p.costPrice),
       taxRate: Number(p.taxRate),

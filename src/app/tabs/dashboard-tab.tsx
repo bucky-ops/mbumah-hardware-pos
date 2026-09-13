@@ -1803,9 +1803,14 @@ export default function DashboardTab() {
   const { data: lowStockProducts } = useQuery({
     queryKey: ['low-stock-products', currentStoreId],
     queryFn: async () => {
-      const res = await productsApi.list({ storeId: currentStoreId, limit: 200 });
-      // Filter low stock client-side: products below reorder level
-      return (Array.isArray(res.data) ? res.data : []).filter(p => p.quantityInStock <= p.reorderLevel && p.isActive);
+      // v2.5.8: limit raised 200 → 500 (catalogs exceed 200 now) and both
+      // stock fields coerced with Number() — the API historically serialized
+      // these Decimals as strings, so `<=` compared lexicographically and
+      // the dialog listed phantom low-stock products.
+      const res = await productsApi.list({ storeId: currentStoreId, limit: 500 });
+      return (Array.isArray(res.data) ? res.data : []).filter(
+        p => Number(p.quantityInStock) <= Number(p.reorderLevel) && p.isActive
+      );
     },
     enabled: lowStockDialogOpen,
   });

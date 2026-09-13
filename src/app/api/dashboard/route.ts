@@ -84,7 +84,12 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
     }),
 
     db.product.findMany({
-      where: { storeId, isActive: true, quantityInStock: { lte: 10 } },
+      // v2.5.8 FIX: the KPI used a hardcoded `lte: 10` cutoff that ignored
+      // each product's own reorderLevel — healthy items with reorderLevel 50
+      // were flagged while items with reorderLevel 5 were missed. Compare
+      // against the per-product reorder level instead (Prisma field
+      // reference, same pattern as email-service.ts low-stock alerts).
+      where: { storeId, isActive: true, quantityInStock: { lte: db.product.fields.reorderLevel } },
       select: { id: true, name: true, sku: true, quantityInStock: true, reorderLevel: true, unitType: true },
       orderBy: { quantityInStock: 'asc' },
       take: 20,
