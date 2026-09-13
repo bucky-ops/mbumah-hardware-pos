@@ -5,14 +5,15 @@
 // Requirement: "real or icon images of each product are visible … when a new
 // product is added, the corresponding image or a similar icon appears."
 //
-// The chain is: photo (imageUrl) → category icon (bundled PNG) → letter tile.
+// The chain is: photo (imageUrl or the name-matched studio shot in
+// public/products) → category icon (bundled PNG) → letter tile.
 // A broken/missing photo never renders as a broken-image glyph: onError walks
 // down the chain automatically. Rendering stays lightweight — plain <img>
 // with lazy loading (no layout shift; grid slots reserve square boxes).
 
 import React, { useState } from 'react';
 import { Package } from 'lucide-react';
-import { deriveCategoryIcon } from '@/lib/product-images';
+import { deriveCategoryIcon, resolveProductImage } from '@/lib/product-images';
 import { cn } from '@/lib/utils';
 
 export interface ProductImageProps {
@@ -48,7 +49,7 @@ export function ProductImage({
   fallbackClassName,
 }: ProductImageProps) {
   const [stage, setStage] = useState<0 | 1 | 2>(0); // 0 photo, 1 icon, 2 letter
-  const photo = imageUrl?.trim() || null;
+  const photo = imageUrl?.trim() || resolveProductImage(null, categoryId, categoryName, name);
   const icon = deriveCategoryIcon(categoryId, categoryName);
 
   // Current candidate for this stage (photo may be empty → start at icon).

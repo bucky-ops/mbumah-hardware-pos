@@ -42,6 +42,33 @@ const CATEGORY_IMAGE_BY_KEYWORD: Array<{ re: RegExp; image: string }> = [
 ];
 
 /**
+ * PRODUCT PHOTO LIBRARY (v2.5.2) — realistic generated studio shots shipped
+ * with the app (public/products/*.jpg, 40-160KB each, ~1.3MB total). Matched
+ * against the PRODUCT NAME so every store's products — and any product added
+ * in the future — automatically show the right photo without a data migration.
+ * The category icon below remains the fallback for everything else.
+ */
+export const PRODUCT_PHOTO_BY_KEYWORD: Array<{ re: RegExp; image: string }> = [
+  { re: /cement/i, image: '/products/cement-50kg.jpg' },
+  { re: /ballast|river\s*sand|machine\s*cut\s*stone/i, image: '/products/cement-50kg.jpg' },
+  { re: /\bnails?\b|wood\s*screws?|hoop\s*iron/i, image: '/products/nails-2inch.jpg' },
+  { re: /mabati|roofing\s*sheet|iron\s*sheet|galvanized/i, image: '/products/mabati-sheet.jpg' },
+  { re: /\bpaint\b|dulux|duracoat|crown\s*vinyl|silk\s*20l|membrane/i, image: '/products/paint-20l.jpg' },
+  { re: /rebar|\by\d+\b|deformed|round\s*bar|steel\s*bar/i, image: '/products/rebar-bundle.jpg' },
+  { re: /wheelbarrow/i, image: '/products/wheelbarrow.jpg' },
+  { re: /pvc|ppr|pipe|elbow|tap\b|waste\s*pipe/i, image: '/products/pvc-pipe.jpg' },
+  { re: /drill|impact\s*wrench|rotary\s*hammer|hammer\s*drill/i, image: '/products/power-drill.jpg' },
+  { re: /grinder|circular\s*saw|jig\s*saw|saw\b/i, image: '/products/angle-grinder.jpg' },
+  { re: /hammer(?!.*drill)|wrench|spanner|screwdriver|pliers|tape\s*measure|spirit\s*level|utility\s*knife|putty\s*knife|spade|pickaxe/i, image: '/products/claw-hammer.jpg' },
+  { re: /led\s*bulb|flood\s*light|bulb\b/i, image: '/products/led-bulb.jpg' },
+  { re: /cable|wire\b(?!.*mesh)/i, image: '/products/cable-roll.jpg' },
+  { re: /water\s*tank/i, image: '/products/water-tank.jpg' },
+  { re: /timber|plywood|gypsum/i, image: '/products/timber-plank.jpg' },
+  { re: /generator|pressure\s*washer|compactor|mixer(?!.*tap)|poker|tile\s*cutter/i, image: '/products/power-drill.jpg' },
+  { re: /safety\s*boots|helmet|hard\s*hat/i, image: '/products/claw-hammer.jpg' },
+];
+
+/**
  * Best icon for a category — by exact id first, then by name keywords.
  * Returns null when nothing matches (UI falls back to a letter tile).
  */
@@ -59,15 +86,22 @@ export function deriveCategoryIcon(
 }
 
 /**
- * Full resolution chain: explicit photo → category icon → null.
+ * Best photo for a PRODUCT — the full resolution chain:
+ *   explicit photo URL → name-keyword studio shot → category icon → null.
  * Pure & isomorphic (no window access) — safe on the server and in tests.
  */
 export function resolveProductImage(
   imageUrl?: string | null,
   categoryId?: string | null,
-  categoryName?: string | null
+  categoryName?: string | null,
+  productName?: string | null
 ): string | null {
   const url = imageUrl?.trim();
   if (url) return url;
+  if (productName) {
+    for (const { re, image } of PRODUCT_PHOTO_BY_KEYWORD) {
+      if (re.test(productName)) return image;
+    }
+  }
   return deriveCategoryIcon(categoryId, categoryName);
 }

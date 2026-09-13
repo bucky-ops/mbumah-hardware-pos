@@ -7,7 +7,7 @@ import { generateSKU } from '@/lib/helpers';
 // SKU/BARCODE AUTOGEN + IMAGE DEFAULT (v2.5.2): EAN-13 barcode generation and
 // category-icon resolution for products created without explicit codes/images.
 import { generateEan13Barcode } from '@/lib/utils/product-codes';
-import { deriveCategoryIcon } from '@/lib/product-images';
+import { resolveProductImage } from '@/lib/product-images';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { requireStoreAccess, MANAGER_PLUS_ROLES, type AuthSession } from '@/lib/auth';
 import { parsePagination, buildPaginationMeta } from '@/lib/api-pagination';
@@ -184,8 +184,10 @@ async function createProductHandler(
     // EAN-13 (GS1 Kenya 620 prefix + checksum) is generated server-side so
     // EVERY product is scanner-ready — mirrors the add-product form draft.
     const productBarcode = barcode || generateEan13Barcode();
-    // IMAGE DEFAULT (v2.5.2): a new product immediately shows its category
-    // icon unless a real photo URL is supplied (similar icon appears).
+    // IMAGE DEFAULT (v2.5.2): a new product immediately shows a matching
+    // picture — the name-matched studio shot from /public/products, else the
+    // category icon ("similar icon appears") — unless a real photo URL is
+    // supplied by the caller.
     let categoryForImage: { name: string } | null = null;
     if (!imageUrl && categoryId) {
       categoryForImage = await db.productCategory.findUnique({
@@ -194,7 +196,7 @@ async function createProductHandler(
       });
     }
     const productImage =
-      imageUrl || deriveCategoryIcon(categoryId, categoryForImage?.name) || null;
+      resolveProductImage(imageUrl, categoryId, categoryForImage?.name, name) || null;
 
     const existingSku = await db.product.findUnique({ where: { sku: productSku } });
   if (existingSku) {

@@ -609,23 +609,23 @@ async function buildCustomerStatement(storeId: string, customerId: string): Prom
 
   highlights.push(
     debtBalance > 0
-      ? `Outstanding store credit: KES ${formatKES(debtBalance)} of a KES ${formatKES(data.customer.debtLimit)} limit (${utilization}% utilised).`
+      ? `Outstanding store credit: ${formatKES(debtBalance)} of a ${formatKES(data.customer.debtLimit)} limit (${utilization}% utilised).`
       : `Account is fully settled — no outstanding store credit.`
   );
   highlights.push(
-    `Purchases to date: KES ${formatKES(t.purchases)} across ${data.counts.sales} transaction(s).`
+    `Purchases to date: ${formatKES(t.purchases)} across ${data.counts.sales} transaction(s).`
   );
   if (data.counts.rentals > 0) {
     highlights.push(
-      `Equipment rentals: ${data.counts.rentals} (active now: ${data.counts.activeRentals}) · hire charges KES ${formatKES(t.rentalCharges)}.`
+      `Equipment rentals: ${data.counts.rentals} (active now: ${data.counts.activeRentals}) · hire charges ${formatKES(t.rentalCharges)}.`
     );
     highlights.push(
-      `Deposits: KES ${formatKES(t.depositsHeld)} currently held · KES ${formatKES(t.depositsReleased)} released (refunds paid: KES ${formatKES(t.refundsGiven)}).`
+      `Deposits: ${formatKES(t.depositsHeld)} currently held · ${formatKES(t.depositsReleased)} released (refunds paid: ${formatKES(t.refundsGiven)}).`
     );
   }
   if (data.customer.loyaltyPoints > 0) {
     highlights.push(
-      `Loyalty: ${data.customer.loyaltyPoints} points (${data.customer.loyaltyTier} tier) — worth about KES ${formatKES(data.customer.loyaltyPoints * 10)} in redeemable vouchers.`
+      `Loyalty: ${data.customer.loyaltyPoints} points (${data.customer.loyaltyTier} tier) — worth about ${formatKES(data.customer.loyaltyPoints * 10)} in redeemable vouchers.`
     );
   }
   const last = data.entries[data.entries.length - 1];
