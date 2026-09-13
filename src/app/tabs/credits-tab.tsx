@@ -18,6 +18,15 @@ import {
   type CustomerItem,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
+import {
+  buildBrandedDocumentHtml,
+  buildDocumentQrDataUrl,
+  buildDocumentQrPayload,
+  escapeHtml,
+  getDocumentLogoSrc,
+  printHtmlDocument,
+  resolveDocumentStore,
+} from '@/lib/document-print';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 import { Button } from '@/components/ui/button';
@@ -441,63 +450,80 @@ export default function CreditsTab() {
     }
   }
 
-  function handlePrintCredit(entry: CustomerCreditItem) {
-    const customer = customers.find((c: CustomerItem) => c.id === entry.customerId);
-    const customerName = customer?.name || 'Unknown Customer';
-    const customerPhone = customer?.phone || '—';
-    const badge = getCreditTypeBadge(entry.creditType);
-    const printWindow = window.open('', '_blank', 'width=800,height=900');
-    if (!printWindow) {
-      toast.error('Pop-up blocked. Please allow pop-ups to print.');
-      return;
+  // Task 35-b: branded credit note (red accent + logo + QR + thank-you).
+  async function handlePrintCredit(entry: CustomerCreditItem) {
+    try {
+      const customer = customers.find((c: CustomerItem) => c.id === entry.customerId);
+      const customerName = customer?.name || 'Unknown Customer';
+      const customerPhone = customer?.phone || '—';
+      const badge = getCreditTypeBadge(entry.creditType);
+      const isCreditSide = entry.creditType === 'CREDIT' || entry.creditType === 'REFUND';
+      const amt = (isCreditSide ? '+' : '-') + formatKES(entry.amount);
+      const docNo = entry.reference || entry.id.slice(0, 8).toUpperCase();
+      const store = resolveDocumentStore(currentStoreId);
+      const qrDataUrl = await buildDocumentQrDataUrl(
+        buildDocumentQrPayload('CREDIT_NOTE', docNo, {
+          total: formatKES(entry.amount),
+          date: formatDateTime(entry.createdAt),
+        }),
+      );
+      const html = buildBrandedDocumentHtml({
+        docTypeLabel: 'CREDIT NOTE',
+        accentColor: '#dc2626',
+        docNumber: docNo,
+        logoSrc: getDocumentLogoSrc(),
+        storeName: store.storeName,
+        storeLines: store.storeLines,
+        taxPin: store.taxPin,
+        metaRows: [
+          { label: 'Entry type', value: badge.label },
+          { label: 'Date', value: formatDateTime(entry.createdAt) },
+          { label: 'Ref', value: entry.reference || '—' },
+          { label: 'Status', value: entry.status === 'VOIDED' ? 'VOIDED' : 'Active' },
+        ],
+        billToHtml: `
+          <div class="who">${escapeHtml(customerName)}</div>
+          <div class="muted">${escapeHtml(customerPhone)}</div>
+        `,
+        itemsTableHtml: `
+          <table class="items">
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th class="text-right">Type</th>
+                <th class="text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${escapeHtml(entry.description || 'Customer credit-account adjustment')}</td>
+                <td class="text-right">${escapeHtml(badge.label)}</td>
+                <td class="text-right">${escapeHtml(amt)}</td>
+              </tr>
+            </tbody>
+          </table>
+        `,
+        totalsHtml: `
+          <div class="totals">
+            <table>
+              <tr><td class="muted">Running balance</td><td class="text-right">${escapeHtml(formatKES(Math.abs(entry.runningBalance)))} ${entry.runningBalance < 0 ? 'DR' : 'CR'}${entry.status === 'VOIDED' ? ' · VOIDED' : ''}</td></tr>
+              <tr class="grand"><td>${escapeHtml(badge.label)} amount</td><td class="text-right" style="color:${isCreditSide ? '#047857' : '#b91c1c'}">${escapeHtml(amt)}</td></tr>
+            </table>
+          </div>
+        `,
+        signatureLabels: ['Authorised Signature', 'Customer Acknowledgement'],
+        qrDataUrl,
+        qrCaption: 'Scan to verify this document',
+        footerNote: 'This is a computer-generated credit note from MBUMAH HARDWARE POS.',
+      });
+      const printed = printHtmlDocument(html, `Credit Note ${docNo}`);
+      if (!printed) {
+        toast.error('Pop-up blocked. Please allow pop-ups to print.');
+      }
+    } catch (err) {
+      const msg = handleError(err, 'Print credit note');
+      toast.error(msg);
     }
-    const amt = (entry.creditType === 'CREDIT' || entry.creditType === 'REFUND' ? '+' : '-') + formatKES(entry.amount);
-    printWindow.document.write(`
-      <!doctype html><html><head><title>Credit Note - ${entry.reference || entry.id.slice(0, 8)}</title>
-      <style>
-        body { font-family: Arial, Helvetica, sans-serif; color: #1f2937; margin: 0; padding: 32px; }
-        h1 { color: #047857; margin: 0 0 4px; font-size: 22px; }
-        .muted { color: #6b7280; font-size: 12px; }
-        h2 { font-size: 14px; margin: 24px 0 8px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; }
-        .row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; border-bottom: 1px dashed #e5e7eb; }
-        .label { color: #6b7280; }
-        .value { font-weight: 600; }
-        .amount { font-size: 28px; font-weight: 700; color: ${entry.creditType === 'CREDIT' || entry.creditType === 'REFUND' ? '#047857' : '#b91c1c'}; }
-        .badge { display: inline-block; padding: 4px 10px; border-radius: 9999px; background: #fef3c7; color: #92400e; font-size: 11px; font-weight: 700; }
-        .sign { margin-top: 64px; display: flex; justify-content: space-between; }
-        .sign div { width: 45%; }
-        .sign .line { border-top: 1px solid #9ca3af; margin-top: 36px; padding-top: 4px; font-size: 11px; color: #6b7280; }
-        .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #047857; padding-bottom: 12px; margin-bottom: 16px; }
-      </style></head>
-      <body>
-        <div class="head">
-          <div>
-            <h1>Mbumah Hardware</h1>
-            <p class="muted">Juja, Kiambu County · +254 700 000 000</p>
-          </div>
-          <div style="text-align:right">
-            <span class="badge">${badge.label.toUpperCase()}</span>
-            <p class="muted" style="margin-top:6px">Ref: ${entry.reference || '—'}</p>
-            <p class="muted">Date: ${formatDateTime(entry.createdAt)}</p>
-          </div>
-        </div>
-        <h2>Billed To</h2>
-        <div class="row"><span class="label">Customer</span><span class="value">${customerName}</span></div>
-        <div class="row"><span class="label">Phone</span><span class="value">${customerPhone}</span></div>
-        ${entry.description ? `<div class="row"><span class="label">Description</span><span class="value">${entry.description}</span></div>` : ''}
-        <h2>Amount</h2>
-        <div class="amount">${amt}</div>
-        <p class="muted" style="margin-top:4px">Running balance: ${formatKES(Math.abs(entry.runningBalance))} ${entry.runningBalance < 0 ? 'DR' : 'CR'}${entry.status === 'VOIDED' ? ' · VOIDED' : ''}</p>
-        <div class="sign">
-          <div><div class="line">Authorised Signature</div></div>
-          <div><div class="line">Customer Acknowledgement</div></div>
-        </div>
-        <p class="muted" style="margin-top:32px;text-align:center">This is a computer-generated credit note from Mbumah Hardware POS.</p>
-      </body></html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => printWindow.print(), 250);
   }
 
   function openEditDialog(credit: CustomerCreditItem) {

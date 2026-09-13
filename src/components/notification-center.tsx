@@ -1,17 +1,25 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppStore, type AppTab } from '@/lib/stores';
 import { notificationsApi, formatDateTime, formatRelativeTime, type NotificationItem } from '@/lib/api';
+import { useNotificationReadState } from '@/lib/notification-read-state';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   PackageX, AlertTriangle, AlertOctagon, CircleDollarSign,
   UserPlus, Receipt, CheckCheck, BellRing, Filter, X,
+  MoreVertical, Eye, EyeOff, RotateCcw,
 } from 'lucide-react';
 
 type NotificationFilter = 'all' | 'critical' | 'warning' | 'info';
@@ -26,41 +34,15 @@ export function NotificationCenter({
   storeId: string;
 }) {
   const [filter, setFilter] = useState<NotificationFilter>('all');
+  const [showDismissed, setShowDismissed] = useState(false);
   const { setActiveTab } = useAppStore();
+  const queryClient = useQueryClient();
 
-  // Persist read/dismissed state in localStorage
-  const [readIds, setReadIds] = useState<Set<string>>(() => {
-    if (typeof window === 'undefined') return new Set();
-    try {
-      const stored = localStorage.getItem('mbt_read_notifications');
-      return stored ? new Set(JSON.parse(stored)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
-
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => {
-    if (typeof window === 'undefined') return new Set();
-    try {
-      const stored = localStorage.getItem('mbt_dismissed_notifications');
-      return stored ? new Set(JSON.parse(stored)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
-
-  // Save to localStorage whenever they change
-  useEffect(() => {
-    try {
-      localStorage.setItem('mbt_read_notifications', JSON.stringify([...readIds]));
-    } catch { /* ignore */ }
-  }, [readIds]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('mbt_dismissed_notifications', JSON.stringify([...dismissedIds]));
-    } catch { /* ignore */ }
-  }, [dismissedIds]);
+  // Shared external store — the sidebar/top-bar badge mirrors every change instantly.
+  const {
+    readIds, dismissedIds,
+    markRead, markAllRead, dismiss, restore, restoreDismissed, reset,
+  } = useNotificationReadState();
 
   const { data: notificationsData, isLoading } = useQuery({
     queryKey: ['notifications', storeId],
@@ -71,11 +53,16 @@ export function NotificationCenter({
     enabled: open,
   });
 
-  const allNotifications = notificationsData || [];
+  const allNotifications = useMemo(() => notificationsData || [], [notificationsData]);
 
   // Filter out dismissed notifications
   const activeNotifications = useMemo(
     () => allNotifications.filter((n) => !dismissedIds.has(n.id)),
+    [allNotifications, dismissedIds]
+  );
+
+  const dismissedNotifications = useMemo(
+    () => allNotifications.filter((n) => dismissedIds.has(n.id)),
     [allNotifications, dismissedIds]
   );
 
@@ -84,6 +71,13 @@ export function NotificationCenter({
     if (filter === 'all') return activeNotifications;
     return activeNotifications.filter((n) => n.severity === filter);
   }, [activeNotifications, filter]);
+
+  const filteredDismissedNotifications = useMemo(() => {
+    if (filter === 'all') return dismissedNotifications;
+    return dismissedNotifications.filter((n) => n.severity === filter);
+  }, [dismissedNotifications, filter]);
+
+  const visibleNotifications = showDismissed ? filteredDismissedNotifications : filteredNotifications;
 
   const unreadCount = activeNotifications.filter((n) => !readIds.has(n.id)).length;
 
@@ -99,12 +93,20 @@ export function NotificationCenter({
     }
   }, [open, activeNotifications, readIds]);
 
-  const markAllRead = () => {
-    setReadIds(new Set([...readIds, ...activeNotifications.map((n) => n.id)]));
+  const invalidateNotificationQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ['notification-count', storeId] });
+    queryClient.invalidateQueries({ queryKey: ['notifications', storeId] });
+  };
+
+  const handleMarkAllRead = () => {
+    // Mark EVERYTHING active — the severity filter must not hide unread items.
+    markAllRead(activeNotifications.map((n) => n.id));
+    // Re-pull from the server so the list also picks up brand-new notifications.
+    invalidateNotificationQueries();
   };
 
   const handleNotificationClick = (notification: NotificationItem) => {
-    setReadIds((prev) => new Set([...prev, notification.id]));
+    markRead(notification.id);
     const targetTab = notification.targetTab as AppTab | undefined;
     if (targetTab) {
       setActiveTab(targetTab);
@@ -114,7 +116,18 @@ export function NotificationCenter({
 
   const handleDismiss = (e: React.MouseEvent, notificationId: string) => {
     e.stopPropagation();
-    setDismissedIds((prev) => new Set([...prev, notificationId]));
+    dismiss(notificationId);
+  };
+
+  const handleRestore = (e: React.MouseEvent, notificationId: string) => {
+    e.stopPropagation();
+    restore(notificationId);
+  };
+
+  const toggleShowDismissed = () => {
+    // Reset the severity filter so the dismissed list isn't silently narrowed.
+    if (!showDismissed) setFilter('all');
+    setShowDismissed(!showDismissed);
   };
 
   const getNotificationIcon = (type: NotificationItem['type']) => {
@@ -157,18 +170,34 @@ export function NotificationCenter({
               )}
             </div>
             <div className="flex items-center gap-1">
-              {dismissedIds.size > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs h-7 text-muted-foreground"
-                  onClick={() => setDismissedIds(new Set())}
-                >
-                  Show dismissed
-                </Button>
-              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Notification actions">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuItem onClick={handleMarkAllRead} disabled={unreadCount === 0}>
+                    <CheckCheck />
+                    Mark all as read
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={toggleShowDismissed}
+                    disabled={dismissedNotifications.length === 0 && !showDismissed}
+                  >
+                    {showDismissed ? <EyeOff /> : <Eye />}
+                    {showDismissed ? 'Hide dismissed' : 'Show dismissed'}
+                  </DropdownMenuItem>
+                  {readIds.size > 0 && (
+                    <DropdownMenuItem variant="destructive" onClick={reset}>
+                      <RotateCcw />
+                      Reset read state
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
               {unreadCount > 0 && (
-                <Button variant="ghost" size="sm" className="text-xs h-7" onClick={markAllRead}>
+                <Button variant="ghost" size="sm" className="text-xs h-7" onClick={handleMarkAllRead}>
                   <CheckCheck className="h-3.5 w-3.5 mr-1" />
                   Mark all read
                 </Button>
@@ -176,30 +205,48 @@ export function NotificationCenter({
             </div>
           </div>
           <SheetDescription>
-            Stay updated on stock levels, rentals, debts, and more
+            Stay updated on stock, rentals, debts and sales — mark all as read from the ⋮ menu
           </SheetDescription>
         </SheetHeader>
 
-        {/* Filter Tabs */}
-        <div className="flex items-center gap-1 px-4 py-2 border-b shrink-0">
-          <Filter className="h-3.5 w-3.5 text-muted-foreground mr-1" />
-          {filterTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setFilter(tab.id)}
-              className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
-                filter === tab.id
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}
-            >
-              {tab.label}
-              {tab.count > 0 && (
-                <span className="ml-1 opacity-70">({tab.count})</span>
-              )}
-            </button>
-          ))}
-        </div>
+        {/* Filter Tabs / Dismissed banner */}
+        {showDismissed ? (
+          <div className="flex items-center gap-2 px-4 py-2 border-b shrink-0">
+            <EyeOff className="h-3.5 w-3.5 text-muted-foreground mr-1" />
+            <span className="text-[11px] text-muted-foreground">Showing dismissed notifications</span>
+            {dismissedNotifications.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto text-xs h-7 text-muted-foreground"
+                onClick={restoreDismissed}
+              >
+                <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                Restore all
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-1 px-4 py-2 border-b shrink-0">
+            <Filter className="h-3.5 w-3.5 text-muted-foreground mr-1" />
+            {filterTabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setFilter(tab.id)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                  filter === tab.id
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                }`}
+              >
+                {tab.label}
+                {tab.count > 0 && (
+                  <span className="ml-1 opacity-70">({tab.count})</span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
 
         <ScrollArea className="flex-1">
           {isLoading ? (
@@ -208,17 +255,51 @@ export function NotificationCenter({
                 <Skeleton key={i} className="h-20 w-full" />
               ))}
             </div>
-          ) : filteredNotifications.length === 0 ? (
+          ) : visibleNotifications.length === 0 ? (
             <div className="p-8 text-center">
               <BellRing className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
               <p className="text-sm font-medium text-muted-foreground">
-                {filter === 'all' ? 'No notifications' : `No ${filter} notifications`}
+                {showDismissed
+                  ? 'No dismissed notifications'
+                  : filter === 'all'
+                    ? 'No notifications'
+                    : `No ${filter} notifications`}
               </p>
               <p className="text-xs text-muted-foreground/60 mt-1">You&apos;re all caught up!</p>
             </div>
           ) : (
             <div className="p-3 space-y-2">
-              {filteredNotifications.map((notification) => {
+              {visibleNotifications.map((notification) => {
+                if (showDismissed) {
+                  return (
+                    <div
+                      key={notification.id}
+                      className="w-full text-left p-3 rounded-lg border bg-muted/50 dark:bg-muted/20 border-border opacity-60 group"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="shrink-0 mt-0.5">{getNotificationIcon(notification.type)}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">{notification.title}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                            {notification.description}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground/60 mt-1" title={formatDateTime(notification.timestamp)}>
+                            {formatRelativeTime(notification.timestamp)}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="shrink-0 p-1 rounded-md hover:bg-muted/80 transition-all"
+                          onClick={(e) => handleRestore(e, notification.id)}
+                          aria-label="Restore notification"
+                        >
+                          <RotateCcw className="h-3 w-3 text-muted-foreground" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
                 const isUnread = !readIds.has(notification.id);
                 return (
                   <div

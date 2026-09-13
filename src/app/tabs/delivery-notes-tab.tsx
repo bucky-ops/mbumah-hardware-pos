@@ -20,6 +20,15 @@ import {
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
 import { formatQty, unitLabel } from '@/lib/utils/financialMath';
+import {
+  buildBrandedDocumentHtml,
+  buildDocumentQrDataUrl,
+  buildDocumentQrPayload,
+  escapeHtml,
+  getDocumentLogoSrc,
+  printHtmlDocument,
+  resolveDocumentStore,
+} from '@/lib/document-print';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 import { Button } from '@/components/ui/button';
@@ -34,53 +43,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 
-// ─── Reusable print helper ───────────────────────────────────────────────────
-// Opens a new window with print-friendly HTML. Falls back to window.print()
-// if popups are blocked.
-
-function printDocument(html: string, title = 'Print') {
-  const printWindow = window.open('', '_blank', 'width=820,height=920');
-  if (!printWindow) {
-    toast.error('Pop-up blocked. Showing inline print dialog instead.');
-    window.print();
-    return;
-  }
-  printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
-    <style>
-      @page { margin: 14mm; }
-      body { font-family: 'Segoe UI', Arial, Helvetica, sans-serif; color: #1f2937; margin: 0; padding: 22px; }
-      h1, h2, h3 { margin: 0; }
-      .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #047857; padding-bottom: 12px; margin-bottom: 16px; }
-      .head h1 { color: #047857; font-size: 22px; }
-      .muted { color: #6b7280; font-size: 12px; }
-      table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-      th { background: #f3f4f6; text-align: left; padding: 8px 10px; border: 1px solid #e5e7eb; font-weight: 600; font-size: 12px; }
-      td { padding: 8px 10px; border: 1px solid #e5e7eb; font-size: 12px; }
-      .text-right { text-align: right; }
-      .text-center { text-align: center; }
-      .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; font-size: 13px; }
-      .info-grid .label { font-weight: 600; color: #555; }
-      .info-grid .value { color: #1a1a1a; }
-      .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 40px; }
-      .sig-line { border-top: 1px solid #333; padding-top: 4px; text-align: center; font-size: 12px; }
-      .footer { margin-top: 24px; font-size: 11px; color: #888; text-align: center; border-top: 1px solid #eee; padding-top: 12px; }
-      .status-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
-    </style></head><body>${html}</body></html>`);
-  printWindow.document.close();
-  printWindow.focus();
-  setTimeout(() => printWindow.print(), 250);
-}
-
-// Escape a string for safe inclusion in raw HTML.
-function escapeHtml(str: unknown): string {
-  if (str === null || str === undefined) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
 
 // ─── Helpers ─────────────────────────────────────────────
 
@@ -389,6 +351,7 @@ export default function DeliveryNotesTab() {
   // Print a delivery note — fetches detail (with items) if needed, then opens a
   // print-friendly window. Works for both the row-level print button and the
   // view-dialog print button.
+  // Task 35-b: branded delivery note (accent band + logo + QR + thank-you).
   async function handlePrint(note: DeliveryNoteItem | NonNullable<typeof noteDetail>) {
     try {
       let detail = note as DeliveryNoteItem & { items?: DeliveryNoteItemDetail[] };
@@ -401,54 +364,72 @@ export default function DeliveryNotesTab() {
       const items = detail.items || [];
       const rows = items.map((item, i) => `
         <tr>
-          <td>${i + 1}</td>
+          <td class="text-center">${i + 1}</td>
           <td>${escapeHtml(item.productName)}</td>
           <td class="text-center">${escapeHtml(formatQty(item.quantity))}</td>
           <td>${escapeHtml(unitLabel(item.unitType))}</td>
           <td>${escapeHtml(item.notes || '—')}</td>
         </tr>
       `).join('');
-      const html = `
-        <div class="head">
-          <div>
-            <h1>Mbumah Hardware</h1>
-            <p class="muted">Juja, Kiambu County · +254 700 000 000</p>
+      const store = resolveDocumentStore(currentStoreId);
+      const qrDataUrl = await buildDocumentQrDataUrl(
+        buildDocumentQrPayload('DELIVERY_NOTE', detail.deliveryNumber, {
+          date: formatDateTime(detail.createdAt),
+        }),
+      );
+      const html = buildBrandedDocumentHtml({
+        docTypeLabel: 'DELIVERY NOTE',
+        accentColor: '#16a34a',
+        docNumber: detail.deliveryNumber,
+        logoSrc: getDocumentLogoSrc(),
+        storeName: store.storeName,
+        storeLines: store.storeLines,
+        taxPin: store.taxPin,
+        metaRows: [
+          { label: 'Status', value: getStatusLabel(detail.status) },
+          { label: 'Scheduled', value: detail.scheduledDate ? formatDate(detail.scheduledDate) : '—' },
+          { label: 'Created', value: formatDateTime(detail.createdAt) },
+        ],
+        billToHtml: `
+          <div class="who">${escapeHtml(detail.customerName)}</div>
+          ${detail.customerPhone ? `<div class="muted">${escapeHtml(detail.customerPhone)}</div>` : ''}
+          ${detail.deliveryAddress ? `<div class="muted">${escapeHtml(detail.deliveryAddress)}</div>` : ''}
+          <div class="muted">Driver: ${escapeHtml(detail.driverName || '—')} · Vehicle: ${escapeHtml(detail.vehicleNumber || '—')}</div>
+        `,
+        itemsTableHtml: `
+          <table class="items">
+            <thead>
+              <tr>
+                <th class="text-center">#</th>
+                <th>Product</th>
+                <th class="text-center">Qty</th>
+                <th>Unit</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>${rows || '<tr><td colspan="5" class="text-center muted">No items</td></tr>'}</tbody>
+          </table>
+        `,
+        // Delivery notes move goods, not money — the totals block reports the
+        // consignment size instead of inventing amounts.
+        totalsHtml: `
+          <div class="totals">
+            <table>
+              <tr class="grand"><td>Goods to deliver</td><td class="text-right">${escapeHtml(String(items.length))} line item(s)</td></tr>
+            </table>
           </div>
-          <div style="text-align:right">
-            <span class="status-badge">DELIVERY NOTE</span>
-            <p class="muted" style="margin-top:6px"><strong>${escapeHtml(detail.deliveryNumber)}</strong></p>
-            <p class="muted">Status: ${escapeHtml(getStatusLabel(detail.status))}</p>
-          </div>
-        </div>
-        <div class="info-grid">
-          <div><span class="label">Customer:</span> <span class="value">${escapeHtml(detail.customerName)}</span></div>
-          <div><span class="label">Phone:</span> <span class="value">${escapeHtml(detail.customerPhone || '—')}</span></div>
-          <div style="grid-column:1/-1"><span class="label">Delivery Address:</span> <span class="value">${escapeHtml(detail.deliveryAddress || '—')}</span></div>
-          <div><span class="label">Driver:</span> <span class="value">${escapeHtml(detail.driverName || '—')}</span></div>
-          <div><span class="label">Vehicle:</span> <span class="value">${escapeHtml(detail.vehicleNumber || '—')}</span></div>
-          <div><span class="label">Scheduled:</span> <span class="value">${detail.scheduledDate ? formatDate(detail.scheduledDate) : '—'}</span></div>
-          <div><span class="label">Created:</span> <span class="value">${formatDateTime(detail.createdAt)}</span></div>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Product</th>
-              <th class="text-center">Qty</th>
-              <th>Unit</th>
-              <th>Notes</th>
-            </tr>
-          </thead>
-          <tbody>${rows || '<tr><td colspan="5" class="text-center muted">No items</td></tr>'}</tbody>
-        </table>
-        ${detail.notes ? `<div style="margin-top:12px;font-size:13px"><strong>Notes:</strong> ${escapeHtml(detail.notes)}</div>` : ''}
-        <div class="signatures">
-          <div><div class="sig-line">Driver Signature</div></div>
-          <div><div class="sig-line">Receiver Signature</div></div>
-        </div>
-        <div class="footer">This delivery note was generated by Mbumah Hardware POS · ${formatDateTime(new Date())}</div>
-      `;
-      printDocument(html, `DN-${detail.deliveryNumber}`);
+        `,
+        extraSectionsHtml: detail.notes
+          ? `<div class="note-block"><strong>Notes:</strong> ${escapeHtml(detail.notes)}</div>`
+          : '',
+        signatureLabels: ['Driver Signature', 'Receiver Signature'],
+        qrDataUrl,
+        qrCaption: 'Scan to verify this document',
+      });
+      const printed = printHtmlDocument(html, `DN-${detail.deliveryNumber}`);
+      if (!printed) {
+        toast.error('Pop-up blocked. Please allow pop-ups for this site to print.');
+      }
     } catch (err) {
       const msg = handleError(err, 'Print delivery note');
       toast.error(msg);
