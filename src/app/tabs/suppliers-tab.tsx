@@ -8,7 +8,7 @@ import {
   Phone, Mail, MapPin, Building2, User, FileText,
   ChevronRight, Download, Package, CalendarDays,
   ClipboardCheck, AlertTriangle, Hash, Clock, CheckCircle2,
-  Circle, Award, Timer, MessageSquare,
+  Circle, Award, Timer, MessageSquare, Smartphone,
   Send, MoreVertical, DollarSign,
 } from 'lucide-react';
 
@@ -1972,6 +1972,21 @@ export default function SuppliersTab() {
                               >
                                 <Phone className="h-4 w-4 text-green-600" />
                                 Quick WhatsApp
+                              </DropdownMenuItem>
+                            )}
+                            {supplier.phone && (
+                              <DropdownMenuItem
+                                onSelect={(e) => {
+                                  e.preventDefault();
+                                  openSMS(
+                                    supplier.phone!,
+                                    `Hello ${supplier.name}, this is Mbumah Hardware. We wanted to reach out regarding our supplier relationship.`,
+                                  );
+                                }}
+                                className="gap-2 cursor-pointer"
+                              >
+                                <Smartphone className="h-4 w-4 text-emerald-600" />
+                                Quick SMS
                               </DropdownMenuItem>
                             )}
                             {supplier.email && (

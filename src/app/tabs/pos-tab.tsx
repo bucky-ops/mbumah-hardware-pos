@@ -16,7 +16,7 @@ import { ProductImage } from '@/components/product-image';
 import {
   productsApi, categoriesApi, customersApi, transactionsApi,
   paymentsApi, giftCardsApi, vouchersApi, whatsappApi,
-  formatKES, formatDateTime,
+  formatKES, formatDateTime, openSMS,
   type ProductListItem, type CustomerItem, type TransactionItem, type GiftCardItem, type VoucherItem,
 } from '@/lib/api';
 import type { PaymentMethod, CartItem, UnitType, CheckoutPayload } from '@/lib/types';
@@ -61,7 +61,7 @@ import {
   Printer, ChevronDown, Tag, LayoutGrid, List, ArrowUpDown,
   ArrowUp, ArrowDown, RefreshCw, Wifi, WifiOff, CloudOff, CloudLightning,
   Send, Pause, UserPlus, Award, Ticket,
-  Lightbulb, PartyPopper, AlertTriangle,
+  Lightbulb, PartyPopper, AlertTriangle, MessageSquare,
 } from 'lucide-react';
 
 // Extracted sub-components
@@ -1043,6 +1043,28 @@ export default function POSTab() {
     }
   };
 
+  // Send receipt via SMS — SMS twin of handleSendReceiptWhatsApp: opens an
+  // sms: deep link with a compact receipt text (openSMS normalizes 07xx →
+  // 2547xx); with no phone the empty recipient opens the SMS app chooser.
+  const handleSendReceiptSms = () => {
+    if (!lastTransaction) return;
+    if (receiptSendPhone && receiptSendPhone.length < 9) {
+      toast.error('Enter a valid SMS phone number');
+      return;
+    }
+    try {
+      const phone = receiptSendPhone
+        ? (receiptSendPhone.startsWith('0') ? `254${receiptSendPhone.slice(1)}` : receiptSendPhone)
+        : '';
+      const msg = `MBUMAH HARDWARE — Receipt ${lastTransaction.receiptNumber}. Total: ${formatKES(lastTransaction.totalAmount)}. Paid via ${lastTransaction.paymentMethod}. Thank you for shopping with us!`;
+      openSMS(phone, msg);
+      toast.success(phone ? 'Receipt prepared for SMS' : 'SMS app opened — choose a recipient');
+      setReceiptSendOpen(false);
+    } catch (err) {
+      toast.error(handleError(err, 'Send receipt via SMS'));
+    }
+  };
+
   // Print receipt — opens the branded ReceiptPrintPreview modal, which owns
   // the modern colored receipt with QR verification, real PDF download and
   // the print-root isolation (see src/lib/receipt-pdf.ts + globals.css).
@@ -1927,16 +1949,27 @@ export default function POSTab() {
         onNewSale={() => { setReceiptPrintOpen(false); setLastTransaction(null); }}
       />
 
-      {/* Send Receipt via WhatsApp Dialog */}
+      {/* Send Receipt via WhatsApp / SMS Dialog */}
       <ResponsiveDialog
         open={receiptSendOpen}
         onOpenChange={setReceiptSendOpen}
-        title={<span className="flex items-center gap-2"><Send className="h-4 w-4 text-green-600" /> Send Receipt via WhatsApp</span>}
-        description="Enter the customer's WhatsApp number. We'll generate the receipt and open WhatsApp with the document ready to send."
+        title={<span className="flex items-center gap-2"><Send className="h-4 w-4 text-green-600" /> Send Receipt via WhatsApp / SMS</span>}
+        description="Enter the customer's number. We'll open WhatsApp or the SMS app with the receipt ready to send."
         size="sm"
         footer={
           <>
             <Button variant="outline" onClick={() => setReceiptSendOpen(false)}>Cancel</Button>
+            <Button
+              variant="outline"
+              onClick={handleSendReceiptSms}
+              disabled={receiptSending || (!!receiptSendPhone && receiptSendPhone.length < 9)}
+              className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:text-emerald-400"
+              title="Send via SMS"
+              aria-label="Send receipt via SMS"
+            >
+              <MessageSquare className="mr-2 h-4 w-4" />
+              Send via SMS
+            </Button>
             <Button
               onClick={handleSendReceiptWhatsApp}
               disabled={receiptSending || !receiptSendPhone || receiptSendPhone.length < 9}
@@ -1945,7 +1978,7 @@ export default function POSTab() {
               {receiptSending ? (
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Preparing…</>
               ) : (
-                <><Send className="mr-2 h-4 w-4" />Send</>
+                <><Send className="mr-2 h-4 w-4" />Send via WhatsApp</>
               )}
             </Button>
           </>
@@ -1953,7 +1986,7 @@ export default function POSTab() {
       >
         <div className="space-y-3">
           <div>
-            <Label htmlFor="receiptPhone">WhatsApp Phone Number</Label>
+            <Label htmlFor="receiptPhone">Phone Number</Label>
             <div className="relative mt-1">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">+254</span>
               <Input
@@ -1966,7 +1999,8 @@ export default function POSTab() {
               />
             </div>
             <p className="text-[11px] text-muted-foreground mt-1.5">
-              Receipt will be sent from the MBUMAH HARDWARE WhatsApp Business account. The customer must have WhatsApp installed on this number.
+              WhatsApp is sent from the MBUMAH HARDWARE WhatsApp Business account (requires WhatsApp on this number).
+              SMS opens the Messages app with the receipt pre-filled — leave the number empty to pick a recipient in the SMS app.
             </p>
           </div>
           {lastTransaction && (

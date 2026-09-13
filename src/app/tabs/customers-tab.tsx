@@ -7,12 +7,12 @@ import {
   Users, Search, Plus, CircleDollarSign, AlertTriangle,
   Eye, Loader2, HandCoins, Banknote, Smartphone, ShoppingBag, Phone, Mail, MapPin, CreditCard, Clock,
   ArrowUpDown, Filter, UserPlus, TrendingUp, FileText, Bell,
-  History, Send, Tag, Gift, Truck, FileCheck, Receipt, Minus, Printer,
+  History, Send, Tag, Gift, Truck, FileCheck, Receipt, Minus, Printer, MessageSquare,
 } from 'lucide-react';
 
 import { useAppStore, useAuthStore } from '@/lib/stores';
 import {
-  customersApi, debtApi, transactionsApi, whatsappApi, authorizedFetchJson,
+  customersApi, debtApi, transactionsApi, whatsappApi, authorizedFetchJson, openSMS,
   formatKES, formatDate, formatDateTime,
   type CustomerItem,
   type TransactionItem,
@@ -283,6 +283,36 @@ function CustomerHistoryDialog({
     }
   }
 
+  // SMS twin of handleSendStatement — compact (~<=320 chars) account summary
+  // built from the ALREADY-FETCHED history data (no new API calls); openSMS
+  // normalizes 07xx → 2547xx.
+  async function handleSendStatementSms() {
+    if (!customer) return;
+    const phone = prompt('Enter SMS phone number to send the statement to:', customer.phone || '') || '';
+    if (!phone) return;
+    setSendingStatement(true);
+    try {
+      const outstanding = summary ? summary.outstandingDebt : customer.currentDebtBalance;
+      const lastPayment = [...timeline]
+        .filter((e) => e.type === 'payment')
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+      const text = [
+        'MBUMAH HARDWARE — Account Statement',
+        `Customer: ${customer.name}`,
+        `Outstanding balance: ${formatKES(outstanding)}`,
+        ...(lastPayment ? [`Last payment: ${formatKES(lastPayment.amount)} on ${formatDate(lastPayment.date)}`] : []),
+        'Thank you for your business! Asante sana!',
+      ].join('\n');
+      openSMS(phone, text);
+      toast.success('Statement summary opened in SMS');
+    } catch (err) {
+      const msg = handleError(err, 'Send statement via SMS');
+      toast.error(msg);
+    } finally {
+      setSendingStatement(false);
+    }
+  }
+
   if (!customer) return null;
   const loyalty = getLoyaltyTier(customer.loyaltyPoints);
   const gradient = getAvatarGradient(customer.name);
@@ -302,6 +332,15 @@ function CustomerHistoryDialog({
       footer={
         <>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button
+            onClick={handleSendStatementSms}
+            disabled={sendingStatement}
+            className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:text-emerald-400 gap-2"
+            title="Send statement summary via SMS"
+          >
+            {sendingStatement ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />}
+            Send Statement via SMS
+          </Button>
           <Button
             onClick={handleSendStatement}
             disabled={sendingStatement}

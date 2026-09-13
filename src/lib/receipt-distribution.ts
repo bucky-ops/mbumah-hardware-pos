@@ -1,10 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Receipt Distribution (Email via Resend + WhatsApp via Twilio)
+// MBUMAH HARDWARE POS — Receipt Distribution (Email via Resend + WhatsApp/SMS via Twilio)
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// Sends customer receipts through two channels:
+// Sends customer receipts through three channels:
 //   • EMAIL    — Resend (https://resend.com) transactional email API
 //   • WHATSAPP — Twilio WhatsApp Business API (https://twilio.com)
+//   • SMS      — Twilio Programmable SMS (same account, plain E.164 `to`)
 //
 // DESIGN PRINCIPLES
 // ─────────────────
@@ -47,7 +48,7 @@ import type { SalesTransaction, SaleItem } from "@prisma/client";
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
-export type DistributionChannel = "EMAIL" | "WHATSAPP";
+export type DistributionChannel = "EMAIL" | "WHATSAPP" | "SMS";
 
 export interface DistributionResult {
   success: boolean;
@@ -66,7 +67,7 @@ export interface DistributeReceiptInput {
   channel: DistributionChannel;
   /** Email address (required for EMAIL channel). */
   email?: string;
-  /** Phone in E.164 format, e.g. +254712345678 (required for WHATSAPP). */
+  /** Phone in E.164 format, e.g. +254712345678 (required for WHATSAPP/SMS). */
   phone?: string;
   /** Custom message to prepend. Defaults to a polite cover note. */
   customMessage?: string;
@@ -101,6 +102,16 @@ function getTwilioConfig(): ProviderConfig {
   return {
     configured: accountSid.length > 0 && authToken.length > 0,
     from: process.env.TWILIO_WHATSAPP_FROM ?? "whatsapp:+14155238886",
+  };
+}
+
+/** SMS shares the Twilio account credentials but uses its own sender ID. */
+function getTwilioSmsConfig(): ProviderConfig {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID ?? "";
+  const authToken = process.env.TWILIO_AUTH_TOKEN ?? "";
+  return {
+    configured: accountSid.length > 0 && authToken.length > 0,
+    from: process.env.TWILIO_SMS_FROM ?? "+15550000000",
   };
 }
 
@@ -221,7 +232,30 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#039;");
 }
 
-// ── Plain-text receipt (for WhatsApp body) ───────────────────────────────────
+// ── Compact plain-text receipt (for the SMS body) ───────────────────────────
+
+/**
+ * Build a compact plain-text receipt for the SMS channel.
+ *
+ * Unlike the WhatsApp body, items are omitted — SMS payloads must stay short
+ * (~<=320 chars ≈ two GSM-7 segments); the customer gets the essentials:
+ * store name, receipt number, total, payment method and a thank-you.
+ */
+export function renderReceiptSmsText(ctx: ReceiptRenderContext): string {
+  const { transaction, store } = ctx;
+  const storeName = store?.name ?? "Mbumah Hardware";
+  const date = new Date(transaction.createdAt).toLocaleDateString("en-KE", {
+    timeZone: "Africa/Nairobi",
+  });
+
+  return [
+    `${storeName}: Receipt ${transaction.receiptNumber}`,
+    `Date: ${date}`,
+    `Total: ${KES(transaction.totalAmount).formatKES()}`,
+    `Paid via: ${transaction.paymentMethod}`,
+    "Thank you for your business!",
+  ].join("\n");
+}
 
 export function renderReceiptText(ctx: ReceiptRenderContext): string {
   const { transaction, store } = ctx;
@@ -348,10 +382,48 @@ async function sendViaTwilioWhatsApp(
   return { providerId: message.sid, simulated: false };
 }
 
+// ── SMS distribution (Twilio Programmable SMS) ─────────────────────────────
+
+async function sendViaTwilioSms(
+  to: string,
+  body: string,
+): Promise<{ providerId: string | null; simulated: boolean }> {
+  const config = getTwilioSmsConfig();
+
+  if (!config.configured) {
+    await systemLog({
+      action: "RECEIPT_SMS_SIMULATED",
+      component: LogComponent.FINANCIAL,
+      severity: LogSeverity.WARN,
+      message: `TWILIO_ACCOUNT_SID/AUTH_TOKEN not set — SMS to ${maskPhone(to)} was simulated (not actually sent).`,
+      metadata: { recipient: maskPhone(to), provider: "twilio" },
+    });
+    return { providerId: null, simulated: true };
+  }
+
+  const twilio = (await import("twilio")).default;
+  const client = twilio(
+    process.env.TWILIO_ACCOUNT_SID,
+    process.env.TWILIO_AUTH_TOKEN,
+  );
+
+  // SMS recipients are plain E.164 — no whatsapp: prefix.
+  const normalizedTo = to.replace(/\s/g, "");
+
+  const message = await client.messages.create({
+    from: config.from,
+    to: normalizedTo,
+    body,
+  });
+
+  return { providerId: message.sid, simulated: false };
+}
+
 // ── Main entry point ─────────────────────────────────────────────────────────
 
 /**
- * Distribute a receipt to a customer via Email (Resend) or WhatsApp (Twilio).
+ * Distribute a receipt to a customer via Email (Resend), WhatsApp (Twilio) or
+ * SMS (Twilio Programmable SMS).
  *
  * Loads the transaction + items + store, renders the branded receipt, sends it
  * through the appropriate provider, and writes an AuditLog entry. Returns a
@@ -380,7 +452,7 @@ export async function distributeReceipt(
   if (channel === "EMAIL" && !resolvedEmail) {
     throw new Error("No email address on the customer. Provide one explicitly.");
   }
-  if (channel === "WHATSAPP" && !resolvedPhone) {
+  if ((channel === "WHATSAPP" || channel === "SMS") && !resolvedPhone) {
     throw new Error("No phone number on the customer. Provide one explicitly.");
   }
 
@@ -410,6 +482,12 @@ export async function distributeReceipt(
       `;
       const subject = `Receipt #${transaction.receiptNumber} — Mbumah Hardware`;
       providerResult = await sendViaResend(recipient, subject, html);
+    } else if (channel === "SMS") {
+      // Compact SMS body — a custom message is prepended when provided, and
+      // the whole payload is kept within a ~320-char (2-segment) budget.
+      const base = renderReceiptSmsText(renderCtx);
+      const text = (customMessage ? `${customMessage}\n${base}` : base).slice(0, 320);
+      providerResult = await sendViaTwilioSms(recipient, text);
     } else {
       const text = `${coverNote}\n\n${renderReceiptText(renderCtx)}`;
       providerResult = await sendViaTwilioWhatsApp(recipient, text);
@@ -500,6 +578,6 @@ export async function distributeReceipt(
     providerId: providerResult.providerId,
     message:
       (providerResult.simulated ? "Simulated (no API key): " : "") +
-      `Receipt sent via ${channel === "EMAIL" ? "email" : "WhatsApp"} to ${maskedRecipient}.`,
+      `Receipt sent via ${channel === "EMAIL" ? "email" : channel} to ${maskedRecipient}.`,
   };
 }

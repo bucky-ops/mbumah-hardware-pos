@@ -1,14 +1,15 @@
 // POST /api/transactions/[id]/distribute-receipt
 //
-// Distributes a sales receipt to a customer via Email (Resend) or WhatsApp
-// (Twilio). Requires authentication; any authenticated user with transaction
-// read access may send a receipt (cashiers commonly email receipts at POS).
+// Distributes a sales receipt to a customer via Email (Resend), WhatsApp
+// (Twilio) or SMS (Twilio Programmable SMS). Requires authentication; any
+// authenticated user with transaction read access may send a receipt (cashiers
+// commonly email receipts at POS).
 //
 // Body:
 //   {
-//     "channel": "EMAIL" | "WHATSAPP",
+//     "channel": "EMAIL" | "WHATSAPP" | "SMS",
 //     "email"?:   "customer@example.com",   // required if channel=EMAIL and customer has no email
-//     "phone"?:   "+254712345678",          // required if channel=WHATSAPP and customer has no phone
+//     "phone"?:   "+254712345678",          // required if channel=WHATSAPP/SMS and customer has no phone
 //     "customMessage"?: "Thank you!"
 //   }
 //
@@ -41,15 +42,15 @@ async function distributeReceiptHandler(
 
   const body = await request.json();
   const { channel, email, phone, customMessage } = body as {
-    channel?: "EMAIL" | "WHATSAPP";
+    channel?: "EMAIL" | "WHATSAPP" | "SMS";
     email?: string;
     phone?: string;
     customMessage?: string;
   };
 
-  if (!channel || (channel !== "EMAIL" && channel !== "WHATSAPP")) {
+  if (!channel || (channel !== "EMAIL" && channel !== "WHATSAPP" && channel !== "SMS")) {
     return Response.json(
-      { success: false, error: "channel must be 'EMAIL' or 'WHATSAPP'." },
+      { success: false, error: "channel must be 'EMAIL', 'WHATSAPP' or 'SMS'." },
       { status: 400 },
     );
   }

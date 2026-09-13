@@ -8,15 +8,16 @@ import {
   CheckCircle, Loader2, Clock, ArrowRight, Wrench,
   ShieldAlert, ShieldCheck, ShieldOff, CalendarDays, Activity, Package, Search, LayoutGrid,
   List, Camera,
-  Phone, Printer, Pencil, Trash2,
+  Phone, Printer, Pencil, Trash2, Smartphone,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
+import { handleError } from '@/lib/error-handler';
 // R13 FIX: Decimal-safe money aggregation (decimal-string concat audit).
 import { toDec, round2 } from '@/lib/utils/financialMath';
 import {
   rentalsApi, productsApi, customersApi,
-  formatKES, formatDate, openWhatsApp,
+  formatKES, formatDate, openWhatsApp, openSMS,
   type ProductListItem, type CustomerItem, type RentalItem,
 } from '@/lib/api';
 import {
@@ -676,7 +677,7 @@ function EquipmentCatalog({ products, rentals }: { products: ProductListItem[]; 
 
 // Rental Card View Component
 
-function RentalCardView({ rentals, onReturn, onEdit, onDelete, onSendReceipt, onPrintReceipt }: { rentals: RentalItem[]; onReturn: (rental: RentalItem) => void; onEdit: (rental: RentalItem) => void; onDelete: (rental: RentalItem) => void; onSendReceipt: (rental: RentalItem) => void; onPrintReceipt: (rental: RentalItem) => void }) {
+function RentalCardView({ rentals, onReturn, onEdit, onDelete, onSendReceipt, onSendReceiptSms, onPrintReceipt }: { rentals: RentalItem[]; onReturn: (rental: RentalItem) => void; onEdit: (rental: RentalItem) => void; onDelete: (rental: RentalItem) => void; onSendReceipt: (rental: RentalItem) => void; onSendReceiptSms: (rental: RentalItem) => void; onPrintReceipt: (rental: RentalItem) => void }) {
   const statusBorder: Record<string, string> = {
     ACTIVE: 'border-l-green-500',
     OVERDUE: 'border-l-red-500',
@@ -763,6 +764,9 @@ function RentalCardView({ rentals, onReturn, onEdit, onDelete, onSendReceipt, on
                 )}
                 <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/30" onClick={() => onSendReceipt(rental)}>
                   <Phone className="h-3 w-3 mr-1" /> WhatsApp
+                </Button>
+                <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30" onClick={() => onSendReceiptSms(rental)} title="Send via SMS">
+                  <Smartphone className="h-3 w-3 mr-1" /> SMS
                 </Button>
                 <Button variant="outline" size="sm" className="h-7 text-[10px] px-2" onClick={() => onPrintReceipt(rental)}>
                   <Printer className="h-3 w-3 mr-1" /> Print
@@ -922,16 +926,11 @@ export default function RentalsTab() {
     setDeleteDialogOpen(true);
   };
 
-  const handleSendReceipt = (rental: RentalItem) => {
-    const phone = rental.customer?.phone || '';
-    if (!phone) {
-      toast.error('Customer has no phone number on file');
-      return;
-    }
+  const buildRentalReceiptText = (rental: RentalItem) => {
     const daysRented = Math.ceil(
       ((rental.actualReturnDate ? new Date(rental.actualReturnDate).getTime() : Date.now()) - new Date(rental.rentalStartDate).getTime()) / 86400000
     );
-    const message = [
+    return [
       `*Mbumah Hardware - Rental Receipt*`,
       ``,
       `Rental ID: ${rental.id.slice(-8).toUpperCase()}`,
@@ -952,7 +951,31 @@ export default function RentalsTab() {
       ``,
       `Thank you for doing business with us`,
     ].filter(Boolean).join('\n');
-    openWhatsApp(phone, message);
+  };
+
+  const handleSendReceipt = (rental: RentalItem) => {
+    const phone = rental.customer?.phone || '';
+    if (!phone) {
+      toast.error('Customer has no phone number on file');
+      return;
+    }
+    openWhatsApp(phone, buildRentalReceiptText(rental));
+  };
+
+  // SMS twin of handleSendReceipt — same receipt text opened as an sms:
+  // deep link (openSMS normalizes 07xx → 2547xx).
+  const handleSendReceiptSms = (rental: RentalItem) => {
+    const phone = rental.customer?.phone || '';
+    if (!phone) {
+      toast.error('Customer has no phone number on file');
+      return;
+    }
+    try {
+      openSMS(phone, buildRentalReceiptText(rental));
+      toast.success('Rental receipt opened in SMS');
+    } catch (err) {
+      toast.error(handleError(err, 'Send rental receipt via SMS'));
+    }
   };
 
   // Task 35-b: branded thermal-style rental receipt (logo + QR + thank-you).
@@ -1300,7 +1323,7 @@ export default function RentalsTab() {
               <Skeleton className="h-64" />
             </div>
           ) : viewMode === 'cards' ? (
-            <RentalCardView rentals={rentals} onReturn={handleReturn} onEdit={handleEdit} onDelete={handleDelete} onSendReceipt={handleSendReceipt} onPrintReceipt={handlePrintReceipt} />
+            <RentalCardView rentals={rentals} onReturn={handleReturn} onEdit={handleEdit} onDelete={handleDelete} onSendReceipt={handleSendReceipt} onSendReceiptSms={handleSendReceiptSms} onPrintReceipt={handlePrintReceipt} />
           ) : (
             <Card className="backdrop-blur-sm bg-card/80 border-border/50">
               <CardContent className="p-0">
@@ -1395,6 +1418,9 @@ export default function RentalsTab() {
                                   )}
                                   <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/30" onClick={() => handleSendReceipt(rental)}>
                                     <Phone className="h-3 w-3" />
+                                  </Button>
+                                  <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30" onClick={() => handleSendReceiptSms(rental)} title="Send via SMS" aria-label="Send receipt via SMS">
+                                    <Smartphone className="h-3 w-3" />
                                   </Button>
                                   <Button variant="outline" size="sm" className="h-7 text-[10px] px-2" onClick={() => handlePrintReceipt(rental)}>
                                     <Printer className="h-3 w-3" />

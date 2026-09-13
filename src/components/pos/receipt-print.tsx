@@ -26,9 +26,10 @@ import {
   Copy,
   Check,
   Loader2,
+  MessageSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatKES, formatDateTime, type TransactionItem } from '@/lib/api';
+import { formatKES, formatDateTime, openSMS, type TransactionItem } from '@/lib/api';
 import { STORE_LIST, COMPANY, type StoreInfo } from '@/lib/store-info';
 import { toNum, changeDue as changeDueOf } from '@/lib/utils/financialMath';
 import { RECEIPT_CONTENT_ID, generateReceiptPdf, buildReceiptFileName, printReceiptElement } from '@/lib/receipt-pdf';
@@ -249,6 +250,15 @@ export function EnhancedReceiptPrint({
     window.open(url, '_blank', 'noopener');
   }, [transaction, store, receiptTextOpts]);
 
+  // SMS twin of handleShareWhatsApp — same richer receipt text opened as an
+  // sms: deep link; empty phone => `sms:?body=…` app chooser (same UX as the
+  // wa.me share).
+  const handleShareSms = useCallback(() => {
+    if (!transaction) return;
+    const text = buildReceiptText(transaction, store, receiptTextOpts());
+    openSMS('', text);
+  }, [transaction, store, receiptTextOpts]);
+
   const handleCopyReceipt = useCallback(() => {
     if (!transaction) return;
     const text = buildReceiptText(transaction, store, receiptTextOpts());
@@ -326,6 +336,16 @@ export function EnhancedReceiptPrint({
           >
             <Share2 className="mr-1.5 h-4 w-4" />
             WhatsApp
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleShareSms}
+            aria-label="Send receipt via SMS"
+            title="Send receipt via SMS"
+            className="flex-1 min-w-[90px] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+          >
+            <MessageSquare className="mr-1.5 h-4 w-4" />
+            SMS
           </Button>
           <Button
             onClick={handleNewSale}

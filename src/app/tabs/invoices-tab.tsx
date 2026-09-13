@@ -8,13 +8,13 @@ import {
   ArrowRightLeft, XCircle, DollarSign, Clock,
   TrendingUp, AlertCircle, Receipt,
   FileCheck, FileMinus, FilePlus, ChevronDown,
-  Trash2, ArrowUpDown, Send, CheckCircle2, Phone,
+  Trash2, ArrowUpDown, Send, CheckCircle2, Phone, MessageSquare,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
   invoicesApi, productsApi, customersApi, whatsappApi,
-  formatKES, formatDate, formatDateTime,
+  formatKES, formatDate, formatDateTime, openSMS,
   type InvoiceItem,
   type InvoiceItemDetail,
   type ProductListItem,
@@ -633,6 +633,27 @@ export default function InvoicesTab() {
     }
   };
 
+  // SMS twin of handleSendWhatsApp — compact (~<=320 chars) sms: deep link
+  // built client-side (no server round-trip); openSMS normalizes 07xx → 2547xx.
+  const handleSendSms = async (invoice: InvoiceItem) => {
+    try {
+      const phone = prompt('Enter SMS phone number:', invoice.customerPhone || '') || '';
+      if (!phone) return;
+      const text = [
+        `MBUMAH HARDWARE ${invoice.invoiceType} ${invoice.invoiceNumber}`,
+        `Total: ${formatKES(invoice.totalAmount)}`,
+        `Issued: ${formatDate(invoice.issueDate)}`,
+        `Status: ${invoice.status}`,
+        'Thank you for your business! Asante sana!',
+      ].join('\n');
+      openSMS(phone, text);
+      toast.success(`${invoice.invoiceType} ${invoice.invoiceNumber} opened in SMS`);
+    } catch (err) {
+      const msg = handleError(err, 'Send invoice via SMS');
+      toast.error(msg);
+    }
+  };
+
   // ── Product dropdown ref ──
   const productDropdownRefs = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -909,6 +930,17 @@ export default function InvoicesTab() {
                             title="Send via WhatsApp"
                           >
                             <Phone className="h-4 w-4" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                            onClick={() => handleSendSms(inv)}
+                            title="Send via SMS"
+                            aria-label="Send via SMS"
+                          >
+                            <MessageSquare className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -1489,6 +1521,15 @@ export default function InvoicesTab() {
                     title="Send via WhatsApp"
                   >
                     <Phone className="h-4 w-4" /> WhatsApp
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => handleSendSms(invoiceDetail)}
+                    title="Send via SMS"
+                    aria-label="Send via SMS"
+                  >
+                    <MessageSquare className="h-4 w-4" /> SMS
                   </Button>
                 </div>
 

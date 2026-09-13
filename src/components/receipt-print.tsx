@@ -24,7 +24,7 @@
  * Component layout:
  *   ReceiptDocument      — the printable, branded receipt (colored, QR).
  *   ReceiptPrintPreview  — ResponsiveDialog wrapper with Print / Download
- *                          PDF / Copy / WhatsApp / New Sale actions.
+ *                          PDF / Copy / WhatsApp / SMS / New Sale actions.
  */
 
 import React, { useCallback, useState } from 'react';
@@ -49,6 +49,7 @@ import {
   Loader2,
   Percent,
   ScanLine,
+  MessageSquare,
 } from 'lucide-react';
 import Image from 'next/image';
 import { QRCodeCanvas } from 'qrcode.react';
@@ -56,6 +57,7 @@ import { toast } from 'sonner';
 import {
   formatKES,
   formatDateTime,
+  openSMS,
   type TransactionItem,
   type SaleItemDetail,
 } from '@/lib/api';
@@ -671,6 +673,15 @@ export function ReceiptPrintPreview({
     window.open(url, '_blank', 'noopener');
   }, [transaction, store, receiptTextOpts]);
 
+  // SMS twin of handleShareWhatsApp — same receipt text opened as an sms:
+  // deep link; the empty phone produces `sms:?body=…` which opens the SMS app
+  // so the user picks the recipient (same chooser UX as the wa.me share).
+  const handleShareSms = useCallback(() => {
+    if (!transaction) return;
+    const text = buildReceiptText(transaction, store, receiptTextOpts());
+    openSMS('', text);
+  }, [transaction, store, receiptTextOpts]);
+
   const handleCopyReceipt = useCallback(() => {
     if (!transaction) return;
     const text = buildReceiptText(transaction, store, receiptTextOpts());
@@ -748,6 +759,16 @@ export function ReceiptPrintPreview({
           >
             <Share2 className="mr-1.5 h-4 w-4" />
             WhatsApp
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleShareSms}
+            aria-label="Send receipt via SMS"
+            title="Send receipt via SMS"
+            className="flex-1 min-w-[90px] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+          >
+            <MessageSquare className="mr-1.5 h-4 w-4" />
+            SMS
           </Button>
           <Button
             onClick={handleNewSale}

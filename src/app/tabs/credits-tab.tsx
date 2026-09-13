@@ -7,12 +7,12 @@ import {
   CreditCard, Search, Plus, ArrowUpRight, ArrowDownRight,
   Minus, RotateCcw, Loader2, Filter, Users, Wallet, Scale, ChevronUp, ChevronDown,
   FileText, User, CircleDollarSign, AlertCircle, MoreHorizontal,
-  Pencil, Trash2, MessageCircle, Printer,
+  Pencil, Trash2, MessageCircle, MessageSquare, Printer,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
-  customerCreditsApi, customersApi, whatsappApi,
+  customerCreditsApi, customersApi, whatsappApi, openSMS,
   formatKES, formatDate, formatDateTime,
   type CustomerCreditItem,
   type CustomerItem,
@@ -446,6 +446,29 @@ export default function CreditsTab() {
       }
     } catch (err) {
       const msg = handleError(err, 'Send credit note via WhatsApp');
+      toast.error(msg);
+    }
+  }
+
+  // SMS twin of handleSendCreditWhatsApp — compact (~<=320 chars) sms: deep
+  // link built client-side; openSMS normalizes 07xx → 2547xx.
+  async function handleSendCreditSms(entry: CustomerCreditItem) {
+    try {
+      const customer = customers.find((c: CustomerItem) => c.id === entry.customerId);
+      const phone = prompt('Enter SMS phone number:', customer?.phone || '') || '';
+      if (!phone) return;
+      const docNo = entry.reference || entry.id.slice(0, 8).toUpperCase();
+      const text = [
+        `MBUMAH HARDWARE ${entry.creditType} ${docNo}`,
+        `Customer: ${customer?.name || 'Unknown Customer'}`,
+        `Amount: ${formatKES(entry.amount)}`,
+        `Status: ${entry.status === 'VOIDED' ? 'VOIDED' : 'Active'}`,
+        'Thank you for your business! Asante sana!',
+      ].join('\n');
+      openSMS(phone, text);
+      toast.success(`Credit note ${docNo} opened in SMS`);
+    } catch (err) {
+      const msg = handleError(err, 'Send credit note via SMS');
       toast.error(msg);
     }
   }
@@ -886,6 +909,14 @@ export default function CreditsTab() {
                                   >
                                     <MessageCircle className="h-4 w-4" />
                                     Send via WhatsApp
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => handleSendCreditSms(entry)}
+                                    className="gap-2 text-emerald-600 dark:text-emerald-400 focus:text-emerald-600 focus:bg-emerald-50 dark:focus:bg-emerald-950/30"
+                                    onSelect={(e) => e.preventDefault()}
+                                  >
+                                    <MessageSquare className="h-4 w-4" />
+                                    Send via SMS
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={() => handlePrintCredit(entry)}

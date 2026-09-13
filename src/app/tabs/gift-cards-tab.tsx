@@ -9,7 +9,7 @@ import {
   Mail, User, FileText, AlertTriangle, CheckCircle2, Clock, ChevronDown, Settings2, Sparkles,
   TrendingDown, TrendingUp, Ban, RefreshCw, Wallet,
   MoreHorizontal, Pencil, Trash2, ShieldAlert, Info,
-  MessageCircle,
+  MessageCircle, MessageSquare,
 } from 'lucide-react';
 
 import {
@@ -19,6 +19,7 @@ import {
   formatKES,
   formatDate,
   formatDateTime,
+  openSMS,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
 import type { UpdateGiftCardPayload } from '@/lib/types';
@@ -684,6 +685,27 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
     }
   }, [storeId]);
 
+  // SMS twin of handleSendGiftCardWhatsApp — compact (~<=320 chars) sms: deep
+  // link built client-side; openSMS normalizes 07xx → 2547xx.
+  const handleSendGiftCardSms = useCallback(async (card: GiftCardItem) => {
+    try {
+      const phone = prompt('Enter SMS phone number:', card.recipientPhone || '') || '';
+      if (!phone) return;
+      const text = [
+        `MBUMAH HARDWARE Gift Card ${card.code}`,
+        card.recipientName ? `To: ${card.recipientName}` : null,
+        `Balance: ${formatKES(card.currentBalance)}`,
+        card.notes ? `Note: ${card.notes.slice(0, 80)}` : null,
+        'Thank you for your business!',
+      ].filter(Boolean).join('\n');
+      openSMS(phone, text);
+      toast.success(`Gift card ${card.code} opened in SMS`);
+    } catch (err) {
+      const msg = handleError(err, 'Send gift card via SMS');
+      toast.error(msg);
+    }
+  }, []);
+
   const resetCreateForm = useCallback(() => {
     setCreateForm({
       code: generateGiftCardCode(),
@@ -1066,6 +1088,15 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
                           >
                             <MessageCircle className="h-4 w-4" />
                             Send via WhatsApp
+                          </DropdownMenuItem>
+                          {/* Send via SMS */}
+                          <DropdownMenuItem
+                            onClick={() => handleSendGiftCardSms(card)}
+                            className="gap-2 cursor-pointer text-emerald-600 dark:text-emerald-400 focus:text-emerald-600 focus:bg-emerald-50 dark:focus:bg-emerald-950/30"
+                            onSelect={(e) => e.preventDefault()}
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                            Send via SMS
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           {canCancel(userRole) && ['ACTIVE', 'PARTIALLY_REDEEMED'].includes(card.status) && (

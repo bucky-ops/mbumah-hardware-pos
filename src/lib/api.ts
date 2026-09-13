@@ -842,7 +842,7 @@ export const transactionsApi = {
 
   distributeReceipt: async (params: {
     transactionId: string;
-    channel: 'EMAIL' | 'WHATSAPP';
+    channel: 'EMAIL' | 'WHATSAPP' | 'SMS';
     email?: string;
     phone?: string;
     customMessage?: string;
@@ -855,11 +855,11 @@ export const transactionsApi = {
   },
 };
 
-// ── Receipt Distribution (Phase 4 — Email via Resend + WhatsApp via Twilio) ──
+// ── Receipt Distribution (Phase 4 — Email via Resend + WhatsApp/SMS via Twilio) ──
 
 export interface ReceiptDistributionResult {
   success: boolean;
-  channel: 'EMAIL' | 'WHATSAPP';
+  channel: 'EMAIL' | 'WHATSAPP' | 'SMS';
   recipient: string; // masked for PII
   simulated: boolean; // true when provider API key was absent
   providerId: string | null;

@@ -8,12 +8,12 @@ import {
   Phone, MapPin, User, FileText, Clock,
   Package, CheckCircle2, AlertTriangle,
   Printer, CalendarDays, Hash, Navigation,
-  ChevronRight, CircleDot, MessageSquare,
+  ChevronRight, CircleDot, MessageSquare, Smartphone,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
-  deliveryNotesApi, whatsappApi,
+  deliveryNotesApi, whatsappApi, openSMS,
   formatDate, formatDateTime, formatKES,
   type DeliveryNoteItem,
   type DeliveryNoteItemDetail,
@@ -342,6 +342,27 @@ export default function DeliveryNotesTab() {
       const msg = handleError(err, 'Send delivery note via WhatsApp');
       toast.error(msg);
     });
+  }
+
+  // SMS twin of handleSendWhatsApp — compact (~<=320 chars) sms: deep link
+  // built client-side; openSMS normalizes 07xx → 2547xx.
+  function handleSendSms(note: DeliveryNoteItem) {
+    const phone = prompt('Enter SMS phone number:', note.customerPhone || '') || '';
+    if (!phone) return;
+    try {
+      const text = [
+        `MBUMAH HARDWARE — Delivery Note ${note.deliveryNumber}`,
+        `Customer: ${note.customerName}`,
+        typeof note.itemCount === 'number' ? `Items: ${note.itemCount}` : null,
+        `Status: ${note.status}`,
+        'Thank you for your business! Asante sana!',
+      ].filter(Boolean).join('\n');
+      openSMS(phone, text);
+      toast.success(`Delivery note ${note.deliveryNumber} opened in SMS`);
+    } catch (err) {
+      const msg = handleError(err, 'Send delivery note via SMS');
+      toast.error(msg);
+    }
   }
 
   function handleStatusUpdate(id: string, newStatus: string) {
@@ -685,6 +706,16 @@ export default function DeliveryNotesTab() {
                           >
                             <MessageSquare className="h-3.5 w-3.5" />
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                            onClick={() => handleSendSms(dn)}
+                            title="Send via SMS"
+                            aria-label="Send via SMS"
+                          >
+                            <Smartphone className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -981,6 +1012,15 @@ export default function DeliveryNotesTab() {
                     title="Send to WhatsApp"
                   >
                     <MessageSquare className="h-3.5 w-3.5" /> WhatsApp
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => handleSendSms(noteDetail)}
+                    title="Send via SMS"
+                    aria-label="Send via SMS"
+                  >
+                    <Smartphone className="h-3.5 w-3.5" /> SMS
                   </Button>
                 </div>
               </div>

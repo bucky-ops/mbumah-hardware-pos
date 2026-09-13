@@ -7,7 +7,7 @@ import {
   ShoppingBag, Search, Download, ChevronDown, ChevronUp,
   CalendarDays, TrendingUp, Hash, CreditCard, Smartphone, Banknote, Wallet,
   Filter, FileText, RotateCcw, Ban, Eye, Printer, AlertTriangle, Receipt, X, MessageCircle,
-  Mail, Send, Loader2,
+  Mail, Send, Loader2, MessageSquare,
 } from 'lucide-react';
 
 import { transactionsApi, whatsappApi, formatKES, formatDateTime, type TransactionItem, type SaleItemDetail, type ReceiptDistributionResult } from '@/lib/api';
@@ -286,15 +286,15 @@ function ReceiptModal({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   transaction: TransactionItem | null;
-  onDistribute: (channel: 'EMAIL' | 'WHATSAPP', recipient: string) => void;
-  distributing: 'EMAIL' | 'WHATSAPP' | null;
+  onDistribute: (channel: 'EMAIL' | 'WHATSAPP' | 'SMS', recipient: string) => void;
+  distributing: 'EMAIL' | 'WHATSAPP' | 'SMS' | null;
 }) {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
 
   // Recipient input state (email or phone) — prefilled from the customer record
   // when the user picks a channel. State is reset via `onOpenChange` when the
   // modal closes (see the wrapped handler below).
-  const [distChannel, setDistChannel] = useState<'EMAIL' | 'WHATSAPP' | null>(null);
+  const [distChannel, setDistChannel] = useState<'EMAIL' | 'WHATSAPP' | 'SMS' | null>(null);
   const [recipient, setRecipient] = useState('');
   const [pdfBusy, setPdfBusy] = useState(false);
 
@@ -318,6 +318,13 @@ function ReceiptModal({
     setDistChannel('WHATSAPP');
     setRecipient(transaction.customer?.phone || '');
   };
+
+  const handleStartSms = () => {
+    setDistChannel('SMS');
+    setRecipient(transaction.customer?.phone || '');
+  };
+
+  const distChannelLabel = distChannel === 'EMAIL' ? 'Email' : distChannel === 'SMS' ? 'SMS' : 'WhatsApp';
 
   const handleConfirmDistribute = () => {
     if (!recipient.trim()) {
@@ -374,8 +381,8 @@ function ReceiptModal({
         {distChannel ? (
           <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
             <p className="text-xs font-medium flex items-center gap-1.5">
-              {distChannel === 'EMAIL' ? <Mail className="h-3.5 w-3.5" /> : <MessageCircle className="h-3.5 w-3.5" />}
-              Send receipt via {distChannel === 'EMAIL' ? 'Email' : 'WhatsApp'}
+              {distChannel === 'EMAIL' ? <Mail className="h-3.5 w-3.5" /> : distChannel === 'SMS' ? <MessageSquare className="h-3.5 w-3.5" /> : <MessageCircle className="h-3.5 w-3.5" />}
+              Send receipt via {distChannelLabel}
             </p>
             <Input
               type={distChannel === 'EMAIL' ? 'email' : 'tel'}
@@ -388,7 +395,7 @@ function ReceiptModal({
             <div className="flex gap-2">
               <Button size="sm" className="h-7 text-xs flex-1" onClick={handleConfirmDistribute} disabled={distributing !== null}>
                 {distributing === distChannel ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Send className="h-3 w-3 mr-1" />}
-                Send {distChannel === 'EMAIL' ? 'Email' : 'WhatsApp'}
+                Send {distChannelLabel}
               </Button>
               <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setDistChannel(null)} disabled={distributing !== null}>
                 Cancel
@@ -409,6 +416,9 @@ function ReceiptModal({
             </Button>
             <Button variant="outline" size="sm" className="text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30" onClick={handleStartWhatsApp} disabled={distributing !== null}>
               <MessageCircle className="h-4 w-4 mr-1.5" /> WhatsApp
+            </Button>
+            <Button variant="outline" size="sm" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30" onClick={handleStartSms} disabled={distributing !== null} title="Send receipt via SMS" aria-label="Send receipt via SMS">
+              <MessageSquare className="h-4 w-4 mr-1.5" /> SMS
             </Button>
             <Button size="sm" onClick={() => onOpenChange(false)}>Close</Button>
           </DialogFooter>
@@ -648,7 +658,7 @@ export default function TransactionsTab() {
   const [receiptTransaction, setReceiptTransaction] = useState<TransactionItem | null>(null);
   const [receiptOpen, setReceiptOpen] = useState(false);
   // Receipt distribution state (Phase 4 — Email/WhatsApp)
-  const [distributing, setDistributing] = useState<'EMAIL' | 'WHATSAPP' | null>(null);
+  const [distributing, setDistributing] = useState<'EMAIL' | 'WHATSAPP' | 'SMS' | null>(null);
 
   // Refund/Void dialog state
   const [refundTransaction, setRefundTransaction] = useState<TransactionItem | null>(null);
@@ -773,12 +783,13 @@ export default function TransactionsTab() {
   }, [currentStoreId]);
 
   /**
-   * Distribute the currently-open receipt via Email (Resend) or WhatsApp (Twilio).
+   * Distribute the currently-open receipt via Email (Resend), WhatsApp
+   * (Twilio) or SMS (Twilio Programmable SMS).
    * Calls POST /api/reports/export with the transaction ID and channel. The
    * backend gracefully simulates the send when provider API keys are absent,
    * returning `simulated: true` so we can inform the user.
    */
-  const handleDistributeReceipt = useCallback(async (channel: 'EMAIL' | 'WHATSAPP', recipient: string) => {
+  const handleDistributeReceipt = useCallback(async (channel: 'EMAIL' | 'WHATSAPP' | 'SMS', recipient: string) => {
     if (!receiptTransaction) return;
     setDistributing(channel);
     try {
@@ -786,7 +797,7 @@ export default function TransactionsTab() {
         transactionId: receiptTransaction.id,
         channel,
         email: channel === 'EMAIL' ? recipient : undefined,
-        phone: channel === 'WHATSAPP' ? recipient : undefined,
+        phone: channel !== 'EMAIL' ? recipient : undefined,
         storeId: currentStoreId || undefined,
       });
       const result: ReceiptDistributionResult = (res as unknown as { data: ReceiptDistributionResult }).data ?? (res as unknown as ReceiptDistributionResult);
@@ -796,7 +807,7 @@ export default function TransactionsTab() {
         toast.success(result.message);
       }
     } catch (err) {
-      const msg = handleError(err, `Send receipt via ${channel === 'EMAIL' ? 'email' : 'WhatsApp'}`);
+      const msg = handleError(err, `Send receipt via ${channel === 'EMAIL' ? 'email' : channel === 'SMS' ? 'SMS' : 'WhatsApp'}`);
       toast.error(msg);
     } finally {
       setDistributing(null);
