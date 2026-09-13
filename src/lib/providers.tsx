@@ -10,6 +10,7 @@ import { ErrorBoundary } from '@/components/error-boundary';
 // v2.5.0: 45-second ALERT POPUPS host (bottom-left stack + notification poller).
 import { AlertPopupHost } from '@/components/alerts/alert-popup-host';
 import { useState, useEffect, type ReactNode } from 'react';
+import { useAuthStore } from '@/lib/stores';
 
 function GlobalErrorHandler({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -21,10 +22,18 @@ function GlobalErrorHandler({ children }: { children: ReactNode }) {
 
       console.error('[Unhandled Promise Rejection]', event.reason);
 
-      toast.error('Unexpected Error', {
-        description: message,
-        duration: 6000,
-      });
+      // LOGIN POPUP FIX (v2.5.2): global error TOASTS only fire for signed-in
+      // users. On the login screen an unexpected rejection used to pop
+      // "Unexpected Error" over the form — with retries it felt like popup
+      // spam and contributed to the "cannot access the login" report. Before
+      // login we log to the console and keep the screen silent; the inline
+      // login error banner handles the feedback users actually need.
+      if (useAuthStore.getState().isAuthenticated) {
+        toast.error('Unexpected Error', {
+          description: message,
+          duration: 6000,
+        });
+      }
     };
 
     const handleWindowError = (event: ErrorEvent) => {
@@ -35,10 +44,12 @@ function GlobalErrorHandler({ children }: { children: ReactNode }) {
 
       console.error('[Window Error]', event.error);
 
-      toast.error('Runtime Error', {
-        description: message,
-        duration: 6000,
-      });
+      if (useAuthStore.getState().isAuthenticated) {
+        toast.error('Runtime Error', {
+          description: message,
+          duration: 6000,
+        });
+      }
     };
 
     window.addEventListener('unhandledrejection', handleUnhandledRejection);

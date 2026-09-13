@@ -18,6 +18,7 @@ import {
 import { handleError } from '@/lib/error-handler';
 import { formatQtyWithUnit, unitLabel } from '@/lib/utils/financialMath';
 import { ProductImageUpload } from '@/components/product-image-upload';
+import { ProductImage } from '@/components/product-image';
 import { Button } from '@/components/ui/button';
 import {
   Card, CardContent, CardFooter,
@@ -61,19 +62,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   cat_nails_screws: '#78716C',
 };
 
-const CATEGORY_IMAGES: Record<string, string> = {
-  cat_cement: '/categories/cat_cement.png',
-  cat_iron_sheets: '/categories/cat_iron.png',
-  cat_paints: '/categories/cat_paints.png',
-  cat_iron_bars: '/categories/cat_rebar.png',
-  cat_wheelbarrows: '/categories/cat_wheelbarrow.png',
-  cat_mesh_wires: '/categories/cat_mesh.png',
-  cat_tools: '/categories/cat_tools.png',
-  cat_plumbing: '/categories/cat_plumbing.png',
-  cat_electrical: '/categories/cat_electrical.png',
-  cat_nails_screws: '/categories/cat_nails.png',
-};
-
 const UNIT_TYPES: { value: string; label: string }[] = [
   { value: 'PIECE', label: 'Piece' },
   { value: 'KILOGRAM', label: 'Kilogram' },
@@ -83,11 +71,6 @@ const UNIT_TYPES: { value: string; label: string }[] = [
   { value: 'BOX', label: 'Box' },
   { value: 'SET', label: 'Set' },
 ];
-
-function getCategoryImage(categoryId: string | null | undefined): string | null {
-  if (!categoryId) return null;
-  return CATEGORY_IMAGES[categoryId] || null;
-}
 
 function getStockStatus(qty: number, reorder: number) {
   if (qty <= 0) return { label: 'Out of Stock', color: 'bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400', tone: 'out' as const };
@@ -481,7 +464,6 @@ export default function CatalogTab() {
 
   const renderProductCard = (product: ProductListItem) => {
     const stock = getStockStatus(product.quantityInStock, product.reorderLevel);
-    const catImg = getCategoryImage(product.categoryId);
     const qty = getQty(product.id);
     const inCart = cart.items.find((i) => i.productId === product.id);
     const isLow = stock.tone !== 'ok';
@@ -493,25 +475,15 @@ export default function CatalogTab() {
           isLow ? 'ring-1 ring-amber-300 dark:ring-amber-700/60' : ''
         }`}
       >
-        {/* Image / placeholder — prefer product photo, fall back to category image */}
+        {/* Image / placeholder — photo → category icon → letter tile */}
         <div className="relative h-40 bg-muted/30 overflow-hidden">
-          {product.imageUrl ? (
-            <img
-              src={product.imageUrl}
-              alt={product.name}
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-            />
-          ) : catImg ? (
-            <img
-              src={catImg}
-              alt={product.category?.name || product.name}
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <Package className="h-12 w-12 text-muted-foreground/40" />
-            </div>
-          )}
+          <ProductImage
+            imageUrl={product.imageUrl}
+            categoryId={product.categoryId}
+            categoryName={product.category?.name}
+            name={product.name}
+            className="w-full h-full transition-transform duration-300 group-hover:scale-105"
+          />
           {/* Category badge */}
           {product.category && (
             <Badge
@@ -637,7 +609,6 @@ export default function CatalogTab() {
 
   const renderProductListItem = (product: ProductListItem) => {
     const stock = getStockStatus(product.quantityInStock, product.reorderLevel);
-    const catImg = getCategoryImage(product.categoryId);
     const qty = getQty(product.id);
     const inCart = cart.items.find((i) => i.productId === product.id);
     const isLow = stock.tone !== 'ok';
@@ -651,13 +622,13 @@ export default function CatalogTab() {
       >
         {/* Thumbnail */}
         <div className="h-16 w-16 rounded-md bg-muted/30 overflow-hidden flex-shrink-0">
-          {catImg ? (
-            <img src={catImg} alt={product.name} className="w-full h-full object-cover" />
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <Package className="h-6 w-6 text-muted-foreground/40" />
-            </div>
-          )}
+          <ProductImage
+            imageUrl={product.imageUrl}
+            categoryId={product.categoryId}
+            categoryName={product.category?.name}
+            name={product.name}
+            className="w-full h-full"
+          />
         </div>
 
         {/* Info */}

@@ -7,7 +7,7 @@ import {
   Package, Search, Plus, AlertTriangle, AlertCircle, DollarSign,
   MoreVertical, Edit, Trash2, Loader2, CheckCircle, Copy, ArrowUpDown,
   Minus, BarChart3, ChevronUp, ChevronDown, ChevronsUpDown,
-  Download, History, RotateCcw, X, ImageIcon,
+  Download, History, RotateCcw, X,
   Filter, ChevronRight, Tag, Palette, Zap, ShoppingCart, Info,
   MessageCircle, RefreshCw, Pencil, Settings2, Check
 } from 'lucide-react';
@@ -33,6 +33,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { handleError } from '@/lib/error-handler';
+import { ProductImage } from '@/components/product-image';
+// SKU/BARCODE AUTOGEN (v2.5.2): selecting a category auto-fills a
+// branch-coded SKU draft and a valid EAN-13 barcode (user edits always win).
+import { generateSkuDraft, generateEan13Barcode } from '@/lib/utils/product-codes';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
@@ -59,25 +63,6 @@ const CATEGORY_COLOR_PALETTE = [
   '#EC4899', '#14B8A6', '#A855F7', '#E11D48', '#84CC16',
   '#0EA5E9', '#D946EF', '#F43F5E', '#22D3EE', '#FBBF24',
 ];
-
-// Category image mapping (same as page.tsx)
-const CATEGORY_IMAGES: Record<string, string> = {
-  cat_cement: '/categories/cat_cement.png',
-  cat_iron_sheets: '/categories/cat_iron.png',
-  cat_paints: '/categories/cat_paints.png',
-  cat_iron_bars: '/categories/cat_rebar.png',
-  cat_wheelbarrows: '/categories/cat_wheelbarrow.png',
-  cat_mesh_wires: '/categories/cat_mesh.png',
-  cat_tools: '/categories/cat_tools.png',
-  cat_plumbing: '/categories/cat_plumbing.png',
-  cat_electrical: '/categories/cat_electrical.png',
-  cat_nails_screws: '/categories/cat_nails.png',
-};
-
-function getCategoryImage(categoryId: string | null | undefined): string | null {
-  if (!categoryId) return null;
-  return CATEGORY_IMAGES[categoryId] || null;
-}
 
 function getCategoryColor(name: string): string {
   return CATEGORY_COLORS[name] || '#6B7280';
@@ -240,6 +225,67 @@ export default function InventoryTab() {
     isRental: false, isBundle: false,
   });
 
+  // ── SKU/BARCODE AUTOGENERATION (v2.5.2) ─────────────────────────────────
+  // Tracks whether the current SKU / barcode value came from the generator:
+  // re-selecting a category refreshes generated values but NEVER clobbers
+  // something the user typed by hand (user edit wins — standard form UX).
+  const skuGeneratedRef = useRef(false);
+  const barcodeGeneratedRef = useRef(false);
+  // Store codes for branch-coded SKU drafts (MBM-JUJ-CEM-0042). Fetched once
+  // from /api/stores; drafts fall back to the branch-less MBM-<CAT>-XXXX form
+  // while the list loads or if the code is missing.
+  const storeCodeMapRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { authorizedFetchJson } = await import('@/lib/api');
+        const res = await authorizedFetchJson<{ id: string; code?: string | null }[]>('/api/stores');
+        if (cancelled) return;
+        const map: Record<string, string> = {};
+        for (const s of res.json?.data ?? []) {
+          if (s.id && s.code) map[s.id] = s.code;
+        }
+        storeCodeMapRef.current = map;
+      } catch {
+        /* drafts simply omit the branch segment */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  /** Regenerate the SKU draft for the currently selected category. */
+  const regenerateSku = () => {
+    const cat = categories.find((c) => c.id === newProduct.categoryId);
+    const draft = generateSkuDraft(cat?.name, storeCodeMapRef.current[currentStoreId]);
+    skuGeneratedRef.current = true;
+    setNewProduct((prev) => ({ ...prev, sku: draft }));
+  };
+
+  /** Regenerate the EAN-13 barcode draft. */
+  const regenerateBarcode = () => {
+    barcodeGeneratedRef.current = true;
+    setNewProduct((prev) => ({ ...prev, barcode: generateEan13Barcode() }));
+  };
+
+  /** Category select handler — auto-generates codes that are still empty. */
+  const handleNewProductCategoryChange = (v: string) => {
+    setNewProduct((prev) => {
+      const next = { ...prev, categoryId: v };
+      if (!prev.sku || skuGeneratedRef.current) {
+        const cat = categories.find((c) => c.id === v);
+        next.sku = generateSkuDraft(cat?.name, storeCodeMapRef.current[currentStoreId]);
+        skuGeneratedRef.current = true;
+      }
+      if (!prev.barcode || barcodeGeneratedRef.current) {
+        next.barcode = generateEan13Barcode();
+        barcodeGeneratedRef.current = true;
+      }
+      return next;
+    });
+  };
+  // ────────────────────────────────────────────────────────────────────────
+
   // Debounce search input (300ms)
   useEffect(() => {
     if (debounceTimerRef.current) {
@@ -292,6 +338,8 @@ export default function InventoryTab() {
     onSuccess: () => {
       toast.success('Product created successfully');
       setAddProductOpen(false);
+      skuGeneratedRef.current = false;
+      barcodeGeneratedRef.current = false;
       setNewProduct({ name: '', sku: '', barcode: '', pricePerUnit: '', costPrice: '', quantityInStock: '', reorderLevel: '10', unitType: 'PIECE', categoryId: '', description: '', isRental: false, isBundle: false });
       queryClient.invalidateQueries({ queryKey: ['products', currentStoreId] });
     },
@@ -888,16 +936,26 @@ export default function InventoryTab() {
                   </div>
                   <div className="space-y-2">
                     <Label>SKU</Label>
-                    <Input value={newProduct.sku} onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })} placeholder="e.g. NAIL-20" />
+                    <div className="flex gap-1.5">
+                      <Input value={newProduct.sku} onChange={(e) => { skuGeneratedRef.current = false; setNewProduct({ ...newProduct, sku: e.target.value }); }} placeholder="Auto-fills when category is selected" />
+                      <Button type="button" variant="outline" size="icon" onClick={regenerateSku} title="Generate new SKU" aria-label="Generate new SKU" className="shrink-0">
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Barcode</Label>
-                    <Input value={newProduct.barcode} onChange={(e) => setNewProduct({ ...newProduct, barcode: e.target.value })} placeholder="e.g. 6001234567890" />
+                    <div className="flex gap-1.5">
+                      <Input value={newProduct.barcode} onChange={(e) => { barcodeGeneratedRef.current = false; setNewProduct({ ...newProduct, barcode: e.target.value }); }} placeholder="Auto-fills (EAN-13)" inputMode="numeric" />
+                      <Button type="button" variant="outline" size="icon" onClick={regenerateBarcode} title="Generate new barcode" aria-label="Generate new barcode" className="shrink-0">
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                   <div className="space-y-2 col-span-2">
                     <Label>Category</Label>
-                    <Select value={newProduct.categoryId} onValueChange={(v) => setNewProduct({ ...newProduct, categoryId: v })}>
-                      <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                    <Select value={newProduct.categoryId} onValueChange={handleNewProductCategoryChange}>
+                      <SelectTrigger><SelectValue placeholder="Select category (auto-generates SKU + barcode)" /></SelectTrigger>
                       <SelectContent>
                         {categories.map((c) => (
                           <SelectItem key={c.id} value={c.id}>
@@ -1207,8 +1265,7 @@ export default function InventoryTab() {
                         : 0;
                       const marginColor = getProfitMarginColor(profitMargin);
                       const catColor = product.category?.name ? getCategoryColor(product.category.name) : '#6B7280';
-                      const catImage = getCategoryImage(product.categoryId);
-                      const isQuickAdjusting = quickAdjustId === product.id;
+                                      const isQuickAdjusting = quickAdjustId === product.id;
 
                       return (
                         <TableRow
@@ -1223,15 +1280,12 @@ export default function InventoryTab() {
                             />
                           </TableCell>
                           <TableCell>
-                            {catImage ? (
-                              <div className="w-8 h-8 rounded overflow-hidden bg-muted shrink-0 group-hover:scale-110 transition-transform cursor-pointer" onClick={() => setDetailProduct(product)}>
-                                <img src={catImage} alt={product.category?.name || 'Product category'} className="h-full w-full object-cover" />
-                              </div>
-                            ) : (
-                              <div className="w-8 h-8 rounded bg-muted flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform cursor-pointer" onClick={() => setDetailProduct(product)}>
-                                <ImageIcon className="h-3.5 w-3.5 text-muted-foreground/40" />
-                              </div>
-                            )}
+                            <div
+                              className="w-8 h-8 rounded overflow-hidden bg-muted shrink-0 group-hover:scale-110 transition-transform cursor-pointer"
+                              onClick={() => setDetailProduct(product)}
+                            >
+                              <ProductImage imageUrl={product.imageUrl} categoryId={product.categoryId} categoryName={product.category?.name} name={product.name} className="h-full w-full" />
+                            </div>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-3">
@@ -1529,18 +1583,9 @@ export default function InventoryTab() {
             <DialogTitle className="flex items-center gap-3">
               {detailProduct && (
                 <>
-                  {(() => {
-                    const img = getCategoryImage(detailProduct.categoryId);
-                    return img ? (
-                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-muted shrink-0">
-                        <img src={img} alt={detailProduct.category?.name || ''} className="h-full w-full object-cover" />
-                      </div>
-                    ) : (
-                      <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                        <Package className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                    );
-                  })()}
+                  <div className="w-10 h-10 rounded-lg overflow-hidden bg-muted shrink-0">
+                    <ProductImage imageUrl={detailProduct.imageUrl} categoryId={detailProduct.categoryId} categoryName={detailProduct.category?.name} name={detailProduct.name} className="h-full w-full" />
+                  </div>
                   <div>
                     <span>{detailProduct.name}</span>
                     <p className="text-xs font-normal text-muted-foreground mt-0.5">{detailProduct.sku}</p>

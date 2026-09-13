@@ -4,6 +4,10 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateSKU } from '@/lib/helpers';
+// SKU/BARCODE AUTOGEN + IMAGE DEFAULT (v2.5.2): EAN-13 barcode generation and
+// category-icon resolution for products created without explicit codes/images.
+import { generateEan13Barcode } from '@/lib/utils/product-codes';
+import { resolveProductImage } from '@/lib/product-images';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { requireStoreAccess, MANAGER_PLUS_ROLES, type AuthSession } from '@/lib/auth';
 import { parsePagination, buildPaginationMeta } from '@/lib/api-pagination';
@@ -176,6 +180,24 @@ async function createProductHandler(
     }
     const productSku = sku || autoSku || generateSKU(categoryId || 'GEN');
 
+    // BARCODE AUTOGEN (v2.5.2): when the caller does not supply one, a valid
+    // EAN-13 (GS1 Kenya 620 prefix + checksum) is generated server-side so
+    // EVERY product is scanner-ready — mirrors the add-product form draft.
+    const productBarcode = barcode || generateEan13Barcode();
+    // IMAGE DEFAULT (v2.5.2): a new product immediately shows a matching
+    // picture — the name-matched studio shot from /public/products, else the
+    // category icon ("similar icon appears") — unless a real photo URL is
+    // supplied by the caller.
+    let categoryForImage: { name: string } | null = null;
+    if (!imageUrl && categoryId) {
+      categoryForImage = await db.productCategory.findUnique({
+        where: { id: categoryId },
+        select: { name: true },
+      });
+    }
+    const productImage =
+      resolveProductImage(imageUrl, categoryId, categoryForImage?.name, name) || null;
+
     const existingSku = await db.product.findUnique({ where: { sku: productSku } });
   if (existingSku) {
     return Response.json(
@@ -184,13 +206,17 @@ async function createProductHandler(
     );
   }
 
-    if (barcode) {
-    const existingBarcode = await db.product.findUnique({ where: { barcode } });
+    if (productBarcode) {
+    const existingBarcode = await db.product.findUnique({ where: { barcode: productBarcode } });
     if (existingBarcode) {
-      return Response.json(
-        { success: false, error: 'A product with this barcode already exists.' },
-        { status: 409 }
-      );
+      if (barcode) {
+        // Caller explicitly picked a duplicate barcode — refuse so they can
+        // choose another; generated collisions are retried below instead.
+        return Response.json(
+          { success: false, error: 'A product with this barcode already exists.' },
+          { status: 409 }
+        );
+      }
     }
   }
 
@@ -199,7 +225,7 @@ async function createProductHandler(
       storeId,
       name,
       sku: productSku,
-      barcode: barcode || null,
+      barcode: productBarcode,
       description: description || null,
       categoryId: categoryId || null,
       unitType: unitType || 'PIECE',
@@ -210,7 +236,7 @@ async function createProductHandler(
       taxRate: taxRate ?? 16,
       isRental: isRental ?? false,
       isBundle: isBundle ?? false,
-      imageUrl: imageUrl || null,
+      imageUrl: productImage,
       isActive: true,
     },
     include: {

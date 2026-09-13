@@ -24,6 +24,10 @@ async function getHandler(request: NextRequest): Promise<Response> {
         id: true,
         organizationId: true,
         name: true,
+        // v2.5.2: expose the branch code (JUJ/NAK/…) — the add-product forms
+        // use it to prefill branch-coded SKU drafts that match what the
+        // server-side generateSKU() will store (MBM-<branch>-<cat>-XXXX).
+        code: true,
         location: true,
         address: true,
         phone: true,
