@@ -127,6 +127,15 @@ async function endShiftHandler(...args: unknown[]): Promise<Response> {
     },
   });
 
+  // v2.6.1 BLIND CLOSEOUT authz: a non-manager may only end their OWN shift.
+  // Managers-and-above retain store-wide closeout powers (handover closures).
+  if (session && !MANAGER_UP_ROLES.includes(session.role) && shift && shift.userId !== session.userId) {
+    return Response.json(
+      { success: false, error: 'You can only end your own shift. Ask a manager to close another user\u2019s drawer.' },
+      { status: 403 }
+    );
+  }
+
   if (!shift) {
     return Response.json(
       { success: false, error: 'Shift not found.' },
@@ -256,4 +265,4 @@ async function endShiftHandler(...args: unknown[]): Promise<Response> {
 }
 
 // AUDIT FIX: session auth + manager-or-above role gate (was unauthenticated).
-export const POST = withErrorBoundary(withSessionAuth(endShiftHandler, MANAGER_UP_ROLES), 'SHIFT_END');
+export const POST = withErrorBoundary(withSessionAuth(endShiftHandler), 'SHIFT_END');
