@@ -42,6 +42,14 @@ import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { GET as outboxGET } from '@/app/api/cron/outbox/route';
 import { GET as paymentsSweeperGET } from '@/app/api/cron/payments-sweeper/route';
+// v2.6.1: the eTIMS retry queue and the debt-reminder sweep originally
+// shipped as dedicated vercel.json cron entries — which pushed the project
+// past Vercel Hobby's TWO-cron-jobs-per-project limit and REJECTED every
+// deployment (commit status links to the cron usage-and-pricing docs; prod
+// froze on v2.5.8). Same remediation as the original dispatcher: fold them
+// into this endpoint and keep the routes live for external schedulers.
+import { GET as etimsRetryGET } from '@/app/api/cron/etims-retry/route';
+import { GET as debtRemindersGET } from '@/app/api/cron/debt-reminders/route';
 
 export const dynamic = 'force-dynamic';
 // Both sub-routes declare maxDuration 60; running them in parallel keeps the
@@ -121,6 +129,14 @@ async function hourlyCronHandler(...args: unknown[]): Promise<Response> {
   const results = await dispatchAll(request, [
     { name: 'outbox', run: () => outboxGET(request) },
     { name: 'payments-sweeper', run: () => paymentsSweeperGET(request) },
+    // v2.6.1 sub-jobs (each re-verifies the x-cron-secret itself and is
+    // independently guarded against double-delivery / double-reminding):
+    { name: 'etims-retry', run: () => etimsRetryGET(request) },
+    // The debt-reminder sweep carries a 7-day per-ledger re-reminder guard,
+    // so a daily tick here preserves the 30/60/90+ bucket semantics without
+    // a dedicated cron entry. Runs at the dispatcher's 03:00 UTC tick
+    // (06:00 EAT) — statement times shift with the schedule, not the code.
+    { name: 'debt-reminders', run: () => debtRemindersGET(request) },
   ]);
 
   const allOk = results.every((r) => r.ok);

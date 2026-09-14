@@ -151,6 +151,10 @@ async function createProductHandler(
     description,
     categoryId,
     unitType,
+    // v2.6.1 UoM conversion (optional): sellingUnit = what the counter sells
+    // in; conversionFactor = base units per selling unit (default 1).
+    sellingUnit,
+    conversionFactor,
     quantityInStock,
     reorderLevel,
     pricePerUnit,
@@ -242,6 +246,10 @@ async function createProductHandler(
       description: description || null,
       categoryId: categoryId || null,
       unitType: unitType || 'PIECE',
+      sellingUnit: sellingUnit ? String(sellingUnit).trim().toUpperCase().slice(0, 20) : null,
+      conversionFactor: Number.isFinite(Number(conversionFactor)) && Number(conversionFactor) > 0
+        ? Number(conversionFactor)
+        : 1,
       quantityInStock: quantityInStock ?? 0,
       reorderLevel: reorderLevel ?? 10,
       pricePerUnit,
