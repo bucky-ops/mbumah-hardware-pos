@@ -328,6 +328,33 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
     },
   });
 
+  // v2.6.0: tamper-evident audit entry for drawer OPEN — the opening float
+  // seeds the Z-read expected-cash chain, so who opened the drawer and with
+  // how much belongs in the chained audit log (plain JSON numbers only).
+  if (eventType === 'OPEN') {
+    try {
+      const { auditTrail } = await import('@/lib/audit-trail');
+      await auditTrail.log({
+        action: 'CREATE',
+        resourceType: 'CASH_DRAWER',
+        resourceId: logEntry.id,
+        // Prefer the authenticated actor; fall back to the (validated,
+        // active) body user for legacy callers.
+        actorId: session?.userId || userId,
+        actorRole: session?.role,
+        storeId,
+        newValues: {
+          action: 'OPEN',
+          amount: amountNum,
+          balance: newBalance,
+        },
+        reason: 'Cash drawer opened',
+      });
+    } catch {
+      /* audit chain must never block the drawer event */
+    }
+  }
+
   return Response.json({ success: true, data: logEntry }, { status: 201 });
 }
 

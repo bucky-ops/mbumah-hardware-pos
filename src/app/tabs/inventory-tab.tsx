@@ -29,6 +29,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { VirtualizedTableBody } from '@/components/ui/virtualized-table-body';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -176,6 +177,8 @@ export default function InventoryTab() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // v2.6.0 PERF: scroll container for the virtualized products table.
+  const productsScrollRef = useRef<HTMLDivElement | null>(null);
   const [addProductOpen, setAddProductOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<ProductListItem | null>(null);
   const [stockFilter, setStockFilter] = useState<string>('all');
@@ -1183,7 +1186,7 @@ export default function InventoryTab() {
               </Button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div ref={productsScrollRef} className="overflow-x-auto relative max-h-[65vh] overflow-y-auto custom-scrollbar">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1230,8 +1233,8 @@ export default function InventoryTab() {
                     <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
-                  {filteredProducts.length === 0 ? (
+                {filteredProducts.length === 0 ? (
+                  <TableBody>
                     <TableRow>
                       <TableCell colSpan={11} className="text-center py-16">
                         <div className="flex flex-col items-center gap-4">
@@ -1258,8 +1261,14 @@ export default function InventoryTab() {
                         </div>
                       </TableCell>
                     </TableRow>
+                  </TableBody>
                   ) : (
-                    filteredProducts.map((product, idx) => {
+                    <VirtualizedTableBody
+                      scrollRef={productsScrollRef}
+                      rows={filteredProducts}
+                      colSpan={11}
+                      aria-label="Products inventory"
+                      renderRow={(product, idx, measureRef) => {
                       const profitMargin = product.pricePerUnit > 0
                         ? ((product.pricePerUnit - product.costPrice) / product.pricePerUnit * 100)
                         : 0;
@@ -1270,6 +1279,8 @@ export default function InventoryTab() {
                       return (
                         <TableRow
                           key={product.id}
+                          ref={measureRef}
+                          data-index={idx}
                           className={`${idx % 2 === 1 ? 'bg-muted/20' : ''} ${selectedIds.has(product.id) ? 'bg-primary/5' : ''} hover:bg-primary/5 transition-colors group`}
                         >
                           <TableCell>
@@ -1417,9 +1428,9 @@ export default function InventoryTab() {
                           </TableCell>
                         </TableRow>
                       );
-                    })
+                    }}
+                  />
                   )}
-                </TableBody>
               </Table>
             </div>
           )}

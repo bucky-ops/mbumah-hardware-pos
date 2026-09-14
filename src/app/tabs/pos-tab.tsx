@@ -20,7 +20,7 @@ import {
   type ProductListItem, type CustomerItem, type TransactionItem, type GiftCardItem, type VoucherItem,
 } from '@/lib/api';
 import type { PaymentMethod, CartItem, UnitType, CheckoutPayload } from '@/lib/types';
-import { handleError } from '@/lib/error-handler';
+import { handleError, ApiRequestError } from '@/lib/error-handler';
 import {
   saveOfflineTransaction,
   buildOfflineReceipt,
@@ -78,6 +78,46 @@ import { HeldCartsDialog, type HeldCartRecord } from '@/components/pos/held-cart
 // POS TAB (kept inline - core feature)
 
 // Escape HTML special chars for safe inclusion in print-window HTML strings.
+
+/**
+ * v2.6.0 UoM UX: format a conversion factor for humans — trim trailing zeros
+ * and cap at 4 decimal places (1.5 → "1.5", 0.3048 → "0.3048", 2 → "2").
+ */
+function formatConversionFactor(factor: number): string {
+  if (!Number.isFinite(factor) || factor <= 0) return '1';
+  return String(Math.round(factor * 10000) / 10000);
+}
+
+/**
+ * v2.6.0 UoM UX: muted hint under a product tile —
+ * "1 FOOT = 0.3048 METER" (selling unit → base stock unit).
+ */
+function UomHint({ sellingUnit, conversionFactor, baseUnit }: { sellingUnit: string; conversionFactor: number; baseUnit: string }) {
+  return (
+    <p className="text-[10px] text-muted-foreground leading-tight">
+      1 <span className="font-medium">{sellingUnit}</span> = {formatConversionFactor(conversionFactor)} {baseUnit}
+    </p>
+  );
+}
+
+/**
+ * v2.6.0 UoM UX: muted sub-line under a cart line —
+ * "= 3.048 METER stock" (qty × conversionFactor, in the BASE stock unit).
+ * Rendered by pos-tab (CartItemRow is a shared component; the sub-line is
+ * additive and cannot disturb its layout).
+ */
+function CartItemUomSubline({ item }: { item: CartItem }) {
+  const sellingUnit = item.sellingUnit?.trim();
+  if (!sellingUnit) return null;
+  const factor = Number(item.conversionFactor) || 1;
+  const baseQty = (Number(item.quantity) || 0) * factor;
+  return (
+    <p className="text-[10px] text-muted-foreground pl-2 -mt-0.5 leading-tight" aria-label={`Equals ${formatConversionFactor(baseQty)} ${item.unitType} of stock`}>
+      = {formatConversionFactor(baseQty)} {item.unitType} stock
+    </p>
+  );
+}
+
 export default function POSTab() {
   // AUDIT FIX (Task 3-e): search input value is decoupled from the query that
   // drives the products fetch/grid. searchInput updates instantly (keeps typing
@@ -164,6 +204,23 @@ export default function POSTab() {
   const [receiptSendOpen, setReceiptSendOpen] = useState(false);
   const [receiptSendPhone, setReceiptSendPhone] = useState('');
   const [receiptSending, setReceiptSending] = useState(false);
+
+  // ── v2.6.0 MANAGER APPROVAL (credit-limit override) state ──
+  // Lives HERE (not in the dialog) because handleCheckout builds the payload.
+  // The dialog only renders the form; a 400 CREDIT_LIMIT_EXCEEDED from the
+  // server auto-opens it.
+  const [managerApprovalOpen, setManagerApprovalOpen] = useState(false);
+  const [managerApprovalEmail, setManagerApprovalEmail] = useState('');
+  const [managerApprovalPassword, setManagerApprovalPassword] = useState('');
+  // v2.6.0: unified open/close — closing the approval form ALWAYS wipes the
+  // manager password from state (SECURITY), open just shows the form.
+  const handleManagerApprovalOpenChange = useCallback((open: boolean) => {
+    setManagerApprovalOpen(open);
+    if (!open) {
+      // SECURITY: never keep a manager password in state longer than needed.
+      setManagerApprovalPassword('');
+    }
+  }, []);
 
   // Sell-More recommendations collapse
   const [recommendationsOpen, setRecommendationsOpen] = useState(true);
@@ -454,6 +511,11 @@ export default function POSTab() {
       setCartNotes({});
       setCartDiscountInput('');
       setCheckoutOpen(false);
+      // v2.6.0: sale complete — wipe the manager-approval credentials (the
+      // password must never linger in state) and close the approval form.
+      setManagerApprovalOpen(false);
+      setManagerApprovalPassword('');
+      setManagerApprovalEmail('');
       setCashReceived('');
       setSplitCashAmount('');
       setSplitMpesaAmount('');
@@ -474,6 +536,25 @@ export default function POSTab() {
       // (they'll refresh naturally when syncQueue completes).
     },
     onError: (err: unknown) => {
+      // v2.6.0 MANAGER APPROVAL error surface:
+      //   • 403 'Manager approval failed: …' → credentials/role wrong — toast
+      //     the dedicated message, reopen the form, wipe the password.
+      //   • 400 with requiresManagerApproval (CREDIT_LIMIT_EXCEEDED) and no
+      //     approval attached → auto-open the approval form.
+      if (err instanceof ApiRequestError) {
+        const msg = err.message || '';
+        if (err.status === 403 && /manager approval/i.test(msg)) {
+          toast.error('Manager approval failed — check credentials/role');
+          setManagerApprovalOpen(true);
+          setManagerApprovalPassword('');
+          return;
+        }
+        if (err.status === 400 && /credit limit|manager approval|CREDIT_LIMIT_EXCEEDED/i.test(msg)) {
+          setManagerApprovalOpen(true);
+          toast.error(msg || "Sale exceeds the customer's available debt limit — manager approval required");
+          return;
+        }
+      }
       toast.error(handleError(err, 'Checkout'));
     },
   });
@@ -717,6 +798,10 @@ export default function POSTab() {
         stockSnapshot: stock,
         minimumStockLevel: minStock,
         reorderLevel: reorder,
+        // v2.6.0 UoM snapshot: quantity is in the SELLING unit; the server
+        // converts to base stock units via the authoritative product.conversionFactor.
+        sellingUnit: product.sellingUnit || undefined,
+        conversionFactor: Number(product.conversionFactor) || 1,
       });
     }
     // Trigger animations
@@ -851,6 +936,9 @@ export default function POSTab() {
         taxRate: item.taxRate,
         isRentalItem: item.isRentalItem,
         isBundle: item.isBundle,
+        // v2.6.0 UoM: preserve the selling-unit snapshot across hold/resume.
+        sellingUnit: item.sellingUnit,
+        conversionFactor: item.conversionFactor,
       });
     });
     if (record.customer) setSelectedCustomer(record.customer);
@@ -897,6 +985,10 @@ export default function POSTab() {
       toast.error('Cart is empty');
       return;
     }
+    // v2.6.0: does the DEBT (or DEBT split leg) total exceed the customer's
+    // remaining credit? Computed BEFORE the guard so the mutation payload can
+    // attach managerApproval when the manager re-auth form is filled.
+    let debtOverLimit = false;
 
     // Low-stock guard (QA Phase 5): items at/below their minimum stock level
     // cannot be sold until restocked. The server enforces the same rule.
@@ -934,8 +1026,13 @@ export default function POSTab() {
         return;
       }
       const cust = customers.find((c) => c.id === selectedCustomer);
-      if (cust && finalTotal > (cust.debtLimit - cust.currentDebtBalance)) {
-        toast.error('Sale exceeds the customer\'s available debt limit');
+      debtOverLimit = !!cust && finalTotal > (cust.debtLimit - cust.currentDebtBalance);
+      if (debtOverLimit && (!managerApprovalEmail.trim() || !managerApprovalPassword)) {
+        // v2.6.0: still blocked, but no longer a dead end — open the inline
+        // manager-approval form; submitting it re-runs handleCheckout with
+        // the managerApproval attached.
+        toast.error("Sale exceeds the customer's available debt limit — manager approval required");
+        setManagerApprovalOpen(true);
         return;
       }
     }
@@ -957,6 +1054,14 @@ export default function POSTab() {
         lineTotal: Number(item.lineTotal) || 0,
       })),
       paymentMethod,
+      // v2.6.0 MANAGER APPROVAL: attached ONLY for an over-limit DEBT sale and
+      // ONLY when the manager re-auth form is filled. The server verifies the
+      // credentials against a MANAGER_UP user of the SAME store and records
+      // the override in the audit trail.
+      managerApproval:
+        debtOverLimit && managerApprovalEmail.trim() && managerApprovalPassword
+          ? { loginEmail: managerApprovalEmail.trim(), password: managerApprovalPassword }
+          : undefined,
       // Cart-level flat discount (from the discount input in the cart footer).
       // This is separate from line-level discounts (which are baked into each
       // item's discountPercent) and from gift-card / voucher redemptions
@@ -1286,13 +1391,28 @@ export default function POSTab() {
         ) : viewMode === 'grid' ? (
           <div className={`grid ${gridColsClass} items-stretch`}>
             {safeMap(sortedProducts, (product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                onAdd={handleAddToCart}
-                cartQuantity={cart.items.find(i => i.productId === product.id)?.quantity}
-                isBestSeller={bestSellerIds.has(product.id)}
-              />
+              <div key={product.id} className="flex flex-col gap-1">
+                <ProductCard
+                  product={product}
+                  onAdd={handleAddToCart}
+                  cartQuantity={cart.items.find(i => i.productId === product.id)?.quantity}
+                  isBestSeller={bestSellerIds.has(product.id)}
+                />
+                {/* v2.6.0 UoM UX: selling-unit chip + conversion hint so the
+                    cashier knows stock is tracked in the BASE unit. */}
+                {product.sellingUnit && (
+                  <div className="px-1">
+                    <Badge variant="outline" className="text-[9px] h-4 px-1 mr-1 text-primary border-primary/40">
+                      per {product.sellingUnit}
+                    </Badge>
+                    <UomHint
+                      sellingUnit={product.sellingUnit}
+                      conversionFactor={Number(product.conversionFactor) || 1}
+                      baseUnit={product.unitType}
+                    />
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         ) : (
@@ -1337,7 +1457,22 @@ export default function POSTab() {
                             <Badge variant="outline" className="text-[10px]" style={{ borderColor: product.category.color || undefined }}>{product.category.name}</Badge>
                           )}
                         </td>
-                        <td className="p-2.5 text-right font-semibold text-primary">{formatKES(product.pricePerUnit)}</td>
+                        <td className="p-2.5 text-right">
+                          {/* v2.6.0 UoM UX: price is per SELLING unit when set. */}
+                          <span className="font-semibold text-primary">{formatKES(product.pricePerUnit)}</span>
+                          {product.sellingUnit && (
+                            <div className="mt-0.5">
+                              <Badge variant="outline" className="text-[9px] h-4 px-1 mr-1 text-primary border-primary/40">
+                                per {product.sellingUnit}
+                              </Badge>
+                              <UomHint
+                                sellingUnit={product.sellingUnit}
+                                conversionFactor={Number(product.conversionFactor) || 1}
+                                baseUnit={product.unitType}
+                              />
+                            </div>
+                          )}
+                        </td>
                         <td className="p-2.5 text-center">
                           <span className={`text-xs font-medium ${isOutOfStock ? 'text-red-500' : isLowStock ? 'text-amber-500' : 'text-foreground'}`}>
                             {isOutOfStock ? 'Out' : product.quantityInStock}
@@ -1507,6 +1642,8 @@ export default function POSTab() {
                       note={cartNotes[item.productId]}
                       onNoteChange={handleCartNoteChange}
                     />
+                    {/* v2.6.0 UoM: selling-unit conversion hint (base-unit stock). */}
+                    <CartItemUomSubline item={item} />
                   </div>
                 ))}
               </div>
@@ -1773,6 +1910,14 @@ export default function POSTab() {
         cartItems={cart.items}
         subtotal={subtotal}
         taxAmount={tax}
+        // v2.6.0 MANAGER APPROVAL — parent owns the credential state so
+        // handleCheckout can attach it to the checkout payload.
+        managerApprovalEmail={managerApprovalEmail}
+        onManagerApprovalEmailChange={setManagerApprovalEmail}
+        managerApprovalPassword={managerApprovalPassword}
+        onManagerApprovalPasswordChange={setManagerApprovalPassword}
+        managerApprovalOpen={managerApprovalOpen}
+        onManagerApprovalOpenChange={handleManagerApprovalOpenChange}
       />
 
       {/* AUDIT FIX (Task 3-e): held-carts picker — resume any parked cart out of
@@ -2309,6 +2454,8 @@ export default function POSTab() {
                       note={cartNotes[item.productId]}
                       onNoteChange={handleCartNoteChange}
                     />
+                    {/* v2.6.0 UoM: selling-unit conversion hint (base-unit stock). */}
+                    <CartItemUomSubline item={item} />
                   </div>
                 ))}
               </div>

@@ -494,6 +494,9 @@ export interface ProductListItem {
   name: string;
   description: string | null;
   unitType: string;
+  // ── v2.6.0 UoM conversion (server-authoritative) ──
+  sellingUnit: string | null;
+  conversionFactor: number;
   quantityInStock: number;
   reorderLevel: number;
   minimumStockLevel?: number;
@@ -518,6 +521,8 @@ export interface CreateProductPayload {
   name: string;
   description?: string;
   unitType?: string;
+  sellingUnit?: string;
+  conversionFactor?: number;
   quantityInStock?: number;
   reorderLevel?: number;
   pricePerUnit: number;
@@ -796,6 +801,13 @@ export interface TransactionItem {
   transactionType: string;
   notes: string | null;
   isOffline: boolean;
+  /**
+   * v2.6.0 eTIMS (KRA electronic tax invoice) pipeline status for this sale:
+   * 'PENDING' (queued for KRA submission, will retry) | 'ISSUED' (accepted) |
+   * 'CANCELLED'. Null when the transaction predates the pipeline or the
+   * endpoint omits the field. Surfaced as a badge on the Transactions tab.
+   */
+  etimsStatus?: string | null;
   createdAt: string;
   updatedAt: string;
   items?: SaleItemDetail[];
@@ -2643,7 +2655,54 @@ export const shiftsApi = {
       body: JSON.stringify(payload),
     });
   },
+
+  /**
+   * v2.6.0 BLIND CLOSEOUT: X-read (non-resetting cash snapshot) for the
+   * End-Shift dialog. Mirrors shiftsApi.end's path-param URL style
+   * (GET /api/shifts/[id]/xread).
+   *
+   * `blind: true` asks the SERVER to withhold expectedCash / difference —
+   * the client must NEVER recompute expected cash locally (the old
+   * `startingCash + totalSales` formula ignored CASH_IN/CASH_OUT legs and
+   * leaked system totals to cashiers). blind=true is enforced for
+   * CASHIER/BRANCH_MANAGER/ACCOUNTANT; only SUPER_ADMIN/STORE_OWNER may
+   * request blind=false.
+   */
+  xread: async (shiftId: string, params?: { blind?: boolean }) => {
+    const query = new URLSearchParams();
+    if (params?.blind !== undefined) query.set('blind', params.blind ? '1' : '0');
+    const qs = query.toString();
+    return request<ShiftXRead>(`/shifts/${shiftId}/xread${qs ? `?${qs}` : ''}`);
+  },
 };
+
+/**
+ * v2.6.0 X-read snapshot (GET /api/shifts/[id]/xread).
+ *
+ * When requested with `blind=1` the server OMITS the expected-cash figures
+ * (`expectedCash`, `difference`) so a closing cashier cannot peek at system
+ * totals — those properties are absent (undefined) in the blind response.
+ * expectedCash/difference are therefore optional/nullable here.
+ */
+export interface ShiftXRead {
+  documentType: 'X_READ' | string;
+  note?: string;
+  shiftId: string;
+  storeId: string;
+  status: string;
+  startedAt: string;
+  windowEnd: string;
+  startingCash: number;
+  salesCash: number;
+  cashIn: number;
+  cashOut: number;
+  /** Present ONLY when blind=false. Server-computed: start + sales + in − out. */
+  expectedCash?: number | null;
+  countedCash?: number | null;
+  /** Present ONLY when blind=false (post-Z-read variance). */
+  difference?: number | null;
+  generatedAt: string;
+}
 
 // ─── Shift Schedules (planned roster) ────────────────────────────────────────
 //

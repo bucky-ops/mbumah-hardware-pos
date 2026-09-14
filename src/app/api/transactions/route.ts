@@ -22,6 +22,7 @@
 // sales, no orphaned stock movements, no unbalanced journal entries.
 
 import { type NextRequest } from 'next/server';
+import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary, sanitizeForLog } from '@/lib/logger';
 import { generateReceiptNumber, calculateLineTotal } from '@/lib/helpers';
@@ -29,7 +30,7 @@ import { recordSaleJournalEntry, getAccountIds, ACCOUNT_CODES } from '@/lib/acco
 import { LogSeverity, LogComponent, PaymentMethod, PaymentStatus } from '@/lib/types';
 import { checkoutSchema, validateInput } from '@/lib/validations';
 import { calculateEarnedPoints, getTierFromPoints } from '@/lib/loyalty-utils';
-import { requireStoreAccess, type AuthSession } from '@/lib/auth';
+import { requireStoreAccess, MANAGER_PLUS_ROLES, type AuthSession } from '@/lib/auth';
 import { KES } from '@/lib/money';
 import Decimal from 'decimal.js';
 import { toDec, toNum, round2, changeDue as calcChangeDue } from '@/lib/utils/financialMath';
@@ -37,6 +38,29 @@ import { enqueueOutbox } from '@/lib/outbox';
 import { withSequenceRetry, isP2002 } from '@/lib/sequence';
 
 export const dynamic = 'force-dynamic';
+
+// v2.6.0: quantity rounding for UoM conversion — HALF_UP 4dp. Stock is held
+// in the product's BASE unit; a cart line's quantity × conversionFactor is
+// frozen at 4dp before it touches quantityInStock or a StockMovement row.
+function round4(d: Decimal): number {
+  return d.toDecimalPlaces(4, Decimal.ROUND_HALF_UP).toNumber();
+}
+
+// v2.6.0: manager step-up credential verification — the SAME bcrypt + legacy
+// "hashed_" fallback the login route uses, so an approving manager's stored
+// hash verifies identically at checkout.
+async function verifyManagerPassword(password: string, storedHash: string): Promise<boolean> {
+  try {
+    if (storedHash.startsWith('$2')) {
+      return await bcrypt.compare(password, storedHash);
+    }
+  } catch { /* ignore bcrypt errors */ }
+  if (storedHash.startsWith('hashed_')) {
+    const plainPart = storedHash.replace('hashed_', '').replace(/_\d+$/, '');
+    if (password === plainPart) return true;
+  }
+  return false;
+}
 
 // AUDIT FIX (2): typed credit-limit failure. Thrown from INSIDE the checkout
 // transaction when the conditional credit-limit write claims 0 rows (i.e. a
@@ -289,6 +313,7 @@ async function createTransactionInner(
     discountAmount,
     notes,
     serials,
+    managerApproval,
   } = validation.data;
 
   // SYS-2 (F5-1): the cashier identity ALWAYS comes from the authenticated
@@ -392,13 +417,38 @@ async function createTransactionInner(
   const productMap = new Map(products.map((p) => [p.id, p]));
 
   // Build stock deduction map: productId -> total quantity to deduct
-  const stockDeductions = new Map<string, { quantity: number; product: typeof products[0] }>();
+  //
+  // v2.6.0 UoM CONVERSION: quantityInStock is ALWAYS held in the product's
+  // BASE unit (unitType — e.g. METER of PVC pipe, TON of cement). A cart
+  // line's `quantity` is in the SELLING unit (product.sellingUnit — e.g.
+  // FOOT, BAG): baseQty = quantity × conversionFactor, HALF_UP 4dp. Bundle
+  // children are converted by the CHILD's own factor (default 1). The
+  // map also accumulates SELLING-unit totals so the StockMovement notes can
+  // carry "sold 6 FOOT (×0.3048)"-style audit context.
+  const stockDeductions = new Map<
+    string,
+    {
+      /** Total to deduct in BASE units (what quantityInStock counts). */
+      quantity: number;
+      product: typeof products[0];
+      /** Total in SELLING units — movement-note audit context. */
+      soldUnits: number;
+    }
+  >();
 
   for (const item of items) {
     const product = productMap.get(item.productId);
     if (!product) continue;
 
     const quantity = parseFloat(String(item.quantity));
+
+    // Resolve the selling→base conversion factor. A missing/zero/garbage
+    // factor falls back to 1 (1 selling unit = 1 base unit) — a zero factor
+    // would otherwise silently deduct nothing.
+    const conversionFactor = (() => {
+      const f = toNum(product.conversionFactor);
+      return Number.isFinite(f) && f > 0 ? f : 1;
+    })();
 
     if (product.isBundle) {
       // For bundle items, auto-resolve constituent items
@@ -411,16 +461,24 @@ async function createTransactionInner(
 
       for (const bundleItem of product.bundleItems) {
         const childProduct = bundleItem.childProduct;
-        const childQtyNeeded = bundleItem.quantityRequired * quantity;
+        // Recipe units are the CHILD's SELLING units; convert to the child's
+        // BASE units with the child's own factor (default 1).
+        const childFactor = (() => {
+          const f = toNum(childProduct.conversionFactor);
+          return Number.isFinite(f) && f > 0 ? f : 1;
+        })();
+        const childSoldUnits = toDec(bundleItem.quantityRequired).mul(toDec(quantity)).toNumber();
+        const childQtyNeeded = round4(toDec(childSoldUnits).mul(toDec(childFactor)));
 
         const existing = stockDeductions.get(childProduct.id);
-        const totalNeeded = (existing?.quantity || 0) + childQtyNeeded;
+        const totalNeeded = round4(toDec(existing?.quantity || 0).plus(toDec(childQtyNeeded)));
+        const totalSoldUnits = (existing?.soldUnits || 0) + childSoldUnits;
 
-        if (childProduct.quantityInStock < totalNeeded) {
+        if (toDec(childProduct.quantityInStock).lt(toDec(totalNeeded))) {
           return Response.json(
             {
               success: false,
-              error: `Insufficient stock for "${childProduct.name}" (bundle constituent). Available: ${childProduct.quantityInStock}, Needed: ${totalNeeded}`,
+              error: `Insufficient stock for "${childProduct.name}" (bundle constituent). Available: ${Number(childProduct.quantityInStock)} ${childProduct.unitType} (base), Needed: ${totalNeeded} ${childProduct.unitType} (base)`,
             },
             { status: 400 }
           );
@@ -429,6 +487,7 @@ async function createTransactionInner(
         stockDeductions.set(childProduct.id, {
           quantity: totalNeeded,
           product: childProduct as typeof products[0],
+          soldUnits: totalSoldUnits,
         });
       }
     } else {
@@ -438,6 +497,8 @@ async function createTransactionInner(
         // minimum stock level cannot be sold until restocked. Default
         // minimumStockLevel is 0, so only genuinely empty stock is blocked
         // unless the store raises the floor.
+        // v2.6.0: unchanged semantics — both sides are BASE units
+        // (quantityInStock and minimumStockLevel were always base).
         if (Number(product.quantityInStock) <= Number(product.minimumStockLevel ?? 0)) {
           return Response.json(
             {
@@ -447,14 +508,17 @@ async function createTransactionInner(
             { status: 409 }
           );
         }
+        // v2.6.0: selling units → BASE units for the stock claim.
+        const baseQty = round4(toDec(quantity).mul(toDec(conversionFactor)));
         const existing = stockDeductions.get(product.id);
-        const totalNeeded = (existing?.quantity || 0) + quantity;
+        const totalNeeded = round4(toDec(existing?.quantity || 0).plus(toDec(baseQty)));
+        const totalSoldUnits = (existing?.soldUnits || 0) + quantity;
 
-        if (product.quantityInStock < totalNeeded) {
+        if (toDec(product.quantityInStock).lt(toDec(totalNeeded))) {
           return Response.json(
             {
               success: false,
-              error: `Insufficient stock for "${product.name}". Available: ${product.quantityInStock}, Needed: ${totalNeeded}`,
+              error: `Insufficient stock for "${product.name}". Available: ${Number(product.quantityInStock)} ${product.unitType} (base), Needed: ${totalNeeded} ${product.unitType} (base)`,
             },
             { status: 400 }
           );
@@ -463,6 +527,7 @@ async function createTransactionInner(
         stockDeductions.set(product.id, {
           quantity: totalNeeded,
           product,
+          soldUnits: totalSoldUnits,
         });
       }
     }
@@ -484,7 +549,7 @@ async function createTransactionInner(
   let taxAcc = new Decimal(0);
   let discountAcc = new Decimal(0);
 
-  const saleItemsData = items.map((item: { productId: string; productName: string; sku: string; quantity: number; unitType: string; pricePerUnit: number; costPrice: number; discountPercent: number; taxRate: number; isRentalItem: boolean; isBundle: boolean }, index: number) => {
+  const saleItemsData = items.map((item: { productId: string; productName: string; sku: string; quantity: number; unitType: string; pricePerUnit: number; costPrice: number; discountPercent: number; taxRate: number; isRentalItem?: boolean; isBundle?: boolean }, index: number) => {
     const product = productMap.get(item.productId);
 
     // Safe numeric coercion with NaN guard — prevents silent NaN propagation
@@ -517,8 +582,14 @@ async function createTransactionInner(
     return {
       productId: item.productId,
       productName: product?.name || item.productName,
+      // v2.6.0: quantity stays the SELLING-unit amount the customer sees on
+      // the receipt; unitType records the SELLING unit (product.sellingUnit,
+      // e.g. FOOT) instead of the base stock unit (METER).
       quantity: safeQty,
-      unitType: item.unitType || 'PIECE',
+      unitType: product ? (product.sellingUnit || product.unitType) : (item.unitType || 'PIECE'),
+      // NOTE: pricePerUnit is the price per SELLING unit (the shelf price).
+      // Server-authoritative pricing above already sourced it from
+      // product.pricePerUnit — do NOT divide by conversionFactor here.
       pricePerUnit: safePrice,
       costPrice: safeCost,
       discountPercent: safeDisc,
@@ -614,6 +685,26 @@ async function createTransactionInner(
   // pure-DEBT sale. This pre-check is the friendly early 400; the
   // authoritative guard is the conditional write inside the transaction
   // below (TOCTOU-proof against concurrent sales to the same customer).
+  //
+  // v2.6.0 STEP-UP MANAGER OVERRIDE: an over-limit sale is rejected with
+  // `requiresManagerApproval: true` + `code: 'CREDIT_LIMIT_EXCEEDED'` in the
+  // body so the POS can prompt for a manager's credentials. When
+  // `managerApproval` IS supplied, the credentials are verified HERE (before
+  // the tx) against a MANAGER-or-above user of the SAME store; on success the
+  // in-tx headroom guards are bypassed (both the pure-DEBT and split-DEBT
+  // paths) and a tamper-evident CREDIT_LIMIT_OVERRIDE audit entry is written
+  // post-commit. The password is never logged (logger LOG_REDACT_KEYS
+  // redacts `password` and nothing below persists it).
+  let creditOverride: {
+    customerId: string;
+    managerId: string;
+    managerRole: string;
+    managerEmail: string;
+    chargedAmount: number;
+    debtLimit: number;
+    balanceBefore: number;
+  } | null = null;
+
   if (customer) {
     const debtCharge =
       paymentMethod === PaymentMethod.DEBT
@@ -630,13 +721,63 @@ async function createTransactionInner(
         .toNumber();
       const roundedCharge = KES(debtCharge).round().toNumber();
       if (roundedCharge > availableCredit) {
-        return Response.json(
-          {
-            success: false,
-            error: `Customer credit limit exceeded. Available credit: KES ${availableCredit.toLocaleString()}, Transaction total: KES ${roundedCharge.toLocaleString()}`,
-          },
-          { status: 400 }
-        );
+        if (!managerApproval) {
+          return Response.json(
+            {
+              success: false,
+              error: `Customer credit limit exceeded. Available credit: KES ${availableCredit.toLocaleString()}, Transaction total: KES ${roundedCharge.toLocaleString()}`,
+              // v2.6.0: the POS keys its step-up approval dialog on these flags.
+              requiresManagerApproval: true,
+              code: 'CREDIT_LIMIT_EXCEEDED',
+            },
+            { status: 400 }
+          );
+        }
+
+        // ── Verify the approving manager. ONE generic 403 for EVERY failure
+        // mode (unknown email, bad password, inactive, wrong role, wrong
+        // store) so the endpoint never reveals which check failed. Email
+        // normalization matches the login route (trim + lowercase).
+        const manager = await db.user.findUnique({
+          where: { email: managerApproval.loginEmail.trim().toLowerCase() },
+        });
+        const managerPasswordOk = manager
+          ? await verifyManagerPassword(managerApproval.password, manager.passwordHash)
+          : false;
+        if (
+          !manager ||
+          !managerPasswordOk ||
+          !manager.isActive ||
+          !MANAGER_PLUS_ROLES.includes(manager.role) ||
+          manager.storeId !== storeId
+        ) {
+          await systemLog({
+            action: 'CREDIT_LIMIT_OVERRIDE_DENIED',
+            component: LogComponent.POS,
+            severity: LogSeverity.WARN,
+            message: 'Manager approval rejected: invalid credentials or insufficient role.',
+            storeId,
+            userId: cashierId,
+            metadata: {
+              customerId: customer.id,
+              requestedEmail: managerApproval.loginEmail,
+            },
+          }).catch(() => {});
+          return Response.json(
+            { success: false, error: 'Manager approval failed: invalid credentials or insufficient role.' },
+            { status: 403 }
+          );
+        }
+
+        creditOverride = {
+          customerId: customer.id,
+          managerId: manager.id,
+          managerRole: manager.role,
+          managerEmail: manager.email,
+          chargedAmount: roundedCharge,
+          debtLimit: Number(customer.debtLimit),
+          balanceBefore: Number(customer.currentDebtBalance),
+        };
       }
     }
   }
@@ -680,6 +821,17 @@ async function createTransactionInner(
   // whole checkout is retried on the rare P2002 unique-number collision —
   // the old Math.random suffix could abort a live checkout with a 500.
   const orgId = session.organizationId || 'org_mbumah';
+
+  // ── v2.6.0: eTIMS async invoicing gate ──────────────────────────────
+  // Sales must NEVER block on KRA. When the store has an active KRA business
+  // profile the sale is created with etimsStatus='PENDING' and an
+  // ETIMS_INVOICE outbox event is enqueued after commit (the opportunistic
+  // pump + /api/cron/etims-retry issue the invoice asynchronously). Without
+  // a profile, etimsStatus stays unset — identical to pre-v2.6 behaviour.
+  const kraProfile = await db.kraBusinessProfile
+    .findFirst({ where: { storeId, isActive: true }, select: { id: true } })
+    .catch(() => null);
+  const kraConfigured = kraProfile !== null;
 
   // Pre-fetch (and auto-create if missing) ALL accounting chart-of-account
   // IDs BEFORE opening the transaction. `recordSaleJournalEntry` calls
@@ -733,6 +885,10 @@ async function createTransactionInner(
     // same client-facing 400 the friendly pre-check returns (a concurrent
     // sale may have consumed the customer's remaining headroom).
     if (err instanceof CreditLimitExceededError) {
+      // v2.6.0: carry the step-up flags on the race-loser response too, so
+      // the POS offers manager approval instead of a dead end. (An override
+      // bypasses the headroom predicate entirely, so this error can only
+      // fire on an UN-approved over-limit checkout.)
       return { creditLimitExceeded: true as const, message: err.message };
     }
     throw err;
@@ -752,7 +908,13 @@ async function createTransactionInner(
       },
     });
     return Response.json(
-      { success: false, error: checkoutAttempt.message },
+      {
+        success: false,
+        error: checkoutAttempt.message,
+        // v2.6.0: same step-up contract as the pre-check 400.
+        requiresManagerApproval: true,
+        code: 'CREDIT_LIMIT_EXCEEDED',
+      },
       { status: 400 }
     );
   }
@@ -790,6 +952,10 @@ async function createTransactionInner(
         // SYS-10: stores the client idempotency key (unique) so replayed
         // checkouts are detectable at the database level.
         idempotencyKey: idempotencyKey || null,
+        // v2.6.0: async eTIMS invoicing — the KRA invoice is issued AFTER
+        // commit (outbox queue); the row starts PENDING when the store has
+        // an active KRA profile, otherwise unset (legacy behaviour).
+        etimsStatus: kraConfigured ? 'PENDING' : null,
         // FINANCIAL MATH AUDIT: real till movement — cash rendered and the
         // change handed back (spec §4). Null for non-cash tenders.
         cashTendered: cashTendered ?? null,
@@ -838,8 +1004,13 @@ async function createTransactionInner(
     }
 
     // 3 ── Deduct stock + write stock movements ──
+    // v2.6.0 UoM: `deduction.quantity` is in BASE units (quantity ×
+    // conversionFactor, HALF_UP 4dp); the atomic conditional decrement and
+    // the StockMovement.quantity both operate in base units so the movement
+    // ledger reconciles exactly with quantityInStock. SaleItem.quantity
+    // (step 1) stays in SELLING units for the customer-facing receipt.
     for (const [productId, deduction] of stockDeductions) {
-      const { quantity, product } = deduction;
+      const { quantity, product, soldUnits } = deduction;
 
       // R1 remediation: ATOMIC conditional decrement. The previous
       // read-then-check (`findUnique` → compare → `decrement`) was a TOCTOU
@@ -854,19 +1025,30 @@ async function createTransactionInner(
         });
         if (claimed.count === 0) {
           throw new Error(
-            `Insufficient stock for "${product.name}". Needed: ${quantity}. (Concurrent sale may have consumed the last units.)`,
+            `Insufficient stock for "${product.name}". Needed: ${quantity} ${product.unitType} (base units). (Concurrent sale may have consumed the remaining stock.)`,
           );
         }
       }
+
+      // UoM audit context (v2.6.0): converted products carry
+      // "sold 6 FOOT (×0.3048)"-style context so the movement ledger
+      // explains the base-unit delta. Unconverted products keep the
+      // original concise note.
+      const factor = toNum(product.conversionFactor);
+      const hasConversion = Number.isFinite(factor) && factor > 0 && factor !== 1;
+      const movementNotes = hasConversion
+        ? `Sale ${receiptNumber} — sold ${round4(toDec(soldUnits))} ${product.sellingUnit || product.unitType} (×${factor})`
+        : `Sale ${receiptNumber}`;
 
       await tx.stockMovement.create({
         data: {
           storeId,
           productId,
           movementType: product.isRental ? 'RENTAL_OUT' : 'SALE',
+          // BASE units — always reconciles with quantityInStock.
           quantity: -quantity,
           referenceId: transaction.id,
-          notes: `Sale ${receiptNumber}`,
+          notes: movementNotes,
           performedBy: cashierId,
         },
       });
@@ -983,22 +1165,32 @@ async function createTransactionInner(
       // (decimal.js) columns — headroom is computed via `KES` (HALF_EVEN,
       // 2dp) so no float dust can skew the predicate.
       const chargeAmount = KES(finalTotal).round().toNumber();
-      const headroom = KES(customer.debtLimit).subtract(chargeAmount).round().toNumber();
-      const claimedCredit = await tx.customer.updateMany({
-        where: {
-          id: customer.id,
-          currentDebtBalance: { lte: headroom },
-        },
-        data: { currentDebtBalance: { increment: chargeAmount } },
-      });
-      if (claimedCredit.count === 0) {
-        throw new CreditLimitExceededError(
-          `Customer credit limit exceeded. Available credit: KES ${KES(customer.debtLimit)
-            .subtract(customer.currentDebtBalance)
-            .round()
-            .toNumber()
-            .toLocaleString()}, Charge: KES ${chargeAmount.toLocaleString()} (a concurrent sale may have used the remaining credit).`,
-        );
+      // v2.6.0: a verified manager override bypasses the headroom predicate —
+      // the increment is still atomic (single-row update), just unconditional.
+      // The override itself is audited post-commit (CREDIT_LIMIT_OVERRIDE).
+      if (creditOverride) {
+        await tx.customer.update({
+          where: { id: customer.id },
+          data: { currentDebtBalance: { increment: chargeAmount } },
+        });
+      } else {
+        const headroom = KES(customer.debtLimit).subtract(chargeAmount).round().toNumber();
+        const claimedCredit = await tx.customer.updateMany({
+          where: {
+            id: customer.id,
+            currentDebtBalance: { lte: headroom },
+          },
+          data: { currentDebtBalance: { increment: chargeAmount } },
+        });
+        if (claimedCredit.count === 0) {
+          throw new CreditLimitExceededError(
+            `Customer credit limit exceeded. Available credit: KES ${KES(customer.debtLimit)
+              .subtract(customer.currentDebtBalance)
+              .round()
+              .toNumber()
+              .toLocaleString()}, Charge: KES ${chargeAmount.toLocaleString()} (a concurrent sale may have used the remaining credit).`,
+          );
+        }
       }
     }
 
@@ -1154,22 +1346,31 @@ async function createTransactionInner(
         // Conditional optimistic write (see AUDIT FIX 2): the predicate is
         // re-evaluated under the row lock, so it accounts for prior DEBT
         // legs in this same tx AND committed concurrent sales.
-        const headroom = KES(customer.debtLimit).subtract(splitAmount).round().toNumber();
-        const claimedCredit = await tx.customer.updateMany({
-          where: {
-            id: customer.id,
-            currentDebtBalance: { lte: headroom },
-          },
-          data: { currentDebtBalance: { increment: splitAmount } },
-        });
-        if (claimedCredit.count === 0) {
-          throw new CreditLimitExceededError(
-            `Customer credit limit exceeded for ${customer.name}. Available credit: KES ${KES(customer.debtLimit)
-              .subtract(customer.currentDebtBalance)
-              .round()
-              .toNumber()
-              .toLocaleString()}, Split charge: KES ${splitAmount.toLocaleString()}.`,
-          );
+        // v2.6.0: a verified manager override bypasses the headroom
+        // predicate (audited post-commit), same as the pure-DEBT path.
+        if (creditOverride) {
+          await tx.customer.update({
+            where: { id: customer.id },
+            data: { currentDebtBalance: { increment: splitAmount } },
+          });
+        } else {
+          const headroom = KES(customer.debtLimit).subtract(splitAmount).round().toNumber();
+          const claimedCredit = await tx.customer.updateMany({
+            where: {
+              id: customer.id,
+              currentDebtBalance: { lte: headroom },
+            },
+            data: { currentDebtBalance: { increment: splitAmount } },
+          });
+          if (claimedCredit.count === 0) {
+            throw new CreditLimitExceededError(
+              `Customer credit limit exceeded for ${customer.name}. Available credit: KES ${KES(customer.debtLimit)
+                .subtract(customer.currentDebtBalance)
+                .round()
+                .toNumber()
+                .toLocaleString()}, Split charge: KES ${splitAmount.toLocaleString()}.`,
+            );
+          }
         }
       }
     }
@@ -1324,6 +1525,85 @@ async function createTransactionInner(
     });
   } catch {
     /* audit chain must never block checkout */
+  }
+
+  // ── v2.6.0: manager credit-limit override — tamper-evident audit entry ──
+  // Written post-commit through the chained-HMAC auditTrail (best-effort,
+  // same precedent as the sale audit above) so audit I/O can never fail a
+  // committed sale. oldValues/newValues are plain JSON numbers — never
+  // Decimal. The approving manager is the AUDIT ACTOR, not the cashier.
+  if (creditOverride) {
+    try {
+      const { auditTrail } = await import('@/lib/audit-trail');
+      await auditTrail.log({
+        action: 'UPDATE',
+        resourceType: 'CREDIT_LIMIT_OVERRIDE',
+        resourceId: creditOverride.customerId,
+        actorId: creditOverride.managerId,
+        actorRole: creditOverride.managerRole,
+        storeId,
+        reason: `Credit-limit override for KES ${creditOverride.chargedAmount.toLocaleString()} (limit ${creditOverride.debtLimit.toLocaleString()}, balance before ${creditOverride.balanceBefore.toLocaleString()})`,
+        newValues: {
+          chargedAmount: creditOverride.chargedAmount,
+          debtLimit: creditOverride.debtLimit,
+          balanceAfter: round2(
+            toDec(creditOverride.balanceBefore).plus(toDec(creditOverride.chargedAmount)),
+          ),
+        },
+        metadata: {
+          checkoutIdempotencyKey: idempotencyKey ?? null,
+          overrideEmail: creditOverride.managerEmail,
+          transactionId: result.id,
+          receiptNumber,
+        },
+      });
+    } catch {
+      /* audit chain must never block checkout */
+    }
+  }
+
+  // ── v2.6.0: enqueue the async eTIMS invoice (NON-BLOCKING) ──────────────
+  // The sale is already committed; enqueueing is best-effort. If the insert
+  // fails, etimsStatus stays 'PENDING' and staff can re-issue via
+  // POST /api/etims/worker (or the retry cron re-runs on schedule).
+  if (kraConfigured) {
+    try {
+      await db.outboxEvent.create({
+        data: {
+          storeId,
+          kind: 'ETIMS_INVOICE',
+          payload: JSON.stringify({
+            transactionId: result.id,
+            receiptNumber,
+            storeId,
+            items: items.map((item: { productId: string; productName: string; quantity: number }) => ({
+              productId: item.productId,
+              name: item.productName,
+              quantity: Number(item.quantity),
+            })),
+            totals: { subtotal, taxAmount, totalAmount: finalTotal },
+            taxBreakdown: { vatTotal: taxAmount },
+            // Customer has no KRA PIN column yet — reserved for a future
+            // schema change; the queue core reads the relation defensively.
+            customerPin: null,
+          }),
+          status: 'PENDING',
+          availableAt: new Date(),
+        },
+      });
+    } catch (etimsEnqueueErr) {
+      await systemLog({
+        action: 'ETIMS_INVOICE_ENQUEUE_FAILED',
+        component: LogComponent.FINANCIAL,
+        severity: LogSeverity.WARN,
+        message: `Failed to enqueue ETIMS_INVOICE for ${receiptNumber}: ${
+          etimsEnqueueErr instanceof Error ? etimsEnqueueErr.message : 'Unknown error'
+        }`,
+        storeId,
+        userId: cashierId,
+        metadata: { transactionId: result.id, receiptNumber },
+      }).catch(() => {});
+    }
   }
 
   // ── Phase 3: Award loyalty points to the customer (non-blocking) ──

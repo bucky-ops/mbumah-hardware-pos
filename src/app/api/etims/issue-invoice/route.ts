@@ -16,15 +16,20 @@
 //     `discountAmount`, does not exist on SaleItem so discounts were never
 //     reported), and the invoice number sequence is scoped per store instead
 //     of a global unsynchronised count.
+//
+// v2.6.0: the submission core (client call + etims-field persistence) moved
+// to src/lib/etims-queue.ts `submitEtimsInvoiceOnce` so the async outbox
+// queue (/api/cron/etims-retry, /api/etims/worker) and this manual route run
+// the EXACT same logic. The route keeps its own pre-checks and response
+// bodies so external behaviour is unchanged.
 
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getEtimsConfig, initializeEtimsClient } from '@/lib/etims-service';
-import { generateInvoiceNumber } from '@/lib/etims-utils';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { isEtimsMock } from '@/lib/etims-service';
+import { submitEtimsInvoiceOnce } from '@/lib/etims-queue';
 
 export const dynamic = 'force-dynamic';
 
@@ -83,72 +88,26 @@ async function issueInvoiceHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  const config = getEtimsConfig();
-  const client = initializeEtimsClient(config);
+  // v2.6.0: ONE submission attempt through the shared core (loads the
+  // transaction again cross-store-safe, issues via the configured client and
+  // persists etimsInvoiceNumber/QrCode/Url/Status/IssuedAt).
+  const result = await submitEtimsInvoiceOnce(transactionId);
 
-  // Per-store daily sequence (F9-2): the previous count was global across all
-  // stores and raced under concurrency. Counting this store's transactions
-  // issued today keeps the sequence deterministic and scoped; the retry-free
-  // window is acceptable because issuance is a rare, user-triggered action —
-  // the canonical high-volume path is kra/submit (see audit F9-2 remediation).
-  const dayStart = new Date(transaction.createdAt);
-  dayStart.setHours(0, 0, 0, 0);
-  const invoiceCount = await db.salesTransaction.count({
-    where: {
-      storeId: transaction.storeId,
-      etimsStatus: 'ISSUED',
-      createdAt: { gte: dayStart, lte: transaction.createdAt },
-    },
-  });
-
-  const invoiceNumber = generateInvoiceNumber(
-    transaction.store?.code || 'MBM',
-    invoiceCount + 1,
-    transaction.createdAt
-  );
-
-  const response = await client.issueInvoice({
-    invoiceNumber,
-    date: transaction.createdAt,
-    customerTin: transaction.customer?.kraPin || undefined,
-    customerName: transaction.customer?.name || 'Walk-in Customer',
-    items: transaction.items.map((item) => ({
-      itemCode: item.product?.etimsItemCode || 'ITEM00000',
-      name: item.product?.name || 'Unknown',
-      quantity: Number(item.quantity),
-      price: Number(item.pricePerUnit),
-      // F9-2: per-line tax rate (was hardcoded 0.16 — zero-rated/exempt lines
-      // were over-declared to KRA).
-      taxRate: Number(item.taxRate) / 100,
-      // F9-2: line discount actually DERIVED (SaleItem stores discountPercent,
-      // not discountAmount — the old lookup was always undefined → 0, so
-      // discounts were never reported and taxable value was overstated).
-      discount: (Number(item.pricePerUnit) * Number(item.quantity) * Number(item.discountPercent || 0)) / 100,
-    })),
-    payments: [
-      {
-        method: transaction.paymentMethod,
-        amount: Number(transaction.totalAmount),
-      },
-    ],
-    totalAmount: Number(transaction.totalAmount),
-    vatAmount: Number(transaction.taxAmount || 0),
-  });
-
-  await db.salesTransaction.update({
-    where: { id: transactionId },
-    data: {
-      etimsInvoiceNumber: response.invoiceNumber,
-      etimsQrCode: response.qrCode,
-      etimsUrl: response.url,
-      etimsStatus: response.status,
-      etimsIssuedAt: response.issuedAt,
-    },
-  });
+  if (!result.ok || !result.status) {
+    // Parity with the pre-extraction behaviour: an unexpected submission
+    // failure escaped as a throw → withErrorBoundary emits the 500.
+    throw new Error(result.error || 'eTIMS invoice submission failed');
+  }
 
   return NextResponse.json({
     success: true,
-    data: response,
+    data: {
+      invoiceNumber: result.invoiceNumber,
+      qrCode: result.qr,
+      url: result.url,
+      status: result.status,
+      issuedAt: result.issuedAt,
+    },
   });
 }
 

@@ -274,6 +274,14 @@ model Product {
   name              String
   description       String?
   unitType          String   @default("PIECE") // PIECE, KILOGRAM, METER, LITER, BAG, BOX, SET
+  // ── v2.6.0 UoM conversion (hardware units of measure) ──────────────────
+  // Stock is ALWAYS held in `unitType` = the BASE unit (what the store buys
+  // in, e.g. METER of PVC pipe or TON of cement). `sellingUnit` is what the
+  // counter sells in (FOOT / BAG / ...). `conversionFactor` = how many BASE
+  // units one SELLING unit contains (1 FOOT = 0.3048 METER, 1 BAG = 0.05 TON).
+  // Checkout deducts quantity × conversionFactor from quantityInStock.
+  sellingUnit       String?
+  conversionFactor  Decimal  @default(1) @db.Decimal(12, 6)
   quantityInStock   Decimal  @default(0)
   reorderLevel      Decimal  @default(10)
   pricePerUnit      Decimal // Selling price

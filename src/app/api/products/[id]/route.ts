@@ -4,7 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
-import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
+import { withSessionAuth, getSessionFromRequest, MANAGER_PLUS_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -130,6 +130,46 @@ async function updateProductHandler(...args: unknown[]): Promise<Response> {
       category: { select: { id: true, name: true, color: true } },
     },
   });
+
+  // v2.6.0: price-change audit — any change to pricePerUnit or costPrice is
+  // a money-moving event and gets a tamper-evident trail entry with the old
+  // and new prices. Values are Number()-coerced plain JSON (Prisma Decimals
+  // serialize as strings through Response.json — never let them reach the
+  // audit chain).
+  const priceChanged =
+    updateData.pricePerUnit !== undefined &&
+    Number(updateData.pricePerUnit) !== Number(existing.pricePerUnit);
+  const costChanged =
+    updateData.costPrice !== undefined &&
+    Number(updateData.costPrice) !== Number(existing.costPrice);
+  if (priceChanged || costChanged) {
+    try {
+      const session = await getSessionFromRequest(request);
+      const { auditTrail } = await import('@/lib/audit-trail');
+      await auditTrail.log({
+        action: 'UPDATE',
+        resourceType: 'PRODUCT_PRICE',
+        resourceId: id,
+        actorId: session?.userId,
+        actorRole: session?.role,
+        storeId: product.storeId,
+        oldValues: {
+          pricePerUnit: Number(existing.pricePerUnit),
+          costPrice: Number(existing.costPrice),
+        },
+        newValues: {
+          pricePerUnit: Number(product.pricePerUnit),
+          costPrice: Number(product.costPrice),
+        },
+        metadata: {
+          sku: product.sku,
+          name: product.name,
+        },
+      });
+    } catch {
+      /* audit chain must never block the update response */
+    }
+  }
 
   await systemLog({
     action: 'PRODUCT_UPDATED',

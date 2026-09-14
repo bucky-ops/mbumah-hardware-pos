@@ -113,6 +113,9 @@ async function getProductsHandler(
     // `p.quantityInStock <= p.reorderLevel` compared LEXICOGRAPHICALLY
     // ("9" <= "10" → false, "10" <= "9" → true) and produced phantom
     // low-stock states across inventory, POS and dashboard consumers.
+    // v2.6.0: sellingUnit (string|null) + conversionFactor (number) exposed
+    // per the ProductListItem contract so the POS can render the SELLING
+    // unit and the client can compute base-unit quantities.
     data: products.map((p) => ({
       ...p,
       quantityInStock: Number(p.quantityInStock),
@@ -120,6 +123,9 @@ async function getProductsHandler(
       pricePerUnit: Number(p.pricePerUnit),
       costPrice: Number(p.costPrice),
       taxRate: Number(p.taxRate),
+      // v2.6.0 UoM: 1 sellingUnit = conversionFactor BASE units (unitType).
+      sellingUnit: p.sellingUnit,
+      conversionFactor: Number(p.conversionFactor),
       bundleItems: p.bundleItems?.map((b) => ({
         ...b,
         childProduct: b.childProduct

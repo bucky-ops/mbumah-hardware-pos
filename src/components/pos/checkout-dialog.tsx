@@ -20,6 +20,7 @@ import {
   CreditCard, Banknote, Wallet, Split, Smartphone,
   AlertCircle, Loader2, AlertTriangle, CheckCircle, ExternalLink,
   Check, ChevronLeft, ChevronRight, ShoppingCart, User, Tag, Receipt,
+  ShieldCheck, Lock, X,
 } from 'lucide-react';
 
 // ─── Shared checkout dialog (ResponsiveDialog) ───────────────────────────────
@@ -72,6 +73,20 @@ export interface CheckoutDialogProps {
   subtotal?: number;
   /** Tax amount for the order summary */
   taxAmount?: number;
+  /**
+   * v2.6.0 MANAGER APPROVAL (credit-limit override): when a DEBT sale exceeds
+   * the customer's available debt, the cashier can request a MANAGER_UP
+   * re-authentication. The credentials live in the PARENT (pos-tab) because
+   * the checkout payload is built there; this dialog only renders the form.
+   */
+  managerApprovalEmail?: string;
+  onManagerApprovalEmailChange?: (email: string) => void;
+  managerApprovalPassword?: string;
+  onManagerApprovalPasswordChange?: (password: string) => void;
+  /** Whether the inline approval form is open (parent-owned so a 400 from
+   *  the server can auto-open it). */
+  managerApprovalOpen?: boolean;
+  onManagerApprovalOpenChange?: (open: boolean) => void;
 }
 
 const PAYMENT_METHODS: {
@@ -121,11 +136,27 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
     mpesaMutation, checkoutMutation,
     onSendStkPush, onRetryStk, onCompleteSale,
     cartItems, subtotal, taxAmount,
+    managerApprovalEmail = '', onManagerApprovalEmailChange,
+    managerApprovalPassword = '', onManagerApprovalPasswordChange,
+    managerApprovalOpen = false, onManagerApprovalOpenChange,
   } = props;
 
   const customer = customers.find((c) => c.id === selectedCustomer);
   const debtAvailable = customer ? Math.max(0, customer.debtLimit - customer.currentDebtBalance) : 0;
   const exceedsDebt = customer ? finalTotal > debtAvailable : false;
+
+  // v2.6.0 MANAGER APPROVAL: the DEBT block stays, but is no longer a
+  // dead-end — the cashier can summon a manager whose credentials are
+  // attached to the checkout payload (top-level `managerApproval` field).
+  // The server verifies the manager (same store, MANAGER_UP role) and writes
+  // an audit-trail CREDIT_LIMIT_OVERRIDE entry.
+  const managerApprovalFilled = !!managerApprovalEmail.trim() && !!managerApprovalPassword;
+  const setApprovalOpen = (open: boolean) => onManagerApprovalOpenChange?.(open);
+  const dismissApproval = () => {
+    setApprovalOpen(false);
+    // SECURITY: wipe the password the moment the form is dismissed.
+    onManagerApprovalPasswordChange?.('');
+  };
 
   const cashValid = !!cashReceived && Number(cashReceived) >= finalTotal;
   const splitValid = (Number(splitCashAmount) || 0) + (Number(splitMpesaAmount) || 0) >= finalTotal && (Number(splitMpesaAmount) || 0) > 0 ? !!mpesaPhone && mpesaPhone.length >= 9 : true;
@@ -181,11 +212,15 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
   const step1Valid = true; // Payment method is always selected (defaults to CASH)
   const step2Valid = useMemo(() => {
     if (paymentMethod === 'CASH') return cashValid;
-    if (paymentMethod === 'DEBT') return !!selectedCustomer && selectedCustomer !== 'walk-in' && !exceedsDebt;
+    // DEBT: the hard block lifts once manager approval credentials are filled
+    // in (they are attached to the payload and re-verified server-side).
+    if (paymentMethod === 'DEBT') {
+      return !!selectedCustomer && selectedCustomer !== 'walk-in' && (!exceedsDebt || managerApprovalFilled);
+    }
     if (paymentMethod === 'SPLIT') return splitValid;
     if (paymentMethod === 'MPESA') return mpesaValid;
     return false;
-  }, [paymentMethod, cashValid, selectedCustomer, exceedsDebt, splitValid, mpesaValid]);
+  }, [paymentMethod, cashValid, selectedCustomer, exceedsDebt, managerApprovalFilled, splitValid, mpesaValid]);
 
   // Show the M-Pesa processing panel as a special "step 2.5" — when mpesa is processing/success/failed,
   // we still show step 2 content (STK status) but the footer changes via renderFooter.
@@ -723,14 +758,117 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
                           </div>
                         </div>
                         {exceedsDebt && (
-                          <Alert variant="destructive">
-                            <AlertTriangle className="h-4 w-4" />
-                            <AlertTitle>Exceeds Debt Limit</AlertTitle>
-                            <AlertDescription>
-                              This sale ({formatKES(finalTotal)}) exceeds the customer&rsquo;s available debt ({formatKES(debtAvailable)}).
-                              Collect partial cash or increase the debt limit on the customer record.
-                            </AlertDescription>
-                          </Alert>
+                          <>
+                            <Alert variant="destructive">
+                              <AlertTriangle className="h-4 w-4" />
+                              <AlertTitle>Exceeds Debt Limit</AlertTitle>
+                              <AlertDescription>
+                                This sale ({formatKES(finalTotal)}) exceeds the customer&rsquo;s available debt ({formatKES(debtAvailable)}).
+                                Collect partial cash, increase the debt limit, or request manager approval below.
+                              </AlertDescription>
+                            </Alert>
+
+                            {/* ── v2.6.0 MANAGER APPROVAL (credit-limit override) ──
+                                Blocked banner → manager re-authentication form.
+                                Submitting attaches `managerApproval` to the checkout
+                                payload; the server re-validates and records the
+                                override in the audit trail. */}
+                            {!managerApprovalOpen ? (
+                              <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3 space-y-2">
+                                <div className="flex items-start gap-2">
+                                  <Lock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                                  <p className="text-xs text-amber-800 dark:text-amber-300">
+                                    A manager can authorise this sale as a credit-limit override.
+                                  </p>
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setApprovalOpen(true)}
+                                  aria-expanded={false}
+                                  aria-label="Request manager approval for this credit-limit override"
+                                  className="w-full h-10 border-amber-400 text-amber-800 hover:bg-amber-100 dark:text-amber-300 dark:hover:bg-amber-900/40 dark:border-amber-700"
+                                >
+                                  <ShieldCheck className="mr-1.5 h-4 w-4" />
+                                  Request manager approval
+                                </Button>
+                              </div>
+                            ) : (
+                              <div
+                                className="rounded-lg border border-primary/40 bg-primary/5 p-3 space-y-3"
+                                role="region"
+                                aria-label="Manager approval form"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-xs font-semibold flex items-center gap-1.5">
+                                    <ShieldCheck className="h-4 w-4 text-primary" />
+                                    Manager approval required
+                                  </p>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    onClick={dismissApproval}
+                                    aria-label="Dismiss manager approval form"
+                                    title="Dismiss"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                                <div className="space-y-1.5">
+                                  <Label htmlFor="manager-email" className="text-xs">Manager email</Label>
+                                  <Input
+                                    id="manager-email"
+                                    type="email"
+                                    autoComplete="email"
+                                    placeholder="manager@mbumahhardware.co.ke"
+                                    value={managerApprovalEmail}
+                                    onChange={(e) => onManagerApprovalEmailChange?.(e.target.value)}
+                                    className="h-9 text-sm"
+                                  />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <Label htmlFor="manager-password" className="text-xs">Manager password</Label>
+                                  <Input
+                                    id="manager-password"
+                                    type="password"
+                                    autoComplete="current-password"
+                                    placeholder="Manager password"
+                                    value={managerApprovalPassword}
+                                    onChange={(e) => onManagerApprovalPasswordChange?.(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' && managerApprovalFilled) {
+                                        e.preventDefault();
+                                        onCompleteSale();
+                                      }
+                                    }}
+                                    className="h-9 text-sm"
+                                  />
+                                </div>
+                                <p className="text-[11px] text-muted-foreground flex items-start gap-1.5">
+                                  <Lock className="h-3 w-3 shrink-0 mt-0.5" />
+                                  This override is permanently recorded in the audit trail.
+                                </p>
+                                <Button
+                                  type="button"
+                                  onClick={() => {
+                                    if (!managerApprovalFilled) return;
+                                    onCompleteSale();
+                                  }}
+                                  disabled={!managerApprovalFilled || checkoutMutation.isPending}
+                                  className="w-full h-10 bg-green-600 hover:bg-green-700 text-white"
+                                >
+                                  {checkoutMutation.isPending ? (
+                                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing…</>
+                                  ) : (
+                                    <><ShieldCheck className="mr-2 h-4 w-4" />Approve &amp; Process Payment</>
+                                  )}
+                                </Button>
+                              </div>
+                            )}
+                          </>
                         )}
                         <p className="text-xs text-muted-foreground">
                           On checkout, this sale will create a debt ledger entry against <span className="font-semibold">{customer.name}</span>&rsquo;s account.
