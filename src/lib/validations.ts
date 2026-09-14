@@ -81,6 +81,14 @@ export const checkoutSchema = z.object({
   }).optional(),
   discountAmount: z.coerce.number().nonnegative().optional(),
   notes: z.string().max(1000).optional(),
+  // v2.6.0: step-up manager approval for credit-limit override. The server
+  // verifies the credentials against a MANAGER_UP user of the SAME store
+  // (bcrypt), then proceeds AND writes an audit-trail CREDIT_LIMIT_OVERRIDE
+  // entry. Without it, an over-limit DEBT sale is rejected.
+  managerApproval: z.object({
+    loginEmail: z.string().email(),
+    password: z.string().min(1).max(200),
+  }).optional(),
 }).superRefine((data, ctx) => {
   // AUDIT FIX (1): a DEBT split leg charges the customer's credit account, so
   // a customerId is MANDATORY — without one the DebtLedger charge row could

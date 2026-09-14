@@ -494,6 +494,9 @@ export interface ProductListItem {
   name: string;
   description: string | null;
   unitType: string;
+  // ── v2.6.0 UoM conversion (server-authoritative) ──
+  sellingUnit: string | null;
+  conversionFactor: number;
   quantityInStock: number;
   reorderLevel: number;
   minimumStockLevel?: number;
@@ -518,6 +521,8 @@ export interface CreateProductPayload {
   name: string;
   description?: string;
   unitType?: string;
+  sellingUnit?: string;
+  conversionFactor?: number;
   quantityInStock?: number;
   reorderLevel?: number;
   pricePerUnit: number;

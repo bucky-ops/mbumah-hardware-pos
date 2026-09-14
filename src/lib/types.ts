@@ -287,6 +287,11 @@ export interface CartItem {
   stockSnapshot?: number;
   minimumStockLevel?: number;
   reorderLevel?: number;
+  // ── v2.6.0 UoM conversion snapshot (optional for persisted-cart compat) ──
+  // `quantity` is expressed in the SELLING unit (e.g. FOOT); the server
+  // converts to BASE units via the authoritative product.conversionFactor.
+  sellingUnit?: string;
+  conversionFactor?: number;
 }
 
 export interface CheckoutPayload {
@@ -298,6 +303,7 @@ export interface CheckoutPayload {
   paymentDetails: PaymentDetails;
   discountAmount?: number;
   notes?: string;
+  managerApproval?: ManagerApproval;
 }
 
 export interface PaymentDetails {
@@ -619,6 +625,16 @@ export interface EndShiftPayload {
   endingCash: number;
   countedCash: number;
   notes?: string;
+}
+
+// ── v2.6.0 step-up manager approval (credit-limit override) ────────────
+// When a DEBT sale would exceed the customer's debtLimit, the POS blocks it
+// unless a manager re-authenticates. The server verifies these credentials
+// against a MANAGER_UP user of the SAME store and writes an audit-trail
+// CREDIT_LIMIT_OVERRIDE entry. Never stored, only transmitted over HTTPS.
+export interface ManagerApproval {
+  loginEmail: string;
+  password: string;
 }
 
 
