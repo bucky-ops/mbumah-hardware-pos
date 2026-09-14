@@ -85,6 +85,10 @@ async function updateProductHandler(...args: unknown[]): Promise<Response> {
     'name', 'description', 'barcode', 'categoryId', 'unitType',
     'reorderLevel', 'pricePerUnit', 'costPrice', 'taxRate',
     'isRental', 'isBundle', 'imageUrl', 'isActive',
+    // v2.6.1 UoM conversion: `sellingUnit` (string; ''/null clears it) and
+    // `conversionFactor` (how many BASE units one SELLING unit contains —
+    // validated below). The checkout deducts quantity × conversionFactor.
+    'sellingUnit', 'conversionFactor',
   ];
 
   // SKU is editable so legacy products can be re-coded to the branch-code
@@ -114,6 +118,24 @@ async function updateProductHandler(...args: unknown[]): Promise<Response> {
     if (body[field] !== undefined) {
       updateData[field] = body[field];
     }
+  }
+
+  // v2.6.1 UoM guards: '' sellingUnit means "sell in the base unit" (null);
+  // the factor must be a positive finite number (a zero/garbage factor would
+  // silently deduct no stock at checkout).
+  if (updateData.sellingUnit !== undefined) {
+    const su = String(updateData.sellingUnit).trim().toUpperCase();
+    updateData.sellingUnit = su === '' ? null : su.slice(0, 20);
+  }
+  if (updateData.conversionFactor !== undefined) {
+    const cf = Number(updateData.conversionFactor);
+    if (!Number.isFinite(cf) || cf <= 0 || cf > 1000) {
+      return Response.json(
+        { success: false, error: 'conversionFactor must be a positive number (base units per selling unit).' },
+        { status: 400 }
+      );
+    }
+    updateData.conversionFactor = cf;
   }
 
   if (Object.keys(updateData).length === 0) {
