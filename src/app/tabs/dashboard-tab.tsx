@@ -14,7 +14,7 @@ import {
   Clock, ArrowRight, Activity,
   CircleDollarSign, KeyRound,
   Banknote, Zap, Timer, Play, Square, Calculator, LogOut,
-  ArrowUpRight, Sparkles,
+  ArrowUpRight, Sparkles, Lock, ShieldCheck,
 } from 'lucide-react';
 
 import { useAppStore, useAuthStore, type AppTab } from '@/lib/stores';
@@ -22,6 +22,7 @@ import {
   dashboardApi, debtApi, financialApi, productsApi,
   shiftsApi,
   formatKES, formatDateTime,
+  type ShiftXRead,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
 import { toast } from 'sonner';
@@ -972,8 +973,17 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
   const [endNotes, setEndNotes] = useState('');
   const [isStarting, setIsStarting] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
+  // v2.6.0 BLIND CLOSEOUT: post-end variance reveal (counted vs system).
+  const [endResult, setEndResult] = useState<{ countedCash: number; cashDifference: number } | null>(null);
 
   const userId = user?.id;
+
+  // v2.6.0 BLIND CLOSEOUT: blind=false ONLY for owner roles — everyone else
+  // (CASHIER/BRANCH_MANAGER/ACCOUNTANT) must count the drawer without seeing
+  // system totals.
+  const role = user?.role;
+  const isOwnerRole = role === 'SUPER_ADMIN' || role === 'STORE_OWNER';
+  const blindCount = !isOwnerRole;
 
   const { data: activeShift, isLoading, refetch } = useQuery({
     queryKey: ['current-shift', storeId, userId],
@@ -982,6 +992,21 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
       return res.data;
     },
     enabled: !!storeId && !!userId,
+    refetchInterval: 15000,
+  });
+
+  // v2.6.0: SERVER X-READ replaces the wrong client-side formula
+  // (startingCash + totalSales — ignored CASH_IN/CASH_OUT legs). Blind per
+  // role: the server strips expectedCash/difference when blind=1, so a
+  // cashier physically cannot peek at the system total.
+  const { data: xreadData, refetch: refetchXread } = useQuery({
+    queryKey: ['shift-xread', activeShift?.id ?? null, blindCount],
+    queryFn: async (): Promise<ShiftXRead | null> => {
+      if (!activeShift) return null;
+      const res = await shiftsApi.xread(activeShift.id, { blind: blindCount });
+      return res.data ?? null;
+    },
+    enabled: !!activeShift,
     refetchInterval: 15000,
   });
 
@@ -1049,11 +1074,18 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
         } else {
           toast.success('Shift ended. Cash balance is correct!');
         }
-        setEndDialogOpen(false);
+        // v2.6.0 BLIND CLOSEOUT: keep the dialog open and reveal the variance
+        // card (Counted KES X — Over/Short KES Y). For blind roles this is the
+        // FIRST moment they may see the system's expected figures.
+        setEndResult({
+          countedCash: shiftData?.countedCash ?? counted,
+          cashDifference: shiftData?.cashDifference ?? diff,
+        });
         setCountedCash('');
         setEndingCash('');
         setEndNotes('');
         refetch();
+        void refetchXread();
         queryClient.invalidateQueries({ queryKey: ['current-shift'] });
         queryClient.invalidateQueries({ queryKey: ['shifts'] });
       } else {
@@ -1066,9 +1098,13 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
     }
   };
 
-  const expectedCash = activeShift
-    ? activeShift.startingCash + activeShift.totalSales
-    : 0;
+  // v2.6.0: expected cash comes from the SERVER X-READ (owner roles only —
+  // blind roles get undefined from the server and must never see it). The old
+  // client-side `startingCash + totalSales` was WRONG (ignored cash-in/out)
+  // and leaked system totals to cashiers.
+  const expectedCash: number | null = isOwnerRole
+    ? xreadData?.expectedCash ?? null
+    : null;
 
   if (isLoading) {
     return (
@@ -1172,7 +1208,18 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
             </div>
             <div className="rounded-lg border p-2.5 bg-muted/30">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Expected Cash</p>
-              <p className="text-sm font-bold mt-0.5 text-emerald-600">{formatKES(expectedCash)}</p>
+              {/* v2.6.0: server X-read figure for owner roles; blind roles get a
+                  locked cell — showing the system total would defeat the blind
+                  count (and the server omits it anyway). */}
+              {blindCount ? (
+                <p className="text-sm font-bold mt-0.5 text-muted-foreground flex items-center gap-1">
+                  <Lock className="h-3 w-3" /> Blind
+                </p>
+              ) : (
+                <p className="text-sm font-bold mt-0.5 text-emerald-600">
+                  {expectedCash === null ? '—' : formatKES(expectedCash)}
+                </p>
+              )}
             </div>
           </div>
           <div className="mt-3 flex justify-end">
@@ -1180,7 +1227,15 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
               variant="destructive"
               size="sm"
               className="h-8 gap-1.5 text-xs"
-              onClick={() => setEndDialogOpen(true)}
+              onClick={() => {
+                setEndResult(null);
+                setCountedCash('');
+                setEndingCash('');
+                setEndNotes('');
+                setEndDialogOpen(true);
+                // Refresh the server snapshot when the dialog opens.
+                void refetchXread();
+              }}
             >
               <LogOut className="h-3.5 w-3.5" />
               End Shift
@@ -1190,7 +1245,7 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
       </Card>
 
       {/* End Shift Dialog */}
-      <Dialog open={endDialogOpen} onOpenChange={setEndDialogOpen}>
+      <Dialog open={endDialogOpen} onOpenChange={(open) => { setEndDialogOpen(open); if (!open) setEndResult(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1203,28 +1258,85 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Summary before counting */}
-            <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Starting Cash</span>
-                <span className="font-medium">{formatKES(activeShift.startingCash)}</span>
+            {/* v2.6.0 POST-END VARIANCE REVEAL — the Z-read response carries
+                countedCash + cashDifference. Blind roles see the system figures
+                for the first time HERE, after the count is committed. */}
+            {endResult ? (
+              <div className="space-y-3">
+                <div
+                  role="status"
+                  className={`rounded-lg border p-4 space-y-2 ${Math.abs(endResult.cashDifference) < 1 ? 'border-green-300 bg-green-50 dark:bg-green-950/30 dark:border-green-800' : 'border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800'}`}
+                >
+                  <p className={`text-sm font-semibold flex items-center gap-2 ${Math.abs(endResult.cashDifference) < 1 ? 'text-green-700 dark:text-green-300' : 'text-amber-700 dark:text-amber-300'}`}>
+                    <ShieldCheck className="h-4 w-4" />
+                    Shift closed — cash variance
+                  </p>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">Counted</span>
+                    <span className="font-mono font-bold">{formatKES(endResult.countedCash)}</span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {Math.abs(endResult.cashDifference) < 1 ? 'Balanced' : endResult.cashDifference > 0 ? 'Over' : 'Short'}
+                    </span>
+                    <span className={`font-mono font-extrabold text-base ${Math.abs(endResult.cashDifference) < 1 ? 'text-green-600' : 'text-amber-600'}`}>
+                      {Math.abs(endResult.cashDifference) < 1
+                        ? '✓ KES 0.00'
+                        : `${endResult.cashDifference > 0 ? '+' : '−'}${formatKES(Math.abs(endResult.cashDifference))}`}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Counted KES {formatKES(endResult.countedCash)} — {Math.abs(endResult.cashDifference) < 1 ? 'no variance' : `${endResult.cashDifference > 0 ? 'over' : 'short'} KES ${formatKES(Math.abs(endResult.cashDifference))}`}. The drawer ledger has been frozen for this shift.
+                  </p>
+                </div>
+                <Button
+                  className="w-full h-10"
+                  onClick={() => { setEndDialogOpen(false); setEndResult(null); }}
+                >
+                  Done
+                </Button>
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">+ Shift Sales</span>
-                <span className="font-medium text-green-600">{formatKES(activeShift.totalSales)}</span>
+            ) : (
+              <>
+            {/* Summary before counting — OWNERS ONLY. For blind roles the
+                summary is REPLACED by the blind-count notice: showing starting
+                cash + shift sales would let anyone derive the expected total. */}
+            {blindCount ? (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3 space-y-1.5" role="note">
+                <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                  <Lock className="h-4 w-4 shrink-0 mt-0.5" />
+                  Blind count enforced
+                </p>
+                <p className="text-xs text-amber-800/90 dark:text-amber-300/90">
+                  Count the physical cash in the drawer and enter it below. Do not check system totals.
+                </p>
               </div>
-              <Separator />
-              <div className="flex justify-between text-sm">
-                <span className="font-medium">Expected Cash</span>
-                <span className="font-bold text-emerald-600">{formatKES(expectedCash)}</span>
+            ) : (
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Starting Cash</span>
+                  <span className="font-medium">{formatKES(activeShift.startingCash)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">+ Shift Sales</span>
+                  <span className="font-medium text-green-600">{formatKES(activeShift.totalSales)}</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between text-sm">
+                  <span className="font-medium">Expected Cash (system)</span>
+                  <span className="font-bold text-emerald-600">
+                    {expectedCash === null ? '…' : formatKES(expectedCash)}
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Cash counting inputs */}
+            {/* Cash counting inputs — countedCash is the PRIMARY field for
+                blind roles (autoFocus) and required for everyone. */}
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label htmlFor="counted-cash" className="text-xs font-medium">
-                  Counted Cash in Drawer (KES)
+                  Counted Cash in Drawer (KES){blindCount && ' *'}
                 </Label>
                 <Input
                   id="counted-cash"
@@ -1269,8 +1381,9 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
               </div>
             </div>
 
-            {/* Live difference calculation */}
-            {countedCash && (
+            {/* Live difference calculation — OWNERS ONLY. Rendering this for a
+                blind role would leak the expected total before the count. */}
+            {!blindCount && countedCash && expectedCash !== null && (
               <div className="rounded-lg border p-3 space-y-1.5">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cash Summary</p>
                 <div className="flex justify-between text-xs">
@@ -1296,26 +1409,30 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
                 </div>
               </div>
             )}
+              </>
+            )}
           </div>
 
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setEndDialogOpen(false)} className="h-9">
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleEndShift}
-              disabled={isEnding || !countedCash || !endingCash}
-              className="h-9 gap-1.5"
-            >
-              {isEnding ? (
-                <Activity className="h-4 w-4 animate-spin" />
-              ) : (
-                <Square className="h-4 w-4" />
-              )}
-              {isEnding ? 'Ending...' : 'End Shift'}
-            </Button>
-          </DialogFooter>
+          {!endResult && (
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setEndDialogOpen(false)} className="h-9">
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleEndShift}
+                disabled={isEnding || !countedCash || !endingCash}
+                className="h-9 gap-1.5"
+              >
+                {isEnding ? (
+                  <Activity className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Square className="h-4 w-4" />
+                )}
+                {isEnding ? 'Ending...' : 'End Shift'}
+              </Button>
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
     </>

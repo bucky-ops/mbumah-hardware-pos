@@ -1,9 +1,12 @@
 // Zustand state stores
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { AuthUser, CartItem } from './types';
 import { authApi } from './api';
+// v2.6.0 CART PERSISTENCE: IndexedDB-backed storage adapter so the cart
+// survives logout, idle timeout, refresh and browser restart.
+import { idbCartStorage } from './cart-persist';
 // FINANCIAL MATH AUDIT: cart money math is Decimal-based (never float) and
 // uses the SAME line formula as the server (financialMath.calculateLineItem,
 // VAT-INCLUSIVE retail pricing) so what the cashier sees is exactly what
@@ -139,15 +142,20 @@ export const useAuthStore = create<AuthState>((set) => ({
 // R10 FIX (v2.5.1 — login flash/reload loop): the API layer dispatches
 // `mbt:session-expired` instead of calling window.location.reload() when a
 // request comes back 401 (see api.ts handleSessionExpired). React by flipping
-// the SPA to the LoginScreen in place — no reload, no flash loop, cart and
-// UI state simply reset alongside the session.
+// the SPA to the LoginScreen in place — no reload, no flash loop, UI state
+// simply resets alongside the session.
+//
+// v2.6.0 (CART SURVIVAL): the handler NO LONGER calls clearCart(). The cart
+// now persists in IndexedDB (see useCartStore below) and MUST survive logout,
+// 401s and idle timeouts — a cashier whose session expired mid-sale logs back
+// in and finds the sale exactly as they left it. page.tsx shows the
+// "Previous cart restored (N items)" toast after re-login.
 if (typeof window !== 'undefined') {
   window.addEventListener('mbt:session-expired', () => {
     try {
       const s = useAuthStore.getState();
       if (s.isAuthenticated || s.token) {
         useAuthStore.setState({ user: null, token: null, isAuthenticated: false });
-        useCartStore.getState().clearCart();
       }
     } catch {
       // Never crash the page from a session-event handler.
@@ -192,9 +200,17 @@ function lineVatComponent(item: CartItem): number {
   return round2(gross.minus(net));
 }
 
-export const useCartStore = create<CartState>((set, get) => ({
-  items: [],
-  discount: 0,
+/** The slice of CartState that is persisted to IndexedDB (mbt_cart_v1, v1). */
+export interface CartPersistSlice {
+  items: CartItem[];
+  discount: number;
+}
+
+export const useCartStore = create<CartState>()(
+  persist(
+    (set, get) => ({
+      items: [],
+      discount: 0,
 
   setDiscount: (amount) => {
     // Cart-level flat discount (Ksh). Clamped to >= 0 and capped at the
@@ -279,7 +295,27 @@ export const useCartStore = create<CartState>((set, get) => ({
   getItemCount: () => {
     return get().items.reduce((sum, item) => sum + item.quantity, 0);
   },
-}));
+    }),
+    {
+      // v2.6.0 CART PERSISTENCE — durable IndexedDB (NOT localStorage):
+      //   • survives logout / idle timeout / refresh / browser restart;
+      //   • `skipHydration: true` keeps SSR safe — page.tsx manually calls
+      //     useCartStore.persist.rehydrate() on first client mount (same
+      //     pattern as useAppStore) and toasts "Previous cart restored".
+      name: 'mbt_cart_v1',
+      version: 1,
+      storage: createJSONStorage(() => idbCartStorage),
+      // Persist ONLY cart data — actions (addItem etc.) are never serialized.
+      partialize: (state): CartPersistSlice => ({
+        items: state.items,
+        discount: state.discount,
+      }),
+      // v1 is the first version: any foreign/legacy shape resets to an empty
+      // cart instead of crashing the POS.
+      migrate: (): CartPersistSlice => ({ items: [], discount: 0 }),
+    },
+  ),
+);
 
 export type AppTab = 'dashboard' | 'pos' | 'catalog' | 'inventory' | 'customers' | 'rentals' | 'financial' | 'reports' | 'transactions' | 'suppliers' | 'gift-cards' | 'admin' | 'vouchers' | 'invoices' | 'delivery' | 'credits' | 'messaging' | 'transfers' | 'banking' | 'loyalty' | 'security' | 'payroll' | 'etims' | 'debt-management' | 'debt-plans' | 'conversations' | 'purchase-orders' | 'analytics' | 'data-exports' | 'shift-scheduling';
 

@@ -524,6 +524,40 @@ async function createStockAdjustmentHandler(
     },
   });
 
+  // v2.6.0: tamper-evident audit entry for the inventory adjustment. Captures
+  // the stock level BEFORE (from the pre-transaction product read) and AFTER
+  // the movement. All values are Number()-coerced plain JSON — Prisma
+  // Decimals must never reach the audit chain (string-serialization trap).
+  try {
+    const { auditTrail } = await import('@/lib/audit-trail');
+    await auditTrail.log({
+      action: 'UPDATE',
+      resourceType: 'INVENTORY_ADJUSTMENT',
+      resourceId: productId,
+      actorId: session.userId,
+      actorRole: session.role,
+      storeId,
+      oldValues: {
+        quantityInStock: Number(product.quantityInStock),
+      },
+      newValues: {
+        quantityInStock: Number(updatedProduct?.quantityInStock ?? product.quantityInStock),
+        movementType: movementTypeValue,
+        reason: reasonText || noteText || movementTypeValue,
+      },
+      metadata: {
+        movementId: movement.id,
+        productName: product.name,
+        sku: product.sku,
+        quantity: adjustmentQuantity,
+        unitCost: parsedUnitCost,
+        writeOffCategory: writeOffCategory || null,
+      },
+    });
+  } catch {
+    /* audit chain must never block the adjustment response */
+  }
+
   return Response.json(
     {
       success: true,

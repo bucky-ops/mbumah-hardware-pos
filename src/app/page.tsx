@@ -5,12 +5,14 @@
  * Refactored: components extracted into separate files for maintainability.
  */
 
-import React, { useState, useEffect, useRef, lazy, Suspense, useSyncExternalStore } from 'react';
+import React, { useState, useEffect, useRef, useCallback, lazy, Suspense, useSyncExternalStore } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Loader2, Keyboard } from 'lucide-react';
+import { toast } from 'sonner';
 
-import { useAuthStore, useAppStore } from '@/lib/stores';
+import { useAuthStore, useAppStore, useCartStore } from '@/lib/stores';
+import { useIdleTimeout } from '@/hooks/use-idle-timeout';
 import { APP_VERSION_LABEL } from '@/lib/version';
 import { TAB_LOADERS } from '@/lib/tab-preload';
 import { ErrorBoundary, SectionErrorBoundary } from '@/components/error-boundary';
@@ -74,6 +76,28 @@ function MainApp() {
   const user = useAuthStore((s) => s.user);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const searchBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  // v2.6.0 IDLE TIMEOUT (30 min): reuse the EXACT 401 session-expired path —
+  // clear the auth tokens and dispatch `mbt:session-expired`, which the
+  // auth-store listener (stores.ts) handles by flipping the SPA to the
+  // LoginScreen. The cart now PERSISTS in IndexedDB (no clearCart on this
+  // path), so the toast tells the cashier their sale survived.
+  const handleIdleTimeout = useCallback(() => {
+    try {
+      const hadSession = !!localStorage.getItem('mbt_token');
+      localStorage.removeItem('mbt_token');
+      localStorage.removeItem('mbt_user');
+      if (hadSession) {
+        window.dispatchEvent(new CustomEvent('mbt:session-expired'));
+      }
+    } catch {
+      // Storage unavailable — still flip to the login screen via the event.
+    }
+    toast.info('Session timed out after 30 minutes — your cart was saved and will be restored on next login.', {
+      duration: 8000,
+    });
+  }, []);
+  useIdleTimeout(handleIdleTimeout);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -267,8 +291,13 @@ export default function HomePage() {
   const hasMounted = useHasMounted();
   const showRetry = useLoadingWatchdog(hasMounted);
 
+  // v2.6.0: one-time guard so React StrictMode double-invocation of the
+  // effect never toasts "Previous cart restored" twice.
+  const cartRehydrateToastShownRef = useRef(false);
+
   // Hydrate auth state from localStorage on first client mount.
   // Also rehydrate the persisted app store (sidebar state, active tab, etc.)
+  // and — since v2.6.0 — the persisted CART (IndexedDB 'mbt_cart_v1').
   // Defensive checks ensure this never crashes even if persist middleware
   // is removed or the store structure changes.
   useEffect(() => {
@@ -279,6 +308,30 @@ export default function HomePage() {
       }
     } catch (err) {
       console.error('[MbumahBoot] Failed to rehydrate app store:', err);
+    }
+
+    // v2.6.0 CART RESTORATION: the cart store persists to IndexedDB with
+    // skipHydration: true — rehydrate it manually here (async storage, so
+    // rehydrate() resolves AFTER the cart slice is merged). If a non-empty
+    // cart came back, toast ONCE so the cashier knows their sale survived
+    // the logout/idle-timeout. Gated on an existing token so the toast is
+    // not shown on the cold login screen.
+    try {
+      if (typeof useCartStore?.persist?.rehydrate === 'function') {
+        void Promise.resolve(useCartStore.persist.rehydrate())
+          .then(() => {
+            if (cartRehydrateToastShownRef.current) return;
+            cartRehydrateToastShownRef.current = true;
+            const hasToken = !!localStorage.getItem('mbt_token');
+            const { items } = useCartStore.getState();
+            if (hasToken && items.length > 0) {
+              toast.success(`Previous cart restored (${items.length} item${items.length !== 1 ? 's' : ''})`);
+            }
+          })
+          .catch((err) => console.error('[MbumahBoot] Failed to rehydrate cart store:', err));
+      }
+    } catch (err) {
+      console.error('[MbumahBoot] Failed to rehydrate cart store:', err);
     }
   }, [hydrateFromStorage]);
 

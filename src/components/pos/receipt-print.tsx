@@ -27,6 +27,7 @@ import {
   Check,
   Loader2,
   MessageSquare,
+  Usb,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatKES, formatDateTime, openSMS, type TransactionItem } from '@/lib/api';
@@ -34,6 +35,9 @@ import { STORE_LIST, COMPANY, type StoreInfo } from '@/lib/store-info';
 import { toNum, changeDue as changeDueOf } from '@/lib/utils/financialMath';
 import { RECEIPT_CONTENT_ID, generateReceiptPdf, buildReceiptFileName, printReceiptElement } from '@/lib/receipt-pdf';
 import { ReceiptDocument, ReceiptPrintPreview } from '@/components/receipt-print';
+import { buildReceiptQrPayload } from '@/lib/receipt-qr';
+import { buildReceiptEscpos, printReceiptViaUsb, hasUsbPrinting } from '@/lib/escpos';
+import type { ReceiptData } from '@/lib/types';
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
@@ -175,8 +179,13 @@ export function EnhancedReceiptPrint({
 }: EnhancedReceiptProps) {
   const [isPrinting, setIsPrinting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isThermalPrinting, setIsThermalPrinting] = useState(false);
   const [copied, setCopied] = useState(false);
   const autoPrintTriggered = useRef(false);
+
+  // v2.6.0: WebUSB ESC/POS thermal printing is Chromium-only — gate the
+  // button so Firefox/Safari users never see a dead control.
+  const [usbAvailable] = useState(() => hasUsbPrinting());
 
   const store = STORE_LIST.find((s) => s.id === storeId);
 
@@ -283,6 +292,56 @@ export function EnhancedReceiptPrint({
     onNewSale();
   }, [onOpenChange, onNewSale]);
 
+  /**
+   * v2.6.0 THERMAL PRINT (USB): serialise the receipt to raw ESC/POS bytes
+   * and send them straight to a USB printer — NO print dialog, NO paper-size
+   * fight with the OS. Complements (never replaces) the window.print and PDF
+   * flows, which remain the fallback for A4/email-cabin printers.
+   */
+  const handleThermalPrint = useCallback(async () => {
+    if (!transaction) return;
+    setIsThermalPrinting(true);
+    try {
+      const receipt: ReceiptData = {
+        storeName: store?.name || 'MBUMAH HARDWARE',
+        storeLocation: store?.location || '',
+        storePhone: store?.phone || COMPANY.phone,
+        receiptNumber: transaction.receiptNumber,
+        date: formatDateTime(transaction.createdAt),
+        cashier: transaction.cashier?.name || 'N/A',
+        customer: transaction.customer?.name,
+        items: (transaction.items ?? []).map((item) => ({
+          name: item.productName,
+          quantity: toNum(item.quantity),
+          unitType: item.unitType,
+          pricePerUnit: toNum(item.pricePerUnit),
+          lineTotal: toNum(item.lineTotal),
+        })),
+        subtotal: toNum(transaction.subtotal),
+        taxAmount: toNum(transaction.taxAmount),
+        discountAmount: toNum(transaction.discountAmount),
+        total: toNum(transaction.totalAmount),
+        paymentMethod: transaction.paymentMethod,
+        footer: 'Thank you for shopping at MBUMAH HARDWARE!',
+      };
+      const escposBytes = buildReceiptEscpos(receipt, {
+        qrText: buildReceiptQrPayload(transaction),
+        etimsStatus: transaction.etimsStatus ?? null,
+      });
+      const result = await printReceiptViaUsb(escposBytes);
+      if (result.ok) {
+        toast.success(`Sent to thermal printer (no print dialog)${result.deviceName ? ` — ${result.deviceName}` : ''}.`);
+      } else {
+        toast.error(result.error || 'Could not send the receipt to the thermal printer.');
+      }
+    } catch (error) {
+      console.error('[RECEIPT_THERMAL_PRINT_ERROR]', error);
+      toast.error('Could not build or send the ESC/POS receipt. Use Print or PDF instead.');
+    } finally {
+      setIsThermalPrinting(false);
+    }
+  }, [transaction, store]);
+
   if (!transaction) return null;
 
   return (
@@ -321,6 +380,23 @@ export function EnhancedReceiptPrint({
             <Printer className="mr-1.5 h-4 w-4" />
             {isPrinting ? 'Printing...' : 'Print'}
           </Button>
+          {usbAvailable && (
+            <Button
+              variant="outline"
+              onClick={handleThermalPrint}
+              disabled={isThermalPrinting}
+              aria-label="Print receipt directly to a USB thermal printer without a print dialog"
+              title="Send to USB thermal printer (ESC/POS, no print dialog)"
+              className="flex-1 min-w-[90px] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+            >
+              {isThermalPrinting ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <Usb className="mr-1.5 h-4 w-4" />
+              )}
+              {isThermalPrinting ? 'Sending…' : 'Thermal Print (USB)'}
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={handleCopyReceipt}

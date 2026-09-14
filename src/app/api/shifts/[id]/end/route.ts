@@ -4,7 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent, UserRole } from '@/lib/types';
-import { withSessionAuth } from '@/lib/auth';
+import { withSessionAuth, getSessionFromRequest } from '@/lib/auth';
 // Task 12-c: canonical financial math (HALF_UP 2dp). The expected-cash chain
 // previously mixed Number()-coerced Prisma Decimals in float arithmetic;
 // now every leg is an exact Decimal accumulator. FORMULA UNCHANGED:
@@ -90,6 +90,10 @@ async function endShiftHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const id = args[1] as { params: Promise<{ id: string }> };
   const { id: shiftId } = await id.params;
+
+  // v2.6.0: the session is needed to attribute the CLOSE audit entry (the
+  // wrapper already validated it; withSessionAuth does not forward it).
+  const session = await getSessionFromRequest(request);
 
   const body = await request.json();
   const { endingCash, countedCash, notes } = body;
@@ -200,6 +204,31 @@ async function endShiftHandler(...args: unknown[]): Promise<Response> {
       cashDifference,
     },
   });
+
+  // v2.6.0: tamper-evident CLOSE audit entry for the shift closeout (Z-read).
+  // Best-effort — the shift is already persisted; a chained-HMAC audit row
+  // records WHO closed the shift and the revealed variance. oldValues/
+  // newValues are plain JSON numbers (never Decimal).
+  try {
+    const { auditTrail } = await import('@/lib/audit-trail');
+    await auditTrail.log({
+      action: 'CLOSE',
+      resourceType: 'SHIFT',
+      resourceId: shiftId,
+      actorId: session?.userId,
+      actorRole: session?.role,
+      storeId: shift.storeId,
+      newValues: {
+        countedCash: countedValue,
+        endingCash: endingCashNum,
+        cashDifference,
+        totalSales: breakdown.salesCash,
+      },
+      reason: 'Shift closeout',
+    });
+  } catch {
+    /* audit chain must never block the closeout */
+  }
 
   const data = {
     id: updatedShift.id,

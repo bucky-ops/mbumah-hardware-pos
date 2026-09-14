@@ -35,6 +35,21 @@ export function ensureOutboxHandlers(): void {
     });
   });
 
+  // ETIMS_INVOICE (v2.6.0) — checkout enqueues this right after the sale
+  // commits (SalesTransaction.etimsStatus = 'PENDING'). The shared core in
+  // src/lib/etims-queue.ts performs ONE KRA submission attempt; the pump's
+  // backoff/dead-letter semantics apply on failure, and the dedicated retry
+  // cron (/api/cron/etims-retry) is the durable fallback. Registration here
+  // is REQUIRED — without it pumpOutbox would fail every ETIMS_INVOICE event
+  // with "No outbox handler registered" and dead-letter real tax invoices.
+  registerOutboxHandler('ETIMS_INVOICE', async ({ payload }) => {
+    const { submitEtimsInvoiceOnce } = await import('@/lib/etims-queue');
+    const transactionId = String(payload.transactionId ?? '');
+    if (!transactionId) throw new Error('ETIMS_INVOICE payload missing transactionId');
+    const result = await submitEtimsInvoiceOnce(transactionId);
+    if (!result.ok) throw new Error(result.error || 'eTIMS invoice submission failed');
+  });
+
   // AUDIT_ALERT — reserved for reconciliation findings surfaced to ops (F6-6).
   registerOutboxHandler('AUDIT_ALERT', async ({ payload }) => {
     await systemLog({

@@ -9,11 +9,24 @@
 //
 // Response breakdown: startingCash, salesCash, cashIn, cashOut, expectedCash
 // (plus countedCash/cashDifference when the shift has already been ended).
+//
+// v2.6.0 BLIND CLOSEOUT: the EXPECTED cash figure is the number a dishonest
+// cashier would use to tune their count, so it is hidden from anyone below
+// owner level:
+//   • role ∉ OWNER_ROLES (SUPER_ADMIN, STORE_OWNER) → expectedCash and
+//     difference are ALWAYS null (default-blind; ?blind=0 cannot widen —
+//     only a super-owner may un-blind).
+//   • Owners see the numbers by default; ?blind=1 forces a blind read for
+//     everyone; ?blind=0 explicitly un-blinds for owners.
+// countedCash/difference: `difference` reveals the variance and is stripped
+// blind; `countedCash` (only present after a Z-read) stays visible — the
+// cashier entered it themselves.
 
+import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { UserRole } from '@/lib/types';
-import { withSessionAuth } from '@/lib/auth';
+import { withSessionAuth, getSessionFromRequest, OWNER_ROLES } from '@/lib/auth';
 // Task 12-c: canonical financial math (HALF_UP 2dp). The expected-cash chain
 // previously mixed Number()-coerced Prisma Decimals in float arithmetic; now
 // every leg is an exact Decimal accumulator. FORMULA UNCHANGED:
@@ -39,8 +52,18 @@ interface RouteContext {
  * (REFUND rows are intentionally excluded per the audit spec.)
  */
 async function xreadShiftHandler(...args: unknown[]): Promise<Response> {
+  const request = args[0] as NextRequest;
   const context = args[1] as RouteContext;
   const { id: shiftId } = await context.params;
+
+  // ── v2.6.0 blind-closeout resolution ──
+  // The wrapper already validated the session; re-derive it for the role
+  // check (withSessionAuth does not forward the session to the handler).
+  // No session ⇒ fail closed (blind).
+  const session = await getSessionFromRequest(request);
+  const isOwner = session ? OWNER_ROLES.includes(session.role) : false;
+  const blindParam = new URL(request.url).searchParams.get('blind');
+  const blind = blindParam === '1' || !isOwner;
 
   const shift = await db.shift.findUnique({
     where: { id: shiftId },
@@ -91,11 +114,17 @@ async function xreadShiftHandler(...args: unknown[]): Promise<Response> {
     toDec(startingCash).plus(sumFor('SALE')).plus(sumFor('CASH_IN')).minus(sumFor('CASH_OUT'))
   );
 
+  // v2.6.0 BLIND CLOSEOUT (see file header): expectedCash and the
+  // counted-vs-expected difference are null unless the caller is
+  // owner-or-above AND has not explicitly asked for a blind read.
+  const rawDifference = shift.cashDifference === null ? null : round2(toDec(shift.cashDifference));
+
   return Response.json({
     success: true,
     data: {
       documentType: 'X_READ',
       note: 'X-read is a non-resetting inquiry; Z-read (shift end) closes and snapshots.',
+      blind,
       shiftId: shift.id,
       storeId: shift.storeId,
       status: shift.status,
@@ -105,11 +134,14 @@ async function xreadShiftHandler(...args: unknown[]): Promise<Response> {
       salesCash,
       cashIn,
       cashOut,
-      expectedCash,
+      // Blind closeout: hidden (null) for non-owner roles — a cashier must
+      // count the drawer without knowing the expected figure.
+      expectedCash: blind ? null : expectedCash,
       // Only present once the Z-read (shift end) has been performed.
       // Task 12-c: Decimal-coerced, rounded emits (was Number()).
       countedCash: shift.countedCash === null ? null : round2(toDec(shift.countedCash)),
-      difference: shift.cashDifference === null ? null : round2(toDec(shift.cashDifference)),
+      // Blind closeout: the variance reveals expected cash by implication.
+      difference: blind ? null : rawDifference,
       generatedAt: new Date().toISOString(),
     },
   });
