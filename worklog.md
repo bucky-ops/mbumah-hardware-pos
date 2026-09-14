@@ -111,3 +111,26 @@ Stage Summary:
 - PRODUCTION = v2.6.1 on both Vercel projects, health GREEN, 427/427 tests, releases v2.5.8 + v2.6.1 published.
 - Key learnings: (1) Vercel Hobby = 2 cron jobs/project + once-daily schedules — ALWAYS fold new schedules into the hourly/nightly dispatchers; commit-status link (vercel.link/3Fpeeb1 → cron pricing docs) is the diagnostic signature. (2) git commit without git add -A after programmatic edits ships empty diffs — verify origin/main content after merge. (3) The postgres/sqlite dual-provider trap: prisma generate ALWAYS needs DATABASE_URL=postgresql://... override in this sandbox; local test runs need the CI-identical file: + db:push + seed sequence. (4) pricePerUnit semantics become per-SELLING-unit once UoM is configured — shops must re-price converted products.
 - Remaining follow-ups: Server Actions migration documented as phased follow-up (REST+CSRF+idempotency layer is load-bearing; pilot candidates = simple CRUD); Neon pooled host + connect_timeout already in place (PgBouncer/Accelerate optional); transactions/movements tables use expandable fragments (virtualization deferred); variance-reveal card may auto-close with dialog (cosmetic); idle-timeout toast copy verified; webhook/WhatsApp reminders run via hourly dispatcher at 03:00 UTC.
+
+---
+Task ID: V
+Agent: Z.ai Code (main)
+Task: Vercel account management — audit account with provided access token, produce usage-limit action plan, set up recurring oversight cron.
+
+Work Log:
+- Authenticated to Vercel API with user-provided token (vcp_...3034b25) as user muchiricollins98@gmail.com (Recaro).
+- Account facts: Hobby (free) plan, team "Recaro's projects" (team_VmVQcu8Piwz4KvXho7u8PEG1), 1 concurrent build, remote caching ON, dataCache excessBillingEnabled=false, MFA+TOTP enabled, planIteration=legacy with plusMigrationEnabled=true.
+- Pulled 13 projects: mbumah-hardware-pos, mbumah-hardware-pos-ltcm, web, binti-rising-org, binti-rising-initiative, my-project, login-system, login-system1, blogify, ngo-insights-ai, nowa-systems, v0-new-project-vugzc04ppeh, kamama-portfolio.
+- CRITICAL FINDING: mbumah-hardware-pos AND mbumah-hardware-pos-ltcm both link to the SAME repo bucky-ops/mbumah-hardware-pos (main) → every push triggers 2 prod + 2 preview builds (double build minutes, doubled deploy queue on 1 concurrent builder).
+- `web` (bucky-ops/Kenya-Childhood-Malnutrition-Risk-Prediction-System) had 6+ production ERROR deployments on 2026-09-13 — repeated failed builds waste minutes; needs rootDir/build fix before next push.
+- binti-rising-org (binti.rising.website) vs binti-rising-initiative (binti-rising-website) = two different repos, both idle ~2 months; my-project, login-system, login-system1, v0-new-project have NO git link (CLI/v0 leftovers).
+- Domains nowa-systems.app / nowa-systems.org / nowa-systems-credit.app are verified but PROJECTLESS (no projectId) — nothing is serving them.
+- Usage API (/v1/usage) returns plan_upgrade_required on Hobby → granular usage via API unavailable; must monitor via dashboard https://vercel.com/{team}/settings/usage.
+- Budgets API returns forbidden with this token scope (vcp_ project-style token).
+- No destructive action taken (no project deletions/renames) — deliverable is a follow-along action plan; safe ops offered for execution on user approval.
+- Created recurring 15-minute webDevReview cron for continuous oversight (see cron tool).
+
+Stage Summary:
+- Account is Hobby/free: no overage billing, but hard limits (100GB transfer, 1M edge requests, 1M function invocations, 5k image optimizations, 2 cron jobs once/day, 1 concurrent build) and an "excessive usage" review policy.
+- Top waste: duplicate mbumah project (2x builds per push) + failing `web` builds. Recommended: delete mbumah-hardware-pos-ltcm after verifying domains/aliases, rename `web`, assign or detach nowa-systems domains.
+- Token hygiene: rotate this token after use and store as Vercel CI token or local env var; do not paste in chats (it grants full account API access).
