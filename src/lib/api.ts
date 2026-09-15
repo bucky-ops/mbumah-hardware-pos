@@ -2932,6 +2932,38 @@ export const giftCardsApi = {
       body: JSON.stringify({ toggleVisibility: true }),
     });
   },
+
+  /**
+   * Redeem a gift card BY ITS CODE (the POS "Pay with Gift Card" flow).
+   *
+   * FIX (v2.6.3): this method was referenced by pos-tab.tsx since the POS
+   * redesign but was NEVER defined on giftCardsApi (a same-named method
+   * exists on vouchersApi, which is what made the drift easy to miss).
+   * Every click on "Apply Gift Card" threw
+   *   "giftCardsApi.redeemByCode is not a function"
+   * (minified as "u.giftCardsApi.redeemByCode is not a function").
+   * It now hits POST /api/gift-cards/redeem, which resolves the card by
+   * code (case-insensitive), scopes it to the issuing store, and applies
+   * UP TO the requested amount — the response carries `discountAmount`
+   * (capped at the card balance) plus `remainingBalance`.
+   */
+  redeemByCode: async (payload: {
+    code: string;
+    storeId?: string;
+    amount?: number;
+    transactionId?: string;
+    notes?: string;
+  }) => {
+    return request<{
+      giftCard: GiftCardItem;
+      redemption: GiftCardRedemption;
+      discountAmount: number;
+      remainingBalance: number;
+    }>('/gift-cards/redeem', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
 };
 
 // ─── Vouchers API ────────────────────────────────────────────────────────────
