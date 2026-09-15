@@ -26,6 +26,11 @@ on:
     branches: [main, develop, development, update]
   pull_request:
     branches: [main, develop, development]
+  # MANUAL RUNS (v2.6.3): lets maintainers re-fire the pipeline via
+  # `gh workflow run` / API dispatch when GitHub loses push/PR webhook
+  # events (happened 2026-09-15: an API incident dropped every PR event,
+  # leaving the PR merge blocked on checks that never ran).
+  workflow_dispatch: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
