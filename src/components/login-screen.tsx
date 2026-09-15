@@ -25,6 +25,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/lib/stores';
+import { APP_BUILD_LABEL } from '@/lib/version';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -367,6 +368,16 @@ export function LoginScreen() {
           transition={{ duration: 0.5, delay: 0.7 }}
         >
           Powered by MBUMAH HARDWARE · Made in Kenya 🇰🇪
+        </motion.p>
+        {/* VERSION BADGE (v2.6.2): version + build commit, visible BEFORE
+            login — support can verify the deployed release from the gate. */}
+        <motion.p
+          className="text-center mt-1 text-[10px] text-white/25 tracking-wider"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.9 }}
+        >
+          {APP_BUILD_LABEL}
         </motion.p>
       </motion.div>
     </div>

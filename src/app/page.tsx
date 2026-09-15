@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 
 import { useAuthStore, useAppStore, useCartStore } from '@/lib/stores';
 import { useIdleTimeout } from '@/hooks/use-idle-timeout';
-import { APP_VERSION_LABEL } from '@/lib/version';
+import { APP_BUILD_LABEL } from '@/lib/version';
 import { TAB_LOADERS } from '@/lib/tab-preload';
 import { ErrorBoundary, SectionErrorBoundary } from '@/components/error-boundary';
 import { FloatingHomeButton } from '@/components/floating-home-button';
@@ -203,9 +203,10 @@ function MainApp() {
                 <p className="text-xs text-muted-foreground">
                   MBUMAH HARDWARE POS & ERP &copy; {new Date().getFullYear()}
                 </p>
-                {/* VERSION FLOW FIX (v2.5.1): was hardcoded "v2.2.0" while the
-                    API reported 2.5.0 — now renders package.json version. */}
-                <span className="text-[10px] text-muted-foreground/50 hidden sm:inline">{APP_VERSION_LABEL}</span>
+                {/* VERSION FLOW (v2.6.2): renders package.json version + the
+                    exact commit SHA this bundle was built from — see
+                    src/lib/version.ts. Never hardcode a version here. */}
+                <span className="text-[10px] text-muted-foreground/50 hidden sm:inline" title="App version · build commit">{APP_BUILD_LABEL}</span>
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60">

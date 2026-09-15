@@ -1,0 +1,81 @@
+# ============================================================================
+# AUTOMATIC RELEASE — tag + GitHub Release on every version bump to main
+# ============================================================================
+#
+# WHY THIS EXISTS: RELEASE_FLOW.md step 4 (tag vX.Y.Z + publish the GitHub
+# Release) was a MANUAL step and it was forgotten TWICE — v2.5.8 and v2.6.1
+# both shipped to production before anyone remembered to cut the release.
+#
+# GUARANTEE: after this workflow, the rule "every version that reaches main
+# also has a matching v-version tag and GitHub Release" is enforced by
+# machinery, not memory:
+#
+#   • package.json version NEW  → annotated tag v<X.Y.Z> pushed from the
+#     merge commit + GitHub Release with auto-generated notes.
+#   • package.json version SAME → workflow exits successfully as a no-op
+#     (every ordinary bugfix/choir merge without a bump touches nothing).
+#
+# The release notes are generated from the commits since the previous tag,
+# so the release page always lists exactly what shipped in that version.
+# ============================================================================
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}   # manual re-run is safe (idempotent)
+
+permissions:
+  contents: write         # push the tag + create the release
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false   # never cancel a tag-push mid-flight
+
+jobs:
+  release:
+    name: Tag & publish release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history — needed to resolve previous tag)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version from package.json (single source of truth)
+        id: ver
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing version: v$VERSION"
+
+      - name: Check whether tag already exists
+        id: tag
+        run: |
+          if git rev-parse -q --verify "refs/tags/v${{ steps.ver.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag v${{ steps.ver.outputs.version }} already exists — nothing to do."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Tag v${{ steps.ver.outputs.version }} is new — will cut release."
+          fi
+
+      - name: Cut annotated tag
+        if: steps.tag.outputs.exists == 'false'
+        run: |
+          git config user.name  "mbumah-release-bot"
+          git config user.email "release-bot@mbumahhardware.co.ke"
+          git tag -a "v${{ steps.ver.outputs.version }}" \
+                  -m "Release v${{ steps.ver.outputs.version }} — ${{ github.sha }}"
+          git push origin "v${{ steps.ver.outputs.version }}"
+
+      - name: Publish GitHub Release (auto-generated notes)
+        if: steps.tag.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.ver.outputs.version }}" \
+            --title "v${{ steps.ver.outputs.version }}" \
+            --verify-tag \
+            --generate-notes \
+            --latest
