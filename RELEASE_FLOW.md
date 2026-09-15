@@ -50,18 +50,25 @@ git push -u origin feat/my-feature
    - `GET /api/health` → `"version": "X.Y.Z"` and `status: healthy`
 3. Browser check the golden path (login → POS → the touched area).
 
-## 4. Tag & publish the GitHub Release
+## 4. Tag & publish the GitHub Release — AUTOMATIC (v2.6.2)
 
-```bash
-git checkout main && git pull origin main
-git tag -a vX.Y.Z -m "vX.Y.Z — <one-line summary>"
-git push origin vX.Y.Z
-```
+**You no longer do this by hand.** `.github/workflows/release.yml` runs on
+every push to `main` and:
 
-Then create the GitHub Release for the tag (mark it *latest*) with:
-- what changed (user language),
-- fixes with before/after evidence,
-- any data repairs that were run and their audit reference.
+1. reads the version from `package.json` (single source of truth),
+2. if tag `vX.Y.Z` does not exist yet → pushes the annotated tag from the
+   merge commit and publishes the GitHub Release (*latest*, with
+   auto-generated notes from the commits since the previous tag),
+3. if the tag already exists → exits as a no-op (ordinary merges without a
+   version bump release nothing).
+
+This machinery exists because manual tagging was forgotten twice — v2.5.8
+and v2.6.1 both reached production before a release was cut. The workflow
+makes the guarantee physical: **every version on main has a release page**.
+
+Release notes still benefit from a human touch — after the automatic release
+appears, you may edit the release body to add user-language highlights,
+before/after evidence, or data-repair references.
 
 ## 5. Data repairs (when a bug corrupted production data)
 
@@ -74,9 +81,10 @@ If a bug wrote wrong numbers to the database:
 
 ## Checklist (copy into the PR description)
 
-- [ ] `package.json` + `src/lib/openapi.ts` version bumped
+- [ ] `package.json` version bumped (`src/lib/openapi.ts` mirrors it automatically since v2.6.2 — never edit the spec version by hand)
 - [ ] `bun run lint` clean, tests green
 - [ ] Golden-path browser check done on the deployed preview/production
 - [ ] `/api/health` reports the new version after deploy
-- [ ] Tag `vX.Y.Z` pushed + GitHub Release published (latest)
+- [ ] Tag `vX.Y.Z` + GitHub Release created **automatically** by release.yml after merge (verify it exists — no manual tagging)
+- [ ] Footer + login screen show `vX.Y.Z · <sha>` on production
 - [ ] Data repair executed + verified (only if applicable)

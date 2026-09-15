@@ -25,11 +25,18 @@
 // error/pagination) rather than every model field; exhaustive per-model
 // schemas should be generated from the Prisma schema in a follow-up.
 
+// VERSION SOURCE (v2.6.2): info.version previously hardcode-oscillated — it
+// was left at '2.5.7' while package.json shipped 2.6.0/2.6.1, so every
+// consumer of GET /api/openapi was shown a stale API version. It now reads
+// the single source of truth (src/lib/version.ts → package.json) and can
+// never drift again.
+import { APP_VERSION } from './version';
+
 export const OPENAPI_SPEC = {
   openapi: '3.0.3',
   info: {
     title: 'MBUMAH HARDWARE POS & ERP API',
-    version: '2.5.7',
+    version: APP_VERSION,
     description:
       'Multi-tenant Point-of-Sale and ERP API for Kenyan hardware stores. ' +
       'All authenticated endpoints require the session cookie issued by ' +
