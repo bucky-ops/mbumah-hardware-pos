@@ -484,6 +484,59 @@ export const authApi = {
   },
 };
 
+// ─── Profile API (v2.7.0) ────────────────────────────────────────────────────
+// Self-service profile endpoints. Until v2.7.0 the sidebar's "Profile &
+// Settings" entry showed a "coming soon" toast and the ONLY way to change a
+// name/phone/password was a SUPER_ADMIN in the Admin tab.
+
+export interface ProfileData {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  organizationId: string;
+  storeId: string | null;
+  isActive: boolean;
+  phone: string | null;
+  avatarUrl: string | null;
+  lastLoginAt: string | null;
+  createdAt: string;
+  organization: { id: string; name: string; taxPin: string | null };
+  store: {
+    id: string;
+    name: string;
+    location: string | null;
+    phone: string | null;
+    email: string | null;
+  } | null;
+}
+
+export const profileApi = {
+  /** GET /api/profile — the signed-in user's full profile. */
+  get: async () => {
+    return request<ProfileData>('/profile');
+  },
+
+  /** PATCH /api/profile — update your OWN name / phone / avatarUrl. */
+  update: async (data: { name?: string; phone?: string | null; avatarUrl?: string | null }) => {
+    return request<ProfileData>('/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * POST /api/profile/password — rotate your own password.
+   * Revokes every OTHER session (other devices); the current session stays.
+   */
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    return request<{ sessionsRevoked: number }>('/profile/password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  },
+};
+
 
 export interface ProductListItem {
   id: string;

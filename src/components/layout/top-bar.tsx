@@ -20,6 +20,7 @@ import {
   CheckCheck, BellRing,
 } from 'lucide-react';
 import { CurrencySwitcher } from '@/components/currency-switcher';
+import { AboutDialog } from '@/components/about-dialog';
 
 export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonElement | null> }) {
   const { activeTab, toggleSidebar, setActiveTab, isSidebarCollapsed, toggleSidebarCollapse } = useAppStore();
@@ -33,6 +34,7 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const notificationCount = useNotificationCount(currentStoreId);
 
   const handleMarkAllRead = async () => {
@@ -175,7 +177,11 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
                   <Smartphone className="mr-2 h-4 w-4" />
                   Contact support
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => toast.info('MBUMAH HARDWARE POS & ERP\nVersion 1.0.0\nMade in Kenya 🇰🇪')}>
+                {/* v2.7.0: real About dialog — the old toast hardcoded
+                    "Version 1.0.0" while the app shipped 2.6.x. The dialog
+                    reads the version from src/lib/version.ts so it can never
+                    drift from /api/health, the footer or openapi.json again. */}
+                <DropdownMenuItem onClick={() => setAboutOpen(true)}>
                   <Info className="mr-2 h-4 w-4" />
                   About this system
                 </DropdownMenuItem>
@@ -331,6 +337,9 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* About this system (v2.7.0) */}
+      <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
     </>
   );
 }
