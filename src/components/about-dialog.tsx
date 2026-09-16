@@ -87,11 +87,17 @@ export function AboutDialog({
               <MapPin className="mr-1 h-3 w-3" /> Made in Kenya 🇰🇪
             </Badge>
           </div>
-          <p className="text-xs text-muted-foreground flex items-start gap-1.5">
+          <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
             <GitBranch className="mt-0.5 h-3 w-3 shrink-0" />
-            This version matches <span className="font-mono">/api/health</span>, the
-            footer, the login screen and the public API spec — all read one source
-            (<span className="font-mono">package.json</span>), so support can trust it.
+            {/* Single span so the flex gap separates icon from TEXT BLOCK —
+                raw text nodes inside a flex <p> each become flex items and
+                the sentence renders with huge word gaps. */}
+            <span>
+              This version matches <span className="font-mono">/api/health</span>,
+              the footer, the login screen and the public API spec — all read one
+              source (<span className="font-mono">package.json</span>), so support
+              can trust it.
+            </span>
           </p>
         </div>
 

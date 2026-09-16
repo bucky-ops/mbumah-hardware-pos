@@ -23,7 +23,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
-import { withSessionAuth } from '@/lib/auth';
+import { withSessionAuth, getSessionFromRequest } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,7 +78,17 @@ function serializeUser(user: {
 }
 
 async function getProfileHandler(...args: unknown[]): Promise<Response> {
-  const session = args[1] as { userId: string };
+  const request = args[0] as NextRequest;
+  // NOTE: withSessionAuth does NOT pass the session as args[1] (it sets the
+  // ORM tenant context via AsyncLocalStorage). Re-derive it from the request
+  // — same pattern as POST /api/gift-cards/redeem.
+  const session = await getSessionFromRequest(request);
+  if (!session) {
+    return Response.json(
+      { success: false, error: 'Authentication required.' },
+      { status: 401 }
+    );
+  }
   const user = await db.user.findUnique({
     where: { id: session.userId },
     select: USER_SELECT,
@@ -96,7 +106,14 @@ async function getProfileHandler(...args: unknown[]): Promise<Response> {
 
 async function patchProfileHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
-  const session = args[1] as { userId: string; email: string };
+  // Re-derive the session — see the note in getProfileHandler above.
+  const session = await getSessionFromRequest(request);
+  if (!session) {
+    return Response.json(
+      { success: false, error: 'Authentication required.' },
+      { status: 401 }
+    );
+  }
   const body = (await request.json()) as {
     name?: unknown;
     phone?: unknown;

@@ -58,6 +58,7 @@ import {
   PanelLeft,
   Phone,
   KeyRound,
+  AlertCircle,
 } from 'lucide-react';
 
 function initials(name: string): string {
@@ -191,7 +192,17 @@ export function ProfileSettingsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {profileQuery.isLoading || !profileQuery.data ? (
+        {profileQuery.isError ? (
+          <div className="flex flex-col items-center gap-3 py-10 text-center">
+            <AlertCircle className="h-8 w-8 text-red-500" />
+            <p className="text-sm text-muted-foreground">
+              Could not load your profile. Please try again.
+            </p>
+            <Button variant="outline" size="sm" onClick={() => profileQuery.refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : profileQuery.isLoading || !profileQuery.data ? (
           <div className="flex items-center justify-center py-12" role="status" aria-label="Loading profile">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>

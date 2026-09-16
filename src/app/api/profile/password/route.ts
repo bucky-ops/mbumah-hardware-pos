@@ -21,7 +21,7 @@ import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
-import { withSessionAuth } from '@/lib/auth';
+import { withSessionAuth, getSessionFromRequest } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +35,16 @@ interface ChangePasswordBody {
 
 async function changePasswordHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
-  const session = args[1] as { userId: string; email: string };
+  // NOTE: withSessionAuth does NOT pass the session as args[1] (it sets the
+  // ORM tenant context via AsyncLocalStorage). Re-derive it from the request
+  // — same pattern as POST /api/gift-cards/redeem.
+  const session = await getSessionFromRequest(request);
+  if (!session) {
+    return Response.json(
+      { success: false, error: 'Authentication required.' },
+      { status: 401 }
+    );
+  }
   const body = (await request.json()) as ChangePasswordBody;
 
   const currentPassword =
