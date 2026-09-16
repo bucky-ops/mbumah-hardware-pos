@@ -9,6 +9,7 @@ import { filterTabsByRole, NAV_GROUPS } from '@/lib/app-config';
 import { preloadTab } from '@/lib/tab-preload';
 import { useNotificationCount } from '@/hooks/use-notification-count';
 import { NotificationCenter } from '@/components/notification-center';
+import { ProfileSettingsDialog } from '@/components/profile-settings-dialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
@@ -35,6 +36,7 @@ export function AppSidebar() {
   const logout = useAuthStore((s) => s.logout);
   const { theme, setTheme } = useTheme();
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const notificationCount = useNotificationCount(currentStoreId);
   const sidebarRef = useRef<HTMLElement>(null);
   // Track previous notification count for bounce animation
@@ -374,7 +376,9 @@ export function AppSidebar() {
                   {theme === 'dark' ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
                   {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => toast.info('Profile settings coming soon')}>
+                {/* v2.7.0: real Profile & Settings dialog — replaces the
+                    "coming soon" toast that lived here since the redesign. */}
+                <DropdownMenuItem onClick={() => setProfileOpen(true)} data-testid="profile-settings-menu">
                   <ShieldCheck className="mr-2 h-4 w-4" />
                   Profile & Settings
                 </DropdownMenuItem>
@@ -397,6 +401,7 @@ export function AppSidebar() {
         onOpenChange={setNotificationOpen}
         storeId={currentStoreId}
       />
+      <ProfileSettingsDialog open={profileOpen} onOpenChange={setProfileOpen} />
     </TooltipProvider>
   );
 }
