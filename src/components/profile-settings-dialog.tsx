@@ -172,8 +172,14 @@ export function ProfileSettingsDialog({
       } else {
         toast.error(res.error || 'Could not update profile.');
       }
-    } catch {
-      toast.error('Could not update profile. Please try again.');
+    } catch (err) {
+      // request() throws ApiRequestError with the server's message (e.g.
+      // validation failures) — surface it instead of generic copy.
+      toast.error(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Could not update profile. Please try again.'
+      );
     } finally {
       setSavingProfile(false);
     }
@@ -429,8 +435,14 @@ function PasswordChangeCard({ email }: { email: string }) {
       } else {
         toast.error(res.error || 'Could not change password.');
       }
-    } catch {
-      toast.error('Could not change password. Please try again.');
+    } catch (err) {
+      // request() throws ApiRequestError with the server's message — e.g.
+      // "Current password is incorrect." Show it verbatim.
+      toast.error(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Could not change password. Please try again.'
+      );
     } finally {
       setSubmitting(false);
     }
