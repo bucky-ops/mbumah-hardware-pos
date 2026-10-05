@@ -1,0 +1,142 @@
+# ============================================================================
+# MBUMAH HARDWARE POS & ERP — Laptop / Standalone Compose (single machine)
+# ============================================================================\# Runs the ENTIRE POS on ONE laptop with zero cloud dependency:
+#   postgres — local persistent database (internal network only)
+#   app      — Next.js POS (standalone build), exposed on host port 3000
+#   cron     — in-stack scheduler replacing Vercel Cron (hourly + nightly)
+#
+# Usage:
+#   cp deploy/laptop/.env.laptop.example .env   (or run the install script)
+#   docker compose -f docker-compose.laptop.yml up -d --build
+#   Open http://localhost:3000
+#
+# LAN access (other devices on the shop Wi-Fi):
+#   Set NEXTAUTH_URL and NEXT_PUBLIC_APP_URL to http://<laptop-ip>:3000
+#   in .env, then: docker compose -f docker-compose.laptop.yml up -d
+# ============================================================================
+
+name: mbumah-laptop
+
+services:
+  # ───────────────────────────────────────────────────────────────────────────
+  # PostgreSQL 15 — persistent local database
+  # ───────────────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: mbumah_laptop_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mbumah}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-mbumah_pos}
+    # Not published to the host — reachable only inside the compose network.
+    expose:
+      - "5432"
+    volumes:
+      - laptop_postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mbumah} -d ${POSTGRES_DB:-mbumah_pos}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - mbumah-laptop
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Next.js Application — built from the Dockerfile (standalone output)
+  # ───────────────────────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mbumah_laptop_app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # ── Database ──────────────────────────────────────────────────────────
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mbumah}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mbumah_pos}?sslmode=disable&connect_timeout=15
+      DIRECT_URL: postgresql://${POSTGRES_USER:-mbumah}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mbumah_pos}?sslmode=disable&connect_timeout=30
+      # ── Authentication ────────────────────────────────────────────────────
+      # NEXTAUTH_URL MUST match the URL typed in the browser (localhost or
+      # the laptop's LAN IP) or logins will loop.
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET in .env}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      # ── Application ───────────────────────────────────────────────────────
+      NODE_ENV: production
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NEXT_PUBLIC_CURRENCY: ${NEXT_PUBLIC_CURRENCY:-KES}
+      # ── Background jobs (in-stack cron, see service below) ───────────────
+      CRON_SECRET: ${CRON_SECRET:?Set CRON_SECRET in .env}
+      # Set to true for the FIRST RUN ONLY to create the admin + demo data.
+      # Set back to false after first login (re-running seed re-creates users).
+      SEED_DATABASE: ${SEED_DATABASE:-false}
+      # ── M-Pesa Daraja (Safaricom) — optional ─────────────────────────────
+      MPESA_CONSUMER_KEY: ${MPESA_CONSUMER_KEY:-}
+      MPESA_CONSUMER_SECRET: ${MPESA_CONSUMER_SECRET:-}
+      MPESA_PASSKEY: ${MPESA_PASSKEY:-}
+      MPESA_SHORTCODE: ${MPESA_SHORTCODE:-174379}
+      MPESA_ENVIRONMENT: ${MPESA_ENVIRONMENT:-sandbox}
+      MPESA_CALLBACK_URL: ${MPESA_CALLBACK_URL:-}
+      # ── Notifications (optional) ──────────────────────────────────────────
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
+      # ── Optional cache ────────────────────────────────────────────────────
+      REDIS_URL: ${REDIS_URL:-}
+      # ── Diagnostics ───────────────────────────────────────────────────────
+      # EXPOSE_ERRORS: "true"  # Uncomment TEMPORARILY to debug 500 errors
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - mbumah-laptop
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # In-stack cron — replaces Vercel Cron on local installs.
+  # Fires the hourly dispatcher every hour; the nightly dispatcher once per
+  # day when the local hour is 02. Every sub-job re-verifies the
+  # x-cron-secret itself, so this only works when CRON_SECRET matches.
+  # Sub-jobs (hourly): outbox pump, payments sweeper, eTIMS retry, debt SMS
+  # Sub-jobs (nightly): reconciliation, retention purge
+  # ───────────────────────────────────────────────────────────────────────────
+  cron:
+    image: alpine:3.20
+    container_name: mbumah_laptop_cron
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      CRON_SECRET: ${CRON_SECRET:?Set CRON_SECRET in .env}
+    command: >
+      /bin/sh -c 'while :; do
+        wget -q -O /dev/null --header "x-cron-secret: $$CRON_SECRET" http://app:3000/api/cron/hourly || true;
+        if [ "$$(date +%H)" = "02" ]; then
+          wget -q -O /dev/null --header "x-cron-secret: $$CRON_SECRET" http://app:3000/api/cron/nightly || true;
+        fi;
+        sleep 3600;
+      done'
+    networks:
+      - mbumah-laptop
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Volumes
+# ───────────────────────────────────────────────────────────────────────────────
+volumes:
+  laptop_postgres_data:
+    driver: local
+
+networks:
+  mbumah-laptop:
+    driver: bridge
