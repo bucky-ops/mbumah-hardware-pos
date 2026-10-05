@@ -1,9 +1,9 @@
 # ============================================================================
-# MBUMAH HARDWARE POS — Desktop shortcut creator (Windows, no Docker)
+# MBUMAH HARDWARE POS - Desktop shortcut creator (Windows, no Docker)
 # ============================================================================
 # Called by Install-Mbumah-POS.bat. Creates on the Desktop:
-#   "Mbumah POS"        — starts the whole system (app + background jobs + browser)
-#   "Backup POS Data"   — one-click database backup
+#   "Mbumah POS"        - starts the whole system (app + background jobs + browser)
+#   "Backup POS Data"   - one-click database backup
 # Also generates a branded .ico on the fly (cosmetic; silently skipped if
 # System.Drawing is unavailable).
 # ============================================================================
@@ -12,7 +12,7 @@ $root    = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $desktop = [Environment]::GetFolderPath('Desktop')
 $ws      = New-Object -ComObject WScript.Shell
 
-# ── Generate a simple branded icon (M on dark) — cosmetic only ──────────────
+# -- Generate a simple branded icon (M on dark) - cosmetic only --------------
 $iconPath = ''
 try {
   Add-Type -AssemblyName System.Drawing
