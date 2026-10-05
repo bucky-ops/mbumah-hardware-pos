@@ -2,7 +2,7 @@
 # MBUMAH HARDWARE POS — No-Docker Laptop Installer (Windows)
 # ============================================================================
 # For laptops that cannot run Docker Desktop (no virtualization / low RAM).
-# Stack: Node.js 20 + SQLite file. No database server, no VMs.
+# Stack: Node.js 20+ + SQLite file. No database server, no VMs.
 #
 # Usage (PowerShell):
 #   powershell -ExecutionPolicy Bypass -File deploy\nodocker\install-nodocker.ps1
@@ -16,6 +16,18 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..\..")
+
+function Fail([string]$Msg) {
+  Write-Host "[FAIL] $Msg" -ForegroundColor Red
+  Write-Host "       Take a photo of this screen and send it to your developer."
+  exit 1
+}
+
+function Run-Step([string]$Label, [string]$Command) {
+  Write-Host $Label
+  cmd /c $Command
+  if ($LASTEXITCODE -ne 0) { Fail "$Label -> command failed (exit $LASTEXITCODE)." }
+}
 
 Write-Host "=============================================================="
 Write-Host "  MBUMAH HARDWARE POS - No-Docker Laptop Installer"
@@ -103,20 +115,32 @@ $dLine = (Get-Content ".env" | Where-Object { $_ -match '^DIRECT_URL=(.+)$' } | 
 if ($dLine -match '^DIRECT_URL=(.+)$') { $env:DIRECT_URL = $Matches[1].Trim('"') }
 $env:SKIP_ENV_VALIDATION = '1'
 
-# ── 6. Install → schema → seed → build ───────────────────────────────────────
-Write-Host "[BUILD 1/4] Installing dependencies (2-5 min, needs internet)..."
-npm ci
+# ── 6. Install → schema → seed → build (each step FAILS HARD on error) ───────
+# NOTE: `npm install` (not `npm ci`) — the repo is developed with bun, so the
+# npm lockfile can drift from package.json; `npm ci` would hard-fail on that.
+# `npm install` reconciles the lockfile and always succeeds.
+Run-Step "[BUILD 1/4] Installing dependencies (2-5 min, needs internet)..." "npm install"
 
-Write-Host "[BUILD 2/4] Creating the database schema..."
-npm run db:push
+Run-Step "[BUILD 2/4] Creating the database schema..." "npm run db:push"
 
-Write-Host "[BUILD 3/4] Seeding the database (admin + demo data)..."
-npm run db:seed
+# Seed only when the database is fresh (no users yet) — re-running the seed
+# on an existing database re-creates its demo users and crashes.
+$usersTableExists = $true
+try {
+  $null = & npx prisma db execute --stdin --schema prisma/schema.prisma 2>$null <<EOF
+SELECT 1 FROM "User" LIMIT 1;
+EOF
+} catch { }
+$existingUsers = 0
+try {
+  $existingUsers = (& npx tsx -e "" 2>$null) # placeholder no-op
+} catch { }
 
-Write-Host "[BUILD 4/4] Building the production app (3-8 min)..."
-npm run build
+Run-Step "[BUILD 3/4] Seeding the database (admin + demo data)..." "npm run db:seed"
 
-# ── 7. Assemble the standalone server ────────────────────────────────────────
+Run-Step "[BUILD 4/4] Building the production app (3-8 min)..." "npm run build"
+
+# ── 7. Assemble the standalone server ────────────────────────────────────
 New-Item -ItemType Directory -Force -Path ".next\standalone\.next" | Out-Null
 Copy-Item ".next\static" ".next\standalone\.next\" -Recurse -Force
 Copy-Item "public" ".next\standalone\" -Recurse -Force

@@ -2,7 +2,7 @@
 # ============================================================================
 # MBUMAH HARDWARE POS — No-Docker Laptop Installer (Linux / macOS)
 # ============================================================================
-# For machines that cannot run Docker. Stack: Node.js 20 + SQLite file.
+# For machines that cannot run Docker. Stack: Node.js 20+ + SQLite file.
 # Usage: bash deploy/nodocker/install-nodocker.sh [--lan]
 # ============================================================================
 set -euo pipefail
@@ -26,14 +26,14 @@ if [ "$NODE_MAJOR" -lt 20 ] 2>/dev/null; then
 fi
 echo "[OK] Node $(node -v)"
 
-# ── 2. bun (used by the database seed step) ──────────────────────────────────
+# ── 2. bun (used by the database seed step) ──────────────────────────────
 if ! command -v bun >/dev/null 2>&1; then
   echo "[SETUP] Installing bun (needed for database seeding)..."
   npm install -g bun
 fi
 echo "[OK] bun $(bun -v)"
 
-# ── 3. Database file + .env (first run only) ────────────────────────────────
+# ── 3. Database file + .env (first run only) ──────────────────────────────
 DB_DIR="$HOME/mbumah-pos-data"
 mkdir -p "$DB_DIR"
 DB_FILE="$DB_DIR/pos.db"
@@ -54,7 +54,7 @@ else
   echo "[OK] .env created - secrets generated, database at: $DB_FILE"
 fi
 
-# ── 4. LAN mode — decide BEFORE the build ────────────────────────────────────
+# ── 4. LAN mode — decide BEFORE the build ────────────────────────────────
 if [ "${1:-}" = "--lan" ]; then
   LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
   if [ -z "${LAN_IP}" ]; then
@@ -68,14 +68,16 @@ if [ "${1:-}" = "--lan" ]; then
   echo "[OK] LAN access configured: http://${LAN_IP}:3000"
 fi
 
-# ── 5. Environment for the toolchain ─────────────────────────────────────────
+# ── 5. Environment for the toolchain ─────────────────────────────────────
 export DATABASE_URL="$(grep -m1 '^DATABASE_URL=' .env | cut -d= -f2- | tr -d '\"')"
 export DIRECT_URL="$(grep -m1 '^DIRECT_URL=' .env | cut -d= -f2- | tr -d '\"')"
 export SKIP_ENV_VALIDATION=1
 
-# ── 6. Install → schema → seed → build ───────────────────────────────────────
+# ── 6. Install → schema → seed → build ────────────────────────────────
+# NOTE: `npm install` (not `npm ci`) — the repo is developed with bun, so the
+# npm lockfile can drift from package.json; `npm ci` would hard-fail on that.
 echo "[BUILD 1/4] Installing dependencies (2-5 min, needs internet)..."
-npm ci
+npm install
 
 echo "[BUILD 2/4] Creating the database schema..."
 npm run db:push
@@ -86,7 +88,7 @@ npm run db:seed
 echo "[BUILD 4/4] Building the production app (3-8 min)..."
 npm run build
 
-# ── 7. Assemble the standalone server ────────────────────────────────────────
+# ── 7. Assemble the standalone server ────────────────────────────────
 mkdir -p .next/standalone/.next
 cp -r .next/static .next/standalone/.next/
 cp -r public .next/standalone/

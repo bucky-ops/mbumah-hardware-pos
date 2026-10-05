@@ -7,7 +7,7 @@ echo.
 echo  ============================================================
 echo    MBUMAH HARDWARE POS  -  FULL SYSTEM INSTALLER
 echo    Installs everything: app + database + desktop shortcuts
-necho    (Node.js + SQLite - no Docker needed)
+echo    (Node.js + SQLite - no Docker needed)
 echo  ============================================================
 echo.
 
@@ -43,12 +43,12 @@ if exist "deploy\nodocker\install-nodocker.ps1" (
 cd /d "!ROOT!"
 
 REM ==========================================================================
-REM STEP 2 of 4 - Node.js 20 LTS (auto-install if missing)
+REM STEP 2 of 4 - Node.js 20+ (auto-install if missing)
 REM ==========================================================================
 set "NODEV="
 for /f "delims=" %%v in ('node -v 2^>nul') do set "NODEV=%%v"
 if not defined NODEV (
-  echo [2/4] Installing Node.js 20 LTS ^(one-time, needs internet^)...
+  echo [2/4] Installing Node.js LTS ^(one-time, needs internet^)...
   winget install --id OpenJS.NodeJS.LTS -e --silent --accept-package-agreements --accept-source-agreements
   set "PATH=!PATH!;%ProgramFiles%\nodejs;%APPDATA%\npm"
 )
@@ -92,10 +92,10 @@ color 0A
 echo.
 echo  ============================================================
 echo    INSTALL COMPLETE
-necho.
+echo.
 echo    Every morning : double-click  "Mbumah POS"  on the Desktop
 echo    Every evening : close the black windows, then double-click
-necho                    "Backup POS Data"
+echo                    "Backup POS Data"
 echo  ============================================================
 echo.
 pause
