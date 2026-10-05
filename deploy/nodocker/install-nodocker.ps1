@@ -123,19 +123,6 @@ Run-Step "[BUILD 1/4] Installing dependencies (2-5 min, needs internet)..." "npm
 
 Run-Step "[BUILD 2/4] Creating the database schema..." "npm run db:push"
 
-# Seed only when the database is fresh (no users yet) — re-running the seed
-# on an existing database re-creates its demo users and crashes.
-$usersTableExists = $true
-try {
-  $null = & npx prisma db execute --stdin --schema prisma/schema.prisma 2>$null <<EOF
-SELECT 1 FROM "User" LIMIT 1;
-EOF
-} catch { }
-$existingUsers = 0
-try {
-  $existingUsers = (& npx tsx -e "" 2>$null) # placeholder no-op
-} catch { }
-
 Run-Step "[BUILD 3/4] Seeding the database (admin + demo data)..." "npm run db:seed"
 
 Run-Step "[BUILD 4/4] Building the production app (3-8 min)..." "npm run build"
