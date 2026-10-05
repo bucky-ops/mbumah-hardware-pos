@@ -124,15 +124,16 @@ function delegateFor(name) {
   return null;
 }
 
-let prisma;
-try {
-  const mod = await import('@prisma/client');
-  prisma = new mod.PrismaClient();
-} catch (e) {
-  console.error('✗ Could not load @prisma/client. Run this from the installed repo (node_modules present).');
-  console.error(' ' + e.message);
-  process.exit(1);
-}
+const prisma = await (async () => {
+  try {
+    const mod = await import('@prisma/client');
+    return new mod.PrismaClient();
+  } catch (e) {
+    console.error('✗ Could not load @prisma/client. Run this from the installed repo (node_modules present).');
+    console.error(' ' + e.message);
+    process.exit(1);
+  }
+})();
 
 // ── Preflight ────────────────────────────────────────────────────────────────
 console.log('');
@@ -154,7 +155,7 @@ console.log('    chart of accounts, tax config, loyalty/voucher config, settings
 console.log('');
 
 // Show current volume of demo data
-let demoCounts = {};
+const demoCounts = {};
 try {
   demoCounts.salesTransactions = await prisma.salesTransaction.count();
   demoCounts.payments = await prisma.payment.count();
@@ -198,7 +199,7 @@ try {
     total += n;
     if (n > 0) console.log(`  ✓ ${s.label.padEnd(22)} ${String(n).padStart(6)} rows deleted`);
   });
-  console.log(`  ────────────────────────────────────────────`);
+  console.log('  ────────────────────────────────────────────');
   console.log(`  ✓ TOTAL rows deleted: ${total}  in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 } catch (err) {
   console.error('');
@@ -240,7 +241,7 @@ await prisma.$disconnect();
 console.log('');
 console.log('──────────────────────────────────────────────────────────────');
 console.log('  ✅ GO-LIVE RESET COMPLETE — the shop is ready for real sales.');
-console.log('  Next: start the POS, create the client\'s real products &');
+console.log("  Next: start the POS, create the client's real products &");
 console.log('  customers (or keep the catalog), and set SEED_DATABASE=false.');
 console.log('──────────────────────────────────────────────────────────────');
 console.log('');
