@@ -1867,7 +1867,7 @@ async function seedBody() {
   const po1Total = po1SubTotal + po1Tax;
 
   const po1Number = `PO-${poDateStr(po1Date)}-0001`;
-  const existingPO1 = await prisma.purchaseOrder.findUnique({ where: { poNumber: po1Number } });
+  const existingPO1 = await prisma.purchaseOrder.findFirst({ where: { poNumber: po1Number, storeId: store.id } });
   if (!existingPO1) {
     await prisma.purchaseOrder.create({
       data: {
@@ -1912,7 +1912,7 @@ async function seedBody() {
   const po2Total = po2SubTotal + po2Tax;
 
   const po2Number = `PO-${poDateStr(po2Date)}-0002`;
-  const existingPO2 = await prisma.purchaseOrder.findUnique({ where: { poNumber: po2Number } });
+  const existingPO2 = await prisma.purchaseOrder.findFirst({ where: { poNumber: po2Number, storeId: store.id } });
   if (!existingPO2) {
     await prisma.purchaseOrder.create({
       data: {
@@ -1955,7 +1955,7 @@ async function seedBody() {
   const po3Total = po3SubTotal + po3Tax;
 
   const po3Number = `PO-${poDateStr(po3Date)}-0003`;
-  const existingPO3 = await prisma.purchaseOrder.findUnique({ where: { poNumber: po3Number } });
+  const existingPO3 = await prisma.purchaseOrder.findFirst({ where: { poNumber: po3Number, storeId: store.id } });
   if (!existingPO3) {
     await prisma.purchaseOrder.create({
       data: {
@@ -1999,7 +1999,7 @@ async function seedBody() {
   const po4Total = po4SubTotal + po4Tax;
 
   const po4Number = `PO-${poDateStr(po4Date)}-0004`;
-  const existingPO4 = await prisma.purchaseOrder.findUnique({ where: { poNumber: po4Number } });
+  const existingPO4 = await prisma.purchaseOrder.findFirst({ where: { poNumber: po4Number, storeId: store.id } });
   if (!existingPO4) {
     await prisma.purchaseOrder.create({
       data: {
@@ -2038,7 +2038,7 @@ async function seedBody() {
   const po5Total = po5SubTotal + po5Tax;
 
   const po5Number = `PO-${poDateStr(po5Date)}-0005`;
-  const existingPO5 = await prisma.purchaseOrder.findUnique({ where: { poNumber: po5Number } });
+  const existingPO5 = await prisma.purchaseOrder.findFirst({ where: { poNumber: po5Number, storeId: store.id } });
   if (!existingPO5) {
     await prisma.purchaseOrder.create({
       data: {
