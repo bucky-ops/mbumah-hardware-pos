@@ -2,7 +2,6 @@
 # MBUMAH HARDWARE POS — Production Dockerfile
 # Multi-stage build for minimal image size with standalone Next.js output
 # ============================================================================
-
 # ── Stage 1: Base — Install dependencies ──────────────────────────────────────
 FROM node:20-alpine AS base
 RUN apk add --no-cache libc6-compat
@@ -10,9 +9,10 @@ WORKDIR /app
 
 # Install bun for consistent package management
 RUN npm install -g bun@1.2.15
-
 # Copy dependency manifests first for better layer caching
-COPY package.json bun.lockb ./
+# NOTE: the repo uses the TEXT lockfile (bun.lock, bun >= 1.2 default).
+# `bun.lockb` no longer exists — copying it failed every docker build.
+COPY package.json bun.lock ./
 
 # Install ALL dependencies (including devDependencies for the build stage)
 RUN bun install --frozen-lockfile
@@ -46,6 +46,11 @@ RUN bun run build
 FROM node:20-alpine AS runner
 RUN apk add --no-cache libc6-compat
 
+# bun is needed at RUNTIME: package.json prisma.seed = "bun prisma/seed.ts",
+# so `npx prisma db seed` (docker-entrypoint.sh / first-run seeding) fails
+# with "bun: not found" unless bun is present in the runner image.
+RUN npm install -g bun@1.2.15
+
 WORKDIR /app
 
 # Run as non-root user for security
@@ -57,7 +62,6 @@ ENV NODE_ENV=production
 
 # Copy the standalone Next.js server output
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-
 # Copy static assets that the standalone server references but doesn't include
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
