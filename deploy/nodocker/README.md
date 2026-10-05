@@ -1,0 +1,154 @@
+# MBUMAH HARDWARE POS — No-Docker Laptop Install (Node.js + SQLite)
+
+Run the entire POS & ERP on **one laptop with NO Docker, NO virtualization,
+and NO database server**. Ideal for older/low-spec machines where Docker
+Desktop will not install or run.
+
+**Stack:** Node.js 20 + Next.js standalone build + one SQLite file.
+The whole database is a single file (`~/mbumah-pos-data/pos.db`) — backing up
+the entire system means copying that one file to a USB stick.
+
+> Confidence note: the application's own CI test suite (427 tests) runs on
+> SQLite, and `scripts/setup-prisma-provider.mjs` automatically switches the
+> database provider from PostgreSQL to SQLite when `DATABASE_URL` starts with
+> `file:`. SQLite mode is a first-class, tested configuration of this codebase.
+
+---
+
+## Requirements
+
+| Item | Minimum |
+|---|---|
+| Laptop RAM | 4 GB is enough (no VM overhead) |
+| Disk | ~3 GB free (dependencies + build + database) |
+| OS | Windows 10/11 64-bit, Ubuntu 20.04+, or macOS |
+| Node.js | **20 LTS or newer** (installer offers to install it via winget) |
+| Browser on POS terminal | **Chrome or Edge** (thermal printing uses WebUSB) |
+| Internet | Needed for the install/build (~10 min) and for M-Pesa / eTIMS / SMS. Daily selling works fully offline. |
+
+---
+
+## Install (one command)
+
+### Windows
+```powershell
+git clone https://github.com/bucky-ops/mbumah-hardware-pos.git
+cd mbumah-hardware-pos
+powershell -ExecutionPolicy Bypass -File deploy\nodocker\install-nodocker.ps1
+```
+
+For shop-LAN access (phones/other PCs connect to the laptop):
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\nodocker\install-nodocker.ps1 -UseLan
+# or pin the IP:  ... -LanIp 192.168.1.50
+```
+
+### Linux / macOS
+```bash
+git clone https://github.com/bucky-ops/mbumah-hardware-pos.git
+cd mbumah-hardware-pos
+bash deploy/nodocker/install-nodocker.sh           # localhost only
+bash deploy/nodocker/install-nodocker.sh --lan     # shop-LAN access
+```
+
+The installer: checks/installs Node + bun → creates `.env` with **freshly
+generated secrets** and a database file in `~/mbumah-pos-data/` → installs
+dependencies (npm ci) → creates the schema → seeds → builds → assembles the
+standalone server.
+
+> ⚠ Decide LAN vs localhost **before** running the installer: `NEXT_PUBLIC_APP_URL`
+> is baked into the build. Changing it later means re-running `npm run build`.
+
+---
+
+## Daily use (built for non-technical staff)
+
+**Start the POS:**
+```powershell
+# Windows (can be pinned to the taskbar / desktop shortcut)
+powershell -ExecutionPolicy Bypass -File deploy\nodocker\start-pos.ps1
+```
+```bash
+# Linux / macOS
+bash deploy/nodocker/start-pos.sh
+```
+
+This opens two console windows (the **POS server** and **background jobs**)
+and the browser. *Closing the POS-server window stops the POS.* Closing the
+background-jobs window is not fatal, but keep it open so eTIMS retries, debt
+reminders and reconciliation keep running.
+
+**Stop the POS:** close the console window (or Ctrl+C).
+
+**Optional — auto-start at login (Windows):**
+```powershell
+schtasks /create /tn "Mbumah POS" /sc onlogon /tr ^
+  "powershell -ExecutionPolicy Bypass -File '<full-path>\deploy\nodocker\start-pos.ps1'"
+```
+
+---
+
+## First login & go-live
+
+1. Open the POS → log in as `admin@mbumahhardware.co.ke` / `password123`.
+2. **Change the admin password immediately** (Profile → Security).
+3. Set `SEED_DATABASE=false` in `.env` (the seed re-creates demo users otherwise).
+4. LAN devices: set BOTH `NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL` to
+   `http://<laptop-ip>:3000`, then rebuild (`npm run build`) and restart.
+5. M-Pesa: fill Daraja credentials in `.env`, restart. Production callbacks
+   need a public HTTPS URL (see SELF_HOSTING_GUIDE.md).
+6. Verify: About dialog shows v2.7.x; test sale, receipt print, shift close.
+
+---
+
+## Backups (much simpler than Docker/Postgres)
+
+The entire database is ONE file:
+
+- **Windows:** `%USERPROFILE%\mbumah-pos-data\pos.db`
+- **Linux/macOS:** `~/mbumah-pos-data/pos.db`
+
+Backup = copy that file (USB stick / OneDrive / Google Drive) while the POS is
+running is **not** recommended — close the POS (or copy right after closing
+shop) for a consistent copy. Restore = stop the POS, copy the file back, start.
+
+---
+
+## Updating to a newer release
+
+```bash
+git pull origin main
+npm ci
+npm run db:push        # apply schema changes
+npm run build          # rebuild (SKIP_ENV_VALIDATION=1 is set by the installer; re-set it if needed)
+# then start with start-pos.ps1 / start-pos.sh (they refresh static assets)
+```
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `node` not recognized after install | Close and reopen PowerShell (PATH refresh) |
+| Build fails: Prisma provider errors | `.env` must exist with `DATABASE_URL=file:...` BEFORE `npm ci` (the installer handles this) |
+| Login loops on phones | `NEXTAUTH_URL` ≠ browser URL → set both URL vars to `http://<laptop-ip>:3000` and rebuild |
+| App restarts / seed errors every boot | `SEED_DATABASE` still `true` → set to `false` in `.env` |
+| Port 3000 busy | `APP_PORT=3001` in `.env` |
+| Printer won't print | Chrome/Edge only · accept the WebUSB prompt · printer plugged into the POS terminal itself |
+| Slow performance | Close heavy apps; 4 GB RAM is fine, 8 GB is comfortable |
+
+---
+
+## Differences vs the Docker/Vercel deployments
+
+| Area | No-Docker laptop |
+|---|---|
+| Database | SQLite file (vs PostgreSQL) — same Prisma code, CI-tested |
+| Store-isolation RLS script | Not applied (Postgres-only feature; irrelevant on a single-device install) |
+| Background jobs | `deploy/nodocker/cron-local.mjs` console window (vs Vercel Cron / compose cron container) |
+| Backups | Copy one file (vs pg_dump) |
+| Scaling | Single store/terminal set on one laptop — perfect for one shop; move to Docker/Postgres when multi-server is needed |
+
+Offline capability is unchanged: selling, inventory, printing, shifts and
+reports work without internet; M-Pesa, eTIMS/KRA and SMS/email need connectivity.
