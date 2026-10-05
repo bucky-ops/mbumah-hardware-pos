@@ -108,8 +108,9 @@ bash deploy/nodocker/install-nodocker.sh --lan     # shop-LAN access
 
 The installer: checks/installs Node + bun → creates `.env` with **freshly
 generated secrets** and a database file in `~/mbumah-pos-data/` → installs
-dependencies (npm ci) → creates the schema → seeds → builds → assembles the
-standalone server.
+dependencies (`npm install` — it reconciles the npm lockfile, which can drift
+because the team develops with bun) → creates the schema → seeds → builds →
+assembles the standalone server.
 
 > ⚠ Decide LAN vs localhost **before** running the installer: `NEXT_PUBLIC_APP_URL`
 > is baked into the build. Changing it later means re-running `npm run build`.
@@ -134,9 +135,7 @@ standalone server.
 **Start the POS:** double-click **Mbumah POS** on the Desktop (or:
 ```powershell
 powershell -ExecutionPolicy Bypass -File deploy\nodocker\start-pos.ps1
-```).
-
-This opens two console windows (the **POS server** and **background jobs**)
+```).\n\nThis opens two console windows (the **POS server** and **background jobs**)
 and the browser. *Closing the POS-server window stops the POS.* Closing the
 background-jobs window is not fatal, but keep it open so eTIMS retries, debt
 reminders and reconciliation keep running.
@@ -189,9 +188,9 @@ the POS is closed). Restore = stop the POS, copy the file back, start.
 
 ```bash
 git pull origin main
-npm ci
-npm run db:push        # apply schema changes
-npm run build          # rebuild (SKIP_ENV_VALIDATION=1 is set by the installer; re-set it if needed)
+npm install           # refresh dependencies (reconciles the lockfile — do NOT use npm ci, the lockfile is bun-managed)
+npm run db:push       # apply schema changes
+npm run build         # rebuild (SKIP_ENV_VALIDATION=1 is set by the installer; re-set it if needed)
 # then start with start-pos.ps1 / start-pos.sh (they refresh static assets)
 ```
 
@@ -202,7 +201,7 @@ npm run build          # rebuild (SKIP_ENV_VALIDATION=1 is set by the installer;
 | Symptom | Fix |
 |---|---|
 | `node` not recognized after install | Close and reopen PowerShell (PATH refresh) |
-| Build fails: Prisma provider errors | `.env` must exist with `DATABASE_URL=file:...` BEFORE `npm ci` (the installer handles this) |
+| Build fails: Prisma provider errors | `.env` must exist with `DATABASE_URL=file:...` BEFORE `npm install` (the installer handles this) |
 | Login loops on phones | `NEXTAUTH_URL` ≠ browser URL → set both URL vars to `http://<laptop-ip>:3000` and rebuild |
 | App restarts / seed errors every boot | `SEED_DATABASE` still `true` → set to `false` in `.env` |
 | Port 3000 busy | `APP_PORT=3001` in `.env` |
