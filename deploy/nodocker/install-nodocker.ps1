@@ -1,5 +1,5 @@
 # ============================================================================
-# MBUMAH HARDWARE POS — No-Docker Laptop Installer (Windows)
+# MBUMAH HARDWARE POS - No-Docker Laptop Installer (Windows)
 # ============================================================================
 # For laptops that cannot run Docker Desktop (no virtualization / low RAM).
 # Stack: Node.js 20+ + SQLite file. No database server, no VMs.
@@ -34,7 +34,7 @@ Write-Host "  MBUMAH HARDWARE POS - No-Docker Laptop Installer"
 Write-Host "  (Node.js + SQLite - no virtualization required)"
 Write-Host "=============================================================="
 
-# ── 1. Node.js 20+ ───────────────────────────────────────────────────────────
+# -- 1. Node.js 20+ -----------------------------------------------------------
 $nodeOk = $false
 try {
   $v = node -v
@@ -54,14 +54,14 @@ if (-not $nodeOk) {
 }
 Write-Host "[OK] Node $(node -v)"
 
-# ── 2. bun (small CLI used by the database seed step) ────────────────────────
+# -- 2. bun (small CLI used by the database seed step) ------------------------
 try { $null = bun -v } catch {
   Write-Host "[SETUP] Installing bun (needed for database seeding)..."
   npm install -g bun
 }
 Write-Host "[OK] bun $(bun -v)"
 
-# ── 3. Database file + .env (first run only) ────────────────────────────────
+# -- 3. Database file + .env (first run only) --------------------------------
 $dbDir = Join-Path $HOME "mbumah-pos-data"
 New-Item -ItemType Directory -Force -Path $dbDir | Out-Null
 $dbFile = Join-Path $dbDir "pos.db"
@@ -83,11 +83,11 @@ if (Test-Path ".env") {
   $envText = $envText -replace '(?m)^NEXTAUTH_SECRET=.*', "NEXTAUTH_SECRET=$(New-Secret)"
   $envText = $envText -replace '(?m)^JWT_SECRET=.*', "JWT_SECRET=$(New-Secret)"
   $envText = $envText -replace '(?m)^CRON_SECRET=.*', "CRON_SECRET=$(New-Secret)"
-  Set-Content -Path ".env" -Value $envText -NoNewline -Encoding UTF8
+  $utf8NoBom = New-Object System.Text.UTF8Encoding $false; [System.IO.File]::WriteAllText((Join-Path (Get-Location) ".env"), $envText, $utf8NoBom)
   Write-Host "[OK] .env created - secrets generated, database at: $dbFile"
 }
 
-# ── 4. LAN mode — decide BEFORE the build (NEXT_PUBLIC_APP_URL is baked in) ──
+# -- 4. LAN mode - decide BEFORE the build (NEXT_PUBLIC_APP_URL is baked in) --
 if ($UseLan -or $LanIp -ne "") {
   if ($LanIp -eq "") {
     try {
@@ -104,19 +104,19 @@ if ($UseLan -or $LanIp -ne "") {
   $envText = Get-Content ".env" -Raw
   $envText = $envText -replace '(?m)^NEXTAUTH_URL=.*', "NEXTAUTH_URL=http://$LanIp`:3000"
   $envText = $envText -replace '(?m)^NEXT_PUBLIC_APP_URL=.*', "NEXT_PUBLIC_APP_URL=http://$LanIp`:3000"
-  Set-Content -Path ".env" -Value $envText -NoNewline -Encoding UTF8
+  $utf8NoBom = New-Object System.Text.UTF8Encoding $false; [System.IO.File]::WriteAllText((Join-Path (Get-Location) ".env"), $envText, $utf8NoBom)
   Write-Host "[OK] LAN access configured: http://${LanIp}:3000"
 }
 
-# ── 5. Environment for the toolchain (provider switch happens in postinstall) ─
+# -- 5. Environment for the toolchain (provider switch happens in postinstall) -
 $envLine = (Get-Content ".env" | Where-Object { $_ -match '^DATABASE_URL=(.+)$' } | Select-Object -First 1)
 if ($envLine -match '^DATABASE_URL=(.+)$') { $env:DATABASE_URL = $Matches[1].Trim('"') }
 $dLine = (Get-Content ".env" | Where-Object { $_ -match '^DIRECT_URL=(.+)$' } | Select-Object -First 1)
 if ($dLine -match '^DIRECT_URL=(.+)$') { $env:DIRECT_URL = $Matches[1].Trim('"') }
 $env:SKIP_ENV_VALIDATION = '1'
 
-# ── 6. Install → schema → seed → build (each step FAILS HARD on error) ───────
-# NOTE: `npm install` (not `npm ci`) — the repo is developed with bun, so the
+# -- 6. Install -> schema -> seed -> build (each step FAILS HARD on error) -------
+# NOTE: `npm install` (not `npm ci`) - the repo is developed with bun, so the
 # npm lockfile can drift from package.json; `npm ci` would hard-fail on that.
 # `npm install` reconciles the lockfile and always succeeds.
 Run-Step "[BUILD 1/4] Installing dependencies (2-5 min, needs internet)..." "npm install"
@@ -127,7 +127,7 @@ Run-Step "[BUILD 3/4] Seeding the database (admin + demo data)..." "npm run db:s
 
 Run-Step "[BUILD 4/4] Building the production app (3-8 min)..." "npm run build"
 
-# ── 7. Assemble the standalone server ────────────────────────────────────
+# -- 7. Assemble the standalone server ------------------------------------
 New-Item -ItemType Directory -Force -Path ".next\standalone\.next" | Out-Null
 Copy-Item ".next\static" ".next\standalone\.next\" -Recurse -Force
 Copy-Item "public" ".next\standalone\" -Recurse -Force

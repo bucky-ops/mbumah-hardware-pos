@@ -30,7 +30,7 @@ if (existsSync(envPath)) {
 
 process.env.NODE_ENV = 'production';
 process.env.PORT = process.env.PORT || process.env.APP_PORT || '3000';
-process.env.HOSTNAME = process.env.HOSTNAME || '0.0.0.0';
+process.env.HOSTNAME = '0.0.0.0';
 
 const server = join(root, '.next', 'standalone', 'server.js');
 if (!existsSync(server)) {

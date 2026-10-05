@@ -1,5 +1,5 @@
 # ============================================================================
-# MBUMAH HARDWARE POS — One-click database backup (Windows, no Docker)
+# MBUMAH HARDWARE POS - One-click database backup (Windows, no Docker)
 # ============================================================================
 # Copies the single SQLite database file (plus .env configuration) into
 # Desktop\MbumahBackups\ with a timestamp. Safe, simple, no technical

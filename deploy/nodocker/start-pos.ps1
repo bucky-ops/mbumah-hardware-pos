@@ -1,9 +1,9 @@
 # ============================================================================
-# MBUMAH HARDWARE POS — Start the POS (Windows, no Docker)
+# MBUMAH HARDWARE POS - Start the POS (Windows, no Docker)
 # ============================================================================
 # Double-click-friendly. Opens TWO console windows:
-#   1. "POS server"  — the app itself (closing it stops the POS)
-#   2. "Background jobs" — hourly/nightly maintenance (closing it is not fatal,
+#   1. "POS server"  - the app itself (closing it stops the POS)
+#   2. "Background jobs" - hourly/nightly maintenance (closing it is not fatal,
 #      but keep it open so eTIMS retries, debt SMS and reconciliation run)
 # Then opens the browser at the POS URL.
 # ============================================================================
@@ -11,7 +11,7 @@ $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 Set-Location $root
 
-# Refresh standalone static/public copies (idempotent, cheap — needed after rebuilds)
+# Refresh standalone static/public copies (idempotent, cheap - needed after rebuilds)
 if (Test-Path ".next\standalone") {
   if (Test-Path ".next\static") {
     New-Item -ItemType Directory -Force -Path ".next\standalone\.next" | Out-Null
@@ -26,11 +26,11 @@ if (Test-Path ".next\standalone") {
 
 # Background jobs in their own window
 Start-Process powershell -ArgumentList '-NoExit','-ExecutionPolicy','Bypass','-Command',
-  "Set-Location '$root'; Write-Host 'Mbumah POS — background jobs (keep open)'; node deploy\nodocker\cron-local.mjs"
+  "Set-Location '$root'; Write-Host 'Mbumah POS - background jobs (keep open)'; node deploy\nodocker\cron-local.mjs"
 
 Start-Sleep -Seconds 2
 Start-Process "http://localhost:3000"
 
 Write-Host ""
-Write-Host "Starting MBUMAH HARDWARE POS... (keep this window open — closing it stops the POS)"
+Write-Host "Starting MBUMAH HARDWARE POS... (keep this window open - closing it stops the POS)"
 node deploy\nodocker\start-server.mjs
