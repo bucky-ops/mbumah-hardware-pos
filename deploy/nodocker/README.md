@@ -15,6 +15,30 @@ the entire system means copying that one file to a USB stick.
 
 ---
 
+## ⚡ One-click installer (recommended — the "game installer" experience)
+
+On Windows, open the repo folder and **double-click `Install-Mbumah-POS.bat`**.
+It behaves like a game installer:
+
+1. Finds the app source (this folder — or downloads the latest `main` from GitHub)
+2. Installs Node.js 20 LTS automatically if it is missing
+3. Runs the complete install: dependencies → database schema → seed → production build
+4. Creates two Desktop shortcuts with a branded icon:
+   - **Mbumah POS** — starts the entire system (app + background jobs + browser)
+   - **Backup POS Data** — one-click backup of the database + configuration
+
+For shop-LAN access run it once from a terminal so the LAN IP is baked in:
+```bat
+Install-Mbumah-POS.bat -UseLan
+:: or pin the IP:
+Install-Mbumah-POS.bat -LanIp 192.168.1.50
+```
+
+Daily use afterwards = double-click **Mbumah POS** on the Desktop. Close the
+black windows to close the shop. That is the entire workflow for staff.
+
+---
+
 ## Requirements
 
 | Item | Minimum |
@@ -28,7 +52,7 @@ the entire system means copying that one file to a USB stick.
 
 ---
 
-## Install (one command)
+## Install — command line (equivalent to the one-click installer)
 
 ### Windows
 ```powershell
@@ -61,17 +85,25 @@ standalone server.
 
 ---
 
+## What gets installed (complete system, nothing else to do)
+
+1. **Full database** — every table (products, transactions, customers,
+   employees, payroll, debt ledgers, banking, chat, audit trail…)
+2. **Seeded business data** — Super Admin + 11 staff users, 5 Mbumah stores,
+   RBAC permissions, categories, product catalog, customers, demo
+   transactions/purchase orders (useful for staff training — wipe demo
+   transactions before the first real sale)
+3. **The application** — production build, persistent SQLite storage
+4. **Desktop shortcuts** — Start + Backup
+
+---
+
 ## Daily use (built for non-technical staff)
 
-**Start the POS:**
+**Start the POS:** double-click **Mbumah POS** on the Desktop (or:
 ```powershell
-# Windows (can be pinned to the taskbar / desktop shortcut)
 powershell -ExecutionPolicy Bypass -File deploy\nodocker\start-pos.ps1
-```
-```bash
-# Linux / macOS
-bash deploy/nodocker/start-pos.sh
-```
+```).
 
 This opens two console windows (the **POS server** and **background jobs**)
 and the browser. *Closing the POS-server window stops the POS.* Closing the
@@ -79,6 +111,11 @@ background-jobs window is not fatal, but keep it open so eTIMS retries, debt
 reminders and reconciliation keep running.
 
 **Stop the POS:** close the console window (or Ctrl+C).
+
+**Back up:** double-click **Backup POS Data** on the Desktop after closing
+shop — it copies the database into `Desktop\MbumahBackups\` with a timestamp.
+Then copy that folder to a USB stick or OneDrive. A backup that only lives on
+the same laptop is not a backup.
 
 **Optional — auto-start at login (Windows):**
 ```powershell
@@ -108,9 +145,8 @@ The entire database is ONE file:
 - **Windows:** `%USERPROFILE%\mbumah-pos-data\pos.db`
 - **Linux/macOS:** `~/mbumah-pos-data/pos.db`
 
-Backup = copy that file (USB stick / OneDrive / Google Drive) while the POS is
-running is **not** recommended — close the POS (or copy right after closing
-shop) for a consistent copy. Restore = stop the POS, copy the file back, start.
+Backup = double-click **Backup POS Data**, or copy that file manually (while
+the POS is closed). Restore = stop the POS, copy the file back, start.
 
 ---
 
