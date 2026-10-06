@@ -207,3 +207,20 @@ Stage Summary:
 - User's 4 asks ALL DONE and production-verified: (1) audit complete — v2.6.3 fix correct, version governance held, 2 gaps found and fixed; (2) gift card crash root-caused (parallel-agent fix verified) + full E2E redemption proven; (3) About section upgraded from stale toast to an informative dialog permanently synced to package.json; (4) Profile & Settings fully built (API + UI + audit + session revocation), 3 releases shipped.
 - KEY LEARNINGS: withSessionAuth never passes session as args[1] (use getSessionFromRequest(request) inside handlers); squash-merges orphan follow-up branches (rebuild from origin/main); GitHub webhook drops persist (workflow_dispatch is the workaround; merge PUT needs retries until stale duplicate checks finish); gift-card create API needs `reason` enum; local test suite needs prisma/prisma/dev.db + seed for fixture IDs.
 - NEXT: Task I (P0) chat presence; Task K (Blind Closeouts + AuditLog, virtualization, UoM/eTIMS, WebUSB); Task J (seeding); Task A (login modal loop). vcp_ Vercel token rotation STILL pending (user action).
+
+---
+Task ID: RC-1 (repo change check after 2nd sandbox reset)
+Agent: Z.ai Code (main)
+Task: User asked "Check the repo and see if there are changes" (after sandbox reset #2).
+
+Work Log:
+- Sandbox reset #2 detected: /home/z/mbumah-ver clone gone again; tokens + weekly cron survived. Re-cloned from bucky-ops/mbumah-hardware-pos (fresh HEAD 7acf2e4).
+- Diff scan v2.7.2..HEAD: 9 new commits, ALL by /m_collins, 21 files +1,928/-9. Deploy-focused:
+  #69 no-Docker laptop install kit (Node+SQLite), #70 one-click Install-Mbumah-POS.bat, #71 Wipe-Demo-Data.bat go-live reset, #68 Docker laptop kit + local cron, #72 docs/CLIENT_SETUP_GUIDE.md, #73 hotfix installer (lockfile drift/hard failures), #74 seed fix (purchaseOrder compound unique storeId+poNumber), #75 POS shortcut fix (PS 5.1 encoding + bind interface), #76 browser opens after server healthy.
+- Core app impact: NONE in runtime (only prisma/seed.ts fix + Dockerfile/deploy tree). POS/ERP UI untouched.
+- Verification: no open PRs; CI run 201 green on main; Vercel prod READY @ 7acf2e4; /api/health → 2.7.2 healthy.
+- Governance: package.json still 2.7.2 → release.yml correctly no-op'd (Release runs 14/15) → NO GitHub release for the 9 commits (latest tag still v2.7.2). Deploy kit shipped without version bump — minor gap, not a violation (app unchanged). Recommend next bump = 2.8.0 (feat-level kit).
+
+Stage Summary:
+- Repo checked; all changes identified and classified. Production stable @ v2.7.2 · 7acf2e4.
+- No action taken beyond verification + clone restore. Next: await user direction or continue queue (Task I/K/J/A).
