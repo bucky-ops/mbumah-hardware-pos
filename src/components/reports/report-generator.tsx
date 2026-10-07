@@ -30,7 +30,7 @@ import {
   downloadCSV, formatReportDate, formatNumber, formatISODate,
   type SalesSummaryData, type DailyReportData,
 } from '@/lib/report-utils';
-import { formatKES } from '@/lib/api';
+import { authorizedFetchJson, formatKES } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -109,9 +109,14 @@ export function ReportGenerator({
     queryKey: ['stores-for-reports'],
     queryFn: async (): Promise<StoreOption[]> => {
       if (stores && stores.length > 0) return stores;
-      const res = await fetch('/api/stores');
-      const json = await res.json();
-      return (json.data || []) as StoreOption[];
+      // Auth fix: the edge proxy rejects bare fetches without an
+      // Authorization: Bearer header (silent 401 -> empty store selector).
+      const { ok, status, json } = await authorizedFetchJson('/api/stores');
+      if (!ok) {
+        throw new Error(json?.error || `Could not load stores (HTTP ${status})`);
+      }
+      const rows: unknown = json?.data;
+      return (Array.isArray(rows) ? rows : []) as StoreOption[];
     },
     staleTime: 5 * 60 * 1000,
   });

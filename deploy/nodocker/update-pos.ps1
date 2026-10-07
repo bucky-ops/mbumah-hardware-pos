@@ -20,6 +20,12 @@
 #   ... -ToVersion v2.9.0     install a specific release tag instead of latest
 #   ... -SkipBackup           do not take the pre-update backup (not recommended)
 #   ... -WindowStart 22:00 -WindowEnd 06:00     custom dormant window
+#   ... -Quiet                scripted mode (start-pos.ps1 calls this on every
+#                             launch): shorter network timeouts, no interactive
+#                             assumptions, harmless exit codes
+#   ... -NoStart              do NOT auto-start the POS after the update — the
+#                             caller does it (start-pos.ps1 continues its normal
+#                             startup on the NEW code; avoids double servers)
 #
 # Designed for Task Scheduler ("Mbumah POS Nightly Update", 23:00, hidden):
 # it NEVER prompts, never fails loudly when offline, and exits 0 on the
@@ -30,7 +36,9 @@ param(
   [string]$ToVersion = "",
   [switch]$SkipBackup,
   [string]$WindowStart = "22:00",
-  [string]$WindowEnd = "06:00"
+  [string]$WindowEnd = "06:00",
+  [switch]$Quiet,
+  [switch]$NoStart
 )
 
 $ErrorActionPreference = 'Stop'
@@ -110,6 +118,37 @@ function Test-InDormantWindow {
     return (($cur -ge $startMin) -and ($cur -lt $endMin))
   }
   return (($cur -ge $startMin) -or ($cur -lt $endMin))  # wraps midnight, e.g. 22:00-06:00
+}
+
+function Ensure-ScheduledTasks {
+  # Self-heal (v2.10.1): installs that predate the nightly tasks — or that
+  # received their FIRST update via the start-pos.ps1 startup check — may not
+  # have "Mbumah POS Nightly Update/Backup" registered. Re-create any missing
+  # task (same /tr quoting as the installer: full -File path, no /tr comma
+  # mangling on Windows PowerShell 5.1) so the dormant-window automation
+  # takes over from the next night on. Never throws.
+  $tasks = @(
+    @{ Name = 'Mbumah POS Nightly Update'; Time = '23:00'; File = 'deploy\nodocker\update-pos.ps1'; Extra = '' },
+    @{ Name = 'Mbumah POS Nightly Backup'; Time = '02:30'; File = 'deploy\nodocker\backup-pos.ps1'; Extra = ' -Unattended' }
+  )
+  foreach ($t in $tasks) {
+    $exists = $false
+    try {
+      schtasks /query /tn "$($t.Name)" > $null 2>&1
+      if ($LASTEXITCODE -eq 0) { $exists = $true }
+    } catch { $exists = $false }
+    if ($exists) { continue }
+    $scriptPath = Join-Path $root $t.File
+    if (-not (Test-Path $scriptPath)) { continue }
+    $tr = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $scriptPath + '"' + $t.Extra
+    try {
+      schtasks /create /f /tn "$($t.Name)" /sc daily /st $t.Time /tr $tr | Out-Null
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[OK] Scheduled task '$($t.Name)' registered (daily $($t.Time), hidden)."
+        Write-Ledger 'TASK_REGISTERED' '' '' $t.Name
+      }
+    } catch { }
+  }
 }
 
 function Invoke-Checked([string]$Label, [string]$Command) {
@@ -290,7 +329,10 @@ if ($ToVersion -ne "") {
   try {
     $headers = @{}
     if ($env:GITHUB_TOKEN) { $headers['Authorization'] = "token $($env:GITHUB_TOKEN)" }
-    $latest = Invoke-RestMethod -Uri "https://api.github.com/repos/$repoSlug/releases/latest" -Headers $headers -TimeoutSec 30
+    # -Quiet (startup check) uses a short timeout so an offline laptop is not
+    # stuck waiting at shop-opening time; the nightly task can afford 30s.
+    $timeoutSec = 30; if ($Quiet) { $timeoutSec = 10 }
+    $latest = Invoke-RestMethod -Uri "https://api.github.com/repos/$repoSlug/releases/latest" -Headers $headers -TimeoutSec $timeoutSec
   } catch {
     # Scheduled tasks must NEVER spam errors - offline is a normal state.
     Write-Host "[WARN] Could not reach GitHub (offline?). Will try again tomorrow."
@@ -310,6 +352,9 @@ $targetVersion = $targetTag.TrimStart('v')
 if ($targetVersion -eq $currentVersion) {
   Write-Host "[OK] Already up to date (v$currentVersion)."
   Write-Ledger 'UP_TO_DATE' "$fromVersion" "$targetTag" 'no update needed'
+  # Self-heal even when current: an install updated before this feature or
+  # with a removed task gets its nightly automation back for free.
+  Ensure-ScheduledTasks
   exit 0
 }
 
@@ -386,19 +431,26 @@ $healthy = $false
 if ($buildOk) {
   # -- g) Restart the app and gate on REAL health (database answering) ------
   # (the app was already stopped before the rebuild - see Invoke-RebuildAndAssemble)
-  Write-Host '[RESTART] Starting the new version (hidden windows)...'
-  Start-AppProcs
-  Write-Host '[RESTART] Waiting for the POS to become ready (up to 60s)...'
-  $healthy = Test-Healthy $port
-  if ($healthy) {
-    $liveVersion = ""
-    try {
-      $r = Invoke-WebRequest -Uri "http://127.0.0.1:$port/api/health" -UseBasicParsing -TimeoutSec 3
-      $h = $r.Content | ConvertFrom-Json
-      $liveVersion = "$($h.version)"
-    } catch { }
-    if ($liveVersion -and $liveVersion -ne $targetVersion) {
-      Write-Host "[WARN] Server is healthy but reports version $liveVersion (expected $targetVersion)." -ForegroundColor Yellow
+  if ($NoStart) {
+    Write-Host '[RESTART] -NoStart given - the caller (Start POS) starts the new version.'
+    # No server running to health-gate; trust the verified build + database
+    # steps above (the caller health-gates right after its own start).
+    $healthy = $true
+  } else {
+    Write-Host '[RESTART] Starting the new version (hidden windows)...'
+    Start-AppProcs
+    Write-Host '[RESTART] Waiting for the POS to become ready (up to 60s)...'
+    $healthy = Test-Healthy $port
+    if ($healthy) {
+      $liveVersion = ""
+      try {
+        $r = Invoke-WebRequest -Uri "http://127.0.0.1:$port/api/health" -UseBasicParsing -TimeoutSec 3
+        $h = $r.Content | ConvertFrom-Json
+        $liveVersion = "$($h.version)"
+      } catch { }
+      if ($liveVersion -and $liveVersion -ne $targetVersion) {
+        Write-Host "[WARN] Server is healthy but reports version $liveVersion (expected $targetVersion)." -ForegroundColor Yellow
+      }
     }
   }
 }
@@ -413,6 +465,7 @@ if ($buildOk -and $healthy) {
     Write-Host "  Pre-update backup kept at: $backupDir"
   }
   Write-Ledger 'UPDATE_SUCCESS' "$fromVersion" "$targetTag" 'update installed and healthy'
+  Ensure-ScheduledTasks
   exit 0
 }
 
@@ -437,6 +490,12 @@ if ($hasGit) {
 if ($rollbackOk) {
   $rebuilt = Invoke-RebuildAndAssemble
   if ($rebuilt) {
+    if ($NoStart) {
+      # Caller (start-pos.ps1) starts the app right after us.
+      Write-Host '[OK] ROLLBACK SUCCESS - previous version restored (caller will start it).'
+      Write-Ledger 'ROLLBACK_SUCCESS' "$targetTag" "v$fromVersion" "restored $prevRef (NoStart)"
+      exit 1
+    }
     Stop-AppProcs
     Start-AppProcs
     if (Test-Healthy $port) {

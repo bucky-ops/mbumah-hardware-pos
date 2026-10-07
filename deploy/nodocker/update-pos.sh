@@ -15,6 +15,8 @@
 #   ... -ToVersion v2.9.0   install a specific release tag instead of latest
 #   ... -SkipBackup         no pre-update backup (not recommended)
 #   ... -WindowStart 22:00 -WindowEnd 06:00   custom dormant window
+#   ... -Quiet                scripted mode (start-pos.sh calls this on launch)
+#   ... -NoStart              after the update, let the CALLER start the POS
 #
 # Designed for cron ("0 23 * * *"): never prompts, never fails loudly when
 # offline, exits 0 on the harmless outcomes (skipped / offline / up to date).
@@ -29,6 +31,8 @@ LEDGER="$HOME/mbumah-pos-data/update-ledger.jsonl"
 
 FORCE=0
 SKIP_BACKUP=0
+QUIET=0
+NOSTART=0
 TO_VERSION=""
 WINDOW_START="22:00"
 WINDOW_END="06:00"
@@ -37,6 +41,8 @@ while [ $# -gt 0 ]; do
   case "$1" in
     -Force|--force) FORCE=1 ;;
     -SkipBackup|--skip-backup) SKIP_BACKUP=1 ;;
+    -Quiet|--quiet) QUIET=1 ;;
+    -NoStart|--no-start) NOSTART=1 ;;
     -ToVersion|--to-version) TO_VERSION="${2:-}"; shift ;;
     -WindowStart) WINDOW_START="${2:-22:00}"; shift ;;
     -WindowEnd) WINDOW_END="${2:-06:00}"; shift ;;
@@ -72,6 +78,27 @@ find_app_pids() { # $1 = script name fragment (start-server.mjs / cron-local.mjs
 }
 
 server_running() { [ -n "$(find_app_pids start-server.mjs)" ]; }
+
+ensure_cron_tasks() {
+  # Self-heal (v2.10.1): re-add the nightly cron lines if they went missing
+  # (or if this install got its first update via the startup check and the
+  # cron offer was never accepted). Never throws.
+  command -v crontab >/dev/null 2>&1 || return 0
+  local app_root="$ROOT"
+  local need_update=1 need_backup=1
+  crontab -l 2>/dev/null | grep -q "deploy/nodocker/update-pos.sh" && need_update=0
+  crontab -l 2>/dev/null | grep -q "deploy/nodocker/backup-pos.sh" && need_backup=0
+  { [ "$need_update" -eq 1 ] || [ "$need_backup" -eq 1 ]; } || return 0
+  {
+    crontab -l 2>/dev/null
+    [ "$need_update" -eq 1 ] && echo "0 23 * * * bash $app_root/deploy/nodocker/update-pos.sh >> $app_root/update-cron.log 2>&1"
+    [ "$need_backup" -eq 1 ] && echo "30 2 * * * bash $app_root/deploy/nodocker/backup-pos.sh >> $app_root/backup-cron.log 2>&1"
+  } | crontab - 2>/dev/null && {
+    [ "$need_update" -eq 1 ] && { echo "[OK] Nightly update cron re-registered (23:00)."; append_ledger "TASK_REGISTERED" "" "" "cron update"; }
+    [ "$need_backup" -eq 1 ] && { echo "[OK] Nightly backup cron re-registered (02:30)."; append_ledger "TASK_REGISTERED" "" "" "cron backup"; }
+  }
+  return 0
+}
 
 stop_app() {
   local pid
@@ -264,7 +291,10 @@ else
   AUTH_ARGS=""
   if [ -n "${GITHUB_TOKEN:-}" ]; then AUTH_ARGS="-H Authorization:token_${GITHUB_TOKEN}"; fi
   # shellcheck disable=SC2086
-  TARGET_TAG="$(curl -sf $AUTH_ARGS -m 30 "https://api.github.com/repos/${REPO_SLUG}/releases/latest" 2>/dev/null |
+  # -Quiet (startup check) uses a short timeout so an offline machine is not
+  # stuck waiting; the nightly cron can afford 30s.
+  GH_TIMEOUT=30; [ "$QUIET" -eq 1 ] && GH_TIMEOUT=10
+  TARGET_TAG="$(curl -sf $AUTH_ARGS -m $GH_TIMEOUT "https://api.github.com/repos/${REPO_SLUG}/releases/latest" 2>/dev/null |
     grep -m1 '"tag_name"' | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')" || TARGET_TAG=""
   if [ -z "$TARGET_TAG" ]; then
     # Scheduled tasks must NEVER spam errors - offline is a normal state.
@@ -279,6 +309,7 @@ TARGET_VERSION="${TARGET_TAG#v}"
 if [ "$TARGET_VERSION" = "$CURRENT_VERSION" ]; then
   echo "[OK] Already up to date (v$CURRENT_VERSION)."
   append_ledger "UP_TO_DATE" "$FROM_VERSION" "$TARGET_TAG" "no update needed"
+  ensure_cron_tasks
   exit 0
 fi
 
@@ -363,6 +394,10 @@ HEALTHY=0
 if [ "$BUILD_OK" -eq 1 ]; then
   # ── g) Restart the app and gate on REAL health (database answering) ──────
   # (the app was already stopped before the rebuild - see run_rebuild)
+  if [ "$NOSTART" -eq 1 ]; then
+    echo "[RESTART] -NoStart given - the caller (start-pos.sh) starts the new version."
+    HEALTHY=1  # no server to gate; the caller health-gates right after start
+  else
   echo "[RESTART] Starting the new version (detached, logs in server.log)..."
   start_app
   echo "[RESTART] Waiting for the POS to become ready (up to 60s)..."
@@ -374,6 +409,7 @@ if [ "$BUILD_OK" -eq 1 ]; then
       echo "[WARN] Server is healthy but reports version $LIVE_VERSION (expected $TARGET_VERSION)."
     fi
   fi
+  fi
 fi
 
 # ── h) Success, or automatic code rollback ──────────────────────────────────
@@ -384,6 +420,7 @@ if [ "$BUILD_OK" -eq 1 ] && [ "$HEALTHY" -eq 1 ]; then
   echo "=============================================================="
   [ -n "$BACKUP_DIR" ] && echo "  Pre-update backup kept at: $BACKUP_DIR"
   append_ledger "UPDATE_SUCCESS" "$FROM_VERSION" "$TARGET_TAG" "update installed and healthy"
+  ensure_cron_tasks
   exit 0
 fi
 
@@ -407,6 +444,11 @@ if [ "$ROLLBACK_OK" -eq 1 ]; then
   RB_OK=1
   run_rebuild || RB_OK=0
   if [ "$RB_OK" -eq 1 ]; then
+    if [ "$NOSTART" -eq 1 ]; then
+      echo "[OK] ROLLBACK SUCCESS - previous version restored (caller will start it)."
+      append_ledger "ROLLBACK_SUCCESS" "$TARGET_TAG" "v$FROM_VERSION" "restored $PREV_REF (NoStart)"
+      exit 1
+    fi
     stop_app
     start_app
     if wait_healthy "$PORT"; then

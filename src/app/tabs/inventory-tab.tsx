@@ -243,11 +243,14 @@ export default function InventoryTab() {
     (async () => {
       try {
         const { authorizedFetchJson } = await import('@/lib/api');
-        const res = await authorizedFetchJson<{ id: string; code?: string | null }[]>('/api/stores');
+        const res = await authorizedFetchJson('/api/stores');
         if (cancelled) return;
         const map: Record<string, string> = {};
-        for (const s of res.json?.data ?? []) {
-          if (s.id && s.code) map[s.id] = s.code;
+        const rows = res.json?.data;
+        if (Array.isArray(rows)) {
+          for (const s of rows as { id?: string; code?: string | null }[]) {
+            if (s.id && s.code) map[s.id] = s.code;
+          }
         }
         storeCodeMapRef.current = map;
       } catch {

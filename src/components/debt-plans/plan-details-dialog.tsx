@@ -205,7 +205,14 @@ export function PlanDetailsDialog({
   // left them with no exit — payments/waivers were blocked server-side too).
   const canCancel =
     current.status === 'ACTIVE' || current.status === 'PAUSED' || current.status === 'DEFAULTED';
-  const canDelete = current.status === 'PENDING_APPROVAL' || current.status === 'CANCELLED';
+  // Client request: once a plan has been CLEARED (status COMPLETED — balance
+  // fully paid) show the delete option so the record can be tidied up.
+  // Collected payments stay in the debt ledger; only the plan + installments
+  // schedule are removed (server enforces the same rule).
+  const canDelete =
+    current.status === 'PENDING_APPROVAL' ||
+    current.status === 'CANCELLED' ||
+    current.status === 'COMPLETED';
   // Task 12-d: DEFAULTED plans accept catch-up payments and waivers again.
   const canActOnInstallments =
     current.status === 'ACTIVE' || current.status === 'PAUSED' || current.status === 'DEFAULTED';
@@ -365,7 +372,7 @@ export function PlanDetailsDialog({
                     className="text-rose-600 hover:text-rose-700 hover:border-rose-300 ml-auto"
                   >
                     <Trash2 className="h-3.5 w-3.5 mr-1" />
-                    Delete
+                    {current.status === 'COMPLETED' ? 'Delete cleared plan' : 'Delete'}
                   </Button>
                 )}
               </div>
@@ -661,8 +668,9 @@ export function PlanDetailsDialog({
             <AlertDialogDescription>
               Cancelling stops the installment schedule. Amounts already
               collected are kept, and the underlying debt remains collectible
-              through the debt ledger. Cancelled plans can be deleted
-              afterwards. This action will be recorded in the audit trail.
+              through the debt ledger. Cancelled or cleared (fully paid) plans
+              can be deleted afterwards. This action will be recorded in the
+              audit trail.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -690,9 +698,9 @@ export function PlanDetailsDialog({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this payment plan?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the plan and all its installments.
-              The underlying debt ledger entry will not be affected. This action
-              cannot be undone.
+              {current.status === 'COMPLETED'
+                ? 'This plan has been cleared (fully paid). Deleting removes the plan and its installment schedule; the payments already collected remain in the debt ledger. This action cannot be undone.'
+                : 'This will permanently delete the plan and all its installments. The underlying debt ledger entry will not be affected. This action cannot be undone.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
