@@ -10,7 +10,7 @@ import {
 
 import { useAppStore } from '@/lib/stores';
 import {
-  storeTransfersApi, productsApi, formatKES, formatDate, formatDateTime,
+  storeTransfersApi, productsApi, authorizedFetchJson, formatKES, formatDate, formatDateTime,
   type StoreTransferItem,
 } from '@/lib/api';
 
@@ -263,13 +263,23 @@ export default function TransfersTab() {
   });
 
   // Fetch stores (for from/to selection)
-  const { data: storesData } = useQuery({
+  // BUGFIX (client report: "Select source/destination store" dropdowns not
+  // functioning): the edge proxy rejects any /api request without an
+  // Authorization: Bearer header — the old bare fetch('/api/stores') got a
+  // silent 401 and rendered EMPTY dropdowns. authorizedFetchJson attaches
+  // the session token (same pattern as the inventory tab).
+  const { data: storesData, isLoading: storesLoading, error: storesError, refetch: refetchStores } = useQuery({
     queryKey: ['stores'],
     queryFn: async () => {
-      const res = await fetch('/api/stores');
-      const json = await res.json();
-      return json.data as StoreInfo[];
+      const { ok, status, json } = await authorizedFetchJson('/api/stores');
+      if (!ok) {
+        throw new Error(json?.error || `Could not load stores (HTTP ${status})`);
+      }
+      const rows: unknown = json?.data;
+      return (Array.isArray(rows) ? rows : []) as StoreInfo[];
     },
+    staleTime: 60 * 1000,
+    retry: 1,
   });
 
   // Product search for create transfer
@@ -280,7 +290,7 @@ export default function TransfersTab() {
   });
 
   const transfers: StoreTransferItem[] = Array.isArray(transfersData?.data) ? transfersData.data : [];
-  const stores: StoreInfo[] = storesData || [];
+  const stores: StoreInfo[] = Array.isArray(storesData) ? storesData : [];
   const searchResults = Array.isArray(productSearchData?.data) ? productSearchData.data : [];
 
   // Stats
@@ -514,13 +524,26 @@ export default function TransfersTab() {
               <CardDescription>Transfer stock between stores</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Stores failed to load — the form cannot work without them.
+                  Give an explicit reason + retry instead of silent dead dropdowns. */}
+              {!storesLoading && stores.length === 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-300">
+                  <span className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    Store list could not be loaded ({storesError?.message || 'no stores returned'}) — source and destination dropdowns need it.
+                  </span>
+                  <Button size="sm" variant="outline" className="h-8" onClick={() => refetchStores()}>
+                    Retry
+                  </Button>
+                </div>
+              )}
               {/* Store Selection */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>From Store (Source)</Label>
-                  <Select value={fromStoreId} onValueChange={setFromStoreId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select source store" />
+                  <Select value={fromStoreId} onValueChange={(v) => { setFromStoreId(v); if (toStoreId === v) setToStoreId(''); }}>
+                    <SelectTrigger disabled={storesLoading || stores.length === 0}>
+                      <SelectValue placeholder={storesLoading ? 'Loading stores…' : stores.length === 0 ? 'No stores available' : 'Select source store'} />
                     </SelectTrigger>
                     <SelectContent>
                       {stores.map(s => (
@@ -532,8 +555,8 @@ export default function TransfersTab() {
                 <div className="space-y-2">
                   <Label>To Store (Destination)</Label>
                   <Select value={toStoreId} onValueChange={setToStoreId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select destination store" />
+                    <SelectTrigger disabled={storesLoading || stores.length === 0}>
+                      <SelectValue placeholder={storesLoading ? 'Loading stores…' : stores.length === 0 ? 'No stores available' : 'Select destination store'} />
                     </SelectTrigger>
                     <SelectContent>
                       {stores.filter(s => s.id !== fromStoreId).map(s => (

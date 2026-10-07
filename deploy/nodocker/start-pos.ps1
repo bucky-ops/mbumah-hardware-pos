@@ -10,7 +10,10 @@ param(
   # -NoBrowser: start everything but do NOT auto-open the browser (used by
   # the nightly updater, which restarts the POS at 23:00 - a browser popping
   # up would be surprising). Interactive users: just run without arguments.
-  [switch]$NoBrowser
+  [switch]$NoBrowser,
+  # -NoUpdate: skip the one-time update check this launch (normal users never
+  # need it - the check itself is controlled by UPDATE_ON_START in .env).
+  [switch]$NoUpdate
 )
 $ErrorActionPreference = 'Stop'
 
@@ -30,6 +33,45 @@ try {
     Write-Host '       powershell -ExecutionPolicy Bypass -File deploy\nodocker\install-nodocker.ps1'
     Read-Host 'Press Enter to close'
     exit 1
+  }
+
+  # ------------------------------------------------------------------
+  # UPDATE ON STARTUP (v2.10.1): every launch checks GitHub for a newer
+  # release and installs it BEFORE the POS starts. This is the catch-up
+  # path for installs that were off at 23:00 (the nightly task) - and for
+  # installs created before the nightly updater existed: with internet,
+  # every copy converges to the latest release the next time it is opened.
+  # The updater is safe here: it backs up the database first, never touches
+  # data, and rolls the CODE back automatically if any step fails.
+  # Disable with UPDATE_ON_START=0 in .env (or skip once with -NoUpdate).
+  # ------------------------------------------------------------------
+  if (-not $NoBrowser -and -not $NoUpdate) {
+    $updateOnStart = $true
+    $uosLine = Get-Content (Join-Path $root '.env') -ErrorAction SilentlyContinue |
+      Where-Object { $_ -match '^UPDATE_ON_START=(.*)$' } | Select-Object -First 1
+    if ("$uosLine" -match '^UPDATE_ON_START=(.*)$') {
+      $v = $Matches[1].Trim().Trim('"').Trim("'")
+      if ($v -eq '0' -or $v -ieq 'false' -or $v -ieq 'no' -or $v -ieq 'off') { $updateOnStart = $false }
+    }
+    if ($updateOnStart) {
+      $pkgBefore = ""
+      try { $pkgBefore = (Get-Content (Join-Path $root 'package.json') -Raw | ConvertFrom-Json).version } catch { }
+      Write-Host ''
+      Write-Host 'Checking for updates... (disable with UPDATE_ON_START=0 in .env)'
+      try {
+        # -Quiet: short network timeouts; -NoStart: WE start the POS below,
+        # on the updated code (prevents two servers on one port).
+        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'update-pos.ps1') -Quiet -NoStart
+      } catch {
+        Write-Host "[WARN] Update check could not run: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host '       Starting the POS anyway.'
+      }
+      $pkgAfter = ""
+      try { $pkgAfter = (Get-Content (Join-Path $root 'package.json') -Raw | ConvertFrom-Json).version } catch { }
+      if ($pkgAfter -and $pkgBefore -and ($pkgAfter -ne $pkgBefore)) {
+        Write-Host "[OK] Mbumah POS was updated to v$pkgAfter." -ForegroundColor Green
+      }
+    }
   }
 
   # Background jobs in their own window

@@ -1,8 +1,10 @@
 // GET/PATCH/DELETE /api/debt-payment-plans/[id]
 //
 // Single-plan operations. PENDING_APPROVAL plans can be edited freely;
-// ACTIVE plans may only be PAUSED or CANCELLED; DELETE is allowed only on
-// PENDING_APPROVAL or CANCELLED plans.
+// ACTIVE plans may only be PAUSED or CANCELLED; DELETE is allowed on
+// PENDING_APPROVAL, CANCELLED and COMPLETED plans (COMPLETED = cleared /
+// fully paid — the client asked for a delete option once a plan has been
+// cleared; the collected-payment history stays in the debt ledger).
 //
 // Task 12-d (debt-plan audit) changes:
 //   - Tenant isolation now relies on Layer-4 tenancy: `debtPaymentPlan` was
@@ -226,7 +228,7 @@ async function patchPlanHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: serializePlanRow(updated) });
 }
 
-// ── DELETE: only PENDING_APPROVAL or CANCELLED ──────────────────────────────
+// ── DELETE: PENDING_APPROVAL, CANCELLED, or COMPLETED (cleared) ─────────────
 
 async function deletePlanHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
@@ -243,11 +245,11 @@ async function deletePlanHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  if (existing.status !== 'PENDING_APPROVAL' && existing.status !== 'CANCELLED') {
+  if (existing.status !== 'PENDING_APPROVAL' && existing.status !== 'CANCELLED' && existing.status !== 'COMPLETED') {
     return Response.json(
       {
         success: false,
-        error: `Cannot delete a plan with status "${existing.status}". Only PENDING_APPROVAL or CANCELLED plans can be deleted.`,
+        error: `Cannot delete a plan with status "${existing.status}". Only PENDING_APPROVAL, CANCELLED or COMPLETED (cleared) plans can be deleted.`,
       },
       { status: 400 },
     );
@@ -260,13 +262,14 @@ async function deletePlanHandler(...args: unknown[]): Promise<Response> {
     action: 'DEBT_PAYMENT_PLAN_DELETED',
     component: LogComponent.FINANCIAL,
     severity: LogSeverity.WARN,
-    message: `Payment plan ${id} deleted.`,
+    message: `Payment plan ${id} deleted (status was ${existing.status}).`,
     storeId: existing.storeId,
     userId: userId || undefined,
     metadata: {
       planId: id,
       customerId: existing.customerId,
       debtLedgerId: existing.debtLedgerId,
+      statusAtDeletion: existing.status,
     },
   });
 

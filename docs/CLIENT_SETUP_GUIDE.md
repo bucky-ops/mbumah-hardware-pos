@@ -154,6 +154,12 @@ Your POS looks after itself at night, while the shop is closed:
   the new version does not pass its health checks it **puts the previous
   version back by itself**. You do not have to do anything. If the laptop is
   switched off at that time, it simply tries again the next night.
+- **Every time you start the POS** — if a nightly update was missed (the
+  laptop was off at 23:00), **Start Mbumah POS** catches it up before the
+  till opens: you may see "Checking for updates..." and, if a new version
+  was found, a few minutes of update progress. Your data is backed up first
+  and the shop opens on the newest version. You do not have to do anything;
+  internet just needs to be connected.
 - **02:30 — Nightly backup.** A copy of your sales database is saved into
   `Desktop\MbumahBackups`. Copy that folder to a USB stick or OneDrive about
   once a week — a backup that only lives on the same laptop is not a real

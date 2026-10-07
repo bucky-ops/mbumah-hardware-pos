@@ -209,6 +209,15 @@ Safety rails:
   `ROLLBACK_SUCCESS`, …).
 - If the laptop is off at 23:00 the run is missed and simply catches up the
   next night — nothing breaks. Offline check → silent skip, retry tomorrow.
+- **Update on startup (v2.10.1):** every launch of `start-pos.ps1` /
+  `start-pos.sh` runs a quick release check (`-Quiet -NoStart`) and installs
+  any pending update **before** the till opens — so a machine that kept
+  missing the nightly window still converges to the latest release. Disable
+  with `UPDATE_ON_START=0` in `.env` (or skip one launch with `-NoUpdate`).
+- **Self-healing schedules (v2.10.1):** the updater re-registers the missing
+  nightly tasks (Windows scheduled tasks / Linux crontab lines) whenever it
+  runs and they are absent — including on installs that predate v2.9.0 and
+  just received their first update via the startup check.
 - The ledger is what powers **Rollback-Mbumah-POS.bat**: it lists the
   versions the POS has actually been on and reinstates the one you pick.
 

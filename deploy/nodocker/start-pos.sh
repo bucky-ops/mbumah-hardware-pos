@@ -15,6 +15,35 @@ fi
 [ -d .next/static ] && cp -r .next/static .next/standalone/.next/ 2>/dev/null || true
 [ -d public ] && cp -r public .next/standalone/ 2>/dev/null || true
 
+# ── UPDATE ON STARTUP (v2.10.1) ─────────────────────────────────────────────
+# Every launch checks GitHub for a newer release and installs it BEFORE the
+# POS starts (catch-up for installs that were off at the 23:00 cron, and for
+# installs created before the updater existed). Backs up data first; a failed
+# update rolls the code back automatically. Disable: UPDATE_ON_START=0 in .env
+# or pass -NoUpdate once.
+SKIP_UPDATE=0
+for arg in "$@"; do
+  case "$arg" in
+    -NoUpdate|--no-update) SKIP_UPDATE=1 ;;
+  esac
+done
+if [ "$SKIP_UPDATE" -eq 0 ]; then
+  UOS="$(grep -m1 -E '^UPDATE_ON_START=' .env 2>/dev/null | sed -E 's/^UPDATE_ON_START=//; s/^"//; s/"$//; s/^'"'"'//; s/'"'"'$//' || echo "")"
+  case "$UOS" in
+    0|false|no|off) SKIP_UPDATE=1 ;;
+  esac
+fi
+if [ "$SKIP_UPDATE" -eq 0 ]; then
+  PKG_BEFORE="$(node -p "require('./package.json').version" 2>/dev/null || echo "")"
+  echo ""
+  echo "Checking for updates... (disable with UPDATE_ON_START=0 in .env)"
+  bash deploy/nodocker/update-pos.sh -Quiet -NoStart || echo "[WARN] Update check failed - starting the POS anyway."
+  PKG_AFTER="$(node -p "require('./package.json').version" 2>/dev/null || echo "")"
+  if [ -n "$PKG_BEFORE" ] && [ -n "$PKG_AFTER" ] && [ "$PKG_BEFORE" != "$PKG_AFTER" ]; then
+    echo "[OK] Mbumah POS was updated to v$PKG_AFTER."
+  fi
+fi
+
 # Background jobs in the background, logged to cron.log
 nohup node deploy/nodocker/cron-local.mjs > cron.log 2>&1 &
 echo "Background jobs running → cron.log (pid $!)"
