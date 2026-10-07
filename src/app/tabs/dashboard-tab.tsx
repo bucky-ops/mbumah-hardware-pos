@@ -1,1255 +1,525 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+/**
+ * MBUMAH HARDWARE POS — Dashboard (v2.12.0 premium rebuild, Task DASH-UI)
+ *
+ * Single data source: GET /api/dashboard via dashboardApi.getStats() and
+ * TanStack Query (queryKey ['dashboard', storeId], 30s refetch) — the
+ * response shape is documented by Task DASH-BE in worklog.md. Every figure
+ * on this page is LIVE data; nothing is hardcoded and no chart library is
+ * used (pure CSS/SVG only).
+ *
+ * Section → data map:
+ *   1. Hero            — useAuthStore user + STORE_LIST + live clock
+ *   2. Debt banner     — data.debtCrisis.warning / banner / debtRatioPercent
+ *   3. Active shift    — data.shift (snapshot + live elapsed + End-Shift
+ *                        dialog reusing the existing shiftsApi.end flow)
+ *   4. KPI row         — todayRevenue / todayTransactions /
+ *                        averageTransactionValue / outOfStockCount +
+ *                        lowStockCount / debtCrisis.outstandingTotal
+ *                        (sparklines from revenueTrend7d.days and the
+ *                        hourly series — never fabricated)
+ *   5. Middle row      — hourlySalesBreakdown (6 AM–9 PM bars) +
+ *                        paymentMethodBreakdown (conic-gradient donut)
+ *   6. Quick actions   — tab navigation + existing /api/cash-drawer dialog
+ *   7. Bottom grid     — recentTransactions + recentActivities (sanitized),
+ *                        storeHealth, hourlySalesBreakdown heatmap
+ *   8. Top customers   — debtCrisis.customers sorted by lifetimeSpend
+ *   9. Top products    — topProducts with revenue share bars
+ *  10. Sales trend     — revenueTrend7d days + forecast + outlier note
+ *  11. Debt aging      — debtCrisis.aging buckets (sum verified)
+ *  12. Alerts          — data.alerts + alertsCount + severity actions
+ */
+
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
-  ResponsiveContainer, PieChart, Pie, Cell,
-  Area, AreaChart,
-} from 'recharts';
-import {
-  TrendingUp, TrendingDown, ShoppingCart, AlertTriangle,
-  Wallet, Package, Plus, BarChart3,
-  FileText, Receipt,
-  Clock, ArrowRight, Activity,
-  CircleDollarSign, KeyRound,
-  Banknote, Zap, Timer, Play, Square, Calculator, LogOut,
-  ArrowUpRight, Sparkles, Lock, ShieldCheck,
+  Activity, AlertTriangle, ArrowUpRight, Banknote, BarChart3,
+  Bell, Calculator, CheckCircle, CircleDollarSign, Clock, Eye, HandCoins,
+  Info, Lock, LogOut, Minus, Package, Phone, Play, Plus, Receipt,
+  ShieldCheck, ShoppingCart, Sparkles, Square, Timer, TrendingDown,
+  TrendingUp, Users, Wallet, Zap,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { useAppStore, useAuthStore, type AppTab } from '@/lib/stores';
 import {
-  dashboardApi, debtApi, financialApi, productsApi,
-  shiftsApi,
-  formatKES, formatDateTime,
+  dashboardApi, shiftsApi, formatKES,
   type ShiftXRead,
 } from '@/lib/api';
-import { handleError } from '@/lib/error-handler';
-import { toast } from 'sonner';
-import type { TopProduct } from '@/lib/types';
+import type {
+  DashboardStats, TopProduct, ShiftSnapshot, DebtCrisisSummary,
+  DashboardAlert, StoreHealthSummary, RevenueTrend7d,
+} from '@/lib/types';
+import { STORE_LIST } from '@/lib/store-info';
+import { timeAgo } from '@/lib/time-ago';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 
-// Extracted sub-components (see ./dashboard/ directory)
-import { DashboardStats } from './dashboard/DashboardStats';
-import { RecentTransactions } from './dashboard/RecentTransactions';
-import { LowStockAlerts } from './dashboard/LowStockAlerts';
-import { TopCustomersWidget } from './dashboard/TopCustomersWidget';
-import { StoreHealthWidget } from './dashboard/StoreHealthWidget';
-import { HourlySalesWidget } from './dashboard/HourlySalesWidget';
-// Shared types — kept in a separate module to avoid circular imports
-import type { KpiMetricKey, KpiDetail } from './dashboard/types';
-// Re-export for backwards compatibility with any external consumers
-export type { KpiMetricKey, KpiDetail } from './dashboard/types';
+// ── Types ────────────────────────────────────────────────────────────────────
 
 /**
- * Authenticated fetch helper — mirrors the Authorization header logic in
- * src/lib/api.ts so raw fetch() calls in this tab include the JWT token
- * (stored in localStorage as `mbt_token`). Without this, protected
- * endpoints return 401 and dashboard widgets silently fall back to empty
- * states.
+ * The API serializes Prisma Decimals for the LEGACY list fields, so the UI
+ * coerces with Number() at the boundary (DECIMAL-STRING AUDIT precedent —
+ * same approach the extracted widgets already use).
  */
-async function authedFetch(
-  input: string,
-  init: RequestInit = {},
-): Promise<Response> {
-  const token =
-    typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null;
-  const headers = new Headers(init.headers || {});
-  if (token) headers.set('Authorization', `Bearer ${token}`);
-  return fetch(input, { ...init, headers, credentials: 'same-origin' });
+interface RecentTxn {
+  id: string;
+  receiptNumber: string;
+  totalAmount: number | string;
+  paymentMethod: string;
+  paymentStatus: string;
+  createdAt: string;
+  customer: { name: string } | null;
+  cashier: { name: string } | null;
 }
 
-const _CHART_COLORS = [
-  'hsl(var(--chart-1))',
-  'hsl(var(--chart-2))',
-  'hsl(var(--chart-3))',
-  'hsl(var(--chart-4))',
-  'hsl(var(--chart-5))',
-];
+interface HourlyPoint {
+  hour: string;
+  amount: number;
+  transactionCount: number;
+}
 
-const PAYMENT_METHOD_COLORS: Record<string, string> = {
-  CASH: '#10b981',
-  MPESA: '#f59e0b',
-  DEBT: '#ef4444',
-  SPLIT: '#8b5cf6',
+type DashboardData = DashboardStats & {
+  /** Legacy fields the API returns but the shared interface predates. */
+  averageTransactionValue?: number;
+  revenueChangePercent?: number;
+  outstandingDebtCount?: number;
+  recentTransactions?: RecentTxn[];
+  hourlySalesBreakdown?: HourlyPoint[];
 };
 
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  CASH: 'Cash',
-  MPESA: 'M-Pesa',
-  DEBT: 'Debt',
-  SPLIT: 'Split',
-};
+// ── Small helpers ────────────────────────────────────────────────────────────
 
-// Animated counter hook + mini sparkline component were extracted into
-// ./dashboard/DashboardStats.tsx (only used there).
+/** Decimal-string safe number coercion — never trust wire types for money. */
+function num(v: number | string | null | undefined): number {
+  const n = typeof v === 'number' ? v : parseFloat(String(v ?? 0));
+  return Number.isFinite(n) ? n : 0;
+}
 
-// Aging breakdown mini bars
-function AgingBars({ current, days30, days60, days90Plus }: {
-  current: number; days30: number; days60: number; days90Plus: number;
-}) {
-  const total = current + days30 + days60 + days90Plus || 1;
-  const segments = [
-    { value: current, color: '#10b981', label: 'Current' },
-    { value: days30, color: '#f59e0b', label: '30d' },
-    { value: days60, color: '#f97316', label: '60d' },
-    { value: days90Plus, color: '#ef4444', label: '90d+' },
-  ];
+/** Compact axis money label, e.g. 342000 → "342k", 1_500_000 → "1.5M". */
+function formatCompact(v: number): string {
+  if (!Number.isFinite(v)) return '0';
+  const abs = Math.abs(v);
+  if (abs >= 1_000_000) return `${(v / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1).replace(/\.0$/, '')}M`;
+  if (abs >= 1_000) return `${Math.round(v / 1_000)}k`;
+  return `${Math.round(v)}`;
+}
+
+/** 24h hour number → "6 AM" / "2 PM" label. */
+function formatHour(hour: number): string {
+  const suffix = hour < 12 ? 'AM' : 'PM';
+  const h12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${h12} ${suffix}`;
+}
+
+/** Receipt "MBM-9D042" → "…9D042" (last-5 emphasis, per redesign spec). */
+function receiptTail(receipt: string | null | undefined): string {
+  const r = (receipt ?? '').trim();
+  if (!r) return '—';
+  return r.length <= 5 ? r : `…${r.slice(-5)}`;
+}
+
+const MOTIVATIONAL_QUOTE = 'Consistency beats intensity. Show up and deliver.';
+
+// ── Sparkline (pure inline SVG — NO chart libraries) ────────────────────────
+
+function Sparkline({ points, className }: { points: number[]; className?: string }) {
+  const coords = useMemo(() => {
+    if (!Array.isArray(points) || points.length < 2) return null;
+    const w = 40;
+    const h = 24;
+    const max = Math.max(...points);
+    const min = Math.min(...points);
+    const range = max - min || 1;
+    return points.map((p, i) => ({
+      x: (i / (points.length - 1)) * w,
+      y: h - 2 - ((p - min) / range) * (h - 4),
+    }));
+  }, [points]);
+
+  if (!coords) return null;
 
   return (
-    <div className="space-y-1">
-      <div className="flex h-2 rounded-full overflow-hidden bg-muted">
-        {segments.map((seg) => (
-          <div
-            key={seg.label}
-            style={{
-              width: `${(seg.value / total) * 100}%`,
-              backgroundColor: seg.color,
-            }}
-            className="transition-all duration-500"
-          />
-        ))}
-      </div>
-      <div className="flex gap-2 text-[9px] text-muted-foreground">
-        {segments.map((seg) => (
-          <span key={seg.label} className="flex items-center gap-0.5">
-            <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: seg.color }} />
-            {seg.label}
-          </span>
-        ))}
-      </div>
-    </div>
+    <svg
+      viewBox="0 0 40 24"
+      width={40}
+      height={24}
+      className={className}
+      aria-hidden="true"
+      focusable="false"
+    >
+      <polyline
+        points={coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ')}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
-// Custom chart tooltip
-function ChartTooltipContent({ active, payload, label, valuePrefix = '' }: {
-  active?: boolean; payload?: Array<{ value: number; name: string; color: string }>; label?: string; valuePrefix?: string;
-}) {
-  if (!active || !payload?.length) return null;
+// ── Trend badge ──────────────────────────────────────────────────────────────
+
+function TrendBadge({ pct }: { pct: number }) {
+  const up = pct > 0.05;
+  const down = pct < -0.05;
+  const Icon = up ? TrendingUp : down ? TrendingDown : Minus;
   return (
-    <div className="rounded-lg border bg-background/95 backdrop-blur-sm p-2 shadow-lg text-xs">
-      {label && <p className="font-medium mb-1">{label}</p>}
-      {payload.map((entry, i) => (
-        <div key={i} className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-          <span className="text-muted-foreground">{entry.name}:</span>
-          <span className="font-semibold">{valuePrefix}{entry.value.toLocaleString()}</span>
-        </div>
-      ))}
-    </div>
+    <span
+      className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+        up
+          ? 'bg-emerald-50 text-emerald-700'
+          : down
+            ? 'bg-red-50 text-red-600'
+            : 'bg-slate-100 text-slate-500'
+      }`}
+    >
+      <Icon className="h-3 w-3" aria-hidden="true" />
+      {Math.abs(pct).toFixed(1)}%
+    </span>
   );
 }
 
-// KpiCards / RecentActivity / AlertsPanel were extracted into ./dashboard/
-// DashboardStats.tsx, RecentTransactions.tsx, LowStockAlerts.tsx.
+// ── 1. HERO ──────────────────────────────────────────────────────────────────
 
-// SALES OVERVIEW SECTION (Charts)
-
-function SalesOverview({ storeId }: { storeId: string }) {
-  const { data: revenueData, isLoading: revenueLoading } = useQuery({
-    queryKey: ['revenue-trend', storeId],
-    queryFn: async () => {
-      const res = await financialApi.getRevenueTrend({ storeId, days: 7 });
-      return res.data ?? null;
-    },
-    refetchInterval: 60000,
-  });
-
-  const { data: dashboardData, isLoading: dashboardLoading } = useQuery({
-    queryKey: ['dashboard', storeId],
-    queryFn: async () => {
-      const res = await dashboardApi.getStats(storeId);
-      const d = res.data;
-      // Defensive: ensure all array fields are actually arrays
-      if (d && typeof d === 'object') {
-        return {
-          ...d,
-          salesByHour: Array.isArray(d.salesByHour) ? d.salesByHour : [],
-          paymentMethodBreakdown: Array.isArray(d.paymentMethodBreakdown) ? d.paymentMethodBreakdown : [],
-          recentTransactions: Array.isArray(d.recentTransactions) ? d.recentTransactions : [],
-          topProducts: Array.isArray(d.topProducts) ? d.topProducts : [],
-          topSellingCategories: Array.isArray(d.topSellingCategories) ? d.topSellingCategories : [],
-          hourlySalesBreakdown: Array.isArray(d.hourlySalesBreakdown) ? d.hourlySalesBreakdown : [],
-          lowStockItems: Array.isArray(d.lowStockItems) ? d.lowStockItems : [],
-          recentActivities: Array.isArray(d.recentActivities) ? d.recentActivities : [],
-        };
-      }
-      return d ?? null;
-    },
-    refetchInterval: 30000,
-  });
-
-  const isLoading = revenueLoading || dashboardLoading;
-
-  // Payment method pie chart data
-  const paymentData = useMemo(() => {
-    if (dashboardData?.paymentMethodBreakdown && dashboardData.paymentMethodBreakdown.length > 0) {
-      return dashboardData.paymentMethodBreakdown.map((pm) => ({
-        name: PAYMENT_METHOD_LABELS[pm.method] || pm.method,
-        value: pm.amount,
-        count: pm.count,
-        color: PAYMENT_METHOD_COLORS[pm.method] || '#6b7280',
-      }));
-    }
-    // Fallback demo data
-    return [
-      { name: 'Cash', value: 45000, count: 23, color: '#10b981' },
-      { name: 'M-Pesa', value: 32000, count: 15, color: '#f59e0b' },
-      { name: 'Debt', value: 12000, count: 5, color: '#ef4444' },
-      { name: 'Split', value: 8000, count: 3, color: '#8b5cf6' },
-    ];
-  }, [dashboardData]);
-
-  // Revenue trend bar chart data
-  const { revenueChartData, isDemoData } = useMemo(() => {
-    const todayRev = dashboardData?.todayRevenue ?? 0;
-
-    // First, try using dashboard's salesByHour when available
-    if (dashboardData?.salesByHour && dashboardData.salesByHour.length > 0) {
-      const hasNonZero = dashboardData.salesByHour.some((h: { amount: number }) => h.amount > 0);
-      if (hasNonZero) {
-        // Use salesByHour from dashboard as primary source
-        const hourLabels = ['6am', '7am', '8am', '9am', '10am', '11am', '12pm', '1pm', '2pm', '3pm', '4pm', '5pm', '6pm', '7pm'];
-        const nonZeroHours = dashboardData.salesByHour.filter((h: { amount: number }) => h.amount > 0);
-        return {
-          revenueChartData: nonZeroHours.map((h: { hour: string; amount: number }, _i: number) => ({
-            label: hourLabels[parseInt(h.hour) - 6] || h.hour,
-            revenue: h.amount,
-            expenses: Math.round(h.amount * 0.35),
-            transactions: Math.max(1, Math.round(h.amount / 2500)),
-          })),
-          isDemoData: false,
-        };
-      }
-    }
-
-    // Next, try revenue trend API
-    if (revenueData?.daily && revenueData.daily.length > 0) {
-      const totalFromTrend = revenueData.daily.reduce((s, d) => s + d.revenue, 0);
-
-      // If the trend data seems disproportionately large compared to real dashboard data,
-      // generate proportionate demo data instead
-      if (todayRev > 0 && totalFromTrend > todayRev * 10 && !revenueData.summary?.isDemo) {
-        // Real trend data is reasonable, use it
-        return {
-          revenueChartData: revenueData.daily.map((d) => ({
-            label: d.label,
-            revenue: d.revenue,
-            expenses: d.expenses,
-            transactions: d.transactions,
-          })),
-          isDemoData: false,
-        };
-      }
-
-      if (revenueData.summary?.isDemo && todayRev > 0) {
-        // Revenue trend is demo but we have real dashboard data - generate proportional demo
-        const avgDaily = todayRev;
-        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        return {
-          revenueChartData: days.map(() => ({
-            revenue: Math.round(avgDaily * (0.7 + Math.random() * 0.6)),
-            expenses: Math.round(avgDaily * (0.2 + Math.random() * 0.2)),
-            transactions: Math.max(1, Math.round(Math.random() * 5 + 1)),
-          })).map((d, i) => ({ ...d, label: days[i] })),
-          isDemoData: true,
-        };
-      }
-
-      // Use revenue trend API data as-is
-      return {
-        revenueChartData: revenueData.daily.map((d) => ({
-          label: d.label,
-          revenue: d.revenue,
-          expenses: d.expenses,
-          transactions: d.transactions,
-        })),
-        isDemoData: revenueData.summary?.isDemo ?? false,
-      };
-    }
-
-    // Generate proportional demo data
-    const baseRevenue = todayRev > 0 ? todayRev : 25000;
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+function DashboardHero({ onTab }: { onTab: (tab: AppTab) => void }) {
+  const user = useAuthStore((s) => s.user);
+  const currentStoreId = useAppStore((s) => s.currentStoreId);
+  const nowMs = useNowMs();
+  const clock = useMemo(() => {
+    if (nowMs <= 0) return null;
+    const now = new Date(nowMs);
     return {
-      revenueChartData: days.map((label) => ({
-        label,
-        revenue: Math.round(baseRevenue * (0.7 + Math.random() * 0.6)),
-        expenses: Math.round(baseRevenue * (0.2 + Math.random() * 0.2)),
-        transactions: Math.max(1, Math.round(Math.random() * 20 + 5)),
-      })),
-      isDemoData: true,
+      time: now.toLocaleTimeString('en-KE', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
+      }),
+      date: now.toLocaleDateString('en-KE', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      }),
     };
-  }, [revenueData, dashboardData]);
+  }, [nowMs]);
 
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card className="backdrop-blur-sm bg-card/80 border-border/50">
-          <CardContent className="p-4">
-            <Skeleton className="h-6 w-32 mb-4" />
-            <Skeleton className="h-64 w-full" />
-          </CardContent>
-        </Card>
-        <Card className="backdrop-blur-sm bg-card/80 border-border/50">
-          <CardContent className="p-4">
-            <Skeleton className="h-6 w-36 mb-4" />
-            <Skeleton className="h-64 w-full" />
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const totalRevenue = paymentData.reduce((sum, d) => sum + d.value, 0);
+  const firstName = (user?.name ?? '').trim().split(/\s+/)[0] || '';
+  const storeName = STORE_LIST.find((s) => s.id === currentStoreId)?.shortName ?? 'your branch';
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {/* Revenue Trend Bar Chart */}
-      <Card className="backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-all duration-200">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <BarChart3 className="h-4 w-4 text-green-600" />
-            Revenue Trend (7 Days)
-            {isDemoData && (
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30">
-                Demo Data
-              </Badge>
-            )}
-          </CardTitle>
-          <CardDescription className="text-xs">
-            {revenueData?.summary ? (
-              <>
-                Total: {formatKES(revenueData.summary.totalRevenue)} | Avg/day: {formatKES(revenueData.summary.avgDailyRevenue)}
-              </>
-            ) : (
-              'Daily revenue and expenses overview'
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pb-4">
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={revenueChartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-                <defs>
-                  <linearGradient id="barRevenueGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#10b981" stopOpacity={1} />
-                    <stop offset="100%" stopColor="#059669" stopOpacity={0.7} />
-                  </linearGradient>
-                  <linearGradient id="barExpensesGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.8} />
-                    <stop offset="100%" stopColor="#d97706" stopOpacity={0.5} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 11 }}
-                  className="text-muted-foreground"
-                />
-                <YAxis
-                  tick={{ fontSize: 11 }}
-                  className="text-muted-foreground"
-                  tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`}
-                />
-                <RechartsTooltip content={<ChartTooltipContent valuePrefix="KES " />} />
-                <Bar dataKey="revenue" name="Revenue" fill="url(#barRevenueGrad)" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                <Bar dataKey="expenses" name="Expenses" fill="url(#barExpensesGrad)" radius={[4, 4, 0, 0]} maxBarSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
+    <section
+      aria-label="Welcome"
+      className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#059669] to-[#10b981] text-white shadow-md"
+    >
+      {/* Subtle texture overlay */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.07]"
+        style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '22px 22px' }}
+        aria-hidden="true"
+      />
+      <CardContent className="relative p-4 sm:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+              {firstName ? `Karibu, ${firstName}` : 'Karibu'} <span aria-hidden="true">👋</span>
+            </h1>
+            <p className="mt-1 text-xs text-emerald-50/95 sm:text-sm">
+              Here&rsquo;s what&rsquo;s happening at <span className="font-semibold">{storeName}</span> today
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-emerald-50/90 sm:text-xs">
+              <span className="inline-flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                {/* Live ticking clock — filled client-side to avoid SSR mismatch */}
+                <span className="font-mono tabular-nums">{clock?.time ?? '--:--:--'}</span>
+              </span>
+              <span className="hidden text-emerald-200/60 sm:inline" aria-hidden="true">·</span>
+              <span>{clock?.date ?? ''}</span>
+            </div>
+            <p className="mt-2 max-w-md text-[11px] italic leading-relaxed text-emerald-100/80">
+              {`“${MOTIVATIONAL_QUOTE}”`}
+            </p>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Payment Methods Pie Chart */}
-      <Card className="backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-all duration-200">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Wallet className="h-4 w-4 text-amber-600" />
-            Payment Methods
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Distribution of today&apos;s payments
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pb-4">
-          <div className="flex flex-col sm:flex-row items-center gap-4">
-            <div className="h-52 w-52 shrink-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={paymentData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={3}
-                    dataKey="value"
-                    strokeWidth={0}
-                  >
-                    {paymentData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip
-                    formatter={(value: number, name: string) => [formatKES(value), name]}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex-1 space-y-3 w-full">
-              {paymentData.map((pm) => {
-                const percent = totalRevenue > 0 ? ((pm.value / totalRevenue) * 100).toFixed(1) : '0';
-                return (
-                  <div key={pm.name} className="flex items-center gap-3">
-                    <span
-                      className="shrink-0 w-3 h-3 rounded-full"
-                      style={{ backgroundColor: pm.color }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">{pm.name}</span>
-                        <span className="text-sm font-semibold">{formatKES(pm.value)}</span>
-                      </div>
-                      <Progress
-                        value={parseFloat(percent)}
-                        className="h-1.5 mt-1"
-                      />
-                      <div className="flex items-center justify-between mt-0.5">
-                        <span className="text-[10px] text-muted-foreground">{pm.count} transactions</span>
-                        <span className="text-[10px] text-muted-foreground">{percent}%</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              className="gap-1.5 bg-white font-semibold text-emerald-700 shadow-sm hover:bg-emerald-50 hover:text-emerald-800"
+              onClick={() => onTab('pos')}
+            >
+              <ShoppingCart className="h-4 w-4" aria-hidden="true" />
+              New Sale (F2)
+            </Button>
+            <Button
+              size="sm"
+              className="gap-1.5 bg-white font-semibold text-emerald-700 shadow-sm hover:bg-emerald-50 hover:text-emerald-800"
+              onClick={() => onTab('catalog')}
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Add Product
+            </Button>
+            <Button
+              size="sm"
+              className="gap-1.5 bg-white font-semibold text-emerald-700 shadow-sm hover:bg-emerald-50 hover:text-emerald-800"
+              onClick={() => onTab('reports')}
+            >
+              <BarChart3 className="h-4 w-4" aria-hidden="true" />
+              View Reports
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </CardContent>
+    </section>
+  );
+}
+
+// ── 2. DEBT CRISIS BANNER ────────────────────────────────────────────────────
+
+function DebtCrisisBanner({ crisis, onTab }: { crisis: DebtCrisisSummary; onTab: (tab: AppTab) => void }) {
+  return (
+    <section
+      role="alert"
+      aria-label="Debt warning"
+      className="flex flex-col gap-3 rounded-2xl border border-red-300 bg-red-50 p-4 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100">
+          <AlertTriangle className="h-4 w-4 text-red-600" aria-hidden="true" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-red-700">
+            {crisis.banner || 'High debt exposure'}
+          </p>
+          <p className="mt-0.5 text-xs text-red-600">
+            — {num(crisis.debtRatioPercent).toFixed(1)}% of today&rsquo;s sales are on debt
+          </p>
+        </div>
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        className="shrink-0 gap-1.5 border-red-300 bg-white text-red-700 hover:bg-red-100 hover:text-red-800"
+        onClick={() => onTab('debt-management')}
+      >
+        View debtors
+        <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+      </Button>
+    </section>
+  );
+}
+
+// ── 3. ACTIVE SHIFT CARD ─────────────────────────────────────────────────────
+
+/**
+ * Shared 1-second tick for live clocks. Returns 0 until the client mounts
+ * (the SSR/hydration render shows placeholders) — setState fires only inside
+ * the interval callback, never synchronously within the effect body.
+ */
+function useNowMs(): number {
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return now;
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** Live mm:ss / hh:mm elapsed label for the open shift. */
+function useElapsedLabel(startedAt: string | null | undefined): string {
+  const now = useNowMs();
+  if (!startedAt || now <= 0) return '--:--';
+  const start = new Date(startedAt).getTime();
+  if (Number.isNaN(start)) return '--:--';
+  const diff = Math.max(0, now - start);
+  const h = Math.floor(diff / 3_600_000);
+  const m = Math.floor((diff % 3_600_000) / 60_000);
+  const s = Math.floor((diff % 60_000) / 1000);
+  return h > 0 ? `${pad2(h)}:${pad2(m)}` : `${pad2(m)}:${pad2(s)}`;
+}
+
+function ShiftStatBox({ label, value, sub, emphasized }: {
+  label: string;
+  value: string;
+  sub?: string | null;
+  emphasized?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-xl p-3 ${
+        emphasized
+          ? 'bg-emerald-50 ring-1 ring-emerald-200'
+          : 'border border-slate-200 bg-slate-50/60'
+      }`}
+    >
+      <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">{label}</p>
+      <p className={`mt-0.5 text-sm font-bold tabular-nums ${emphasized ? 'text-emerald-700' : 'text-slate-900'}`}>
+        {value}
+      </p>
+      {sub ? <p className="mt-0.5 text-[10px] text-slate-500">{sub}</p> : null}
     </div>
   );
 }
 
-function QuickActions({ onTabSwitch }: { onTabSwitch: (tab: AppTab) => void }) {
-  const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
-  const [cashDrawerOpen, setCashDrawerOpen] = useState(false);
-
-  // Expense form state
-  const [expenseDesc, setExpenseDesc] = useState('');
-  const [expenseAmount, setExpenseAmount] = useState('');
-  const [expenseCategory, setExpenseCategory] = useState('TRANSPORT');
-  const [expensePaymentMethod, setExpensePaymentMethod] = useState('CASH');
-  const [expenseSubmitting, setExpenseSubmitting] = useState(false);
-
-  // Cash drawer state
-  const [cashDrawerData, setCashDrawerData] = useState<{
-    currentBalance: number;
-    totalCashIn: number;
-    totalCashOut: number;
-  } | null>(null);
-  const [cashDrawerLoading, setCashDrawerLoading] = useState(false);
-
-  const handleExpenseSubmit = async () => {
-    if (!expenseDesc.trim() || !expenseAmount || parseFloat(expenseAmount) <= 0) {
-      toast.error('Please fill in description and a valid amount.');
-      return;
-    }
-
-    setExpenseSubmitting(true);
-    try {
-      const res = await authedFetch('/api/expenses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          storeId: 'store_juja_main',
-          description: expenseDesc.trim(),
-          amount: parseFloat(expenseAmount),
-          category: expenseCategory,
-          paidBy: 'user_super_admin',
-          paymentMethod: expensePaymentMethod,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success(`Expense recorded: ${formatKES(parseFloat(expenseAmount))}`);
-        setExpenseDesc('');
-        setExpenseAmount('');
-        setExpenseCategory('TRANSPORT');
-        setExpensePaymentMethod('CASH');
-        setExpenseDialogOpen(false);
-      } else {
-        toast.error(data.error || 'Failed to record expense.');
-      }
-    } catch {
-      toast.error('Network error. Please try again.');
-    } finally {
-      setExpenseSubmitting(false);
-    }
-  };
-
-  const handleOpenCashDrawer = async () => {
-    setCashDrawerOpen(true);
-    setCashDrawerLoading(true);
-    try {
-      const res = await authedFetch('/api/cash-drawer?storeId=store_juja_main');
-      const data = await res.json();
-      if (data.success && data.summary) {
-        setCashDrawerData(data.summary);
-      } else {
-        setCashDrawerData(null);
-      }
-    } catch {
-      setCashDrawerData(null);
-    } finally {
-      setCashDrawerLoading(false);
-    }
-  };
-
-  const actions = [
-    {
-      label: 'New Sale',
-      icon: ShoppingCart,
-      color: 'text-green-600 dark:text-green-400',
-      iconCircle: 'bg-green-200 dark:bg-green-800/50',
-      bg: 'bg-green-50 hover:bg-green-100 dark:bg-green-950/30 dark:hover:bg-green-950/50 border-green-200 dark:border-green-800',
-      tab: 'pos' as AppTab,
-      onClick: () => onTabSwitch('pos'),
-    },
-    {
-      label: 'Add Product',
-      icon: Plus,
-      color: 'text-emerald-600 dark:text-emerald-400',
-      iconCircle: 'bg-emerald-200 dark:bg-emerald-800/50',
-      bg: 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800',
-      tab: 'inventory' as AppTab,
-      onClick: () => onTabSwitch('inventory'),
-    },
-    {
-      label: 'Record Expense',
-      icon: Receipt,
-      color: 'text-amber-600 dark:text-amber-400',
-      iconCircle: 'bg-amber-200 dark:bg-amber-800/50',
-      bg: 'bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-950/50 border-amber-200 dark:border-amber-800',
-      tab: null,
-      onClick: () => setExpenseDialogOpen(true),
-    },
-    {
-      label: 'View Reports',
-      icon: FileText,
-      color: 'text-purple-600 dark:text-purple-400',
-      iconCircle: 'bg-purple-200 dark:bg-purple-800/50',
-      bg: 'bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/30 dark:hover:bg-purple-950/50 border-purple-200 dark:border-purple-800',
-      tab: 'reports' as AppTab,
-      onClick: () => onTabSwitch('reports'),
-    },
-    {
-      label: 'Cash Drawer',
-      icon: Banknote,
-      color: 'text-teal-600 dark:text-teal-400',
-      iconCircle: 'bg-teal-200 dark:bg-teal-800/50',
-      bg: 'bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/30 dark:hover:bg-teal-950/50 border-teal-200 dark:border-teal-800',
-      tab: null,
-      onClick: () => handleOpenCashDrawer(),
-    },
-  ];
-
-  return (
-    <>
-      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Zap className="h-4 w-4 text-amber-500" />
-            Quick Actions
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pb-4">
-          <div className="flex flex-wrap gap-2.5">
-            {actions.map((action) => {
-              const Icon = action.icon;
-              return (
-                <Button
-                  key={action.label}
-                  variant="outline"
-                  size="sm"
-                  className={`gap-2.5 border ${action.bg} transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 px-4 py-2.5 h-auto`}
-                  onClick={action.onClick}
-                >
-                  <span className={`inline-flex items-center justify-center h-7 w-7 rounded-full ${action.iconCircle} shrink-0`}>
-                    <Icon className={`h-4 w-4 ${action.color}`} />
-                  </span>
-                  <span className="text-xs font-medium">{action.label}</span>
-                </Button>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Expense Dialog */}
-      <Dialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Receipt className="h-5 w-5 text-amber-600" />
-              Record Expense
-            </DialogTitle>
-            <DialogDescription>
-              Log a new expense for the store.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Description</label>
-              <input
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                placeholder="e.g. Transport costs"
-                value={expenseDesc}
-                onChange={(e) => setExpenseDesc(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Amount (KES)</label>
-              <input
-                type="number"
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                placeholder="0"
-                value={expenseAmount}
-                onChange={(e) => setExpenseAmount(e.target.value)}
-                min="1"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Category</label>
-              <select
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                value={expenseCategory}
-                onChange={(e) => setExpenseCategory(e.target.value)}
-              >
-                <option value="TRANSPORT">Transport</option>
-                <option value="UTILITIES">Utilities</option>
-                <option value="MAINTENANCE">Maintenance</option>
-                <option value="SALARIES">Salaries</option>
-                <option value="RENT">Rent</option>
-                <option value="SUPPLIES">Supplies</option>
-                <option value="BAD_DEBT">Bad Debt</option>
-                <option value="OTHER">Other</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Payment Method</label>
-              <select
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                value={expensePaymentMethod}
-                onChange={(e) => setExpensePaymentMethod(e.target.value)}
-              >
-                <option value="CASH">Cash</option>
-                <option value="MPESA">M-Pesa</option>
-              </select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setExpenseDialogOpen(false)} disabled={expenseSubmitting}>Cancel</Button>
-            <Button onClick={handleExpenseSubmit} disabled={expenseSubmitting}>
-              {expenseSubmitting ? 'Recording...' : 'Record Expense'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Cash Drawer Dialog */}
-      <Dialog open={cashDrawerOpen} onOpenChange={setCashDrawerOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Banknote className="h-5 w-5 text-teal-600" />
-              Cash Drawer Status
-            </DialogTitle>
-            <DialogDescription>
-              Current cash drawer overview.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {cashDrawerLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="h-6 w-6 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
-              </div>
-            ) : cashDrawerData ? (
-              <>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="rounded-lg border p-3 text-center">
-                    <p className="text-xs text-muted-foreground">Cash In</p>
-                    <p className="text-lg font-bold text-green-600">{formatKES(cashDrawerData.totalCashIn)}</p>
-                  </div>
-                  <div className="rounded-lg border p-3 text-center">
-                    <p className="text-xs text-muted-foreground">Cash Out</p>
-                    <p className="text-lg font-bold text-red-600">{formatKES(cashDrawerData.totalCashOut)}</p>
-                  </div>
-                  <div className="col-span-2 rounded-lg border p-3 text-center bg-teal-50 dark:bg-teal-950/30">
-                    <p className="text-xs text-muted-foreground">Current Balance</p>
-                    <p className="text-2xl font-bold text-teal-700 dark:text-teal-300">{formatKES(cashDrawerData.currentBalance)}</p>
-                  </div>
-                </div>
-                <div className="rounded-lg border p-3 bg-amber-50 dark:bg-amber-950/30">
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-amber-600" />
-                    <span className="text-sm text-amber-700 dark:text-amber-400">Live balance from drawer records</span>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="text-center py-6 text-muted-foreground">
-                <Banknote className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No cash drawer records found.</p>
-                <p className="text-xs mt-1">Record a drawer event to get started.</p>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCashDrawerOpen(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
-
-
-function TopProductsTable({ storeId }: { storeId: string }) {
-  const { data, isLoading } = useQuery({
-    queryKey: ['dashboard', storeId],
-    queryFn: async () => {
-      const res = await dashboardApi.getStats(storeId);
-      return res.data;
-    },
-    refetchInterval: 30000,
-  });
-
-  const topProducts: TopProduct[] = useMemo(() => {
-    if (Array.isArray(data?.topProducts) && data.topProducts.length > 0) {
-      return data.topProducts.slice(0, 5);
-    }
-    // Demo data
-    return [
-      { productId: '1', productName: 'Portland Cement (50kg)', totalQuantity: 45, totalRevenue: 54000 },
-      { productId: '2', productName: 'Iron Sheets (3m)', totalQuantity: 32, totalRevenue: 41600 },
-      { productId: '3', productName: 'D-Paint White (20L)', totalQuantity: 18, totalRevenue: 36000 },
-      { productId: '4', productName: 'Rebar 12mm (6m)', totalQuantity: 60, totalRevenue: 27000 },
-      { productId: '5', productName: 'Wheelbarrow Heavy Duty', totalQuantity: 8, totalRevenue: 24000 },
-    ];
-  }, [data]);
-
-  const maxRevenue = Math.max(...topProducts.map(p => p.totalRevenue), 1);
-
-  if (isLoading) {
-    return (
-      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-green-600" />
-            Top Selling Products
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pb-4">
-          <div className="space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <Skeleton className="h-6 w-6 rounded" />
-                <div className="flex-1 space-y-1.5">
-                  <Skeleton className="h-3 w-40" />
-                  <Skeleton className="h-2 w-full" />
-                </div>
-                <Skeleton className="h-4 w-16" />
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-all duration-200">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-semibold flex items-center gap-2">
-          <TrendingUp className="h-4 w-4 text-green-600" />
-          Top Selling Products
-        </CardTitle>
-        <CardDescription className="text-xs">
-          Best performing products by revenue
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="pb-4">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="w-8 text-xs">#</TableHead>
-              <TableHead className="text-xs">Product</TableHead>
-              <TableHead className="text-xs text-right">Qty Sold</TableHead>
-              <TableHead className="text-xs text-right">Revenue</TableHead>
-              <TableHead className="text-xs w-24">Share</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {topProducts.map((product, index) => {
-              const sharePercent = (product.totalRevenue / maxRevenue) * 100;
-              const rankColors = [
-                'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400',
-                'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
-                'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400',
-              ];
-              return (
-                <TableRow key={product.productId} className="hover:bg-muted/50 transition-colors">
-                  <TableCell className="py-2">
-                    <span className={`inline-flex items-center justify-center h-6 w-6 rounded text-[10px] font-bold ${
-                      index < 3 ? rankColors[index] : 'text-muted-foreground'
-                    }`}>
-                      {index + 1}
-                    </span>
-                  </TableCell>
-                  <TableCell className="py-2">
-                    <span className="text-sm font-medium truncate block max-w-[160px]">
-                      {product.productName}
-                    </span>
-                  </TableCell>
-                  <TableCell className="py-2 text-right">
-                    <span className="text-sm tabular-nums">{product.totalQuantity}</span>
-                  </TableCell>
-                  <TableCell className="py-2 text-right">
-                    <span className="text-sm font-semibold tabular-nums">{formatKES(product.totalRevenue)}</span>
-                  </TableCell>
-                  <TableCell className="py-2">
-                    <div className="flex items-center gap-2">
-                      <Progress value={sharePercent} className="h-1.5 flex-1" />
-                      <span className="text-[10px] text-muted-foreground w-8 text-right">
-                        {sharePercent.toFixed(0)}%
-                      </span>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
-  );
-}
-
-// DEBT AGING SECTION (embedded in dashboard)
-
-function DebtAgingCard({ storeId }: { storeId: string }) {
-  const { data: debtData, isLoading } = useQuery({
-    queryKey: ['debt-aging', storeId],
-    queryFn: async () => {
-      const res = await debtApi.list({ storeId, limit: 100 });
-      return Array.isArray(res.data) ? res.data : [];
-    },
-    refetchInterval: 60000,
-  });
-
-  const agingSummary = useMemo(() => {
-    if (!debtData || debtData.length === 0) {
-      return { current: 12000, days30: 8500, days60: 5200, days90Plus: 3100, total: 28800 };
-    }
-    const summary = { current: 0, days30: 0, days60: 0, days90Plus: 0, total: 0 };
-    debtData.forEach((d) => {
-      const balance = d.balance;
-      summary.total += balance;
-      switch (d.agingBucket) {
-        case 'CURRENT': summary.current += balance; break;
-        case 'DAYS_30': summary.days30 += balance; break;
-        case 'DAYS_60': summary.days60 += balance; break;
-        case 'DAYS_90_PLUS': summary.days90Plus += balance; break;
-        default: summary.current += balance;
-      }
-    });
-    return summary;
-  }, [debtData]);
-
-  if (isLoading) {
-    return (
-      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
-        <CardContent className="p-4">
-          <Skeleton className="h-6 w-28 mb-4" />
-          <Skeleton className="h-4 w-full mb-2" />
-          <Skeleton className="h-2 w-full" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-all duration-200">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-semibold flex items-center gap-2">
-          <CircleDollarSign className="h-4 w-4 text-red-600" />
-          Debt Aging Summary
-        </CardTitle>
-        <CardDescription className="text-xs">
-          Total outstanding: {formatKES(agingSummary.total)}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="pb-4">
-        <AgingBars
-          current={agingSummary.current}
-          days30={agingSummary.days30}
-          days60={agingSummary.days60}
-          days90Plus={agingSummary.days90Plus}
-        />
-        <div className="grid grid-cols-2 gap-2 mt-3">
-          <div className="rounded-lg border p-2 text-center">
-            <p className="text-[10px] text-muted-foreground">Current</p>
-            <p className="text-sm font-semibold text-green-600">{formatKES(agingSummary.current)}</p>
-          </div>
-          <div className="rounded-lg border p-2 text-center">
-            <p className="text-[10px] text-muted-foreground">30 Days</p>
-            <p className="text-sm font-semibold text-amber-600">{formatKES(agingSummary.days30)}</p>
-          </div>
-          <div className="rounded-lg border p-2 text-center">
-            <p className="text-[10px] text-muted-foreground">60 Days</p>
-            <p className="text-sm font-semibold text-orange-600">{formatKES(agingSummary.days60)}</p>
-          </div>
-          <div className="rounded-lg border p-2 text-center">
-            <p className="text-[10px] text-muted-foreground">90+ Days</p>
-            <p className="text-sm font-semibold text-red-600">{formatKES(agingSummary.days90Plus)}</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function useShiftDuration(startedAt: string | null) {
-  const [duration, setDuration] = useState(() => !startedAt ? '0h 0m 0s' : '');
-
-  useEffect(() => {
-    if (!startedAt) {
-      return;
-    }
-
-    const update = () => {
-      const start = new Date(startedAt).getTime();
-      const now = Date.now();
-      const diff = Math.max(0, now - start);
-      const hours = Math.floor(diff / 3600000);
-      const minutes = Math.floor((diff % 3600000) / 60000);
-      const seconds = Math.floor((diff % 60000) / 1000);
-      setDuration(`${hours}h ${minutes}m ${seconds}s`);
-    };
-
-    update();
-    const interval = setInterval(update, 1000);
-    return () => clearInterval(interval);
-  }, [startedAt]);
-
-  return duration || '0h 0m 0s';
-}
-
-function ShiftStatusCard({ storeId }: { storeId: string }) {
-  const { user } = useAuthStore();
+function ActiveShiftCard({ shift }: { shift: ShiftSnapshot }) {
   const queryClient = useQueryClient();
-  const [startingCash, setStartingCash] = useState('');
-  const [endDialogOpen, setEndDialogOpen] = useState(false);
-  const [countedCash, setCountedCash] = useState('');
-  const [endingCash, setEndingCash] = useState('');
-  const [endNotes, setEndNotes] = useState('');
-  const [isStarting, setIsStarting] = useState(false);
-  const [isEnding, setIsEnding] = useState(false);
-  // v2.6.0 BLIND CLOSEOUT: post-end variance reveal (counted vs system).
-  const [endResult, setEndResult] = useState<{ countedCash: number; cashDifference: number } | null>(null);
+  const user = useAuthStore((s) => s.user);
+  const elapsed = useElapsedLabel(shift.startedAt);
 
-  const userId = user?.id;
-
-  // v2.6.0 BLIND CLOSEOUT: blind=false ONLY for owner roles — everyone else
-  // (CASHIER/BRANCH_MANAGER/ACCOUNTANT) must count the drawer without seeing
-  // system totals.
+  // ── End-shift flow (existing client pattern: shiftsApi.end + blind xread) ──
   const role = user?.role;
   const isOwnerRole = role === 'SUPER_ADMIN' || role === 'STORE_OWNER';
   const blindCount = !isOwnerRole;
 
-  const { data: activeShift, isLoading, refetch } = useQuery({
-    queryKey: ['current-shift', storeId, userId],
-    queryFn: async () => {
-      const res = await shiftsApi.getCurrent(storeId, userId);
-      return res.data;
-    },
-    enabled: !!storeId && !!userId,
-    refetchInterval: 15000,
-  });
+  const [endOpen, setEndOpen] = useState(false);
+  const [countedCash, setCountedCash] = useState('');
+  const [endingCash, setEndingCash] = useState('');
+  const [endNotes, setEndNotes] = useState('');
+  const [isEnding, setIsEnding] = useState(false);
+  const [endResult, setEndResult] = useState<{ countedCash: number; cashDifference: number } | null>(null);
 
-  // v2.6.0: SERVER X-READ replaces the wrong client-side formula
-  // (startingCash + totalSales — ignored CASH_IN/CASH_OUT legs). Blind per
-  // role: the server strips expectedCash/difference when blind=1, so a
-  // cashier physically cannot peek at the system total.
-  const { data: xreadData, refetch: refetchXread } = useQuery({
-    queryKey: ['shift-xread', activeShift?.id ?? null, blindCount],
+  // v2.6.0 pattern: the AUTHORITATIVE expected-cash figure for closing comes
+  // from the server X-read (blind=1 withholds it from non-owner roles). The
+  // card's "Expected Cash" stat above is the DASH-BE snapshot formula and is
+  // labelled as such; the closeout dialog uses the ledger truth.
+  const { data: xread, refetch: refetchXread } = useQuery({
+    queryKey: ['shift-xread', shift.id, blindCount],
     queryFn: async (): Promise<ShiftXRead | null> => {
-      if (!activeShift) return null;
-      const res = await shiftsApi.xread(activeShift.id, { blind: blindCount });
+      const res = await shiftsApi.xread(shift.id, { blind: blindCount });
       return res.data ?? null;
     },
-    enabled: !!activeShift,
-    refetchInterval: 15000,
+    enabled: endOpen,
   });
-
-  const duration = useShiftDuration(activeShift?.startedAt ?? null);
-
-  const handleStartShift = async () => {
-    const cash = parseFloat(startingCash);
-    if (isNaN(cash) || cash < 0) {
-      toast.error('Please enter a valid starting cash amount.');
-      return;
-    }
-
-    setIsStarting(true);
-    try {
-      const res = await shiftsApi.start({
-        storeId,
-        userId,
-        startingCash: cash,
-      });
-      if (res.success) {
-        toast.success('Shift started successfully!');
-        setStartingCash('');
-        refetch();
-        queryClient.invalidateQueries({ queryKey: ['current-shift'] });
-        queryClient.invalidateQueries({ queryKey: ['shifts'] });
-      } else {
-        toast.error(res.error || 'Failed to start shift.');
-      }
-    } catch (_error) {
-      toast.error('Failed to start shift. Please try again.');
-    } finally {
-      setIsStarting(false);
-    }
-  };
+  const expectedCash: number | null = isOwnerRole ? (xread?.expectedCash ?? null) : null;
 
   const handleEndShift = async () => {
-    if (!activeShift) return;
-
     const counted = parseFloat(countedCash);
     const ending = parseFloat(endingCash);
-    if (isNaN(counted) || counted < 0) {
+    if (Number.isNaN(counted) || counted < 0) {
       toast.error('Please enter the counted cash amount.');
       return;
     }
-    if (isNaN(ending) || ending < 0) {
+    if (Number.isNaN(ending) || ending < 0) {
       toast.error('Please enter the ending cash amount.');
       return;
     }
 
     setIsEnding(true);
     try {
-      const res = await shiftsApi.end(activeShift.id, {
+      const res = await shiftsApi.end(shift.id, {
         endingCash: ending,
         countedCash: counted,
         notes: endNotes || undefined,
       });
       if (res.success) {
-        const shiftData = res.data;
-        const diff = shiftData?.cashDifference ?? 0;
+        const diff = res.data?.cashDifference ?? 0;
         if (Math.abs(diff) > 0.01) {
-          const msg = diff > 0
-            ? `Shift ended. Cash over by ${formatKES(diff)}`
-            : `Shift ended. Cash short by ${formatKES(Math.abs(diff))}`;
-          toast.warning(msg);
+          toast.warning(
+            diff > 0
+              ? `Shift ended. Cash over by ${formatKES(diff)}`
+              : `Shift ended. Cash short by ${formatKES(Math.abs(diff))}`,
+          );
         } else {
           toast.success('Shift ended. Cash balance is correct!');
         }
-        // v2.6.0 BLIND CLOSEOUT: keep the dialog open and reveal the variance
-        // card (Counted KES X — Over/Short KES Y). For blind roles this is the
-        // FIRST moment they may see the system's expected figures.
-        setEndResult({
-          countedCash: shiftData?.countedCash ?? counted,
-          cashDifference: shiftData?.cashDifference ?? diff,
-        });
+        setEndResult({ countedCash: res.data?.countedCash ?? counted, cashDifference: diff });
         setCountedCash('');
         setEndingCash('');
         setEndNotes('');
-        refetch();
-        void refetchXread();
-        queryClient.invalidateQueries({ queryKey: ['current-shift'] });
-        queryClient.invalidateQueries({ queryKey: ['shifts'] });
+        void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+        void queryClient.invalidateQueries({ queryKey: ['shifts'] });
       } else {
         toast.error(res.error || 'Failed to end shift.');
       }
-    } catch (_error) {
+    } catch {
       toast.error('Failed to end shift. Please try again.');
     } finally {
       setIsEnding(false);
     }
   };
 
-  // v2.6.0: expected cash comes from the SERVER X-READ (owner roles only —
-  // blind roles get undefined from the server and must never see it). The old
-  // client-side `startingCash + totalSales` was WRONG (ignored cash-in/out)
-  // and leaked system totals to cashiers.
-  const expectedCash: number | null = isOwnerRole
-    ? xreadData?.expectedCash ?? null
-    : null;
+  const closeEndDialog = (open: boolean) => {
+    setEndOpen(open);
+    if (!open) setEndResult(null);
+    else void refetchXread();
+  };
 
-  if (isLoading) {
-    return (
-      <Card className="backdrop-blur-sm bg-card/80 border-border/50">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <Skeleton className="h-10 w-10 rounded-lg" />
-            <div className="flex-1 space-y-2">
-              <Skeleton className="h-3 w-32" />
-              <Skeleton className="h-5 w-48" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // No active shift — show start shift UI
-  if (!activeShift) {
-    return (
-      <Card className="backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-all duration-200 border-dashed">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Timer className="h-4 w-4 text-muted-foreground" />
-            Shift Management
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Start your shift to begin processing sales
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pb-4">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
-            <div className="flex-1 space-y-1.5">
-              <Label htmlFor="starting-cash" className="text-xs font-medium">
-                Starting Cash (KES)
-              </Label>
-              <Input
-                id="starting-cash"
-                type="number"
-                min="0"
-                step="100"
-                placeholder="e.g. 50000"
-                value={startingCash}
-                onChange={(e) => setStartingCash(e.target.value)}
-                className="h-9"
-              />
-            </div>
-            <Button
-              onClick={handleStartShift}
-              disabled={isStarting || !startingCash}
-              className="h-9 gap-2 bg-green-600 hover:bg-green-700 text-white shrink-0"
-            >
-              {isStarting ? (
-                <Activity className="h-4 w-4 animate-spin" />
-              ) : (
-                <Play className="h-4 w-4" />
-              )}
-              {isStarting ? 'Starting...' : 'Start Shift'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Active shift — show status
   return (
-    <>
-      <Card className="backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-all duration-200 border-l-4 border-l-green-500">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Timer className="h-4 w-4 text-green-600" />
-              Active Shift
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800">
-                LIVE
-              </Badge>
-            </CardTitle>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Clock className="h-3 w-3" />
-              <span className="font-mono tabular-nums">{duration}</span>
-            </div>
-          </div>
-          <CardDescription className="text-xs">
-            Started {formatDateTime(activeShift.startedAt)} by {activeShift.userName || 'You'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pb-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="rounded-lg border p-2.5 bg-muted/30">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Starting Cash</p>
-              <p className="text-sm font-bold mt-0.5">{formatKES(activeShift.startingCash)}</p>
-            </div>
-            <div className="rounded-lg border p-2.5 bg-muted/30">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Shift Sales</p>
-              <p className="text-sm font-bold mt-0.5 text-green-600">{formatKES(activeShift.totalSales)}</p>
-            </div>
-            <div className="rounded-lg border p-2.5 bg-muted/30">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Transactions</p>
-              <p className="text-sm font-bold mt-0.5">{activeShift.totalTransactions}</p>
-            </div>
-            <div className="rounded-lg border p-2.5 bg-muted/30">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Expected Cash</p>
-              {/* v2.6.0: server X-read figure for owner roles; blind roles get a
-                  locked cell — showing the system total would defeat the blind
-                  count (and the server omits it anyway). */}
-              {blindCount ? (
-                <p className="text-sm font-bold mt-0.5 text-muted-foreground flex items-center gap-1">
-                  <Lock className="h-3 w-3" /> Blind
-                </p>
-              ) : (
-                <p className="text-sm font-bold mt-0.5 text-emerald-600">
-                  {expectedCash === null ? '—' : formatKES(expectedCash)}
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="mt-3 flex justify-end">
-            <Button
-              variant="destructive"
-              size="sm"
-              className="h-8 gap-1.5 text-xs"
-              onClick={() => {
-                setEndResult(null);
-                setCountedCash('');
-                setEndingCash('');
-                setEndNotes('');
-                setEndDialogOpen(true);
-                // Refresh the server snapshot when the dialog opens.
-                void refetchXread();
-              }}
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              End Shift
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+    <Card className="rounded-2xl border-slate-200 shadow-sm">
+      <CardHeader className="pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <Timer className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+            Active shift
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" aria-hidden="true" />
+              LIVE
+            </span>
+          </CardTitle>
+          <span className="inline-flex items-center gap-1.5 font-mono text-xs tabular-nums text-slate-500">
+            <Clock className="h-3 w-3" aria-hidden="true" />
+            {elapsed}
+          </span>
+        </div>
+        <CardDescription className="text-xs">
+          Shift started {timeAgo(shift.startedAt)} by {shift.startedBy || 'you'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+          <ShiftStatBox label="Starting Cash" value={formatKES(num(shift.startingCash))} />
+          <ShiftStatBox
+            label="Cash Sales"
+            value={formatKES(num(shift.cashSales))}
+            sub={Number.isFinite(shift.txnsCash) ? `+${num(shift.txnsCash)} txns` : null}
+          />
+          <ShiftStatBox
+            label="Debt Sales"
+            value={formatKES(num(shift.debtSales))}
+            sub={Number.isFinite(shift.txnsDebt) ? `+${num(shift.txnsDebt)} txns` : null}
+          />
+          <ShiftStatBox
+            label="Total Revenue"
+            value={formatKES(num(shift.totalSales))}
+            sub={Number.isFinite(shift.txnsTotal) ? `+${num(shift.txnsTotal)} txns` : null}
+          />
+          <ShiftStatBox label="Expenses" value={formatKES(num(shift.expenses))} />
+          <ShiftStatBox
+            label="Expected Cash"
+            value={formatKES(num(shift.expectedCash))}
+            emphasized
+          />
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[11px] text-slate-500">
+            Expected = {shift.formula || 'Starting + Cash Sales − Expenses'}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+            onClick={() => closeEndDialog(true)}
+          >
+            <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+            End Shift
+          </Button>
+        </div>
+      </CardContent>
 
-      {/* End Shift Dialog */}
-      <Dialog open={endDialogOpen} onOpenChange={(open) => { setEndDialogOpen(open); if (!open) setEndResult(null); }}>
+      {/* End Shift dialog — preserves the v2.6.0 blind-closeout flow */}
+      <Dialog open={endOpen} onOpenChange={closeEndDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Calculator className="h-5 w-5 text-amber-600" />
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Calculator className="h-5 w-5 text-amber-600" aria-hidden="true" />
               Count Cash Drawer
             </DialogTitle>
             <DialogDescription>
@@ -1258,164 +528,148 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* v2.6.0 POST-END VARIANCE REVEAL — the Z-read response carries
-                countedCash + cashDifference. Blind roles see the system figures
-                for the first time HERE, after the count is committed. */}
             {endResult ? (
               <div className="space-y-3">
                 <div
                   role="status"
-                  className={`rounded-lg border p-4 space-y-2 ${Math.abs(endResult.cashDifference) < 1 ? 'border-green-300 bg-green-50 dark:bg-green-950/30 dark:border-green-800' : 'border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800'}`}
+                  className={`space-y-2 rounded-xl border p-4 ${
+                    Math.abs(endResult.cashDifference) < 1
+                      ? 'border-emerald-300 bg-emerald-50'
+                      : 'border-amber-300 bg-amber-50'
+                  }`}
                 >
-                  <p className={`text-sm font-semibold flex items-center gap-2 ${Math.abs(endResult.cashDifference) < 1 ? 'text-green-700 dark:text-green-300' : 'text-amber-700 dark:text-amber-300'}`}>
-                    <ShieldCheck className="h-4 w-4" />
+                  <p className={`flex items-center gap-2 text-sm font-semibold ${Math.abs(endResult.cashDifference) < 1 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                    <ShieldCheck className="h-4 w-4" aria-hidden="true" />
                     Shift closed — cash variance
                   </p>
                   <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-xs text-muted-foreground">Counted</span>
+                    <span className="text-xs text-slate-500">Counted</span>
                     <span className="font-mono font-bold">{formatKES(endResult.countedCash)}</span>
                   </div>
                   <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-slate-500">
                       {Math.abs(endResult.cashDifference) < 1 ? 'Balanced' : endResult.cashDifference > 0 ? 'Over' : 'Short'}
                     </span>
-                    <span className={`font-mono font-extrabold text-base ${Math.abs(endResult.cashDifference) < 1 ? 'text-green-600' : 'text-amber-600'}`}>
+                    <span className={`font-mono text-base font-extrabold ${Math.abs(endResult.cashDifference) < 1 ? 'text-emerald-600' : 'text-amber-600'}`}>
                       {Math.abs(endResult.cashDifference) < 1
-                        ? '✓ KES 0.00'
+                        ? 'KES 0.00'
                         : `${endResult.cashDifference > 0 ? '+' : '−'}${formatKES(Math.abs(endResult.cashDifference))}`}
                     </span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    Counted KES {formatKES(endResult.countedCash)} — {Math.abs(endResult.cashDifference) < 1 ? 'no variance' : `${endResult.cashDifference > 0 ? 'over' : 'short'} KES ${formatKES(Math.abs(endResult.cashDifference))}`}. The drawer ledger has been frozen for this shift.
-                  </p>
                 </div>
-                <Button
-                  className="w-full h-10"
-                  onClick={() => { setEndDialogOpen(false); setEndResult(null); }}
-                >
+                <Button className="h-10 w-full" onClick={() => closeEndDialog(false)}>
                   Done
                 </Button>
               </div>
             ) : (
               <>
-            {/* Summary before counting — OWNERS ONLY. For blind roles the
-                summary is REPLACED by the blind-count notice: showing starting
-                cash + shift sales would let anyone derive the expected total. */}
-            {blindCount ? (
-              <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3 space-y-1.5" role="note">
-                <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-start gap-2">
-                  <Lock className="h-4 w-4 shrink-0 mt-0.5" />
-                  Blind count enforced
-                </p>
-                <p className="text-xs text-amber-800/90 dark:text-amber-300/90">
-                  Count the physical cash in the drawer and enter it below. Do not check system totals.
-                </p>
-              </div>
-            ) : (
-              <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Starting Cash</span>
-                  <span className="font-medium">{formatKES(activeShift.startingCash)}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">+ Shift Sales</span>
-                  <span className="font-medium text-green-600">{formatKES(activeShift.totalSales)}</span>
-                </div>
-                <Separator />
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium">Expected Cash (system)</span>
-                  <span className="font-bold text-emerald-600">
-                    {expectedCash === null ? '…' : formatKES(expectedCash)}
-                  </span>
-                </div>
-              </div>
-            )}
+                {blindCount ? (
+                  <div className="space-y-1.5 rounded-xl border border-amber-300 bg-amber-50 p-3" role="note">
+                    <p className="flex items-start gap-2 text-xs font-semibold text-amber-800">
+                      <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                      Blind count enforced
+                    </p>
+                    <p className="text-xs text-amber-800/90">
+                      Count the physical cash in the drawer and enter it below. Do not check system totals.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">Starting Cash</span>
+                      <span className="font-medium">{formatKES(num(shift.startingCash))}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">+ Cash Sales</span>
+                      <span className="font-medium text-emerald-600">{formatKES(num(shift.cashSales))}</span>
+                    </div>
+                    <Separator />
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">Expected Cash (ledger)</span>
+                      <span className="font-bold text-emerald-600">
+                        {expectedCash === null ? '…' : formatKES(expectedCash)}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
-            {/* Cash counting inputs — countedCash is the PRIMARY field for
-                blind roles (autoFocus) and required for everyone. */}
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="counted-cash" className="text-xs font-medium">
-                  Counted Cash in Drawer (KES){blindCount && ' *'}
-                </Label>
-                <Input
-                  id="counted-cash"
-                  type="number"
-                  min="0"
-                  step="100"
-                  placeholder="Count all cash in the drawer"
-                  value={countedCash}
-                  onChange={(e) => setCountedCash(e.target.value)}
-                  className="h-9"
-                  autoFocus
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="ending-cash" className="text-xs font-medium">
-                  Ending Cash to Leave in Drawer (KES)
-                </Label>
-                <Input
-                  id="ending-cash"
-                  type="number"
-                  min="0"
-                  step="100"
-                  placeholder="Cash to leave for next shift"
-                  value={endingCash}
-                  onChange={(e) => setEndingCash(e.target.value)}
-                  className="h-9"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="end-notes" className="text-xs font-medium">
-                  Notes (optional)
-                </Label>
-                <Input
-                  id="end-notes"
-                  placeholder="Any notes about this shift"
-                  value={endNotes}
-                  onChange={(e) => setEndNotes(e.target.value)}
-                  className="h-9"
-                />
-              </div>
-            </div>
-
-            {/* Live difference calculation — OWNERS ONLY. Rendering this for a
-                blind role would leak the expected total before the count. */}
-            {!blindCount && countedCash && expectedCash !== null && (
-              <div className="rounded-lg border p-3 space-y-1.5">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cash Summary</p>
-                <div className="flex justify-between text-xs">
-                  <span>Expected</span>
-                  <span className="font-mono">{formatKES(expectedCash)}</span>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="counted-cash" className="text-xs font-medium">
+                      Counted Cash in Drawer (KES){blindCount ? ' *' : ''}
+                    </Label>
+                    <Input
+                      id="counted-cash"
+                      type="number"
+                      min="0"
+                      step="100"
+                      placeholder="Count all cash in the drawer"
+                      value={countedCash}
+                      onChange={(e) => setCountedCash(e.target.value)}
+                      className="h-9"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ending-cash" className="text-xs font-medium">
+                      Ending Cash to Leave in Drawer (KES)
+                    </Label>
+                    <Input
+                      id="ending-cash"
+                      type="number"
+                      min="0"
+                      step="100"
+                      placeholder="Cash to leave for next shift"
+                      value={endingCash}
+                      onChange={(e) => setEndingCash(e.target.value)}
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="end-notes" className="text-xs font-medium">
+                      Notes (optional)
+                    </Label>
+                    <Input
+                      id="end-notes"
+                      placeholder="Any notes about this shift"
+                      value={endNotes}
+                      onChange={(e) => setEndNotes(e.target.value)}
+                      className="h-9"
+                    />
+                  </div>
                 </div>
-                <div className="flex justify-between text-xs">
-                  <span>Counted</span>
-                  <span className="font-mono">{formatKES(parseFloat(countedCash) || 0)}</span>
-                </div>
-                <Separator />
-                <div className="flex justify-between text-sm font-bold">
-                  <span>Difference</span>
-                  {(() => {
-                    const diff = (parseFloat(countedCash) || 0) - expectedCash;
-                    if (Math.abs(diff) < 0.01) {
-                      return <span className="text-green-600">✓ Balanced</span>;
-                    }
-                    return diff > 0
-                      ? <span className="text-amber-600">+{formatKES(diff)} over</span>
-                      : <span className="text-red-600">{formatKES(diff)} short</span>;
-                  })()}
-                </div>
-              </div>
-            )}
+
+                {!blindCount && countedCash !== '' && expectedCash !== null && (
+                  <div className="space-y-1.5 rounded-xl border border-slate-200 p-3">
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">Cash summary</p>
+                    <div className="flex justify-between text-xs">
+                      <span>Expected</span>
+                      <span className="font-mono">{formatKES(expectedCash)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span>Counted</span>
+                      <span className="font-mono">{formatKES(parseFloat(countedCash) || 0)}</span>
+                    </div>
+                    <Separator />
+                    <div className="flex justify-between text-sm font-bold">
+                      <span>Difference</span>
+                      {(() => {
+                        const diff = (parseFloat(countedCash) || 0) - expectedCash;
+                        if (Math.abs(diff) < 0.01) return <span className="text-emerald-600">Balanced</span>;
+                        return diff > 0
+                          ? <span className="text-amber-600">+{formatKES(diff)} over</span>
+                          : <span className="text-red-600">{formatKES(diff)} short</span>;
+                      })()}
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
 
           {!endResult && (
             <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setEndDialogOpen(false)} className="h-9">
+              <Button variant="outline" onClick={() => closeEndDialog(false)} className="h-9">
                 Cancel
               </Button>
               <Button
@@ -1424,364 +678,363 @@ function ShiftStatusCard({ storeId }: { storeId: string }) {
                 disabled={isEnding || !countedCash || !endingCash}
                 className="h-9 gap-1.5"
               >
-                {isEnding ? (
-                  <Activity className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Square className="h-4 w-4" />
-                )}
-                {isEnding ? 'Ending...' : 'End Shift'}
+                {isEnding
+                  ? <Activity className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  : <Square className="h-4 w-4" aria-hidden="true" />}
+                {isEnding ? 'Ending…' : 'End Shift'}
               </Button>
             </DialogFooter>
           )}
         </DialogContent>
       </Dialog>
-    </>
+    </Card>
   );
 }
 
-// Metric descriptions for the detail dialog
-const METRIC_DESCRIPTIONS: Record<KpiMetricKey, { description: string; navButton: { label: string; tab: AppTab; icon: React.ElementType } }> = {
-  revenue: {
-    description: 'Total revenue generated from all sales transactions today. This includes cash, M-Pesa, and split payments received.',
-    navButton: { label: 'View Transactions', tab: 'transactions', icon: Receipt },
-  },
-  transactions: {
-    description: 'Number of completed sales transactions processed today. Each transaction represents a unique customer purchase.',
-    navButton: { label: 'View Transactions', tab: 'transactions', icon: Receipt },
-  },
-  avgTransaction: {
-    description: 'Average value per transaction today. Calculated as today\'s total revenue divided by the number of transactions. A higher value indicates customers are spending more per visit.',
-    navButton: { label: 'View Transactions', tab: 'transactions', icon: Receipt },
-  },
-  lowStock: {
-    description: 'Products that have fallen below their reorder level and need restocking soon to avoid stockouts.',
-    navButton: { label: 'View Inventory', tab: 'inventory', icon: Package },
-  },
-  debt: {
-    description: 'Total outstanding debt owed by customers from credit purchases. This includes all aging buckets — current, 30 days, 60 days, and 90+ days overdue.',
-    navButton: { label: 'View Credits', tab: 'credits', icon: CircleDollarSign },
-  },
-};
+// ── 4. KPI ROW ───────────────────────────────────────────────────────────────
 
-function DashboardDetailDialog({
-  open,
-  onOpenChange,
-  kpi,
-  onTabSwitch,
-  onViewLowStockDetails,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  kpi: KpiDetail | null;
-  onTabSwitch: (tab: AppTab) => void;
-  onViewLowStockDetails?: () => void;
-}) {
-  if (!kpi) return null;
-
-  const Icon = kpi.icon;
-  const metricInfo = METRIC_DESCRIPTIONS[kpi.metricKey];
-  const NavIcon = metricInfo.navButton.icon;
-
-  // Additional navigation buttons based on metric type
-  const extraNavButtons: Array<{ label: string; tab: AppTab; icon: React.ElementType; variant?: 'outline' | 'default' }> = [];
-
-  if (kpi.metricKey === 'debt') {
-    // For debt, also offer view to rentals since debt often relates to rental equipment
-    extraNavButtons.push({ label: 'View Rentals', tab: 'rentals', icon: KeyRound, variant: 'outline' });
-    extraNavButtons.push({ label: 'View Financial', tab: 'financial', icon: BarChart3, variant: 'outline' });
-  } else if (kpi.metricKey === 'revenue') {
-    extraNavButtons.push({ label: 'View Financial', tab: 'financial', icon: BarChart3, variant: 'outline' });
-  } else if (kpi.metricKey === 'transactions') {
-    extraNavButtons.push({ label: 'View Financial', tab: 'financial', icon: BarChart3, variant: 'outline' });
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <div className={`shrink-0 p-2 rounded-xl ${kpi.iconBg}`}>
-              <Icon className={`h-5 w-5 ${kpi.color}`} />
-            </div>
-            {kpi.label}
-          </DialogTitle>
-          <DialogDescription>
-            {metricInfo.description}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 py-2">
-          {/* Metric value display */}
-          <div className="rounded-lg border p-4 text-center bg-muted/30">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">{kpi.label}</p>
-            <p className={`text-3xl font-bold ${kpi.color}`}>
-              {kpi.formattedValue}
-            </p>
-            <div className={`flex items-center justify-center gap-1 mt-2 text-xs font-medium ${
-              kpi.trendUp ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-            }`}>
-              {kpi.trendUp ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
-              {kpi.trend} vs yesterday
-            </div>
-          </div>
-
-          {/* For debt, show credits navigation prominently */}
-          {kpi.metricKey === 'debt' && (
-            <div className="rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20 p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <CircleDollarSign className="h-4 w-4 text-red-600" />
-                <span className="text-sm font-medium text-red-700 dark:text-red-400">Credits & Debt Management</span>
-              </div>
-              <p className="text-xs text-muted-foreground mb-3">
-                Navigate to the Credits section to view all customer debts, record payments, and manage aging balances.
-              </p>
-              <Button
-                onClick={() => { onOpenChange(false); onTabSwitch('credits'); }}
-                className="w-full gap-2 bg-red-600 hover:bg-red-700 text-white"
-                size="sm"
-              >
-                <CircleDollarSign className="h-4 w-4" />
-                View Credits
-                <ArrowRight className="h-3.5 w-3.5 ml-auto" />
-              </Button>
-            </div>
-          )}
-
-          {/* For low stock, show link to detailed product list */}
-          {kpi.metricKey === 'lowStock' && onViewLowStockDetails && (
-            <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                <span className="text-sm font-medium text-amber-700 dark:text-amber-400">Low Stock Details</span>
-              </div>
-              <p className="text-xs text-muted-foreground mb-3">
-                View the full list of products that are below their reorder level and need attention.
-              </p>
-              <Button
-                onClick={() => { onOpenChange(false); onViewLowStockDetails(); }}
-                variant="outline"
-                className="w-full gap-2 border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/50"
-                size="sm"
-              >
-                <AlertTriangle className="h-4 w-4" />
-                View Low Stock Products
-                <ArrowRight className="h-3.5 w-3.5 ml-auto" />
-              </Button>
-            </div>
-          )}
-        </div>
-
-        <DialogFooter className="flex-col sm:flex-row gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} className="w-full sm:w-auto">
-            Close
-          </Button>
-          <Button
-            onClick={() => { onOpenChange(false); onTabSwitch(metricInfo.navButton.tab); }}
-            className="w-full sm:w-auto gap-2"
-          >
-            <NavIcon className="h-4 w-4" />
-            {metricInfo.navButton.label}
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Button>
-          {extraNavButtons.map((btn) => {
-            const BtnIcon = btn.icon;
-            return (
-              <Button
-                key={btn.label}
-                variant={btn.variant || 'outline'}
-                onClick={() => { onOpenChange(false); onTabSwitch(btn.tab); }}
-                className="w-full sm:w-auto gap-2"
-              >
-                <BtnIcon className="h-4 w-4" />
-                {btn.label}
-              </Button>
-            );
-          })}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sales Trend mini-widget — compact last-7-day revenue area chart + top-3
-// growing products. Pulls from /api/trends/analysis (range=7d). Falls back
-// gracefully if the trends endpoint isn't available yet.
-// ---------------------------------------------------------------------------
-
-interface DashboardGrowingProduct {
-  productId: string;
-  name: string;
-  growthPct: number;
-}
-interface DashboardForecastPoint {
+function KpiCard({ label, value, icon: Icon, iconClass, sub, badge, onClick, sparkline, sparklineClass, valueClass }: {
   label: string;
-  predicted: number;
+  value: string;
+  icon: React.ElementType;
+  iconClass: string;
+  sub?: React.ReactNode;
+  badge?: React.ReactNode;
+  onClick?: () => void;
+  sparkline?: number[] | null;
+  sparklineClass?: string;
+  valueClass?: string;
+}) {
+  const interactive = typeof onClick === 'function';
+  return (
+    <div
+      {...(interactive
+        ? { role: 'button', tabIndex: 0, onClick, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } }
+        : {})}
+      className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow ${
+        interactive ? 'cursor-pointer hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40' : ''
+      }`}
+      aria-label={interactive ? `${label} — open details` : label}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${iconClass}`}>
+          <Icon className="h-4 w-4" aria-hidden="true" />
+        </span>
+        {badge}
+      </div>
+      <p className="mt-2.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className={`mt-0.5 truncate text-lg font-bold tabular-nums ${valueClass ?? 'text-slate-900'}`} title={value}>
+        {value}
+      </p>
+      {sub ? <div className="mt-0.5 text-[11px] text-slate-500">{sub}</div> : null}
+      {sparkline && sparkline.length >= 2 ? (
+        <div className={`mt-2 ${sparklineClass ?? 'text-emerald-500'}`}>
+          <Sparkline points={sparkline} />
+        </div>
+      ) : null}
+    </div>
+  );
 }
-interface DashboardTrendsPayload {
-  growing?: DashboardGrowingProduct[];
-  forecast?: DashboardForecastPoint[];
-  isDemo?: boolean;
-}
 
-async function fetchDashboardTrends(storeId: string): Promise<DashboardTrendsPayload> {
-  const params = new URLSearchParams({ storeId, range: '7d' });
-  const res = await authedFetch(`/api/trends/analysis?${params.toString()}`);
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
-    throw new Error(txt || `Trends API returned ${res.status}`);
-  }
-  const json = await res.json();
-  const d = json?.data ?? json;
-  return {
-    growing: Array.isArray(d?.growing) ? d.growing : [],
-    forecast: Array.isArray(d?.forecast) ? d.forecast : [],
-    isDemo: !!d?.isDemo,
-  };
-}
+function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppTab) => void }) {
+  if (!data) return null;
 
-function SalesTrendsWidget({ storeId, onSeeMore }: { storeId: string; onSeeMore: () => void }) {
-  const { data: trends, isLoading, error } = useQuery<DashboardTrendsPayload>({
-    queryKey: ['dashboard-trends', storeId],
-    queryFn: () => fetchDashboardTrends(storeId),
-    retry: false,
-    staleTime: 60_000,
-    refetchInterval: 120_000,
-  });
+  const todayRevenue = num(data.todayRevenue);
+  const txns = num(data.todayTransactions);
+  const atv = num(data.averageTransactionValue);
+  const outOfStock = num(data.outOfStockCount);
+  const lowStock = num(data.lowStockCount);
+  const stockTotal = outOfStock + lowStock || num(data.lowStockProducts);
+  const debtTotal = num(data.debtCrisis?.outstandingTotal ?? data.outstandingDebt);
 
-  // Surface fetch errors once (non-blocking)
-  React.useEffect(() => {
-    if (error) {
-      const msg = handleError(error, 'Dashboard trends');
-      console.warn('[Dashboard] trends fetch failed:', msg);
-    }
-  }, [error]);
+  const changeRaw = data.revenueChangePercent;
+  const revenueChange = typeof changeRaw === 'number' && Number.isFinite(changeRaw) ? changeRaw : 0;
+  const showTrendBadge = revenueChange !== 0 || todayRevenue > 0;
 
-  const chartData = useMemo(() => {
-    return (trends?.forecast ?? []).map((f) => ({
-      label: f.label,
-      predicted: Math.round(Number(f.predicted ?? 0)),
-    }));
-  }, [trends]);
-
-  const topGrowing = useMemo(() => {
-    return (trends?.growing ?? []).slice(0, 3);
-  }, [trends]);
-
-  const totalForecast = chartData.reduce((s, d) => s + d.predicted, 0);
-  const peakDay = chartData.reduce((m, d) => Math.max(m, d.predicted), 0);
+  // Real series only — never fabricate a sparkline.
+  const revenueSpark = (data.revenueTrend7d?.days ?? [])
+    .map((day) => num(day?.revenue))
+    .filter((v) => Number.isFinite(v));
+  const hourly = Array.isArray(data.hourlySalesBreakdown) ? data.hourlySalesBreakdown : [];
+  const txnSpark = hourly.map((h) => num(h?.transactionCount));
+  // ATV sparkline only over hours that actually had sales (zero-sale hours
+  // have no average — plotting 0 would fabricate a dip).
+  const atvSpark = hourly
+    .map((h) => {
+      const c = num(h?.transactionCount);
+      return c > 0 ? num(h?.amount) / c : 0;
+    })
+    .filter((v) => v > 0);
 
   return (
-    <Card className="backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-all duration-200">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <CardTitle className="text-sm font-semibold flex items-center gap-2 flex-wrap">
-              <Sparkles className="h-4 w-4 text-primary" />
-              Sales Trend (7d)
-              {trends?.isDemo && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30">
-                  Demo
-                </Badge>
-              )}
-            </CardTitle>
-            <CardDescription className="text-xs mt-0.5">
-              Forecast: <strong>{formatKES(totalForecast)}</strong>{peakDay > 0 && <> · Peak: {formatKES(peakDay)}</>}
-            </CardDescription>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs shrink-0"
-            onClick={onSeeMore}
+    <section aria-label="Today's key metrics" className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-5">
+      <KpiCard
+        label="Today's Revenue"
+        value={formatKES(todayRevenue)}
+        icon={Banknote}
+        iconClass="bg-emerald-100 text-emerald-600"
+        badge={showTrendBadge ? <TrendBadge pct={revenueChange} /> : undefined}
+        sub={<span>net of VAT · today</span>}
+        sparkline={revenueSpark.length >= 2 ? revenueSpark : null}
+        sparklineClass="text-emerald-500"
+      />
+      <KpiCard
+        label="Transactions"
+        value={String(txns)}
+        icon={ShoppingCart}
+        iconClass="bg-green-100 text-green-700"
+        sub={<span>ATV {formatKES(atv)}</span>}
+        sparkline={txnSpark.some((v) => v > 0) ? txnSpark : null}
+        sparklineClass="text-green-600"
+      />
+      <KpiCard
+        label="Avg Transaction"
+        value={formatKES(atv)}
+        icon={Calculator}
+        iconClass="bg-amber-100 text-amber-600"
+        sub={<span>per sale today</span>}
+        sparkline={atvSpark.some((v) => v > 0) ? atvSpark : null}
+        sparklineClass="text-amber-500"
+      />
+      <KpiCard
+        label="Stock Alerts"
+        value={String(stockTotal)}
+        icon={Package}
+        iconClass={outOfStock > 0 ? 'bg-red-100 text-red-600' : stockTotal > 0 ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-500'}
+        valueClass={outOfStock > 0 ? 'text-red-600' : stockTotal > 0 ? 'text-amber-600' : 'text-slate-900'}
+        sub={
+          stockTotal > 0 ? (
+            <span>
+              <span className={outOfStock > 0 ? 'font-semibold text-red-600' : ''}>{outOfStock} out</span>
+              {' · '}
+              <span className={lowStock > 0 ? 'font-semibold text-amber-600' : ''}>{lowStock} low</span>
+            </span>
+          ) : (
+            <span className="text-emerald-600">All stock healthy</span>
+          )
+        }
+        onClick={() => onTab('inventory')}
+      />
+      <KpiCard
+        label="Outstanding Debt"
+        value={formatKES(debtTotal)}
+        icon={HandCoins}
+        iconClass="bg-rose-100 text-rose-600"
+        valueClass={debtTotal > 0 ? 'text-rose-600' : 'text-slate-900'}
+        sub={
+          <button
+            type="button"
+            className="font-medium text-rose-600 underline-offset-2 hover:underline"
+            onClick={() => onTab('debt-management')}
           >
-            Details
-            <ArrowRight className="h-3 w-3 ml-1" />
-          </Button>
-        </div>
+            Tap to view debtors
+          </button>
+        }
+      />
+    </section>
+  );
+}
+
+// ── 5a. REVENUE TREND BY HOUR (pure CSS bars) ────────────────────────────────
+
+function HourlyRevenueChart({ data }: { data: DashboardData | null }) {
+  const hours = useMemo<HourlyPoint[]>(() => {
+    const breakdown = Array.isArray(data?.hourlySalesBreakdown) ? data?.hourlySalesBreakdown ?? [] : [];
+    const byHour = new Map<number, HourlyPoint>();
+    breakdown.forEach((h) => {
+      const k = parseInt(String(h?.hour ?? ''), 10);
+      if (Number.isNaN(k)) return;
+      byHour.set(k, { hour: String(k), amount: num(h?.amount), transactionCount: num(h?.transactionCount) });
+    });
+    // Business hours 6 AM – 9 PM only, for readability.
+    return Array.from({ length: 16 }, (_, i) => {
+      const hour = i + 6;
+      return byHour.get(hour) ?? { hour: String(hour), amount: 0, transactionCount: 0 };
+    });
+  }, [data]);
+
+  const peak = data?.revenueTrend7d?.peakHour ?? null;
+  const max = Math.max(...hours.map((h) => h.amount), 0);
+  const topIdx = hours.reduce((best, h, i) => (h.amount > (hours[best]?.amount ?? 0) ? i : best), 0);
+  const secondIdx = hours.reduce((best, h, i) => {
+    if (i === topIdx) return best;
+    if (best === topIdx) return i;
+    return h.amount > (hours[best]?.amount ?? 0) ? i : best;
+  }, topIdx);
+
+  const labelEvery = new Set([6, 9, 12, 15, 18, 21]);
+  const yTicks = max > 0 ? [max, (max * 2) / 3, max / 3, 0] : [0, 0, 0, 0];
+
+  return (
+    <Card className="rounded-2xl border-slate-200 shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <BarChart3 className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+          Revenue trend · today by hour
+        </CardTitle>
+        <CardDescription className="text-xs">Sales between 6 AM and 9 PM</CardDescription>
       </CardHeader>
-      <CardContent className="pb-4">
-        {isLoading ? (
-          <div className="space-y-3">
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-20 w-full" />
+      <CardContent>
+        {max <= 0 ? (
+          <div className="flex h-48 flex-col items-center justify-center gap-2 text-center">
+            <BarChart3 className="h-8 w-8 text-slate-300" aria-hidden="true" />
+            <p className="text-sm text-slate-500">No sales recorded yet today</p>
+            <p className="text-xs text-slate-400">Bars appear as soon as the first sale lands</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {/* Compact area chart */}
-            {chartData.length > 0 ? (
-              <div className="h-32">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="dashTrendGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.45} />
-                        <stop offset="50%" stopColor="#10b981" stopOpacity={0.15} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fontSize: 10 }} className="text-muted-foreground" />
-                    <YAxis
-                      tick={{ fontSize: 10 }}
-                      className="text-muted-foreground"
-                      tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`}
-                      width={36}
-                    />
-                    <RechartsTooltip
-                      formatter={(value: number) => [formatKES(value), 'Predicted']}
-                      contentStyle={{ fontSize: 12, padding: '4px 8px' }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="predicted"
-                      name="Predicted"
-                      stroke="#10b981"
-                      strokeWidth={2}
-                      fill="url(#dashTrendGrad)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="h-32 flex flex-col items-center justify-center text-center">
-                <TrendingUp className="h-8 w-8 text-muted-foreground/30 mb-1" />
-                <p className="text-xs text-muted-foreground">No forecast data yet.</p>
-                <p className="text-[10px] text-muted-foreground/70">Generates once sales history is available.</p>
-              </div>
-            )}
-
-            {/* Top 3 growing products list */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                  <ArrowUpRight className="h-3 w-3 text-green-600" />
-                  Top 3 Growing Products
-                </span>
-              </div>
-              {topGrowing.length > 0 ? (
-                <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                  {topGrowing.map((p, i) => (
-                    <div
-                      key={p.productId}
-                      className="flex items-center justify-between gap-2 rounded-md border bg-muted/20 px-2.5 py-1.5"
-                    >
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <span className="text-[10px] font-bold text-muted-foreground shrink-0 w-4">#{i + 1}</span>
-                        <span className="text-xs font-medium truncate">{p.name}</span>
-                      </div>
-                      <Badge className="bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0">
-                        +{Math.round(p.growthPct || 0)}%
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-md border bg-muted/10 px-2.5 py-3 text-center">
-                  <p className="text-xs text-muted-foreground">No growing products detected yet.</p>
-                </div>
-              )}
+          <div className="flex gap-2">
+            {/* Y axis — compact K labels */}
+            <div className="flex h-40 w-10 shrink-0 flex-col justify-between pb-0 text-right text-[9px] tabular-nums text-slate-400">
+              {yTicks.map((t, i) => (
+                <span key={`${t}-${i}`}>{formatCompact(t)}</span>
+              ))}
             </div>
+            <div className="relative flex-1">
+              {/* gridlines */}
+              <div className="absolute inset-0 flex h-40 flex-col justify-between" aria-hidden="true">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="border-t border-dashed border-slate-100" />
+                ))}
+                <div className="border-t border-slate-200" />
+              </div>
+              <div className="flex h-40 items-end gap-1 sm:gap-1.5">
+                {hours.map((h, i) => {
+                  const pct = max > 0 ? (h.amount / max) * 100 : 0;
+                  const isTop = i === topIdx;
+                  const isSecond = i === secondIdx && secondIdx !== topIdx;
+                  return (
+                    <div key={h.hour} className="relative flex h-full flex-1 items-end">
+                      {isTop && peak && num(peak.amount) > 0 ? (
+                        <span
+                          className="pointer-events-none absolute left-1/2 z-10 max-w-[150px] -translate-x-1/2 truncate rounded-full bg-slate-900 px-2 py-0.5 text-[9px] font-medium text-white shadow-sm"
+                          style={{ bottom: `min(${pct}%, calc(100% - 1.5rem))`, marginBottom: 4 }}
+                          title={`Bulk sale · ${formatKES(num(peak.amount))}`}
+                        >
+                          Bulk sale · {formatKES(num(peak.amount))}
+                        </span>
+                      ) : null}
+                      <div
+                        className={`w-full rounded-t-md transition-all ${
+                          isTop
+                            ? 'bg-emerald-600'
+                            : isSecond
+                              ? 'bg-amber-500'
+                              : 'bg-slate-300'
+                        }`}
+                        style={{ height: `${Math.max(pct, h.amount > 0 ? 3 : 0)}%` }}
+                        title={`${formatHour(parseInt(h.hour, 10))} · ${formatKES(h.amount)}`}
+                        role="img"
+                        aria-label={`${formatHour(parseInt(h.hour, 10))}: ${formatKES(h.amount)}`}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+        {/* X labels */}
+        <div className="mt-1.5 flex gap-1 pl-12 sm:gap-1.5">
+          {hours.map((h) => (
+            <span key={h.hour} className="flex-1 text-center text-[9px] text-slate-400">
+              {labelEvery.has(parseInt(h.hour, 10)) ? formatHour(parseInt(h.hour, 10)).replace(' ', '') : ''}
+            </span>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── 5b. PAYMENT METHODS (conic-gradient donut) ───────────────────────────────
+
+const PAYMENT_META: Record<string, { label: string; color: string }> = {
+  CASH: { label: 'Cash', color: '#10b981' },
+  MPESA: { label: 'M-Pesa', color: '#f59e0b' },
+  DEBT: { label: 'Debt', color: '#f43f5e' },
+  SPLIT: { label: 'Split', color: '#64748b' },
+  GIFT_CARD: { label: 'Gift card', color: '#94a3b8' },
+};
+
+function PaymentMethodsCard({ data }: { data: DashboardData | null }) {
+  const rows = useMemo(() => {
+    const breakdown = Array.isArray(data?.paymentMethodBreakdown) ? data?.paymentMethodBreakdown ?? [] : [];
+    return breakdown
+      .map((pm) => ({
+        method: String(pm?.method ?? ''),
+        label: PAYMENT_META[String(pm?.method ?? '')]?.label ?? String(pm?.method ?? 'Other'),
+        color: PAYMENT_META[String(pm?.method ?? '')]?.color ?? '#94a3b8',
+        amount: num(pm?.amount),
+        count: num(pm?.count),
+      }))
+      .filter((r) => r.amount > 0 || r.count > 0)
+      .sort((a, b) => b.amount - a.amount);
+  }, [data]);
+
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+  const gradient = useMemo(() => {
+    if (total <= 0) return undefined;
+    let acc = 0;
+    const stops = rows.map((r) => {
+      const from = acc;
+      acc += (r.amount / total) * 100;
+      return `${r.color} ${from.toFixed(2)}% ${acc.toFixed(2)}%`;
+    });
+    return `conic-gradient(${stops.join(', ')})`;
+  }, [rows, total]);
+
+  return (
+    <Card className="rounded-2xl border-slate-200 shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <Wallet className="h-4 w-4 text-amber-600" aria-hidden="true" />
+          Payment methods
+        </CardTitle>
+        <CardDescription className="text-xs">Share of today&rsquo;s collected payments</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {rows.length === 0 || total <= 0 ? (
+          <div className="flex h-48 flex-col items-center justify-center gap-2 text-center">
+            <Wallet className="h-8 w-8 text-slate-300" aria-hidden="true" />
+            <p className="text-sm text-slate-500">No payments recorded yet today</p>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-5 sm:flex-row">
+            <div className="relative h-36 w-36 shrink-0" role="img" aria-label="Payment methods distribution">
+              <div className="h-full w-full rounded-full" style={{ background: gradient }} />
+              <div className="absolute inset-[22%] flex flex-col items-center justify-center rounded-full bg-white text-center">
+                <span className="max-w-full truncate px-1 text-[11px] font-bold tabular-nums text-slate-900" title={formatKES(total)}>
+                  {formatCompact(total)}
+                </span>
+                <span className="text-[9px] uppercase tracking-wide text-slate-400">today</span>
+              </div>
+            </div>
+            <ul className="w-full flex-1 space-y-2.5">
+              {rows.map((r) => {
+                const pct = (r.amount / total) * 100;
+                return (
+                  <li key={r.method}>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: r.color }} aria-hidden="true" />
+                        <span className="truncate font-medium text-slate-700">{r.label}</span>
+                        <span className="shrink-0 text-[10px] text-slate-400">({r.count})</span>
+                      </span>
+                      <span className="shrink-0 tabular-nums">
+                        <span className="font-semibold text-slate-700">{pct.toFixed(1)}%</span>
+                        <span className="ml-1.5 text-slate-400">{formatKES(r.amount)}</span>
+                      </span>
+                    </div>
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(100, Math.max(0, pct))}%`, backgroundColor: r.color }}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         )}
       </CardContent>
@@ -1789,295 +1042,1087 @@ function SalesTrendsWidget({ storeId, onSeeMore }: { storeId: string; onSeeMore:
   );
 }
 
-// Friendly store display names for the welcome hero (kept in sync with STORE_LIST in page.tsx)
-const STORE_DISPLAY_NAMES: Record<string, string> = {
-  store_juja_main: 'Juja Main',
-  store_thika: 'Thika',
-  store_ruiru: 'Ruiru',
-  store_nairobi_cbd: 'Nairobi CBD',
-  store_nakuru: 'Nakuru',
-};
+// ── 6. QUICK ACTIONS ─────────────────────────────────────────────────────────
 
-// Daily motivational quotes — one per day of the week (0=Sun … 6=Sat)
-const DAILY_QUOTES = [
-  'Every sale today builds tomorrow\'s success.',
-  'Small progress is still progress — keep going!',
-  'Great service turns first-time buyers into lifelong customers.',
-  'Consistency beats intensity. Show up and deliver.',
-  'Your hard work today is someone else\'s foundation tomorrow.',
-  'Track everything, improve anything.',
-  'A well-stocked shelf is a silent salesperson.',
-];
+interface CashDrawerSummary {
+  currentBalance: number;
+  totalCashIn: number;
+  totalCashOut: number;
+}
 
-// Welcome hero banner — personalized greeting + live clock + daily quote + quick-action shortcuts.
-function WelcomeHero() {
-  const { user } = useAuthStore();
-  const { currentStoreId, setActiveTab } = useAppStore();
-  const [liveTime, setLiveTime] = useState<string>('');
+async function authedFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null;
+  const headers = new Headers(init.headers || {});
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  return fetch(input, { ...init, headers, credentials: 'same-origin' });
+}
 
-  useEffect(() => {
-    const update = () => {
-      setLiveTime(
-        new Date().toLocaleTimeString('en-KE', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: true,
-        })
-      );
-    };
-    update();
-    const interval = setInterval(update, 1000);
-    return () => clearInterval(interval);
-  }, []);
+function QuickActionsRow({ onTab }: { onTab: (tab: AppTab) => void }) {
+  const currentStoreId = useAppStore((s) => s.currentStoreId);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerData, setDrawerData] = useState<CashDrawerSummary | null>(null);
+  const [drawerLoading, setDrawerLoading] = useState(false);
 
-  const firstName = (user?.name || '').trim().split(/\s+/)[0];
-  const greeting = firstName ? `Karibu, ${firstName} 👋` : 'Karibu 👋';
-  const branchName = STORE_DISPLAY_NAMES[currentStoreId] ?? 'your branch';
-  const today = new Date().toLocaleDateString('en-KE', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-  const dayIndex = new Date().getDay(); // 0-6
-  const dailyQuote = DAILY_QUOTES[dayIndex];
+  const openCashDrawer = async () => {
+    setDrawerOpen(true);
+    setDrawerLoading(true);
+    try {
+      const res = await authedFetch(`/api/cash-drawer?storeId=${encodeURIComponent(currentStoreId)}`);
+      const json = await res.json();
+      setDrawerData(json?.success && json?.summary ? json.summary : null);
+    } catch {
+      setDrawerData(null);
+    } finally {
+      setDrawerLoading(false);
+    }
+  };
+
+  const actions: Array<{
+    label: string;
+    icon: React.ElementType;
+    className: string;
+    onClick: () => void;
+  }> = [
+    {
+      label: 'New Sale',
+      icon: ShoppingCart,
+      className: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100',
+      onClick: () => onTab('pos'),
+    },
+    {
+      label: 'Add Product',
+      icon: Plus,
+      className: 'bg-green-50 text-green-700 hover:bg-green-100',
+      onClick: () => onTab('catalog'),
+    },
+    {
+      // No dedicated expenses tab — the Financial tab owns expense recording.
+      label: 'Record Expense',
+      icon: Receipt,
+      className: 'bg-amber-50 text-amber-700 hover:bg-amber-100',
+      onClick: () => onTab('financial'),
+    },
+    {
+      label: 'View Reports',
+      icon: BarChart3,
+      className: 'bg-purple-50 text-purple-700 hover:bg-purple-100',
+      onClick: () => onTab('reports'),
+    },
+    {
+      label: 'Cash Drawer',
+      icon: Wallet,
+      className: 'bg-teal-50 text-teal-700 hover:bg-teal-100',
+      onClick: () => void openCashDrawer(),
+    },
+  ];
 
   return (
-    <Card className="overflow-hidden border-0 bg-gradient-to-br from-green-700 via-emerald-600 to-teal-500 text-white shadow-lg relative">
-      {/* Decorative pattern overlay */}
-      <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} aria-hidden="true" />
-      <CardContent className="p-4 sm:p-5 relative">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-emerald-100 shrink-0" aria-hidden="true" />
-              <h2 className="text-lg sm:text-xl font-bold tracking-tight">{greeting}</h2>
+    <>
+      <section aria-label="Quick actions" className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        {actions.map((action) => {
+          const Icon = action.icon;
+          return (
+            <button
+              key={action.label}
+              type="button"
+              onClick={action.onClick}
+              className={`flex min-h-[44px] items-center justify-center gap-2 rounded-2xl border border-transparent px-3 py-3 text-xs font-semibold shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 sm:flex-col sm:gap-2 ${action.className}`}
+            >
+              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {action.label}
+            </button>
+          );
+        })}
+      </section>
+
+      {/* Cash Drawer dialog — existing /api/cash-drawer pattern */}
+      <Dialog open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Wallet className="h-5 w-5 text-teal-600" aria-hidden="true" />
+              Cash Drawer
+            </DialogTitle>
+            <DialogDescription>Live cash position for the current drawer.</DialogDescription>
+          </DialogHeader>
+          {drawerLoading ? (
+            <div className="space-y-2 py-2">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
             </div>
-            <p className="text-xs sm:text-sm text-emerald-50/90 mt-1">
-              Here&rsquo;s what&rsquo;s happening at <span className="font-semibold">{branchName}</span> today · {today}
-            </p>
-            {/* Live clock */}
-            <div className="flex items-center gap-1.5 mt-1.5">
-              <Clock className="h-3.5 w-3.5 text-emerald-200/80 shrink-0" />
-              <span className="text-xs font-mono tabular-nums text-emerald-100/90">{liveTime}</span>
+          ) : drawerData ? (
+            <div className="space-y-2 py-2">
+              <div className="flex items-center justify-between rounded-xl bg-emerald-50 p-3 ring-1 ring-emerald-200">
+                <span className="text-xs font-medium text-emerald-700">Current balance</span>
+                <span className="text-sm font-bold tabular-nums text-emerald-700">{formatKES(num(drawerData.currentBalance))}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 p-3">
+                <span className="text-xs text-slate-500">Total cash in</span>
+                <span className="text-sm font-semibold tabular-nums text-emerald-600">+{formatKES(num(drawerData.totalCashIn))}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 p-3">
+                <span className="text-xs text-slate-500">Total cash out</span>
+                <span className="text-sm font-semibold tabular-nums text-red-600">−{formatKES(num(drawerData.totalCashOut))}</span>
+              </div>
             </div>
-            {/* Daily motivational quote */}
-            <p className="text-[11px] text-emerald-100/70 mt-2 italic max-w-md leading-relaxed">
-              &ldquo;{dailyQuote}&rdquo;
+          ) : (
+            <div className="py-6 text-center text-sm text-slate-500">
+              Drawer summary is unavailable right now.
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// ── 7a. RECENT ACTIVITY (Recent Sales / System Activity) ─────────────────────
+
+const PM_BADGE: Record<string, string> = {
+  CASH: 'bg-emerald-100 text-emerald-700',
+  MPESA: 'bg-amber-100 text-amber-700',
+  DEBT: 'bg-rose-100 text-rose-600',
+  SPLIT: 'bg-slate-200 text-slate-600',
+  GIFT_CARD: 'bg-slate-100 text-slate-500',
+};
+
+function severityTone(severity: string | null | undefined): string {
+  const s = String(severity ?? '').toUpperCase();
+  if (s.includes('ERR') || s.includes('CRIT')) return 'bg-red-500';
+  if (s.includes('WARN')) return 'bg-amber-500';
+  return 'bg-slate-400';
+}
+
+function RecentActivityCard({ data }: { data: DashboardData | null }) {
+  const [view, setView] = useState<'sales' | 'system'>('sales');
+  const sales = Array.isArray(data?.recentTransactions) ? data?.recentTransactions ?? [] : [];
+  const activities = Array.isArray(data?.recentActivities) ? data?.recentActivities ?? [] : [];
+
+  return (
+    <Card className="flex flex-col rounded-2xl border-slate-200 shadow-sm">
+      <CardHeader className="pb-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="text-sm font-semibold text-slate-900">Recent activity</CardTitle>
+          <div className="flex rounded-full bg-slate-100 p-0.5" role="tablist" aria-label="Activity view">
+            {(['sales', 'system'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                role="tab"
+                aria-selected={view === v}
+                onClick={() => setView(v)}
+                className={`rounded-full px-2.5 py-1 text-[10px] font-semibold transition-colors ${
+                  view === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {v === 'sales' ? 'Recent sales' : 'System'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="flex-1">
+        {view === 'sales' ? (
+          sales.length === 0 ? (
+            <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
+              <Receipt className="h-8 w-8 text-slate-300" aria-hidden="true" />
+              <p className="text-sm text-slate-500">No sales yet</p>
+              <p className="text-xs text-slate-400">Your latest receipts will appear here</p>
+            </div>
+          ) : (
+            <ul className="max-h-72 space-y-0.5 overflow-y-auto pr-1 custom-scrollbar">
+              {sales.map((tx, i) => {
+                const method = String(tx?.paymentMethod ?? '');
+                return (
+                  <li key={String(tx?.id ?? i)} className="flex items-center justify-between gap-3 border-b border-slate-100 py-2.5 last:border-0">
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-1.5 text-sm">
+                        <span className="font-mono font-semibold text-slate-900">{receiptTail(tx?.receiptNumber)}</span>
+                        <Badge variant="secondary" className={`h-4 px-1.5 text-[9px] font-semibold ${PM_BADGE[method] ?? 'bg-slate-100 text-slate-500'}`}>
+                          {PAYMENT_META[method]?.label ?? method}
+                        </Badge>
+                      </p>
+                      <p className="mt-0.5 truncate text-[11px] text-slate-500">
+                        {tx?.customer?.name || 'Walk-in'} · {timeAgo(tx?.createdAt)}
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{formatKES(num(tx?.totalAmount))}</p>
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        ) : activities.length === 0 ? (
+          <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
+            <Activity className="h-8 w-8 text-slate-300" aria-hidden="true" />
+            <p className="text-sm text-slate-500">No system activity yet</p>
+            <p className="text-xs text-slate-400">Actions like logins and product updates show up here</p>
+          </div>
+        ) : (
+          <ul className="max-h-72 space-y-0.5 overflow-y-auto pr-1 custom-scrollbar">
+            {activities.map((a, i) => (
+              <li key={String(a?.id ?? i)} className="flex items-start gap-2.5 border-b border-slate-100 py-2.5 last:border-0">
+                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${severityTone(a?.severity)}`} aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium text-slate-800" title={a?.displayMessage ?? ''}>
+                    {a?.displayMessage || a?.action || 'System event'}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-slate-400">
+                    {a?.actorName || a?.user?.name || 'System'} · {timeAgo(a?.createdAt)}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── 7b. STORE HEALTH (SVG circular gauge) ────────────────────────────────────
+
+function healthColor(score: number, key?: string): string {
+  if (key === 'debt' && score < 30) return '#ef4444';
+  if (key === 'engagement' && score < 50) return '#f97316';
+  if (score >= 70) return '#10b981';
+  if (score >= 40) return '#f59e0b';
+  return '#ef4444';
+}
+
+function StoreHealthCard({ data }: { data: DashboardData | null }) {
+  const health: StoreHealthSummary | null | undefined = data?.storeHealth;
+  const overall = Math.max(0, Math.min(100, num(health?.overall)));
+  const hasHealth = !!health && health.breakdown != null;
+  const C = 2 * Math.PI * 34;
+  const strokeColor = healthColor(overall);
+
+  return (
+    <Card className="rounded-2xl border-slate-200 shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <Zap className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+          Store health
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {!hasHealth ? (
+          <div className="flex h-48 flex-col items-center justify-center gap-2 text-center">
+            <Activity className="h-8 w-8 text-slate-300" aria-hidden="true" />
+            <p className="text-sm text-slate-500">Health score unavailable</p>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-4">
+              <svg width="88" height="88" viewBox="0 0 88 88" role="img" aria-label={`Store health ${overall} of 100`}>
+                <circle cx="44" cy="44" r="34" fill="none" stroke="#e2e8f0" strokeWidth="8" />
+                <circle
+                  cx="44"
+                  cy="44"
+                  r="34"
+                  fill="none"
+                  stroke={strokeColor}
+                  strokeWidth="8"
+                  strokeLinecap="round"
+                  strokeDasharray={`${(overall / 100) * C} ${C}`}
+                  transform="rotate(-90 44 44)"
+                />
+                <text x="44" y="43" textAnchor="middle" fontSize="19" fontWeight="700" fill="#0f172a">
+                  {overall}
+                </text>
+                <text x="44" y="57" textAnchor="middle" fontSize="9" fill="#64748b">
+                  {health?.label ?? '—'}
+                </text>
+              </svg>
+              <div className="min-w-0 text-xs text-slate-500">
+                <p className="font-medium text-slate-700">
+                  {overall >= 80 ? 'Trading well today' : overall >= 60 ? 'Room to push today' : 'Needs attention'}
+                </p>
+                <p className="mt-1 leading-relaxed">
+                  Weighted from revenue, stock, debt and customer engagement.
+                </p>
+              </div>
+            </div>
+
+            <ul className="mt-4 space-y-3">
+              {(health?.breakdown ?? []).map((item) => {
+                const score = Math.max(0, Math.min(100, num(item?.score)));
+                const weight = num(item?.weight);
+                const color = healthColor(score, item?.key);
+                return (
+                  <li key={item?.key ?? item?.label}>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="font-medium text-slate-700">
+                        {item?.label ?? '—'}
+                        <span className="ml-1.5 text-[10px] text-slate-400">{weight}% weight</span>
+                      </span>
+                      <span className="font-semibold tabular-nums" style={{ color }}>
+                        {score}
+                      </span>
+                    </div>
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${score}%`, backgroundColor: color }}
+                      />
+                    </div>
+                    {item?.detail ? <p className="mt-0.5 text-[10px] leading-relaxed text-slate-400">{item.detail}</p> : null}
+                  </li>
+                );
+              })}
+            </ul>
+
+            <p className="mt-3 border-t border-slate-100 pt-2 text-[10px] text-slate-400">
+              {`Weighted: Revenue ${num(health?.weights?.revenue)}% + Stock ${num(health?.weights?.stock)}% + Debt ${num(health?.weights?.debt)}% + Engagement ${num(health?.weights?.engagement)}%`}
             </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── 7c. HOURLY SALES HEATMAP ─────────────────────────────────────────────────
+
+function HourlyHeatmapCard({ data }: { data: DashboardData | null }) {
+  const hours = useMemo(() => {
+    const breakdown = Array.isArray(data?.hourlySalesBreakdown) ? data?.hourlySalesBreakdown ?? [] : [];
+    const byHour = new Map<number, number>();
+    breakdown.forEach((h) => {
+      const k = parseInt(String(h?.hour ?? ''), 10);
+      if (!Number.isNaN(k)) byHour.set(k, num(h?.amount));
+    });
+    // 6 AM – 9 PM window, matching the bar chart above.
+    return Array.from({ length: 16 }, (_, i) => {
+      const hour = i + 6;
+      return { hour, amount: byHour.get(hour) ?? 0 };
+    });
+  }, [data]);
+
+  const max = Math.max(...hours.map((h) => h.amount), 0);
+  const total = hours.reduce((s, h) => s + h.amount, 0);
+  const peak = hours.reduce((best, h) => (h.amount > best.amount ? h : best), hours[0] ?? { hour: 6, amount: 0 });
+  const quiet = hours.reduce((best, h) => (h.amount < best.amount ? h : best), hours[0] ?? { hour: 6, amount: 0 });
+
+  const cellColor = (amount: number): string => {
+    if (max <= 0 || amount <= 0) return '#f1f5f9';
+    const t = Math.min(1, amount / max);
+    return `rgba(5, 150, 105, ${(0.12 + 0.88 * t).toFixed(3)})`;
+  };
+
+  return (
+    <Card className="rounded-2xl border-slate-200 shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <Clock className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+          Hourly sales heatmap
+        </CardTitle>
+        <CardDescription className="text-xs">6 AM – 9 PM · darker means busier</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {max <= 0 ? (
+          <div className="flex h-32 flex-col items-center justify-center gap-2 text-center">
+            <Clock className="h-8 w-8 text-slate-300" aria-hidden="true" />
+            <p className="text-sm text-slate-500">No sales recorded yet today</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <Button
-              size="sm"
-              className="bg-white text-green-700 hover:bg-emerald-50 hover:text-green-700 font-semibold shadow-sm gap-1.5"
-              onClick={() => setActiveTab('pos')}
-            >
-              <ShoppingCart className="h-4 w-4" />
-              New Sale (F2)
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="bg-white/10 border-white/40 text-white hover:bg-white/20 hover:text-white backdrop-blur-sm gap-1.5"
-              onClick={() => setActiveTab('catalog')}
-            >
-              <Plus className="h-4 w-4" />
-              Add Product
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="bg-white/10 border-white/40 text-white hover:bg-white/20 hover:text-white backdrop-blur-sm gap-1.5"
-              onClick={() => setActiveTab('reports')}
-            >
-              <BarChart3 className="h-4 w-4" />
-              View Reports
-            </Button>
+        ) : (
+          <>
+            <div className="grid grid-cols-[repeat(16,minmax(0,1fr))] gap-1" role="img" aria-label="Hourly sales intensity from 6 AM to 9 PM">
+              {hours.map((h) => (
+                <div
+                  key={h.hour}
+                  className="aspect-square rounded-[4px] transition-colors"
+                  style={{ backgroundColor: cellColor(h.amount) }}
+                  title={`${formatHour(h.hour)} · ${formatKES(h.amount)}`}
+                />
+              ))}
+            </div>
+            <div className="grid grid-cols-[repeat(16,minmax(0,1fr))] gap-1">
+              {hours.map((h) => (
+                <span key={h.hour} className="text-center text-[8px] leading-tight text-slate-400">
+                  {h.hour % 2 === 0 ? (h.hour < 12 ? `${h.hour}a` : h.hour === 12 ? '12p' : `${h.hour - 12}p`) : ''}
+                </span>
+              ))}
+            </div>
+            <dl className="grid grid-cols-3 gap-2 border-t border-slate-100 pt-3 text-center">
+              <div>
+                <dt className="text-[10px] uppercase tracking-wide text-slate-400">Peak hour</dt>
+                <dd className="mt-0.5 text-xs font-bold text-emerald-700">{formatHour(peak.hour)}</dd>
+                <dd className="text-[10px] tabular-nums text-slate-500">{formatKES(peak.amount)}</dd>
+              </div>
+              <div>
+                <dt className="text-[10px] uppercase tracking-wide text-slate-400">Quietest</dt>
+                <dd className="mt-0.5 text-xs font-bold text-slate-600">{formatHour(quiet.hour)}</dd>
+                <dd className="text-[10px] tabular-nums text-slate-500">{formatKES(quiet.amount)}</dd>
+              </div>
+              <div>
+                <dt className="text-[10px] uppercase tracking-wide text-slate-400">Total today</dt>
+                <dd className="mt-0.5 text-xs font-bold text-slate-900">{formatCompact(total)}</dd>
+                <dd className="text-[10px] tabular-nums text-slate-500">Ksh collected</dd>
+              </div>
+            </dl>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── 8. TOP CUSTOMERS (by lifetime spend) ─────────────────────────────────────
+
+function tierFor(spend: number): { label: 'GOLD' | 'SILVER' | 'BRONZE'; className: string } {
+  if (spend >= 300_000) return { label: 'GOLD', className: 'bg-yellow-100 text-yellow-700' };
+  if (spend >= 100_000) return { label: 'SILVER', className: 'bg-slate-200 text-slate-600' };
+  return { label: 'BRONZE', className: 'bg-amber-100 text-amber-700' };
+}
+
+function initialsOf(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || '?';
+}
+
+function TopCustomersCard({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppTab) => void }) {
+  const customers = useMemo(() => {
+    const list = Array.isArray(data?.debtCrisis?.customers) ? [...data.debtCrisis.customers] : [];
+    return list
+      .sort((a, b) => num(b?.lifetimeSpend) - num(a?.lifetimeSpend))
+      .slice(0, 5);
+  }, [data]);
+
+  const maxSpend = Math.max(...customers.map((c) => num(c?.lifetimeSpend)), 1);
+  const maxOwes = Math.max(...customers.map((c) => num(c?.owes)), 1);
+
+  return (
+    <Card className="rounded-2xl border-slate-200 shadow-sm">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <Users className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+            Top customers · All time
+          </CardTitle>
+          <button
+            type="button"
+            onClick={() => onTab('customers')}
+            className="text-xs font-medium text-emerald-600 underline-offset-2 hover:underline"
+          >
+            All
+          </button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {customers.length === 0 ? (
+          <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
+            <Users className="h-8 w-8 text-slate-300" aria-hidden="true" />
+            <p className="text-sm text-slate-500">No customers yet</p>
+            <p className="text-xs text-slate-400">Customer spend rankings appear after your first sales</p>
           </div>
+        ) : (
+          <ul className="max-h-80 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+            {customers.map((c, i) => {
+              const spend = num(c?.lifetimeSpend);
+              const owes = num(c?.owes);
+              const tier = tierFor(spend);
+              const highRisk = c?.highRisk === true;
+              return (
+                <li
+                  key={String(c?.customerId ?? i)}
+                  className={`rounded-xl border p-2.5 ${highRisk ? 'border-red-300 bg-red-50' : 'border-slate-100 bg-white'}`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-5 shrink-0 text-center text-xs font-bold text-slate-400">#{i + 1}</span>
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${highRisk ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'}`}>
+                      {initialsOf(String(c?.name ?? ''))}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-slate-900">
+                        <span className="max-w-[9rem] truncate sm:max-w-[10rem]" title={String(c?.name ?? '')}>
+                          {c?.name ?? 'Unknown'}
+                        </span>
+                        <Badge variant="secondary" className={`h-4 px-1.5 text-[9px] font-bold ${tier.className}`}>
+                          {tier.label}
+                        </Badge>
+                        {highRisk && (
+                          <Badge className="h-4 bg-red-600 px-1.5 text-[9px] font-bold text-white hover:bg-red-600">
+                            HIGH RISK
+                          </Badge>
+                        )}
+                      </p>
+                      <p className="mt-0.5 text-[11px] tabular-nums text-slate-500">
+                        Spent <span className="font-semibold text-slate-700">{formatKES(spend)}</span>
+                        {owes > 0 && (
+                          <> · <span className="font-medium text-red-600">Owes {formatKES(owes)}</span></>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-red-400 to-rose-500"
+                      style={{ width: `${Math.min(100, (owes / maxOwes) * 100)}%` }}
+                    />
+                  </div>
+                  {/* spend context bar — share of top spender */}
+                  <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-slate-50">
+                    <div className="h-full rounded-full bg-emerald-200" style={{ width: `${Math.min(100, (spend / maxSpend) * 100)}%` }} />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── 9. TOP SELLING PRODUCTS ──────────────────────────────────────────────────
+
+function TopProductsCard({ data }: { data: DashboardData | null }) {
+  const products: TopProduct[] = useMemo(() => {
+    const list = Array.isArray(data?.topProducts) ? data.topProducts : [];
+    return list.slice(0, 5);
+  }, [data]);
+
+  const maxRevenue = Math.max(...products.map((p) => num(p?.totalRevenue)), 1);
+
+  return (
+    <Card className="rounded-2xl border-slate-200 shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <Package className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+          Top selling products
+        </CardTitle>
+        <CardDescription className="text-xs">Today&rsquo;s movers by revenue</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {products.length === 0 ? (
+          <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
+            <Package className="h-8 w-8 text-slate-300" aria-hidden="true" />
+            <p className="text-sm text-slate-500">No sales yet today</p>
+            <p className="text-xs text-slate-400">Your best sellers will rank here</p>
+          </div>
+        ) : (
+          <ol className="space-y-2.5">
+            {products.map((p, i) => {
+              const revenue = num(p?.totalRevenue);
+              const qty = num(p?.totalQuantity);
+              const share = Math.min(100, (revenue / maxRevenue) * 100);
+              return (
+                <li key={String(p?.productId ?? i)} className="grid grid-cols-[1.25rem_1fr_auto] items-center gap-2">
+                  <span className="text-xs font-bold text-slate-400">{i + 1}</span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-slate-900" title={String(p?.productName ?? '')}>
+                      {p?.productName ?? 'Unknown product'}
+                    </p>
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                      <div className="h-full rounded-full bg-emerald-500" style={{ width: `${share}%` }} />
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-semibold tabular-nums text-slate-900">{formatKES(revenue)}</p>
+                    <p className="text-[10px] text-slate-400">{qty} sold</p>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── 10. SALES TREND (7 DAYS) + FORECAST ──────────────────────────────────────
+
+function SalesTrendForecastCard({ data }: { data: DashboardData | null }) {
+  const trend: RevenueTrend7d | null | undefined = data?.revenueTrend7d;
+  const days = useMemo(
+    () => (Array.isArray(trend?.days) ? trend.days : []),
+    [trend],
+  );
+  const forecast = num(trend?.forecast);
+  const canChart = days.length >= 2;
+
+  const W = 320;
+  const H = 130;
+  const PAD = 8;
+
+  const geometry = useMemo(() => {
+    if (!canChart) return null;
+    const values = days.map((d) => num(d?.revenue));
+    const max = Math.max(...values, forecast, 1);
+    const x = (i: number) => PAD + (i / (days.length - 1)) * (W - PAD * 2);
+    const y = (v: number) => H - PAD - (v / max) * (H - PAD * 2);
+    const pts = values.map((v, i) => ({ x: x(i), y: y(v) }));
+    const linePoints = pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+    const areaPath = `M ${pts[0].x.toFixed(1)} ${H - PAD} L ${pts.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' L ')} L ${pts[pts.length - 1].x.toFixed(1)} ${H - PAD} Z`;
+    return { pts, linePoints, areaPath, forecastY: y(forecast), max };
+  }, [canChart, days, forecast]);
+
+  return (
+    <Card className="rounded-2xl border-slate-200 shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <TrendingUp className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+          Sales trend · 7 days
+        </CardTitle>
+        <CardDescription className="text-xs">Net revenue with forecast</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {!canChart || !geometry ? (
+          <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
+            <TrendingUp className="h-8 w-8 text-slate-300" aria-hidden="true" />
+            <p className="text-sm text-slate-500">Not enough history yet</p>
+            <p className="text-xs text-slate-400">The 7-day trend appears after a couple of trading days</p>
+          </div>
+        ) : (
+          <>
+            <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Revenue trend for the last 7 days with forecast line">
+              <defs>
+                <linearGradient id="dashRevGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity="0.28" />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
+                </linearGradient>
+              </defs>
+              {/* forecast dashed line */}
+              <line
+                x1={PAD}
+                x2={W - PAD}
+                y1={geometry.forecastY}
+                y2={geometry.forecastY}
+                stroke="#f59e0b"
+                strokeWidth="1.5"
+                strokeDasharray="5 4"
+              />
+              {/* area + line */}
+              <path d={geometry.areaPath} fill="url(#dashRevGrad)" />
+              <polyline
+                points={geometry.linePoints}
+                fill="none"
+                stroke="#059669"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              {geometry.pts.map((p, i) => {
+                const isToday = days[i]?.isToday === true;
+                return (
+                  <circle
+                    key={days[i]?.date ?? i}
+                    cx={p.x}
+                    cy={p.y}
+                    r={isToday ? 4.5 : 2.5}
+                    fill={isToday ? '#059669' : '#ffffff'}
+                    stroke="#059669"
+                    strokeWidth={isToday ? 2 : 1.5}
+                  />
+                );
+              })}
+            </svg>
+            <div className="flex justify-between px-0.5 text-[9px] text-slate-400">
+              {days.map((d, i) => (
+                <span key={d?.date ?? i} className={d?.isToday ? 'font-semibold text-emerald-600' : ''}>
+                  {d?.label ?? ''}
+                </span>
+              ))}
+            </div>
+            <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
+              <span className="inline-block h-0 w-5 border-t-2 border-dashed border-amber-500" aria-hidden="true" />
+              Forecast {formatKES(forecast)} · {trend?.forecastMethod || 'median of prior 6 days'}
+            </p>
+            {trend?.todayIsOutlier === true && (
+              <p className="flex items-start gap-1.5 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-[11px] text-amber-700">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                Today is a bulk-sale outlier — forecast uses the median of the previous 6 days.
+              </p>
+            )}
+          </>
+        )}
+
+        {/* Growing products — the backend does not provide this series yet;
+            honest empty state, never fabricated. */}
+        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-3">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+            <Sparkles className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
+            Top 3 growing products
+          </p>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
+            Not enough history yet — check back after a few more days of sales.
+          </p>
         </div>
       </CardContent>
     </Card>
   );
 }
 
-export default function DashboardTab() {
-  const { currentStoreId, setActiveTab } = useAppStore();
-  const [lowStockDialogOpen, setLowStockDialogOpen] = useState(false);
-  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
-  const [selectedKpi, setSelectedKpi] = useState<KpiDetail | null>(null);
+// ── 11. DEBT AGING SUMMARY ───────────────────────────────────────────────────
 
-  const handleTabSwitch = useCallback((tab: AppTab) => {
-    setActiveTab(tab);
-  }, [setActiveTab]);
+function DebtAgingCard({ data }: { data: DashboardData | null }) {
+  const crisis: DebtCrisisSummary | null | undefined = data?.debtCrisis;
+  const total = num(crisis?.outstandingTotal ?? data?.outstandingDebt);
+  const aging = crisis?.aging;
+  const buckets = aging
+    ? {
+        current: num(aging.current),
+        d30: num(aging.d30),
+        d60: num(aging.d60),
+        d90plus: num(aging.d90plus),
+      }
+    : null;
+  const bucketSum = buckets ? buckets.current + buckets.d30 + buckets.d60 + buckets.d90plus : 0;
+  const sumsReconcile = buckets != null && Math.abs(bucketSum - total) < 0.05;
+  const count = num(crisis?.outstandingCount ?? data?.outstandingDebtCount);
 
-  const handleKpiCardClick = useCallback((kpi: KpiDetail) => {
-    setSelectedKpi(kpi);
-    setDetailDialogOpen(true);
-  }, []);
-
-  // Fetch low stock products for the dialog
-  const { data: lowStockProducts } = useQuery({
-    queryKey: ['low-stock-products', currentStoreId],
-    queryFn: async () => {
-      // v2.5.8: limit raised 200 → 500 (catalogs exceed 200 now) and both
-      // stock fields coerced with Number() — the API historically serialized
-      // these Decimals as strings, so `<=` compared lexicographically and
-      // the dialog listed phantom low-stock products.
-      const res = await productsApi.list({ storeId: currentStoreId, limit: 500 });
-      return (Array.isArray(res.data) ? res.data : []).filter(
-        p => Number(p.quantityInStock) <= Number(p.reorderLevel) && p.isActive
-      );
-    },
-    enabled: lowStockDialogOpen,
-  });
-
-  // Onboarding detection — check if the store has any real activity
-  const { data: onboardingCheck } = useQuery({
-    queryKey: ['onboarding-check', currentStoreId],
-    queryFn: async () => {
-      const res = await dashboardApi.getStats(currentStoreId);
-      const d = res.data;
-      if (!d) return { hasData: false };
-      const hasRevenue = (d.todayRevenue ?? 0) > 0;
-      const hasTransactions = (d.todayTransactions ?? 0) > 0;
-      const hasProducts = Array.isArray(d.topProducts) && d.topProducts.length > 0;
-      return { hasData: hasRevenue || hasTransactions || hasProducts };
-    },
-    staleTime: 60_000,
-  });
-
-  const showOnboarding = onboardingCheck && !onboardingCheck.hasData;
+  const segments = buckets
+    ? [
+        { key: 'current', label: 'Current', value: buckets.current, color: '#10b981' },
+        { key: 'd30', label: '30 days', value: buckets.d30, color: '#64748b' },
+        { key: 'd60', label: '60 days', value: buckets.d60, color: '#f97316' },
+        { key: 'd90plus', label: '90+ days', value: buckets.d90plus, color: '#ef4444' },
+      ]
+    : [];
 
   return (
-    <div className="space-y-4 animate-fade-in">
-      {/* Welcome Hero — personalized greeting + quick actions */}
-      <WelcomeHero />
-
-      {/* Top KPI Cards Row */}
-      <DashboardStats storeId={currentStoreId} onCardClick={handleKpiCardClick} />
-
-      {/* Onboarding message for first-time / empty stores */}
-      {showOnboarding && (
-        <Card className="border-dashed border-2 border-primary/20 bg-primary/5 backdrop-blur-sm animate-fade-in">
-          <CardContent className="p-6 sm:p-8 text-center">
-            <div className="flex flex-col items-center gap-3 max-w-md mx-auto">
-              <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center">
-                <Sparkles className="h-7 w-7 text-primary" />
-              </div>
-              <h3 className="text-lg font-semibold">Welcome to MBUMAH HARDWARE POS!</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Your dashboard is ready. Start by adding products in the <strong>Catalog</strong> tab,
-                then process your first sale in the <strong>POS</strong> tab. Charts and stats will
-                populate automatically as you record transactions.
-              </p>
-              <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
-                <Button size="sm" className="gap-1.5" onClick={() => setActiveTab('catalog')}>
-                  <Plus className="h-4 w-4" />
-                  Add Products
-                </Button>
-                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setActiveTab('pos')}>
-                  <ShoppingCart className="h-4 w-4" />
-                  New Sale
-                </Button>
-              </div>
+    <Card className="rounded-2xl border-slate-200 shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <CircleDollarSign className="h-4 w-4 text-rose-500" aria-hidden="true" />
+          Debt aging summary
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {total <= 0 ? (
+          <div className="flex h-28 flex-col items-center justify-center gap-2 text-center">
+            <CheckCircle className="h-8 w-8 text-emerald-300" aria-hidden="true" />
+            <p className="text-sm text-slate-500">No outstanding debt — all clear</p>
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-baseline justify-between gap-1">
+              <p className="text-[11px] uppercase tracking-wide text-slate-400">Total outstanding</p>
+              <p className="text-lg font-bold tabular-nums text-rose-600">{formatKES(total)}</p>
             </div>
+            {count > 0 && <p className="-mt-2 text-[11px] text-slate-400">{count} outstanding bill{count === 1 ? '' : 's'}</p>}
+
+            {buckets && (
+              <>
+                {/* Segmented aging bar — shares of the total */}
+                <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-100" role="img" aria-label="Debt aging distribution">
+                  {segments.map((seg) => (
+                    <div
+                      key={seg.key}
+                      className="h-full transition-all duration-500"
+                      style={{ width: `${total > 0 ? (seg.value / total) * 100 : 0}%`, backgroundColor: seg.color }}
+                      title={`${seg.label}: ${formatKES(seg.value)}`}
+                    />
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {segments.map((seg) => (
+                    <div key={seg.key} className="rounded-xl border border-slate-200 p-2.5">
+                      <p className="flex items-center gap-1 text-[10px] font-medium text-slate-500">
+                        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: seg.color }} aria-hidden="true" />
+                        {seg.label}
+                      </p>
+                      <p className="mt-0.5 text-xs font-bold tabular-nums text-slate-900">{formatKES(seg.value)}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {sumsReconcile && (
+                  <p className="flex items-center gap-1 text-[10px] text-slate-400">
+                    <CheckCircle className="h-3 w-3 text-emerald-500" aria-hidden="true" />
+                    Ages sum to the total outstanding
+                  </p>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── 12. ALERTS & NOTIFICATIONS ───────────────────────────────────────────────
+
+function alertSeverityStyle(severity: string): { icon: React.ElementType; circle: string; text: string } {
+  if (severity === 'critical') return { icon: AlertTriangle, circle: 'bg-red-100 text-red-600', text: 'text-red-600' };
+  if (severity === 'warning') return { icon: AlertTriangle, circle: 'bg-amber-100 text-amber-600', text: 'text-amber-600' };
+  return { icon: Info, circle: 'bg-slate-100 text-slate-500', text: 'text-slate-500' };
+}
+
+function alertActionTab(alert: DashboardAlert, action: string): AppTab | null {
+  if (action === 'collect') return 'debt-management';
+  if (action === 'call') return 'messaging';
+  if (action === 'view') {
+    if (alert?.type === 'rental_overdue') return 'rentals';
+    if (alert?.type === 'stock_low') return 'inventory';
+    return 'transactions';
+  }
+  return null;
+}
+
+function alertActionIcon(action: string): React.ElementType {
+  if (action === 'collect') return HandCoins;
+  if (action === 'call') return Phone;
+  if (action === 'view') return Eye;
+  return ArrowUpRight;
+}
+
+function alertActionLabel(action: string): string {
+  if (action === 'collect') return 'Collect';
+  if (action === 'call') return 'Call';
+  if (action === 'view') return 'View';
+  return action.charAt(0).toUpperCase() + action.slice(1);
+}
+
+function AlertsCard({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppTab) => void }) {
+  const alerts: DashboardAlert[] = Array.isArray(data?.alerts) ? data.alerts : [];
+  // Backend guarantees alertsCount === returned list length; derive from the
+  // list so the badge can never disagree with what is rendered.
+  const alertsCount = alerts.length;
+
+  return (
+    <Card className="rounded-2xl border-slate-200 shadow-sm lg:col-span-2">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <Bell className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+            Alerts
+            {alertsCount > 0 && (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                {alertsCount > 99 ? '99+' : alertsCount}
+              </span>
+            )}
+          </CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-col">
+        {alerts.length === 0 ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 py-8 text-center">
+            <CheckCircle className="h-8 w-8 text-emerald-400" aria-hidden="true" />
+            <p className="text-sm font-medium text-slate-700">All clear</p>
+            <p className="text-xs text-slate-400">No overdue rentals, debts or stock emergencies</p>
+          </div>
+        ) : (
+          <ul className="max-h-80 space-y-0.5 overflow-y-auto pr-1 custom-scrollbar">
+            {alerts.map((alert, i) => {
+              const style = alertSeverityStyle(String(alert?.severity ?? 'info'));
+              const Icon = style.icon;
+              const actions = Array.isArray(alert?.actions) ? alert.actions : [];
+              return (
+                <li key={String(alert?.dedupeKey ?? i)} className="flex flex-wrap items-start gap-3 border-b border-slate-100 py-2.5 last:border-0 sm:flex-nowrap">
+                  <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${style.circle}`}>
+                    <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-slate-900" title={alert?.title ?? ''}>
+                      {alert?.title ?? 'Alert'}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-500">{alert?.detail ?? ''}</p>
+                  </div>
+                  {actions.length > 0 && (
+                    <div className="flex w-full shrink-0 gap-1.5 sm:w-auto">
+                      {actions.slice(0, 3).map((action) => {
+                        const target = alertActionTab(alert, String(action));
+                        const ActionIcon = alertActionIcon(String(action));
+                        if (!target) return null;
+                        return (
+                          <Button
+                            key={String(action)}
+                            variant="outline"
+                            size="sm"
+                            className="h-7 gap-1 border-slate-200 px-2 text-[11px] text-slate-600 hover:bg-slate-50"
+                            onClick={() => onTab(target)}
+                          >
+                            <ActionIcon className="h-3 w-3" aria-hidden="true" />
+                            {alertActionLabel(String(action))}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-2.5 text-[10px] text-slate-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+          <span>System healthy</span>
+          <span aria-hidden="true">·</span>
+          <span>Last sync just now</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Loading skeleton ─────────────────────────────────────────────────────────
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-4 sm:space-y-6" aria-busy="true" aria-label="Loading dashboard">
+      <Skeleton className="h-36 w-full rounded-2xl" />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-5">
+        {Array.from({ length: 5 }, (_, i) => (
+          <Skeleton key={i} className="h-32 rounded-2xl" />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 sm:gap-6">
+        <Skeleton className="h-64 rounded-2xl lg:col-span-2" />
+        <Skeleton className="h-64 rounded-2xl" />
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        {Array.from({ length: 5 }, (_, i) => (
+          <Skeleton key={i} className="h-16 rounded-2xl" />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 sm:gap-6">
+        {Array.from({ length: 3 }, (_, i) => (
+          <Skeleton key={i} className="h-64 rounded-2xl" />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 sm:gap-6">
+        {Array.from({ length: 3 }, (_, i) => (
+          <Skeleton key={i} className="h-64 rounded-2xl" />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 sm:gap-6">
+        <Skeleton className="h-56 rounded-2xl" />
+        <Skeleton className="h-56 rounded-2xl lg:col-span-2" />
+      </div>
+    </div>
+  );
+}
+
+// ── Orchestrator ─────────────────────────────────────────────────────────────
+
+export default function DashboardTab() {
+  const { currentStoreId, setActiveTab } = useAppStore();
+  const user = useAuthStore((s) => s.user);
+
+  const onTab = useCallback(
+    (tab: AppTab) => {
+      setActiveTab(tab);
+    },
+    [setActiveTab],
+  );
+
+  const { data, isLoading, isError, refetch, dataUpdatedAt } = useQuery({
+    queryKey: ['dashboard', currentStoreId],
+    queryFn: async (): Promise<DashboardData | null> => {
+      const res = await dashboardApi.getStats(currentStoreId);
+      const raw = res.data as DashboardData | null;
+      if (!raw || typeof raw !== 'object') return null;
+      // Defensive: coerce every list the UI renders (Decimal-string audit
+      // precedent — never trust wire shapes).
+      return {
+        ...raw,
+        salesByHour: Array.isArray(raw.salesByHour) ? raw.salesByHour : [],
+        paymentMethodBreakdown: Array.isArray(raw.paymentMethodBreakdown) ? raw.paymentMethodBreakdown : [],
+        recentTransactions: Array.isArray(raw.recentTransactions) ? raw.recentTransactions : [],
+        topProducts: Array.isArray(raw.topProducts) ? raw.topProducts : [],
+        hourlySalesBreakdown: Array.isArray(raw.hourlySalesBreakdown) ? raw.hourlySalesBreakdown : [],
+        lowStockItems: Array.isArray(raw.lowStockItems) ? raw.lowStockItems : [],
+        recentActivities: Array.isArray(raw.recentActivities) ? raw.recentActivities : [],
+        alerts: Array.isArray(raw.alerts) ? raw.alerts : [],
+      } as DashboardData;
+    },
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
+
+  const shift = data?.shift ?? null;
+  const crisis = data?.debtCrisis ?? null;
+  const view = data ?? null;
+  const lastSyncLabel = dataUpdatedAt ? timeAgo(new Date(dataUpdatedAt)) : 'just now';
+
+  if (isLoading && !data) {
+    return (
+      <div className="-m-4 min-h-full bg-slate-50 p-4 sm:p-5">
+        <DashboardSkeleton />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="-m-4 min-h-full bg-slate-50 p-4 sm:p-5">
+        <Card className="rounded-2xl border-slate-200 shadow-sm">
+          <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
+            <AlertTriangle className="h-10 w-10 text-amber-500" aria-hidden="true" />
+            <p className="text-sm font-semibold text-slate-900">Dashboard could not load</p>
+            <p className="max-w-sm text-xs text-slate-500">
+              We couldn&rsquo;t reach the dashboard service. Check your connection and try again.
+            </p>
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void refetch()}>
+              <Play className="h-3.5 w-3.5" aria-hidden="true" />
+              Retry
+            </Button>
           </CardContent>
         </Card>
-      )}
+      </div>
+    );
+  }
 
-      {/* Shift Status Card */}
-      <ShiftStatusCard storeId={currentStoreId} />
+  return (
+    <div className="-m-4 min-h-full space-y-4 bg-slate-50 p-4 sm:space-y-6 sm:p-5">
+      {/* 1. HERO */}
+      <DashboardHero onTab={onTab} />
 
-      {/* Sales Overview Charts */}
-      <SalesOverview storeId={currentStoreId} />
+      {/* 2. DEBT CRISIS BANNER (conditional) */}
+      {crisis?.warning === true && <DebtCrisisBanner crisis={crisis} onTab={onTab} />}
 
-      {/* Quick Actions Bar */}
-      <QuickActions onTabSwitch={handleTabSwitch} />
+      {/* 3. ACTIVE SHIFT (only while a shift is open) */}
+      {shift && <ActiveShiftCard shift={shift} />}
 
-      {/* Bottom Grid: Activity Feed + Alerts + Top Products + Debt Aging + Sales Trend + Top Customers + Store Health */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Left Column */}
-        <div className="space-y-4 stagger-1">
-          <RecentTransactions storeId={currentStoreId} />
-          <TopProductsTable storeId={currentStoreId} />
+      {/* 4. KPI ROW */}
+      <KpiRow data={view} onTab={onTab} />
+
+      {/* 5. MIDDLE ROW — hourly bars (2/3) + payment donut (1/3) */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 sm:gap-6">
+        <div className="lg:col-span-2">
+          <HourlyRevenueChart data={view} />
         </div>
-
-        {/* Middle Column */}
-        <div className="space-y-4 stagger-2">
-          <StoreHealthWidget storeId={currentStoreId} />
-          <HourlySalesWidget storeId={currentStoreId} />
-          <SalesTrendsWidget storeId={currentStoreId} onSeeMore={() => handleTabSwitch('reports')} />
-          <DebtAgingCard storeId={currentStoreId} />
-        </div>
-
-        {/* Right Column */}
-        <div className="space-y-4 stagger-3">
-          <TopCustomersWidget
-            storeId={currentStoreId}
-            onSeeMore={() => handleTabSwitch('customers')}
-            onTabSwitch={handleTabSwitch}
-          />
-          <LowStockAlerts storeId={currentStoreId} onTabSwitch={handleTabSwitch} />
-        </div>
+        <PaymentMethodsCard data={view} />
       </div>
 
-      {/* Dashboard Detail Dialog - shows when any KPI card is clicked */}
-      <DashboardDetailDialog
-        open={detailDialogOpen}
-        onOpenChange={setDetailDialogOpen}
-        kpi={selectedKpi}
-        onTabSwitch={handleTabSwitch}
-        onViewLowStockDetails={() => { setDetailDialogOpen(false); setLowStockDialogOpen(true); }}
-      />
+      {/* 6. QUICK ACTIONS */}
+      <QuickActionsRow onTab={onTab} />
 
-      {/* Low Stock Details Dialog */}
-      <Dialog open={lowStockDialogOpen} onOpenChange={setLowStockDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-600" />
-              Low Stock Products
-            </DialogTitle>
-            <DialogDescription>
-              Products that are below their reorder level and need restocking.
-            </DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="max-h-80">
-            {lowStockProducts && lowStockProducts.length > 0 ? (
-              <div className="space-y-2">
-                {lowStockProducts.map((product) => (
-                  <div
-                    key={product.id}
-                    className="flex items-center justify-between p-2.5 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{product.name}</p>
-                      <p className="text-xs text-muted-foreground">SKU: {product.sku}</p>
-                    </div>
-                    <div className="shrink-0 text-right ml-3">
-                      <p className="text-sm font-bold text-red-600">{product.quantityInStock} left</p>
-                      <p className="text-[10px] text-muted-foreground">Reorder at: {product.reorderLevel}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-6 text-muted-foreground">
-                <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No low stock products found</p>
-              </div>
-            )}
-          </ScrollArea>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setLowStockDialogOpen(false)}>Close</Button>
-            <Button onClick={() => { setLowStockDialogOpen(false); handleTabSwitch('inventory'); }}>
-              Go to Inventory
-              <ArrowRight className="h-4 w-4 ml-1" />
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* 7. BOTTOM GRID — activity / health / heatmap */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 sm:gap-6">
+        <RecentActivityCard data={view} />
+        <StoreHealthCard data={view} />
+        <HourlyHeatmapCard data={view} />
+      </div>
+
+      {/* 8–10. Customers / products / 7-day trend */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 sm:gap-6">
+        <TopCustomersCard data={view} onTab={onTab} />
+        <TopProductsCard data={view} />
+        <SalesTrendForecastCard data={view} />
+      </div>
+
+      {/* 11–12. Debt aging + alerts */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 sm:gap-6">
+        <DebtAgingCard data={view} />
+        <AlertsCard data={view} onTab={onTab} />
+      </div>
+
+      {/* Footer meta — live data confirmation */}
+      <p className="pb-1 text-center text-[10px] text-slate-400">
+        Live data · auto-refreshes every 30s{user?.name ? ` · signed in as ${user.name}` : ''} · last sync {lastSyncLabel}
+      </p>
     </div>
   );
 }

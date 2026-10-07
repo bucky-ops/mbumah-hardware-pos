@@ -126,20 +126,20 @@ export function AppSidebar() {
           collapsed ? 'px-0 py-2.5 justify-center' : 'px-4 py-2.5'
         } ${
           isActive
-            ? 'bg-sidebar-primary/90 text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/25'
-            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground hover:translate-x-1'
+            ? 'bg-orange-500/15 text-orange-400'
+            : 'text-slate-300 hover:bg-white/5 hover:text-white'
         }`}
       >
-        {/* Active item left border accent indicator */}
+        {/* Active item left border accent indicator (orange #f97316) */}
         {isActive && (
-          <div className="absolute left-0 top-0.5 bottom-0.5 w-1 rounded-r-full bg-sidebar-primary-foreground/90 transition-all duration-300 shadow-[0_0_6px] shadow-sidebar-primary-foreground/30" />
+          <div className="absolute left-0 top-0.5 bottom-0.5 w-0.5 rounded-r-full bg-orange-500 transition-all duration-300" />
         )}
         <Icon className={`h-4 w-4 shrink-0 relative z-10 transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
         {!collapsed && <span className="relative z-10">{label}</span>}
-        {!collapsed && id === 'pos' && <kbd className="ml-auto text-[8px] opacity-40 hidden xl:inline">F2</kbd>}
-        {!collapsed && id === 'inventory' && <kbd className="ml-auto text-[8px] opacity-40 hidden xl:inline">F3</kbd>}
-        {!collapsed && id === 'customers' && <kbd className="ml-auto text-[8px] opacity-40 hidden xl:inline">F4</kbd>}
-        {!collapsed && id === 'financial' && <kbd className="ml-auto text-[8px] opacity-40 hidden xl:inline">F5</kbd>}
+        {!collapsed && id === 'pos' && <kbd className="ml-auto rounded border border-white/10 px-1 text-[8px] text-slate-500 hidden xl:inline">F2</kbd>}
+        {!collapsed && id === 'inventory' && <kbd className="ml-auto rounded border border-white/10 px-1 text-[8px] text-slate-500 hidden xl:inline">F3</kbd>}
+        {!collapsed && id === 'customers' && <kbd className="ml-auto rounded border border-white/10 px-1 text-[8px] text-slate-500 hidden xl:inline">F4</kbd>}
+        {!collapsed && id === 'financial' && <kbd className="ml-auto rounded border border-white/10 px-1 text-[8px] text-slate-500 hidden xl:inline">F5</kbd>}
         {/* Ripple effect overlay on click */}
         <span className="absolute inset-0 overflow-hidden rounded-lg pointer-events-none" />
       </button>
@@ -177,29 +177,29 @@ export function AppSidebar() {
         aria-collapsed={collapsed}
         data-sidebar-state={sidebarState}
         tabIndex={sidebarState === 'mobile-overlay' ? -1 : undefined}
-        className={`fixed top-0 left-0 z-50 h-full bg-sidebar/95 backdrop-blur-md text-sidebar-foreground transform transition-all duration-300 ease-in-out lg:translate-x-0 lg:static lg:z-auto border-r border-sidebar-border shadow-lg lg:shadow-none ${
+        className={`fixed top-0 left-0 z-50 h-full bg-[#0f172a] text-slate-300 transform transition-all duration-300 ease-in-out lg:translate-x-0 lg:static lg:z-auto border-r border-white/10 shadow-lg lg:shadow-none ${
           sidebarState === 'expanded' ? 'w-64' : sidebarState === 'collapsed' ? 'lg:w-16 w-64' : 'w-64'
         } ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <div className="flex flex-col h-full">
-          {/* Logo + Collapse Toggle — gradient header */}
-          <div className={`flex items-center gap-3 border-b border-sidebar-border relative sidebar-header-gradient ${collapsed ? 'px-2 py-4 justify-center' : 'px-4 py-5'}`}>
-            <div className={`rounded-lg overflow-hidden bg-sidebar-primary flex items-center justify-center shrink-0 ${collapsed ? 'w-8 h-8' : 'w-9 h-9'}`}>
-              <img src="/logo.png" alt="MH" className="w-full h-full object-cover" />
+          {/* Logo + Collapse Toggle — flat dark-navy header with emerald brand mark */}
+          <div className={`flex items-center gap-3 border-b border-white/10 relative ${collapsed ? 'px-2 py-4 justify-center' : 'px-4 py-5'}`}>
+            <div className={`rounded-lg bg-emerald-600 flex items-center justify-center shrink-0 font-bold text-white tracking-tight ${collapsed ? 'w-8 h-8 text-[11px]' : 'w-9 h-9 text-xs'}`}>
+              MH
             </div>
             {!collapsed && (
               <div className="flex-1 min-w-0">
-                <h1 className="font-bold text-sm leading-tight">MBUMAH HARDWARE</h1>
-                <p className="text-xs text-sidebar-foreground/60">POS & ERP</p>
+                <h1 className="font-bold text-sm leading-tight text-white">Mbumah Hardware</h1>
+                <p className="text-xs text-slate-400">POS &amp; ERP</p>
               </div>
             )}
             {!collapsed && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="shrink-0 text-sidebar-foreground/60 hover:text-sidebar-foreground relative"
+                className="shrink-0 text-slate-400 hover:text-white relative"
                 onClick={() => setNotificationOpen(true)}
               >
                 <Bell className="h-4 w-4" />
@@ -215,7 +215,7 @@ export function AppSidebar() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="shrink-0 lg:hidden text-sidebar-foreground/60 hover:text-sidebar-foreground"
+                className="shrink-0 lg:hidden text-slate-400 hover:text-white"
                 onClick={() => setSidebarOpen(false)}
               >
                 <X className="h-4 w-4" />
@@ -225,7 +225,7 @@ export function AppSidebar() {
             <button
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               onClick={toggleSidebarCollapse}
-              className="hidden lg:flex absolute -right-3 top-1/2 -translate-y-1/2 z-50 h-6 w-6 items-center justify-center rounded-full border border-sidebar-border bg-sidebar text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent shadow-sm transition-all duration-200"
+              className="hidden lg:flex absolute -right-3 top-1/2 -translate-y-1/2 z-50 h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-[#0f172a] text-slate-400 hover:text-white hover:bg-white/10 shadow-sm transition-all duration-200"
             >
               {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
             </button>
@@ -239,7 +239,7 @@ export function AppSidebar() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="text-sidebar-foreground/60 hover:text-sidebar-foreground relative h-8 w-8"
+                    className="text-slate-400 hover:text-white relative h-8 w-8"
                     onClick={() => setNotificationOpen(true)}
                   >
                     <Bell className="h-4 w-4" />
@@ -262,7 +262,7 @@ export function AppSidebar() {
                 {collapsed ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <button className="w-full flex items-center justify-center px-2 py-2 rounded-lg border border-sidebar-border bg-sidebar-accent/50 text-sidebar-foreground/80 hover:bg-sidebar-accent transition-colors">
+                      <button className="w-full flex items-center justify-center px-2 py-2 rounded-lg border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 transition-colors">
                         <Store className="h-3.5 w-3.5 shrink-0" />
                       </button>
                     </TooltipTrigger>
@@ -271,10 +271,10 @@ export function AppSidebar() {
                     </TooltipContent>
                   </Tooltip>
                 ) : (
-                  <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-sidebar-border bg-sidebar-accent/50 text-xs text-sidebar-foreground/80 hover:bg-sidebar-accent transition-colors">
+                  <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-xs text-slate-300 hover:bg-white/10 transition-colors">
                     <Store className="h-3.5 w-3.5 shrink-0" />
                     {/* Branch code surfacing (v2.3.0 codes: JUJ/THI/RUI/NAI/NAK) */}
-                    <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary tracking-wide">
+                    <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-400 tracking-wide">
                       {STORE_LIST.find(s => s.id === currentStoreId)?.code || '—'}
                     </span>
                     <span className="truncate font-medium">{STORE_LIST.find(s => s.id === currentStoreId)?.shortName || 'Select Branch'}</span>
@@ -311,13 +311,13 @@ export function AppSidebar() {
             {navGroups.map((group, idx) => (
               <div key={group.label}>
                 {!collapsed && (
-                  <div className={`px-4 ${idx === 0 ? 'pt-2' : 'pt-4'} pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 flex items-center gap-1.5`}>
+                  <div className={`px-4 ${idx === 0 ? 'pt-2' : 'pt-4'} pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5`}>
                     <span>{group.label}</span>
-                    <Separator className="flex-1 bg-sidebar-border/50" />
+                    <Separator className="flex-1 bg-white/10" />
                   </div>
                 )}
                 {collapsed && idx > 0 && (
-                  <Separator className="my-2 mx-2 bg-sidebar-border/50" />
+                  <Separator className="my-2 mx-2 bg-white/10" />
                 )}
                 {group.items.map(renderNavItem)}
               </div>
@@ -325,20 +325,20 @@ export function AppSidebar() {
           </nav>
 
           {/* Footer - User Profile Dropdown — role-based avatar ring */}
-          <div className={`border-t border-sidebar-border py-3 space-y-2 ${collapsed ? 'px-1' : 'px-3'}`}>
+          <div className={`border-t border-white/10 py-3 space-y-2 ${collapsed ? 'px-1' : 'px-3'}`}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 {collapsed ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <div className="w-full flex justify-center px-1 py-2 rounded-lg hover:bg-sidebar-accent transition-colors cursor-pointer" role="button" tabIndex={0}>
+                      <div className="w-full flex justify-center px-1 py-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer" role="button" tabIndex={0}>
                         <div className="relative">
-                          <Avatar className={`h-8 w-8 ring-2 ring-sidebar-primary/20 ${avatarRingClass}`}>
-                            <AvatarFallback className="bg-gradient-to-br from-sidebar-primary to-sidebar-primary/70 text-sidebar-primary-foreground text-[10px] font-semibold">
+                          <Avatar className={`h-8 w-8 ring-2 ring-emerald-500/30 ${avatarRingClass}`}>
+                            <AvatarFallback className="bg-gradient-to-br from-emerald-600 to-emerald-500 text-white text-[10px] font-semibold">
                               {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
                             </AvatarFallback>
                           </Avatar>
-                          <span className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 border-2 border-sidebar rounded-full" />
+                          <span className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 border-2 border-[#0f172a] rounded-full" />
                         </div>
                       </div>
                     </TooltipTrigger>
@@ -347,20 +347,20 @@ export function AppSidebar() {
                     </TooltipContent>
                   </Tooltip>
                 ) : (
-                  <div className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors text-left cursor-pointer" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}>
+                  <div className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors text-left cursor-pointer" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}>
                     <div className="relative">
-                      <Avatar className={`h-9 w-9 ring-2 ring-sidebar-primary/20 ${avatarRingClass}`}>
-                        <AvatarFallback className="bg-gradient-to-br from-sidebar-primary to-sidebar-primary/70 text-sidebar-primary-foreground text-xs font-semibold">
+                      <Avatar className={`h-9 w-9 ring-2 ring-emerald-500/30 ${avatarRingClass}`}>
+                        <AvatarFallback className="bg-gradient-to-br from-emerald-600 to-emerald-500 text-white text-xs font-semibold">
                           {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-sidebar rounded-full" />
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[#0f172a] rounded-full" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
-                      <p className="text-xs text-sidebar-foreground/60 truncate">{user?.role === 'SUPER_ADMIN' ? 'Super Admin' : user?.role === 'CASHIER' ? 'Cashier' : user?.role || 'User'}</p>
+                      <p className="text-sm font-medium truncate text-white">{user?.name || 'User'}</p>
+                      <p className="text-xs text-slate-400 truncate">{user?.role === 'SUPER_ADMIN' ? 'Super Admin' : user?.role === 'CASHIER' ? 'Cashier' : user?.role || 'User'}</p>
                     </div>
-                    <ChevronDown className="h-3.5 w-3.5 text-sidebar-foreground/40 shrink-0" />
+                    <ChevronDown className="h-3.5 w-3.5 text-slate-500 shrink-0" />
                   </div>
                 )}
               </DropdownMenuTrigger>

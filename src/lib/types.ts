@@ -304,6 +304,12 @@ export interface CheckoutPayload {
   discountAmount?: number;
   notes?: string;
   managerApproval?: ManagerApproval;
+  // v2.12.0 (Task DASH-BE): debt-sale blocking step-up. When the customer has
+  // DebtLedger rows 90+ days overdue, a DEBT sale is rejected with
+  // `code: 'DEBT_BLOCKED_OVERDUE'` + `requiresManagerOverride: true` until
+  // the request carries managerOverride: true AND the authenticated session
+  // role is manager-level (SUPER_ADMIN / STORE_OWNER / BRANCH_MANAGER).
+  managerOverride?: boolean;
 }
 
 export interface PaymentDetails {
@@ -357,6 +363,141 @@ export interface DashboardStats {
   topProducts: TopProduct[];
   salesByHour: { hour: string; amount: number }[];
   paymentMethodBreakdown: { method: string; count: number; amount: number }[];
+  // ── v2.12.0 (Task DASH-BE) dashboard-insights extension ────────────────
+  // All new fields are ALWAYS present in the GET /api/dashboard response;
+  // they are typed optional so legacy constructors of this interface stay
+  // valid. The UI agent (DASH-UI) can rely on them at runtime.
+  /** Precise combined low-stock count (outOfStockCount + lowStockCount). */
+  lowStockCount?: number;
+  outOfStockCount?: number;
+  lowStockItems?: DashboardStockItem[];
+  outOfStockItems?: DashboardStockItem[];
+  lowStockOnlyItems?: DashboardStockItem[];
+  /** Active-shift snapshot (null when no shift is open). */
+  shift?: ShiftSnapshot | null;
+  debtCrisis?: DebtCrisisSummary;
+  alerts?: DashboardAlert[];
+  alertsCount?: number;
+  storeHealth?: StoreHealthSummary;
+  revenueTrend7d?: RevenueTrend7d;
+  recentActivities?: SanitizedActivity[];
+}
+
+// ── v2.12.0 dashboard-insight DTOs (server: src/lib/dashboard-insights.ts) ──
+
+export interface DashboardStockItem {
+  id: string;
+  name: string;
+  sku: string;
+  quantityInStock: number;
+  reorderLevel: number;
+  unitType: string;
+}
+
+export interface ShiftSnapshot {
+  id: string;
+  startedAt: string;
+  endedAt: null;
+  startedBy: string | null;
+  startingCash: number;
+  cashSales: number;
+  debtSales: number;
+  otherSales: number;
+  totalSales: number;
+  txnsCash: number;
+  txnsDebt: number;
+  txnsOther: number;
+  txnsTotal: number;
+  expenses: number;
+  /** startingCash + cashSales − expenses (formula field carries the string). */
+  expectedCash: number;
+  formula: string;
+  elapsedMinutes: number;
+}
+
+export interface DebtAgingBuckets {
+  current: number;
+  d30: number;
+  d60: number;
+  d90plus: number;
+}
+
+export interface DebtRiskCustomer {
+  customerId: string;
+  name: string;
+  owes: number;
+  lifetimeSpend: number;
+  ratio: number | null;
+  highRisk: boolean;
+}
+
+export interface DebtCrisisSummary {
+  outstandingTotal: number;
+  outstandingCount: number;
+  aging: DebtAgingBuckets;
+  debtRatioPercent: number;
+  warning: boolean;
+  banner: string | null;
+  highRiskCount: number;
+  customers: DebtRiskCustomer[];
+}
+
+export type DashboardAlertType = 'rental_overdue' | 'debt_overdue' | 'debt_large' | 'stock_low';
+export type DashboardAlertSeverity = 'critical' | 'warning' | 'info';
+
+export interface DashboardAlert {
+  type: DashboardAlertType;
+  severity: DashboardAlertSeverity;
+  dedupeKey: string;
+  title: string;
+  detail: string;
+  fine?: number;
+  actions: string[];
+}
+
+export interface StoreHealthBreakdownItem {
+  key: 'revenue' | 'stock' | 'debt' | 'engagement';
+  label: string;
+  score: number;
+  weight: number;
+  detail: string;
+}
+
+export interface StoreHealthSummary {
+  overall: number;
+  label: 'Good' | 'Fair' | 'At Risk';
+  weights: { revenue: number; stock: number; debt: number; engagement: number };
+  breakdown: StoreHealthBreakdownItem[];
+}
+
+export interface RevenueTrendDay {
+  date: string;
+  label: string;
+  revenue: number;
+  isToday: boolean;
+}
+
+export interface RevenueTrend7d {
+  days: RevenueTrendDay[];
+  forecast: number;
+  forecastMethod: string;
+  todayIsOutlier: boolean;
+  peakHour: { hour: string; amount: number } | null;
+  peakNote: string | null;
+}
+
+export interface SanitizedActivity {
+  id: string;
+  action: string;
+  component: string;
+  severity: string;
+  message: string;
+  metadata: Record<string, unknown> | null;
+  displayMessage: string;
+  actorName: string | null;
+  actorRole: string | null;
+  createdAt: string;
+  user: { name: string; role: string } | null;
 }
 
 export interface TopProduct {

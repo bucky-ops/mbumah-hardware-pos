@@ -88,13 +88,14 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
 
   return (
     <>
-      <header className="sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b shadow-sm">
+      <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 shadow-sm dark:border-slate-800 dark:bg-slate-950/95 dark:supports-[backdrop-filter]:bg-slate-950/80">
         <div className="flex items-center gap-3 px-4 py-3">
           <Button
             variant="ghost"
             size="icon"
             className="lg:hidden"
             onClick={toggleSidebar}
+            aria-label="Open menu"
           >
             <Menu className="h-5 w-5" />
           </Button>
@@ -108,9 +109,9 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
           >
             {isSidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
           </Button>
-          <div className="flex items-center gap-2">
-            <TabIcon className="h-5 w-5 text-primary" />
-            <h2 className="font-semibold text-lg">{currentTab?.label || 'Dashboard'}</h2>
+          <div className="flex items-center gap-2 min-w-0">
+            <TabIcon className="h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
+            <h2 className="truncate font-semibold text-base sm:text-lg text-slate-900 dark:text-slate-100">{currentTab?.label || 'Dashboard'}</h2>
           </div>
           <div className="ml-auto flex items-center gap-2">
             {/* Quick Search Button */}
@@ -242,12 +243,17 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
               </Badge>
             )}
             <CurrencySwitcher />
-            <Badge variant="outline" className="hidden sm:flex items-center gap-1.5">
-              <CalendarDays className="h-3 w-3" />
-              {now.toLocaleDateString('en-KE', { weekday: 'short', month: 'short', day: 'numeric' })}
-              <span className="text-muted-foreground">|</span>
-              <Clock className="h-3 w-3" />
-              {now.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            {/* Live date + clock — "Wed 7 Oct · 19:35:50" */}
+            <Badge
+              variant="outline"
+              className="hidden sm:flex items-center gap-1.5 border-slate-200 bg-white/60 font-mono tabular-nums text-slate-600"
+              aria-label="Current date and time"
+            >
+              <CalendarDays className="h-3 w-3 text-emerald-600" aria-hidden="true" />
+              {`${now.toLocaleDateString('en-KE', { weekday: 'short' })} ${now.getDate()} ${now.toLocaleDateString('en-KE', { month: 'short' })}`}
+              <span className="text-slate-300" aria-hidden="true">·</span>
+              <Clock className="h-3 w-3 text-emerald-600" aria-hidden="true" />
+              {now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
             </Badge>
           </div>
         </div>

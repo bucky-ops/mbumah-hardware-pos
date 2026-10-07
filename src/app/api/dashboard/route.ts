@@ -9,6 +9,9 @@ import { requireStoreAccess } from '@/lib/auth';
 // `number + decimal` concatenates. All accumulation below flows through
 // toDec()/round2() and emits plain numbers only at the JSON boundary.
 import { toDec, round2 } from '@/lib/utils/financialMath';
+// v2.12.0 (Task DASH-BE): server-only insight builders — every block is
+// fault-isolated so the dashboard NEVER throws (see module header).
+import { buildDashboardInsights, sanitizeActivity } from '@/lib/dashboard-insights';
 
 /**
  * NET (VAT-exclusive) revenue for a sale line. `lineTotal` is VAT-inclusive
@@ -136,7 +139,9 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
     db.salesTransaction.findMany({
       where: { storeId, createdAt: { gte: todayStart, lte: todayEnd }, transactionType: 'SALE', paymentStatus: { in: ['COMPLETED', 'PARTIAL'] } },
       // Task 12-b: taxAmount needed for the VAT-exclusive hourly series.
-      select: { createdAt: true, totalAmount: true, taxAmount: true },
+      // v2.12.0 (DASH-BE): paymentMethod added so today's debt-tender share
+      // (debtRatioToday) is computed from the SAME rows — no second query.
+      select: { createdAt: true, totalAmount: true, taxAmount: true, paymentMethod: true },
     }),
     db.salesTransaction.groupBy({
       by: ['paymentMethod'],
@@ -219,7 +224,9 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
   // Inventory valuation
   const allProductsForInventory = await db.product.findMany({
     where: { storeId, isActive: true },
-    select: { quantityInStock: true, costPrice: true, pricePerUnit: true },
+    // v2.12.0 (DASH-BE): reorderLevel added so the store-health stock score
+    // (healthy = qty > reorderLevel) reuses these rows — no second scan.
+    select: { quantityInStock: true, costPrice: true, pricePerUnit: true, reorderLevel: true },
   });
 
   // Task 12-b: revenue KPIs are NET of VAT (totalAmount − taxAmount) — VAT is
@@ -227,6 +234,49 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
   const todayRev = toDec(todayRevenue._sum.totalAmount).minus(toDec(todayRevenue._sum.taxAmount)).toNumber();
   const yesterdayRev = toDec(yesterdayRevenue._sum.totalAmount).minus(toDec(yesterdayRevenue._sum.taxAmount)).toNumber();
   const revenueChange = yesterdayRev > 0 ? ((todayRev - yesterdayRev) / yesterdayRev) * 100 : todayRev > 0 ? 100 : 0;
+
+  // ── v2.12.0 (Task DASH-BE) derived figures shared with the insights ──
+  // Today's NET debt-tender revenue from the SAME rows as the hourly series.
+  const todayDebtSales = round2(
+    salesByHourData
+      .filter((tx) => tx.paymentMethod === 'DEBT')
+      .reduce((acc, tx) => acc.plus(toDec(tx.totalAmount)).minus(toDec(tx.taxAmount)), toDec(0)),
+  );
+  const averageTransactionValue = todayTransactions > 0 ? round2(todayRev / todayTransactions) : 0;
+  const salesByHour = Object.entries(hourlyData).map(([hour, data]) => ({ hour, amount: round2(data.amount) }));
+
+  // Stock health inputs (healthy = quantity above the per-product reorder
+  // level) computed from the already-fetched inventory rows.
+  const stockHealthy = allProductsForInventory.filter(
+    (p) => toDec(p.quantityInStock).gt(toDec(p.reorderLevel)),
+  ).length;
+
+  // ── v2.12.0 insight blocks (shift / debtCrisis / alerts / storeHealth /
+  //    revenueTrend7d / precise stock counts). Fault-isolated internally. ──
+  const insights = await buildDashboardInsights(storeId, {
+    todayRevenue: todayRev,
+    todayTransactions,
+    averageTransactionValue,
+    todayDebtSales,
+    hourly: salesByHour,
+    stockHealthy,
+    stockTotal: allProductsForInventory.length,
+  });
+
+  // v2.12.0 (DASH-BE) low-stock fix: the precise out-of-stock / low counts
+  // replace the capped findMany-length; the split lists (numeric fields per
+  // the DECIMAL-STRING AUDIT precedent) come from the existing display list.
+  const toStockItem = (p: (typeof lowStockProducts)[number]) => ({
+    id: p.id,
+    name: p.name,
+    sku: p.sku,
+    quantityInStock: toDec(p.quantityInStock).toNumber(),
+    reorderLevel: toDec(p.reorderLevel).toNumber(),
+    unitType: p.unitType,
+  });
+  const lowStockItems = lowStockProducts.map(toStockItem);
+  const outOfStockItems = lowStockItems.filter((item) => item.quantityInStock <= 0);
+  const lowStockOnlyItems = lowStockItems.filter((item) => item.quantityInStock > 0);
 
   return Response.json({
     success: true,
@@ -236,15 +286,16 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
       todayRevenue: todayRev,
       // Net-revenue AOV (was tax-inclusive _avg.totalAmount) — consistent with
       // the net revenue basis above.
-      averageTransactionValue: todayTransactions > 0 ? round2(todayRev / todayTransactions) : 0,
+      averageTransactionValue,
       revenueChangePercent: Math.round(revenueChange * 100) / 100,
-      lowStockProducts: lowStockProducts.length,
-      lowStockItems: lowStockProducts,
+      // v2.12.0 (DASH-BE): precise combined count (was the capped list length).
+      lowStockProducts: insights.outOfStockCount + insights.lowStockCount,
+      lowStockItems,
       activeRentals,
       outstandingDebt: toDec(outstandingDebt._sum.balance).toNumber(),
       outstandingDebtCount: outstandingDebt._count,
       topProducts: topProductsResult,
-      salesByHour: Object.entries(hourlyData).map(([hour, data]) => ({ hour, amount: round2(data.amount) })),
+      salesByHour,
       // TENDER by method (tax-inclusive) by design — labelled by payment method,
       // this is money collected, not revenue. Decimal-safe conversion only.
       paymentMethodBreakdown: paymentMethodGrouped.map((pm) => ({ method: pm.paymentMethod, count: pm._count, amount: toDec(pm._sum.totalAmount).toNumber() })),
@@ -261,11 +312,28 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
         totalItems: allProductsForInventory.length,
         totalQuantity: allProductsForInventory.reduce((acc, p) => acc.plus(toDec(p.quantityInStock)), toDec(0)).toNumber(),
       },
-      recentActivities: recentActivities.map((log) => ({
-        id: log.id, action: log.action, component: log.component, severity: log.severity,
-        message: log.message, metadata: log.metadata ? (() => { try { return JSON.parse(log.metadata); } catch { return null; } })() : null,
-        createdAt: log.createdAt, user: log.user,
-      })),
+      // v2.12.0 (DASH-BE) ACTIVITY SANITIZATION: rows mapped through the
+      // leak-free sanitizer — ids stripped, displayMessage humanized,
+      // metadata gated, actor id dropped.
+      recentActivities: recentActivities.map(sanitizeActivity),
+
+      // ══ v2.12.0 (Task DASH-BE) NEW insight fields ══
+      // Active-shift snapshot with the user's expected-cash formula.
+      shift: insights.shift,
+      // Debt aging + ratio + high-risk customers.
+      debtCrisis: insights.debtCrisis,
+      // Deduplicated, actionable alert feed.
+      alerts: insights.alerts,
+      alertsCount: insights.alertsCount,
+      // Transparent weighted store-health score.
+      storeHealth: insights.storeHealth,
+      // 7-day net revenue trend + median forecast + peak-hour note.
+      revenueTrend7d: insights.revenueTrend7d,
+      // Precise stock-count split (lowStockProducts above = their sum).
+      outOfStockCount: insights.outOfStockCount,
+      lowStockCount: insights.lowStockCount,
+      outOfStockItems,
+      lowStockOnlyItems,
     },
   });
 }
