@@ -184,7 +184,53 @@ the POS is closed). Restore = stop the POS, copy the file back, start.
 
 ---
 
-## Updating to a newer release
+## Automatic updates, rollback & scheduled backups (v2.9.0)
+
+The installer registers two hidden Windows scheduled tasks (the Linux
+installer prints the matching crontab lines instead):
+
+| Task | When | What it does |
+|---|---|---|
+| **Mbumah POS Nightly Update** | daily 23:00, hidden | checks GitHub for a newer release; backs up the database + `.env` first (`Desktop\MbumahBackups\pre-update\…`), installs the new version, rebuilds exactly like the installer, restarts the POS and **health-checks it** |
+| **Mbumah POS Nightly Backup** | daily 02:30, hidden | unattended copy of `pos.db` (+ WAL sidecars) + `.env` into `Desktop\MbumahBackups` |
+
+Safety rails:
+
+- **Nothing happens while the shop works.** The updater only acts inside the
+  dormant window **22:00–06:00** (configurable) or when the POS is not
+  running at all; a manual run with `-Force` overrides.
+- **A failed update rolls itself back automatically.** If any build/verify/
+  health step fails, the previous version is re-installed and health-checked.
+  Your data is never touched — schema changes are forward-compatible, and the
+  pre-update backup is always kept.
+- **Every decision is recorded** in the update ledger:
+  `%USERPROFILE%\mbumah-pos-data\update-ledger.jsonl` (one JSON line per
+  event: `UP_TO_DATE`, `BACKUP`, `UPDATE_SUCCESS`, `UPDATE_FAILED`,
+  `ROLLBACK_SUCCESS`, …).
+- If the laptop is off at 23:00 the run is missed and simply catches up the
+  next night — nothing breaks. Offline check → silent skip, retry tomorrow.
+- The ledger is what powers **Rollback-Mbumah-POS.bat**: it lists the
+  versions the POS has actually been on and reinstates the one you pick.
+
+Run by hand instead of waiting for the schedule (repo root):
+
+```bat
+Update-Mbumah-POS.bat          REM the same check the nightly task runs, right now
+Update-Mbumah-POS.bat -Force   REM update even outside the dormant window
+Rollback-Mbumah-POS.bat        REM pick a previous version from the ledger
+Rollback-Mbumah-POS.bat -ToVersion v2.8.0
+```
+
+Manage the scheduled tasks:
+
+```bat
+schtasks /change /tn "Mbumah POS Nightly Update" /disable    REM pause auto-updates
+schtasks /change /tn "Mbumah POS Nightly Update" /enable     REM resume
+schtasks /query /tn "Mbumah POS Nightly Update" /v           REM inspect
+schtasks /delete /tn "Mbumah POS Nightly Update" /f          REM remove
+```
+
+Manual update (equivalent to what the updater runs):
 
 ```bash
 git pull origin main

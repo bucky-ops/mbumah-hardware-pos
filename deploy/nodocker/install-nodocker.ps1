@@ -139,6 +139,30 @@ New-Item -ItemType Directory -Force -Path ".next\standalone\.next" | Out-Null
 Copy-Item ".next\static" ".next\standalone\.next\" -Recurse -Force
 Copy-Item "public" ".next\standalone\" -Recurse -Force
 
+# -- 8. Scheduled tasks: nightly update (23:00) + nightly backup (02:30) ---
+# The updater only acts inside the dormant window (22:00-06:00) and skips
+# silently when offline, so a laptop that is switched off at night just
+# catches up the next night - nothing breaks. Both tasks run hidden.
+$here = (Get-Location).Path
+$tasks = @(
+  @{ Name = 'Mbumah POS Nightly Update'; Time = '23:00'; File = 'deploy\nodocker\update-pos.ps1'; Extra = '' },
+  @{ Name = 'Mbumah POS Nightly Backup'; Time = '02:30'; File = 'deploy\nodocker\backup-pos.ps1'; Extra = ' -Unattended' }
+)
+foreach ($t in $tasks) {
+  $scriptPath = Join-Path $here $t.File
+  $tr = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $scriptPath + '"' + $t.Extra
+  try {
+    schtasks /create /f /tn "$($t.Name)" /sc daily /st $t.Time /tr $tr | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+      Write-Host "[OK] Scheduled task '$($t.Name)' registered (daily $($t.Time), hidden)."
+    } else {
+      Write-Host "[WARN] Could not register '$($t.Name)' (schtasks exit $LASTEXITCODE) - you can still update/backup by hand." -ForegroundColor Yellow
+    }
+  } catch {
+    Write-Host "[WARN] Could not register '$($t.Name)': $($_.Exception.Message)" -ForegroundColor Yellow
+  }
+}
+
 Write-Host ""
 Write-Host "==============================================================" -ForegroundColor Green
 Write-Host "  INSTALL COMPLETE" -ForegroundColor Green
@@ -150,3 +174,6 @@ Write-Host "  First login:  admin@mbumahhardware.co.ke / password123"
 Write-Host "  !! CHANGE THE ADMIN PASSWORD IMMEDIATELY (Profile > Security)"
 Write-Host "  !! Then set SEED_DATABASE=false in .env"
 Write-Host "  Database file (back this up): $dbFile"
+Write-Host ""
+Write-Host "  Scheduled: nightly update 23:00 + nightly backup 02:30 (hidden tasks)"
+Write-Host "  Manual:    Update-Mbumah-POS.bat / Rollback-Mbumah-POS.bat / Backup POS Data"

@@ -148,6 +148,20 @@ const envSchema = z.object({
   TWILIO_PHONE_NUMBER: z.string().optional(), // .env.example alias for TWILIO_FROM_PHONE
   TWILIO_SMS_FROM: z.string().optional(), // optional SMS sender override
   TWILIO_WHATSAPP_FROM: z.string().optional(), // defaults to the Twilio sandbox number
+
+  // ── Updates / rollback / backups (v2.9.0) — ALL OPTIONAL. ──────────────────
+  // Presence-only documentation (same contract as the gateway block above):
+  //   VERCEL_TOKEN + VERCEL_PROJECT_ID power the admin "Roll back production"
+  //   button (Vercel deployments API); VERCEL_TEAM_ID scopes it to a team.
+  //   GITHUB_TOKEN raises the GitHub releases rate limit for update checks.
+  //   BACKUP_DIR overrides where crash/manual backups are written
+  //   (default: Desktop\MbumahBackups on Windows, os.tmpdir()/mbumah-backups
+  //   on cloud). All absent → the panel degrades honestly (no rollback
+  //   button, anonymous rate limits, tmpdir backups) instead of failing.
+  VERCEL_TOKEN: z.string().optional(),
+  VERCEL_PROJECT_ID: z.string().optional(),
+  VERCEL_TEAM_ID: z.string().optional(), // optional team scope for Vercel API calls
+  GITHUB_TOKEN: z.string().optional(), // raises GitHub API rate limits for release checks
 });
 
 export type Env = z.infer<typeof envSchema>;

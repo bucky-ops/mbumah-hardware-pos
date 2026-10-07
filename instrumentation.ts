@@ -49,6 +49,21 @@ export async function register(): Promise<void> {
         error instanceof Error ? error.message : String(error),
       );
     }
+
+    // ── Crash-triggered database backup (v2.9.0) ────────────────────────────
+    // Installs process-level uncaughtException / unhandledRejection handlers
+    // that attempt a database backup (SQLite file copy / pg_dump attempt)
+    // before a crash takes the process down. Defensive by design: every step
+    // is internally try/caught, so this can never break server boot.
+    try {
+      const { installCrashBackup } = await import('./src/lib/crash-backup');
+      installCrashBackup();
+    } catch (error) {
+      console.error(
+        '[instrumentation] Failed to install the crash-backup hook:',
+        error instanceof Error ? error.message : String(error),
+      );
+    }
     return;
   }
 

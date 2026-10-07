@@ -6,6 +6,12 @@
 #   2. "Background jobs" - hourly/nightly maintenance (keep it open too)
 # The browser opens ONLY after the server reports healthy.
 # ============================================================================
+param(
+  # -NoBrowser: start everything but do NOT auto-open the browser (used by
+  # the nightly updater, which restarts the POS at 23:00 - a browser popping
+  # up would be surprising). Interactive users: just run without arguments.
+  [switch]$NoBrowser
+)
 $ErrorActionPreference = 'Stop'
 
 try {
@@ -68,8 +74,12 @@ try {
 
   if ($ready) {
     Write-Host ''
-    Write-Host 'POS is ready - opening your browser...' -ForegroundColor Green
-    Start-Process "http://localhost:$port"
+    if ($NoBrowser) {
+      Write-Host 'POS is ready. (-NoBrowser: not opening a browser window.)' -ForegroundColor Green
+    } else {
+      Write-Host 'POS is ready - opening your browser...' -ForegroundColor Green
+      Start-Process "http://localhost:$port"
+    }
   } elseif ($dbEmpty) {
     Write-Host ''
     Write-Host 'WARNING: the server is running but the DATABASE is not ready.' -ForegroundColor Yellow
