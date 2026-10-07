@@ -18,13 +18,17 @@ async function searchProductsHandler(...args: unknown[]): Promise<Response> {
     return Response.json({ success: true, data: [] });
   }
 
+  // Case handling is provider-aware: PostgreSQL `contains` is case-SENSITIVE
+  // (a transfer/POS search for "nail" found no "4-inch Nails" in production),
+  // so Postgres gets `mode: 'insensitive'`. SQLite (the laptop deployment
+  // kits) rejects the `mode` argument at runtime, but its ASCII contains is
+  // already case-insensitive there — so it just uses the plain form.
+  const isPostgres = (process.env.DATABASE_URL || '').trim().toLowerCase().startsWith('postgres');
+  const ci = () => (isPostgres ? { contains: q, mode: 'insensitive' as const } : { contains: q });
+
   const where: Record<string, unknown> = {
     isActive: true,
-    OR: [
-      { name: { contains: q } },
-      { sku: { contains: q } },
-      { barcode: { contains: q } },
-    ],
+    OR: [{ name: ci() }, { sku: ci() }, { barcode: ci() }],
   };
 
   if (storeId) {
