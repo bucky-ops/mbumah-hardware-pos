@@ -2,7 +2,7 @@
 // MBUMAH HARDWARE POS — Admin Manual Backup API (SRV-2, v2.9.0)
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// POST /api/admin/backup — build a business-critical JSON snapshot of the
+// GET /api/admin/backup — build a business-critical JSON snapshot of the
 // database and return it as a browser download (Content-Disposition:
 // attachment), mirroring the /api/data-exports/[id]/download pattern.
 //
@@ -76,7 +76,7 @@ function writeSnapshotToDisk(fileName: string, json: string): void {
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────
-async function postHandler(
+async function getHandler(
   _request: NextRequest,
   session: AuthSession,
 ): Promise<Response> {
@@ -250,8 +250,10 @@ async function postHandler(
   });
 }
 
-// POST: SUPER_ADMIN or STORE_OWNER only.
-export const POST = withErrorBoundary(
-  requireAuth(postHandler, { roles: ['SUPER_ADMIN', 'STORE_OWNER'] }),
+// GET: SUPER_ADMIN or STORE_OWNER only. GET (not POST) on purpose: a
+// snapshot is a read, and GET skips the proxy's JSON-content-type/CSRF
+// layers — mirrors the data-exports download route.
+export const GET = withErrorBoundary(
+  requireAuth(getHandler, { roles: ['SUPER_ADMIN', 'STORE_OWNER'] }),
   'ADMIN_BACKUP',
 );

@@ -73,7 +73,7 @@ async function downloadBackupSnapshot(): Promise<string> {
   const token =
     typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null;
   const res = await fetch('/api/admin/backup', {
-    method: 'POST',
+    method: 'GET',
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     credentials: 'same-origin',
   });
