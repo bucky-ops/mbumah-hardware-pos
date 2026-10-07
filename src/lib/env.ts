@@ -162,6 +162,16 @@ const envSchema = z.object({
   VERCEL_PROJECT_ID: z.string().optional(),
   VERCEL_TEAM_ID: z.string().optional(), // optional team scope for Vercel API calls
   GITHUB_TOKEN: z.string().optional(), // raises GitHub API rate limits for release checks
+  // ── Remote Access Kit / fleet ops (v2.11.0) — all optional ──
+  //   OPS_GITHUB_TOKEN: fine-grained PAT with Contents RW on the ops-log repo
+  //     ONLY — lets the admin console commit fleet commands and read ledgers.
+  //   OPS_LOG_REPO: "owner/repo" of the private audit repo
+  //     (default bucky-ops/mbumah-ops-log).
+  //   OPS_SIGNING_KEY: shared HMAC key — commands are signed by the cloud and
+  //     verified by store agents; without it no command can be issued.
+  OPS_GITHUB_TOKEN: z.string().optional(),
+  OPS_LOG_REPO: z.string().optional(),
+  OPS_SIGNING_KEY: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

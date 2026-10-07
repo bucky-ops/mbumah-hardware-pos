@@ -127,6 +127,8 @@ function Ensure-ScheduledTasks {
   # task (same /tr quoting as the installer: full -File path, no /tr comma
   # mangling on Windows PowerShell 5.1) so the dormant-window automation
   # takes over from the next night on. Never throws.
+  # v2.11.0: also re-registers the RAK agent ("Mbumah POS Agent", every 15 min)
+  # so remote commands keep flowing after any update.
   $tasks = @(
     @{ Name = 'Mbumah POS Nightly Update'; Time = '23:00'; File = 'deploy\nodocker\update-pos.ps1'; Extra = '' },
     @{ Name = 'Mbumah POS Nightly Backup'; Time = '02:30'; File = 'deploy\nodocker\backup-pos.ps1'; Extra = ' -Unattended' }
@@ -148,6 +150,26 @@ function Ensure-ScheduledTasks {
         Write-Ledger 'TASK_REGISTERED' '' '' $t.Name
       }
     } catch { }
+  }
+  # RAK agent — different cadence (every 15 min), registered separately.
+  $agentTask = 'Mbumah POS Agent'
+  $agentExists = $false
+  try {
+    schtasks /query /tn "$agentTask" > $null 2>&1
+    if ($LASTEXITCODE -eq 0) { $agentExists = $true }
+  } catch { $agentExists = $false }
+  if (-not $agentExists) {
+    $agentPath = Join-Path $root 'deploy\nodocker\agent.mjs'
+    if (Test-Path $agentPath) {
+      $agentTr = 'node.exe --no-warnings "' + $agentPath + '"'
+      try {
+        schtasks /create /f /tn "$agentTask" /sc minute /mo 15 /tr $agentTr | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "[OK] Scheduled task '$agentTask' registered (every 15 min, hidden)."
+          Write-Ledger 'TASK_REGISTERED' '' '' $agentTask
+        }
+      } catch { }
+    }
   }
 }
 

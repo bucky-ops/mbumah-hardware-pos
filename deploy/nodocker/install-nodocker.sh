@@ -54,6 +54,22 @@ else
   echo "[OK] .env created - secrets generated, database at: $DB_FILE"
 fi
 
+# ── 3b. Remote Ops agent identity (RAK, v2.11.0) — append missing keys only ──
+# STORE_ID: this machine's fleet identity (defaults to the sanitized hostname).
+# OPS_SIGNING_KEY: shared HMAC secret — must match the cloud's key or every
+# remote command is rejected by design. Written once; never rotated here.
+if ! grep -q '^STORE_ID=' .env 2>/dev/null; then
+  SID="$(hostname | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9._-' '-' | cut -c1-80)"
+  [ -n "$SID" ] || SID="mbumah-store"
+  printf '\n# -- Remote Ops agent (RAK) --\nSTORE_ID=%s\n' "$SID" >> .env
+  echo "[OK] STORE_ID=$SID"
+fi
+if ! grep -q '^OPS_SIGNING_KEY=' .env 2>/dev/null; then
+  RK="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  printf 'OPS_SIGNING_KEY=%s\n' "$RK" >> .env
+  echo "[OK] OPS_SIGNING_KEY generated (copy the SAME value into the cloud's OPS_SIGNING_KEY)."
+fi
+
 # ── 4. LAN mode — decide BEFORE the build ────────────────────────────────
 if [ "${1:-}" = "--lan" ]; then
   LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
@@ -121,3 +137,9 @@ echo "  To enable both, run:"
 echo "    (crontab -l 2>/dev/null; \\"
 echo "      echo \"0 23 * * * bash $APP_ROOT/deploy/nodocker/update-pos.sh >> $APP_ROOT/update-cron.log 2>&1\"; \\"
 echo "      echo \"30 2 * * * bash $APP_ROOT/deploy/nodocker/backup-pos.sh >> $APP_ROOT/backup-cron.log 2>&1\") | crontab -"
+echo ""
+echo "  Remote Ops agent (RAK): polls the private ops-log repo every 15 minutes"
+echo "  for signed commands from the owner's console (pull-only, no inbound ports)."
+echo "  To enable it, run:"
+echo "    (crontab -l 2>/dev/null; \\"
+echo "      echo \"*/15 * * * * cd $APP_ROOT && node deploy/nodocker/agent.mjs >> $APP_ROOT/agent-cron.log 2>&1\") | crontab -"

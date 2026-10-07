@@ -2247,6 +2247,92 @@ export const settingsApi = {
   },
 };
 
+// ─── Remote Access Kit — fleet ops (v2.11.0) ─────────────────────────────────
+
+export interface FleetAgent {
+  storeId: string;
+  status: 'online' | 'stale' | 'offline' | 'unknown';
+  lastHeartbeatAt: string | null;
+  lastEvent: string | null;
+  lastEventAt: string | null;
+  version: string | null;
+  health: string | null;
+  frozen: boolean;
+  drift: 'up_to_date' | 'behind' | 'unknown';
+  pendingCommand: {
+    commandId: string;
+    type: string;
+    version: string | null;
+    force: boolean;
+    issuedAt: string;
+    issuedBy: string;
+    reason: string | null;
+  } | null;
+}
+
+export interface FleetStatusData {
+  configured: boolean;
+  note?: string;
+  repo: string;
+  agents: FleetAgent[];
+  cloud: {
+    version: string;
+    buildSha: string;
+    latestRelease: string | null;
+    releaseUrl: string | null;
+    updateAvailable: boolean;
+    releasesNote?: string;
+  };
+  rings: unknown;
+}
+
+export interface FleetCommandResult {
+  issued: Array<{ target: string; commandId: string; commitUrl: string | null }>;
+  failures: Array<{ target: string; error: string }>;
+  message: string;
+}
+
+export interface FleetLogRow {
+  ts: string;
+  event: string;
+  storeId: string;
+  [key: string]: unknown;
+}
+
+export const fleetApi = {
+  /** Fleet + cloud snapshot (SUPER_ADMIN / STORE_OWNER only). */
+  getStatus: async () => {
+    const res = await request<FleetStatusData>('/admin/fleet');
+    return res.data;
+  },
+
+  /** Issue a signed command (SUPER_ADMIN only). */
+  issueCommand: async (payload: {
+    type: 'update' | 'rollback' | 'freeze' | 'unfreeze' | 'tunnel';
+    targets: string[];
+    version?: string;
+    force?: boolean;
+    ttlMinutes?: number;
+    reason?: string;
+  }) => {
+    return request<FleetCommandResult>('/admin/fleet/command', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Activity ledger (newest first). */
+  getLog: async (params?: { limit?: number; store?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.store) qs.set('store', params.store);
+    const res = await request<{ rows: FleetLogRow[]; count: number; configured?: boolean; note?: string }>(
+      `/admin/fleet/log${qs.toString() ? `?${qs.toString()}` : ''}`,
+    );
+    return res.data;
+  },
+};
+
 // ─── Updates / rollback / backups (v2.9.0) ───────────────────────────────────
 
 export interface UpdateStatusData {
