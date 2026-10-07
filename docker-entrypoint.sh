@@ -33,22 +33,35 @@ npx prisma db push --skip-generate 2>&1 || {
   sleep 5
   npx prisma db push --skip-generate 2>&1 || {
     echo "❌ Database schema push failed after retry. Check your DATABASE_URL."
-    echo "   The server will start anyway, but some features may not work."
+    echo "   Exiting so the container restart policy can retry from a clean state."
+    echo "   (Starting the server anyway would render every module 'unavailable'.)"
+    exit 1
   }
 }
 
 # ── Step 4: Seed database (first run only) ───────────────────────────────────
 # The seed script is idempotent — it checks for existing data before inserting.
-# Set SEED_DATABASE=true in .env to force seeding (e.g., on first deployment).
+# Seeding runs when SEED_DATABASE=true, OR automatically when the database is
+# EMPTY (fresh install). The auto-seed guarantees a new laptop/compose stack
+# always boots with the admin account present instead of an unusable,
+# "backend unavailable" empty database.
 echo ""
-echo "[4/4] Seeding database (if empty)..."
+echo "[4/4] Seeding database (if needed)..."
 if [ "${SEED_DATABASE:-false}" = "true" ]; then
   echo "   SEED_DATABASE=true — running seed..."
   npx prisma db seed 2>&1 || echo "⚠️  Seed failed. You can run it manually: docker compose exec app npx prisma db seed"
 else
-  echo "   Skipping seed (SEED_DATABASE not set to 'true')."
-  echo "   To seed on first run, set SEED_DATABASE=true in your .env file."
-  echo "   Or run manually: docker compose exec app npx prisma db seed"
+  VERIFY=0
+  node ./verify-db.mjs || VERIFY=$?
+  if [ "$VERIFY" = "10" ]; then
+    echo "   Database is reachable but EMPTY — running the first-run seed..."
+    npx prisma db seed 2>&1 || echo "⚠️  Seed failed. You can run it manually: docker compose exec app npx prisma db seed"
+  elif [ "$VERIFY" = "0" ]; then
+    echo "   Database already seeded — skipping (set SEED_DATABASE=true to force)."
+  else
+    echo "   ⚠️  Could not verify the database (see error above). You can run the seed manually:"
+    echo "      docker compose exec app npx prisma db seed"
+  fi
 fi
 
 # ── Start the server ─────────────────────────────────────────────────────────

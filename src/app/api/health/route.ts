@@ -53,7 +53,13 @@ export async function GET() {
     };
   }
 
-  // Check database size (record counts for key tables)
+  // Check database size (record counts for key tables) + seeded state.
+  // The previous version swallowed the actual error behind "Could not
+  // retrieve stats", which made the "backend unavailable on an empty DB"
+  // laptop failure undiagnosable from the health endpoint alone. The error
+  // message is now surfaced (truncated) and a dedicated `seed` check tells
+  // an EMPTY-but-reachable database apart from a BROKEN connection.
+  let userCount: number | null = null;
   try {
     const [users, products, transactions, sessions] = await Promise.all([
       db.user.count(),
@@ -61,12 +67,39 @@ export async function GET() {
       db.salesTransaction.count(),
       db.session.count({ where: { expiresAt: { gt: new Date() } } }),
     ]);
+    userCount = users;
     checks.database_stats = {
       status: 'ok',
       detail: `${users} users, ${products} products, ${transactions} transactions, ${sessions} active sessions`,
     };
-  } catch {
-    checks.database_stats = { status: 'warning', detail: 'Could not retrieve stats' };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message.slice(0, 160) : 'Unknown error';
+    checks.database_stats = {
+      status: 'warning',
+      detail: `Could not retrieve stats: ${detail}`,
+    };
+  }
+
+  // Seeded-state check — a reachable but EMPTY database (fresh install where
+  // the seed never ran, or the server pointed at the wrong file) used to look
+  // "healthy" here because `SELECT 1` succeeds on any SQLite/Postgres. The
+  // frontend then shows the backend as unavailable for every module. A
+  // warning (not error) keeps the HTTP 200 contract for uptime monitors.
+  if (userCount === null) {
+    checks.seed = {
+      status: 'warning',
+      detail: 'Seed state unknown — user count query failed',
+    };
+  } else if (userCount === 0) {
+    checks.seed = {
+      status: 'warning',
+      detail: 'Database is EMPTY (0 users) — run the seed (SEED_DATABASE=true / installer) or verify DATABASE_URL points at the intended database',
+    };
+  } else {
+    checks.seed = {
+      status: 'ok',
+      detail: `${userCount} users present`,
+    };
   }
 
   // Check for security concerns

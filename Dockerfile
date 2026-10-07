@@ -81,6 +81,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
+# Copy the shared database verifier (used by the entrypoint to auto-seed
+# empty databases on first run instead of booting "backend unavailable")
+COPY --from=builder --chown=nextjs:nodejs /app/deploy/nodocker/verify-db.mjs ./verify-db.mjs
+
 # Copy the Prisma CLI from builder (needed for db push/seed at startup)
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
