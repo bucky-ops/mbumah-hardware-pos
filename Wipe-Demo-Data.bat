@@ -5,7 +5,7 @@ color 0C
 echo.
 echo  ============================================================
 echo    MBUMAH HARDWARE POS  -  GO-LIVE RESET
-necho  ============================================================
+echo  ============================================================
 echo.
 echo  This deletes all DEMO / TRAINING sales data so the shop can
 echo  start clean for real trading.

@@ -141,3 +141,32 @@ To move to a new laptop: uninstall here (keep the backup folder on a USB
 stick), then run `Install-Mbumah-POS.bat` on the new laptop and copy the
 backup with your technician.
 
+
+---
+
+## 10. Staying up to date (updates, backups & rollback)
+
+Your POS looks after itself at night, while the shop is closed:
+
+- **23:00 — Nightly update.** The system quietly checks the internet for a
+  newer version of Mbumah POS. It only installs it between **22:00 and
+  06:00**, it always saves a copy of your data first, and if anything about
+  the new version does not pass its health checks it **puts the previous
+  version back by itself**. You do not have to do anything. If the laptop is
+  switched off at that time, it simply tries again the next night.
+- **02:30 — Nightly backup.** A copy of your sales database is saved into
+  `Desktop\MbumahBackups`. Copy that folder to a USB stick or OneDrive about
+  once a week — a backup that only lives on the same laptop is not a real
+  backup.
+
+Things you can do yourself:
+
+- **Update right now** (instead of waiting for the night): double-click
+  **Update-Mbumah-POS.bat** in the app folder.
+- **Go back to an earlier version** (only if support asks you to):
+  double-click **Rollback-Mbumah-POS.bat**, pick the version from the list,
+  and wait. Your sales data is never changed by this.
+- **Back up right now**: the **Backup POS Data** desktop icon (unchanged).
+
+Your sales data is **never** touched by updates or rollbacks — every new
+version is checked against your data before it is allowed to serve the shop.

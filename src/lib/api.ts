@@ -2247,6 +2247,52 @@ export const settingsApi = {
   },
 };
 
+// ─── Updates / rollback / backups (v2.9.0) ───────────────────────────────────
+
+export interface UpdateStatusData {
+  current: { version: string; buildSha: string; buildLabel: string };
+  channel: 'cloud' | 'laptop';
+  updateAvailable: boolean;
+  latestRelease: {
+    tag: string;
+    name: string;
+    url: string;
+    publishedAt: string | null;
+  } | null;
+  releasesNote?: string;
+  vercelConfigured: boolean;
+  deployments: Array<{
+    uid: string;
+    state: string;
+    createdAt: number;
+    url: string | null;
+    sha: string | null;
+  }>;
+  vercelNote?: string;
+  lastBackup: {
+    at: string;
+    action: string;
+    severity: string;
+    message: string;
+  } | null;
+}
+
+export const updatesApi = {
+  /** Deployment update posture snapshot (SUPER_ADMIN / STORE_OWNER only). */
+  getStatus: async () => {
+    const res = await request<UpdateStatusData>('/admin/updates');
+    return res.data;
+  },
+
+  /** Roll production back to a previous Vercel deployment (SUPER_ADMIN only). */
+  rollback: async (deploymentId: string) => {
+    return request<{ status: string; deploymentId: string; message: string }>(
+      '/admin/updates/rollback',
+      { method: 'POST', body: JSON.stringify({ deploymentId }) },
+    );
+  },
+};
+
 export interface UserItem {
   id: string;
   name: string;

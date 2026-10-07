@@ -23,6 +23,7 @@ import {
   type AuditLogItem, type SystemConfigItem, type UserItem,
 } from '@/lib/api';
 import { VAT_RATE_QUERY_KEY } from '@/hooks/use-vat-rate';
+import { UpdatesSafetySection } from '@/components/admin/updates-safety-section';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -1856,6 +1857,11 @@ export default function AdminTab() {
       {/* System Configuration Editor                               */}
       {/* ================================================================== */}
       <ConfigEditor storeId={currentStoreId} />
+
+      {/* ================================================================== */}
+      {/* Updates, Rollback & Backups (v2.9.0 architecture plan)          */}
+      {/* ================================================================== */}
+      <UpdatesSafetySection />
 
       {/* ================================================================== */}
       {/* System Logs & Stock Movements Tabs                                  */}

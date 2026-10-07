@@ -111,3 +111,13 @@ echo "  First login:  admin@mbumahhardware.co.ke / password123"
 echo "  !! CHANGE THE ADMIN PASSWORD IMMEDIATELY (Profile > Security)"
 echo "  !! Then set SEED_DATABASE=false in .env"
 echo "  Database file (back this up): $DB_FILE"
+
+# ── 8. Offer optional cron: nightly update + nightly backup ──────────
+APP_ROOT="$(pwd)"
+echo ""
+echo "  Optional (recommended): automatic nightly update + backup via cron."
+echo "  The updater only acts between 22:00-06:00 and skips quietly when offline."
+echo "  To enable both, run:"
+echo "    (crontab -l 2>/dev/null; \\"
+echo "      echo \"0 23 * * * bash $APP_ROOT/deploy/nodocker/update-pos.sh >> $APP_ROOT/update-cron.log 2>&1\"; \\"
+echo "      echo \"30 2 * * * bash $APP_ROOT/deploy/nodocker/backup-pos.sh >> $APP_ROOT/backup-cron.log 2>&1\") | crontab -"
