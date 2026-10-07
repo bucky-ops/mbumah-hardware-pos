@@ -299,3 +299,26 @@ Stage Summary:
 - v2.8.0 shipped & production-verified: ALL 8 client-reported items addressed in the requested priority order + Inventory crash + Uninstall + PDF checklist for Sam.
 - KEY LEARNINGS: withSessionAuth never passes session (getSessionFromRequest inside handlers — again); radix menus reject synthetic events (E2E manually or accept tab-level verification); zod v4 has no invalid_type_error; Invoice model has NO etims fields (those live on SalesTransaction).
 - PENDING for next rounds: gift-card redeemByCode queue item may be OBSOLETE (v2.6.3 already fixed; confirm with user); About v1.0.0 hardcode (superseded by AboutDialog sync); Profile Settings done in v2.7.x; vcp_ Vercel token rotation STILL pending (user action); voucher gateways need RESEND/TWILIO keys configured (documented in checklist for Sam); campaign server-side dispatch deliberately out of scope.
+
+---
+Task ID: ARCH-1
+Agent: Z.ai Code (main)
+Task: User requested a comprehensive architecture plan (template with blanks) for: (1) GitHub integration that monitors the repo and pushes updates automatically when the system is dormant, (2) a rollback button to revert to a previous stable state, (3) automatic DB backup on crash - each with key features, step-by-step actions, tools, 0-3/3-6/6-12 month timeline, and success metrics; plus security/performance/usability priorities and gap remediation (error handling, testing, notifications). Blanks filled from project context: application = Mbumah Hardware POS, horizon = 12 months, team = 2-3 devs with intermediate skills.
+
+Work Log:
+- Read worklog tail: confirmed v2.8.0 shipped + production-verified (PR #78 @ 10206a2), backend-unavailable root cause fixed (PR #77), uninstaller + Sam checklist delivered. Repo docs/ has no prior architecture plan.
+- Loaded pdf skill; routed to Report brief (ReportLab, English, A4, no emoji). Read briefs/report.md fully + configs/fonts.md + typesetting/cover.md (985 lines) + typesetting/overflow.md fully, per mandatory gates.
+- Ran palette.cascade (seed 42, mode minimal) -> emerald family (#1f9259 accent, #324e40 header fill). No blue/indigo.
+- Built cover per Template 01 (HUD vertical anchor line) at /home/z/my-project/download/build-arch/cover.html; poster_validate check-html PASS; cover_validate.js PASS (0 overlaps); rendered via html2poster.js --width 794px.
+- Wrote generate_body.py (TocDocTemplate + multiBuild, auto-TOC with clickable bookmark keys, CondPageBreak orphan guard, 21 tables all Paragraph-wrapped with ratio-checked colWidths <= AVAIL, 3-box KPI callout row, safe KeepTogether, footer canvas in FreeSerif). Chapter numbering plan output in file header (cover/toc unnumbered; content chapters 1-7).
+- Content: Ch1 exec summary + current-state table + KPI row (RTO <=5min, RPO <=5min, drift 0); Ch2-4 pillars each with features/steps/tools/timeline/metrics tables; Ch5 cross-cutting (security/perf/usability + named-gap closure + notification matrix); Ch6 roadmap + governance; Ch7 assumptions/risk register/6 immediate next steps.
+- Pipeline: code.sanitize -> build (12 body pages) -> merge_final.py with normalize_page_to_a4 (tolerance tightened 2pt -> 0.1pt after pdf_qa flagged 595.9 vs 595.3 cover size) -> meta.brand -> pages.clean (none found) -> font.check 0 issues -> toc.check/toc_validate 0 errors.
+- pdf_qa final: 13 passed, 0 errors, 2 warnings (page-3 "table not centered" x2 = the two outer boxes of the intentional 3-box KPI row; mirrored L/R values prove the row is symmetric - accepted as design).
+- Visual verification: rendered pages 1/3/5 via pypdfium2 - cover, Chapter 1 (KPI row + Table 1), Pillar-1 tables all clean; no overflow, no tofu.
+- Deliverables: /home/z/my-project/download/mbumah-architecture-plan.pdf (13 pages, ~194KB) + HTML cover source + build scripts in /home/z/my-project/download/build-arch/ + repo-ready markdown source at /home/z/mbumah-ver/docs/ARCHITECTURE_PLAN_AUTOUPDATE_ROLLBACK_BACKUP.md (uncommitted - PR on request).
+
+Stage Summary:
+- Architecture plan delivered as professional PDF (pdf_qa PASS) + markdown source for the repo. Plan maps onto the real stack: GitHub Releases + Vercel (cloud), deploy-kit symlinks + Task Scheduler (laptops), Neon PITR + Litestream (backups), update ledger as the rollback/backup interlock.
+- Blanks filled and stated explicitly in Ch1/Ch7: app = Mbumah Hardware POS, 12 months, 2-3 intermediate devs.
+- The mandatory 15-min webDevReview cron was created after this round per session rules.
+- Open items carried: vcp_ token rotation (user); gift-card redeemByCode likely obsolete (confirm); repo PR of the markdown plan (on request); voucher gateway keys on Sam's side.

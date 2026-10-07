@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Mbumah Hardware POS - Reliability Architecture Plan</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;900&display=swap" rel="stylesheet">
+  <style>
+    @page { size: 794px 1123px; margin: 0; }
+    :root {
+      /* Cascade palette (design_engine.py palette-cascade, seed 42, mode minimal) */
+      --c-bg: #f4f5f5;
+      --c-accent: #1f9259;
+      --c-text: #131514;
+      --c-muted: #747e79;
+      --c-mid: #324e40;
+      --c-surface: #e8ebe9;
+    }
+    html, body {
+      margin: 0; padding: 0;
+      width: 794px; height: 1123px;
+      background: var(--c-bg);
+      font-family: 'Inter', 'Liberation Sans', Arial, sans-serif;
+      color: var(--c-text);
+    }
+    .cover { position: relative; width: 794px; height: 1123px; }
+
+    /* Layer 1 - background grid, clipped to page (2-4% opacity accent) */
+    .layer-bg {
+      position: absolute; inset: 0; overflow: hidden; z-index: 1;
+      background-image:
+        repeating-linear-gradient(0deg, rgba(31,146,89,0.04) 0px, rgba(31,146,89,0.04) 0.5px, transparent 0.5px, transparent 50px),
+        repeating-linear-gradient(90deg, rgba(31,146,89,0.04) 0px, rgba(31,146,89,0.04) 0.5px, transparent 0.5px, transparent 50px);
+    }
+
+    /* Layer 2 - ultra-thick left anchor line (Template 01) */
+    .vline {
+      position: absolute; z-index: 2;
+      left: 95px; top: 112px;
+      width: 8px; height: 899px;
+      background: var(--c-accent);
+    }
+
+    /* Layer 3 - content (left edge 152px = line + 1U gap) */
+    .kicker {
+      position: absolute; z-index: 3;
+      left: 152px; top: 168px;
+      max-width: 500px;
+      font-size: 12.5pt; font-weight: 400;
+      letter-spacing: 2.5pt; line-height: 1.55;
+      text-transform: uppercase;
+      color: var(--c-text); opacity: 0.6;
+    }
+    .title {
+      position: absolute; z-index: 3;
+      left: 152px; top: 300px;
+      max-width: 540px;
+      font-size: 48pt; font-weight: 900;
+      line-height: 1.15;
+      color: var(--c-text);
+    }
+    .summary {
+      position: absolute; z-index: 3;
+      left: 152px; top: 562px;
+      max-width: 470px;
+      font-size: 16pt; font-weight: 300;
+      line-height: 1.6;
+      color: var(--c-text); opacity: 0.85;
+    }
+    .meta {
+      position: absolute; z-index: 3;
+      left: 152px; top: 800px;
+    }
+    .meta .for {
+      font-size: 20pt; font-weight: 600;
+      color: var(--c-text);
+    }
+    .meta .by {
+      margin-top: 12px;
+      font-size: 13pt; font-weight: 300;
+      color: var(--c-muted);
+    }
+    .footer {
+      position: absolute; z-index: 3;
+      left: 152px; top: 962px;
+      font-size: 13pt; font-weight: 400;
+      letter-spacing: 3pt;
+      text-transform: uppercase;
+      color: var(--c-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="cover">
+    <div class="layer-bg"></div>
+    <div class="vline"></div>
+    <div class="kicker">Architecture Plan &mdash; Auto-Updates &middot; Rollback &middot; Backup</div>
+    <div class="title">MBUMAH<br>HARDWARE POS</div>
+    <div class="summary">
+      A 12-month reliability architecture covering three pillars: GitHub-driven
+      updates that install only while stores are dormant, a one-click rollback
+      button that reverts code and data to the last known-good release, and
+      automatic database backups that survive a crash.
+    </div>
+    <div class="meta">
+      <div class="for">Prepared for: Sam &amp; the Mbumah Team</div>
+      <div class="by">Prepared by the Development Team &mdash; baseline v2.8.0</div>
+    </div>
+    <div class="footer">October 2026 &middot; Rev 1.0</div>
+  </div>
+</body>
+</html>
