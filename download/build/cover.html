@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Mbumah Hardware POS - Version 2.8.0 Acceptance Checklist</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;900&display=swap" rel="stylesheet">
+  <style>
+    @page { size: 794px 1123px; margin: 0; }
+    :root {
+      /* Cascade palette (design_engine.py palette-cascade, seed 28, mode minimal) */
+      --c-bg: #f5f4f4;
+      --c-accent: #8f7423;
+      --c-text: #1f1e1c;
+      --c-muted: #898780;
+      --c-mid: #5d5641;
+      --c-surface: #e8e8e5;
+    }
+    html, body {
+      margin: 0; padding: 0;
+      width: 794px; height: 1123px;
+      background: var(--c-bg);
+      font-family: 'Inter', 'Liberation Sans', Arial, sans-serif;
+      color: var(--c-text);
+    }
+    .cover { position: relative; width: 794px; height: 1123px; }
+
+    /* Layer 1 - background grid, clipped to page (2-4% opacity accent) */
+    .layer-bg {
+      position: absolute; inset: 0; overflow: hidden; z-index: 1;
+      background-image:
+        repeating-linear-gradient(0deg, rgba(143,116,35,0.04) 0px, rgba(143,116,35,0.04) 0.5px, transparent 0.5px, transparent 50px),
+        repeating-linear-gradient(90deg, rgba(143,116,35,0.04) 0px, rgba(143,116,35,0.04) 0.5px, transparent 0.5px, transparent 50px);
+    }
+
+    /* Layer 2 - ultra-thick left anchor line (Template 01) */
+    .vline {
+      position: absolute; z-index: 2;
+      left: 95px; top: 112px;
+      width: 8px; height: 899px;
+      background: var(--c-accent);
+    }
+
+    /* Layer 3 - content (left edge 152px = line + 1U gap) */
+    .kicker {
+      position: absolute; z-index: 3;
+      left: 152px; top: 168px;
+      max-width: 500px;
+      font-size: 12.5pt; font-weight: 400;
+      letter-spacing: 2.5pt; line-height: 1.55;
+      text-transform: uppercase;
+      color: var(--c-text); opacity: 0.6;
+    }
+    .title {
+      position: absolute; z-index: 3;
+      left: 152px; top: 300px;
+      max-width: 540px;
+      font-size: 48pt; font-weight: 900;
+      line-height: 1.15;
+      color: var(--c-text);
+    }
+    .summary {
+      position: absolute; z-index: 3;
+      left: 152px; top: 562px;
+      max-width: 470px;
+      font-size: 16pt; font-weight: 300;
+      line-height: 1.6;
+      color: var(--c-text); opacity: 0.85;
+    }
+    .meta {
+      position: absolute; z-index: 3;
+      left: 152px; top: 800px;
+    }
+    .meta .for {
+      font-size: 20pt; font-weight: 600;
+      color: var(--c-text);
+    }
+    .meta .by {
+      margin-top: 12px;
+      font-size: 13pt; font-weight: 300;
+      color: var(--c-muted);
+    }
+    .footer {
+      position: absolute; z-index: 3;
+      left: 152px; top: 962px;
+      font-size: 13pt; font-weight: 400;
+      letter-spacing: 3pt;
+      text-transform: uppercase;
+      color: var(--c-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="cover">
+    <div class="layer-bg"></div>
+    <div class="vline"></div>
+    <div class="kicker">Version 2.8.0 &mdash; Fixes &amp; Updates Acceptance Checklist</div>
+    <div class="title">MBUMAH<br>HARDWARE POS</div>
+    <div class="summary">
+      This checklist covers the eight reported issues fixed in version 2.8.0, the two
+      bonus fixes that shipped with them, and the acceptance tests to run before
+      sign-off. It is the single reference for verifying the release.
+    </div>
+    <div class="meta">
+      <div class="for">Prepared for: Sam</div>
+      <div class="by">Prepared by the Development Team</div>
+    </div>
+    <div class="footer">October 2026</div>
+  </div>
+</body>
+</html>
