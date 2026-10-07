@@ -29,6 +29,23 @@ import { ApiRequestError } from '@/lib/error-handler';
 
 // Re-export types so consumers can import from this module
 export type { GiftCardItem } from './types';
+// v2.12.0 (Task DASH-BE): dashboard-insight DTOs re-exported for the UI agent
+// (DASH-UI) — the shapes returned inside DashboardStats by GET /api/dashboard.
+export type {
+  ShiftSnapshot,
+  DebtAgingBuckets,
+  DebtRiskCustomer,
+  DebtCrisisSummary,
+  DashboardAlert,
+  DashboardAlertType,
+  DashboardAlertSeverity,
+  StoreHealthSummary,
+  StoreHealthBreakdownItem,
+  RevenueTrend7d,
+  RevenueTrendDay,
+  DashboardStockItem,
+  SanitizedActivity,
+} from './types';
 
 
 const API_BASE = '/api';

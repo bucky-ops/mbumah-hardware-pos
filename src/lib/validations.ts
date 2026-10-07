@@ -89,6 +89,11 @@ export const checkoutSchema = z.object({
     loginEmail: z.string().email(),
     password: z.string().min(1).max(200),
   }).optional(),
+  // v2.12.0 (Task DASH-BE): debt-sale blocking step-up flag. A DEBT (or
+  // DEBT-leg split) sale to a customer with 90+ day overdue debt is rejected
+  // (403 DEBT_BLOCKED_OVERDUE, requiresManagerOverride) unless this flag is
+  // present AND the authenticated session role is manager-level.
+  managerOverride: z.boolean().optional(),
 }).superRefine((data, ctx) => {
   // AUDIT FIX (1): a DEBT split leg charges the customer's credit account, so
   // a customerId is MANDATORY — without one the DebtLedger charge row could

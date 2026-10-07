@@ -315,6 +315,8 @@ async function createTransactionInner(
     notes,
     serials,
     managerApproval,
+    // v2.12.0 (Task DASH-BE): debt-sale blocking step-up flag.
+    managerOverride,
   } = validation.data;
 
   // SYS-2 (F5-1): the cashier identity ALWAYS comes from the authenticated
@@ -723,13 +725,86 @@ async function createTransactionInner(
               .reduce((sum, s) => sum + Number(s.amount), 0)
           : 0;
     if (debtCharge > 0) {
+      const roundedCharge = KES(debtCharge).round().toNumber();
+
+      // ── v2.12.0 DEBT-SALE BLOCKING (Task DASH-BE) ────────────────────────
+      // A customer with debt 90+ days overdue is on CREDIT HOLD: any new
+      // DEBT (or DEBT-leg split) sale is rejected with 403
+      // DEBT_BLOCKED_OVERDUE until the request carries managerOverride: true
+      // AND the authenticated session role is manager-level
+      // (SUPER_ADMIN / STORE_OWNER / BRANCH_MANAGER). Every override — and
+      // every denied attempt — is audit-logged (SystemLog WARN).
+      const overdue90Cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+      const blockedByOverdue = await db.debtLedger.findFirst({
+        where: {
+          storeId,
+          customerId: customer.id,
+          // daysOverdue = max(0, floor((now − dueDate) / 86_400_000)) ≥ 90
+          // ⟺ dueDate ≤ now − 90 days.
+          dueDate: { lte: overdue90Cutoff },
+          status: { in: ['OUTSTANDING', 'PARTIAL', 'OVERDUE'] },
+          balance: { gt: 0 },
+        },
+        select: { id: true, dueDate: true, balance: true },
+      });
+
+      if (blockedByOverdue) {
+        if (managerOverride !== true) {
+          return Response.json(
+            {
+              success: false,
+              error: 'Customer has debt overdue 90+ days. Manager approval required.',
+              code: 'DEBT_BLOCKED_OVERDUE',
+              requiresManagerOverride: true,
+            },
+            { status: 403 }
+          );
+        }
+        if (!MANAGER_PLUS_ROLES.includes(session.role)) {
+          await systemLog({
+            action: 'DEBT_OVERRIDE_DENIED',
+            component: LogComponent.POS,
+            severity: LogSeverity.WARN,
+            message: '90+ day debt override rejected: session role is not manager-level.',
+            storeId,
+            userId: cashierId,
+            metadata: {
+              customerId: customer.id,
+              paymentMethod,
+            },
+          }).catch(() => {});
+          return Response.json(
+            {
+              success: false,
+              error: 'Manager approval failed: your role cannot override the 90+ day debt block.',
+              code: 'DEBT_OVERRIDE_FORBIDDEN',
+              requiresManagerOverride: true,
+            },
+            { status: 403 }
+          );
+        }
+        await systemLog({
+          action: 'DEBT_OVERRIDE',
+          component: LogComponent.POS,
+          severity: LogSeverity.WARN,
+          message: `90+ day debt block overridden: ${session.role} (${session.email}) approved a KES ${roundedCharge.toLocaleString()} debt charge for customer "${customer.name}".`,
+          storeId,
+          userId: session.userId,
+          metadata: {
+            customerId: customer.id,
+            customerName: customer.name,
+            paymentMethod,
+            chargedAmount: roundedCharge,
+          },
+        }).catch(() => {});
+      }
+
       const availableCredit = KES(customer.debtLimit)
         .subtract(customer.currentDebtBalance)
         .round()
         .toNumber();
-      const roundedCharge = KES(debtCharge).round().toNumber();
       if (roundedCharge > availableCredit) {
-        if (!managerApproval) {
+        if (!managerApproval && managerOverride !== true) {
           return Response.json(
             {
               success: false,
@@ -742,50 +817,89 @@ async function createTransactionInner(
           );
         }
 
-        // ── Verify the approving manager. ONE generic 403 for EVERY failure
-        // mode (unknown email, bad password, inactive, wrong role, wrong
-        // store) so the endpoint never reveals which check failed. Email
-        // normalization matches the login route (trim + lowercase).
-        const manager = await db.user.findUnique({
-          where: { email: managerApproval.loginEmail.trim().toLowerCase() },
-        });
-        const managerPasswordOk = manager
-          ? await verifyManagerPassword(managerApproval.password, manager.passwordHash)
-          : false;
-        if (
-          !manager ||
-          !managerPasswordOk ||
-          !manager.isActive ||
-          !MANAGER_PLUS_ROLES.includes(manager.role) ||
-          manager.storeId !== storeId
-        ) {
-          await systemLog({
-            action: 'CREDIT_LIMIT_OVERRIDE_DENIED',
-            component: LogComponent.POS,
-            severity: LogSeverity.WARN,
-            message: 'Manager approval rejected: invalid credentials or insufficient role.',
-            storeId,
-            userId: cashierId,
-            metadata: {
-              customerId: customer.id,
-              requestedEmail: managerApproval.loginEmail,
-            },
-          }).catch(() => {});
-          return Response.json(
-            { success: false, error: 'Manager approval failed: invalid credentials or insufficient role.' },
-            { status: 403 }
-          );
-        }
+        if (managerApproval) {
+          // ── Verify the approving manager. ONE generic 403 for EVERY failure
+          // mode (unknown email, bad password, inactive, wrong role, wrong
+          // store) so the endpoint never reveals which check failed. Email
+          // normalization matches the login route (trim + lowercase).
+          const manager = await db.user.findUnique({
+            where: { email: managerApproval.loginEmail.trim().toLowerCase() },
+          });
+          const managerPasswordOk = manager
+            ? await verifyManagerPassword(managerApproval.password, manager.passwordHash)
+            : false;
+          if (
+            !manager ||
+            !managerPasswordOk ||
+            !manager.isActive ||
+            !MANAGER_PLUS_ROLES.includes(manager.role) ||
+            manager.storeId !== storeId
+          ) {
+            await systemLog({
+              action: 'CREDIT_LIMIT_OVERRIDE_DENIED',
+              component: LogComponent.POS,
+              severity: LogSeverity.WARN,
+              message: 'Manager approval rejected: invalid credentials or insufficient role.',
+              storeId,
+              userId: cashierId,
+              metadata: {
+                customerId: customer.id,
+                requestedEmail: managerApproval.loginEmail,
+              },
+            }).catch(() => {});
+            return Response.json(
+              { success: false, error: 'Manager approval failed: invalid credentials or insufficient role.' },
+              { status: 403 }
+            );
+          }
 
-        creditOverride = {
-          customerId: customer.id,
-          managerId: manager.id,
-          managerRole: manager.role,
-          managerEmail: manager.email,
-          chargedAmount: roundedCharge,
-          debtLimit: Number(customer.debtLimit),
-          balanceBefore: Number(customer.currentDebtBalance),
-        };
+          creditOverride = {
+            customerId: customer.id,
+            managerId: manager.id,
+            managerRole: manager.role,
+            managerEmail: manager.email,
+            chargedAmount: roundedCharge,
+            debtLimit: Number(customer.debtLimit),
+            balanceBefore: Number(customer.currentDebtBalance),
+          };
+        } else {
+          // ── v2.12.0 (Task DASH-BE): session-role override path ───────────
+          // Alternative to the credential step-up: the request carries
+          // managerOverride: true AND the AUTHENTICATED session itself is a
+          // manager-level user. Same creditOverride audit chain (in-tx
+          // headroom bypass + post-commit CREDIT_LIMIT_OVERRIDE entry).
+          if (!MANAGER_PLUS_ROLES.includes(session.role)) {
+            await systemLog({
+              action: 'CREDIT_LIMIT_OVERRIDE_DENIED',
+              component: LogComponent.POS,
+              severity: LogSeverity.WARN,
+              message: 'Credit-limit override rejected: session role is not manager-level.',
+              storeId,
+              userId: cashierId,
+              metadata: {
+                customerId: customer.id,
+              },
+            }).catch(() => {});
+            return Response.json(
+              {
+                success: false,
+                error: 'Manager approval failed: your role cannot override the credit limit.',
+                requiresManagerApproval: true,
+                code: 'CREDIT_LIMIT_EXCEEDED',
+              },
+              { status: 403 }
+            );
+          }
+          creditOverride = {
+            customerId: customer.id,
+            managerId: session.userId,
+            managerRole: session.role,
+            managerEmail: session.email,
+            chargedAmount: roundedCharge,
+            debtLimit: Number(customer.debtLimit),
+            balanceBefore: Number(customer.currentDebtBalance),
+          };
+        }
       }
     }
   }
