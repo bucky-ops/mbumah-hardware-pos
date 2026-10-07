@@ -46,6 +46,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { CheckoutPayload } from '@/lib/types';
 import type { TransactionItem } from '@/lib/api';
+import { getCachedVatRate } from '@/lib/vat-rate-cache';
 
 // ── Schema ───────────────────────────────────────────────────────────────────
 
@@ -464,8 +465,10 @@ export function buildOfflineReceipt(
     (sum, it) => sum + it.pricePerUnit * it.quantity * (1 - (it.discountPercent || 0) / 100),
     0,
   );
-  const taxRate = 0.16; // Kenya VAT — matches cart.getTax()
-  const tax = subtotal * taxRate;
+  // v2.8.0: rate comes from the cached ADMIN SETTING (localStorage mirror of
+  // /api/settings/vat) instead of a hardcoded 16% — see use-vat-rate.ts.
+  const taxRatePercent = getCachedVatRate();
+  const tax = subtotal * (taxRatePercent / 100);
   const discount = payload.discountAmount || 0;
   const total = subtotal + tax - discount;
 
@@ -495,7 +498,7 @@ export function buildOfflineReceipt(
       pricePerUnit: it.pricePerUnit,
       costPrice: it.costPrice,
       discountPercent: it.discountPercent || 0,
-      taxRate: 16,
+      taxRate: getCachedVatRate(),
       lineTotal: it.pricePerUnit * it.quantity * (1 - (it.discountPercent || 0) / 100),
       isRentalItem: it.isRentalItem || false,
     })),

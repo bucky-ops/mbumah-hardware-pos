@@ -7,6 +7,7 @@ import { LogSeverity, LogComponent } from '@/lib/types';
 import { calculateWeightedAverageCost, recordGoodsReceiptEntry } from '@/lib/account-helper';
 import { isPostgres } from '@/lib/sequence';
 import { requireStoreAccess, type AuthSession } from '@/lib/auth';
+import { getVatRatePercent } from '@/lib/vat-settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -333,12 +334,15 @@ async function updatePurchaseOrderHandler(
           where: { id: existing.storeId },
           select: { organizationId: true },
         });
+        // v2.8.0: input VAT follows the admin-controlled rate.
+        const grnVatRate = await getVatRatePercent();
         await recordGoodsReceiptEntry(tx, {
           organizationId: store?.organizationId || 'org_mbumah',
           storeId: existing.storeId,
           poId: existing.id,
           poNumber: existing.poNumber,
           grossAmount: receivedGrossValue,
+          vatRate: grnVatRate,
           receivedById,
         });
       }

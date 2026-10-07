@@ -7,6 +7,7 @@ import { LogSeverity, LogComponent } from '@/lib/types';
 import { withSessionAuth } from '@/lib/auth';
 import Decimal from 'decimal.js';
 import { toDec, max0 } from '@/lib/utils/financialMath';
+import { getVatRatePercent } from '@/lib/vat-settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -301,6 +302,11 @@ async function createInvoiceHandler(...args: unknown[]): Promise<Response> {
   // line level). Invoices are B2B/wholesale documents → VAT-EXCLUSIVE
   // (tax added on top of the net line amount), per the audit spec §2.
   // Σ(lineTotal) − document discount === totalAmount EXACTLY (no drift).
+  //
+  // v2.8.0: VAT is fully controlled by the ADMIN SETTING (SystemConfig
+  // `vat_rate_percent`) — the admin rate overrides the per-line value so
+  // that setting 0% makes every VAT field on every new invoice 0.
+  const adminVatRate = await getVatRatePercent();
   let subtotalAcc = new Decimal(0);
   let taxAmountAcc = new Decimal(0);
   const invoiceItems = items.map((item: {
@@ -321,7 +327,8 @@ async function createInvoiceHandler(...args: unknown[]): Promise<Response> {
     }
 
     const discountPct = Math.min(100, Math.max(0, item.discountPercent || 0));
-    const taxRt = Math.min(100, Math.max(0, item.taxRate ?? 16));
+    // v2.8.0: admin-controlled VAT rate is authoritative for new invoices.
+    const taxRt = Math.min(100, Math.max(0, adminVatRate));
 
     // Line math — every step HALF_UP-rounded to 2dp in Decimal.
     const lineSubtotal = toDec(item.quantity).mul(toDec(item.pricePerUnit)).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);

@@ -34,6 +34,7 @@ import { requireStoreAccess, MANAGER_PLUS_ROLES, type AuthSession } from '@/lib/
 import { KES } from '@/lib/money';
 import Decimal from 'decimal.js';
 import { toDec, toNum, round2, changeDue as calcChangeDue } from '@/lib/utils/financialMath';
+import { getVatRatePercent } from '@/lib/vat-settings';
 import { enqueueOutbox } from '@/lib/outbox';
 import { withSequenceRetry, isP2002 } from '@/lib/sequence';
 
@@ -545,6 +546,12 @@ async function createTransactionInner(
   // extracts each line's VAT component (net = gross / 1.16 for standard
   // lines; 0 for exempt) and `lineTotal` is the gross the customer pays.
   // All accumulators run in Decimal — float `+=` on money is banned.
+  //
+  // v2.8.0: VAT is fully controlled by the ADMIN SETTING (SystemConfig
+  // `vat_rate_percent`). The admin rate is AUTHORITATIVE — it overrides any
+  // per-product/per-line rate so that setting 0% makes every VAT field on
+  // every new sale 0. Historical documents keep their stored amounts.
+  const adminVatRate = await getVatRatePercent();
   let subtotalAcc = new Decimal(0);
   let taxAcc = new Decimal(0);
   let discountAcc = new Decimal(0);
@@ -559,7 +566,8 @@ async function createTransactionInner(
     const safeCost  = product ? Number(product.costPrice) : parseFloat(String(item.costPrice));
     const safeQty   = parseFloat(String(item.quantity));
     const safeDisc  = Math.min(100, Math.max(0, parseFloat(String(item.discountPercent || 0)) || 0));
-    const safeTax   = product ? Number(product.taxRate) : parseFloat(String(item.taxRate || 16));
+    // v2.8.0: admin-controlled VAT rate wins over the product snapshot.
+    const safeTax   = adminVatRate;
 
     if (Number.isNaN(safePrice) || safePrice < 0) {
       throw new CheckoutInputError(`items[${index}].pricePerUnit: Invalid value "${item.pricePerUnit}" — expected a non-negative number.`);

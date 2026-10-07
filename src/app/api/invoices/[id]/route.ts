@@ -1,10 +1,10 @@
-// GET/PUT /api/invoices/[id]
+// GET/PUT/DELETE /api/invoices/[id]
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
-import { withSessionAuth } from '@/lib/auth';
+import { withSessionAuth, getSessionFromRequest } from '@/lib/auth';
 import Decimal from 'decimal.js';
 import { toDec, max0 } from '@/lib/utils/financialMath';
 
@@ -131,5 +131,62 @@ async function updateInvoiceHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: invoice });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE (v2.8.0) — permanently remove an invoice the business is done with.
+// CLIENT REQUEST: "Add Delete option on all invoices… with confirmation."
+// Confirmation lives in the UI (AlertDialog); the API enforces role access.
+// InvoiceItems cascade automatically. Every deletion is audit-logged with
+// the previous status so the paper trail survives the hard delete.
+// ─────────────────────────────────────────────────────────────────────────────
+async function deleteInvoiceHandler(...args: unknown[]): Promise<Response> {
+  const request = args[0] as NextRequest;
+  const context = args[1] as RouteContext;
+  // withSessionAuth publishes tenant context via AsyncLocalStorage and does
+  // NOT append the session — re-derive it explicitly (repo pattern).
+  const session = await getSessionFromRequest(request);
+  const { id } = await context.params;
+
+  const existing = await db.invoice.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      invoiceNumber: true,
+      invoiceType: true,
+      status: true,
+      storeId: true,
+    },
+  });
+  if (!existing) {
+    return Response.json(
+      { success: false, error: 'Invoice not found.' },
+      { status: 404 }
+    );
+  }
+
+  await db.invoice.delete({ where: { id } });
+
+  await systemLog({
+    action: 'INVOICE_DELETED',
+    component: LogComponent.FINANCIAL,
+    severity: LogSeverity.WARN,
+    message: `${existing.invoiceType} ${existing.invoiceNumber} deleted`,
+    userId: session?.userId,
+    storeId: existing.storeId,
+    metadata: {
+      invoiceId: id,
+      invoiceNumber: existing.invoiceNumber,
+      invoiceType: existing.invoiceType,
+      previousStatus: existing.status,
+      deletedBy: session?.email,
+    },
+  });
+
+  return Response.json({ success: true, data: { id } });
+}
+
 export const GET = withErrorBoundary(withSessionAuth(getInvoiceHandler), 'INVOICE_DETAIL');
 export const PUT = withErrorBoundary(withSessionAuth(updateInvoiceHandler), 'INVOICE_UPDATE');
+export const DELETE = withErrorBoundary(
+  withSessionAuth(deleteInvoiceHandler, ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT']),
+  'INVOICE_DELETE'
+);

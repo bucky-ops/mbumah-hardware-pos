@@ -178,7 +178,7 @@ export function formatWhatsAppReceipt(
   // ── Totals ──────────────────────────────────────────────────────────────
   lines.push("💵 *Payment Summary*");
   lines.push(`Subtotal: ${formatKESCompact(transaction.subtotal)}`);
-  lines.push(`VAT (16%): ${formatKESCompact(transaction.taxAmount)}`);
+  lines.push(`VAT: ${formatKESCompact(transaction.taxAmount)}`);
   if (transaction.discountAmount > 0) {
     lines.push(`Discount: -${formatKESCompact(transaction.discountAmount)}`);
   }

@@ -9,8 +9,17 @@
 // Design decisions:
 //   • Provider credentials come from env vars (TWILIO_*, RESEND_*). If a
 //     provider isn't configured, the corresponding send method logs a warning
-//     and returns true (dev-friendly graceful degradation) rather than
-//     throwing — so the app works in dev without external accounts.
+//     and returns { success: false, simulated: true } — an HONEST failure
+//     (v2.8.0 VF-1). The previous fake-success (sim_ message ids) made the UI
+//     report "Sent" for messages that were NEVER delivered, which is exactly
+//     how the "vouchers are not sending" client report happened. Callers
+//     (processPendingDebtReminders, the debt cron, the DLQ handlers) already
+//     handle success:false by marking rows FAILED, so nothing crashes — the
+//     dashboards now just tell the truth.
+//   • Env-name aliases: the self-hosting docs (.env.example) advertise
+//     TWILIO_PHONE_NUMBER while the code historically read TWILIO_FROM_PHONE
+//     (and some deployments set TWILIO_SMS_FROM for the SMS sender). All three
+//     are accepted; the canonical names are documented in .env.example.
 //   • In production, set the env vars to enable real delivery.
 //   • Every send is logged via systemLog() and a DebtReminder/Message row is
 //     updated with the provider's message ID for delivery tracking.
@@ -38,6 +47,10 @@ export interface SendResult {
   success: boolean;
   providerMessageId?: string;
   errorMessage?: string;
+  /** VF-1 (v2.8.0): true when the send was NOT attempted because the provider
+   *  gateway is unconfigured. Callers can distinguish "config problem" from
+   *  "provider rejected the message" (both are success:false). */
+  simulated?: boolean;
 }
 
 export interface NotificationPreferenceRow {
@@ -88,20 +101,37 @@ export interface INotificationService {
 // ── Provider configuration helpers ───────────────────────────────────────────
 
 /**
- * Twilio credentials. When TWILIO_ACCOUNT_SID is unset, SMS/WhatsApp sends
- * are no-ops (logged + return success) — useful for dev.
+ * Twilio credentials. When TWILIO_ACCOUNT_SID/AUTH_TOKEN/FROM are unset,
+ * SMS/WhatsApp sends short-circuit with an honest simulated:false result —
+ * the UI must never claim "Sent" for a message that never left the building.
+ *
+ * FROM-number aliases (VF-1, v2.8.0): .env.example documents
+ * TWILIO_PHONE_NUMBER, the code historically read TWILIO_FROM_PHONE, and some
+ * deployments set TWILIO_SMS_FROM for the SMS sender specifically. Resolution
+ * order: TWILIO_SMS_FROM → TWILIO_FROM_PHONE → TWILIO_PHONE_NUMBER for SMS,
+ * and TWILIO_FROM_PHONE → TWILIO_PHONE_NUMBER for the general/WhatsApp config.
  */
 function getTwilioConfig() {
+  const fromPhone =
+    process.env.TWILIO_FROM_PHONE || // canonical in code
+    process.env.TWILIO_PHONE_NUMBER || // canonical in .env.example
+    '';
   return {
     accountSid: process.env.TWILIO_ACCOUNT_SID || '',
     authToken: process.env.TWILIO_AUTH_TOKEN || '',
-    fromPhone: process.env.TWILIO_FROM_PHONE || '', // e.g. +1234567890
+    fromPhone, // e.g. +1234567890
+    smsFrom: process.env.TWILIO_SMS_FROM || fromPhone,
     whatsappFrom: process.env.TWILIO_WHATSAPP_FROM || 'whatsapp:+14155238886', // Twilio sandbox
   };
 }
 
+/** Shared error text for the unconfigured-SMS/WhatsApp honest failure. */
+const TWILIO_NOT_CONFIGURED_ERROR =
+  'Twilio not configured — set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_PHONE';
+
 /**
- * Resend credentials. When RESEND_API_KEY is unset, email sends are no-ops.
+ * Resend credentials. When RESEND_API_KEY is unset, email sends short-circuit
+ * with an honest simulated failure (VF-1) instead of a fake sim_ success.
  */
 function getResendConfig() {
   return {
@@ -110,7 +140,7 @@ function getResendConfig() {
   };
 }
 
-/** True if Twilio is fully configured (all required env vars present). */
+/** True if Twilio is fully configured (all required env vars present, aliases included). */
 function isTwilioConfigured(): boolean {
   const c = getTwilioConfig();
   return !!(c.accountSid && c.authToken && c.fromPhone);
@@ -120,6 +150,9 @@ function isTwilioConfigured(): boolean {
 function isResendConfigured(): boolean {
   return !!getResendConfig().apiKey;
 }
+
+/** Shared error text for the unconfigured-Resend honest failure (VF-1). */
+const RESEND_NOT_CONFIGURED_ERROR = 'Resend not configured — set RESEND_API_KEY';
 
 /**
  * Normalize a Kenyan phone number to E.164 format (+254XXXXXXXXX).
@@ -144,7 +177,9 @@ export class NotificationService implements INotificationService {
   /**
    * Send an SMS via Twilio.
    * Returns { success: true, providerMessageId } on success.
-   * If Twilio isn't configured, logs a warning and returns success (dev mode).
+   * If Twilio isn't configured, returns an HONEST failure
+   * ({ success: false, simulated: true }) — VF-1 (v2.8.0). The old fake
+   * success (sim_ ids) made the UI report "Sent" for undelivered messages.
    */
   async sendSms(to: string, message: string): Promise<SendResult> {
     const normalized = normalizeKePhone(to);
@@ -154,10 +189,10 @@ export class NotificationService implements INotificationService {
 
     if (!isTwilioConfigured()) {
       console.warn(
-        '[NotificationService] Twilio not configured — SMS send simulated.',
+        '[NotificationService] Twilio not configured — SMS NOT sent (honest failure).',
         { to: normalized, messagePreview: message.slice(0, 60) },
       );
-      return { success: true, providerMessageId: `sim_${Date.now()}` };
+      return { success: false, simulated: true, errorMessage: TWILIO_NOT_CONFIGURED_ERROR };
     }
 
     const config = getTwilioConfig();
@@ -170,7 +205,7 @@ export class NotificationService implements INotificationService {
 
       const body = new URLSearchParams({
         To: normalized,
-        From: config.fromPhone,
+        From: config.smsFrom || config.fromPhone, // TWILIO_SMS_FROM alias-aware (VF-1)
         Body: message,
       });
 
@@ -204,12 +239,14 @@ export class NotificationService implements INotificationService {
    * Send an email via Resend.
    */
   async sendEmail(to: string, subject: string, html: string): Promise<SendResult> {
+    // VF-1 (v2.8.0): honest failure when Resend is unconfigured — the old
+    // sim_ fake success let the UI claim "Sent" with no email ever leaving.
     if (!isResendConfigured()) {
       console.warn(
-        '[NotificationService] Resend not configured — email send simulated.',
+        '[NotificationService] Resend not configured — email NOT sent (honest failure).',
         { to, subject },
       );
-      return { success: true, providerMessageId: `sim_${Date.now()}` };
+      return { success: false, simulated: true, errorMessage: RESEND_NOT_CONFIGURED_ERROR };
     }
 
     const config = getResendConfig();
@@ -251,6 +288,7 @@ export class NotificationService implements INotificationService {
 
   /**
    * Send a WhatsApp message via Twilio WhatsApp API.
+   * Unconfigured Twilio → honest { success:false, simulated:true } (VF-1).
    */
   async sendWhatsApp(to: string, message: string): Promise<SendResult> {
     const normalized = normalizeKePhone(to);
@@ -260,10 +298,10 @@ export class NotificationService implements INotificationService {
 
     if (!isTwilioConfigured()) {
       console.warn(
-        '[NotificationService] Twilio not configured — WhatsApp send simulated.',
+        '[NotificationService] Twilio not configured — WhatsApp NOT sent (honest failure).',
         { to: normalized, messagePreview: message.slice(0, 60) },
       );
-      return { success: true, providerMessageId: `sim_${Date.now()}` };
+      return { success: false, simulated: true, errorMessage: TWILIO_NOT_CONFIGURED_ERROR };
     }
 
     const config = getTwilioConfig();

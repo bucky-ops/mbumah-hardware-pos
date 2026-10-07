@@ -283,7 +283,7 @@ export function receiptTemplate(data: ReceiptTemplateData): string {
     <div class="totals">
       <div class="totals-row"><span>Subtotal</span><span>${kes(data.subtotal)}</span></div>
       ${discountRow}
-      <div class="totals-row"><span>VAT (16%)</span><span>${kes(data.taxAmount)}</span></div>
+      <div class="totals-row"><span>VAT</span><span>${kes(data.taxAmount)}</span></div>
       <div class="totals-row grand"><span>Total Paid</span><span>${kes(data.totalAmount)}</span></div>
     </div>
 

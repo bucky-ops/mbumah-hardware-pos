@@ -118,3 +118,26 @@ Fill this in and keep it with the laptop:
 - Phone / WhatsApp: ______________________
 - Email: ______________________
 - Laptop password hint kept: ☐ (do NOT write the actual password here)
+
+---
+
+## 9. Uninstalling the POS (moving to a new laptop or stopping use)
+
+Double-click **Uninstall-Mbumah-POS.bat** in the app folder
+(`C:\Users\yourname\mbumah-hardware-pos`), or on Linux/macOS run
+`bash deploy/nodocker/uninstall-nodocker.sh` inside the app folder.
+
+The uninstaller always:
+
+1. **Offers one final backup** — accept it (Y). Backups live in
+   `Desktop\MbumahBackups` and are **never** deleted by the uninstaller.
+2. Stops the Mbumah POS background jobs (only the ones from this app).
+3. Removes the **Mbumah POS** and **Backup POS Data** desktop shortcuts.
+4. Asks a final question — you must **type DELETE in capitals** before the
+   app folder and its database are removed. Answer anything else and the
+   folder is kept.
+
+To move to a new laptop: uninstall here (keep the backup folder on a USB
+stick), then run `Install-Mbumah-POS.bat` on the new laptop and copy the
+backup with your technician.
+

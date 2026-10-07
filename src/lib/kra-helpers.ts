@@ -33,6 +33,7 @@ import { db } from '@/lib/db';
 import { systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { decryptSecret, isEncrypted } from '@/lib/crypto-helpers';
+import { getVatRatePercent } from '@/lib/vat-settings';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -561,18 +562,27 @@ export async function mapTransactionToKraInvoice(
     sequence,
   );
 
+  // v2.8.0: admin-controlled VAT rate (fallback 16 if settings unreachable).
+  const kraVatRate = await getVatRatePercent();
   const items: KraInvoiceLineItem[] = tx.items.map((item) => {
-    const lineTotal = item.lineTotal;
-    const vatRate = 16; // Default Kenya VAT
-    const netAmount = lineTotal / (1 + vatRate / 100);
+    // Decimal fields must cross to number-land explicitly (tsc strict: no
+    // Decimal arithmetic). lineTotal is the VAT-INCLUSIVE gross the customer
+    // paid; the line discount is recovered from discountPercent.
+    const lineTotal = Number(item.lineTotal);
+    const unitPrice = Number(item.pricePerUnit);
+    const qty = Number(item.quantity);
+    const discount =
+      Math.round(unitPrice * qty * (Number(item.discountPercent) / 100) * 100) / 100;
+    // Price is VAT-INCLUSIVE: extract the VAT component at the admin rate.
+    const netAmount = lineTotal / (1 + kraVatRate / 100);
     const vatAmount = lineTotal - netAmount;
     return {
       hsCode: '0000.00.00', // Default HS code; real implementation pulls from Product.hsCode
       name: item.productName,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      discount: item.discountAmount || 0,
-      vatRate,
+      quantity: qty,
+      unitPrice,
+      discount,
+      vatRate: kraVatRate,
       vatAmount: Math.round(vatAmount * 100) / 100,
       total: Math.round(lineTotal * 100) / 100,
     };

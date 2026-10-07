@@ -30,6 +30,7 @@ import {
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
 import { formatDateTime, formatKES } from '@/lib/api';
+import { useVatRate } from '@/hooks/use-vat-rate';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -754,6 +755,8 @@ function InvoiceDetailDialog({
     queryFn: () => kraApi.listSubmissions({ storeId, invoiceForKraId: invoice!.id }),
     enabled: !!invoice,
   });
+  // v2.8.0: admin-controlled VAT rate for the label (amount is stored data).
+  const { vatRate } = useVatRate();
 
   if (!invoice) return null;
   const statusCfg = SUBMISSION_STATUS_CONFIG[invoice.submissionStatus] || SUBMISSION_STATUS_CONFIG.PENDING;
@@ -851,7 +854,7 @@ function InvoiceDetailDialog({
                   <span className="font-mono text-rose-600">-{formatKES(breakdown.totalDiscount)}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Total VAT (16%)</span>
+                  <span className="text-muted-foreground">Total VAT ({vatRate}%)</span>
                   <span className="font-mono">{formatKES(breakdown.totalVat)}</span>
                 </div>
                 <div className="flex justify-between text-sm font-bold pt-1 border-t">

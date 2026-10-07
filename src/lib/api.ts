@@ -2224,6 +2224,29 @@ export const systemConfigApi = {
   },
 };
 
+// ── v2.8.0: Admin-controlled VAT rate (see /api/settings/vat) ───────────────
+export interface VatRateData {
+  vatRatePercent: number;
+  isDefault: boolean;
+  updatedAt: string | null;
+}
+
+export const settingsApi = {
+  /** Current admin-controlled VAT rate (any authenticated user). */
+  getVatRate: async () => {
+    const res = await request<VatRateData>('/settings/vat');
+    return res.data;
+  },
+
+  /** Set the VAT rate (0–100). SUPER_ADMIN / STORE_OWNER only. */
+  updateVatRate: async (vatRatePercent: number) => {
+    return request<VatRateData>('/settings/vat', {
+      method: 'PATCH',
+      body: JSON.stringify({ vatRatePercent }),
+    });
+  },
+};
+
 export interface UserItem {
   id: string;
   name: string;
@@ -2375,6 +2398,13 @@ export const invoicesApi = {
       body: JSON.stringify(data),
     });
   },
+
+  // v2.8.0: hard delete (role-gated server-side; UI asks for confirmation).
+  remove: async (id: string) => {
+    return request<{ id: string }>(`/invoices/${id}`, {
+      method: 'DELETE',
+    });
+  },
 };
 
 
@@ -2452,6 +2482,13 @@ export const deliveryNotesApi = {
     return request<DeliveryNoteItem>(`/delivery-notes/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
+    });
+  },
+
+  // v2.8.0: hard delete (role-gated server-side; UI asks for confirmation).
+  remove: async (id: string) => {
+    return request<{ id: string }>(`/delivery-notes/${id}`, {
+      method: 'DELETE',
     });
   },
 };
@@ -3121,7 +3158,60 @@ export const vouchersApi = {
       body: JSON.stringify(payload),
     });
   },
+
+  /**
+   * VF-1 (v2.8.0): REALLY send a voucher through a gateway (Resend email /
+   * Twilio SMS / Twilio WhatsApp) instead of composing a deep link. The
+   * response carries an HONEST status — 'SENT' (gateway accepted), 'FAILED'
+   * (gateway/provider error) or 'SIMULATED' (gateway not configured) — plus
+   * the server-built message text and, for WhatsApp, a wa.me deep-link
+   * fallback. The endpoint answers HTTP 200 even on FAILED/SIMULATED so the
+   * structured result survives request() (which throws on non-2xx).
+   */
+  send: async (data: {
+    voucherId: string;
+    channel: 'EMAIL' | 'SMS' | 'WHATSAPP';
+    recipient: string;
+    customerId?: string;
+  }) => {
+    return request<VoucherSendResult>('/vouchers/send', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * VF-1 (v2.8.0): recent voucher delivery attempts from the Message log
+   * (GET /api/messages supports the messageType filter). Message has no
+   * voucherId column, so the UI joins rows to vouchers client-side via the
+   * subject line ("Voucher <code>").
+   */
+  deliveryLog: async (storeId: string) => {
+    const query = new URLSearchParams({ storeId, messageType: 'VOUCHER', limit: '50' });
+    return request<MessageItem[]>(`/messages?${query.toString()}`);
+  },
 };
+
+/**
+ * VF-1 (v2.8.0): result of POST /api/vouchers/send — an HONEST delivery
+ * outcome. 'SENT' = the gateway accepted the message; 'FAILED' = gateway or
+ * provider error (see `error`); 'SIMULATED' = no gateway configured (nothing
+ * was delivered — use the wa.me fallback / copy). Every attempt persists a
+ * Message row (messageType 'VOUCHER') whose id is returned as `messageId`.
+ */
+export interface VoucherSendResult {
+  status: 'SENT' | 'FAILED' | 'SIMULATED';
+  /** Message row id (messageType=VOUCHER) — the delivery audit record. */
+  messageId: string;
+  /** The exact server-built message text (identical across channels). */
+  message: string;
+  /** WhatsApp only — wa.me deep-link fallback when no gateway is configured. */
+  waLink: string | null;
+  providerMessageId: string | null;
+  error: string | null;
+  channel: 'EMAIL' | 'SMS' | 'WHATSAPP';
+  recipient: string;
+}
 
 export interface VoucherRedeemByCodeResult {
   discountAmount: number;

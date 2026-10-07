@@ -117,7 +117,8 @@ function buildReceiptText(
 
   lines.push(divider);
   lines.push(`Subtotal:        ${formatKES(tx.subtotal).padStart(14)}`);
-  lines.push(`VAT (16%):       ${formatKES(tx.taxAmount).padStart(14)}`);
+  // v2.8.0: no hardcoded rate in the label — amount is the stored component.
+  lines.push(`VAT:             ${formatKES(tx.taxAmount).padStart(14)}`);
   if (tx.discountAmount > 0) {
     lines.push(`Discount:       -${formatKES(tx.discountAmount).padStart(14)}`);
   }
