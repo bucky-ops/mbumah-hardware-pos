@@ -42,20 +42,43 @@ try {
   $server = Start-Process -FilePath 'node' -ArgumentList 'deploy\nodocker\start-server.mjs' `
             -WorkingDirectory $root -NoNewWindow -PassThru
 
-  # Wait until the server is actually healthy BEFORE opening the browser
+  # Wait until the server is healthy AND the database actually answers
+  # (a 200 from /api/health alone also happens on an EMPTY database, which
+  # renders as "backend unavailable / all modules unavailable" in the UI).
   Write-Host 'Waiting for the POS to become ready (this can take up to a minute)...'
   $ready = $false
+  $dbEmpty = $false
+  $dbError = ''
   for ($i = 0; $i -lt 30; $i++) {
     try {
       $r = Invoke-WebRequest -Uri "http://127.0.0.1:$port/api/health" -UseBasicParsing -TimeoutSec 3
-      if ($r.StatusCode -eq 200) { $ready = $true; break }
-    } catch { Start-Sleep -Seconds 2 }
+      if ($r.StatusCode -eq 200) {
+        $h = $r.Content | ConvertFrom-Json
+        $stats = $h.checks.database_stats.status
+        if ($stats -eq 'ok') { $ready = $true; break }
+        if ($h.checks.database -and $h.checks.database.status -eq 'ok') {
+          # Server is up and connected, but table queries fail → empty/mismatched DB
+          $dbEmpty = $true
+          if ($h.checks.database_stats.detail) { $dbError = $h.checks.database_stats.detail }
+        }
+      }
+    } catch { Start-Sleep -Seconds 2; continue }
+    Start-Sleep -Seconds 2
   }
 
   if ($ready) {
     Write-Host ''
     Write-Host 'POS is ready - opening your browser...' -ForegroundColor Green
     Start-Process "http://localhost:$port"
+  } elseif ($dbEmpty) {
+    Write-Host ''
+    Write-Host 'WARNING: the server is running but the DATABASE is not ready.' -ForegroundColor Yellow
+    if ($dbError) { Write-Host "  Detail: $dbError" -ForegroundColor Yellow }
+    Write-Host '  The screen may say "backend unavailable" and every module may be unavailable.'
+    Write-Host '  Fix: close this window, then re-run the installer'
+    Write-Host '    powershell -ExecutionPolicy Bypass -File deploy\nodocker\install-nodocker.ps1'
+    Write-Host '  (it will re-create the schema and seed the admin account).'
+    Write-Host '  You can also diagnose with: node deploy\nodocker\verify-db.mjs'
   } else {
     Write-Host ''
     Write-Host 'WARNING: the server did not respond within 60 seconds.' -ForegroundColor Yellow

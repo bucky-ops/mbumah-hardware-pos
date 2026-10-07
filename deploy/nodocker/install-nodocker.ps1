@@ -127,6 +127,13 @@ Run-Step "[BUILD 3/4] Seeding the database (admin + demo data)..." "npm run db:s
 
 Run-Step "[BUILD 4/4] Building the production app (3-8 min)..." "npm run build"
 
+# -- 6b. Verify the database is REALLY usable (tables + seeded admin) ----------
+# A silent failure in db push/seed (wrong provider, lockfile drift skipping
+# postinstall, seed crash) used to produce an install that "completes" but
+# serves an EMPTY database: frontend renders, every module says unavailable.
+# This step makes that state an INSTALL FAILURE instead of a support call.
+Run-Step "[BUILD 5/5] Verifying the database (tables + admin account)..." "node deploy\nodocker\verify-db.mjs"
+
 # -- 7. Assemble the standalone server ------------------------------------
 New-Item -ItemType Directory -Force -Path ".next\standalone\.next" | Out-Null
 Copy-Item ".next\static" ".next\standalone\.next\" -Recurse -Force
