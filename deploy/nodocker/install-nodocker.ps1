@@ -87,6 +87,37 @@ if (Test-Path ".env") {
   Write-Host "[OK] .env created - secrets generated, database at: $dbFile"
 }
 
+# -- 3b. Remote Ops agent identity (RAK, v2.11.0) — append missing keys only --
+# STORE_ID: this machine's fleet identity (defaults to the sanitized hostname).
+# OPS_SIGNING_KEY: shared HMAC secret — MUST match the cloud's key or every
+# command is rejected by design. Both are written ONCE; never rotated here.
+$envLines = Get-Content ".env"
+$hasStoreId = ($envLines | Where-Object { $_ -match '^STORE_ID=' } | Measure-Object).Count -gt 0
+$hasSigning = ($envLines | Where-Object { $_ -match '^OPS_SIGNING_KEY=' } | Measure-Object).Count -gt 0
+if (-not $hasStoreId -or -not $hasSigning) {
+  $sb = New-Object System.Text.StringBuilder
+  if (-not $hasStoreId) {
+    $rawHost = $env:COMPUTERNAME
+    if ([string]::IsNullOrWhiteSpace($rawHost)) { $rawHost = 'mbumah-store' }
+    $sid = ($rawHost.ToLower() -replace '[^a-z0-9._-]', '-')
+    if ($sid.Length -gt 80) { $sid = $sid.Substring(0, 80) }
+    [void]$sb.AppendLine("")
+    [void]$sb.AppendLine("# -- Remote Ops agent (RAK) --")
+    [void]$sb.AppendLine("STORE_ID=$sid")
+    Write-Host "[OK] STORE_ID=$sid"
+  }
+  if (-not $hasSigning) {
+    $rk = New-Object byte[] 32
+    $rr = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    $rr.GetBytes($rk); $rr.Dispose()
+    $hex = ([System.BitConverter]::ToString($rk)) -replace '-', ''
+    [void]$sb.AppendLine("OPS_SIGNING_KEY=$hex")
+    Write-Host "[OK] OPS_SIGNING_KEY generated (copy the SAME value into the cloud's OPS_SIGNING_KEY)."
+  }
+  $utf8NoBom2 = New-Object System.Text.UTF8Encoding $false
+  [System.IO.File]::AppendAllText((Join-Path (Get-Location) ".env"), $sb.ToString(), $utf8NoBom2)
+}
+
 # -- 4. LAN mode - decide BEFORE the build (NEXT_PUBLIC_APP_URL is baked in) --
 if ($UseLan -or $LanIp -ne "") {
   if ($LanIp -eq "") {
@@ -143,6 +174,10 @@ Copy-Item "public" ".next\standalone\" -Recurse -Force
 # The updater only acts inside the dormant window (22:00-06:00) and skips
 # silently when offline, so a laptop that is switched off at night just
 # catches up the next night - nothing breaks. Both tasks run hidden.
+# The RAK agent (v2.11.0) runs every 15 minutes: it polls the private ops-log
+# repo for signed commands from the owner's Remote Ops console (pull-only —
+# no inbound ports) and reports results back. Without a GITHUB_TOKEN in .env
+# the agent is idle and harmless.
 $here = (Get-Location).Path
 $tasks = @(
   @{ Name = 'Mbumah POS Nightly Update'; Time = '23:00'; File = 'deploy\nodocker\update-pos.ps1'; Extra = '' },
@@ -161,6 +196,20 @@ foreach ($t in $tasks) {
   } catch {
     Write-Host "[WARN] Could not register '$($t.Name)': $($_.Exception.Message)" -ForegroundColor Yellow
   }
+}
+
+# RAK agent — every 15 minutes, hidden. node.exe must be on PATH (step 2).
+$agentPath = Join-Path $here 'deploy\nodocker\agent.mjs'
+try {
+  $agentTr = 'node.exe --no-warnings "' + $agentPath + '"'
+  schtasks /create /f /tn "Mbumah POS Agent" /sc minute /mo 15 /tr $agentTr | Out-Null
+  if ($LASTEXITCODE -eq 0) {
+    Write-Host "[OK] Scheduled task 'Mbumah POS Agent' registered (every 15 min, hidden)."
+  } else {
+    Write-Host "[WARN] Could not register 'Mbumah POS Agent' (schtasks exit $LASTEXITCODE) - remote commands will not reach this store until it is registered." -ForegroundColor Yellow
+  }
+} catch {
+  Write-Host "[WARN] Could not register 'Mbumah POS Agent': $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
 Write-Host ""

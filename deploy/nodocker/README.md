@@ -279,3 +279,17 @@ npm run build         # rebuild (SKIP_ENV_VALIDATION=1 is set by the installer; 
 
 Offline capability is unchanged: selling, inventory, printing, shifts and
 reports work without internet; M-Pesa, eTIMS/KRA and SMS/email need connectivity.
+
+## Remote Ops agent (RAK, v2.11.0)
+
+`agent.mjs` runs every 15 minutes (scheduled task "Mbumah POS Agent", registered by the installer and
+self-healed by the updater). It is **pull-only**: it polls the private `mbumah-ops-log` repo for a signed
+command targeted at this store, verifies the HMAC signature + freshness + replay window, then executes the
+shipped `update-pos` / `rollback-pos` scripts and commits the result back.
+
+- `--status` prints the agent's view of the world (identity, keys configured, last command, frozen state).
+- `frozen.flag` in the data directory blocks agent-driven updates (Freeze command); owner-run `.bat` tools still work.
+- Without `GITHUB_TOKEN` in `.env` the agent is idle and harmless.
+
+Config keys: `STORE_ID`, `OPS_SIGNING_KEY` (installer-generated), `GITHUB_TOKEN` (device token, owner-provided).
+Full design: `docs/REMOTE_ACCESS_KIT_PLAN.md`.

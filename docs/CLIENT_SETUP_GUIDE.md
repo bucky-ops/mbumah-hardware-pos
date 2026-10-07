@@ -176,3 +176,22 @@ Things you can do yourself:
 
 Your sales data is **never** touched by updates or rollbacks — every new
 version is checked against your data before it is allowed to serve the shop.
+
+## 11. Remote Ops — the owner can update your shop from anywhere (v2.11.0)
+
+Since v2.11.0 every install includes a small **agent** (scheduled task "Mbumah POS Agent", every 15 minutes).
+It is pull-only — it **never opens your shop's internet to the outside**. It quietly checks a private GitHub
+repo for a signed command from the owner's "Fleet & Remote Ops" console and reports back:
+
+| What the owner can do remotely | What the agent can NEVER do |
+|---|---|
+| Install an update (tonight's dormant window, or forced with a typed reason) | Touch your sales, stock or any business data |
+| Roll back to a previous version | Read your passwords or secrets |
+| Freeze updates (e.g. December peak) — and unfreeze in January | Run anything the owner did not sign and record in GitHub |
+
+**Setup (one time, per shop):**
+1. The installer already wrote `STORE_ID` and `OPS_SIGNING_KEY` into the `.env` file.
+2. Give the shop a **device token**: on GitHub → Settings → Developer settings → Fine-grained tokens → generate a token for this store with access to ONLY `mbumah-ops-log` (Contents: Read and write) plus `mbumah-hardware-pos` (Contents: Read only). Put it in the `.env` as `GITHUB_TOKEN=`.
+3. Copy the shop's `OPS_SIGNING_KEY` value into the cloud settings (Vercel → Environment Variables → `OPS_SIGNING_KEY`), and add `OPS_GITHUB_TOKEN` there too. Without matching keys, commands are rejected — that is by design.
+
+**How you know it worked:** Admin tab → "Fleet & Remote Ops" shows your shop with a green *Online* badge, its version, and every past command under *Activity log* — each row links to its GitHub commit. If anything looks wrong: `node deploy\nodocker\agent.mjs --status` prints exactly what the agent sees.

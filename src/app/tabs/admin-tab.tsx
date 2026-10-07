@@ -24,6 +24,7 @@ import {
 } from '@/lib/api';
 import { VAT_RATE_QUERY_KEY } from '@/hooks/use-vat-rate';
 import { UpdatesSafetySection } from '@/components/admin/updates-safety-section';
+import { FleetRemoteOpsSection } from '@/components/admin/fleet-remote-ops-section';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -1862,6 +1863,11 @@ export default function AdminTab() {
       {/* Updates, Rollback & Backups (v2.9.0 architecture plan)          */}
       {/* ================================================================== */}
       <UpdatesSafetySection />
+
+      {/* ================================================================== */}
+      {/* Fleet & Remote Ops — Remote Access Kit (v2.11.0)                */}
+      {/* ================================================================== */}
+      <FleetRemoteOpsSection />
 
       {/* ================================================================== */}
       {/* System Logs & Stock Movements Tabs                                  */}
