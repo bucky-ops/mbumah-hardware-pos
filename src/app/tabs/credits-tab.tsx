@@ -485,9 +485,13 @@ export default function CreditsTab() {
       const docNo = entry.reference || entry.id.slice(0, 8).toUpperCase();
       const store = resolveDocumentStore(currentStoreId);
       const qrDataUrl = await buildDocumentQrDataUrl(
+        // v2.10.0: KEEP the self-contained verify string — this docNo is a
+        // customer-credit LEDGER reference (not an invoice document number),
+        // so a /r/<docNo> link would 404 when scanned.
         buildDocumentQrPayload('CREDIT_NOTE', docNo, {
           total: formatKES(entry.amount),
           date: formatDateTime(entry.createdAt),
+          linkToPage: false,
         }),
       );
       const html = buildBrandedDocumentHtml({
