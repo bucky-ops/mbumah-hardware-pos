@@ -9,7 +9,7 @@ import {
   Package, CheckCircle2, AlertTriangle,
   Printer, CalendarDays, Hash, Navigation,
   ChevronRight, CircleDot, MessageSquare, Smartphone,
-  Trash2, Download, FileDown,
+  Trash2, Download, FileDown, QrCode, ExternalLink,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
@@ -45,6 +45,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { DocumentQrBadge } from '@/components/documents/document-qr-badge';
+import { DigitalReceiptViewer } from '@/components/documents/digital-receipt-viewer';
+import {
+  DigitalDeliveryView,
+  type DigitalDocLine,
+} from '@/components/documents/digital-document-view';
 import { MessagePreviewDialog } from '@/components/documents/message-preview-dialog';
 import { generateDocumentPdf, buildDocumentFileName } from '@/lib/document-pdf';
 
@@ -278,6 +283,35 @@ export default function DeliveryNotesTab() {
 
   const noteDetail = noteDetailData?.data as (DeliveryNoteItem & { items: DeliveryNoteItemDetail[]; transaction?: { id: string; receiptNumber: string; totalAmount: number; paymentStatus: string } }) | undefined;
 
+  // v2.10.0: digital receipt viewer (opens from the QR / "View receipt")
+  const [receiptViewerOpen, setReceiptViewerOpen] = useState(false);
+  // v2.10.0: map the loaded note into the shared digital view — the SAME
+  // layout the public /r/<deliveryNumber> page renders for scanned QRs.
+  const viewerDoc = useMemo(() => {
+    if (!noteDetail) return null;
+    const store = resolveDocumentStore(currentStoreId);
+    const lines: DigitalDocLine[] = (noteDetail.items || []).map((item) => ({
+      name: item.productName,
+      description: item.notes ?? null,
+      quantity: Number(item.quantity) || 0,
+      unitType: item.unitType ?? null,
+    }));
+    return {
+      docNumber: noteDetail.deliveryNumber,
+      status: noteDetail.status,
+      customerName: noteDetail.customerName,
+      deliveryAddress: noteDetail.deliveryAddress ?? null,
+      driverName: noteDetail.driverName ?? null,
+      vehicleNumber: noteDetail.vehicleNumber ?? null,
+      scheduled: noteDetail.scheduledDate ? formatDate(noteDetail.scheduledDate) : null,
+      delivered: null as string | null,
+      items: lines,
+      notes: noteDetail.notes ?? null,
+      storeName: store.storeName,
+      storeLine: store.storeLines.join(' · '),
+    };
+  }, [noteDetail, currentStoreId]);
+
   // Stats
   const stats = useMemo(() => {
     const all = Array.isArray(notesData?.data) ? notesData.data : [];
@@ -494,7 +528,7 @@ export default function DeliveryNotesTab() {
         : '',
       signatureLabels: ['Driver Signature', 'Receiver Signature'],
       qrDataUrl,
-      qrCaption: 'Scan to verify this document',
+      qrCaption: 'Scan to view your digital receipt',
     });
     return { html, detail };
   }
@@ -1145,16 +1179,61 @@ export default function DeliveryNotesTab() {
                   >
                     <Trash2 className="h-3.5 w-3.5" /> Delete
                   </Button>
-
-                  {/* v2.8.0 SCANNING FIX: on-screen scannable QR on the delivery
-                      note view — matches the working receipt modal. */}
-                  <DocumentQrBadge
-                    kind="DELIVERY_NOTE"
-                    docNumber={noteDetail.deliveryNumber}
-                    date={formatDateTime(noteDetail.createdAt)}
-                    className="ml-auto self-center"
-                  />
                 </div>
+              </div>
+
+              {/* v2.10.0 DIGITAL RECEIPT CARD — dedicated full-width block below
+                  the header (the old badge sat inside the non-wrapping action
+                  row and could be squeezed/clipped on narrow screens): the QR
+                  is clickable (opens the viewer with scroll + autofit) and the
+                  payload points at the public /r/<deliveryNumber> page. */}
+              <div className="rounded-lg border bg-muted/20 p-4">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                      <DocumentQrBadge
+                        kind="DELIVERY_NOTE"
+                        docNumber={noteDetail.deliveryNumber}
+                        date={formatDateTime(noteDetail.createdAt)}
+                        onView={() => setReceiptViewerOpen(true)}
+                      />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <p className="flex items-center gap-2 text-sm font-semibold">
+                          <QrCode className="h-4 w-4 text-emerald-600" aria-hidden />
+                          Digital delivery note (QR)
+                        </p>
+                        <p className="text-xs leading-relaxed text-muted-foreground">
+                          Scanning this QR — or tapping it — opens the colored digital
+                          copy of this delivery note at{' '}
+                          <span className="font-mono">/r/{noteDetail.deliveryNumber}</span>.
+                          Printed copies carry the same QR. Use Autofit to fit the whole
+                          note on screen, or scroll through it.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                            onClick={() => setReceiptViewerOpen(true)}
+                          >
+                            <FileText className="h-4 w-4" /> View receipt
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5"
+                            onClick={() =>
+                              typeof window !== 'undefined' &&
+                              window.open(
+                                `${window.location.origin}/r/${encodeURIComponent(noteDetail.deliveryNumber)}`,
+                                '_blank',
+                                'noopener',
+                              )
+                            }
+                            title="Open the public page a customer sees after scanning"
+                          >
+                            <ExternalLink className="h-4 w-4" /> Public page
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
               </div>
 
               <Separator />
@@ -1328,6 +1407,32 @@ export default function DeliveryNotesTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── v2.10.0: Digital receipt viewer — scroll + autofit + public page ── */}
+      <DigitalReceiptViewer
+        open={receiptViewerOpen}
+        onOpenChange={setReceiptViewerOpen}
+        title={`Digital delivery note — ${viewerDoc?.docNumber ?? ''}`}
+        subtitle={viewerDoc ? `DELIVERY NOTE · ${viewerDoc.status ?? ''}` : undefined}
+        publicPath={viewerDoc ? `/r/${encodeURIComponent(viewerDoc.docNumber)}` : undefined}
+      >
+        {viewerDoc ? (
+          <DigitalDeliveryView
+            docNumber={viewerDoc.docNumber}
+            storeName={viewerDoc.storeName}
+            storeLine={viewerDoc.storeLine}
+            status={viewerDoc.status}
+            scheduled={viewerDoc.scheduled}
+            delivered={viewerDoc.delivered}
+            customerName={viewerDoc.customerName}
+            deliveryAddress={viewerDoc.deliveryAddress}
+            driverName={viewerDoc.driverName}
+            vehicleNumber={viewerDoc.vehicleNumber}
+            items={viewerDoc.items}
+            notes={viewerDoc.notes}
+          />
+        ) : null}
+      </DigitalReceiptViewer>
 
       {/* ── v2.8.0: enlarged WhatsApp/SMS output preview (visibility fix) ── */}
       <MessagePreviewDialog

@@ -12,17 +12,35 @@
  * reuses `buildDocumentQrDataUrl` for statement QRs (base64 data URI, so the
  * printed HTML stays fully self-contained / offline-capable).
  *
- * QR PAYLOAD FORMATS
- * ──────────────────
- * • Transaction receipts (kind === 'RECEIPT')     → `<origin>/r/<receiptNumber>`
- *   (public digital-receipt page, same as receipt-qr.ts).
- * • ALL other documents → self-contained verify string, because there is no
- *   public page for these docs — the QR must carry the verification data:
+ * QR PAYLOAD FORMATS (v2.10.0 — QR codes open the DIGITAL RECEIPT)
+ * ─────────────────────────────────────────────────────────────────
+ * • Documents with a PUBLIC DIGITAL RECEIPT PAGE — `RECEIPT` plus all five
+ *   business documents (`INVOICE`, `QUOTATION`, `PROFORMA`, `CREDIT_NOTE`,
+ *   `DEBIT_NOTE`) and `DELIVERY_NOTE` — encode
+ *   `<origin>/r/<docNumber>` (the /r/[receiptNumber] page resolves receipts,
+ *   invoices and delivery notes). Scanning the QR now opens a colored,
+ *   mobile-friendly digital copy of the document, exactly like POS receipts.
+ * • ALL other kinds (e.g. `RENTAL`, statement QRs) → self-contained verify
+ *   string, because there is no public page for those numbers:
  *   `MBUMAH|<KIND>|<docNumber>|Total:<total>|Date:<date>`
+ *   Callers may also force the verify string with `linkToPage: false`
+ *   (the customer-credits print uses this — its docNo is a ledger reference,
+ *   not a document number, so a link would 404).
  */
 
 import QRCode from 'qrcode';
 import { COMPANY, STORE_LIST } from '@/lib/store-info';
+
+/** Kinds that resolve on the public /r/<docNumber> digital receipt page. */
+export const QR_LINKED_KINDS = new Set([
+  'RECEIPT',
+  'INVOICE',
+  'QUOTATION',
+  'PROFORMA',
+  'CREDIT_NOTE',
+  'DEBIT_NOTE',
+  'DELIVERY_NOTE',
+]);
 
 // ─── HTML escaping ──────────────────────────────────────────────────────────
 
@@ -43,12 +61,20 @@ export interface DocumentQrOptions {
   total?: string;
   /** Document date (already formatted). */
   date?: string;
+  /**
+   * Force the self-contained verify string even when the kind normally links
+   * to the public digital receipt page (used by the customer-credits print,
+   * whose docNo is a ledger reference, not a document number).
+   */
+  linkToPage?: boolean;
+  /** Explicit origin override (server callers); defaults to window.origin. */
+  origin?: string;
 }
 
 /**
  * Builds the QR payload for a document.
- * Transaction receipts link to the public receipt page; every other document
- * carries its own verification data (see module header).
+ * Kinds with a public digital receipt page (see QR_LINKED_KINDS) encode
+ * `<origin>/r/<docNumber>`; everything else carries its own verification data.
  */
 export function buildDocumentQrPayload(
   kind: string,
@@ -56,8 +82,15 @@ export function buildDocumentQrPayload(
   opts?: DocumentQrOptions,
 ): string {
   const normalizedKind = String(kind || 'DOCUMENT').trim().toUpperCase();
-  if (normalizedKind === 'RECEIPT' && typeof window !== 'undefined' && window.location?.origin) {
-    return `${window.location.origin}/r/${encodeURIComponent(docNumber)}`;
+  const origin =
+    opts?.origin ??
+    (typeof window !== 'undefined' ? window.location?.origin : undefined);
+  if (
+    origin &&
+    opts?.linkToPage !== false &&
+    QR_LINKED_KINDS.has(normalizedKind)
+  ) {
+    return `${origin}/r/${encodeURIComponent(docNumber)}`;
   }
   return [
     'MBUMAH',

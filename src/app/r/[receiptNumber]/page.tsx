@@ -1,10 +1,15 @@
-import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
 import { formatKES } from '@/lib/utils/financialMath';
 import { getVatRatePercent } from '@/lib/vat-settings';
 import { STORE_LIST, COMPANY } from '@/lib/store-info';
 import { ReceiptText, ShieldCheck, Smartphone } from 'lucide-react';
+import {
+  DigitalDocumentView,
+  DigitalDeliveryView,
+  type DigitalDocLine,
+} from '@/components/documents/digital-document-view';
 
 /**
  * PUBLIC DIGITAL RECEIPT (v2.5.0) — /r/<receiptNumber>
@@ -13,12 +18,22 @@ import { ReceiptText, ShieldCheck, Smartphone } from 'lucide-react';
  * so a customer who scans it gets a colored, digital, mobile-friendly copy
  * of their receipt — no app, no login, no paper.
  *
+ * v2.10.0 — the SAME URL shape now also resolves BUSINESS DOCUMENTS:
+ *   1. SalesTransaction.receiptNumber  → colored sales receipt (below)
+ *   2. Invoice.invoiceNumber           → digital INVOICE / QUOTATION /
+ *      PROFORMA / CREDIT NOTE / DEBIT NOTE (DigitalDocumentView)
+ *   3. DeliveryNote.deliveryNumber     → digital delivery note
+ *      (DigitalDeliveryView)
+ * so the QR printed on every branded document opens its digital copy —
+ * the same behaviour customers already knew from POS receipts.
+ *
  * Security / privacy:
- *   • The receipt number is the capability token (unique per sale, random
- *     suffix). There is no enumeration endpoint.
- *   • ONLY customer-safe fields are rendered — NEVER costPrice, profit
- *     margins, supplier data or internal notes.
- *   • The page is `noindex` so search engines don't index customer receipts.
+ *   • The document number is the capability token (unique per document).
+ *     Invoice numbers are sequential — the page therefore renders
+ *     CUSTOMER-SAFE FIELDS ONLY (customer name, items, totals). It NEVER
+ *     renders phone / e-mail / address, cost prices, profit margins,
+ *     supplier data or internal data.
+ *   • The page is `noindex` so search engines don't index customer records.
  */
 
 export const dynamic = 'force-dynamic';
@@ -83,7 +98,9 @@ export default async function DigitalReceiptPage({
     },
   });
 
-  if (!tx) notFound();
+  if (!tx) {
+    return <DocumentResolver docNumber={receiptNumber} />;
+  }
 
   // v2.8.0: current admin-controlled VAT rate for the display label (the
   // amount itself is the stored tax component of THIS receipt).
@@ -276,4 +293,164 @@ export default async function DigitalReceiptPage({
       </div>
     </main>
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v2.10.0 — business-document resolver (invoices, quotations, proformas,
+// credit notes, debit notes and delivery notes share the /r/<number> space).
+// Rendered when the number is NOT a sales receipt. The lookups run in order
+// and stop at the first match; an unknown number falls through to 404.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DOC_ACCENTS: Record<string, string> = {
+  INVOICE: '#ea580c',
+  QUOTATION: '#0d9488',
+  PROFORMA: '#7c3aed',
+  CREDIT_NOTE: '#dc2626',
+  DEBIT_NOTE: '#b45309',
+  DELIVERY_NOTE: '#16a34a',
+};
+
+const DOC_TYPE_LABELS: Record<string, string> = {
+  INVOICE: 'INVOICE',
+  QUOTATION: 'QUOTATION',
+  PROFORMA: 'PROFORMA INVOICE',
+  CREDIT_NOTE: 'CREDIT NOTE',
+  DEBIT_NOTE: 'DEBIT NOTE',
+  DELIVERY_NOTE: 'DELIVERY NOTE',
+};
+
+async function DocumentResolver({ docNumber }: { docNumber: string }) {
+  // 1) Invoice-family documents (the five types). Privacy: customerPhone /
+  //    Email / Address and any cost/margin fields are deliberately NOT
+  //    selected — sequential invoice numbers make this page guessable.
+  const invoice = await db.invoice.findUnique({
+    where: { invoiceNumber: docNumber },
+    select: {
+      invoiceNumber: true,
+      invoiceType: true,
+      customerName: true,
+      issueDate: true,
+      dueDate: true,
+      subtotal: true,
+      taxAmount: true,
+      discountAmount: true,
+      totalAmount: true,
+      status: true,
+      notes: true,
+      terms: true,
+      storeId: true,
+      items: {
+        select: {
+          productName: true,
+          description: true,
+          quantity: true,
+          unitType: true,
+          pricePerUnit: true,
+          discountPercent: true,
+          taxRate: true,
+          lineTotal: true,
+        },
+        orderBy: { id: 'asc' },
+      },
+    },
+  });
+
+  if (invoice) {
+    const kind = String(invoice.invoiceType || 'INVOICE').toUpperCase();
+    const store = STORE_LIST.find((s) => s.id === invoice.storeId) ?? null;
+    const items: DigitalDocLine[] = invoice.items.map((item) => ({
+      name: item.productName,
+      description: item.description,
+      quantity: safeNumber(item.quantity),
+      unitType: item.unitType,
+      pricePerUnit: safeNumber(item.pricePerUnit),
+      discountPercent: safeNumber(item.discountPercent),
+      taxRate: safeNumber(item.taxRate),
+      lineTotal: safeNumber(item.lineTotal),
+    }));
+
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-stone-100 to-stone-200 py-6 px-3 sm:py-10">
+        <DigitalDocumentView
+          docNumber={invoice.invoiceNumber}
+          typeLabel={DOC_TYPE_LABELS[kind] ?? kind}
+          accent={DOC_ACCENTS[kind] ?? DOC_ACCENTS.INVOICE}
+          storeName={store?.name ?? COMPANY.legalName ?? 'MBUMAH HARDWARE'}
+          storeLine={[store?.location, store?.phone].filter(Boolean).join(' · ')}
+          status={invoice.status}
+          issued={new Date(invoice.issueDate).toLocaleDateString('en-KE', { dateStyle: 'medium' })}
+          due={invoice.dueDate
+            ? new Date(invoice.dueDate).toLocaleDateString('en-KE', { dateStyle: 'medium' })
+            : null}
+          customerName={invoice.customerName}
+          items={items}
+          totals={{
+            subtotal: safeNumber(invoice.subtotal),
+            discountAmount: safeNumber(invoice.discountAmount),
+            taxAmount: safeNumber(invoice.taxAmount),
+            totalAmount: safeNumber(invoice.totalAmount),
+          }}
+          notes={invoice.notes}
+          terms={invoice.terms}
+        />
+      </main>
+    );
+  }
+
+  // 2) Delivery notes.
+  const note = await db.deliveryNote.findUnique({
+    where: { deliveryNumber: docNumber },
+    select: {
+      deliveryNumber: true,
+      customerName: true,
+      deliveryAddress: true,
+      driverName: true,
+      vehicleNumber: true,
+      status: true,
+      scheduledDate: true,
+      deliveredAt: true,
+      notes: true,
+      storeId: true,
+      items: {
+        select: { productName: true, quantity: true, unitType: true, notes: true },
+        orderBy: { id: 'asc' },
+      },
+    },
+  });
+
+  if (note) {
+    const store = STORE_LIST.find((s) => s.id === note.storeId) ?? null;
+    const items: DigitalDocLine[] = note.items.map((item) => ({
+      name: item.productName,
+      description: item.notes,
+      quantity: safeNumber(item.quantity),
+      unitType: item.unitType,
+    }));
+
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-stone-100 to-stone-200 py-6 px-3 sm:py-10">
+        <DigitalDeliveryView
+          docNumber={note.deliveryNumber}
+          storeName={store?.name ?? COMPANY.legalName ?? 'MBUMAH HARDWARE'}
+          storeLine={[store?.location, store?.phone].filter(Boolean).join(' · ')}
+          status={note.status}
+          scheduled={note.scheduledDate
+            ? new Date(note.scheduledDate).toLocaleDateString('en-KE', { dateStyle: 'medium' })
+            : null}
+          delivered={note.deliveredAt
+            ? new Date(note.deliveredAt).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })
+            : null}
+          customerName={note.customerName}
+          deliveryAddress={note.deliveryAddress}
+          driverName={note.driverName}
+          vehicleNumber={note.vehicleNumber}
+          items={items}
+          notes={note.notes}
+        />
+      </main>
+    );
+  }
+
+  notFound();
 }

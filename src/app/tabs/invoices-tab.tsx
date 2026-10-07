@@ -9,7 +9,7 @@ import {
   TrendingUp, AlertCircle, Receipt,
   FileCheck, FileMinus, FilePlus, ChevronDown,
   Trash2, ArrowUpDown, Send, CheckCircle2, Phone, MessageSquare,
-  Download, FileDown,
+  Download, FileDown, QrCode, ExternalLink,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
@@ -54,6 +54,11 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { DocumentQrBadge } from '@/components/documents/document-qr-badge';
+import { DigitalReceiptViewer } from '@/components/documents/digital-receipt-viewer';
+import {
+  DigitalDocumentView,
+  type DigitalDocLine,
+} from '@/components/documents/digital-document-view';
 import { MessagePreviewDialog } from '@/components/documents/message-preview-dialog';
 import { generateDocumentPdf, buildDocumentFileName } from '@/lib/document-pdf';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -239,6 +244,8 @@ export default function InvoicesTab() {
   // View dialog
   const [viewOpen, setViewOpen] = useState(false);
   const [viewingInvoice, setViewingInvoice] = useState<InvoiceItem | null>(null);
+  // v2.10.0: digital receipt viewer (opens from the QR / "View receipt")
+  const [receiptViewerOpen, setReceiptViewerOpen] = useState(false);
 
   // Sort
   const [sortField, setSortField] = useState<'invoiceNumber' | 'totalAmount' | 'createdAt' | 'issueDate'>('createdAt');
@@ -339,6 +346,44 @@ export default function InvoicesTab() {
   const customers: CustomerItem[] = Array.isArray(customersData?.data) ? customersData.data : [];
   const products: ProductListItem[] = Array.isArray(productsData?.data) ? productsData.data : [];
   const invoiceDetail = invoiceDetailData?.data as InvoiceItem | undefined;
+
+  // v2.10.0: map the loaded document into the shared digital view (the SAME
+  // layout the public /r/<invoiceNumber> page renders for scanned QRs).
+  const viewerDoc = useMemo(() => {
+    const inv = invoiceDetail || viewingInvoice;
+    if (!inv) return null;
+    const lines: DigitalDocLine[] = (inv.items || []).map((item) => ({
+      name: item.productName,
+      description: item.description ?? null,
+      quantity: Number(item.quantity) || 0,
+      unitType: item.unitType ?? null,
+      pricePerUnit: Number(item.pricePerUnit) || 0,
+      discountPercent: Number(item.discountPercent) || 0,
+      taxRate: Number(item.taxRate) || 0,
+      lineTotal: Number(item.lineTotal) || 0,
+    }));
+    const store = resolveDocumentStore(currentStoreId);
+    return {
+      docNumber: inv.invoiceNumber,
+      typeLabel: PRINT_DOC_LABELS[inv.invoiceType] || inv.invoiceType.toUpperCase(),
+      accent: PRINT_DOC_ACCENTS[inv.invoiceType] || '#ea580c',
+      status: inv.status,
+      issued: formatDate(inv.issueDate),
+      due: inv.dueDate ? formatDate(inv.dueDate) : null,
+      customerName: inv.customerName,
+      storeName: store.storeName,
+      storeLine: store.storeLines.join(' · '),
+      items: lines,
+      totals: {
+        subtotal: Number(inv.subtotal) || 0,
+        discountAmount: Number(inv.discountAmount) || 0,
+        taxAmount: Number(inv.taxAmount) || 0,
+        totalAmount: Number(inv.totalAmount) || 0,
+      },
+      notes: inv.notes ?? null,
+      terms: inv.terms ?? null,
+    };
+  }, [invoiceDetail, viewingInvoice, currentStoreId]);
 
   // Filter by search
   const invoices = useMemo(() => {
@@ -646,7 +691,7 @@ export default function InvoicesTab() {
       `,
       signatureLabels: ['Authorised Signature', 'Customer Acceptance'],
       qrDataUrl,
-      qrCaption: 'Scan to verify this document',
+      qrCaption: 'Scan to view your digital receipt',
     });
     return { html, docLabel, detail };
   }, [currentStoreId]);
@@ -1671,15 +1716,60 @@ export default function InvoicesTab() {
                     <Trash2 className="h-4 w-4" /> Delete
                   </Button>
 
-                  {/* v2.8.0 SCANNING FIX: on-screen scannable QR — matches the
-                      working receipt modal ("Scan for your digital receipt"). */}
-                  <DocumentQrBadge
-                    kind={invoiceDetail.invoiceType}
-                    docNumber={invoiceDetail.invoiceNumber}
-                    total={formatKES(invoiceDetail.totalAmount)}
-                    date={formatDate(invoiceDetail.issueDate)}
-                    className="ml-auto self-center"
-                  />
+                  {/* v2.10.0 DIGITAL RECEIPT CARD — dedicated full-width section
+                      below Quick Actions: the QR can never be clipped/squeezed
+                      by the action buttons, it is clickable (opens the viewer
+                      with scroll + autofit), and the payload now points at the
+                      public digital receipt page /r/<docNumber>. */}
+                  <div className="w-full basis-full rounded-lg border bg-muted/20 p-4">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                      <DocumentQrBadge
+                        kind={invoiceDetail.invoiceType}
+                        docNumber={invoiceDetail.invoiceNumber}
+                        total={formatKES(invoiceDetail.totalAmount)}
+                        date={formatDate(invoiceDetail.issueDate)}
+                        onView={() => setReceiptViewerOpen(true)}
+                      />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <p className="flex items-center gap-2 text-sm font-semibold">
+                          <QrCode className="h-4 w-4 text-emerald-600" aria-hidden />
+                          Digital receipt (QR)
+                        </p>
+                        <p className="text-xs leading-relaxed text-muted-foreground">
+                          Scanning this QR — or tapping it — opens the colored digital
+                          copy of this {PRINT_DOC_LABELS[invoiceDetail.invoiceType]?.toLowerCase() || 'document'}
+                          {' '}at <span className="font-mono">/r/{invoiceDetail.invoiceNumber}</span>.
+                          Printed copies carry the same QR. Use Autofit to fit the
+                          whole receipt on screen, or scroll through it.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                            onClick={() => setReceiptViewerOpen(true)}
+                          >
+                            <Receipt className="h-4 w-4" /> View receipt
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5"
+                            onClick={() =>
+                              typeof window !== 'undefined' &&
+                              window.open(
+                                `${window.location.origin}/r/${encodeURIComponent(invoiceDetail.invoiceNumber)}`,
+                                '_blank',
+                                'noopener',
+                              )
+                            }
+                            title="Open the public page a customer sees after scanning"
+                          >
+                            <ExternalLink className="h-4 w-4" /> Public page
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Metadata */}
@@ -1728,6 +1818,33 @@ export default function InvoicesTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── v2.10.0: Digital receipt viewer — scroll + autofit + public page ── */}
+      <DigitalReceiptViewer
+        open={receiptViewerOpen}
+        onOpenChange={setReceiptViewerOpen}
+        title={`Digital receipt — ${viewerDoc?.docNumber ?? ''}`}
+        subtitle={viewerDoc?.typeLabel}
+        publicPath={viewerDoc ? `/r/${encodeURIComponent(viewerDoc.docNumber)}` : undefined}
+      >
+        {viewerDoc ? (
+          <DigitalDocumentView
+            docNumber={viewerDoc.docNumber}
+            typeLabel={viewerDoc.typeLabel}
+            accent={viewerDoc.accent}
+            storeName={viewerDoc.storeName}
+            storeLine={viewerDoc.storeLine}
+            status={viewerDoc.status}
+            issued={viewerDoc.issued}
+            due={viewerDoc.due}
+            customerName={viewerDoc.customerName}
+            items={viewerDoc.items}
+            totals={viewerDoc.totals}
+            notes={viewerDoc.notes}
+            terms={viewerDoc.terms}
+          />
+        ) : null}
+      </DigitalReceiptViewer>
 
       {/* ── v2.8.0: enlarged WhatsApp/SMS output preview (visibility fix) ── */}
       <MessagePreviewDialog
