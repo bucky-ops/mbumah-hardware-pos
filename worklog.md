@@ -224,3 +224,33 @@ Work Log:
 Stage Summary:
 - Repo checked; all changes identified and classified. Production stable @ v2.7.2 · 7acf2e4.
 - No action taken beyond verification + clone restore. Next: await user direction or continue queue (Task I/K/J/A).
+
+---
+Task ID: LB-1 (laptop "backend unavailable / empty DB" root cause + fix, v2.7.3)
+Agent: Z.ai Code (main)
+Task: User report — after the one-click laptop install, frontend works but backend renders Unavailable and all modules show unavailable.
+
+Work Log:
+- SANDBOX RESET #3 before this task (clone rebuilt again; tokens/crons survived).
+- Read all 9 deploy-kit commits (#68-#76, author /m_collins) then reproduced the no-Docker install end-to-end in-sandbox: npm install → db:push → db:seed → next build (standalone) → assemble → start-server.mjs.
+- REPRODUCED the exact symptom: server "healthy", SELECT 1 OK, but every table "does not exist". Instrumented via spawn() hook + probe DBs:
+  * ROOT CAUSE 1 (proven): start-server.mjs only applied .env vars NOT already in the inherited environment → a stray DATABASE_URL (sandbox baseline was file:/home/z/my-project/db/custom.db) silently pointed the standalone server at a DIFFERENT EMPTY database. Frontend still rendered (static assets) — exact user symptom. Prisma-relative file: paths also resolve against a prisma/ base dir (proved by probe file landing in .next/standalone/prisma/).
+  * ROOT CAUSE 2 (read): no install step ever verified the DB has data; /api/health returned 200 "healthy" on an EMPTY db (SELECT 1 works) and database_stats swallowed the real error ("Could not retrieve stats") → readiness gates blind.
+  * ROOT CAUSE 3 (read): docker-entrypoint.sh continued booting after failed schema push ("server will start anyway") and only seeded when SEED_DATABASE=true.
+- FIX (PR #77, branch fix/laptop-empty-db-backend, commit 4ee2e31, 10 files +225/-15):
+  * start-server.mjs: repo .env now WINS over inherited env; banner prints resolved DB path.
+  * NEW deploy/nodocker/verify-db.mjs — shared verifier, exit 0 seeded / 10 empty / 1 broken (all three paths tested).
+  * install-nodocker.ps1/.sh: BUILD 5/5 "verify database" fails the install on empty/broken DB.
+  * start-pos.ps1/.sh: readiness gate requires database_stats=ok (not just HTTP 200) + actionable "database not ready, re-run installer" message.
+  * docker-entrypoint.sh: exit 1 on failed push (restart policy retries); AUTO-SEED when reachable-but-empty (verify exit 10); Dockerfile copies verify-db.mjs into runner.
+  * /api/health: real database_stats error surfaced + new `seed` check (ok/warning only — keeps HTTP 200 contract for uptime monitors).
+  * package.json → 2.7.3.
+- E2E proof with the contaminated env still active: fixed launcher boots, banner shows the CORRECT db path, /api/health database_stats = ok "13 users, 73 products, 30 transactions" (was failing). eslint 0 errors; tsc strict 0 NEW errors in health/route.ts (health-folder strict errors are pre-existing in dlq-demo/system-status).
+
+Stage Summary:
+- PR #77 open, CI dispatched via workflow_dispatch (webhook drop workaround). Next: poll checks → squash-merge → prod verify → report to user.
+- Laptop remediation for the USER: re-download repo (or git pull) and re-run Install-Mbumah-POS.bat — the fixed installer now fails loudly if the DB is not seeded instead of "succeeding" broken.
+
+- MERGE + VERIFY: PR #77 squash-merged as 8f2626f (attempt 1, HTTP 200 — branch was cut from current main tip so no squash-orphan conflict). Release run 16 → **v2.7.3 auto-published by github-actions[bot]**. Vercel prod READY @ 8f2626f.
+- PROD E2E (agent-browser): login admin@mbumahhardware.co.ke OK → dashboard renders REAL data (Ksh 19,034.00 revenue, 4 transactions, low-stock 1, revenue trend, payment distribution) → zero page errors, zero console errors → footer badge "v2.7.3 · 8f2626f" (version+SHA in sync). /api/health prod: version 2.7.3, healthy, database_stats ok "50 users, 1205 products, 1523 transactions", NEW seed check live "50 users present".
+- TASK COMPLETE: laptop empty-DB class fixed across all 3 install paths (no-Docker Win/Linux, Docker compose). User remediation: re-download repo / re-run Install-Mbumah-POS.bat — installer now fails loudly instead of "succeeding" broken.
