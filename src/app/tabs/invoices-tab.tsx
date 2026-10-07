@@ -9,12 +9,14 @@ import {
   TrendingUp, AlertCircle, Receipt,
   FileCheck, FileMinus, FilePlus, ChevronDown,
   Trash2, ArrowUpDown, Send, CheckCircle2, Phone, MessageSquare,
+  Download, FileDown,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
+import { useVatRate, getCachedVatRate } from '@/hooks/use-vat-rate';
 import {
   invoicesApi, productsApi, customersApi, whatsappApi,
-  formatKES, formatDate, formatDateTime, openSMS,
+  formatKES, formatDate, formatDateTime,
   type InvoiceItem,
   type InvoiceItemDetail,
   type ProductListItem,
@@ -50,6 +52,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { DocumentQrBadge } from '@/components/documents/document-qr-badge';
+import { MessagePreviewDialog } from '@/components/documents/message-preview-dialog';
+import { generateDocumentPdf, buildDocumentFileName } from '@/lib/document-pdf';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -156,7 +162,9 @@ function newLineItemKey(): string {
   return `line-${Date.now()}-${++lineItemCounter}`;
 }
 
-function createEmptyLineItem(): LineItemDraft {
+// v2.8.0: new line items default to the admin-controlled VAT rate (falls
+// back to the cached rate / 16 before the settings query resolves).
+function createEmptyLineItem(taxRate?: number): LineItemDraft {
   return {
     key: newLineItemKey(),
     productId: null,
@@ -166,7 +174,7 @@ function createEmptyLineItem(): LineItemDraft {
     unitType: 'PIECE',
     pricePerUnit: 0,
     discountPercent: 0,
-    taxRate: 16,
+    taxRate: taxRate ?? getCachedVatRate(),
   };
 }
 
@@ -175,6 +183,22 @@ function createEmptyLineItem(): LineItemDraft {
 export default function InvoicesTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
   const queryClient = useQueryClient();
+  // v2.8.0: admin-controlled VAT rate — new lines default to it and the
+  // server applies the same authoritative rate on create.
+  const { vatRate } = useVatRate();
+
+  // v2.8.0: enlarged WhatsApp/SMS output preview (visibility fix),
+  // delete-with-confirmation target, and per-row PDF busy marker.
+  const [msgPreview, setMsgPreview] = useState<{
+    open: boolean;
+    channel: 'whatsapp' | 'sms';
+    phone: string;
+    message: string;
+    title?: string;
+    waLink?: string;
+  } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<InvoiceItem | null>(null);
+  const [pdfBusyId, setPdfBusyId] = useState<string | null>(null);
 
   // ── State ──
   const [typeFilter, setTypeFilter] = useState<TypeFilterTab>('all');
@@ -294,6 +318,22 @@ export default function InvoicesTab() {
     },
   });
 
+  // v2.8.0: hard-delete mutation (client request: "done with an invoice →
+  // remove it", with a confirmation prompt). Role-gated server-side.
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => invoicesApi.remove(id),
+    onSuccess: () => {
+      toast.success('Invoice deleted');
+      setDeleteTarget(null);
+      setViewOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['invoices', currentStoreId] });
+    },
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Delete invoice');
+      toast.error(msg);
+    },
+  });
+
   // ── Derived data ──
   const rawInvoices: InvoiceItem[] = Array.isArray(invoicesData?.data) ? invoicesData.data : [];
   const customers: CustomerItem[] = Array.isArray(customersData?.data) ? customersData.data : [];
@@ -407,7 +447,7 @@ export default function InvoicesTab() {
   };
 
   const addLineItem = () => {
-    setLineItems(prev => [...prev, createEmptyLineItem()]);
+    setLineItems(prev => [...prev, createEmptyLineItem(vatRate)]);
   };
 
   const addProductToLine = (index: number, product: ProductListItem) => {
@@ -417,7 +457,8 @@ export default function InvoicesTab() {
       description: product.description || '',
       pricePerUnit: product.pricePerUnit,
       unitType: product.unitType,
-      taxRate: product.taxRate,
+      // v2.8.0: admin-controlled VAT rate wins over the product snapshot.
+      taxRate: vatRate,
       quantity: 1,
     });
     setShowProductDropdown(null);
@@ -518,90 +559,101 @@ export default function InvoicesTab() {
   };
 
   // Task 35-b: branded print document (accent band + logo + QR + thank-you).
+  // v2.8.0: extracted into buildInvoiceDocHtml so BOTH Print and the new
+  // Download PDF action render the identical branded document.
+  const buildInvoiceDocHtml = useCallback(async (invoice: InvoiceItem): Promise<{
+    html: string;
+    docLabel: string;
+    detail: InvoiceItem;
+  }> => {
+    // Fetch full detail (with line items) if not already loaded.
+    let detail: InvoiceItem = invoice;
+    if (!invoice.items || invoice.items.length === 0) {
+      const res = await invoicesApi.get(invoice.id);
+      detail = (res?.data as InvoiceItem) || invoice;
+    }
+    const items = detail.items || [];
+    const rows = items.map((item, i) => `
+      <tr>
+        <td class="text-center">${i + 1}</td>
+        <td>
+          <div><strong>${escapeHtml(item.productName)}</strong></div>
+          ${item.description ? `<div class="muted">${escapeHtml(item.description)}</div>` : ''}
+        </td>
+        <td class="text-center">${escapeHtml(formatQtyWithUnit(item.quantity, item.unitType))}</td>
+        <td class="text-right">${escapeHtml(formatKES(item.pricePerUnit))}</td>
+        <td class="text-center">${escapeHtml(String(item.discountPercent))}%</td>
+        <td class="text-center">${escapeHtml(String(item.taxRate))}%</td>
+        <td class="text-right">${escapeHtml(formatKES(item.lineTotal))}</td>
+      </tr>
+    `).join('');
+    const store = resolveDocumentStore(currentStoreId);
+    const docLabel = PRINT_DOC_LABELS[detail.invoiceType] || detail.invoiceType.toUpperCase();
+    const qrDataUrl = await buildDocumentQrDataUrl(
+      buildDocumentQrPayload(detail.invoiceType, detail.invoiceNumber, {
+        total: formatKES(detail.totalAmount),
+        date: formatDate(detail.issueDate),
+      }),
+    );
+    const html = buildBrandedDocumentHtml({
+      docTypeLabel: docLabel,
+      accentColor: PRINT_DOC_ACCENTS[detail.invoiceType] || '#ea580c',
+      docNumber: detail.invoiceNumber,
+      logoSrc: getDocumentLogoSrc(),
+      storeName: store.storeName,
+      storeLines: store.storeLines,
+      taxPin: store.taxPin,
+      metaRows: [
+        { label: 'Issued', value: formatDate(detail.issueDate) },
+        ...(detail.dueDate ? [{ label: 'Due', value: formatDate(detail.dueDate) }] : []),
+        { label: 'Status', value: detail.status },
+      ],
+      billToHtml: `
+        <div class="who">${escapeHtml(detail.customerName)}</div>
+        ${detail.customerPhone ? `<div class="muted">${escapeHtml(detail.customerPhone)}</div>` : ''}
+        ${detail.customerEmail ? `<div class="muted">${escapeHtml(detail.customerEmail)}</div>` : ''}
+        ${detail.customerAddress ? `<div class="muted">${escapeHtml(detail.customerAddress)}</div>` : ''}
+      `,
+      itemsTableHtml: `
+        <table class="items">
+          <thead>
+            <tr>
+              <th class="text-center">#</th>
+              <th>Item</th>
+              <th class="text-center">Qty</th>
+              <th class="text-right">Unit Price</th>
+              <th class="text-center">Disc %</th>
+              <th class="text-center">Tax %</th>
+              <th class="text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody>${rows || '<tr><td colspan="7" class="text-center muted">No line items</td></tr>'}</tbody>
+        </table>
+      `,
+      totalsHtml: `
+        <div class="totals">
+          <table>
+            <tr><td class="muted">Subtotal</td><td class="text-right">${escapeHtml(formatKES(detail.subtotal))}</td></tr>
+            ${detail.discountAmount > 0 ? `<tr><td class="muted">Discount</td><td class="text-right">-${escapeHtml(formatKES(detail.discountAmount))}</td></tr>` : ''}
+            <tr><td class="muted">Tax</td><td class="text-right">${escapeHtml(formatKES(detail.taxAmount))}</td></tr>
+            <tr class="grand"><td>Total</td><td class="text-right">${escapeHtml(formatKES(detail.totalAmount))}</td></tr>
+          </table>
+        </div>
+      `,
+      extraSectionsHtml: `
+        ${detail.notes ? `<div class="note-block"><strong>Notes:</strong> ${escapeHtml(detail.notes)}</div>` : ''}
+        ${detail.terms ? `<div class="note-block"><strong>Terms:</strong> ${escapeHtml(detail.terms)}</div>` : ''}
+      `,
+      signatureLabels: ['Authorised Signature', 'Customer Acceptance'],
+      qrDataUrl,
+      qrCaption: 'Scan to verify this document',
+    });
+    return { html, docLabel, detail };
+  }, [currentStoreId]);
+
   const handlePrint = useCallback(async (invoice: InvoiceItem) => {
     try {
-      // Fetch full detail (with line items) if not already loaded.
-      let detail: InvoiceItem = invoice;
-      if (!invoice.items || invoice.items.length === 0) {
-        const res = await invoicesApi.get(invoice.id);
-        detail = (res?.data as InvoiceItem) || invoice;
-      }
-      const items = detail.items || [];
-      const rows = items.map((item, i) => `
-        <tr>
-          <td class="text-center">${i + 1}</td>
-          <td>
-            <div><strong>${escapeHtml(item.productName)}</strong></div>
-            ${item.description ? `<div class="muted">${escapeHtml(item.description)}</div>` : ''}
-          </td>
-          <td class="text-center">${escapeHtml(formatQtyWithUnit(item.quantity, item.unitType))}</td>
-          <td class="text-right">${escapeHtml(formatKES(item.pricePerUnit))}</td>
-          <td class="text-center">${escapeHtml(String(item.discountPercent))}%</td>
-          <td class="text-center">${escapeHtml(String(item.taxRate))}%</td>
-          <td class="text-right">${escapeHtml(formatKES(item.lineTotal))}</td>
-        </tr>
-      `).join('');
-      const store = resolveDocumentStore(currentStoreId);
-      const docLabel = PRINT_DOC_LABELS[detail.invoiceType] || detail.invoiceType.toUpperCase();
-      const qrDataUrl = await buildDocumentQrDataUrl(
-        buildDocumentQrPayload(detail.invoiceType, detail.invoiceNumber, {
-          total: formatKES(detail.totalAmount),
-          date: formatDate(detail.issueDate),
-        }),
-      );
-      const html = buildBrandedDocumentHtml({
-        docTypeLabel: docLabel,
-        accentColor: PRINT_DOC_ACCENTS[detail.invoiceType] || '#ea580c',
-        docNumber: detail.invoiceNumber,
-        logoSrc: getDocumentLogoSrc(),
-        storeName: store.storeName,
-        storeLines: store.storeLines,
-        taxPin: store.taxPin,
-        metaRows: [
-          { label: 'Issued', value: formatDate(detail.issueDate) },
-          ...(detail.dueDate ? [{ label: 'Due', value: formatDate(detail.dueDate) }] : []),
-          { label: 'Status', value: detail.status },
-        ],
-        billToHtml: `
-          <div class="who">${escapeHtml(detail.customerName)}</div>
-          ${detail.customerPhone ? `<div class="muted">${escapeHtml(detail.customerPhone)}</div>` : ''}
-          ${detail.customerEmail ? `<div class="muted">${escapeHtml(detail.customerEmail)}</div>` : ''}
-          ${detail.customerAddress ? `<div class="muted">${escapeHtml(detail.customerAddress)}</div>` : ''}
-        `,
-        itemsTableHtml: `
-          <table class="items">
-            <thead>
-              <tr>
-                <th class="text-center">#</th>
-                <th>Item</th>
-                <th class="text-center">Qty</th>
-                <th class="text-right">Unit Price</th>
-                <th class="text-center">Disc %</th>
-                <th class="text-center">Tax %</th>
-                <th class="text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody>${rows || '<tr><td colspan="7" class="text-center muted">No line items</td></tr>'}</tbody>
-          </table>
-        `,
-        totalsHtml: `
-          <div class="totals">
-            <table>
-              <tr><td class="muted">Subtotal</td><td class="text-right">${escapeHtml(formatKES(detail.subtotal))}</td></tr>
-              ${detail.discountAmount > 0 ? `<tr><td class="muted">Discount</td><td class="text-right">-${escapeHtml(formatKES(detail.discountAmount))}</td></tr>` : ''}
-              <tr><td class="muted">Tax</td><td class="text-right">${escapeHtml(formatKES(detail.taxAmount))}</td></tr>
-              <tr class="grand"><td>Total</td><td class="text-right">${escapeHtml(formatKES(detail.totalAmount))}</td></tr>
-            </table>
-          </div>
-        `,
-        extraSectionsHtml: `
-          ${detail.notes ? `<div class="note-block"><strong>Notes:</strong> ${escapeHtml(detail.notes)}</div>` : ''}
-          ${detail.terms ? `<div class="note-block"><strong>Terms:</strong> ${escapeHtml(detail.terms)}</div>` : ''}
-        `,
-        signatureLabels: ['Authorised Signature', 'Customer Acceptance'],
-        qrDataUrl,
-        qrCaption: 'Scan to verify this document',
-      });
+      const { html, docLabel, detail } = await buildInvoiceDocHtml(invoice);
       const printed = printHtmlDocument(html, `${docLabel}-${detail.invoiceNumber}`);
       if (!printed) {
         toast.error('Pop-up blocked. Please allow pop-ups for this site to print.');
@@ -610,7 +662,26 @@ export default function InvoicesTab() {
       const msg = handleError(err, 'Print invoice');
       toast.error(msg);
     }
-  }, [currentStoreId]);
+  }, [buildInvoiceDocHtml]);
+
+  // v2.8.0: Download PDF — client request for ALL invoice types + delivery
+  // notes. Renders the SAME branded document as Print into an A4 PDF.
+  const handleDownloadPdf = useCallback(async (invoice: InvoiceItem) => {
+    try {
+      setPdfBusyId(invoice.id);
+      const { html, docLabel, detail } = await buildInvoiceDocHtml(invoice);
+      await generateDocumentPdf({
+        html,
+        fileName: buildDocumentFileName(docLabel, detail.invoiceNumber),
+      });
+      toast.success(`${docLabel} ${detail.invoiceNumber} PDF downloaded`);
+    } catch (err) {
+      const msg = handleError(err, 'Download PDF');
+      toast.error(msg);
+    } finally {
+      setPdfBusyId(null);
+    }
+  }, [buildInvoiceDocHtml]);
 
   const handleSendWhatsApp = async (invoice: InvoiceItem) => {
     try {
@@ -623,18 +694,26 @@ export default function InvoicesTab() {
         storeId: currentStoreId,
         phone,
       });
-      if (res.waLink) {
-        window.open(res.waLink, '_blank');
-        toast.success(`${res.documentTitle} sent via WhatsApp`);
-      }
+      // v2.8.0 VISIBILITY FIX: show the exact message in an enlarged,
+      // scrollable preview first — the old flow window.open'd the link
+      // directly (often popup-blocked, so the user never saw the output).
+      setMsgPreview({
+        open: true,
+        channel: 'whatsapp',
+        phone,
+        message: (res as { message?: string }).message || `${invoice.invoiceType} ${invoice.invoiceNumber}`,
+        title: `WhatsApp — ${(res as { documentTitle?: string }).documentTitle || invoice.invoiceNumber}`,
+        waLink: (res as { waLink?: string }).waLink,
+      });
     } catch (err) {
       const msg = handleError(err, 'Send invoice via WhatsApp');
       toast.error(msg);
     }
   };
 
-  // SMS twin of handleSendWhatsApp — compact (~<=320 chars) sms: deep link
-  // built client-side (no server round-trip); openSMS normalizes 07xx → 2547xx.
+  // SMS twin of handleSendWhatsApp — v2.8.0: now shows the enlarged,
+  // scrollable output preview (same visibility fix as WhatsApp) before
+  // opening the sms: deep link.
   const handleSendSms = async (invoice: InvoiceItem) => {
     try {
       const phone = prompt('Enter SMS phone number:', invoice.customerPhone || '') || '';
@@ -646,8 +725,13 @@ export default function InvoicesTab() {
         `Status: ${invoice.status}`,
         'Thank you for your business! Asante sana!',
       ].join('\n');
-      openSMS(phone, text);
-      toast.success(`${invoice.invoiceType} ${invoice.invoiceNumber} opened in SMS`);
+      setMsgPreview({
+        open: true,
+        channel: 'sms',
+        phone,
+        message: text,
+        title: `SMS — ${invoice.invoiceNumber}`,
+      });
     } catch (err) {
       const msg = handleError(err, 'Send invoice via SMS');
       toast.error(msg);
@@ -922,6 +1006,22 @@ export default function InvoicesTab() {
                             <Printer className="h-4 w-4" />
                           </Button>
 
+                          {/* v2.8.0: Download PDF (client request — all invoice types). */}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-violet-600 hover:text-violet-700"
+                            onClick={() => handleDownloadPdf(inv)}
+                            title="Download PDF"
+                            disabled={pdfBusyId === inv.id}
+                          >
+                            {pdfBusyId === inv.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <FileDown className="h-4 w-4" />
+                            )}
+                          </Button>
+
                           <Button
                             variant="ghost"
                             size="icon"
@@ -941,6 +1041,19 @@ export default function InvoicesTab() {
                             aria-label="Send via SMS"
                           >
                             <MessageSquare className="h-4 w-4" />
+                          </Button>
+
+                          {/* v2.8.0: Delete (client request — remove a finished
+                              invoice) — opens the confirmation AlertDialog. */}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-900/20"
+                            onClick={() => setDeleteTarget(inv)}
+                            title="Delete"
+                            aria-label={`Delete ${inv.invoiceNumber}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -1356,9 +1469,26 @@ export default function InvoicesTab() {
                   </DialogDescription>
                 </div>
               </div>
-              <Button variant="outline" size="sm" onClick={() => invoiceDetail && handlePrint(invoiceDetail)} className="gap-1.5">
-                <Printer className="h-4 w-4" /> Print
-              </Button>
+              <div className="flex items-center gap-2">
+                {/* v2.8.0: Download PDF on the invoice view (client request). */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => (invoiceDetail || viewingInvoice) && handleDownloadPdf((invoiceDetail || viewingInvoice)!)}
+                  disabled={pdfBusyId === (invoiceDetail || viewingInvoice)?.id}
+                  className="gap-1.5"
+                >
+                  {pdfBusyId === (invoiceDetail || viewingInvoice)?.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  PDF
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => invoiceDetail && handlePrint(invoiceDetail)} className="gap-1.5">
+                  <Printer className="h-4 w-4" /> Print
+                </Button>
+              </div>
             </div>
           </DialogHeader>
 
@@ -1531,6 +1661,25 @@ export default function InvoicesTab() {
                   >
                     <MessageSquare className="h-4 w-4" /> SMS
                   </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-rose-600 hover:text-rose-700"
+                    onClick={() => setDeleteTarget(invoiceDetail)}
+                    title="Delete this document"
+                  >
+                    <Trash2 className="h-4 w-4" /> Delete
+                  </Button>
+
+                  {/* v2.8.0 SCANNING FIX: on-screen scannable QR — matches the
+                      working receipt modal ("Scan for your digital receipt"). */}
+                  <DocumentQrBadge
+                    kind={invoiceDetail.invoiceType}
+                    docNumber={invoiceDetail.invoiceNumber}
+                    total={formatKES(invoiceDetail.totalAmount)}
+                    date={formatDate(invoiceDetail.issueDate)}
+                    className="ml-auto self-center"
+                  />
                 </div>
 
                 {/* Metadata */}
@@ -1546,6 +1695,50 @@ export default function InvoicesTab() {
           </ScrollArea>
         </DialogContent>
       </Dialog>
+
+      {/* ── v2.8.0: Delete confirmation (AlertDialog — rentals-tab pattern) ── */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deleteTarget?.invoiceType.replace('_', ' ')} {deleteTarget?.invoiceNumber}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the document and its line items. This action cannot be undone.
+              {deleteTarget?.status === 'PAID' && ' Note: this document is marked PAID — consider cancelling it instead to keep the payment history.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Keep it</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-rose-600 text-white hover:bg-rose-700"
+              disabled={deleteMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
+              }}
+            >
+              {deleteMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting…
+                </>
+              ) : (
+                'Delete permanently'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── v2.8.0: enlarged WhatsApp/SMS output preview (visibility fix) ── */}
+      <MessagePreviewDialog
+        open={!!msgPreview?.open}
+        onOpenChange={(open) => !open && setMsgPreview(null)}
+        channel={msgPreview?.channel || 'whatsapp'}
+        phone={msgPreview?.phone || ''}
+        message={msgPreview?.message || ''}
+        title={msgPreview?.title}
+        waLink={msgPreview?.waLink}
+      />
     </div>
   );
 }

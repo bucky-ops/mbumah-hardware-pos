@@ -1,10 +1,10 @@
-// GET/PUT /api/delivery-notes/[id]
+// GET/PUT/DELETE /api/delivery-notes/[id]
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
-import { withSessionAuth } from '@/lib/auth';
+import { withSessionAuth, getSessionFromRequest } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -124,4 +124,48 @@ export const GET = withErrorBoundary(
 export const PUT = withErrorBoundary(
   withSessionAuth(updateDeliveryNoteHandler),
   'DELIVERY_NOTE_UPDATE',
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE (v2.8.0) — permanently remove a delivery note (client request,
+// same as invoices: “done with it → remove it”, confirmation lives in the
+// UI AlertDialog; the API enforces the role gate and audit trail).
+// ─────────────────────────────────────────────────────────────────────────────
+async function deleteDeliveryNoteHandler(...args: unknown[]): Promise<Response> {
+  const request = args[0] as NextRequest;
+  const context = args[1] as RouteContext;
+  const session = await getSessionFromRequest(request);
+  const { id } = await context.params;
+
+  const existing = await db.deliveryNote.findUnique({ where: { id } });
+  if (!existing) {
+    return Response.json(
+      { success: false, error: 'Delivery note not found.' },
+      { status: 404 }
+    );
+  }
+
+  await db.deliveryNote.delete({ where: { id } });
+
+  await systemLog({
+    action: 'DELIVERY_NOTE_DELETED',
+    component: LogComponent.POS,
+    severity: LogSeverity.WARN,
+    message: `Delivery note ${existing.deliveryNumber} deleted`,
+    userId: session?.userId,
+    storeId: existing.storeId,
+    metadata: {
+      deliveryNoteId: id,
+      deliveryNumber: existing.deliveryNumber,
+      previousStatus: existing.status,
+      deletedBy: session?.email,
+    },
+  });
+
+  return Response.json({ success: true, data: { id } });
+}
+
+export const DELETE = withErrorBoundary(
+  withSessionAuth(deleteDeliveryNoteHandler, ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER']),
+  'DELIVERY_NOTE_DELETE',
 );

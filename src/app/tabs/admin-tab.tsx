@@ -18,10 +18,11 @@ import {
 import { useAppStore } from '@/lib/stores';
 import {
   systemLogsApi, stockMovementsApi, productsApi,
-  auditLogsApi, systemConfigApi, usersApi,
+  auditLogsApi, systemConfigApi, usersApi, settingsApi,
   formatDateTime, formatKES,
   type AuditLogItem, type SystemConfigItem, type UserItem,
 } from '@/lib/api';
+import { VAT_RATE_QUERY_KEY } from '@/hooks/use-vat-rate';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -858,6 +859,33 @@ function ConfigEditor({ storeId: _storeId }: { storeId: string }) {
     phone: '+254 700 123 456',
     taxRate: '16',
   });
+
+  // ── v2.8.0: Admin-controlled VAT rate (persisted via PATCH /api/settings/vat)
+  const { data: vatRateData, isLoading: vatRateLoading } = useQuery({
+    queryKey: VAT_RATE_QUERY_KEY,
+    queryFn: settingsApi.getVatRate,
+  });
+  const [vatRateInput, setVatRateInput] = useState('16');
+  // While the user is NOT editing, the input mirrors the persisted rate
+  // (derived, not a setState-in-effect). Once they type, their draft wins
+  // until save or cancel.
+  const [vatRateDirty, setVatRateDirty] = useState(false);
+  const vatRateValue = vatRateDirty && vatRateInput !== ''
+    ? vatRateInput
+    : vatRateData?.vatRatePercent !== undefined
+      ? String(vatRateData.vatRatePercent)
+      : vatRateInput;
+  const saveVatRateMutation = useMutation({
+    mutationFn: (percent: number) => settingsApi.updateVatRate(percent),
+    onSuccess: (_data, percent) => {
+      toast.success(`VAT rate set to ${percent}% — applies to all new sales, invoices and purchase orders`);
+      queryClient.invalidateQueries({ queryKey: VAT_RATE_QUERY_KEY });
+      setStoreSettings((s) => ({ ...s, taxRate: String(percent) }));
+      setVatRateDirty(false);
+      setVatRateInput(String(percent));
+    },
+    onError: (err: Error) => toast.error(err.message || 'Could not save VAT rate'),
+  });
   const [receiptSettings, setReceiptSettings] = useState({
     header: 'MBUMAH HARDWARE',
     footer: 'Thank you for your business! Asante!',
@@ -971,15 +999,43 @@ function ConfigEditor({ storeId: _storeId }: { storeId: string }) {
               </div>
               <div className="space-y-2">
                 <Label className="flex items-center gap-1.5"><span className="text-sm">🧾</span> VAT Rate (%)</Label>
+                {/* v2.8.0: PERSISTED — controls VAT on all new sales/invoices/POs.
+                    Set 0 to disable VAT everywhere. */}
                 <Input
                   type="number"
-                  value={storeSettings.taxRate}
-                  onChange={(e) => setStoreSettings({ ...storeSettings, taxRate: e.target.value })}
+                  min={0}
+                  max={100}
+                  step="0.5"
+                  disabled={vatRateLoading || saveVatRateMutation.isPending}
+                  value={vatRateValue}
+                  onChange={(e) => {
+                    setVatRateDirty(true);
+                    setVatRateInput(e.target.value);
+                  }}
                 />
+                <p className="text-[11px] text-muted-foreground">
+                  Controls VAT on all new sales, invoices &amp; purchase orders. Set 0 to disable VAT.
+                </p>
               </div>
             </div>
-            <Button onClick={() => handleStructuredSave('Store')} className="w-full sm:w-auto">
-              <Save className="mr-2 h-4 w-4" /> Save Store Settings
+            <Button
+              onClick={() => {
+                const rate = parseFloat(vatRateInput);
+                if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
+                  toast.error('VAT rate must be a number between 0 and 100');
+                  return;
+                }
+                saveVatRateMutation.mutate(rate);
+              }}
+              disabled={saveVatRateMutation.isPending}
+              className="w-full sm:w-auto"
+            >
+              {saveVatRateMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Save Store Settings
             </Button>
           </div>
         )}

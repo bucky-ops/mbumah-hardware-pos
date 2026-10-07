@@ -108,6 +108,10 @@ async function sendMessageHandler(...args: unknown[]): Promise<Response> {
   }
 
   // Create the Message record
+  // VF-1 (v2.8.0): a generated wa.me link is NOT a delivery — the user still
+  // has to open the link and press send in WhatsApp. Status is therefore
+  // always PENDING (the messaging tab's STATUS_BADGE map renders it as an
+  // amber "Pending"); sentAt stays null for the same honesty reason.
   const message = await db.message.create({
     data: {
       storeId,
@@ -116,9 +120,9 @@ async function sendMessageHandler(...args: unknown[]): Promise<Response> {
       messageType: resolvedMessageType,
       subject: subject || null,
       content,
-      status: waLink ? 'SENT' : (resolvedChannel === 'SMS' ? 'PENDING' : 'PENDING'),
+      status: 'PENDING',
       waLink: waLink || null,
-      sentAt: waLink ? new Date() : null,
+      sentAt: null,
       createdBy: createdBy || null,
     },
   });
@@ -127,7 +131,7 @@ async function sendMessageHandler(...args: unknown[]): Promise<Response> {
     action: 'MESSAGE_CREATED',
     component: 'MESSAGING',
     severity: 'INFO',
-    message: `Message created: ${resolvedMessageType} via ${resolvedChannel}${waLink ? ' (wa.me link generated)' : ''}`,
+    message: `Message created: ${resolvedMessageType} via ${resolvedChannel}${waLink ? ' (wa.me link generated — delivery pending until opened)' : ''}`,
     storeId,
     metadata: {
       messageId: message.id,

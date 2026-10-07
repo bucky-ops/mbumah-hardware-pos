@@ -9,6 +9,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, useSyncExtern
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useAuthStore, useCartStore, useAppStore } from '@/lib/stores';
+import { useVatRate } from '@/hooks/use-vat-rate';
 import { safeMap } from '@/lib/app-config';
 import { STORE_LIST } from '@/lib/store-info';
 import { ConfettiOverlay } from '@/components/confetti-overlay';
@@ -256,6 +257,9 @@ export default function POSTab() {
 
   const authUser = useAuthStore((s) => s.user);
   const cart = useCartStore();
+  // v2.8.0: admin-controlled VAT rate for display labels (server rate is
+  // authoritative at checkout — see /api/transactions).
+  const { vatRate } = useVatRate();
   const subtotal = cart.getSubtotal();
   const tax = cart.getTax();
   // FINANCIAL MATH AUDIT — VAT-INCLUSIVE pricing: the VAT component is
@@ -792,7 +796,7 @@ export default function POSTab() {
         pricePerUnit: Number(product.pricePerUnit) || 0,
         costPrice: Number(product.costPrice) || 0,
         discountPercent: 0,
-        taxRate: Number(product.taxRate) || 16,
+        taxRate: Number(product.taxRate) || 16, // display snapshot; admin rate wins server-side (v2.8.0)
         isRentalItem: product.isRental,
         isBundle: product.isBundle,
         stockSnapshot: stock,
@@ -1827,7 +1831,7 @@ export default function POSTab() {
                     <span>{formatKES(subtotal)}</span>
                   </div>
                   <div className="flex justify-between animate-total-row" style={{ animationDelay: '60ms' }}>
-                    <span className="text-muted-foreground">VAT (16%)</span>
+                    <span className="text-muted-foreground">VAT ({vatRate}%)</span>
                     <span>{formatKES(tax)}</span>
                   </div>
                   {totalDiscount > 0 && (
@@ -2025,7 +2029,7 @@ export default function POSTab() {
                 <span>{formatKES(lastTransaction.subtotal)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">VAT (16%)</span>
+                <span className="text-muted-foreground">VAT ({vatRate}%)</span>
                 <span>{formatKES(lastTransaction.taxAmount)}</span>
               </div>
               {lastTransaction.discountAmount > 0 && (
@@ -2587,7 +2591,7 @@ export default function POSTab() {
                     <span>{formatKES(subtotal)}</span>
                   </div>
                   <div className="flex justify-between animate-total-row" style={{ animationDelay: '60ms' }}>
-                    <span className="text-muted-foreground">VAT (16%)</span>
+                    <span className="text-muted-foreground">VAT ({vatRate}%)</span>
                     <span>{formatKES(tax)}</span>
                   </div>
                   {totalDiscount > 0 && (

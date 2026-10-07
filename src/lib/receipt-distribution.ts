@@ -204,7 +204,7 @@ export function renderReceiptHtml(ctx: ReceiptRenderContext): string {
       <hr style="border:none;border-top:1px dashed #d1d5db;margin:12px 0;" />
       <div style="font-size:13px;">
         <div style="display:flex;justify-content:space-between;margin:3px 0;"><span style="color:#6b7280;">Subtotal:</span><span>${KES(transaction.subtotal).formatKES()}</span></div>
-        <div style="display:flex;justify-content:space-between;margin:3px 0;"><span style="color:#6b7280;">VAT (16%):</span><span>${KES(transaction.taxAmount).formatKES()}</span></div>
+        <div style="display:flex;justify-content:space-between;margin:3px 0;"><span style="color:#6b7280;">VAT:</span><span>${KES(transaction.taxAmount).formatKES()}</span></div>
         ${Number(transaction.discountAmount) > 0
           ? `<div style="display:flex;justify-content:space-between;margin:3px 0;color:#059669;"><span>Discount:</span><span>-${KES(transaction.discountAmount).formatKES()}</span></div>`
           : ""}

@@ -224,7 +224,7 @@ export function generateReceiptHTML(receiptData: {
     ${itemRows}
     <div class="divider"></div>
     <div class="row"><span>Subtotal:</span><span>${formatKESForCSV(d.subtotal)}</span></div>
-    <div class="row"><span>VAT (16%):</span><span>${formatKESForCSV(d.taxAmount)}</span></div>
+    <div class="row"><span>VAT:</span><span>${formatKESForCSV(d.taxAmount)}</span></div>
     ${d.discountAmount > 0 ? `<div class="row"><span>Discount:</span><span>-${formatKESForCSV(d.discountAmount)}</span></div>` : ''}
     <div class="divider"></div>
     <div class="row bold"><span>TOTAL:</span><span>${formatKESForCSV(d.totalAmount)}</span></div>
@@ -297,7 +297,7 @@ export function exportTransactions(
       paymentMethod: 'Payment Method',
       paymentStatus: 'Payment Status',
       subtotal: 'Subtotal',
-      taxAmount: 'VAT (16%)',
+      taxAmount: 'VAT',
       discountAmount: 'Discount',
       totalAmount: 'Total',
       itemCount: 'Items',

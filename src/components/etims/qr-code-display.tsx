@@ -1,9 +1,15 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useRef, useState } from 'react';
 import { QrCode, Download, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { generateQrPattern } from '@/lib/etims-utils';
+import { QRCodeCanvas } from 'qrcode.react';
+
+// v2.8.0 SCANNING FIX: this component used to draw a HASH-BASED lookalike
+// grid (generateQrPattern) that a phone could NEVER scan — KRA eTIMS invoice
+// cards "displayed" a QR that wasn't one. It now renders a REAL QR code
+// (qrcode.react — the same library as the working receipt QR) encoding the
+// actual KRA verification payload, so "scan to verify" genuinely works.
 
 interface QrCodeDisplayProps {
   data: string;
@@ -21,9 +27,7 @@ export function QrCodeDisplay({
   className = '',
 }: QrCodeDisplayProps) {
   const [copied, setCopied] = useState(false);
-
-  const pattern = useMemo(() => generateQrPattern(data, 21), [data]);
-  const moduleSize = size / 21;
+  const canvasWrapRef = useRef<HTMLDivElement | null>(null);
 
   const handleCopy = async () => {
     try {
@@ -35,55 +39,33 @@ export function QrCodeDisplay({
     }
   };
 
+  // Export the REAL rendered QR canvas as a PNG (replaces the old fake-SVG
+  // download — the PNG is scannable too).
   const handleDownload = () => {
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-      <rect width="${size}" height="${size}" fill="white"/>
-      ${pattern
-        .flatMap((row, r) =>
-          row.map((cell, c) =>
-            cell
-              ? `<rect x="${c * moduleSize}" y="${r * moduleSize}" width="${moduleSize}" height="${moduleSize}" fill="black"/>`
-              : ''
-          )
-        )
-        .join('')}
-    </svg>`;
-    const blob = new Blob([svg], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
+    const wrap = canvasWrapRef.current;
+    const canvas = wrap?.querySelector('canvas');
+    if (!canvas) return;
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `qr-${invoiceNumber || 'code'}.svg`;
+    a.href = canvas.toDataURL('image/png');
+    a.download = `qr-${invoiceNumber || 'code'}.png`;
     a.click();
-    URL.revokeObjectURL(url);
   };
 
   return (
     <div className={`flex flex-col items-center gap-2 ${className}`}>
       <div className="relative bg-white p-2 rounded-lg border-2 border-emerald-500/20 shadow-sm">
-        <svg
-          width={size}
-          height={size}
-          viewBox={`0 0 ${size} ${size}`}
-          className="block"
-          role="img"
-          aria-label="eTIMS QR code"
-        >
-          <rect width={size} height={size} fill="white" />
-          {pattern.map((row, r) =>
-            row.map((cell, c) =>
-              cell ? (
-                <rect
-                  key={`${r}-${c}`}
-                  x={c * moduleSize}
-                  y={r * moduleSize}
-                  width={moduleSize}
-                  height={moduleSize}
-                  fill="#0f172a"
-                />
-              ) : null
-            )
-          )}
-        </svg>
+        <div ref={canvasWrapRef} aria-label="eTIMS QR code" role="img">
+          {/* Real, scannable QR of the KRA payload (high error correction so
+              it survives label printers and crumpled paper). */}
+          <QRCodeCanvas
+            value={data || ' '}
+            size={size}
+            level="H"
+            includeMargin={false}
+            bgColor="#ffffff"
+            fgColor="#0f172a"
+          />
+        </div>
         <div className="absolute -top-1 -right-1 bg-emerald-500 text-white rounded-full p-0.5 shadow">
           <QrCode className="h-3 w-3" />
         </div>
@@ -102,7 +84,7 @@ export function QrCodeDisplay({
             onClick={handleDownload}
           >
             <Download className="h-3 w-3 mr-1" />
-            SVG
+            PNG
           </Button>
           <Button
             size="sm"

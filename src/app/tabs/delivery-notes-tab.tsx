@@ -9,11 +9,12 @@ import {
   Package, CheckCircle2, AlertTriangle,
   Printer, CalendarDays, Hash, Navigation,
   ChevronRight, CircleDot, MessageSquare, Smartphone,
+  Trash2, Download, FileDown,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
-  deliveryNotesApi, whatsappApi, openSMS,
+  deliveryNotesApi, whatsappApi,
   formatDate, formatDateTime, formatKES,
   type DeliveryNoteItem,
   type DeliveryNoteItemDetail,
@@ -42,6 +43,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { DocumentQrBadge } from '@/components/documents/document-qr-badge';
+import { MessagePreviewDialog } from '@/components/documents/message-preview-dialog';
+import { generateDocumentPdf, buildDocumentFileName } from '@/lib/document-pdf';
 
 
 // ─── Helpers ─────────────────────────────────────────────
@@ -155,6 +160,19 @@ export default function DeliveryNotesTab() {
   const [viewOpen, setViewOpen] = useState(false);
   const [selectedNote, setSelectedNote] = useState<DeliveryNoteItem | null>(null);
 
+  // v2.8.0: enlarged WhatsApp/SMS output preview (visibility fix),
+  // delete-with-confirmation target, and per-row PDF busy marker.
+  const [msgPreview, setMsgPreview] = useState<{
+    open: boolean;
+    channel: 'whatsapp' | 'sms';
+    phone: string;
+    message: string;
+    title?: string;
+    waLink?: string;
+  } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeliveryNoteItem | null>(null);
+  const [pdfBusyId, setPdfBusyId] = useState<string | null>(null);
+
   // Debounce search (300ms).
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -207,6 +225,22 @@ export default function DeliveryNotesTab() {
     },
     onError: (err: unknown) => {
       const msg = handleError(err, 'Create delivery note');
+      toast.error(msg);
+    },
+  });
+
+  // v2.8.0: hard-delete mutation (client request — remove a finished delivery
+  // note, with confirmation). Role-gated server-side.
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deliveryNotesApi.remove(id),
+    onSuccess: () => {
+      toast.success('Delivery note deleted');
+      setDeleteTarget(null);
+      setViewOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['delivery-notes', currentStoreId] });
+    },
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Delete delivery note');
       toast.error(msg);
     },
   });
@@ -334,18 +368,24 @@ export default function DeliveryNotesTab() {
       storeId: currentStoreId,
       phone,
     }).then((res) => {
-      if (res.waLink) {
-        window.open(res.waLink, '_blank');
-        toast.success(`${res.documentTitle} sent via WhatsApp`);
-      }
+      // v2.8.0 VISIBILITY FIX: enlarged, scrollable preview of the exact
+      // message before the wa.me link opens (was a blind window.open).
+      setMsgPreview({
+        open: true,
+        channel: 'whatsapp',
+        phone,
+        message: (res as { message?: string }).message || `Delivery Note ${note.deliveryNumber}`,
+        title: `WhatsApp — ${(res as { documentTitle?: string }).documentTitle || note.deliveryNumber}`,
+        waLink: (res as { waLink?: string }).waLink,
+      });
     }).catch((err: unknown) => {
       const msg = handleError(err, 'Send delivery note via WhatsApp');
       toast.error(msg);
     });
   }
 
-  // SMS twin of handleSendWhatsApp — compact (~<=320 chars) sms: deep link
-  // built client-side; openSMS normalizes 07xx → 2547xx.
+  // SMS twin of handleSendWhatsApp — v2.8.0: enlarged, scrollable output
+  // preview (same visibility fix as WhatsApp) before opening the sms: link.
   function handleSendSms(note: DeliveryNoteItem) {
     const phone = prompt('Enter SMS phone number:', note.customerPhone || '') || '';
     if (!phone) return;
@@ -357,8 +397,13 @@ export default function DeliveryNotesTab() {
         `Status: ${note.status}`,
         'Thank you for your business! Asante sana!',
       ].filter(Boolean).join('\n');
-      openSMS(phone, text);
-      toast.success(`Delivery note ${note.deliveryNumber} opened in SMS`);
+      setMsgPreview({
+        open: true,
+        channel: 'sms',
+        phone,
+        message: text,
+        title: `SMS — ${note.deliveryNumber}`,
+      });
     } catch (err) {
       const msg = handleError(err, 'Send delivery note via SMS');
       toast.error(msg);
@@ -373,80 +418,90 @@ export default function DeliveryNotesTab() {
   // print-friendly window. Works for both the row-level print button and the
   // view-dialog print button.
   // Task 35-b: branded delivery note (accent band + logo + QR + thank-you).
+  // v2.8.0: extracted into buildDeliveryNoteDocHtml so BOTH Print and the new
+  // Download PDF action render the identical branded document.
+  async function buildDeliveryNoteDocHtml(note: DeliveryNoteItem | NonNullable<typeof noteDetail>): Promise<{
+    html: string;
+    detail: DeliveryNoteItem & { items?: DeliveryNoteItemDetail[] };
+  }> {
+    let detail = note as DeliveryNoteItem & { items?: DeliveryNoteItemDetail[] };
+    // Fetch detail if items aren't already loaded.
+    if (!detail.items || detail.items.length === 0) {
+      const res = await deliveryNotesApi.get(note.id);
+      const fetched = res?.data as DeliveryNoteItem & { items?: DeliveryNoteItemDetail[] } | undefined;
+      if (fetched) detail = fetched;
+    }
+    const items = detail.items || [];
+    const rows = items.map((item, i) => `
+      <tr>
+        <td class="text-center">${i + 1}</td>
+        <td>${escapeHtml(item.productName)}</td>
+        <td class="text-center">${escapeHtml(formatQty(item.quantity))}</td>
+        <td>${escapeHtml(unitLabel(item.unitType))}</td>
+        <td>${escapeHtml(item.notes || '—')}</td>
+      </tr>
+    `).join('');
+    const store = resolveDocumentStore(currentStoreId);
+    const qrDataUrl = await buildDocumentQrDataUrl(
+      buildDocumentQrPayload('DELIVERY_NOTE', detail.deliveryNumber, {
+        date: formatDateTime(detail.createdAt),
+      }),
+    );
+    const html = buildBrandedDocumentHtml({
+      docTypeLabel: 'DELIVERY NOTE',
+      accentColor: '#16a34a',
+      docNumber: detail.deliveryNumber,
+      logoSrc: getDocumentLogoSrc(),
+      storeName: store.storeName,
+      storeLines: store.storeLines,
+      taxPin: store.taxPin,
+      metaRows: [
+        { label: 'Status', value: getStatusLabel(detail.status) },
+        { label: 'Scheduled', value: detail.scheduledDate ? formatDate(detail.scheduledDate) : '—' },
+        { label: 'Created', value: formatDateTime(detail.createdAt) },
+      ],
+      billToHtml: `
+        <div class="who">${escapeHtml(detail.customerName)}</div>
+        ${detail.customerPhone ? `<div class="muted">${escapeHtml(detail.customerPhone)}</div>` : ''}
+        ${detail.deliveryAddress ? `<div class="muted">${escapeHtml(detail.deliveryAddress)}</div>` : ''}
+        <div class="muted">Driver: ${escapeHtml(detail.driverName || '—')} · Vehicle: ${escapeHtml(detail.vehicleNumber || '—')}</div>
+      `,
+      itemsTableHtml: `
+        <table class="items">
+          <thead>
+            <tr>
+              <th class="text-center">#</th>
+              <th>Product</th>
+              <th class="text-center">Qty</th>
+              <th>Unit</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>${rows || '<tr><td colspan="5" class="text-center muted">No items</td></tr>'}</tbody>
+        </table>
+      `,
+      // Delivery notes move goods, not money — the totals block reports the
+      // consignment size instead of inventing amounts.
+      totalsHtml: `
+        <div class="totals">
+          <table>
+            <tr class="grand"><td>Goods to deliver</td><td class="text-right">${escapeHtml(String(items.length))} line item(s)</td></tr>
+          </table>
+        </div>
+      `,
+      extraSectionsHtml: detail.notes
+        ? `<div class="note-block"><strong>Notes:</strong> ${escapeHtml(detail.notes)}</div>`
+        : '',
+      signatureLabels: ['Driver Signature', 'Receiver Signature'],
+      qrDataUrl,
+      qrCaption: 'Scan to verify this document',
+    });
+    return { html, detail };
+  }
+
   async function handlePrint(note: DeliveryNoteItem | NonNullable<typeof noteDetail>) {
     try {
-      let detail = note as DeliveryNoteItem & { items?: DeliveryNoteItemDetail[] };
-      // Fetch detail if items aren't already loaded.
-      if (!detail.items || detail.items.length === 0) {
-        const res = await deliveryNotesApi.get(note.id);
-        const fetched = res?.data as DeliveryNoteItem & { items?: DeliveryNoteItemDetail[] } | undefined;
-        if (fetched) detail = fetched;
-      }
-      const items = detail.items || [];
-      const rows = items.map((item, i) => `
-        <tr>
-          <td class="text-center">${i + 1}</td>
-          <td>${escapeHtml(item.productName)}</td>
-          <td class="text-center">${escapeHtml(formatQty(item.quantity))}</td>
-          <td>${escapeHtml(unitLabel(item.unitType))}</td>
-          <td>${escapeHtml(item.notes || '—')}</td>
-        </tr>
-      `).join('');
-      const store = resolveDocumentStore(currentStoreId);
-      const qrDataUrl = await buildDocumentQrDataUrl(
-        buildDocumentQrPayload('DELIVERY_NOTE', detail.deliveryNumber, {
-          date: formatDateTime(detail.createdAt),
-        }),
-      );
-      const html = buildBrandedDocumentHtml({
-        docTypeLabel: 'DELIVERY NOTE',
-        accentColor: '#16a34a',
-        docNumber: detail.deliveryNumber,
-        logoSrc: getDocumentLogoSrc(),
-        storeName: store.storeName,
-        storeLines: store.storeLines,
-        taxPin: store.taxPin,
-        metaRows: [
-          { label: 'Status', value: getStatusLabel(detail.status) },
-          { label: 'Scheduled', value: detail.scheduledDate ? formatDate(detail.scheduledDate) : '—' },
-          { label: 'Created', value: formatDateTime(detail.createdAt) },
-        ],
-        billToHtml: `
-          <div class="who">${escapeHtml(detail.customerName)}</div>
-          ${detail.customerPhone ? `<div class="muted">${escapeHtml(detail.customerPhone)}</div>` : ''}
-          ${detail.deliveryAddress ? `<div class="muted">${escapeHtml(detail.deliveryAddress)}</div>` : ''}
-          <div class="muted">Driver: ${escapeHtml(detail.driverName || '—')} · Vehicle: ${escapeHtml(detail.vehicleNumber || '—')}</div>
-        `,
-        itemsTableHtml: `
-          <table class="items">
-            <thead>
-              <tr>
-                <th class="text-center">#</th>
-                <th>Product</th>
-                <th class="text-center">Qty</th>
-                <th>Unit</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>${rows || '<tr><td colspan="5" class="text-center muted">No items</td></tr>'}</tbody>
-          </table>
-        `,
-        // Delivery notes move goods, not money — the totals block reports the
-        // consignment size instead of inventing amounts.
-        totalsHtml: `
-          <div class="totals">
-            <table>
-              <tr class="grand"><td>Goods to deliver</td><td class="text-right">${escapeHtml(String(items.length))} line item(s)</td></tr>
-            </table>
-          </div>
-        `,
-        extraSectionsHtml: detail.notes
-          ? `<div class="note-block"><strong>Notes:</strong> ${escapeHtml(detail.notes)}</div>`
-          : '',
-        signatureLabels: ['Driver Signature', 'Receiver Signature'],
-        qrDataUrl,
-        qrCaption: 'Scan to verify this document',
-      });
+      const { html, detail } = await buildDeliveryNoteDocHtml(note);
       const printed = printHtmlDocument(html, `DN-${detail.deliveryNumber}`);
       if (!printed) {
         toast.error('Pop-up blocked. Please allow pop-ups for this site to print.');
@@ -454,6 +509,24 @@ export default function DeliveryNotesTab() {
     } catch (err) {
       const msg = handleError(err, 'Print delivery note');
       toast.error(msg);
+    }
+  }
+
+  // v2.8.0: Download PDF for delivery notes (client request).
+  async function handleDownloadPdf(note: DeliveryNoteItem | NonNullable<typeof noteDetail>) {
+    try {
+      setPdfBusyId(note.id);
+      const { html, detail } = await buildDeliveryNoteDocHtml(note);
+      await generateDocumentPdf({
+        html,
+        fileName: buildDocumentFileName('Delivery-Note', detail.deliveryNumber),
+      });
+      toast.success(`Delivery note ${detail.deliveryNumber} PDF downloaded`);
+    } catch (err) {
+      const msg = handleError(err, 'Download delivery note PDF');
+      toast.error(msg);
+    } finally {
+      setPdfBusyId(null);
     }
   }
 
@@ -696,6 +769,32 @@ export default function DeliveryNotesTab() {
                             title="Print delivery note"
                           >
                             <Printer className="h-3.5 w-3.5" />
+                          </Button>
+                          {/* v2.8.0: Download PDF for delivery notes (client request). */}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0 text-violet-600 hover:text-violet-700"
+                            onClick={() => handleDownloadPdf(dn)}
+                            title="Download PDF"
+                            disabled={pdfBusyId === dn.id}
+                          >
+                            {pdfBusyId === dn.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <FileDown className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                          {/* v2.8.0: Delete with confirmation (client request). */}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-900/20"
+                            onClick={() => setDeleteTarget(dn)}
+                            title="Delete delivery note"
+                            aria-label={`Delete delivery note ${dn.deliveryNumber}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             size="sm"
@@ -1005,6 +1104,21 @@ export default function DeliveryNotesTab() {
                   <Button size="sm" variant="outline" className="gap-1.5" onClick={() => noteDetail && handlePrint(noteDetail)}>
                     <Printer className="h-3.5 w-3.5" /> Print
                   </Button>
+                  {/* v2.8.0: Download PDF on the delivery-note view (client request). */}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    onClick={() => (noteDetail || selectedNote) && handleDownloadPdf((noteDetail || selectedNote)!)}
+                    disabled={pdfBusyId === (noteDetail || selectedNote)?.id}
+                  >
+                    {pdfBusyId === (noteDetail || selectedNote)?.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}
+                    PDF
+                  </Button>
                   <Button
                     size="sm"
                     className="gap-1.5 bg-green-600 hover:bg-green-700 text-white"
@@ -1022,6 +1136,24 @@ export default function DeliveryNotesTab() {
                   >
                     <Smartphone className="h-3.5 w-3.5" /> SMS
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 text-rose-600 hover:text-rose-700"
+                    onClick={() => setDeleteTarget(noteDetail)}
+                    title="Delete this delivery note"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Delete
+                  </Button>
+
+                  {/* v2.8.0 SCANNING FIX: on-screen scannable QR on the delivery
+                      note view — matches the working receipt modal. */}
+                  <DocumentQrBadge
+                    kind="DELIVERY_NOTE"
+                    docNumber={noteDetail.deliveryNumber}
+                    date={formatDateTime(noteDetail.createdAt)}
+                    className="ml-auto self-center"
+                  />
                 </div>
               </div>
 
@@ -1164,6 +1296,49 @@ export default function DeliveryNotesTab() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ── v2.8.0: Delete confirmation (AlertDialog) ── */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete delivery note {deleteTarget?.deliveryNumber}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the delivery note and its items. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Keep it</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-rose-600 text-white hover:bg-rose-700"
+              disabled={deleteMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
+              }}
+            >
+              {deleteMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting…
+                </>
+              ) : (
+                'Delete permanently'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── v2.8.0: enlarged WhatsApp/SMS output preview (visibility fix) ── */}
+      <MessagePreviewDialog
+        open={!!msgPreview?.open}
+        onOpenChange={(open) => !open && setMsgPreview(null)}
+        channel={msgPreview?.channel || 'whatsapp'}
+        phone={msgPreview?.phone || ''}
+        message={msgPreview?.message || ''}
+        title={msgPreview?.title}
+        waLink={msgPreview?.waLink}
+      />
     </div>
   );
 }

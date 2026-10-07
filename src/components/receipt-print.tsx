@@ -28,6 +28,7 @@
  */
 
 import React, { useCallback, useState } from 'react';
+import { getCachedVatRate } from '@/lib/vat-rate-cache';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -102,6 +103,11 @@ export interface ReceiptDocumentProps {
   giftCardAmount?: number;
   voucherCode?: string;
   voucherAmount?: number;
+  /**
+   * v2.8.0: admin-controlled VAT rate (percent) used for the VAT label and
+   * the taxable-value derivation. Defaults to the cached admin rate / 16.
+   */
+  vatRatePercent?: number;
   className?: string;
 }
 
@@ -222,7 +228,9 @@ function buildReceiptText(
 
   lines.push(divider);
   lines.push(`Subtotal:        ${formatKES(tx.subtotal).padStart(14)}`);
-  lines.push(`VAT (16%):       ${formatKES(tx.taxAmount).padStart(14)}`);
+  // v2.8.0: label no longer hardcodes 16% — the amount is the stored, correct
+  // tax component whatever the admin rate was at sale time.
+  lines.push(`VAT:             ${formatKES(tx.taxAmount).padStart(14)}`);
   if (tx.discountAmount > 0) {
     lines.push(`Discount:       -${formatKES(tx.discountAmount).padStart(14)}`);
   }
@@ -278,9 +286,12 @@ export function ReceiptDocument({
   giftCardAmount = 0,
   voucherCode = '',
   voucherAmount = 0,
+  vatRatePercent,
   className,
 }: ReceiptDocumentProps) {
   const store = STORE_LIST.find((s) => s.id === storeId);
+  // v2.8.0: rate comes from the admin setting (cached) unless overridden.
+  const effectiveVatRatePercent = vatRatePercent ?? getCachedVatRate();
 
   // FINANCIAL MATH AUDIT: change = max(0, cash rendered − total), Decimal-
   // exact. Server-persisted `changeDue` (audit spec §4) is authoritative
@@ -295,12 +306,13 @@ export function ReceiptDocument({
   // VAT breakdown — mode-agnostic and Decimal-exact. For every stored
   // transaction (legacy VAT-exclusive AND current VAT-inclusive pricing)
   // `totalAmount − taxAmount` is the NET (VAT-exclusive) revenue, and
-  // taxAmount / 0.16 recovers the standard-rated net value; whatever net
+  // taxAmount / rate recovers the standard-rated net value; whatever net
   // remains is exempt / zero-rated (mirrors the eTIMS classification).
-  const VAT_RATE = 0.16;
+  // v2.8.0: the rate is the admin-controlled setting (NOT hardcoded 16%).
+  const vatRate = effectiveVatRatePercent > 0 ? effectiveVatRatePercent / 100 : 0;
   const netRevenue = max0(toDec(transaction.totalAmount).minus(toDec(transaction.taxAmount)));
-  const taxableAmount = toDec(transaction.taxAmount).gt(0)
-    ? toDec(transaction.taxAmount).div(VAT_RATE).toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+  const taxableAmount = toDec(transaction.taxAmount).gt(0) && vatRate > 0
+    ? toDec(transaction.taxAmount).div(vatRate).toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
     : new Decimal(0);
   const exemptAmount = max0(netRevenue.minus(taxableAmount)).toNumber();
 
@@ -484,7 +496,7 @@ export function ReceiptDocument({
             </div>
           )}
           <div className="flex justify-between">
-            <span className="text-muted-foreground">VAT (16%)</span>
+            <span className="text-muted-foreground">VAT ({effectiveVatRatePercent}%)</span>
             <span>{formatKES(transaction.taxAmount)}</span>
           </div>
           {exemptAmount > 0 && (

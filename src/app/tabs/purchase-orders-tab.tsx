@@ -15,6 +15,7 @@ import {
 
 import { useAppStore } from '@/lib/stores';
 import { useAuthStore } from '@/lib/stores';
+import { useVatRate } from '@/hooks/use-vat-rate';
 import {
   purchaseOrdersApi, suppliersApi, productsApi,
   formatKES, formatDate,
@@ -61,7 +62,9 @@ const PO_STATUSES = [
   'CANCELLED',
 ] as const;
 
-const VAT_RATE = 0.16;
+// v2.8.0: VAT rate is admin-controlled (no longer hardcoded). The preview in
+// CreatePODialog reads the live rate via useVatRate(); the server applies the
+// same authoritative rate when the PO is created.
 
 const STATUS_FLOW: string[] = [
   'DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT', 'CONFIRMED', 'PARTIALLY_RECEIVED', 'RECEIVED',
@@ -198,6 +201,8 @@ function CreatePODialog({
 }) {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
+  // v2.8.0: admin-controlled VAT rate for the live preview.
+  const { vatRate } = useVatRate();
 
   const [supplierId, setSupplierId] = useState('');
   const [expectedDate, setExpectedDate] = useState('');
@@ -288,7 +293,7 @@ function CreatePODialog({
     (sum, item) => sum + (parseFloat(item.quantity) || 0) * (parseFloat(item.unitCost) || 0),
     0
   );
-  const taxAmount = subTotal * VAT_RATE;
+  const taxAmount = subTotal * (vatRate / 100);
   const totalAmount = subTotal + taxAmount;
 
   const createMutation = useMutation({
@@ -517,7 +522,7 @@ function CreatePODialog({
               <span className="font-medium">{formatKES(subTotal)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">VAT (16%)</span>
+              <span className="text-muted-foreground">VAT ({vatRate}%)</span>
               <span className="font-medium">{formatKES(taxAmount)}</span>
             </div>
             <Separator />
@@ -717,6 +722,8 @@ function PODetailView({
   onOpenChange: (open: boolean) => void;
 }) {
   const queryClient = useQueryClient();
+  // v2.8.0: admin-controlled VAT rate for the stored-amount label.
+  const { vatRate } = useVatRate();
   const { user } = useAuthStore();
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{
@@ -994,7 +1001,7 @@ function PODetailView({
                 <span>{formatKES(detail.subTotal)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Tax (16% VAT)</span>
+                <span className="text-muted-foreground">Tax ({vatRate}% VAT)</span>
                 <span>{formatKES(detail.taxAmount)}</span>
               </div>
               <Separator />

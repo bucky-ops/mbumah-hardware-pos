@@ -11,11 +11,14 @@ import { withSequenceRetry } from '@/lib/sequence';
 // was a float hack that biased half-cent lines DOWN (x.xx5 → x.xx) and let
 // IEEE-754 dust into the Decimal header totals.
 import { toDec, round2 } from '@/lib/utils/financialMath';
+import { getVatRatePercent } from '@/lib/vat-settings';
 
 export const dynamic = 'force-dynamic';
 
-// Default VAT rate for Kenya
-const KENYA_VAT_RATE = 16;
+// v2.8.0: the default VAT rate now lives in the admin-controlled setting
+// (SystemConfig `vat_rate_percent`, see src/lib/vat-settings.ts). This
+// constant is only the fallback if the settings table is unreachable.
+const FALLBACK_VAT_RATE = 16;
 
 async function getPurchaseOrdersHandler(
   request: NextRequest,
@@ -200,7 +203,9 @@ async function createPurchaseOrderHandler(
     });
     const subTotal = round2(subTotalDec);
 
-    const taxAmount = round2(subTotalDec.mul(KENYA_VAT_RATE).div(100));
+    // v2.8.0: VAT fully controlled by the admin setting (0% ⇒ no VAT).
+    const vatRate = await getVatRatePercent().catch(() => FALLBACK_VAT_RATE);
+    const taxAmount = round2(subTotalDec.mul(vatRate).div(100));
     const totalAmount = round2(subTotalDec.plus(taxAmount));
 
     const created = await db.purchaseOrder.create({

@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { db } from '@/lib/db';
 import { formatKES } from '@/lib/utils/financialMath';
+import { getVatRatePercent } from '@/lib/vat-settings';
 import { STORE_LIST, COMPANY } from '@/lib/store-info';
 import { ReceiptText, ShieldCheck, Smartphone } from 'lucide-react';
 
@@ -83,6 +84,10 @@ export default async function DigitalReceiptPage({
   });
 
   if (!tx) notFound();
+
+  // v2.8.0: current admin-controlled VAT rate for the display label (the
+  // amount itself is the stored tax component of THIS receipt).
+  const vatRatePercent = await getVatRatePercent();
 
   const store =
     STORE_LIST.find((s) => s.id === tx.storeId) ?? null;
@@ -210,7 +215,8 @@ export default async function DigitalReceiptPage({
               </div>
             ) : null}
             <div className="flex justify-between text-stone-600">
-              <dt>VAT (16%)</dt>
+              {/* v2.8.0: dynamic admin-controlled rate (amount is stored data). */}
+              <dt>VAT ({vatRatePercent}%)</dt>
               <dd>{formatKES(taxAmount)}</dd>
             </div>
             <div className="flex items-baseline justify-between border-t border-stone-300 pt-2.5">

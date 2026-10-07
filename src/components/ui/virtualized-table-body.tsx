@@ -123,7 +123,13 @@ export function VirtualizedTableBody<T>({
   const first = items[0];
   const last = items[items.length - 1];
   const paddingTop = first?.start ?? 0;
-  const paddingBottom = Math.max(0, virtualizer.getTotalSize() - (last.start + last.size));
+  // v2.8.0 FIX: on the very first render the scroll container still has size 0
+  // so getVirtualItems() returns [] — `last` is then undefined and reading
+  // `last.start` crashed the whole tab ("Unable to load Inventory"). Guard it.
+  const paddingBottom =
+    first && last
+      ? Math.max(0, virtualizer.getTotalSize() - (last.start + last.size))
+      : 0;
 
   const measureRef = (el: HTMLTableRowElement | null) => {
     if (el) virtualizer.measureElement(el);

@@ -129,6 +129,25 @@ const envSchema = z.object({
     .enum(['development', 'test', 'production'])
     .optional()
     .default('development'),
+
+  // ── Notification gateways (VF-1, v2.8.0) — ALL OPTIONAL. ───────────────────
+  // Presence-only documentation: notification-helpers.ts and email-service.ts
+  // read process.env directly and degrade HONESTLY (status FAILED/Simulated,
+  // never a fake "Sent") when these are unset. Declaring them here (a) keeps
+  // a record of the supported names beside the required ones without making
+  // startup depend on them — dev / self-host installs ship without gateways —
+  // and (b) documents the TWILIO_FROM_PHONE ↔ TWILIO_PHONE_NUMBER alias pair
+  // that .env.example also documents. Do NOT promote any of these to
+  // required: that would crash every gateway-less deployment at first env
+  // access (the exact class of eager-validation failure this module fixed).
+  RESEND_API_KEY: z.string().optional(),
+  RESEND_FROM_EMAIL: z.string().optional(),
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_FROM_PHONE: z.string().optional(),
+  TWILIO_PHONE_NUMBER: z.string().optional(), // .env.example alias for TWILIO_FROM_PHONE
+  TWILIO_SMS_FROM: z.string().optional(), // optional SMS sender override
+  TWILIO_WHATSAPP_FROM: z.string().optional(), // defaults to the Twilio sandbox number
 });
 
 export type Env = z.infer<typeof envSchema>;

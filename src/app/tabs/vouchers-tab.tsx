@@ -8,18 +8,20 @@ import {
   Percent, DollarSign, Package, Gift, Clock, CalendarDays, Megaphone, Pencil, Trash2, Copy, CheckCircle2,
   ChevronDown, Filter, Users,
   BarChart3, Receipt, Ticket,
-  AlertCircle, Phone, Mail, MessageSquare, Send, RefreshCw,
+  AlertCircle, AlertTriangle, Phone, Mail, MessageSquare, Send, RefreshCw,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
 import {
-  vouchersApi, voucherCampaignsApi, whatsappApi, customersApi,
+  vouchersApi, voucherCampaignsApi, customersApi,
   formatKES, formatDate, formatDateTime,
-  openWhatsApp, openEmail, openSMS,
+  openEmail,
   type VoucherItem,
   type VoucherCampaignItem,
   type CustomerItem,
+  type VoucherSendResult,
 } from '@/lib/api';
+import { MessagePreviewDialog } from '@/components/documents/message-preview-dialog';
 import { handleError } from '@/lib/error-handler';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
@@ -58,6 +60,10 @@ type VoucherStatus = VoucherItem['status'];
 type CampaignType = VoucherCampaignItem['campaignType'];
 type CampaignStatus = VoucherCampaignItem['status'];
 type InnerTab = 'vouchers' | 'campaigns' | 'redemptions';
+
+// VF-1 (v2.8.0): delivery channels + honest gateway outcomes.
+type SendChannel = 'WHATSAPP' | 'SMS' | 'EMAIL';
+type DeliveryBadgeStatus = VoucherSendResult['status'];
 
 // ─── Badge Helpers ───────────────────────────────────────────────────────────
 
@@ -183,6 +189,34 @@ function formatVoucherValue(voucher: VoucherItem): string {
   return String(voucher.value);
 }
 
+// VF-1: small delivery-status badge rendered next to the row actions.
+// SENT → green, FAILED → amber, SIMULATED → blue (gateway unconfigured).
+function getDeliveryBadge(ds: { status: DeliveryBadgeStatus } | undefined) {
+  if (!ds) return null;
+  switch (ds.status) {
+    case 'SENT':
+      return (
+        <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 border-green-200 dark:border-green-800 text-[10px] px-1.5">
+          Sent
+        </Badge>
+      );
+    case 'SIMULATED':
+      return (
+        <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-[10px] px-1.5">
+          Simulated
+        </Badge>
+      );
+    case 'FAILED':
+      return (
+        <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30 border-amber-200 dark:border-amber-800 text-[10px] px-1.5">
+          Failed
+        </Badge>
+      );
+    default:
+      return null;
+  }
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function VouchersTab() {
@@ -264,6 +298,36 @@ export default function VouchersTab() {
   const [cFormEndDate, setCFormEndDate] = useState('');
   const [cFormTargetAudience, setCFormTargetAudience] = useState('');
 
+  // ── VF-1 (v2.8.0): REAL voucher sending (Email / SMS / WhatsApp) ──────────
+  // Send-voucher dialog (replaces the old prompt()+deep-link flow that never
+  // actually sent anything). Email shows a simple result panel; WhatsApp/SMS
+  // results render through the shared MessagePreviewDialog with the honest
+  // status strip.
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
+  const [sendVoucher, setSendVoucher] = useState<VoucherItem | null>(null);
+  const [sendChannel, setSendChannel] = useState<SendChannel>('WHATSAPP');
+  const [sendCustomerId, setSendCustomerId] = useState('none');
+  const [sendRecipient, setSendRecipient] = useState('');
+  const [emailResult, setEmailResult] = useState<VoucherSendResult | null>(null);
+
+  // Shared WhatsApp/SMS preview dialog state (send results + campaign deep
+  // links are routed through the same component for visibility).
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewData, setPreviewData] = useState<{
+    channel: 'whatsapp' | 'sms';
+    phone: string;
+    message: string;
+    title: string;
+    waLink?: string;
+    status?: DeliveryBadgeStatus;
+    error?: string;
+  } | null>(null);
+
+  // Per-voucher delivery badges: keyed by voucherId, hydrated from the
+  // Message log (persisted across reloads) and updated in-session after each
+  // send (session values win over hydration).
+  const [sendStatuses, setSendStatuses] = useState<Record<string, { status: DeliveryBadgeStatus; channel?: string }>>({});
+
   // ─── Queries ──────────────────────────────────────────────────────────────
 
   const { data: vouchersData, isLoading: vouchersLoading } = useQuery({
@@ -291,6 +355,15 @@ export default function VouchersTab() {
   const { data: customersData } = useQuery({
     queryKey: ['customers', currentStoreId],
     queryFn: () => customersApi.list({ storeId: currentStoreId, limit: 200 }),
+    enabled: !!currentStoreId,
+  });
+
+  // VF-1: recent voucher delivery attempts (Message rows, messageType=VOUCHER)
+  // used to hydrate the per-row delivery badges after a reload. Message has no
+  // voucherId column, so rows are joined by the subject ("Voucher <code>").
+  const { data: deliveryLogData } = useQuery({
+    queryKey: ['voucher-delivery-log', currentStoreId],
+    queryFn: () => vouchersApi.deliveryLog(currentStoreId),
     enabled: !!currentStoreId,
   });
 
@@ -405,6 +478,63 @@ export default function VouchersTab() {
     },
   });
 
+  // ─── VF-1: REAL voucher send mutation ─────────────────────────────────────
+  const sendVoucherMutation = useMutation({
+    mutationFn: vouchersApi.send,
+    onSuccess: (res) => {
+      const result = res.data;
+      if (!result) {
+        toast.error('Send failed — empty response from server.');
+        return;
+      }
+
+      // Row badge + fresh delivery log (the session value wins over hydration).
+      if (sendVoucher) {
+        setSendStatuses((prev) => ({
+          ...prev,
+          [sendVoucher.id]: { status: result.status, channel: result.channel },
+        }));
+      }
+      queryClient.invalidateQueries({ queryKey: ['voucher-delivery-log', currentStoreId] });
+
+      // HONEST feedback — a failed/simulated attempt NEVER toasts "sent".
+      if (result.status === 'SENT') {
+        const channelLabel = result.channel === 'SMS' ? 'SMS' : result.channel === 'EMAIL' ? 'email' : 'WhatsApp';
+        toast.success(`Voucher ${sendVoucher?.code || ''} sent via ${channelLabel} to ${result.recipient}`);
+      } else {
+        toast.warning(
+          result.status === 'SIMULATED'
+            ? 'Gateway not configured — the message was NOT sent. Use the fallback buttons.'
+            : 'Voucher send failed — see the details.',
+          { description: result.error || undefined },
+        );
+      }
+
+      if (result.channel === 'EMAIL') {
+        // Email has no preview component — show the simple result panel in-place.
+        setEmailResult(result);
+      } else {
+        // WhatsApp/SMS → the shared preview dialog (enlarged scrollable text,
+        // Copy + Open-in-app fallbacks) with the honest status strip.
+        setSendDialogOpen(false);
+        setPreviewData({
+          channel: result.channel === 'SMS' ? 'sms' : 'whatsapp',
+          phone: result.recipient,
+          message: result.message,
+          title: `Voucher ${sendVoucher?.code || ''} — ${result.channel === 'SMS' ? 'SMS' : 'WhatsApp'}`,
+          waLink: result.waLink || undefined,
+          status: result.status,
+          error: result.error || undefined,
+        });
+        setPreviewOpen(true);
+      }
+    },
+    onError: (err: unknown) => {
+      const msg = handleError(err, 'Send voucher');
+      toast.error(msg);
+    },
+  });
+
   // ─── Derived Data ────────────────────────────────────────────────────────
 
   const vouchers: VoucherItem[] = Array.isArray(vouchersData?.data) ? vouchersData.data : [];
@@ -428,6 +558,33 @@ export default function VouchersTab() {
 
     return result;
   }, [vouchers, debouncedSearch]);
+
+  // VF-1: hydrated delivery badges from the Message log (persisted across
+  // reloads). Derived via useMemo — NOT an effect with setState — so a fresh
+  // log never triggers cascading renders. In-session send results live in the
+  // sendStatuses state and take precedence via `??` at the render site.
+  const hydratedSendStatuses = useMemo(() => {
+    const rows = Array.isArray(deliveryLogData?.data) ? deliveryLogData.data : [];
+    const list = Array.isArray(vouchersData?.data) ? vouchersData.data : [];
+    const map: Record<string, { status: DeliveryBadgeStatus; channel?: string }> = {};
+    if (rows.length === 0 || list.length === 0) return map;
+    const idByCode = new Map(list.map((v) => [v.code, v.id]));
+    for (const row of rows) {
+      // Rows arrive newest-first — the FIRST match per voucher is its latest
+      // attempt; later (older) rows must never override it.
+      const match = /^Voucher\s+(.+)$/.exec(row.subject || '');
+      if (!match) continue;
+      const voucherId = idByCode.get(match[1].trim());
+      if (!voucherId || map[voucherId]) continue;
+      if (row.status === 'SENT') {
+        map[voucherId] = { status: 'SENT', channel: row.channel };
+      } else if (row.status === 'FAILED') {
+        map[voucherId] = { status: 'FAILED', channel: row.channel };
+      }
+      // PENDING rows (legacy deep-link logs) get no badge.
+    }
+    return map;
+  }, [deliveryLogData, vouchersData]);
 
   // Collect all redemptions from vouchers
   const allRedemptions = useMemo(() => {
@@ -609,14 +766,46 @@ export default function VouchersTab() {
     });
   }
 
-  // ─── Send Voucher Helpers ────────────────────────────────────────────────
+  // ─── Send Voucher Helpers (VF-1 — real gateway dispatch) ─────────────────
 
-  function getVoucherMessage(voucher: VoucherItem): string {
-    const storeName = 'Mbumah Hardware';
-    const discountStr = formatVoucherValue(voucher);
-    const expiryStr = voucher.endDate ? formatDate(voucher.endDate) : 'No expiry';
-    const minPurchaseStr = voucher.minimumPurchase > 0 ? `\nMin. purchase: ${formatKES(voucher.minimumPurchase)}` : '';
-    return `🎉 You have a voucher from ${storeName}!\n\nCode: ${voucher.code}\nDiscount: ${discountStr}${minPurchaseStr}\nValid until: ${expiryStr}\n\nVisit us soon!`;
+  function openSendDialog(voucher: VoucherItem, channel: SendChannel = 'WHATSAPP') {
+    setSendVoucher(voucher);
+    setSendChannel(channel);
+    setSendCustomerId('none');
+    setSendRecipient('');
+    setEmailResult(null);
+    setSendDialogOpen(true);
+  }
+
+  // Prefill the recipient from the selected customer (phone for WhatsApp/SMS,
+  // email for the Email channel).
+  function handleSendCustomerChange(id: string) {
+    setSendCustomerId(id);
+    const customer = customers.find((c) => c.id === id);
+    if (!customer) return;
+    if (sendChannel === 'EMAIL') {
+      if (customer.email) setSendRecipient(customer.email);
+    } else if (customer.phone) {
+      setSendRecipient(customer.phone);
+    }
+  }
+
+  function handleSendChannelChange(channel: string) {
+    const next = channel as SendChannel;
+    setSendChannel(next);
+    // Keep the recipient sensible when the channel changes on a picked customer.
+    const customer = sendCustomerId !== 'none' ? customers.find((c) => c.id === sendCustomerId) : undefined;
+    if (!customer) return;
+    if (next === 'EMAIL' && customer.email) setSendRecipient(customer.email);
+    else if (next !== 'EMAIL' && customer.phone) setSendRecipient(customer.phone);
+  }
+
+  function copyMessageText(text: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      toast.success('Message copied to clipboard');
+    }).catch(() => {
+      toast.error('Failed to copy message');
+    });
   }
 
   function getCampaignMessage(campaign: VoucherCampaignItem): string {
@@ -625,101 +814,24 @@ export default function VouchersTab() {
     return `📢 ${campaign.name} at ${storeName}!\n\n${campaign.description || 'Exciting promotional offers available!'}\n\nValid: ${validStr}\n${campaign.targetAudience ? `For: ${campaign.targetAudience}` : ''}\n\nDon't miss out!`;
   }
 
-  function sendVoucherWhatsApp(voucher: VoucherItem, phone: string) {
-    if (!phone) { toast.error('No phone number available'); return; }
-    whatsappApi.sendDocument({
-      type: 'voucher',
-      documentId: voucher.id,
-      storeId: currentStoreId,
+  // Campaign sends stay deep-link based (server-side campaign dispatch is out
+  // of scope per VF-1) but are routed through the SHARED preview dialog so the
+  // user sees the exact text and gets Copy / Open-in-app buttons instead of a
+  // popup-blocked blind window.open + a fake "sent" toast.
+  function previewCampaignDeepLink(campaign: VoucherCampaignItem, channel: 'whatsapp' | 'sms', phone: string) {
+    setPreviewData({
+      channel,
       phone,
-    }).then((res) => {
-      if (res.waLink) {
-        window.open(res.waLink, '_blank');
-        toast.success(`${res.documentTitle} sent via WhatsApp`);
-      }
-    }).catch((err: unknown) => {
-      const msg = handleError(err, 'Send voucher via WhatsApp');
-      toast.error(msg);
+      message: getCampaignMessage(campaign),
+      title: `${channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} — ${campaign.name}`,
     });
-  }
-
-  function sendVoucherSMS(voucher: VoucherItem, phone: string) {
-    if (!phone) { toast.error('No phone number available'); return; }
-    openSMS(phone, getVoucherMessage(voucher));
-    toast.success('SMS opened with voucher details');
-  }
-
-  function sendVoucherEmail(voucher: VoucherItem, email: string) {
-    if (!email) { toast.error('No email address available'); return; }
-    openEmail(email, `Voucher ${voucher.code} - ${voucher.name}`, getVoucherMessage(voucher));
-    toast.success('Email opened with voucher details');
-  }
-
-  function resendVoucher(voucher: VoucherItem) {
-    // Resend via the first available channel
-    const phone = voucher.redemptions?.[0]?.redeemedBy || '';
-    // Default to WhatsApp for resend
-    const storePhone = ''; // Could be from store settings
-    const targetPhone = phone || storePhone;
-    if (targetPhone) {
-      openWhatsApp(targetPhone, getVoucherMessage(voucher));
-    } else {
-      // Fallback: copy the message to clipboard
-      navigator.clipboard.writeText(getVoucherMessage(voucher)).then(() => {
-        toast.success('Voucher message copied to clipboard — no phone/email on file');
-      }).catch(() => {
-        toast.error('Failed to copy voucher message');
-      });
-      return;
-    }
-    toast.success('Voucher resent via WhatsApp');
-    queryClient.invalidateQueries({ queryKey: ['vouchers', currentStoreId] });
-  }
-
-  function sendCampaignWhatsApp(campaign: VoucherCampaignItem, phone: string) {
-    if (!phone) { toast.error('No phone number available'); return; }
-    openWhatsApp(phone, getCampaignMessage(campaign));
-    toast.success('WhatsApp opened with campaign details');
-  }
-
-  function sendCampaignSMS(campaign: VoucherCampaignItem, phone: string) {
-    if (!phone) { toast.error('No phone number available'); return; }
-    openSMS(phone, getCampaignMessage(campaign));
-    toast.success('SMS opened with campaign details');
+    setPreviewOpen(true);
   }
 
   function sendCampaignEmail(campaign: VoucherCampaignItem, email: string) {
     if (!email) { toast.error('No email address available'); return; }
     openEmail(email, `Campaign: ${campaign.name}`, getCampaignMessage(campaign));
     toast.success('Email opened with campaign details');
-  }
-
-  function resendCampaign(campaign: VoucherCampaignItem) {
-    // Resend campaign to all voucher holders via WhatsApp
-    const campaignVouchers = Array.isArray(campaign.vouchers) ? campaign.vouchers : [];
-    if (campaignVouchers.length > 0) {
-      // Use the first voucher's info as a sample and open WhatsApp
-      const phone = ''; // Could be from store/customer settings
-      if (phone) {
-        openWhatsApp(phone, getCampaignMessage(campaign));
-      } else {
-        navigator.clipboard.writeText(getCampaignMessage(campaign)).then(() => {
-          toast.success('Campaign message copied to clipboard — no phone/email on file');
-        }).catch(() => {
-          toast.error('Failed to copy campaign message');
-        });
-        return;
-      }
-    } else {
-      navigator.clipboard.writeText(getCampaignMessage(campaign)).then(() => {
-        toast.success('Campaign message copied to clipboard');
-      }).catch(() => {
-        toast.error('Failed to copy campaign message');
-      });
-      return;
-    }
-    toast.success('Campaign resent via WhatsApp');
-    queryClient.invalidateQueries({ queryKey: ['voucher-campaigns', currentStoreId] });
   }
 
   // ─── Loading State ───────────────────────────────────────────────────────
@@ -1044,6 +1156,8 @@ export default function VouchersTab() {
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-1">
+                                {/* VF-1: honest delivery badge (Sent/Failed/Simulated). */}
+                                {getDeliveryBadge(sendStatuses[voucher.id] ?? hydratedSendStatuses[voucher.id])}
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button
@@ -1090,15 +1204,15 @@ export default function VouchersTab() {
                                   <DropdownMenuContent align="end" className="w-48">
                                     <DropdownMenuLabel className="text-xs">Send via</DropdownMenuLabel>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={() => sendVoucherWhatsApp(voucher, prompt('Enter WhatsApp phone number:') || '')}>
+                                    <DropdownMenuItem onClick={() => openSendDialog(voucher, 'WHATSAPP')}>
                                       <Phone className="h-4 w-4 mr-2 text-green-600" />
                                       <span>WhatsApp</span>
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => sendVoucherSMS(voucher, prompt('Enter SMS phone number:') || '')}>
+                                    <DropdownMenuItem onClick={() => openSendDialog(voucher, 'SMS')}>
                                       <MessageSquare className="h-4 w-4 mr-2 text-blue-600" />
                                       <span>Text (SMS)</span>
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => sendVoucherEmail(voucher, prompt('Enter email address:') || '')}>
+                                    <DropdownMenuItem onClick={() => openSendDialog(voucher, 'EMAIL')}>
                                       <Mail className="h-4 w-4 mr-2 text-orange-600" />
                                       <span>Email</span>
                                     </DropdownMenuItem>
@@ -1110,7 +1224,7 @@ export default function VouchersTab() {
                                       variant="ghost"
                                       size="sm"
                                       className="h-7 w-7 p-0"
-                                      onClick={() => resendVoucher(voucher)}
+                                      onClick={() => openSendDialog(voucher, 'WHATSAPP')}
                                     >
                                       <RefreshCw className="h-3.5 w-3.5 text-purple-500" />
                                     </Button>
@@ -1305,11 +1419,11 @@ export default function VouchersTab() {
                             <DropdownMenuContent align="end" className="w-48">
                               <DropdownMenuLabel className="text-xs">Send campaign via</DropdownMenuLabel>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => sendCampaignWhatsApp(campaign, prompt('Enter WhatsApp phone number:') || '')}>
+                              <DropdownMenuItem onClick={() => { const phone = prompt('Enter WhatsApp phone number:') || ''; if (!phone) return; previewCampaignDeepLink(campaign, 'whatsapp', phone); }}>
                                 <Phone className="h-4 w-4 mr-2 text-green-600" />
                                 <span>WhatsApp</span>
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => sendCampaignSMS(campaign, prompt('Enter SMS phone number:') || '')}>
+                              <DropdownMenuItem onClick={() => { const phone = prompt('Enter SMS phone number:') || ''; if (!phone) return; previewCampaignDeepLink(campaign, 'sms', phone); }}>
                                 <MessageSquare className="h-4 w-4 mr-2 text-blue-600" />
                                 <span>Text (SMS)</span>
                               </DropdownMenuItem>
@@ -1322,7 +1436,7 @@ export default function VouchersTab() {
                           <Button
                             size="sm"
                             className="h-8 text-xs bg-purple-600 hover:bg-purple-700 text-white"
-                            onClick={() => resendCampaign(campaign)}
+                            onClick={() => previewCampaignDeepLink(campaign, 'whatsapp', '')}
                           >
                             <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
                             Resend
@@ -2025,6 +2139,213 @@ export default function VouchersTab() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* ═══════════════════ SEND VOUCHER DIALOG (VF-1) ═══════════════════ */}
+        <Dialog
+          open={sendDialogOpen}
+          onOpenChange={(open) => {
+            setSendDialogOpen(open);
+            if (!open) setEmailResult(null);
+          }}
+        >
+          <DialogContent className="sm:max-w-[470px] max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Send className="h-5 w-5 text-emerald-500" />
+                Send voucher
+              </DialogTitle>
+              <DialogDescription>
+                {sendVoucher && (
+                  <span>
+                    Deliver{' '}
+                    <code className="font-mono bg-muted px-1 py-0.5 rounded">{sendVoucher.code}</code>
+                    {' '}({sendVoucher.name}) through a real gateway — Resend for email, Twilio for SMS/WhatsApp. The delivery status is recorded honestly.
+                  </span>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-4 py-2">
+              {/* Channel */}
+              <div className="grid gap-2">
+                <Label className="text-sm font-medium">Channel</Label>
+                <Select value={sendChannel} onValueChange={handleSendChannelChange}>
+                  <SelectTrigger aria-label="Send channel">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="WHATSAPP">
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-green-600" />
+                        WhatsApp
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="SMS">
+                      <div className="flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4 text-blue-600" />
+                        Text (SMS)
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="EMAIL">
+                      <div className="flex items-center gap-2">
+                        <Mail className="h-4 w-4 text-orange-600" />
+                        Email
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Customer (optional) — prefills the recipient */}
+              <div className="grid gap-2">
+                <Label className="text-sm font-medium">Customer (optional)</Label>
+                <Select value={sendCustomerId} onValueChange={handleSendCustomerChange}>
+                  <SelectTrigger aria-label="Customer">
+                    <SelectValue placeholder="Manual recipient" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Manual recipient</SelectItem>
+                    {customers.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}{c.phone ? ` · ${c.phone}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Recipient */}
+              <div className="grid gap-2">
+                <Label htmlFor="send-recipient" className="text-sm font-medium">
+                  {sendChannel === 'EMAIL' ? 'Email address' : 'Phone number'} <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="send-recipient"
+                  type={sendChannel === 'EMAIL' ? 'email' : 'tel'}
+                  placeholder={sendChannel === 'EMAIL' ? 'customer@example.com' : '0712 345 678'}
+                  value={sendRecipient}
+                  onChange={(e) => setSendRecipient(e.target.value)}
+                />
+                {sendChannel !== 'EMAIL' && (
+                  <p className="text-xs text-muted-foreground">
+                    Kenyan format e.g. 0712345678 or +254712345678.
+                  </p>
+                )}
+              </div>
+
+              {/* EMAIL result panel — the shared preview dialog is WhatsApp/SMS
+                  only, so email shows a simple honest result here instead. */}
+              {emailResult && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    {emailResult.status === 'SENT' ? (
+                      <>
+                        <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800 gap-1">
+                          <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                          Sent
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">Emailed to {emailResult.recipient}.</span>
+                      </>
+                    ) : (
+                      <>
+                        <Badge className={emailResult.status === 'SIMULATED'
+                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800 gap-1'
+                          : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800 gap-1'}
+                        >
+                          <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                          {emailResult.status === 'SIMULATED' ? 'Simulated' : 'Failed'}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">Not delivered.</span>
+                      </>
+                    )}
+                  </div>
+                  {emailResult.status !== 'SENT' && (
+                    <div
+                      className="flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3"
+                      role="alert"
+                    >
+                      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+                          {emailResult.status === 'SIMULATED'
+                            ? 'No email gateway configured — the message was NOT sent.'
+                            : 'The email gateway rejected the send.'}
+                        </p>
+                        {emailResult.error && (
+                          <p className="text-xs text-amber-700 dark:text-amber-400/90 break-words mt-0.5">
+                            {emailResult.error}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => copyMessageText(emailResult.message)}
+                  >
+                    <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                    Copy message
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setSendDialogOpen(false)}
+                disabled={sendVoucherMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!sendVoucher) return;
+                  const recipient = sendRecipient.trim();
+                  if (!recipient) {
+                    toast.error('Please enter a recipient.');
+                    return;
+                  }
+                  if (sendChannel === 'EMAIL' && !recipient.includes('@')) {
+                    toast.error('Please enter a valid email address.');
+                    return;
+                  }
+                  sendVoucherMutation.mutate({
+                    voucherId: sendVoucher.id,
+                    channel: sendChannel,
+                    recipient,
+                    customerId: sendCustomerId !== 'none' ? sendCustomerId : undefined,
+                  });
+                }}
+                disabled={sendVoucherMutation.isPending || !sendRecipient.trim()}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                {sendVoucherMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Sending…</>
+                ) : (
+                  <><Send className="h-4 w-4 mr-2" /> Send</>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ══════ WHATSAPP / SMS SEND RESULT + CAMPAIGN PREVIEW (VF-1) ══════ */}
+        {previewData && (
+          <MessagePreviewDialog
+            open={previewOpen}
+            onOpenChange={setPreviewOpen}
+            channel={previewData.channel}
+            phone={previewData.phone}
+            message={previewData.message}
+            title={previewData.title}
+            waLink={previewData.waLink}
+            status={previewData.status}
+            error={previewData.error}
+          />
+        )}
 
         {/* ─── Redeem Voucher Code Dialog ─────────────────────────────────── */}
         <ResponsiveDialog
