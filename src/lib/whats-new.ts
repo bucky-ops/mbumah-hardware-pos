@@ -22,6 +22,14 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.13.2',
+    title: 'Checkout fix — sales flow restored',
+    bullets: [
+      'Fixed a checkout failure introduced in v2.13.1 — every sale now completes reliably again.',
+      'Cashier dashboard "Today\u2019s Sales" now shows the true net revenue of your own sales (it briefly showed a sale count instead).',
+    ],
+  },
+  {
     version: '2.13.1',
     title: 'Receipt-true VAT + strictly yours cashier dashboard',
     bullets: [

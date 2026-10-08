@@ -134,7 +134,13 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
       success: true,
       data: {
         limitedView: true,
-        todaySales: limitedTodayTxns,
+        // v2.13.2 HOTFIX: "Today's Sales" is a MONEY card ("net of VAT ·
+        // your sales") — it must carry the net revenue figure (same
+        // semantic as the full dashboard's todaySales), not the
+        // transaction count. The count-as-money bug made the card show
+        // "Ksh 1.00" after a single sale while the true revenue only
+        // surfaced via Avg Order.
+        todaySales: limitedTodayRevNet,
         transactions: { count: limitedTodayTxns },
         averageTransactionValue: limitedAverageTxnValue,
         lowStock: {
