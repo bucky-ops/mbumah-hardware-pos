@@ -2,6 +2,12 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.13.2] — Hotfix: checkout 500 regression + limited-dashboard money card
+
+### Fixed
+- **CRITICAL — checkout 500 on every sale (v2.13.1 regression)**: the new VAT-ledger line chained `.mul()` on the `Money` wrapper (which exposes `multiply()`/`taxComponent()`, not `mul()`), throwing `TypeError: KES(...).mul is not a function` and failing **every** `POST /api/transactions` with a 500. Replaced with the vetted helper `KES(finalTotal).taxComponent(rate).toNumber()` — the exact intended formula (`total × rate/(100+rate)`), Decimal-safe, 2dp HALF_UP. Caught by the post-deploy prod E2E (network log captured the 500 body) within minutes of rollout.
+- **Cashier dashboard "Today's Sales" showed a count as money**: the limited payload's `todaySales` carried the transaction COUNT, so one sale rendered as "Ksh 1.00" while the real net revenue only surfaced via Avg Order. Now returns net revenue (same semantic as the full dashboard), keeping "Transactions" as the count card.
+
 ## [2.13.1] — Fixed: VAT alignment & cashier KPI scoping
 
 Closes the two acceptance nuances documented at the v2.13.0 E2E verification. No schema changes; no changes to totals, payments, debt or discount-gate math.

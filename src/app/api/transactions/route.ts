@@ -736,8 +736,11 @@ async function createTransactionInner(
   // previous Σ per-line pre-cart-discount extraction overstated VAT (and
   // understated net revenue) on every discounted sale. History is kept:
   // transactions created before v2.13.1 retain their stored figures.
+  // v2.13.2 HOTFIX: uses Money.taxComponent (the vetted helper) — the
+  // original draft chained .mul() on the Money wrapper, which has no such
+  // method, and 500'd EVERY checkout in production.
   const taxAmount = finalTotal > 0 && adminVatRate > 0
-    ? round2(KES(finalTotal).mul(adminVatRate).div(100 + adminVatRate))
+    ? KES(finalTotal).taxComponent(adminVatRate).toNumber()
     : 0;
 
   // ── v2.12.2 (PR B — RBAC): DISCOUNT PERMISSION GATE ───────────────────
