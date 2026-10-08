@@ -7,6 +7,8 @@
  *
  * Positioned bottom-right, above the footer, with a subtle pulse + tooltip.
  * Hidden on the login screen (parent conditionally renders it).
+ * v2.12.1: also hidden on the POS tab — the fixed bottom-right FAB sat on
+ * top of the checkout/summary controls on short viewports ("No FAB overlap").
  */
 
 import React from 'react';
@@ -17,8 +19,9 @@ export function FloatingHomeButton() {
   const activeTab = useAppStore((s) => s.activeTab);
   const setActiveTab = useAppStore((s) => s.setActiveTab);
 
-  // Hide when already on dashboard — no need to show a "go home" button on home
-  if (activeTab === 'dashboard') return null;
+  // Hide when already on dashboard — no need to show a "go home" button on home.
+  // Hide on POS too — the FAB overlaps the checkout area (v2.12.1 hotfix).
+  if (activeTab === 'dashboard' || activeTab === 'pos') return null;
 
   return (
     <button

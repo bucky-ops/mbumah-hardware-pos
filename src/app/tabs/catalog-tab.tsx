@@ -16,7 +16,8 @@ import {
   type ProductListItem, type CategoryItem, type CreateProductPayload,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
-import { formatQtyWithUnit, unitLabel } from '@/lib/utils/financialMath';
+import { formatQtyWithUnit } from '@/lib/utils/financialMath';
+import { unitLabel } from '@/lib/units';
 import { ProductImageUpload } from '@/components/product-image-upload';
 import { ProductImage } from '@/components/product-image';
 import { Button } from '@/components/ui/button';

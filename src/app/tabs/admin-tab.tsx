@@ -23,6 +23,7 @@ import {
   type AuditLogItem, type SystemConfigItem, type UserItem,
 } from '@/lib/api';
 import { VAT_RATE_QUERY_KEY } from '@/hooks/use-vat-rate';
+import { unitLabel } from '@/lib/units';
 import { UpdatesSafetySection } from '@/components/admin/updates-safety-section';
 import { FleetRemoteOpsSection } from '@/components/admin/fleet-remote-ops-section';
 
@@ -255,7 +256,7 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
               <SelectContent>
                 {filteredProducts.map(p => (
                   <SelectItem key={p.id} value={p.id}>
-                    {p.name} (Stock: {p.quantityInStock} {p.unitType})
+                    {p.name} (Stock: {p.quantityInStock} {unitLabel(p.unitType)})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -265,7 +266,7 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
               <div className="p-2 rounded-lg bg-muted/30 border text-xs space-y-1">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Current Stock</span>
-                  <span className="font-medium">{selectedProduct.quantityInStock} {selectedProduct.unitType}</span>
+                  <span className="font-medium">{selectedProduct.quantityInStock} {unitLabel(selectedProduct.unitType)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Reorder Level</span>
@@ -335,7 +336,7 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
                       ? newStockLevel > selectedProduct.reorderLevel ? 'text-green-600' : 'text-amber-600'
                       : 'text-red-600'
                   }`}>
-                    {newStockLevel ?? '—'} {selectedProduct.unitType}
+                    {newStockLevel ?? '—'} {unitLabel(selectedProduct.unitType)}
                   </span>
                 </div>
                 {newStockLevel !== null && newStockLevel >= 0 && (

@@ -496,7 +496,7 @@ export function ReceiptDocument({
             </div>
           )}
           <div className="flex justify-between">
-            <span className="text-muted-foreground">VAT ({effectiveVatRatePercent}%)</span>
+            <span className="text-muted-foreground">VAT ({effectiveVatRatePercent}% incl.)</span>
             <span>{formatKES(transaction.taxAmount)}</span>
           </div>
           {exemptAmount > 0 && (
