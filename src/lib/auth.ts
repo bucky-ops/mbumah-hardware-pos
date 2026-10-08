@@ -878,6 +878,25 @@ export async function recordPermissionDenied(
   } catch {
     /* ignore logging errors */
   }
+
+  // ── v2.12.7 (PR C): privilege-abuse PATTERN detection ──────────────────────
+  // Beyond the hard-lockout engine (noteDeniedAndMaybeLock, called by the
+  // routes themselves), slow-drip abuse patterns get their own detector:
+  // a cashier repeatedly denied 'pos.discount.gt5' (4x in 1 hour) pages the
+  // BRANCH_MANAGERs + SUPER_ADMINs once per hour and writes a
+  // PRIVILEGE_ABUSE_PATTERN SecurityEvent. Best-effort — a detector failure
+  // must never turn a 403 into a 500.
+  try {
+    const { noteDiscountSpam } = await import('@/lib/abuse');
+    await noteDiscountSpam({
+      session,
+      permission,
+      ipAddress,
+      userAgent,
+    });
+  } catch {
+    /* abuse detection must never block the denial response */
+  }
 }
 
 // ── 3. Abuse engine: sliding window + lockout + SUPER_ADMIN notification ────

@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import {
   Shield, ShieldOff, AlertTriangle, Users,
-  Activity, Eye, Ban, RefreshCw, Filter, X,
+  Activity, Eye, Ban, RefreshCw, Filter, X, ScrollText,
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +24,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+// v2.12.8 (PR C): Audit Trail — second view inside the Security tab.
+import { AuditTrailSection } from '@/components/admin/audit-trail-section';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,6 +79,11 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   ACCOUNT_LOCKED: 'Account Locked',
   SESSION_HIJACK_ATTEMPT: 'Session Hijack',
   UNAUTHORIZED_ACCESS: 'Unauthorized Access',
+  // v2.12.7 (PR C): RBAC + abuse-detection event types.
+  PERMISSION_DENIED: 'Permission Denied',
+  HIGH_RISK_ATTEMPT: 'High-Risk Attempt',
+  PRIVILEGE_ABUSE_PATTERN: 'Privilege Abuse Pattern',
+  MANAGER_AUTHORIZED: 'Manager Authorized',
 };
 
 const EVENT_TYPE_COLORS: Record<string, string> = {
@@ -233,6 +240,12 @@ function SeverityBadge({ severity }: { severity: string }) {
 // ── Main Security Tab ────────────────────────────────────────────────────────
 
 export default function SecurityTab() {
+  // ── v2.12.8 (PR C): local view toggle ───────────────────────────────────
+  // The Security tab now hosts TWO views: the existing Security Dashboard
+  // (default) and the new Audit Trail. Local state — the sidebar/tab config
+  // stays untouched.
+  const [view, setView] = useState<'dashboard' | 'audit'>('dashboard');
+
   // Filter state
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -335,6 +348,68 @@ export default function SecurityTab() {
     }));
   }, [dashboard]);
 
+  // View toggle (v2.12.8): Security Dashboard | Audit Trail — rendered in the
+  // header of BOTH views so the user can always switch back.
+  const viewToggle = (
+    <div
+      className="flex items-center gap-1 p-1 rounded-lg bg-muted"
+      role="tablist"
+      aria-label="Security views"
+    >
+      <button
+        type="button"
+        role="tab"
+        aria-selected={view === 'dashboard'}
+        onClick={() => setView('dashboard')}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+          view === 'dashboard'
+            ? 'bg-background text-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        <Shield className="h-3.5 w-3.5" />
+        Security Dashboard
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={view === 'audit'}
+        onClick={() => setView('audit')}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+          view === 'audit'
+            ? 'bg-background text-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        <ScrollText className="h-3.5 w-3.5" />
+        Audit Trail
+      </button>
+    </div>
+  );
+
+  // ── Audit Trail view (v2.12.8) ──────────────────────────────────────────
+  if (view === 'audit') {
+    return (
+      <div className="space-y-6 p-4 md:p-6 max-w-7xl mx-auto">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-500/10">
+              <ScrollText className="h-5 w-5 text-emerald-500" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight">Audit Trail</h1>
+              <p className="text-xs text-muted-foreground">
+                Permission denials, manager overrides and authorizations — every denial, exactly once
+              </p>
+            </div>
+          </div>
+          {viewToggle}
+        </div>
+        <AuditTrailSection />
+      </div>
+    );
+  }
+
   // Loading skeleton
   if (dashboardLoading) {
     return (
@@ -370,6 +445,8 @@ export default function SecurityTab() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* v2.12.8 (PR C): view switcher — Dashboard | Audit Trail. */}
+          {viewToggle}
           <Button
             variant="outline"
             size="sm"

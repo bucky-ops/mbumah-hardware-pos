@@ -1,5 +1,9 @@
 // GET /api/security/events - List security events for admin dashboard
-// Requires SUPER_ADMIN or STORE_OWNER role
+// Requires SUPER_ADMIN, STORE_OWNER or BRANCH_MANAGER role.
+// v2.12.7 (PR C): BRANCH_MANAGER added — the discount-spam / abuse alerts ship
+// SECURITY notifications to branch managers, so their Alerts-panel Security
+// tab can merge the matching recent SecurityEvent rows for their own branch
+// (non-super-admin callers are always store-scoped below).
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -17,6 +21,10 @@ async function getSecurityEventsHandler(
   const page = parseInt(searchParams.get('page') || '1');
   const limit = parseInt(searchParams.get('limit') || '20');
   const eventType = searchParams.get('eventType') || '';
+  // v2.12.7 (PR C): comma-separated multi-type filter (e.g. the Alerts-panel
+  // Security tab pulls the abuse set in one request). Single `eventType` wins
+  // when both are provided.
+  const eventTypes = searchParams.get('eventTypes') || '';
   const severity = searchParams.get('severity') || '';
   const ipAddress = searchParams.get('ipAddress') || '';
   const blocked = searchParams.get('blocked') || '';
@@ -34,6 +42,13 @@ async function getSecurityEventsHandler(
   }
 
   if (eventType) where.eventType = eventType;
+  else if (eventTypes) {
+    const types = eventTypes
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+    if (types.length > 0) where.eventType = { in: types };
+  }
   if (severity) where.severity = severity;
   if (ipAddress) where.ipAddress = { contains: ipAddress };
   if (blocked === 'true') where.blocked = true;
@@ -105,6 +120,8 @@ async function getSecurityEventsHandler(
 }
 
 export const GET = withErrorBoundary(
-  requireAuth(getSecurityEventsHandler, { roles: ['SUPER_ADMIN', 'STORE_OWNER'] }),
+  requireAuth(getSecurityEventsHandler, {
+    roles: ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'],
+  }),
   'SECURITY_EVENTS'
 );

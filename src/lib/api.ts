@@ -2855,13 +2855,18 @@ export const purchaseOrdersApi = {
 
 export interface NotificationItem {
   id: string;
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction';
+  // v2.12.7 (PR C): 'security' — durable SECURITY-category Notification rows
+  // (privilege-abuse lockouts, discount-spam alerts) now surface in the feed.
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
   timestamp: string;
   isRead: boolean;
   targetTab: string;
+  // v2.12.7 (PR C): raw Notification.category ('SECURITY' on security rows) —
+  // drives the Alerts panel's Security filter tab.
+  category?: string;
 }
 
 export interface NotificationSummary {

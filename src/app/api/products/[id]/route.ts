@@ -4,9 +4,19 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
-import { withSessionAuth, getSessionFromRequest, MANAGER_PLUS_ROLES } from '@/lib/auth';
 // v2.12.2 (PR B — RBAC): supplier-cost visibility gate + product-edit roles.
+// v2.12.7 (PR C): recordPermissionDenied feeds the HIGH_RISK_ATTEMPT price-guard
+// denial into the SecurityEvent feed + the hash-chained AuditLog.
+import {
+  withSessionAuth,
+  getSessionFromRequest,
+  MANAGER_PLUS_ROLES,
+  recordPermissionDenied,
+} from '@/lib/auth';
 import { hasFeaturePermission } from '@/lib/permissions';
+// v2.12.7 (PR C): manager step-up for the ±20% price guard (same credential
+// rules as checkout + /api/auth/manager-authorize — never a drifting copy).
+import { authorizeManager, clientIpFromHeaders } from '@/lib/manager-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,6 +91,10 @@ async function updateProductHandler(...args: unknown[]): Promise<Response> {
   const context = args[1] as RouteContext;
   const { id } = await context.params;
   const body = await request.json();
+
+  // v2.12.7 (PR C): session resolved once up-front (was previously re-resolved
+  // inside the price-change audit block) — the price guard below needs it.
+  const session = await getSessionFromRequest(request);
 
   const existing = await db.product.findUnique({ where: { id } });
   if (!existing) {
@@ -165,6 +179,153 @@ async function updateProductHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
+  // ── v2.12.7 (PR C): INVENTORY_MANAGER price guard (±20% of cost) ──────────
+  // INVENTORY_MANAGER is the catalog steward (PRODUCT_EDIT_ROLES) but a
+  // business-price decision that moves the price more than ±20% away from the
+  // cost basis is a manager-tier call. Deviations beyond that threshold from a
+  // bare INVENTORY_MANAGER session are refused with MANAGER_APPROVAL_REQUIRED
+  // and recorded as a HIGH_RISK_ATTEMPT (SecurityEvent + AuditLog PERMISSION_DENIED
+  // row — visible in the Audit Trail). The SAME managerOverride credential
+  // object used at checkout ({approverEmail, approverPassword, reason}) lets a
+  // Branch Manager+ approve the change inline; the approval consumes one
+  // MANAGER_OVERRIDE hash-chained audit row (overrideContext
+  // PRODUCT_PRICE_GUARD).
+  //
+  // Deliberately scoped to INVENTORY_MANAGER only: every other role either
+  // holds manager-tier trust already (MANAGER_PLUS_ROLES) or cannot reach this
+  // handler at all (the route's roles gate).
+  if (updateData.pricePerUnit !== undefined && session && session.role === 'INVENTORY_MANAGER') {
+    const newPrice = Number(updateData.pricePerUnit);
+    const oldPrice = Number(existing.pricePerUnit);
+    const costPrice = existing.costPrice === null ? null : Number(existing.costPrice);
+    // Baseline: cost when present and positive, else the OLD selling price.
+    const baseline =
+      costPrice !== null && Number.isFinite(costPrice) && costPrice > 0
+        ? costPrice
+        : oldPrice;
+    const deviation =
+      Number.isFinite(newPrice) && baseline > 0
+        ? Math.abs(newPrice - baseline) / baseline
+        : 0;
+
+    if (Number.isFinite(newPrice) && deviation > 0.2) {
+      const overrideObject =
+        body?.managerOverride && typeof body.managerOverride === 'object'
+          ? (body.managerOverride as {
+              approverEmail?: unknown;
+              approverPassword?: unknown;
+              reason?: unknown;
+            })
+          : null;
+
+      let approved = false;
+      if (overrideObject?.approverEmail && overrideObject?.approverPassword) {
+        const overrideAuth = await authorizeManager(
+          {
+            approverEmail: String(overrideObject.approverEmail),
+            approverPassword: String(overrideObject.approverPassword),
+          },
+          {
+            ip: clientIpFromHeaders(request.headers),
+            userAgent: request.headers.get('user-agent') || undefined,
+            storeId: existing.storeId,
+            requesterId: session.userId,
+          }
+        );
+
+        if (overrideAuth.ok) {
+          approved = true;
+          // One MANAGER_OVERRIDE AuditLog row for this approved price change.
+          try {
+            const { auditTrail } = await import('@/lib/audit-trail');
+            await auditTrail.log({
+              actorId: session.userId,
+              actorRole: session.role,
+              action: 'MANAGER_OVERRIDE',
+              resourceType: 'ManagerOverride',
+              resourceId: overrideAuth.manager.id,
+              reason:
+                (typeof overrideObject.reason === 'string' && overrideObject.reason) ||
+                `Price guard override for ${existing.sku} (KES ${oldPrice} → ${newPrice})`,
+              storeId: existing.storeId,
+              ipAddress: clientIpFromHeaders(request.headers),
+              userAgent: request.headers.get('user-agent') || undefined,
+              metadata: {
+                approverId: overrideAuth.manager.id,
+                approverName: overrideAuth.manager.name,
+                approverEmail: overrideAuth.manager.email,
+                approverRole: overrideAuth.manager.role,
+                overrideContext: 'PRODUCT_PRICE_GUARD',
+                productId: id,
+                sku: existing.sku,
+                oldPricePerUnit: oldPrice,
+                newPricePerUnit: newPrice,
+                costPrice,
+              },
+            });
+          } catch {
+            /* audit logging must never block an approved update */
+          }
+        } else if (overrideAuth.code === 'BRUTE_FORCE_PIN') {
+          return Response.json(
+            {
+              success: false,
+              code: 'BRUTE_FORCE_PIN',
+              message: overrideAuth.message,
+              retryAfterMinutes: overrideAuth.retryAfterMinutes,
+            },
+            {
+              status: 429,
+              headers: {
+                'retry-after': String((overrideAuth.retryAfterMinutes ?? 1) * 60),
+              },
+            }
+          );
+        } else {
+          // Invalid credentials / wrong role → behaves as if no override was
+          // sent. One WARN breadcrumb keeps it triageable.
+          await systemLog({
+            action: 'MANAGER_OVERRIDE_DENIED',
+            component: LogComponent.INVENTORY,
+            severity: LogSeverity.WARN,
+            message: `Product price-guard managerOverride rejected (${overrideAuth.code}) for ${String(overrideObject.approverEmail)}.`,
+            storeId: existing.storeId,
+            userId: session.userId,
+            metadata: {
+              productId: id,
+              sku: existing.sku,
+              approverEmail: String(overrideObject.approverEmail),
+              code: overrideAuth.code,
+            },
+          }).catch(() => {});
+        }
+      }
+
+      if (!approved) {
+        try {
+          await recordPermissionDenied({
+            session,
+            permission: 'inventory.price.guard',
+            request,
+            resource: `/api/products/${id}`,
+            kind: 'HIGH_RISK_ATTEMPT',
+          });
+        } catch {
+          /* never block the 403 on logging */
+        }
+        return Response.json(
+          {
+            success: false,
+            code: 'MANAGER_APPROVAL_REQUIRED',
+            message:
+              'Price change exceeds 20% of cost. Ask your Branch Manager to approve.',
+          },
+          { status: 403 }
+        );
+      }
+    }
+  }
+
   const product = await db.product.update({
     where: { id },
     data: updateData,
@@ -186,7 +347,7 @@ async function updateProductHandler(...args: unknown[]): Promise<Response> {
     Number(updateData.costPrice) !== Number(existing.costPrice);
   if (priceChanged || costChanged) {
     try {
-      const session = await getSessionFromRequest(request);
+      // (session is resolved once at the top of the handler — v2.12.7)
       const { auditTrail } = await import('@/lib/audit-trail');
       await auditTrail.log({
         action: 'UPDATE',

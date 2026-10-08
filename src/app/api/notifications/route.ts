@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { db, runWithTenant } from '@/lib/db';
+import { db, runWithTenant, runWithoutTenant } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
-import { requireStoreAccess } from '@/lib/auth';
+import { requireStoreAccess, type AuthSession } from '@/lib/auth';
 // FORMAT UNIFICATION (task 12-d): canonical en-KE KES formatter for money toasts
 // (accepts Prisma Decimal / string / number safely).
 import { formatKES } from '@/lib/utils/financialMath';
@@ -10,16 +10,21 @@ export const dynamic = 'force-dynamic';
 
 export interface NotificationData {
   id: string;
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction';
+  // v2.12.7 (PR C): 'security' — durable SECURITY-category Notification rows
+  // (privilege-abuse lockouts, discount-spam alerts) now surface in the feed.
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
   timestamp: string;
   isRead: boolean;
   targetTab: string;
+  // v2.12.7 (PR C): raw Notification.category so the Alerts panel can filter
+  // (the synthesized sections below carry no category — undefined).
+  category?: string;
 }
 
-async function getHandler(request: NextRequest): Promise<Response> {
+async function getHandler(request: NextRequest, session?: AuthSession): Promise<Response> {
   const { searchParams } = new URL(request.url);
   const storeId = searchParams.get('storeId');
 
@@ -221,6 +226,50 @@ async function getHandler(request: NextRequest): Promise<Response> {
           isRead: false,
           targetTab: 'transactions',
         });
+      }
+    }
+
+    // 7. ── v2.12.7 (PR C): durable SECURITY-category notifications ─────────
+    // The privilege-abuse lockout engine (auth.ts noteDeniedAndMaybeLock) and
+    // the discount-spam detector (src/lib/abuse.ts) write Notification rows
+    // (category SECURITY) addressed to BRANCH_MANAGERs / SUPER_ADMINs. This
+    // feed previously surfaced NONE of them (sections 1-6 are synthesized
+    // from business tables) — so the bell badge and the Alerts panel silently
+    // dropped security alerts. Pull the recipient's rows explicitly.
+    //
+    // runWithoutTenant: security notifications are addressed BY USER ID, not
+    // by branch — a SUPER_ADMIN's rows carry the OFFENDER's storeId (or null),
+    // and the tenant extension would hide them while browsing another branch.
+    if (session?.userId) {
+      try {
+        const securityNotifications = await runWithoutTenant(() =>
+          db.notification.findMany({
+            where: {
+              category: 'SECURITY',
+              userId: session.userId,
+              createdAt: { gte: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000) },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 15,
+          })
+        );
+
+        for (const n of securityNotifications) {
+          notifications.push({
+            id: `sec-${n.id}`,
+            type: 'security',
+            title: n.title,
+            description: n.message,
+            // Priority URGENT (lockout) → red bell; HIGH (spam pattern) → amber.
+            severity: n.priority === 'URGENT' ? 'critical' : 'warning',
+            timestamp: n.createdAt.toISOString(),
+            isRead: false,
+            targetTab: 'security',
+            category: 'SECURITY',
+          });
+        }
+      } catch {
+        /* security section must never break the rest of the feed */
       }
     }
 
