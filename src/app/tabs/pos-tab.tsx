@@ -56,6 +56,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ReceiptPrintPreview } from '@/components/receipt-print';
 import { changeDue as changeDueOf } from '@/lib/utils/financialMath';
+import { unitLabel } from '@/lib/units';
 import {
   ShoppingCart, ShoppingBag, Search, Plus, Trash2, CreditCard,
   Smartphone, Loader2, Banknote, Wallet, Gift,
@@ -113,8 +114,8 @@ function CartItemUomSubline({ item }: { item: CartItem }) {
   const factor = Number(item.conversionFactor) || 1;
   const baseQty = (Number(item.quantity) || 0) * factor;
   return (
-    <p className="text-[10px] text-muted-foreground pl-2 -mt-0.5 leading-tight" aria-label={`Equals ${formatConversionFactor(baseQty)} ${item.unitType} of stock`}>
-      = {formatConversionFactor(baseQty)} {item.unitType} stock
+    <p className="text-[10px] text-muted-foreground pl-2 -mt-0.5 leading-tight" aria-label={`Equals ${formatConversionFactor(baseQty)} ${unitLabel(item.unitType)} of stock`}>
+      = {formatConversionFactor(baseQty)} {unitLabel(item.unitType)} stock
     </p>
   );
 }
@@ -1831,7 +1832,7 @@ export default function POSTab() {
                     <span>{formatKES(subtotal)}</span>
                   </div>
                   <div className="flex justify-between animate-total-row" style={{ animationDelay: '60ms' }}>
-                    <span className="text-muted-foreground">VAT ({vatRate}%)</span>
+                    <span className="text-muted-foreground">VAT ({vatRate}% incl.)</span>
                     <span>{formatKES(tax)}</span>
                   </div>
                   {totalDiscount > 0 && (
@@ -2016,7 +2017,7 @@ export default function POSTab() {
                 <div key={item.id} className="grid grid-cols-12 text-xs py-0.5">
                   <span className="col-span-5 break-words pr-1">{item.productName}</span>
                   <span className="col-span-2 text-center">{item.quantity}</span>
-                  <span className="col-span-2 text-center">{item.unitType}</span>
+                  <span className="col-span-2 text-center">{unitLabel(item.unitType)}</span>
                   <span className="col-span-3 text-right">{formatKES(item.lineTotal)}</span>
                 </div>
               ))}
@@ -2029,7 +2030,7 @@ export default function POSTab() {
                 <span>{formatKES(lastTransaction.subtotal)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">VAT ({vatRate}%)</span>
+                <span className="text-muted-foreground">VAT ({vatRate}% incl.)</span>
                 <span>{formatKES(lastTransaction.taxAmount)}</span>
               </div>
               {lastTransaction.discountAmount > 0 && (
@@ -2591,7 +2592,7 @@ export default function POSTab() {
                     <span>{formatKES(subtotal)}</span>
                   </div>
                   <div className="flex justify-between animate-total-row" style={{ animationDelay: '60ms' }}>
-                    <span className="text-muted-foreground">VAT ({vatRate}%)</span>
+                    <span className="text-muted-foreground">VAT ({vatRate}% incl.)</span>
                     <span>{formatKES(tax)}</span>
                   </div>
                   {totalDiscount > 0 && (

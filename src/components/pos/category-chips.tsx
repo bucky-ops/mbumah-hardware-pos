@@ -101,7 +101,7 @@ export function CategoryChips({
 
       <div
         ref={scrollRef}
-        className="flex gap-2 overflow-x-auto scrollbar-none scrollbar-thin py-0.5 flex-1 px-1 scroll-snap-x"
+        className="flex gap-2 overflow-x-auto scrollbar-thin py-0.5 flex-1 px-1 scroll-snap-x"
         style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}
       >
         {/* "All" chip — special styling with gradient background when active */}

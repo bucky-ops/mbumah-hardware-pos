@@ -5,6 +5,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { formatKES, type CustomerItem } from '@/lib/api';
 import Decimal from 'decimal.js';
 import { toDec, round2 } from '@/lib/utils/financialMath';
+import { useVatRate } from '@/hooks/use-vat-rate';
 import type { PaymentMethod } from '@/lib/types';
 import { StkStatusPanel } from '@/components/pos/stk-status-panel';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
@@ -166,6 +167,10 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
   const [step, setStep] = useState<Step>(1);
   // Direction of step transition (for slide animation)
   const [stepDirection, setStepDirection] = useState<'right' | 'left'>('right');
+
+  // v2.12.1: show the configured VAT rate on the info-only "incl." label
+  // (KE default 16; cached, shares the parent POS tab's react-query entry).
+  const { vatRate } = useVatRate();
 
   // Respect prefers-reduced-motion: when true, framer-motion transitions are
   // reduced to opacity-only (no translate/scale) for vestibular safety.
@@ -452,7 +457,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
             </div>
           )}
           <div className="flex justify-between">
-            <span className="text-muted-foreground">VAT (incl. in prices)</span>
+            <span className="text-muted-foreground">VAT ({vatRate}% incl.)</span>
             <span>{formatKES(summaryTax)}</span>
           </div>
           <Separator />

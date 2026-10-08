@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { formatKES } from '@/lib/api';
 import { formatQty, roundQty } from '@/lib/utils/financialMath';
+import { unitLabel } from '@/lib/units';
 import type { CartItem } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -86,7 +87,7 @@ export function CartItemRow({
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           <span className="text-xs text-muted-foreground">{formatKES(item.pricePerUnit)}</span>
-          <span className="text-[9px] px-1 py-0 rounded bg-muted text-muted-foreground font-medium">{item.unitType}</span>
+          <span className="text-[9px] px-1 py-0 rounded bg-muted text-muted-foreground font-medium">{unitLabel(item.unitType)}</span>
           {item.discountPercent > 0 && (
             <span className="text-[9px] text-green-600 font-medium">{item.discountPercent}% off</span>
           )}

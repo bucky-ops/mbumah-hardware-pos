@@ -21,6 +21,7 @@ import {
   type CreateProductPayload,
 } from '@/lib/api';
 import { formatQtyWithUnit } from '@/lib/utils/financialMath';
+import { unitLabel } from '@/lib/units';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1706,7 +1707,7 @@ export default function InventoryTab() {
                         </span>
                       ) : '—'}
                     </div>
-                    <div><span className="text-muted-foreground">Unit Type:</span> {detailProduct.unitType}</div>
+                    <div><span className="text-muted-foreground">Unit Type:</span> {unitLabel(detailProduct.unitType)}</div>
                     <div><span className="text-muted-foreground">Barcode:</span> {detailProduct.barcode || '—'}</div>
                     <div><span className="text-muted-foreground">Rental:</span> {detailProduct.isRental ? 'Yes' : 'No'}</div>
                     <div><span className="text-muted-foreground">Bundle:</span> {detailProduct.isBundle ? 'Yes' : 'No'}</div>

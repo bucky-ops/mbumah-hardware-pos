@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { formatKES, type ProductListItem } from '@/lib/api';
 import { getCategoryImage } from '@/lib/app-config';
+import { unitLabel, unitShort } from '@/lib/units';
 import { QuickAddPopup } from '@/components/pos/quick-add-popup';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -53,6 +54,9 @@ export function ProductCard({
     : product.quantityInStock > 0 ? 100 : 0;
   const isLowStock = product.quantityInStock <= product.reorderLevel && product.quantityInStock > 0;
   const isOutOfStock = product.quantityInStock <= 0;
+
+  // Short unit suffix for the stock counter ("393 kg left"); '' when unknown
+  const stockUnit = unitShort(product.unitType);
 
   // On-sale detection: originalPrice (if provided) > current price
   const isOnSale = !!originalPrice && originalPrice > product.pricePerUnit;
@@ -224,36 +228,38 @@ export function ProductCard({
           </div>
         )}
 
-        {/* Badges */}
-        <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 z-20 max-w-[60%]">
+        {/* Badges — v2.12.1: left stack capped at 55% + per-badge truncation so
+            RENTAL/BUNDLE/BEST SELLER/ON SALE/NEW can never collide with the
+            top-right stock badge on narrow cards. */}
+        <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 z-20 max-w-[55%]">
           {product.isRental && (
-            <Badge className="bg-amber-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm">RENTAL</Badge>
+            <Badge className="bg-amber-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm max-w-full truncate whitespace-nowrap">RENTAL</Badge>
           )}
           {product.isBundle && (
-            <Badge className="bg-purple-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm">BUNDLE</Badge>
+            <Badge className="bg-purple-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm max-w-full truncate whitespace-nowrap">BUNDLE</Badge>
           )}
           {isBestSeller && (
-            <Badge className="best-seller-badge text-[10px] px-1.5 py-0.5 font-semibold flex items-center gap-0.5">
-              <Star className="h-2.5 w-2.5 fill-current" />BEST SELLER
+            <Badge className="best-seller-badge text-[10px] px-1.5 py-0.5 font-semibold flex items-center gap-0.5 max-w-full truncate whitespace-nowrap">
+              <Star className="h-2.5 w-2.5 shrink-0 fill-current" />BEST SELLER
             </Badge>
           )}
           {isOnSale && (
-            <Badge className="bg-red-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm animate-on-sale flex items-center gap-0.5">
+            <Badge className="bg-red-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm animate-on-sale flex items-center gap-0.5 max-w-full truncate whitespace-nowrap">
               ON SALE · -{discountPct}%
             </Badge>
           )}
           {isNew && !product.isRental && !product.isBundle && !isBestSeller && (
-            <Badge className="bg-green-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm animate-new-badge">NEW</Badge>
+            <Badge className="bg-green-600 text-white text-[10px] px-1.5 py-0.5 font-semibold shadow-sm animate-new-badge max-w-full truncate whitespace-nowrap">NEW</Badge>
           )}
         </div>
 
         {/* Stock status badge (top-right when not in cart) */}
         {(!cartQuantity || cartQuantity === 0) && (
-          <div className="absolute top-1.5 right-1.5 z-20">
+          <div className="absolute top-1.5 right-1.5 z-20 max-w-[42%]">
             {isOutOfStock ? (
-              <Badge variant="destructive" className="text-[10px] font-bold shadow-sm animate-shake-warning">OUT OF STOCK</Badge>
+              <Badge variant="destructive" className="text-[10px] font-bold shadow-sm animate-shake-warning max-w-full truncate whitespace-nowrap">OUT OF STOCK</Badge>
             ) : isLowStock ? (
-              <Badge className="bg-amber-500 text-white text-[10px] font-semibold shadow-sm animate-shake-warning">LOW STOCK</Badge>
+              <Badge className="bg-amber-500 text-white text-[10px] font-semibold shadow-sm animate-shake-warning max-w-full truncate whitespace-nowrap">LOW STOCK</Badge>
             ) : null}
           </div>
         )}
@@ -283,7 +289,7 @@ export function ProductCard({
               )}
             </div>
             <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium mt-1 inline-block ${unitBadgeColor[product.unitType] || 'bg-muted text-muted-foreground'}`}>
-              per {product.unitType}
+              per {unitLabel(product.unitType)}
             </span>
           </div>
 
@@ -337,7 +343,7 @@ export function ProductCard({
             {isOutOfStock ? 'Out' : (
               <span className="flex items-center gap-0.5">
                 <ShoppingCart className="h-2.5 w-2.5" aria-hidden />
-                {product.quantityInStock} left
+                {product.quantityInStock}{stockUnit && ` ${stockUnit}`} left
               </span>
             )}
           </span>
