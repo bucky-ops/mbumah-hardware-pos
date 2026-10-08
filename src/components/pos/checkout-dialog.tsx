@@ -198,18 +198,16 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
   const showMpesaPanel = (paymentMethod === 'MPESA' || paymentMethod === 'SPLIT');
 
   // Compute derived totals for the order summary
-  // FINANCIAL MATH AUDIT: VAT is INSIDE the (VAT-inclusive) line totals.
-  // The fallback tax preview extracts the per-line VAT component in Decimal
-  // (never `Math.round(subtotal × 0.16)` on top — that double-counted VAT
-  // and diverged from the server's per-line taxRate computation).
+  // FINANCIAL MATH AUDIT: VAT is INSIDE the (VAT-inclusive) total the
+  // customer pays. v2.13.1: the fallback preview extracts the VAT component
+  // from the POST-DISCOUNT finalTotal (spec formula Total × rate/(100+rate),
+  // matching the server's taxAmount and the POS tab's cart figure) instead
+  // of the per-line pre-discount component.
   const summarySubtotal = subtotal ?? cartItems?.reduce((sum, i) => sum + i.lineTotal, 0) ?? 0;
   const summaryTax = taxAmount ?? round2(
-    (cartItems ?? []).reduce((sum, i) => {
-      const rate = Math.min(100, Math.max(0, i.taxRate || 0));
-      if (rate === 0) return sum;
-      const gross = toDec(i.lineTotal);
-      return sum.plus(gross.minus(gross.div(1 + rate / 100).toDecimalPlaces(2, Decimal.ROUND_HALF_UP)));
-    }, new Decimal(0))
+    finalTotal > 0 && vatRate > 0
+      ? toDec(finalTotal).mul(vatRate).div(100 + vatRate)
+      : new Decimal(0)
   );
   const summaryTotalItems = cartItems?.reduce((sum, i) => sum + i.quantity, 0) ?? 0;
 

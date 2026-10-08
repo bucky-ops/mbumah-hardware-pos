@@ -66,12 +66,20 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
   // inventoryValue, profit/margin inputs and the full recentActivities feed.
   // This is an EARLY RETURN — the debt/insight queries never even run for
   // these roles, so the restricted payload cannot leak by construction.
+  //
+  // v2.13.1: the two KPI aggregates are SCOPED TO THE CALLER (cashierId =
+  // session.userId) — "Today's Sales", "Transactions" and "Avg Order" on
+  // the limited dashboard now count the cashier's OWN sales, matching the
+  // RBAC spec ('My Sales', not the branch total). Low-stock stays a
+  // store-level signal (stock health is a shared operational concern and
+  // leaks no revenue).
   if (session && !hasFeaturePermission(session.role, 'dashboard.view.revenue')) {
     const [limitedTodayTxns, limitedTodayRev, limitedLowStock, limitedOutOfStock, mySales] =
       await Promise.all([
         db.salesTransaction.count({
           where: {
             storeId,
+            cashierId: session.userId,
             createdAt: { gte: todayStart, lte: todayEnd },
             transactionType: 'SALE',
             paymentStatus: { in: ['COMPLETED', 'PARTIAL'] },
@@ -80,6 +88,7 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
         db.salesTransaction.aggregate({
           where: {
             storeId,
+            cashierId: session.userId,
             createdAt: { gte: todayStart, lte: todayEnd },
             transactionType: 'SALE',
             paymentStatus: { in: ['COMPLETED', 'PARTIAL'] },
