@@ -655,7 +655,6 @@ async function createTransactionInner(
   // every new sale 0. Historical documents keep their stored amounts.
   const adminVatRate = await getVatRatePercent();
   let subtotalAcc = new Decimal(0);
-  let taxAcc = new Decimal(0);
   let discountAcc = new Decimal(0);
 
   const saleItemsData = items.map((item: { productId: string; productName: string; sku: string; quantity: number; unitType: string; pricePerUnit: number; costPrice: number; discountPercent: number; taxRate: number; isRentalItem?: boolean; isBundle?: boolean }, index: number) => {
@@ -686,7 +685,9 @@ async function createTransactionInner(
 
     const calc = calculateLineTotal(safePrice, safeQty, safeDisc, safeTax);
     subtotalAcc = subtotalAcc.plus(toDec(calc.subtotal));
-    taxAcc = taxAcc.plus(toDec(calc.tax));
+    // v2.13.1: per-line calc.tax is no longer summed into the header
+    // taxAmount — the header VAT is derived once from finalTotal below so
+    // that cart-level discounts reduce the taxable value (Kenya VAT Act).
     discountAcc = discountAcc.plus(toDec(calc.discount));
 
     return {
@@ -712,18 +713,32 @@ async function createTransactionInner(
   // FINANCIAL MATH AUDIT: accumulators ran in Decimal end-to-end; the final
   // freeze to number is exact because every component is already 2dp.
   const subtotal = round2(subtotalAcc);
-  const taxAmount = round2(taxAcc);
   const totalDiscount = round2(discountAcc);
 
   // VAT-INCLUSIVE header: the customer pays Σ(line gross) − cart discount.
-  // The VAT component lives INSIDE the lines (never added on top):
+  // The VAT component lives INSIDE the amount paid (never added on top):
   //   totalAmount = Σ lineTotal − Σ lineDiscounts
-  //   taxAmount   = Σ line VAT components (VAT ledger / eTIMS payloads)
+  //   taxAmount   = VAT component of the POST-DISCOUNT total (v2.13.1)
   const totalAmount = KES(subtotal - totalDiscount).round().toNumber();
   // F5-1: discount cap — a discount larger than the line-discounted total
   // used to produce a NEGATIVE finalTotal (negative Payment, negative debt).
   const appliedDiscount = Math.max(0, Math.min(round2(toDec(discountAmount as number | undefined)), totalAmount));
   const finalTotal = KES(totalAmount - appliedDiscount).round().toNumber();
+
+  // ── v2.13.1 VAT LEDGER ALIGNMENT (spec formula) ────────────────────────
+  // The stored taxAmount / eTIMS vatTotal / receipt VAT figure is now the
+  // VAT component INSIDE the consideration the customer ACTUALLY pays:
+  //
+  //     taxAmount = finalTotal × rate / (100 + rate)
+  //
+  // Kenya VAT Act: a discount given at the time of supply reduces the
+  // taxable value, so VAT must be derived from the discounted total — the
+  // previous Σ per-line pre-cart-discount extraction overstated VAT (and
+  // understated net revenue) on every discounted sale. History is kept:
+  // transactions created before v2.13.1 retain their stored figures.
+  const taxAmount = finalTotal > 0 && adminVatRate > 0
+    ? round2(KES(finalTotal).mul(adminVatRate).div(100 + adminVatRate))
+    : 0;
 
   // ── v2.12.2 (PR B — RBAC): DISCOUNT PERMISSION GATE ───────────────────
   // Effective discount % = the LARGER of the largest per-line
@@ -1733,15 +1748,18 @@ async function createTransactionInner(
     }
 
     // 5 ── Single balanced double-entry journal (all payment types) ──
-    // FINANCIAL MATH AUDIT — VAT-INCLUSIVE PRICING:
-    //   grossRevenue = Σ lineTotal − Σ lineDiscounts − Σ VAT = NET revenue
-    //   (excl. VAT). The cart-level discount is routed to the
-    //   SALES_DISCOUNTS contra-revenue account (proper GAAP accounting).
+    // FINANCIAL MATH AUDIT — VAT-INCLUSIVE PRICING (v2.13.1):
+    //   grossRevenue = finalTotal − taxAmount = NET revenue (excl. VAT).
+    //   Revenue is recognized at the TRANSACTION PRICE (IFRS 15): the cart
+    //   discount is already netted inside finalTotal, so it is NOT booked
+    //   again to the SALES_DISCOUNTS contra account (that would
+    //   double-count it and unbalance the entry). The discount remains
+    //   recorded on the transaction row (discountAmount) for analytics.
     // Balance identity (must hold to the cent):
-    //   Σ debits (payments + cart discount + COGS)
+    //   Σ debits (payments + COGS)
     //     = Σ credits (net revenue + VAT payable + inventory)
-    //   finalTotal + appliedDiscount − taxAmount = grossRevenue
-    const grossRevenue = KES(subtotal - totalDiscount - taxAmount).round().toNumber();
+    //   finalTotal − taxAmount = grossRevenue
+    const grossRevenue = KES(finalTotal - taxAmount).round().toNumber();
     const cogsAmount = saleItemsData.reduce(
       (sum: Decimal, item: { costPrice: number; quantity: number; isRentalItem: boolean }) =>
         item.isRentalItem ? sum : sum.plus(toDec(item.costPrice).mul(toDec(item.quantity))),
@@ -1791,7 +1809,10 @@ async function createTransactionInner(
       transactionId: transaction.id,
       grossRevenue,
       taxAmount,
-      discountAmount: appliedDiscount,
+      // v2.13.1: revenue is booked at transaction price (net of the cart
+      // discount) — no SALES_DISCOUNTS debit, otherwise the entry would be
+      // unbalanced by exactly appliedDiscount.
+      discountAmount: 0,
       paymentBreakdown,
       cogsAmount,
       // M-Pesa stays unposted until the Daraja callback confirms payment.

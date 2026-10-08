@@ -2,6 +2,20 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.13.1] — Fixed: VAT alignment & cashier KPI scoping
+
+Closes the two acceptance nuances documented at the v2.13.0 E2E verification. No schema changes; no changes to totals, payments, debt or discount-gate math.
+
+### Fixed
+- **VAT figure is now receipt-true (spec formula)**: the info-only "VAT (x% incl.)" line on the POS cart, checkout summary and printed receipt shows the VAT component **inside the amount the customer actually pays** — `Total × rate / (100 + rate)`. Previously it showed the pre-discount per-line VAT component, so a Ksh 220 cart with a Ksh 50 discount (Total 170) displayed VAT 30.34 instead of 23.45.
+- **Server VAT ledger aligned (Kenya VAT Act)**: `SalesTransaction.taxAmount`, the journal `VAT_PAYABLE` credit, the eTIMS payload `vatTotal` and the receipt's taxable-amount derivation now all use the post-discount consideration, since a discount given at the time of supply reduces the taxable value. Net revenue (`totalAmount − taxAmount`) therefore increases by the discount's VAT component on discounted sales — correct under IFRS 15 (revenue at transaction price).
+- **Journal entry restructure**: the cart-level discount is no longer booked to the `SALES_DISCOUNTS` contra-revenue account (it is already netted inside the transaction-price revenue; booking both would unbalance the entry by exactly the discount). The discount remains recorded on the transaction row (`discountAmount`) for analytics. Entries created before v2.13.1 are untouched and remain balanced.
+- **Cashier dashboard KPIs strictly own-scoped**: the limited dashboard's "Today's Sales", "Transactions" and "Avg Order" aggregates now filter on `cashierId = session.userId` and are captioned "your sales" — matching the RBAC spec ("My Sales", not the branch total). Low Stock remains a store-level signal (no revenue leakage; previously true by construction).
+
+### Notes
+- Historical transactions keep their stored figures (documents are immutable history); only sales created on/after v2.13.1 use the aligned VAT derivation.
+- Info-only guarantee still holds: Totals, Subtotals, Discounts, payments, debt, gift-card redemptions and the discount permission gates are byte-identical to v2.13.0 behavior.
+
 ## [2.13.0] — Feature release: RBAC & Audit
 
 The v2.12.1 → v2.13.0 ladder completes the RBAC roadmap. This release's headline is already live since v2.12.5–v2.12.8; v2.13.0 adds the release polish and ships the full ladder together.

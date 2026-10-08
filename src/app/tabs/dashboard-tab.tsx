@@ -898,21 +898,21 @@ function LimitedDashboard({ data }: { data: DashboardData | null }) {
           value={formatKES(todaySales)}
           icon={Banknote}
           iconClass="bg-emerald-100 text-emerald-600"
-          sub={<span>net of VAT · all cashiers</span>}
+          sub={<span>net of VAT · your sales</span>}
         />
         <KpiCard
           label="Transactions"
           value={String(txns)}
           icon={ShoppingCart}
           iconClass="bg-green-100 text-green-700"
-          sub={<span>storewide today</span>}
+          sub={<span>your sales today</span>}
         />
         <KpiCard
           label="Avg Order"
           value={formatKES(atv)}
           icon={Calculator}
           iconClass="bg-amber-100 text-amber-600"
-          sub={<span>per sale today</span>}
+          sub={<span>your average sale</span>}
         />
         <KpiCard
           label="Low Stock"

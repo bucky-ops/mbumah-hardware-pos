@@ -281,7 +281,11 @@ export const useCartStore = create<CartState>()(
   getTax: () => {
     // Σ per-line VAT components EXTRACTED from the VAT-inclusive line
     // totals (never `lineTotal × rate%` on top — that would double-count
-    // VAT under inclusive pricing). Matches the server's taxAmount exactly.
+    // VAT under inclusive pricing). v2.13.1: the POS UI no longer uses
+    // this for the "VAT (incl.)" info line — that figure is now the VAT
+    // inside the POST-DISCOUNT total (spec formula Total × rate/(100+rate),
+    // see pos-tab.tsx). Kept as the per-line component for any consumer
+    // that needs the pre-discount extraction.
     return round2(get().items.reduce((sum, item) => sum.plus(toDec(lineVatComponent(item))), Decimal0));
   },
 

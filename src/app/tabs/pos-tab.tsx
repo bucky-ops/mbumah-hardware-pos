@@ -290,7 +290,9 @@ export default function POSTab() {
   // authoritative at checkout — see /api/transactions).
   const { vatRate } = useVatRate();
   const subtotal = cart.getSubtotal();
-  const tax = cart.getTax();
+  // v2.13.1 VAT ALIGNMENT: the info-only "VAT (x% incl.)" figure is now
+  // defined right after finalTotal (below) so it can reflect the POST-
+  // DISCOUNT total per the spec formula Total × rate/(100 + rate).
   // FINANCIAL MATH AUDIT — VAT-INCLUSIVE pricing: the VAT component is
   // INSIDE the line totals, so the pre-discount total is simply the gross
   // subtotal (the old `subtotal + tax` double-counted VAT as a basis for
@@ -866,6 +868,17 @@ export default function POSTab() {
   const cartDiscount = cart.discount;
   const totalDiscount = giftCardDiscount + voucherDiscount + cartDiscount;
   const finalTotal = Math.max(0, preDiscountTotal - totalDiscount);
+
+  // ── v2.13.1 VAT DISPLAY ALIGNMENT (spec formula) ─────────────────────
+  // "VAT (x% incl.)" = the VAT component INSIDE the amount the customer
+  // actually pays: finalTotal × rate/(100 + rate). Identical to the old
+  // per-line extraction (cart.getTax()) when nothing is discounted; once a
+  // gift card / voucher / cart discount is applied the figure drops with
+  // the total and matches the server's post-discount taxAmount exactly
+  // (same formula, same rate source). Info-only — Total math untouched.
+  const tax = finalTotal > 0 && vatRate > 0
+    ? Math.round(((finalTotal * vatRate) / (100 + vatRate)) * 100) / 100
+    : 0;
 
   const handleAddToCart = (product: ProductListItem, qty?: number) => {
     // Low-stock UX (QA Phase 5): below-minimum stock items CAN be added to the

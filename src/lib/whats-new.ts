@@ -22,6 +22,15 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.13.1',
+    title: 'Receipt-true VAT + strictly yours cashier dashboard',
+    bullets: [
+      'VAT (incl.) now shows the VAT inside the amount you actually pay — when you apply a discount, the VAT figure on the cart, checkout summary and receipt drops with it.',
+      'Cashier dashboard KPIs are now strictly yours: Today\u2019s Sales, Transactions and Avg Order count your own sales only, not the whole branch\u2019s.',
+      'Receipts, journal entries and eTIMS payloads all agree: VAT is computed on the discounted total (Kenya VAT Act compliant).',
+    ],
+  },
+  {
     version: '2.13.0',
     title: 'RBAC — 5 roles, manager approvals, audit trail',
     bullets: [
