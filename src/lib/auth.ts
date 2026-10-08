@@ -30,6 +30,15 @@ import { type NextRequest } from 'next/server';
 import { db, runWithTenant, runWithoutTenant } from '@/lib/db';
 import { systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent, hasPermission, type UserRole } from '@/lib/types';
+// v2.12.2 (PR B — RBAC): feature-level permission keys + friendly denial copy.
+// permissions.ts is PURE (no server-only imports) so this stays safe.
+import {
+  hasFeaturePermission,
+  PERMISSION_DENIED_MESSAGES,
+  type FeaturePermissionKey,
+} from '@/lib/permissions';
+// v2.12.2 (PR B — RBAC): tamper-evident AuditLog entries for denials/overrides.
+import { auditTrail } from '@/lib/audit-trail';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,6 +90,14 @@ export async function getSessionFromRequest(
     await db.session.delete({ where: { id: session.id } }).catch(() => {});
     return null;
   }
+
+  // ── v2.12.2 (PR B — RBAC) privilege-abuse lockout enforcement ───────────
+  // A user who burned the abuse counter (5+ permission denials in 10 minutes,
+  // see noteDeniedAndMaybeLock below) is locked out of the API for 15 minutes:
+  // resolving their session yields null → every guarded route answers 401.
+  // The durable record of WHY is the SecurityEvent(ACCOUNT_LOCKED) row + the
+  // SUPER_ADMIN notifications written at lock time.
+  if (isAccountLocked(session.user.id)) return null;
 
   return {
     userId: session.user.id,
@@ -650,3 +667,346 @@ export function withFinancialAuth(
   };
 }
 
+
+// ═════════════════════════════════════════════════════════════════════════════
+// v2.12.2 — v2.12.5 (PR B, Task REL-ROADMAP-B1) FEATURE PERMISSION ENFORCEMENT
+// ═════════════════════════════════════════════════════════════════════════════
+//
+// Server-side counterpart of src/lib/permissions.ts (which stays pure and
+// client-importable). This block provides:
+//
+//   1. requireFeaturePermission(key) — composable guard in the requireRole()
+//      style: returns a 403 Response shaped { code:'PERMISSION_DENIED',
+//      permission, message } or null when allowed.
+//   2. recordPermissionDenied(...)   — durable SecurityEvent + ops systemLog +
+//      hash-chained AuditLog row. NEVER creates Notifications (single denials
+//      are noise; the abuse engine below owns notification).
+//   3. noteDeniedAndMaybeLock(...)   — sliding-window abuse counter. ≥5
+//      denials in a trailing 10 minutes → 15-minute in-memory lock + Security
+//      Event (ACCOUNT_LOCKED, ERROR) + Notification to every active
+//      SUPER_ADMIN of the org. The lock is ENFORCED in getSessionFromRequest
+//      (returns null → 401 while locked).
+//   4. isAccountLocked(userId)       — lock-map probe (used by #1's enforcement
+//      point above and available for login-route UX).
+//
+// ── SERVERLESS LIMITATION (documented, accepted for v2.12.x) ─────────────────
+// The denial counter and the lock map are MODULE-SCOPE in-memory state. On
+// Vercel serverless each warm instance keeps its own map, so (a) a user can
+// split denials across instances to delay the lock, and (b) a lock set on one
+// instance does not propagate to others until cold-start. This is BEST-EFFORT
+// rate-shaping, not a hard control. The DURABLE evidence trail is the
+// SecurityEvent feed (PERMISSION_DENIED / HIGH_RISK_ATTEMPT / ACCOUNT_LOCKED
+// rows), which phase C's audit + abuse UI reads. A shared store (Redis/DB) is
+// the post-2.13 follow-up if abuse becomes an operational problem.
+
+// ── Abuse state (per serverless instance — see limitation note above) ───────
+
+/** Sliding-window denial timestamps per userId. */
+const denialWindowMs = 10 * 60 * 1000; // trailing 10 minutes
+const denialThreshold = 5;             // ≥5 denials in the window → lock
+const lockDurationMs = 15 * 60 * 1000; // 15-minute lockout
+
+const denialTimestamps = new Map<string, number[]>();
+const lockMap = new Map<string, number>(); // userId → lockedUntil (epoch ms)
+
+// Periodic sweep so long-lived instances don't grow the maps unbounded.
+const ABUSE_SWEEP_INTERVAL_MS = 10 * 60 * 1000;
+const abuseSweeper = setInterval(() => {
+  const now = Date.now();
+  for (const [userId, stamps] of denialTimestamps) {
+    const alive = stamps.filter((t) => now - t < denialWindowMs);
+    if (alive.length === 0) denialTimestamps.delete(userId);
+    else denialTimestamps.set(userId, alive);
+  }
+  for (const [userId, until] of lockMap) {
+    if (until <= now) lockMap.delete(userId);
+  }
+}, ABUSE_SWEEP_INTERVAL_MS);
+// Never keep the event loop alive just for the sweeper (serverless freeze).
+if (typeof abuseSweeper.unref === 'function') abuseSweeper.unref();
+
+/** Whether the user is currently locked out by the privilege-abuse engine. */
+export function isAccountLocked(userId: string): boolean {
+  const until = lockMap.get(userId);
+  if (!until) return false;
+  if (until <= Date.now()) {
+    lockMap.delete(userId);
+    return false;
+  }
+  return true;
+}
+
+/** Minutes remaining on an abuse lock (0 when not locked). For UX copy. */
+export function accountLockRemainingMinutes(userId: string): number {
+  const until = lockMap.get(userId);
+  if (!until || until <= Date.now()) return 0;
+  return Math.ceil((until - Date.now()) / 60000);
+}
+
+/** Best-effort client IP for security records (mirrors denyCrossStoreAccess). */
+function clientIpFromRequest(request: NextRequest): string | undefined {
+  return (
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || undefined
+  );
+}
+
+// ── 1. Feature-permission guard ──────────────────────────────────────────────
+
+/**
+ * Composable feature-permission guard in the `requireRole(...)` style.
+ *
+ * ```ts
+ * const denied = requireFeaturePermission('pos.void')(session);
+ * if (denied) return denied;
+ * ```
+ *
+ * Denial body: { success:false, code:'PERMISSION_DENIED', permission:key,
+ * message: PERMISSION_DENIED_MESSAGES[key] ?? generic }. SUPER_ADMIN always
+ * passes (hasFeaturePermission short-circuits for the admin role).
+ *
+ * NOTE: this guard returns the Response — it does NOT write the denial
+ * SecurityEvent itself. Routes that should feed the abuse engine call
+ * recordPermissionDenied(...) + noteDeniedAndMaybeLock(...) explicitly (see
+ * the transactions / users routes), keeping read-level strips (dashboard,
+ * products cost) silent.
+ */
+export function requireFeaturePermission(key: FeaturePermissionKey) {
+  return (session: AuthSession): Response | null => {
+    if (hasFeaturePermission(session.role, key)) return null;
+    return Response.json(
+      {
+        success: false,
+        code: 'PERMISSION_DENIED',
+        permission: key,
+        message:
+          PERMISSION_DENIED_MESSAGES[key] ??
+          'You do not have permission to perform this action.',
+      },
+      { status: 403 }
+    );
+  };
+}
+
+// ── 2. Durable denial record (SecurityEvent + systemLog + AuditLog) ─────────
+
+export interface RecordPermissionDeniedOptions {
+  session: AuthSession;
+  /** The FEATURE_PERMISSIONS key that was denied (e.g. 'pos.discount.gt5'). */
+  permission: string;
+  request: NextRequest;
+  /** Override the resource path (defaults to the request pathname). */
+  resource?: string;
+  /** SecurityEvent.eventType — 'PERMISSION_DENIED' (default) or 'HIGH_RISK_ATTEMPT'. */
+  kind?: 'PERMISSION_DENIED' | 'HIGH_RISK_ATTEMPT';
+}
+
+/**
+ * Durably record one permission denial. Writes:
+ *   • SecurityEvent { eventType: kind ?? 'PERMISSION_DENIED', severity WARN,
+ *     blocked: true, resource: path, details: {role, permission, email} }
+ *   • systemLog ACCESS_DENIED (ops log — same pattern as denyCrossStoreAccess)
+ *   • auditTrail.log(action 'PERMISSION_DENIED') — hash-chained AuditLog row
+ *
+ * IMPORTANT: this function deliberately does NOT create Notification rows.
+ * Single denials are operational noise; only the abuse engine
+ * (noteDeniedAndMaybeLock) notifies SUPER_ADMINs, and only at lock time.
+ * Logging failures are swallowed — a denial must never 500 the route.
+ */
+export async function recordPermissionDenied(
+  opts: RecordPermissionDeniedOptions
+): Promise<void> {
+  const { session, permission, request, kind = 'PERMISSION_DENIED' } = opts;
+  const path = opts.resource ?? new URL(request.url).pathname;
+  const ipAddress = clientIpFromRequest(request);
+  const userAgent = request.headers.get('user-agent') || undefined;
+
+  // SecurityEvent — the durable, dashboard-visible record.
+  try {
+    await db.securityEvent.create({
+      data: {
+        eventType: kind,
+        severity: 'WARN',
+        userId: session.userId,
+        storeId: session.storeId || undefined,
+        resource: path,
+        action: `${request.method} ${path}`,
+        details: JSON.stringify({
+          role: session.role,
+          permission,
+          email: session.email,
+        }),
+        userAgent,
+        ipAddress,
+        blocked: true,
+      },
+    });
+  } catch {
+    /* logging must never block the auth decision */
+  }
+
+  // Ops log — consistent with the existing ACCESS_DENIED breadcrumbs.
+  try {
+    await systemLog({
+      action: 'ACCESS_DENIED',
+      component: LogComponent.AUTH,
+      severity: LogSeverity.WARN,
+      message: `Permission denied: ${session.email} (role: ${session.role}) lacks '${permission}'.`,
+      userId: session.userId,
+      storeId: session.storeId || undefined,
+      metadata: { permission, path, method: request.method, kind },
+    });
+  } catch {
+    /* ignore logging errors */
+  }
+
+  // Tamper-evident AuditLog row (hash-chained). action is a free-form string
+  // on AuditEventOptions; 'PERMISSION_DENIED' keeps denial queries trivial
+  // (auditTrail.query({ action: 'PERMISSION_DENIED' })).
+  try {
+    await auditTrail.log({
+      actorId: session.userId,
+      actorRole: session.role,
+      action: 'PERMISSION_DENIED',
+      resourceType: 'Permission',
+      resourceId: permission,
+      reason: `Role '${session.role}' denied feature permission '${permission}'`,
+      storeId: session.storeId || undefined,
+      ipAddress,
+      userAgent,
+      metadata: { permission, path, method: request.method, kind },
+    });
+  } catch {
+    /* ignore logging errors */
+  }
+}
+
+// ── 3. Abuse engine: sliding window + lockout + SUPER_ADMIN notification ────
+
+export interface NoteDeniedOptions {
+  session: AuthSession;
+  request: NextRequest;
+  /** The permission key that was just denied (audit context). */
+  permission: string;
+}
+
+/**
+ * Feed the abuse counter after a denial and lock the account when it trips.
+ *
+ * Sliding window per userId: every call appends `now` and prunes timestamps
+ * older than 10 minutes. At ≥5 entries the user is locked for 15 minutes:
+ *   • in-memory lockMap entry (ENFORCED by getSessionFromRequest → 401)
+ *   • SecurityEvent ACCOUNT_LOCKED (severity ERROR, details include reason)
+ *   • Notification rows for EVERY active SUPER_ADMIN of the org
+ *     (type WARNING / category SECURITY / priority URGENT — see the
+ *     Notification model's documented type set)
+ *
+ * Returns { locked } so callers can tailor their response copy if they wish.
+ * Per-instance limitation: see the block comment at the top of this section.
+ */
+export async function noteDeniedAndMaybeLock(
+  opts: NoteDeniedOptions
+): Promise<{ locked: boolean }> {
+  const { session, request, permission } = opts;
+  const now = Date.now();
+
+  const stamps = (denialTimestamps.get(session.userId) ?? []).filter(
+    (t) => now - t < denialWindowMs
+  );
+  stamps.push(now);
+  denialTimestamps.set(session.userId, stamps);
+
+  if (stamps.length < denialThreshold || isAccountLocked(session.userId)) {
+    return { locked: isAccountLocked(session.userId) };
+  }
+
+  // ── Trip: lock the account ──
+  const lockedUntil = now + lockDurationMs;
+  lockMap.set(session.userId, lockedUntil);
+  denialTimestamps.delete(session.userId); // fresh window after the lock
+
+  const lockedMinutes = Math.round(lockDurationMs / 60000);
+  const ipAddress = clientIpFromRequest(request);
+
+  // SecurityEvent ACCOUNT_LOCKED (ERROR) — the durable record.
+  try {
+    await db.securityEvent.create({
+      data: {
+        eventType: 'ACCOUNT_LOCKED',
+        severity: 'ERROR',
+        userId: session.userId,
+        storeId: session.storeId || undefined,
+        resource: new URL(request.url).pathname,
+        action: 'PRIVILEGE_ABUSE_LOCKOUT',
+        details: JSON.stringify({
+          reason: 'Privilege abuse: 5+ permission denials in 10 minutes',
+          lockedMinutes: lockedMinutes,
+          lastPermission: permission,
+          role: session.role,
+          email: session.email,
+        }),
+        userAgent: request.headers.get('user-agent') || undefined,
+        ipAddress,
+        blocked: true,
+      },
+    });
+  } catch {
+    /* never block the lockout on logging */
+  }
+
+  // Notify every active SUPER_ADMIN of the org (durable Notification rows —
+  // the notification center's Security filter reads these in phase 2/3).
+  try {
+    const superAdmins = await db.user.findMany({
+      where: {
+        role: 'SUPER_ADMIN',
+        isActive: true,
+        organizationId: session.organizationId,
+      },
+      select: { id: true },
+    });
+
+    if (superAdmins.length > 0) {
+      await db.notification.createMany({
+        data: superAdmins.map((admin) => ({
+          userId: admin.id,
+          storeId: session.storeId || null,
+          title: 'Privilege abuse attempt',
+          message: `${session.email} (role: ${session.role}) hit ${denialThreshold} permission denials in 10 minutes and was locked out for ${lockedMinutes} minutes. Last denied permission: ${permission}.`,
+          type: 'WARNING',
+          category: 'SECURITY',
+          priority: 'URGENT',
+          actionUrl: '/dashboard?tab=security',
+          actionLabel: 'Review security events',
+          metadata: JSON.stringify({
+            kind: 'PRIVILEGE_ABUSE_LOCKOUT',
+            targetUserId: session.userId,
+            targetEmail: session.email,
+            targetRole: session.role,
+            permission,
+            lockedMinutes,
+            windowMinutes: denialWindowMs / 60000,
+          }),
+        })),
+      });
+    }
+  } catch {
+    /* never block the lockout on notifications */
+  }
+
+  // Ops log breadcrumb.
+  try {
+    await systemLog({
+      action: 'ACCOUNT_LOCKED',
+      component: LogComponent.AUTH,
+      severity: LogSeverity.ERROR,
+      message: `Account ${session.email} locked for ${lockedMinutes} minutes after ${denialThreshold} permission denials in 10 minutes.`,
+      userId: session.userId,
+      storeId: session.storeId || undefined,
+      metadata: { permission, lockedMinutes, email: session.email, role: session.role },
+    });
+  } catch {
+    /* ignore logging errors */
+  }
+
+  return { locked: true };
+}

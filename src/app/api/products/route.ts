@@ -11,12 +11,19 @@ import { resolveProductImage } from '@/lib/product-images';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { requireStoreAccess, MANAGER_PLUS_ROLES, type AuthSession } from '@/lib/auth';
 import { parsePagination, buildPaginationMeta } from '@/lib/api-pagination';
+// v2.12.2 (PR B — RBAC): supplier-cost visibility gate + product-edit roles.
+import { hasFeaturePermission } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
+/** v2.12.2 (PR B — RBAC): roles allowed to EDIT catalog items —
+ *  MANAGER_PLUS_ROLES + INVENTORY_MANAGER (PERMISSION_MATRIX.products
+ *  create/update and FEATURE_PERMISSIONS['inventory.edit']). */
+const PRODUCT_EDIT_ROLES: readonly string[] = [...MANAGER_PLUS_ROLES, 'INVENTORY_MANAGER'];
+
 async function getProductsHandler(
   request: NextRequest,
-  _session: AuthSession,
+  session: AuthSession,
 ): Promise<Response> {
   const { searchParams } = new URL(request.url);
 
@@ -45,6 +52,10 @@ async function getProductsHandler(
   });
   const sortBy = searchParams.get('sortBy') || 'name';
   const sortOrder = searchParams.get('sortOrder') || 'asc';
+
+  // v2.12.2 (PR B — RBAC): supplier-cost visibility. Roles without
+  // 'inventory.view.cost' (CASHIER, ACCOUNTANT) get costPrice nulled.
+  const canViewCost = hasFeaturePermission(session.role, 'inventory.view.cost');
 
   const where: Record<string, unknown> = { storeId };
 
@@ -121,7 +132,11 @@ async function getProductsHandler(
       quantityInStock: Number(p.quantityInStock),
       reorderLevel: Number(p.reorderLevel),
       pricePerUnit: Number(p.pricePerUnit),
-      costPrice: Number(p.costPrice),
+      // v2.12.2 (PR B — RBAC): nulled for roles without 'inventory.view.cost'
+      // (CASHIER / ACCOUNTANT) — supplier cost is a margin leak on the shop
+      // floor. The key stays on the wire (null) so legacy client spreads
+      // don't crash; clients must treat null as "hidden".
+      costPrice: canViewCost ? Number(p.costPrice) : null,
       taxRate: Number(p.taxRate),
       // v2.6.0 UoM: 1 sellingUnit = conversionFactor BASE units (unitType).
       sellingUnit: p.sellingUnit,
@@ -282,7 +297,8 @@ export const GET = withErrorBoundary(
   'PRODUCTS_LIST',
 );
 // AUDIT FIX (Task 3-d): product create = manager-or-above per PERMISSION_MATRIX.
+// v2.12.2: INVENTORY_MANAGER added (catalog steward role).
 export const POST = withErrorBoundary(
-  requireStoreAccess(createProductHandler, { roles: MANAGER_PLUS_ROLES }),
+  requireStoreAccess(createProductHandler, { roles: PRODUCT_EDIT_ROLES }),
   'PRODUCTS_CREATE',
 );

@@ -5,8 +5,15 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { withSessionAuth, getSessionFromRequest, MANAGER_PLUS_ROLES } from '@/lib/auth';
+// v2.12.2 (PR B — RBAC): supplier-cost visibility gate + product-edit roles.
+import { hasFeaturePermission } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
+
+/** v2.12.2 (PR B — RBAC): roles allowed to EDIT catalog items —
+ *  MANAGER_PLUS_ROLES + INVENTORY_MANAGER (PERMISSION_MATRIX.products
+ *  create/update and FEATURE_PERMISSIONS['inventory.edit']). */
+const PRODUCT_EDIT_ROLES: readonly string[] = [...MANAGER_PLUS_ROLES, 'INVENTORY_MANAGER'];
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -53,7 +60,20 @@ async function getProductHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  return Response.json({ success: true, data: product });
+  // v2.12.2 (PR B — RBAC): supplier-cost visibility. Roles without
+  // 'inventory.view.cost' (CASHIER / ACCOUNTANT) get costPrice nulled on the
+  // detail payload too (the list route strips the same field — the detail
+  // route must not be the leak-around).
+  const detailSession = await getSessionFromRequest(_request);
+  const canViewCost = hasFeaturePermission(detailSession?.role, 'inventory.view.cost');
+
+  return Response.json({
+    success: true,
+    data: {
+      ...product,
+      costPrice: canViewCost ? Number(product.costPrice) : null,
+    },
+  });
 }
 
 async function updateProductHandler(...args: unknown[]): Promise<Response> {
@@ -266,15 +286,16 @@ async function deleteProductHandler(...args: unknown[]): Promise<Response> {
 
 // AUDIT FIX (Task 3-d): GET = any store role; PUT/DELETE (price edit, delete) =
 // manager-or-above per PERMISSION_MATRIX (CASHIER has products: ['read'] only).
+// v2.12.2: PUT adds INVENTORY_MANAGER (catalog steward role).
 export const GET = withErrorBoundary(
   withSessionAuth(getProductHandler),
   'PRODUCT_DETAIL',
 );
 export const PUT = withErrorBoundary(
-  withSessionAuth(updateProductHandler, { roles: MANAGER_PLUS_ROLES }),
+  withSessionAuth(updateProductHandler, { roles: PRODUCT_EDIT_ROLES }),
   'PRODUCT_UPDATE',
 );
 export const DELETE = withErrorBoundary(
-  withSessionAuth(deleteProductHandler, { roles: MANAGER_PLUS_ROLES }),
+  withSessionAuth(deleteProductHandler, { roles: PRODUCT_EDIT_ROLES }),
   'PRODUCT_DELETE',
 );

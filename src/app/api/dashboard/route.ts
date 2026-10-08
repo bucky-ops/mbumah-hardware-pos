@@ -4,7 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env'; // Eager env validation — fails fast on missing DATABASE_URL
 import { withErrorBoundary } from '@/lib/logger';
-import { requireStoreAccess } from '@/lib/auth';
+import { requireStoreAccess, type AuthSession } from '@/lib/auth';
 // FINANCIAL MATH AUDIT (Task 12-b): Prisma Decimal valueOf() returns a STRING —
 // `number + decimal` concatenates. All accumulation below flows through
 // toDec()/round2() and emits plain numbers only at the JSON boundary.
@@ -12,6 +12,8 @@ import { toDec, round2 } from '@/lib/utils/financialMath';
 // v2.12.0 (Task DASH-BE): server-only insight builders — every block is
 // fault-isolated so the dashboard NEVER throws (see module header).
 import { buildDashboardInsights, sanitizeActivity } from '@/lib/dashboard-insights';
+// v2.12.2 (PR B — RBAC): revenue visibility gate for the limited dashboard.
+import { hasFeaturePermission } from '@/lib/permissions';
 
 /**
  * NET (VAT-exclusive) revenue for a sale line. `lineTotal` is VAT-inclusive
@@ -39,6 +41,7 @@ void env;
 
 async function getDashboardHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
+  const session = args[1] as AuthSession | undefined;
   const { searchParams } = new URL(request.url);
 
   const storeId = searchParams.get('storeId');
@@ -53,6 +56,94 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
   todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date();
   todayEnd.setHours(23, 59, 59, 999);
+
+  // ── v2.12.2 (PR B — RBAC): LIMITED DASHBOARD for revenue-denied roles ───
+  // A role without 'dashboard.view.revenue' (today: CASHIER,
+  // INVENTORY_MANAGER) gets ONLY: own-activity KPIs, stock counts and their
+  // own last 10 sales. Deliberately NOT computed, NOT shipped: revenue
+  // trends, revenueChange, debt totals/aging (debtCrisis), alerts carrying
+  // debt amounts, topCustomers/topProducts revenue, payment-method amounts,
+  // inventoryValue, profit/margin inputs and the full recentActivities feed.
+  // This is an EARLY RETURN — the debt/insight queries never even run for
+  // these roles, so the restricted payload cannot leak by construction.
+  if (session && !hasFeaturePermission(session.role, 'dashboard.view.revenue')) {
+    const [limitedTodayTxns, limitedTodayRev, limitedLowStock, limitedOutOfStock, mySales] =
+      await Promise.all([
+        db.salesTransaction.count({
+          where: {
+            storeId,
+            createdAt: { gte: todayStart, lte: todayEnd },
+            transactionType: 'SALE',
+            paymentStatus: { in: ['COMPLETED', 'PARTIAL'] },
+          },
+        }),
+        db.salesTransaction.aggregate({
+          where: {
+            storeId,
+            createdAt: { gte: todayStart, lte: todayEnd },
+            transactionType: 'SALE',
+            paymentStatus: { in: ['COMPLETED', 'PARTIAL'] },
+          },
+          _sum: { totalAmount: true, taxAmount: true },
+        }),
+        // Healthy = qty > reorderLevel (same rule as the full dashboard's
+        // store-health stock score).
+        db.product.count({
+          where: {
+            storeId,
+            isActive: true,
+            quantityInStock: { gt: 0, lte: db.product.fields.reorderLevel },
+          },
+        }),
+        db.product.count({
+          where: { storeId, isActive: true, quantityInStock: { lte: 0 } },
+        }),
+        // My Sales: the caller's own last 10 sales only — receipt shell
+        // fields (no customer names, no cost/profit columns).
+        db.salesTransaction.findMany({
+          where: { storeId, cashierId: session.userId, transactionType: 'SALE' },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          select: {
+            id: true,
+            receiptNumber: true,
+            paymentMethod: true,
+            paymentStatus: true,
+            totalAmount: true,
+            createdAt: true,
+          },
+        }),
+      ]);
+
+    const limitedTodayRevNet = toDec(limitedTodayRev._sum.totalAmount)
+      .minus(toDec(limitedTodayRev._sum.taxAmount))
+      .toNumber();
+    const limitedAverageTxnValue =
+      limitedTodayTxns > 0 ? round2(limitedTodayRevNet / limitedTodayTxns) : 0;
+
+    return Response.json({
+      success: true,
+      data: {
+        limitedView: true,
+        todaySales: limitedTodayTxns,
+        transactions: { count: limitedTodayTxns },
+        averageTransactionValue: limitedAverageTxnValue,
+        lowStock: {
+          count: limitedLowStock + limitedOutOfStock,
+          low: limitedLowStock,
+          outOfStock: limitedOutOfStock,
+        },
+        mySales: mySales.map((tx) => ({
+          id: tx.id,
+          receiptNumber: tx.receiptNumber,
+          paymentMethod: tx.paymentMethod,
+          paymentStatus: tx.paymentStatus,
+          totalAmount: toDec(tx.totalAmount).toNumber(),
+          createdAt: tx.createdAt,
+        })),
+      },
+    });
+  }
 
   // Core metrics - all lightweight queries
   const [
