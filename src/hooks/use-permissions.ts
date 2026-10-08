@@ -14,7 +14,7 @@
 
 import { useMemo } from 'react';
 import { useAuthStore } from '@/lib/stores';
-import { hasPermission, canCreateUsers, type UserRole } from '@/lib/types';
+import { hasPermission, type UserRole } from '@/lib/types';
 import { hasFeaturePermission, type FeaturePermissionKey } from '@/lib/permissions';
 
 /**
@@ -41,9 +41,10 @@ export function usePermissions() {
       role,
       user,
 
-      // Core permission checks
+      // Core permission checks (user/role management is governed by the
+      // 'settings.roles.manage' FEATURE key below — SUPER_ADMIN only, v2.12.2)
       can,
-      canCreateUsers: canCreateUsers(role),
+      canCreateUsers: hasFeaturePermission(role, 'settings.roles.manage'),
 
       // ── v2.12.2 FEATURE permission group (dotted keys, client-safe) ──
       // Same keys as FEATURE_PERMISSIONS; camelCased for ergonomics.
