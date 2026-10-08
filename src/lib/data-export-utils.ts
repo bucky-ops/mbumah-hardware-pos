@@ -49,14 +49,16 @@ export interface GenerateResult {
   recordCount: number;
 }
 
-// ── Internal CSV helpers ─────────────────────────────────────────────────────
+// ── CSV helpers ──────────────────────────────────────────────────────────────
 
 /**
  * Escape a CSV field per RFC 4180. Wraps the value in double quotes if it
  * contains a comma, double quote, newline, or carriage return; doubles any
  * embedded double quotes.
+ *
+ * v2.12.6 (PR C): now exported — shared by the admin audit-trail CSV export.
  */
-function escapeCsvField(value: unknown): string {
+export function escapeCsvField(value: unknown): string {
   if (value === null || value === undefined) return '';
   const str = String(value);
   if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
@@ -68,8 +70,11 @@ function escapeCsvField(value: unknown): string {
 /**
  * Build a CSV string from an array of row objects and an ordered list of
  * columns. The first line is the header row (using `headerLabels` if provided).
+ *
+ * v2.12.6 (PR C): now exported — shared by the admin audit-trail CSV export
+ * (GET /api/admin/audit-trail?format=csv).
  */
-function buildCsv(
+export function buildCsv(
   rows: Array<Record<string, unknown>>,
   columns: Array<{ key: string; label?: string }>,
 ): string {
