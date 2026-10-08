@@ -268,9 +268,14 @@ async function request<T>(
       }
       if (!retryResponse.ok) {
         let retryServerError = '';
+        let retryErrorBody: Record<string, unknown> | undefined;
         try {
           const retryErrorData = await retryResponse.json();
           retryServerError = retryErrorData.error || retryErrorData.message || '';
+          // v2.12.5 (RBAC): carry the parsed denial body on the error.
+          if (retryErrorData && typeof retryErrorData === 'object') {
+            retryErrorBody = retryErrorData as Record<string, unknown>;
+          }
         } catch {
           // Non-JSON body — fall through
         }
@@ -279,15 +284,15 @@ async function request<T>(
           case 404:
             throw new ApiRequestError(retryServerError || 'Resource not found', 404);
           case 429:
-            throw new ApiRequestError(retryServerError || 'Too many requests. Please try again in a moment.', 429);
+            throw new ApiRequestError(retryServerError || 'Too many requests. Please try again in a moment.', 429, retryErrorBody);
           case 500:
-            throw new ApiRequestError(retryServerError || 'Server error. Please try again later.', 500);
+            throw new ApiRequestError(retryServerError || 'Server error. Please try again later.', 500, retryErrorBody);
           case 502:
           case 503:
           case 504:
-            throw new ApiRequestError(retryServerError || 'Service temporarily unavailable. Please try again.', retryResponse.status);
+            throw new ApiRequestError(retryServerError || 'Service temporarily unavailable. Please try again.', retryResponse.status, retryErrorBody);
           default:
-            throw new ApiRequestError(retryServerError || `Request failed: ${retryResponse.status}`, retryResponse.status);
+            throw new ApiRequestError(retryServerError || `Request failed: ${retryResponse.status}`, retryResponse.status, retryErrorBody);
         }
       }
       const retryJson = await retryResponse.json();
@@ -318,15 +323,25 @@ async function request<T>(
       return retryJson;
     }
     // R2 FIX: the retry also failed with 403 (non-CSRF reason — e.g. role or
-    // store-scope denial) — carry the real status.
-    throw new ApiRequestError(errorMsg || `Request failed: ${response.status}`, response.status);
+    // store-scope denial) — carry the real status. v2.12.5 (RBAC): the parsed
+    // body travels too ({ code, permission, requiresManagerOverride, ... }).
+    throw new ApiRequestError(
+      errorMsg || `Request failed: ${response.status}`,
+      response.status,
+      errorData && typeof errorData === 'object' ? (errorData as Record<string, unknown>) : undefined
+    );
   }
 
   if (!response.ok) {
     let serverError = '';
+    let serverErrorBody: Record<string, unknown> | undefined;
     try {
       const errorData = await response.json();
       serverError = errorData.error || errorData.message || '';
+      // v2.12.5 (RBAC): keep the typed denial payload for the caller.
+      if (errorData && typeof errorData === 'object') {
+        serverErrorBody = errorData as Record<string, unknown>;
+      }
     } catch {
       // Response body is not JSON or empty — fall through to status-based messages
     }
@@ -338,15 +353,15 @@ async function request<T>(
       case 404:
         throw new ApiRequestError(serverError || 'Resource not found', 404);
       case 429:
-        throw new ApiRequestError(serverError || 'Too many requests. Please try again in a moment.', 429);
+        throw new ApiRequestError(serverError || 'Too many requests. Please try again in a moment.', 429, serverErrorBody);
       case 500:
-        throw new ApiRequestError(serverError || 'Server error. Please try again later.', 500);
+        throw new ApiRequestError(serverError || 'Server error. Please try again later.', 500, serverErrorBody);
       case 502:
       case 503:
       case 504:
-        throw new ApiRequestError(serverError || 'Service temporarily unavailable. Please try again.', response.status);
+        throw new ApiRequestError(serverError || 'Service temporarily unavailable. Please try again.', response.status, serverErrorBody);
       default:
-        throw new ApiRequestError(serverError || `Request failed: ${response.status}`, response.status);
+        throw new ApiRequestError(serverError || `Request failed: ${response.status}`, response.status, serverErrorBody);
     }
   }
 

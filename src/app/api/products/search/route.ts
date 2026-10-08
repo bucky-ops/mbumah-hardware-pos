@@ -3,7 +3,9 @@
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
-import { withSessionAuth } from '@/lib/auth';
+import { withSessionAuth, getSessionFromRequest } from '@/lib/auth';
+// v2.12.2 (PR B — RBAC): supplier-cost visibility gate.
+import { hasFeaturePermission } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,6 +37,12 @@ async function searchProductsHandler(...args: unknown[]): Promise<Response> {
     where.storeId = storeId;
   }
 
+  // v2.12.2 (PR B — RBAC): POS search is the cashier's main product feed —
+  // the supplier cost must not ride along here either (list + detail already
+  // strip it). Roles without 'inventory.view.cost' get costPrice nulled.
+  const searchSession = await getSessionFromRequest(request);
+  const canViewCost = hasFeaturePermission(searchSession?.role, 'inventory.view.cost');
+
   const products = await db.product.findMany({
     where,
     select: {
@@ -63,7 +71,13 @@ async function searchProductsHandler(...args: unknown[]): Promise<Response> {
     orderBy: { name: 'asc' },
   });
 
-  return Response.json({ success: true, data: products });
+  return Response.json({
+    success: true,
+    data: products.map((p) => ({
+      ...p,
+      costPrice: canViewCost ? Number(p.costPrice) : null,
+    })),
+  });
 }
 
 // AUDIT FIX (Task 3-d): session-validated (was Bearer-presence only).

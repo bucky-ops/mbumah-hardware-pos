@@ -4,11 +4,30 @@
  * Custom hook for role-based permission checking across the app.
  * Provides convenient access to user permissions for auto-adjusting
  * UI visibility based on the current user's role.
+ *
+ * v2.12.2 (PR B — RBAC): adds the FEATURE permission layer built on
+ * `hasFeaturePermission` (src/lib/permissions.ts) — dotted feature keys such
+ * as 'pos.discount.gt5' or 'dashboard.view.revenue' that drive the LockedCard,
+ * sidebar locks, the Manager Authorization modal and the cashier limited
+ * dashboard. The resource→action `can(resource, action)` matrix is unchanged.
  */
 
 import { useMemo } from 'react';
 import { useAuthStore } from '@/lib/stores';
-import { hasPermission, canCreateUsers, type UserRole } from '@/lib/types';
+import { hasPermission, type UserRole } from '@/lib/types';
+import { hasFeaturePermission, type FeaturePermissionKey } from '@/lib/permissions';
+
+/**
+ * Plain (non-hook) feature-permission check for call sites that already hold
+ * the role string (e.g. event handlers, plain helpers, store selectors).
+ * SUPER_ADMIN bypasses; unknown roles/keys fail closed.
+ */
+export function canFeature(
+  role: string | null | undefined,
+  key: FeaturePermissionKey
+): boolean {
+  return hasFeaturePermission(role, key);
+}
 
 export function usePermissions() {
   const user = useAuthStore((s) => s.user);
@@ -16,14 +35,36 @@ export function usePermissions() {
 
   return useMemo(() => {
     const can = (resource: string, action: string) => hasPermission(role, resource, action);
+    const featureCan = (key: FeaturePermissionKey) => hasFeaturePermission(role, key);
 
     return {
       role,
       user,
 
-      // Core permission checks
+      // Core permission checks (user/role management is governed by the
+      // 'settings.roles.manage' FEATURE key below — SUPER_ADMIN only, v2.12.2)
       can,
-      canCreateUsers: canCreateUsers(role),
+      canCreateUsers: hasFeaturePermission(role, 'settings.roles.manage'),
+
+      // ── v2.12.2 FEATURE permission group (dotted keys, client-safe) ──
+      // Same keys as FEATURE_PERMISSIONS; camelCased for ergonomics.
+      feature: {
+        posSell: featureCan('pos.sell'),
+        posVoid: featureCan('pos.void'),
+        posDiscountGt5: featureCan('pos.discount.gt5'),
+        posDiscountGt10: featureCan('pos.discount.gt10'),
+        posViewAllSales: featureCan('pos.view.all_sales'),
+        dashboardRevenue: featureCan('dashboard.view.revenue'),
+        dashboardProfitMargin: featureCan('dashboard.view.profit_margin'),
+        dashboardDebtAging: featureCan('dashboard.view.debt_aging'),
+        inventoryEdit: featureCan('inventory.edit'),
+        inventoryViewCost: featureCan('inventory.view.cost'),
+        customersViewDebt: featureCan('customers.view.debt'),
+        customersCreate: featureCan('customers.create'),
+        debtApproveHighRisk: featureCan('debt.approve.high_risk'),
+        financialView: featureCan('financial.view'),
+        settingsRolesManage: featureCan('settings.roles.manage'),
+      },
 
       // Specific resource permissions (auto-adjusting visibility)
       products: {

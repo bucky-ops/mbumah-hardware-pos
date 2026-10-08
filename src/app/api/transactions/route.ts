@@ -30,7 +30,11 @@ import { recordSaleJournalEntry, getAccountIds, ACCOUNT_CODES } from '@/lib/acco
 import { LogSeverity, LogComponent, PaymentMethod, PaymentStatus } from '@/lib/types';
 import { checkoutSchema, validateInput } from '@/lib/validations';
 import { calculateEarnedPoints, getTierFromPoints } from '@/lib/loyalty-utils';
-import { requireStoreAccess, MANAGER_PLUS_ROLES, type AuthSession } from '@/lib/auth';
+import { requireStoreAccess, MANAGER_PLUS_ROLES, recordPermissionDenied, noteDeniedAndMaybeLock, type AuthSession } from '@/lib/auth';
+// v2.12.2 (PR B — RBAC): feature-permission gates + shared manager step-up.
+import { hasFeaturePermission, PERMISSION_DENIED_MESSAGES } from '@/lib/permissions';
+import { authorizeManager, clientIpFromHeaders } from '@/lib/manager-auth';
+import { auditTrail } from '@/lib/audit-trail';
 import { KES } from '@/lib/money';
 import Decimal from 'decimal.js';
 import { toDec, toNum, round2, changeDue as calcChangeDue } from '@/lib/utils/financialMath';
@@ -316,8 +320,104 @@ async function createTransactionInner(
     serials,
     managerApproval,
     // v2.12.0 (Task DASH-BE): debt-sale blocking step-up flag.
+    // v2.12.2 (PR B — RBAC): may now ALSO be a credential object
+    // { approverEmail, approverPassword, ... } — normalized below.
     managerOverride,
   } = validation.data;
+
+  // ── v2.12.2 (PR B — RBAC): managerOverride normalization + verification ──
+  // Legacy boolean → the session-role path (unchanged v2.12.0 behavior).
+  // Credential object → verified ONCE, here, via the shared authorizeManager()
+  // helper (same bcrypt/role/brute-force rules as /api/auth/manager-authorize).
+  // A verified object unlocks the 5–10% discount band and the high-risk debt
+  // gate for a cashier; it NEVER unlocks >10% discounts (owner-tier control).
+  const overrideObject =
+    managerOverride && typeof managerOverride === 'object' ? managerOverride : null;
+  const overrideReason = overrideObject?.reason ?? undefined;
+  let managerOverrideValid = false;
+  let overrideApprover: { id: string; name: string; role: string; email: string } | null = null;
+  let managerOverrideAuditWritten = false;
+
+  /** One MANAGER_OVERRIDE AuditLog row per checkout (first gate that consumes it). */
+  const writeManagerOverrideAudit = async (
+    overrideContext: string,
+    extra?: Record<string, unknown>
+  ): Promise<void> => {
+    if (managerOverrideAuditWritten || !overrideApprover) return;
+    managerOverrideAuditWritten = true;
+    try {
+      await auditTrail.log({
+        actorId: session.userId,
+        actorRole: session.role,
+        action: 'MANAGER_OVERRIDE',
+        resourceType: 'ManagerOverride',
+        resourceId: overrideApprover.id,
+        reason: overrideReason ?? undefined,
+        storeId,
+        ipAddress: clientIpFromHeaders(request.headers),
+        userAgent: request.headers.get('user-agent') || undefined,
+        metadata: {
+          approverId: overrideApprover.id,
+          approverName: overrideApprover.name,
+          approverEmail: overrideApprover.email,
+          approverRole: overrideApprover.role,
+          overrideContext,
+          ...extra,
+        },
+      });
+    } catch {
+      /* audit logging must never block a checkout */
+    }
+  };
+
+  if (overrideObject && overrideObject.approverEmail && overrideObject.approverPassword) {
+    const overrideAuth = await authorizeManager(
+      {
+        approverEmail: overrideObject.approverEmail,
+        approverPassword: overrideObject.approverPassword,
+      },
+      {
+        ip: clientIpFromHeaders(request.headers),
+        userAgent: request.headers.get('user-agent') || undefined,
+        storeId,
+        requesterId: session.userId,
+      }
+    );
+    if (overrideAuth.ok) {
+      managerOverrideValid = true;
+      overrideApprover = overrideAuth.manager;
+    } else if (overrideAuth.code === 'BRUTE_FORCE_PIN') {
+      return Response.json(
+        {
+          success: false,
+          code: 'BRUTE_FORCE_PIN',
+          message: overrideAuth.message,
+          retryAfterMinutes: overrideAuth.retryAfterMinutes,
+        },
+        {
+          status: 429,
+          headers: { 'retry-after': String((overrideAuth.retryAfterMinutes ?? 1) * 60) },
+        }
+      );
+    } else {
+      // Invalid credentials / wrong role → the override simply does not
+      // apply; the gates below behave exactly as if none was sent. One WARN
+      // breadcrumb keeps the attempt triageable without blocking the sale
+      // path (the cashier can still re-submit without an override).
+      await systemLog({
+        action: 'MANAGER_OVERRIDE_DENIED',
+        component: LogComponent.POS,
+        severity: LogSeverity.WARN,
+        message: `Checkout managerOverride rejected (${overrideAuth.code}) for ${overrideObject.approverEmail}.`,
+        storeId,
+        userId: session.userId,
+        metadata: {
+          approverEmail: overrideObject.approverEmail,
+          code: overrideAuth.code,
+        },
+      }).catch(() => {});
+    }
+  }
 
   // SYS-2 (F5-1): the cashier identity ALWAYS comes from the authenticated
   // session — the request body can no longer attribute a sale to another user.
@@ -625,6 +725,77 @@ async function createTransactionInner(
   const appliedDiscount = Math.max(0, Math.min(round2(toDec(discountAmount as number | undefined)), totalAmount));
   const finalTotal = KES(totalAmount - appliedDiscount).round().toNumber();
 
+  // ── v2.12.2 (PR B — RBAC): DISCOUNT PERMISSION GATE ───────────────────
+  // Effective discount % = the LARGER of the largest per-line
+  // discountPercent and the cart-level discount expressed as a percentage
+  // of the post-line-discount subtotal — so neither lever can be used to
+  // smuggle a discount past the gate.
+  //
+  //   effective ≤ 5%   — any selling role (no gate)
+  //   effective 5–10%  — roles holding 'pos.discount.gt5' (manager tier),
+  //                      OR a CASHIER carrying a VERIFIED managerOverride
+  //                      credential object (MANAGER_OVERRIDE audit row).
+  //   effective > 10%  — roles holding 'pos.discount.gt10' (STORE_OWNER /
+  //                      SUPER_ADMIN) ONLY. A cashier can NEVER bypass this,
+  //                      even with a manager override — the override only
+  //                      authorizes the 5–10% band.
+  //
+  // Every cashier denial → durable SecurityEvent + AuditLog row
+  // (recordPermissionDenied) and feeds the privilege-abuse lockout engine
+  // (noteDeniedAndMaybeLock — 5 denials / 10 min → 15-min lock).
+  {
+    const maxLineDiscountPercent = items.reduce(
+      (max: number, item: { discountPercent: number }) =>
+        Math.max(max, parseFloat(String(item.discountPercent ?? 0)) || 0),
+      0
+    );
+    const cartDiscountPercent =
+      appliedDiscount > 0 && totalAmount > 0
+        ? (appliedDiscount / totalAmount) * 100
+        : 0;
+    const effectiveDiscountPercent = Math.max(maxLineDiscountPercent, cartDiscountPercent);
+    const EPS = 1e-6; // float safety at the exact 5/10 boundaries
+
+    if (effectiveDiscountPercent > 10 + EPS) {
+      if (!hasFeaturePermission(session.role, 'pos.discount.gt10')) {
+        await recordPermissionDenied({ session, permission: 'pos.discount.gt10', request });
+        await noteDeniedAndMaybeLock({ session, request, permission: 'pos.discount.gt10' });
+        return Response.json(
+          {
+            success: false,
+            code: 'PERMISSION_DENIED',
+            permission: 'pos.discount.gt10',
+            message: PERMISSION_DENIED_MESSAGES['pos.discount.gt10'],
+          },
+          { status: 403 }
+        );
+      }
+    } else if (effectiveDiscountPercent > 5 + EPS) {
+      if (!hasFeaturePermission(session.role, 'pos.discount.gt5')) {
+        if (!managerOverrideValid) {
+          await recordPermissionDenied({ session, permission: 'pos.discount.gt5', request });
+          await noteDeniedAndMaybeLock({ session, request, permission: 'pos.discount.gt5' });
+          return Response.json(
+            {
+              success: false,
+              code: 'PERMISSION_DENIED',
+              permission: 'pos.discount.gt5',
+              message: PERMISSION_DENIED_MESSAGES['pos.discount.gt5'],
+              // Phase-2 POS opens the Manager PIN modal on this flag.
+              requiresManagerOverride: true,
+            },
+            { status: 403 }
+          );
+        }
+        // Verified manager credentials authorize the 5–10% band.
+        await writeManagerOverrideAudit('DISCOUNT_5_10', {
+          effectiveDiscountPercent: round2(effectiveDiscountPercent),
+          saleTotal: finalTotal,
+        });
+      }
+    }
+  }
+
   // ── FINANCIAL MATH AUDIT — CASH TENDERED & CHANGE DUE (spec §4) ──────
   // Change Due = max(0, Cash Rendered − Final Total). The tendered cash
   // and the change handed back are now PERSISTED on the transaction so
@@ -727,7 +898,50 @@ async function createTransactionInner(
     if (debtCharge > 0) {
       const roundedCharge = KES(debtCharge).round().toNumber();
 
-      // ── v2.12.0 DEBT-SALE BLOCKING (Task DASH-BE) ────────────────────────
+      // ── v2.12.2 (PR B — RBAC): HIGH-RISK DEBT GATE ────────────────────
+      // A customer already owing more than KES 150,000 is a high-risk
+      // credit exposure. A CASHIER may not add more debt without a VERIFIED
+      // managerOverride credential object; roles holding
+      // 'debt.approve.high_risk' (BRANCH_MANAGER / STORE_OWNER /
+      // SUPER_ADMIN) pass natively. Covers pure-DEBT sales AND DEBT split
+      // legs (a split must not be a loophole around the gate). The 90+ day
+      // overdue credit-hold below still applies ON TOP — the two blocks are
+      // orthogonal controls.
+      const HIGH_RISK_DEBT_THRESHOLD_KES = 150000;
+      const customerOutstanding = KES(customer.currentDebtBalance).round().toNumber();
+      if (customerOutstanding > HIGH_RISK_DEBT_THRESHOLD_KES) {
+        const highRiskByRole = hasFeaturePermission(session.role, 'debt.approve.high_risk');
+        if (!highRiskByRole && !managerOverrideValid) {
+          await recordPermissionDenied({
+            session,
+            permission: 'debt.approve.high_risk',
+            request,
+            kind: 'HIGH_RISK_ATTEMPT',
+          });
+          await noteDeniedAndMaybeLock({ session, request, permission: 'debt.approve.high_risk' });
+          return Response.json(
+            {
+              success: false,
+              error: PERMISSION_DENIED_MESSAGES['debt.approve.high_risk'],
+              code: 'PERMISSION_DENIED',
+              permission: 'debt.approve.high_risk',
+              // Phase-2 POS opens the Manager PIN modal on this flag.
+              requiresManagerOverride: true,
+            },
+            { status: 403 }
+          );
+        }
+        if (!highRiskByRole && managerOverrideValid) {
+          await writeManagerOverrideAudit('DEBT_HIGH_RISK', {
+            customerOutstanding,
+            chargedAmount: roundedCharge,
+            customerId: customer.id,
+            customerName: customer.name,
+          });
+        }
+      }
+
+      // ── v2.12.0 DEBT-SALE BLOCKING (Task DASH-BE) ────────────────────
       // A customer with debt 90+ days overdue is on CREDIT HOLD: any new
       // DEBT (or DEBT-leg split) sale is rejected with 403
       // DEBT_BLOCKED_OVERDUE until the request carries managerOverride: true

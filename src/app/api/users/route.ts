@@ -1,12 +1,17 @@
 // GET/POST /api/users
-// Requires SUPER_ADMIN or STORE_OWNER role
+//
+// v2.12.2 (PR B — RBAC): POST (create user + role assignment) and role changes
+// anywhere are gated to 'settings.roles.manage' — SUPER_ADMIN only. GET stays
+// SUPER_ADMIN/STORE_OWNER (staff directory).
 
 import { type NextRequest } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
-import { requireAuth, type AuthSession } from '@/lib/auth';
+import { requireAuth, recordPermissionDenied, noteDeniedAndMaybeLock, type AuthSession } from '@/lib/auth';
 import { createUserSchema, validateInput } from '@/lib/validations';
+// v2.12.2 (PR B — RBAC): feature-level role-management gate.
+import { hasFeaturePermission, PERMISSION_DENIED_MESSAGES } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,6 +99,32 @@ async function createUserHandler(
     return Response.json({ success: false, error: validation.error }, { status: 400 });
   }
   const { name, email, role, phone, storeId, organizationId, password } = validation.data;
+
+  // ── v2.12.2 (PR B — RBAC): role-management gate ('settings.roles.manage') ─
+  // Creating a user necessarily assigns a role, so the WHOLE create is now
+  // gated to roles holding 'settings.roles.manage' — SUPER_ADMIN only.
+  // BEHAVIOUR CHANGE (deliberate, security release): STORE_OWNER can no
+  // longer mint users/roles; role administration is segregated to the
+  // SUPER_ADMIN tier. Denials are durably recorded and feed the
+  // privilege-abuse lockout engine.
+  if (!hasFeaturePermission(session.role, 'settings.roles.manage')) {
+    await recordPermissionDenied({
+      session,
+      permission: 'settings.roles.manage',
+      request,
+      resource: '/api/users (create user)',
+    });
+    await noteDeniedAndMaybeLock({ session, request, permission: 'settings.roles.manage' });
+    return Response.json(
+      {
+        success: false,
+        code: 'PERMISSION_DENIED',
+        permission: 'settings.roles.manage',
+        message: PERMISSION_DENIED_MESSAGES['settings.roles.manage'],
+      },
+      { status: 403 }
+    );
+  }
 
   // AUDIT REMEDIATION (F9-4): segregation of duties on role assignment —
   // only SUPER_ADMIN may mint SUPER_ADMIN or ACCOUNTANT users. Previously any

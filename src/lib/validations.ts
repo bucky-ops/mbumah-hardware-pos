@@ -6,11 +6,17 @@ export const loginSchema = z.object({
   password: z.string().min(1, 'Password is required').max(128),
 });
 
+// v2.12.2 (PR B — RBAC): INVENTORY_MANAGER added to the assignable role set.
+// The DB column (User.role) is a plain String — the allowed values are
+// enforced HERE at the API layer, not by a schema enum. Adding the role
+// requires ZERO prisma/schema.prisma changes.
+export const ASSIGNABLE_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'CASHIER', 'ACCOUNTANT', 'INVENTORY_MANAGER'] as const;
+
 // User schemas
 export const createUserSchema = z.object({
   name: z.string().min(2).max(100),
   email: z.string().email(),
-  role: z.enum(['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'CASHIER', 'ACCOUNTANT']),
+  role: z.enum(ASSIGNABLE_ROLES),
   password: z.string().min(6, 'Password must be at least 6 characters').max(128),
   phone: z.string().optional(),
   storeId: z.string().optional(),
@@ -20,7 +26,7 @@ export const createUserSchema = z.object({
 export const updateUserSchema = z.object({
   name: z.string().min(2).max(100).optional(),
   email: z.string().email().optional(),
-  role: z.enum(['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'CASHIER', 'ACCOUNTANT']).optional(),
+  role: z.enum(ASSIGNABLE_ROLES).optional(),
   phone: z.string().optional(),
   storeId: z.string().optional().nullable(),
   isActive: z.boolean().optional(),
@@ -93,7 +99,25 @@ export const checkoutSchema = z.object({
   // DEBT-leg split) sale to a customer with 90+ day overdue debt is rejected
   // (403 DEBT_BLOCKED_OVERDUE, requiresManagerOverride) unless this flag is
   // present AND the authenticated session role is manager-level.
-  managerOverride: z.boolean().optional(),
+  //
+  // v2.12.2 (PR B — RBAC): managerOverride may now be EITHER the legacy
+  // boolean (session-role path — backward compatible) OR a credential object
+  // { approverEmail, approverPassword, approverId?, approverName?, reason? }
+  // from the phase-2 Manager PIN modal. The object form is verified with the
+  // shared bcrypt/manager-role check in src/lib/manager-auth.ts and unlocks
+  // the 5–10% discount band and the high-risk debt gate for cashiers.
+  managerOverride: z
+    .union([
+      z.boolean(),
+      z.object({
+        approverEmail: z.string().email(),
+        approverPassword: z.string().min(1).max(200),
+        approverId: z.string().optional(),
+        approverName: z.string().max(200).optional(),
+        reason: z.string().max(500).optional(),
+      }),
+    ])
+    .optional(),
 }).superRefine((data, ctx) => {
   // AUDIT FIX (1): a DEBT split leg charges the customer's credit account, so
   // a customerId is MANDATORY — without one the DebtLedger charge row could

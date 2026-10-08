@@ -22,6 +22,12 @@ import {
 } from '@/lib/api';
 import type { PaymentMethod, CartItem, UnitType, CheckoutPayload } from '@/lib/types';
 import { handleError, ApiRequestError } from '@/lib/error-handler';
+import { canFeature } from '@/hooks/use-permissions';
+import {
+  ManagerAuthorizationModal,
+  type ManagerOverrideInput,
+  type VerifiedManager,
+} from '@/components/rbac/manager-authorization-modal';
 import {
   saveOfflineTransaction,
   buildOfflineReceipt,
@@ -222,6 +228,28 @@ export default function POSTab() {
       // SECURITY: never keep a manager password in state longer than needed.
       setManagerApprovalPassword('');
     }
+  }, []);
+
+  // ── v2.12.5 RBAC: Manager Authorization modal state ──
+  // Step-up approval for the 5–10% discount band, high-risk credit sales and
+  // the 90+ day credit hold. The modal verifies credentials against
+  // /api/auth/manager-authorize, then handleCheckout retries ONCE with a
+  // managerOverride payload (credential object — or `true` for the
+  // DEBT_BLOCKED_OVERDUE manager-session path).
+  const [managerAuthOpen, setManagerAuthOpen] = useState(false);
+  const [managerAuthContext, setManagerAuthContext] = useState('');
+  const [managerAuthReason, setManagerAuthReason] = useState('');
+  const [managerAuthConfirmOnly, setManagerAuthConfirmOnly] = useState(false);
+  /** Overrides queued for the next checkout attempt (consumed once). */
+  const pendingRetryOverrideRef = useRef<ManagerOverrideInput | true | null>(null);
+  /** Whether the LAST checkout attempt already carried an override (one-retry guard). */
+  const lastAttemptHadOverrideRef = useRef(false);
+
+  const openManagerAuth = useCallback((opts: { context: string; reason?: string; confirmOnly?: boolean }) => {
+    setManagerAuthContext(opts.context);
+    setManagerAuthReason(opts.reason ?? '');
+    setManagerAuthConfirmOnly(opts.confirmOnly ?? false);
+    setManagerAuthOpen(true);
   }, []);
 
   // Sell-More recommendations collapse
@@ -497,6 +525,8 @@ export default function POSTab() {
     onSuccess: (res) => {
       // Detect offline-queued sales via the PENDING_SYNC sentinel so we show
       // the correct messaging (the receipt is still rendered for the cashier).
+      // v2.12.5 RBAC: clear the one-retry guard on success.
+      lastAttemptHadOverrideRef.current = false;
       const wasOffline = res.data?.paymentStatus === 'PENDING_SYNC';
       if (wasOffline) {
         setConfettiActive(true);
@@ -546,7 +576,69 @@ export default function POSTab() {
       //     the dedicated message, reopen the form, wipe the password.
       //   • 400 with requiresManagerApproval (CREDIT_LIMIT_EXCEEDED) and no
       //     approval attached → auto-open the approval form.
+      // ── v2.12.5 RBAC: typed permission denials first ──
+      // 403 bodies carry { code, permission, message, requiresManagerOverride }.
       if (err instanceof ApiRequestError) {
+        const body = (err.body ?? {}) as {
+          code?: string;
+          permission?: string;
+          requiresManagerOverride?: boolean;
+        };
+        const hadOverride = lastAttemptHadOverrideRef.current;
+
+        // PERMISSION_DENIED with an overridable permission → Manager
+        // Authorization modal (reason prefilled with the server message),
+        // retry ONCE with managerOverride; a second failure surfaces the
+        // server message.
+        if (err.status === 403 && body.code === 'PERMISSION_DENIED') {
+          if (body.permission === 'pos.discount.gt10') {
+            // Not overridable at the counter — hard error, no modal.
+            toast.error(err.message || 'Discounts above 10% require Store Owner approval', { duration: 7000 });
+            return;
+          }
+          if (body.requiresManagerOverride && !hadOverride) {
+            openManagerAuth({
+              context:
+                body.permission === 'debt.approve.high_risk'
+                  ? 'Customer debt exceeds the high-risk threshold. A Branch Manager must approve further credit.'
+                  : 'A Branch Manager must authorize this sale.',
+              reason: err.message,
+            });
+            return;
+          }
+          toast.error(err.message || 'This action requires manager approval.', { duration: 7000 });
+          return;
+        }
+
+        // DEBT_BLOCKED_OVERDUE (90+ day credit hold) — the backend only
+        // accepts managerOverride:true AND a manager-level SESSION. Manager
+        // sessions get a confirm dialog + one retry with `true`; cashier
+        // sessions cannot override, so show the server message + guidance.
+        if (err.status === 403 && body.code === 'DEBT_BLOCKED_OVERDUE') {
+          const sessionRole = authUser?.role ?? '';
+          const isManagerLevel = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'].includes(sessionRole);
+          if (isManagerLevel && !hadOverride) {
+            openManagerAuth({
+              context: 'Customer has debt overdue 90+ days. Approving overrides the credit hold for this sale (recorded in the audit trail).',
+              reason: err.message,
+              confirmOnly: true,
+            });
+            return;
+          }
+          toast.error(
+            `${err.message || 'Customer has debt overdue 90+ days. Manager approval required.'} Ask a Branch Manager to approve this sale.`,
+            { duration: 8000 }
+          );
+          return;
+        }
+
+        // BRUTE_FORCE_PIN on the checkout's own override verification →
+        // surface the lockout copy (the modal flow uses its own endpoint).
+        if (err.status === 429 && body.code === 'BRUTE_FORCE_PIN') {
+          toast.error(err.message || 'Too many failed manager attempts. Please wait before retrying.', { duration: 8000 });
+          return;
+        }
+
         const msg = err.message || '';
         if (err.status === 403 && /manager approval/i.test(msg)) {
           toast.error('Manager approval failed — check credentials/role');
@@ -1005,6 +1097,40 @@ export default function POSTab() {
       return;
     }
 
+    // ── v2.12.5 RBAC: discount permission gate (client pre-flight) ──
+    // Mirrors the server's effective-discount rule: max(largest per-line
+    // discountPercent, cart flat discount as % of the pre-discount total).
+    // The server stays authoritative — this pre-flight opens the Manager
+    // Authorization modal BEFORE a doomed request writes SecurityEvent noise.
+    const retryOverride = pendingRetryOverrideRef.current;
+    pendingRetryOverrideRef.current = null;
+    const role = authUser?.role;
+    const maxLineDiscountPercent = cart.items.reduce(
+      (max, item) => Math.max(max, Number(item.discountPercent) || 0),
+      0
+    );
+    const cartDiscountPercent =
+      cartDiscount > 0 && preDiscountTotal > 0
+        ? (cartDiscount / preDiscountTotal) * 100
+        : 0;
+    const effectiveDiscountPercent = Math.max(maxLineDiscountPercent, cartDiscountPercent);
+    const DISCOUNT_EPS = 1e-6; // same float boundary guard as the server
+
+    if (!retryOverride) {
+      if (effectiveDiscountPercent > 10 + DISCOUNT_EPS && !canFeature(role, 'pos.discount.gt10')) {
+        // Hard stop — no counter override exists for >10% (Store Owner tier).
+        toast.error('Discounts above 10% require Store Owner approval', { duration: 6000 });
+        return;
+      }
+      if (effectiveDiscountPercent > 5 + DISCOUNT_EPS && !canFeature(role, 'pos.discount.gt5')) {
+        // Cashier in the 5–10% band → collect manager credentials, then retry.
+        openManagerAuth({
+          context: `Discount ${effectiveDiscountPercent.toFixed(1)}% exceeds the cashier limit of 5%. A Branch Manager must authorize this sale.`,
+        });
+        return;
+      }
+    }
+
     // For MPESA-only, the STK push must have been confirmed first
     if (paymentMethod === 'MPESA' && mpesaStatus !== 'success') {
       toast.error('Send the STK push and wait for confirmation before completing the sale.');
@@ -1032,6 +1158,22 @@ export default function POSTab() {
       }
       const cust = customers.find((c) => c.id === selectedCustomer);
       debtOverLimit = !!cust && finalTotal > (cust.debtLimit - cust.currentDebtBalance);
+      // ── v2.12.5 RBAC: high-risk credit pre-flight ──
+      // Outstanding > KES 150,000 requires debt.approve.high_risk (Branch
+      // Manager tier) or a verified managerOverride credential object —
+      // mirrors the server gate so the modal opens before the request.
+      const selectedOutstanding = Number(cust?.currentDebtBalance ?? 0);
+      if (
+        cust &&
+        selectedOutstanding > 150000 &&
+        !canFeature(role, 'debt.approve.high_risk') &&
+        !retryOverride
+      ) {
+        openManagerAuth({
+          context: `Customer debt exceeds the high-risk threshold. A Branch Manager must approve further credit for ${cust.name}.`,
+        });
+        return;
+      }
       if (debtOverLimit && (!managerApprovalEmail.trim() || !managerApprovalPassword)) {
         // v2.6.0: still blocked, but no longer a dead end — open the inline
         // manager-approval form; submitting it re-runs handleCheckout with
@@ -1043,6 +1185,9 @@ export default function POSTab() {
     }
 
     console.log('[HANDLE-CHECKOUT] about to call checkoutMutation.mutate()');
+    // v2.12.5 RBAC: remember whether this attempt carries an override so the
+    // error handler offers the modal only on the FIRST denial.
+    lastAttemptHadOverrideRef.current = retryOverride != null;
     checkoutMutation.mutate({
       storeId: currentStoreId,
       customerId: selectedCustomer || undefined,
@@ -1067,6 +1212,21 @@ export default function POSTab() {
         debtOverLimit && managerApprovalEmail.trim() && managerApprovalPassword
           ? { loginEmail: managerApprovalEmail.trim(), password: managerApprovalPassword }
           : undefined,
+      // v2.12.5 RBAC: managerOverride — a verified credential object from the
+      // Manager Authorization modal (unlocks the 5–10% discount band and the
+      // high-risk debt gate), or `true` for the DEBT_BLOCKED_OVERDUE retry
+      // from a manager-level session (backend requires the boolean form on
+      // that path — the session itself is the approver).
+      managerOverride:
+        retryOverride === true
+          ? true
+          : retryOverride
+            ? {
+                approverEmail: retryOverride.approverEmail,
+                approverPassword: retryOverride.approverPassword,
+                reason: retryOverride.reason,
+              }
+            : undefined,
       // Cart-level flat discount (from the discount input in the cart footer).
       // This is separate from line-level discounts (which are baked into each
       // item's discountPercent) and from gift-card / voucher redemptions
@@ -1083,6 +1243,17 @@ export default function POSTab() {
         voucherId: appliedVoucherId || undefined,
       },
     });
+  };
+
+  // v2.12.5 RBAC: the Manager Authorization modal verified the approver —
+  // queue the override and retry the checkout exactly once. confirmOnly mode
+  // (manager session on the DEBT_BLOCKED_OVERDUE path) retries with the
+  // boolean `true` form; the credentials mode retries with the object.
+  const handleManagerAuthSuccess = (_manager: VerifiedManager | null, override: ManagerOverrideInput) => {
+    pendingRetryOverrideRef.current = managerAuthConfirmOnly
+      ? true
+      : { approverEmail: override.approverEmail, approverPassword: override.approverPassword, reason: override.reason };
+    handleCheckout();
   };
 
   const handleMpesaPay = () => {
@@ -1744,6 +1915,30 @@ export default function POSTab() {
                   </Button>
                 </div>
 
+                {/* v2.12.5 RBAC: high-risk debt warning on the selected customer.
+                    Amounts shown ONLY to roles holding customers.view.debt —
+                    cashiers see the generic credit-approval notice instead. */}
+                {(() => {
+                  const sel = selectedCustomer && selectedCustomer !== 'walk-in'
+                    ? customers.find((c) => c.id === selectedCustomer)
+                    : null;
+                  const outstanding = Number(sel?.currentDebtBalance ?? 0);
+                  if (!sel || outstanding <= 150000) return null;
+                  const canSeeDebt = canFeature(authUser?.role, 'customers.view.debt');
+                  return (
+                    <p
+                      role="alert"
+                      className="rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-medium leading-snug text-red-700"
+                      data-testid="pos-high-risk-debt-warning"
+                    >
+                      <AlertTriangle className="mr-1 inline h-3 w-3 align-[-2px]" aria-hidden="true" />
+                      {canSeeDebt
+                        ? `High-risk debt: ${sel.name} owes ${formatKES(outstanding)} — manager approval required for further credit.`
+                        : 'Credit approval required for this customer'}
+                    </p>
+                  );
+                })()}
+
                 {/* Gift Cards / Vouchers for selected customer - Collapsible */}
                 {selectedCustomer && selectedCustomer !== 'walk-in' && (customerGiftCards.length > 0 || customerVouchers.length > 0) && (
                   <div className="rounded-md border border-border/60">
@@ -1923,6 +2118,17 @@ export default function POSTab() {
         onManagerApprovalPasswordChange={setManagerApprovalPassword}
         managerApprovalOpen={managerApprovalOpen}
         onManagerApprovalOpenChange={handleManagerApprovalOpenChange}
+      />
+
+      {/* v2.12.5 RBAC: Manager Authorization modal — 5–10% discount band,
+          high-risk credit approval and the 90+ day credit-hold confirm. */}
+      <ManagerAuthorizationModal
+        open={managerAuthOpen}
+        onOpenChange={setManagerAuthOpen}
+        context={managerAuthContext}
+        reason={managerAuthReason}
+        confirmOnly={managerAuthConfirmOnly}
+        onSuccess={handleManagerAuthSuccess}
       />
 
       {/* AUDIT FIX (Task 3-e): held-carts picker — resume any parked cart out of

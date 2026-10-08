@@ -23,7 +23,9 @@ import { type NextRequest } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
-import { requireAuth, type AuthSession } from '@/lib/auth';
+import { requireAuth, recordPermissionDenied, noteDeniedAndMaybeLock, type AuthSession } from '@/lib/auth';
+// v2.12.2 (PR B — RBAC): feature-level role-management gate.
+import { hasFeaturePermission, PERMISSION_DENIED_MESSAGES } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
@@ -124,7 +126,29 @@ async function updateUserHandler(
 
   // ── Segregation of duties on role changes (mirrors POST /api/users) ──
   if (role !== undefined && role !== target.role) {
-    const VALID_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'CASHIER', 'ACCOUNTANT'];
+    // v2.12.2 (PR B — RBAC): role CHANGES are gated to
+    // 'settings.roles.manage' — SUPER_ADMIN only. BEHAVIOUR CHANGE
+    // (deliberate, security release): STORE_OWNER can no longer change
+    // roles; denials are durably recorded and feed the abuse lockout.
+    if (!hasFeaturePermission(session.role, 'settings.roles.manage')) {
+      await recordPermissionDenied({
+        session,
+        permission: 'settings.roles.manage',
+        request,
+        resource: '/api/users/[id] (role change)',
+      });
+      await noteDeniedAndMaybeLock({ session, request, permission: 'settings.roles.manage' });
+      return Response.json(
+        {
+          success: false,
+          code: 'PERMISSION_DENIED',
+          permission: 'settings.roles.manage',
+          message: PERMISSION_DENIED_MESSAGES['settings.roles.manage'],
+        },
+        { status: 403 }
+      );
+    }
+    const VALID_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'CASHIER', 'ACCOUNTANT', 'INVENTORY_MANAGER'];
     if (!VALID_ROLES.includes(role)) {
       return Response.json({ success: false, error: `role must be one of: ${VALID_ROLES.join(', ')}` }, { status: 400 });
     }

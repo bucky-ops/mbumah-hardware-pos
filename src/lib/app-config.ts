@@ -11,6 +11,37 @@ export const ALL_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'CASHI
 export const MGMT_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'];
 export const SENIOR_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'];
 export const ADMIN_ROLES = ['SUPER_ADMIN', 'STORE_OWNER'];
+// v2.12.2 (PR B — RBAC): catalog-steward role — catalog/inventory + inbound
+// supply-chain tabs only (NO financial/sales/HR tabs). User.role is a string
+// column (no schema change); membership enforced via these role arrays.
+export const INVENTORY_STAFF_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT', 'INVENTORY_MANAGER'];
+
+/**
+ * Friendly role names for chips/tooltips (v2.12.5 RBAC sidebar locks).
+ * SUPER_ADMIN intentionally renders "System Administrator".
+ */
+export const ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: 'System Administrator',
+  STORE_OWNER: 'Store Owner',
+  BRANCH_MANAGER: 'Branch Manager',
+  ACCOUNTANT: 'Accountant',
+  CASHIER: 'Cashier',
+  INVENTORY_MANAGER: 'Inventory Manager',
+};
+
+/** Privilege tier order, lowest → highest (for "requires X" tooltips). */
+const ROLE_TIER_ORDER = ['CASHIER', 'INVENTORY_MANAGER', 'ACCOUNTANT', 'BRANCH_MANAGER', 'STORE_OWNER', 'SUPER_ADMIN'];
+
+/**
+ * Friendly label of the lowest-privilege role that can open a tab the current
+ * user cannot (sidebar lock tooltips). Returns e.g. "Branch Manager".
+ */
+export function requiredRoleLabelFor(roles: string[]): string {
+  for (const role of ROLE_TIER_ORDER) {
+    if (roles.includes(role)) return ROLE_LABELS[role] ?? role;
+  }
+  return 'a higher role';
+}
 
 // ── Tab Configuration ───────────────────────────────────────────────────────
 
@@ -26,13 +57,13 @@ import {
 export const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType; roles: string[] }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: Home, roles: ALL_ROLES },
   { id: 'pos', label: 'POS', icon: ShoppingCart, roles: ALL_ROLES },
-  { id: 'catalog', label: 'Catalog', icon: Tag, roles: MGMT_ROLES },
-  { id: 'inventory', label: 'Inventory', icon: Package, roles: MGMT_ROLES },
+  { id: 'catalog', label: 'Catalog', icon: Tag, roles: INVENTORY_STAFF_ROLES },
+  { id: 'inventory', label: 'Inventory', icon: Package, roles: INVENTORY_STAFF_ROLES },
   { id: 'customers', label: 'Customers', icon: Users, roles: ALL_ROLES },
   { id: 'transactions', label: 'Transactions', icon: ShoppingBag, roles: ALL_ROLES },
   { id: 'rentals', label: 'Rentals', icon: KeyRound, roles: SENIOR_ROLES },
-  { id: 'suppliers', label: 'Suppliers', icon: Truck, roles: SENIOR_ROLES },
-  { id: 'purchase-orders', label: 'Purchase Orders', icon: ClipboardList, roles: SENIOR_ROLES },
+  { id: 'suppliers', label: 'Suppliers', icon: Truck, roles: INVENTORY_STAFF_ROLES },
+  { id: 'purchase-orders', label: 'Purchase Orders', icon: ClipboardList, roles: INVENTORY_STAFF_ROLES },
   { id: 'financial', label: 'Financial', icon: BarChart3, roles: MGMT_ROLES },
   { id: 'analytics', label: 'Analytics', icon: LineChart, roles: MGMT_ROLES },
   { id: 'reports', label: 'Reports', icon: FileText, roles: MGMT_ROLES },
@@ -44,9 +75,9 @@ export const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType; r
   { id: 'credits', label: 'Credits', icon: CircleDollarSign, roles: MGMT_ROLES },
   { id: 'debt-management', label: 'Debt Mgmt', icon: BadgeDollarSign, roles: MGMT_ROLES },
   { id: 'debt-plans', label: 'Debt Plans', icon: BadgeDollarSign, roles: MGMT_ROLES },
-  { id: 'messaging', label: 'Messaging', icon: MessageSquare, roles: ALL_ROLES },
-  { id: 'conversations', label: 'Chat', icon: MessagesSquare, roles: ALL_ROLES },
-  { id: 'transfers', label: 'Transfers', icon: ArrowUpDown, roles: SENIOR_ROLES },
+  { id: 'messaging', label: 'Messaging', icon: MessageSquare, roles: MGMT_ROLES },
+  { id: 'conversations', label: 'Chat', icon: MessagesSquare, roles: MGMT_ROLES },
+  { id: 'transfers', label: 'Transfers', icon: ArrowUpDown, roles: INVENTORY_STAFF_ROLES },
   { id: 'banking', label: 'Banking', icon: Landmark, roles: ['SUPER_ADMIN', 'STORE_OWNER', 'ACCOUNTANT'] },
   { id: 'loyalty', label: 'Loyalty', icon: Award, roles: SENIOR_ROLES },
   { id: 'payroll', label: 'Payroll', icon: Wallet, roles: MGMT_ROLES },
@@ -88,6 +119,18 @@ export function filterTabsByRole(role: string | undefined): typeof TAB_CONFIG {
   if (!role) return [];
   if (role === 'SUPER_ADMIN') return TAB_CONFIG;
   return TAB_CONFIG.filter((t) => t.roles.includes(role));
+}
+
+/**
+ * v2.12.5 (RBAC): returns the tab's config when `role` can open it, otherwise
+ * null. Locked (no-access) tabs are NOT silently hidden by the sidebar anymore
+ * — they render with a Lock icon; use this to distinguish access vs lock.
+ */
+export function tabAccessFor(role: string | undefined, id: AppTab): typeof TAB_CONFIG[number] | null {
+  const tab = TAB_CONFIG.find((t) => t.id === id);
+  if (!tab || !role) return null;
+  if (role === 'SUPER_ADMIN') return tab;
+  return tab.roles.includes(role) ? tab : null;
 }
 
 /** Returns the category image path for a given category ID. */

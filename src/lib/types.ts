@@ -6,6 +6,14 @@ export const UserRole = {
   BRANCH_MANAGER: 'BRANCH_MANAGER',
   CASHIER: 'CASHIER',
   ACCOUNTANT: 'ACCOUNTANT',
+  // v2.12.2 (PR B — RBAC): catalog/inventory steward. Sees Catalog, Inventory
+  // and Transfers only; can create/update products and read purchase orders.
+  // NO sales-override powers, NO financial visibility, NO cost-price blindness
+  // (they DO see cost — it is their job). Persisted in the plain-string
+  // User.role column — NO schema change is required or permitted for this PR
+  // (User.role is `String @default("CASHIER")` in prisma/schema.prisma; the
+  // allowed values are enforced at the API layer, not by a DB enum).
+  INVENTORY_MANAGER: 'INVENTORY_MANAGER',
 } as const;
 
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
@@ -309,7 +317,19 @@ export interface CheckoutPayload {
   // `code: 'DEBT_BLOCKED_OVERDUE'` + `requiresManagerOverride: true` until
   // the request carries managerOverride: true AND the authenticated session
   // role is manager-level (SUPER_ADMIN / STORE_OWNER / BRANCH_MANAGER).
-  managerOverride?: boolean;
+  // v2.12.5 (PR B — RBAC): the override may ALSO be a verified credential
+  // object from the Manager Authorization modal — it unlocks the 5–10%
+  // discount band and the high-risk debt gate for cashiers (verified
+  // server-side via src/lib/manager-auth.ts).
+  managerOverride?:
+    | boolean
+    | {
+        approverEmail: string;
+        approverPassword: string;
+        approverId?: string;
+        approverName?: string;
+        reason?: string;
+      };
 }
 
 export interface PaymentDetails {
@@ -620,6 +640,21 @@ export const PERMISSION_MATRIX: Record<UserRole, Record<string, string[]>> = {
     reports: ['read', 'export'],
     debt: ['read', 'update', 'remind'],
     purchase_orders: ['read', 'approve'],
+  },
+  // v2.12.2 (PR B — RBAC): catalog/inventory steward. products create/read/
+  // update; purchase_orders create/read/update/receive; read-only customers.
+  // Everything money- or override-shaped is empty — an inventory manager
+  // never sells, never voids, never sees financials.
+  INVENTORY_MANAGER: {
+    products: ['create', 'read', 'update'],
+    purchase_orders: ['create', 'read', 'update', 'receive'],
+    customers: ['read'],
+    transactions: [],
+    financials: [],
+    debt: [],
+    admin: [],
+    rentals: [],
+    reports: [],
   },
 };
 
