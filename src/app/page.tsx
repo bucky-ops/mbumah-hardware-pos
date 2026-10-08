@@ -21,6 +21,7 @@ import { LoginScreen } from '@/components/login-screen';
 import { AppSidebar } from '@/components/layout/app-sidebar';
 import { TopBar } from '@/components/layout/top-bar';
 import { KeyboardShortcutsHelp } from '@/components/keyboard-shortcuts-help';
+import { WhatsNewDialog } from '@/components/whats-new-dialog';
 
 // LAZY-LOADED TAB COMPONENTS
 //
@@ -59,6 +60,30 @@ const LazyPurchaseOrdersTab = lazy(TAB_LOADERS['purchase-orders']);
 const LazyShiftSchedulingTab = lazy(TAB_LOADERS['shift-scheduling']);
 const LazyPOSTab = lazy(TAB_LOADERS.pos);
 
+/**
+ * Live online/offline indicator for the footer status chip (v2.13.0).
+ * useSyncExternalStore mirrors navigator.onLine + the browser's online/offline
+ * events — no effect setState, and the server snapshot (optimistic 'online')
+ * only ever matters pre-mount, since the footer renders client-side inside
+ * MainApp.
+ */
+function subscribeOnline(onChange: () => void) {
+  window.addEventListener('online', onChange);
+  window.addEventListener('offline', onChange);
+  return () => {
+    window.removeEventListener('online', onChange);
+    window.removeEventListener('offline', onChange);
+  };
+}
+
+function useOnlineStatus(): boolean {
+  return useSyncExternalStore(
+    subscribeOnline,
+    () => navigator.onLine,
+    () => true,
+  );
+}
+
 function TabLoadingFallback() {
   return (
     <div className="space-y-4">
@@ -75,6 +100,7 @@ function MainApp() {
   const { activeTab, setActiveTab, currentStoreId } = useAppStore();
   const user = useAuthStore((s) => s.user);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const online = useOnlineStatus();
   const searchBtnRef = useRef<HTMLButtonElement | null>(null);
 
   // v2.6.0 IDLE TIMEOUT (30 min): reuse the EXACT 401 session-expired path —
@@ -209,9 +235,22 @@ function MainApp() {
                 <span className="text-[10px] text-muted-foreground/50 hidden sm:inline" title="App version · build commit">{APP_BUILD_LABEL}</span>
               </div>
               <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60">
-                  <div className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-[0_0_4px] shadow-green-500/50" />
-                  <span className="hidden sm:inline">Connected</span>
+                {/* ONLINE STATUS (v2.13.0): live navigator.onLine mirror —
+                    green pulsing dot when connected, red static when the
+                    browser fires 'offline'. Chip hidden on xs (crowded). */}
+                <div
+                  className="hidden sm:flex items-center gap-1.5 text-[10px] text-muted-foreground/60"
+                  role="status"
+                  aria-label={online ? 'Connected to the internet' : 'Offline — check your internet connection'}
+                >
+                  <div
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      online
+                        ? 'bg-green-500 shadow-[0_0_4px] shadow-green-500/50 animate-pulse'
+                        : 'bg-red-500 shadow-[0_0_4px] shadow-red-500/50'
+                    }`}
+                  />
+                  <span>{online ? 'Connected' : 'Offline'}</span>
                 </div>
                 <button
                   type="button"
@@ -226,6 +265,7 @@ function MainApp() {
           </footer>
         </div>
         <KeyboardShortcutsHelp open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+        <WhatsNewDialog />
         <FloatingHomeButton />
       </div>
     </ErrorBoundary>
