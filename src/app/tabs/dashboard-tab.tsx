@@ -51,8 +51,10 @@ import type {
   DashboardStats, TopProduct, ShiftSnapshot, DebtCrisisSummary,
   DashboardAlert, StoreHealthSummary, RevenueTrend7d,
 } from '@/lib/types';
+import { hasFeaturePermission } from '@/lib/permissions';
 import { STORE_LIST } from '@/lib/store-info';
 import { timeAgo } from '@/lib/time-ago';
+import { LockedCard } from '@/components/rbac/locked-card';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -89,6 +91,16 @@ interface HourlyPoint {
   transactionCount: number;
 }
 
+/** One row of the limited dashboard's "My Sales" feed (server shape). */
+interface MySaleRow {
+  id: string;
+  receiptNumber: string;
+  paymentMethod: string;
+  paymentStatus: string;
+  totalAmount: number | string;
+  createdAt: string;
+}
+
 type DashboardData = DashboardStats & {
   /** Legacy fields the API returns but the shared interface predates. */
   averageTransactionValue?: number;
@@ -96,6 +108,11 @@ type DashboardData = DashboardStats & {
   outstandingDebtCount?: number;
   recentTransactions?: RecentTxn[];
   hourlySalesBreakdown?: HourlyPoint[];
+  // ── v2.12.5 RBAC limited payload (roles without dashboard.view.revenue) ──
+  limitedView?: boolean;
+  transactions?: { count: number };
+  lowStock?: { count: number; low: number; outOfStock: number };
+  mySales?: MySaleRow[];
 };
 
 // ── Small helpers ────────────────────────────────────────────────────────────
@@ -194,10 +211,14 @@ function TrendBadge({ pct }: { pct: number }) {
 
 // ── 1. HERO ──────────────────────────────────────────────────────────────────
 
-function DashboardHero({ onTab }: { onTab: (tab: AppTab) => void }) {
+function DashboardHero({ onTab, limited }: { onTab: (tab: AppTab) => void; limited?: boolean }) {
   const user = useAuthStore((s) => s.user);
   const currentStoreId = useAppStore((s) => s.currentStoreId);
   const nowMs = useNowMs();
+  // v2.12.5 RBAC: the limited (cashier) view keeps the greeting but drops
+  // quick actions the role cannot open (catalog/reports); "New Sale" only
+  // when the role holds pos.sell.
+  const canSell = hasFeaturePermission(user?.role, 'pos.sell');
   const clock = useMemo(() => {
     if (nowMs <= 0) return null;
     const now = new Date(nowMs);
@@ -249,30 +270,36 @@ function DashboardHero({ onTab }: { onTab: (tab: AppTab) => void }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              className="gap-1.5 bg-white font-semibold text-emerald-700 shadow-sm hover:bg-emerald-50 hover:text-emerald-800"
-              onClick={() => onTab('pos')}
-            >
-              <ShoppingCart className="h-4 w-4" aria-hidden="true" />
-              New Sale (F2)
-            </Button>
-            <Button
-              size="sm"
-              className="gap-1.5 bg-white font-semibold text-emerald-700 shadow-sm hover:bg-emerald-50 hover:text-emerald-800"
-              onClick={() => onTab('catalog')}
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Add Product
-            </Button>
-            <Button
-              size="sm"
-              className="gap-1.5 bg-white font-semibold text-emerald-700 shadow-sm hover:bg-emerald-50 hover:text-emerald-800"
-              onClick={() => onTab('reports')}
-            >
-              <BarChart3 className="h-4 w-4" aria-hidden="true" />
-              View Reports
-            </Button>
+            {canSell && (
+              <Button
+                size="sm"
+                className="gap-1.5 bg-white font-semibold text-emerald-700 shadow-sm hover:bg-emerald-50 hover:text-emerald-800"
+                onClick={() => onTab('pos')}
+              >
+                <ShoppingCart className="h-4 w-4" aria-hidden="true" />
+                New Sale (F2)
+              </Button>
+            )}
+            {!limited && (
+              <Button
+                size="sm"
+                className="gap-1.5 bg-white font-semibold text-emerald-700 shadow-sm hover:bg-emerald-50 hover:text-emerald-800"
+                onClick={() => onTab('catalog')}
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Add Product
+              </Button>
+            )}
+            {!limited && (
+              <Button
+                size="sm"
+                className="gap-1.5 bg-white font-semibold text-emerald-700 shadow-sm hover:bg-emerald-50 hover:text-emerald-800"
+                onClick={() => onTab('reports')}
+              >
+                <BarChart3 className="h-4 w-4" aria-hidden="true" />
+                View Reports
+              </Button>
+            )}
           </div>
         </div>
       </CardContent>
@@ -832,6 +859,154 @@ function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppT
         }
       />
     </section>
+  );
+}
+
+// ── 4b. LIMITED DASHBOARD (v2.12.5 RBAC — cashier / revenue-denied roles) ────
+// Rendered INSTEAD of the full 12-section dashboard when the API payload says
+// limitedView:true (server already refused to compute revenue/debt/analytics
+// for these roles). 4 KPIs + own sales + info banner + LockedCards.
+
+function paymentMethodBadgeClass(method: string): string {
+  switch ((method || '').toUpperCase()) {
+    case 'CASH': return 'bg-emerald-50 text-emerald-700';
+    case 'MPESA': return 'bg-teal-50 text-teal-700';
+    case 'DEBT': return 'bg-rose-50 text-rose-700';
+    case 'SPLIT': return 'bg-purple-50 text-purple-700';
+    case 'GIFT_CARD': return 'bg-amber-50 text-amber-700';
+    default: return 'bg-slate-100 text-slate-600';
+  }
+}
+
+function LimitedDashboard({ data }: { data: DashboardData | null }) {
+  if (!data) return null;
+
+  const todaySales = num(data.todaySales);
+  const txns = num(data.transactions?.count ?? data.todaySales);
+  const atv = num(data.averageTransactionValue);
+  const low = num(data.lowStock?.low);
+  const outOfStock = num(data.lowStock?.outOfStock);
+  const stockTotal = num(data.lowStock?.count) || low + outOfStock;
+  const mySales = Array.isArray(data.mySales) ? data.mySales : [];
+
+  return (
+    <div className="space-y-4 sm:space-y-6">
+      {/* 4 KPI cards only — every number comes from the API's limited payload */}
+      <section aria-label="Today's key metrics" className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+        <KpiCard
+          label="Today's Sales"
+          value={formatKES(todaySales)}
+          icon={Banknote}
+          iconClass="bg-emerald-100 text-emerald-600"
+          sub={<span>net of VAT · all cashiers</span>}
+        />
+        <KpiCard
+          label="Transactions"
+          value={String(txns)}
+          icon={ShoppingCart}
+          iconClass="bg-green-100 text-green-700"
+          sub={<span>storewide today</span>}
+        />
+        <KpiCard
+          label="Avg Order"
+          value={formatKES(atv)}
+          icon={Calculator}
+          iconClass="bg-amber-100 text-amber-600"
+          sub={<span>per sale today</span>}
+        />
+        <KpiCard
+          label="Low Stock"
+          value={String(stockTotal)}
+          icon={Package}
+          iconClass={outOfStock > 0 ? 'bg-red-100 text-red-600' : stockTotal > 0 ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-500'}
+          valueClass={outOfStock > 0 ? 'text-red-600' : stockTotal > 0 ? 'text-amber-600' : 'text-slate-900'}
+          sub={
+            stockTotal > 0 ? (
+              <span>
+                <span className={outOfStock > 0 ? 'font-semibold text-red-600' : ''}>{outOfStock} out</span>
+                {' · '}
+                <span className={low > 0 ? 'font-semibold text-amber-600' : ''}>{low} low</span>
+              </span>
+            ) : (
+              <span className="text-emerald-600">All stock healthy</span>
+            )
+          }
+        />
+      </section>
+
+      {/* Info banner */}
+      <div
+        role="note"
+        className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+      >
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100">
+          <Info className="h-4 w-4 text-slate-500" aria-hidden="true" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-900">
+            You&rsquo;re viewing a limited dashboard.
+          </p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Revenue, debt and analytics are hidden for your role.
+          </p>
+        </div>
+      </div>
+
+      {/* My Sales — the caller's own last sales only (receipt tail, method,
+          amount, time-ago). Empty state kept friendly for new cashiers. */}
+      <Card className="rounded-2xl border-slate-200 shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Receipt className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+            My Sales
+          </CardTitle>
+          <CardDescription>Your latest transactions at this branch</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {mySales.length === 0 ? (
+            <p className="py-6 text-center text-xs text-slate-500">
+              No sales recorded yet — your completed sales will appear here.
+            </p>
+          ) : (
+            <ul className="max-h-96 divide-y divide-slate-100 overflow-y-auto custom-scrollbar" aria-label="My recent sales">
+              {mySales.slice(0, 10).map((sale) => (
+                <li key={sale.id} className="flex items-center justify-between gap-3 py-2.5">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <span className="font-mono text-xs font-semibold text-slate-700" title={sale.receiptNumber}>
+                      {receiptTail(sale.receiptNumber)}
+                    </span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${paymentMethodBadgeClass(sale.paymentMethod)}`}>
+                      {sale.paymentMethod}
+                    </span>
+                    {sale.paymentStatus && sale.paymentStatus !== 'COMPLETED' ? (
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                        {sale.paymentStatus}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <span className="text-sm font-bold tabular-nums text-slate-900">
+                      {formatKES(num(sale.totalAmount))}
+                    </span>
+                    <span className="w-16 text-right text-[11px] text-slate-400" title={new Date(sale.createdAt).toLocaleString()}>
+                      {timeAgo(new Date(sale.createdAt))}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Locked sections — 2-col grid of LockedCards with Request Access */}
+      <section aria-label="Locked dashboards" className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
+        <LockedCard permission="dashboard.view.revenue" title="Revenue Trend" />
+        <LockedCard permission="dashboard.view.debt_aging" title="Debt Aging" />
+        <LockedCard permission="dashboard.view.profit_margin" title="Store Health" />
+        <LockedCard permission="financial.view" title="Financial Reports" />
+      </section>
+    </div>
   );
 }
 
@@ -2070,6 +2245,22 @@ export default function DashboardTab() {
             </Button>
           </CardContent>
         </Card>
+      </div>
+    );
+  }
+
+  // ── v2.12.5 RBAC: LIMITED DASHBOARD (cashier / revenue-denied roles) ──
+  // The API early-returns a minimal payload (limitedView:true) for roles
+  // without 'dashboard.view.revenue'; render the dedicated compact layout
+  // instead of the full 12-section dashboard.
+  if (view?.limitedView) {
+    return (
+      <div className="-m-4 min-h-full space-y-4 bg-slate-50 p-4 sm:space-y-6 sm:p-5">
+        <DashboardHero onTab={onTab} limited />
+        <LimitedDashboard data={view} />
+        <p className="pb-1 text-center text-[10px] text-slate-400">
+          Live data · auto-refreshes every 30s{user?.name ? ` · signed in as ${user.name}` : ''} · last sync {lastSyncLabel}
+        </p>
       </div>
     );
   }

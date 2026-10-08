@@ -317,7 +317,19 @@ export interface CheckoutPayload {
   // `code: 'DEBT_BLOCKED_OVERDUE'` + `requiresManagerOverride: true` until
   // the request carries managerOverride: true AND the authenticated session
   // role is manager-level (SUPER_ADMIN / STORE_OWNER / BRANCH_MANAGER).
-  managerOverride?: boolean;
+  // v2.12.5 (PR B — RBAC): the override may ALSO be a verified credential
+  // object from the Manager Authorization modal — it unlocks the 5–10%
+  // discount band and the high-risk debt gate for cashiers (verified
+  // server-side via src/lib/manager-auth.ts).
+  managerOverride?:
+    | boolean
+    | {
+        approverEmail: string;
+        approverPassword: string;
+        approverId?: string;
+        approverName?: string;
+        reason?: string;
+      };
 }
 
 export interface PaymentDetails {

@@ -12,7 +12,8 @@ import {
   MessageCircle, RefreshCw, Pencil, Settings2, Check
 } from 'lucide-react';
 
-import { useAppStore } from '@/lib/stores';
+import { useAppStore, useAuthStore } from '@/lib/stores';
+import { canFeature } from '@/hooks/use-permissions';
 import {
   productsApi, categoriesApi, stockMovementsApi, whatsappApi,
   formatKES, formatDate, formatDateTime,
@@ -188,6 +189,12 @@ export default function InventoryTab() {
   const [stockAdjustReason, setStockAdjustReason] = useState('');
   const currentStoreId = useAppStore((s) => s.currentStoreId);
   const queryClient = useQueryClient();
+  // ── v2.12.5 RBAC: cost/margin visibility ──
+  // The products API strips costPrice to null for roles without
+  // inventory.view.cost (CASHIER / ACCOUNTANT). Render "•••" for those —
+  // never 0 or a misleading margin.
+  const authUser = useAuthStore((s) => s.user);
+  const canViewCost = canFeature(authUser?.role, 'inventory.view.cost');
 
   // Sorting state
   const [sortField, setSortField] = useState<SortField>('name');
@@ -530,11 +537,13 @@ export default function InventoryTab() {
         case 'name': aVal = a.name.toLowerCase(); bVal = b.name.toLowerCase(); break;
         case 'sku': aVal = a.sku.toLowerCase(); bVal = b.sku.toLowerCase(); break;
         case 'pricePerUnit': aVal = a.pricePerUnit; bVal = b.pricePerUnit; break;
-        case 'costPrice': aVal = a.costPrice; bVal = b.costPrice; break;
+        // v2.12.5 RBAC: costPrice is null on the wire for cost-hidden roles —
+        // coalesce so comparisons never hit NaN.
+        case 'costPrice': aVal = a.costPrice ?? 0; bVal = b.costPrice ?? 0; break;
         case 'quantityInStock': aVal = a.quantityInStock; bVal = b.quantityInStock; break;
         case 'profitMargin':
-          aVal = a.pricePerUnit > 0 ? (a.pricePerUnit - a.costPrice) / a.pricePerUnit : 0;
-          bVal = b.pricePerUnit > 0 ? (b.pricePerUnit - b.costPrice) / b.pricePerUnit : 0;
+          aVal = a.pricePerUnit > 0 ? (a.pricePerUnit - (a.costPrice ?? 0)) / a.pricePerUnit : 0;
+          bVal = b.pricePerUnit > 0 ? (b.pricePerUnit - (b.costPrice ?? 0)) / b.pricePerUnit : 0;
           break;
         default: aVal = a.name.toLowerCase(); bVal = b.name.toLowerCase();
       }
@@ -578,7 +587,11 @@ export default function InventoryTab() {
 
   const lowStockCount = allProducts.filter(p => p.quantityInStock <= p.reorderLevel && p.quantityInStock > 0).length;
   const outOfStockCount = allProducts.filter(p => p.quantityInStock <= 0).length;
-  const totalInventoryValue = allProducts.reduce((sum, p) => sum + (p.costPrice * p.quantityInStock), 0);
+  // v2.12.5 RBAC: with cost prices stripped (null), the stock value is
+  // meaningless — hide it behind "•••" instead of showing a fake 0.
+  const totalInventoryValue = canViewCost
+    ? allProducts.reduce((sum, p) => sum + ((p.costPrice ?? 0) * p.quantityInStock), 0)
+    : null;
   const _avgProfitMargin = (() => {
     if (allProducts.length === 0) return 0;
     const total = allProducts.reduce((sum, p) => {
@@ -629,9 +642,13 @@ export default function InventoryTab() {
     const csvRows = [
       headers.join(','),
       ...selectedProducts.map(p => {
-        const margin = p.pricePerUnit > 0 ? ((p.pricePerUnit - p.costPrice) / p.pricePerUnit * 100).toFixed(1) : '0';
+        // v2.12.5 RBAC: cost/margin columns empty for cost-hidden roles.
+        const cost = canViewCost ? (p.costPrice ?? 0) : '';
+        const margin = canViewCost
+          ? (p.pricePerUnit > 0 ? ((p.pricePerUnit - (p.costPrice ?? 0)) / p.pricePerUnit * 100).toFixed(1) : '0')
+          : '';
         const status = p.quantityInStock <= 0 ? 'Out of Stock' : p.quantityInStock <= p.reorderLevel ? 'Low Stock' : 'In Stock';
-        return [p.name, p.sku, p.category?.name || '', p.pricePerUnit, p.costPrice, margin, p.quantityInStock, status]
+        return [p.name, p.sku, p.category?.name || '', p.pricePerUnit, cost, margin, p.quantityInStock, status]
           .map(v => String(v).includes(',') ? `"${v}"` : v)
           .join(',');
       }),
@@ -804,7 +821,11 @@ export default function InventoryTab() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground">Stock Value</p>
-                <p className="text-xl font-bold whitespace-nowrap">{formatKES(totalInventoryValue)}</p>
+                {totalInventoryValue === null ? (
+                  <p className="text-xl font-bold text-muted-foreground" title="Cost hidden for your role">•••</p>
+                ) : (
+                  <p className="text-xl font-bold whitespace-nowrap">{formatKES(totalInventoryValue)}</p>
+                )}
               </div>
             </div>
           </CardContent>
@@ -1273,8 +1294,10 @@ export default function InventoryTab() {
                       colSpan={11}
                       aria-label="Products inventory"
                       renderRow={(product, idx, measureRef) => {
-                      const profitMargin = product.pricePerUnit > 0
-                        ? ((product.pricePerUnit - product.costPrice) / product.pricePerUnit * 100)
+                      // v2.12.5 RBAC: cost-derived figures render "•••" when the
+                      // server stripped costPrice (roles without inventory.view.cost).
+                      const profitMargin = canViewCost && product.pricePerUnit > 0
+                        ? ((product.pricePerUnit - (product.costPrice ?? 0)) / product.pricePerUnit * 100)
                         : 0;
                       const marginColor = getProfitMarginColor(profitMargin);
                       const catColor = product.category?.name ? getCategoryColor(product.category.name) : '#6B7280';
@@ -1321,11 +1344,21 @@ export default function InventoryTab() {
                             </div>
                           </TableCell>
                           <TableCell className="text-right font-medium">{formatKES(product.pricePerUnit)}</TableCell>
-                          <TableCell className="text-right text-sm text-muted-foreground">{formatKES(product.costPrice)}</TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">
+                            {canViewCost ? (
+                              formatKES(product.costPrice ?? 0)
+                            ) : (
+                              <span title="Cost hidden for your role" aria-label="Cost hidden for your role">•••</span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${marginColor.bg} ${marginColor.text}`}>
-                              {profitMargin.toFixed(1)}%
-                            </span>
+                            {canViewCost ? (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${marginColor.bg} ${marginColor.text}`}>
+                                {profitMargin.toFixed(1)}%
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground" title="Cost hidden for your role" aria-label="Margin hidden for your role">•••</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             {isQuickAdjusting ? (
@@ -1611,8 +1644,10 @@ export default function InventoryTab() {
             <DialogDescription className="sr-only">Product details</DialogDescription>
           </DialogHeader>
           {detailProduct && (() => {
-            const profitMargin = detailProduct.pricePerUnit > 0
-              ? ((detailProduct.pricePerUnit - detailProduct.costPrice) / detailProduct.pricePerUnit * 100)
+            // v2.12.5 RBAC: cost-derived figures hidden behind "•••" for
+            // roles without inventory.view.cost.
+            const profitMargin = canViewCost && detailProduct.pricePerUnit > 0
+              ? ((detailProduct.pricePerUnit - (detailProduct.costPrice ?? 0)) / detailProduct.pricePerUnit * 100)
               : 0;
             const marginColor = getProfitMarginColor(profitMargin);
             const relatedProducts = getRelatedProducts(detailProduct);
@@ -1632,15 +1667,27 @@ export default function InventoryTab() {
                   </div>
                   <div className="rounded-lg border bg-muted/20 p-3">
                     <p className="text-xs text-muted-foreground">Cost Price</p>
-                    <p className="text-lg font-bold text-muted-foreground">{formatKES(detailProduct.costPrice)}</p>
+                    {canViewCost ? (
+                      <p className="text-lg font-bold text-muted-foreground">{formatKES(detailProduct.costPrice ?? 0)}</p>
+                    ) : (
+                      <p className="text-lg font-bold text-muted-foreground" title="Cost hidden for your role">•••</p>
+                    )}
                   </div>
                   <div className="rounded-lg border bg-muted/20 p-3">
                     <p className="text-xs text-muted-foreground">Profit Margin</p>
-                    <p className={`text-lg font-bold ${marginColor.text}`}>{profitMargin.toFixed(1)}%</p>
+                    {canViewCost ? (
+                      <p className={`text-lg font-bold ${marginColor.text}`}>{profitMargin.toFixed(1)}%</p>
+                    ) : (
+                      <p className="text-lg font-bold text-muted-foreground" title="Cost hidden for your role">•••</p>
+                    )}
                   </div>
                   <div className="rounded-lg border bg-muted/20 p-3">
                     <p className="text-xs text-muted-foreground">Profit/Unit</p>
-                    <p className="text-lg font-bold">{formatKES(detailProduct.pricePerUnit - detailProduct.costPrice)}</p>
+                    {canViewCost ? (
+                      <p className="text-lg font-bold">{formatKES(detailProduct.pricePerUnit - (detailProduct.costPrice ?? 0))}</p>
+                    ) : (
+                      <p className="text-lg font-bold text-muted-foreground" title="Cost hidden for your role">•••</p>
+                    )}
                   </div>
                 </div>
 

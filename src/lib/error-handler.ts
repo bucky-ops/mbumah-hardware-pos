@@ -52,12 +52,21 @@ export class ApiRequestError extends Error {
   readonly status: number;
   /** The server-provided error message, if any (may equal `message`). */
   readonly serverMessage: string;
+  /**
+   * v2.12.5 (RBAC): the parsed JSON error body, when one was available.
+   * Carries typed denial payloads (code / permission / requiresManagerOverride)
+   * so callers can branch on machine-readable codes instead of matching
+   * message text — e.g. the POS opening the Manager Authorization modal on
+   * { code: 'PERMISSION_DENIED', requiresManagerOverride: true }.
+   */
+  readonly body?: Record<string, unknown>;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, body?: Record<string, unknown>) {
     super(message);
     this.name = 'ApiRequestError';
     this.status = status;
     this.serverMessage = message;
+    this.body = body;
   }
 }
 

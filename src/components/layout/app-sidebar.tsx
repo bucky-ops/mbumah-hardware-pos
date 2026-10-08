@@ -5,7 +5,10 @@ import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 import { useAuthStore, useAppStore, type AppTab } from '@/lib/stores';
 import { STORE_LIST } from '@/lib/store-info';
-import { filterTabsByRole, NAV_GROUPS } from '@/lib/app-config';
+// v2.12.5 (RBAC): NAV_GROUPS × TAB_CONFIG — no-access tabs now render LOCKED
+// (grayed row + lock icon + "Requires …" tooltip) instead of being silently
+// hidden, so staff can see what exists and ask for it via LockedCard flows.
+import { TAB_CONFIG, NAV_GROUPS, requiredRoleLabelFor } from '@/lib/app-config';
 import { preloadTab } from '@/lib/tab-preload';
 import { useNotificationCount } from '@/hooks/use-notification-count';
 import { NotificationCenter } from '@/components/notification-center';
@@ -17,7 +20,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import {
   Store, LogOut, Sun, Moon, Bell, X, ChevronDown, ChevronLeft, ChevronRight,
-  Keyboard, ShieldCheck, CheckCircle,
+  Keyboard, ShieldCheck, CheckCircle, Lock,
 } from 'lucide-react';
 
 /** Get role-based avatar ring class */
@@ -105,14 +108,60 @@ export function AppSidebar() {
     toast.success('Logged out successfully');
   };
 
-  // Role-based tab visibility
-  const visibleTabs = filterTabsByRole(user?.role);
-  const navGroups = NAV_GROUPS
-    .map(g => ({ label: g.label, items: visibleTabs.filter(t => g.ids.includes(t.id)) }))
-    .filter(g => g.items.length > 0);
+  // Role-based tab visibility — v2.12.5: inaccessible tabs are flagged LOCKED
+  // (rendered grayed-out with a lock) rather than filtered out of the nav.
+  const userRole = user?.role;
+  const navGroups = NAV_GROUPS.map((g) => ({
+    label: g.label,
+    items: g.ids
+      .map((id) => TAB_CONFIG.find((t) => t.id === id))
+      .filter((t): t is (typeof TAB_CONFIG)[number] => Boolean(t))
+      .map((t) => ({
+        ...t,
+        locked: userRole !== 'SUPER_ADMIN' && !t.roles.includes(userRole ?? ''),
+      })),
+  })).filter((g) => g.items.length > 0);
 
-  const renderNavItem = ({ id, label, icon: Icon }: { id: AppTab; label: string; icon: React.ElementType }) => {
+  const renderNavItem = ({ id, label, icon: Icon, roles, locked }: (typeof TAB_CONFIG)[number] & { locked?: boolean }) => {
     const isActive = activeTab === id;
+    // Sidebar LOCKED row (v2.12.5): grayed out, 14px lock, non-clickable
+    // (aria-disabled), tooltip names the role that unlocks it. Collapsed
+    // mode renders just the lock icon.
+    if (locked) {
+      const requiresLabel = requiredRoleLabelFor(roles);
+      const lockedRow = (
+        <button
+          key={id}
+          type="button"
+          aria-disabled="true"
+          tabIndex={-1}
+          data-locked="true"
+          aria-label={`${label} — requires ${requiresLabel}`}
+          onClick={(e) => e.preventDefault()}
+          className={`w-full flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-300 ease-out relative group cursor-not-allowed select-none opacity-50 ${
+            collapsed ? 'px-0 py-2.5 justify-center' : 'px-4 py-2.5'
+          } text-slate-500`}
+        >
+          {collapsed ? (
+            <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          ) : (
+            <>
+              <Icon className="h-4 w-4 shrink-0 relative z-10" aria-hidden="true" />
+              <span className="relative z-10 flex-1 text-left">{label}</span>
+              <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            </>
+          )}
+        </button>
+      );
+      return (
+        <Tooltip key={id}>
+          <TooltipTrigger asChild>{lockedRow}</TooltipTrigger>
+          <TooltipContent side="right" sideOffset={8}>
+            Requires {requiresLabel}
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
     const btn = (
       <button
         key={id}

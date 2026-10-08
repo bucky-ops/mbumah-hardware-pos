@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { useAppStore, useCartStore } from '@/lib/stores';
+import { useAppStore, useCartStore, useAuthStore } from '@/lib/stores';
 import { TAB_CONFIG, safeMap } from '@/lib/app-config';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import { useNotificationCount } from '@/hooks/use-notification-count';
@@ -22,9 +22,26 @@ import {
 import { CurrencySwitcher } from '@/components/currency-switcher';
 import { AboutDialog } from '@/components/about-dialog';
 
+/**
+ * v2.12.5 (RBAC): top-bar role badge labels. SUPER_ADMIN intentionally reads
+ * "SA · System Administrator" per the design spec.
+ */
+const TOPBAR_ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: 'SA · System Administrator',
+  STORE_OWNER: 'Store Owner',
+  BRANCH_MANAGER: 'Branch Manager',
+  ACCOUNTANT: 'Accountant',
+  CASHIER: 'Cashier',
+  INVENTORY_MANAGER: 'Inventory Manager',
+};
+
 export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonElement | null> }) {
   const { activeTab, toggleSidebar, setActiveTab, isSidebarCollapsed, toggleSidebarCollapse } = useAppStore();
   const cartItems = useCartStore((s) => s.items);
+  const authUser = useAuthStore((s) => s.user);
+  // v2.12.5 (RBAC): compact role chip next to the top-bar actions
+  // (hidden on very small screens).
+  const roleBadgeLabel = authUser ? TOPBAR_ROLE_LABELS[authUser.role] ?? authUser.role : null;
   const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const currentStoreId = useAppStore((s) => s.currentStoreId);
   const queryClient = useQueryClient();
@@ -242,6 +259,17 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
                 {cartItemCount}
               </Badge>
             )}
+            {/* v2.12.5 (RBAC): signed-in role chip — muted, hidden on xs */}
+            {roleBadgeLabel ? (
+              <Badge
+                variant="outline"
+                className="hidden sm:inline-flex items-center gap-1 border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
+                aria-label={`Signed in as ${roleBadgeLabel}`}
+                title={`Signed in as ${roleBadgeLabel}`}
+              >
+                {roleBadgeLabel}
+              </Badge>
+            ) : null}
             <CurrencySwitcher />
             {/* Live date + clock — "Wed 7 Oct · 19:35:50" */}
             <Badge
