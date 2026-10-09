@@ -95,3 +95,9 @@ scripts/populate/*.log
 .env.bak
 .env.*.bak
 worklog.md
+
+# Generated artifacts
+*.tsbuildinfo
+dev.log
+server.log
+package-lock.json

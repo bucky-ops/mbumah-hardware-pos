@@ -24,7 +24,7 @@ Hardware POS system:
 If you ever need to install it again on a new laptop:
 
 1. Copy the folder `mbumah-hardware-pos` onto the new laptop (USB stick works)
-2. Open the folder and **double-click `Install-Mbumah-POS.bat`**
+2. Open the folder and **double-click `deploy/windows/Install-Mbumah-POS.bat`**
 3. Wait 15 to 30 minutes. Do not close the black window.
 4. When you see the green **INSTALL COMPLETE** message, it is ready.
 5. Two new icons appear on the Desktop.
@@ -103,7 +103,7 @@ and SMS messages.
 The system comes with **practice data** (demo sales, demo customers) so staff
 can learn safely. When you are ready to start **real** selling:
 
-1. Ask your technician (or do it yourself): double-click **`Wipe-Demo-Data.bat`**
+1. Ask your technician (or do it yourself): double-click **`deploy/windows/Wipe-Demo-Data.bat`**
    inside the `mbumah-hardware-pos` folder, type `GO-LIVE-WIPE` and press Enter
 2. This clears all practice sales; your products, staff accounts and settings stay
 3. Now start real selling
@@ -123,7 +123,7 @@ Fill this in and keep it with the laptop:
 
 ## 9. Uninstalling the POS (moving to a new laptop or stopping use)
 
-Double-click **Uninstall-Mbumah-POS.bat** in the app folder
+Double-click **deploy/windows/Uninstall-Mbumah-POS.bat** in the app folder
 (`C:\Users\yourname\mbumah-hardware-pos`), or on Linux/macOS run
 `bash deploy/nodocker/uninstall-nodocker.sh` inside the app folder.
 
@@ -138,7 +138,7 @@ The uninstaller always:
    folder is kept.
 
 To move to a new laptop: uninstall here (keep the backup folder on a USB
-stick), then run `Install-Mbumah-POS.bat` on the new laptop and copy the
+stick), then run `deploy/windows/Install-Mbumah-POS.bat` on the new laptop and copy the
 backup with your technician.
 
 
@@ -168,9 +168,9 @@ Your POS looks after itself at night, while the shop is closed:
 Things you can do yourself:
 
 - **Update right now** (instead of waiting for the night): double-click
-  **Update-Mbumah-POS.bat** in the app folder.
+  **deploy/windows/Update-Mbumah-POS.bat** in the app folder.
 - **Go back to an earlier version** (only if support asks you to):
-  double-click **Rollback-Mbumah-POS.bat**, pick the version from the list,
+  double-click **deploy/windows/Rollback-Mbumah-POS.bat**, pick the version from the list,
   and wait. Your sales data is never changed by this.
 - **Back up right now:** use the **Backup POS Data** desktop icon.
 
