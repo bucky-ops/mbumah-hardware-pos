@@ -79,7 +79,7 @@ docker compose -f docker-compose.laptop.yml up -d --build
 5. Configure M-Pesa in `.env` if the client will take mobile payments
    (`MPESA_ENVIRONMENT=production` + real Daraja credentials; production
    callbacks additionally need a publicly reachable HTTPS URL — see the main
-   SELF_HOSTING_GUIDE.md).
+   docs/deployment.md (self-hosting).
 6. Verify: About dialog (in-app) must show **v2.7.x**; run a test sale,
    print a receipt, open/close a shift.
 
@@ -160,6 +160,6 @@ Windows note: the backup pipe works in PowerShell as
 
 - Change `POSTGRES_PASSWORD` (the installer generates one) and the admin password.
 - The database port is **not** exposed to the host or LAN — only the app is.
-- Don't port-forward port 3000 to the internet without adding SSL (see SELF_HOSTING_GUIDE.md for the Nginx/Let's Encrypt path).
+- Don't port-forward port 3000 to the internet without adding SSL (see docs/deployment.md for the Nginx/Let's Encrypt path).
 - Back up daily and keep a copy off the laptop (USB / cloud drive).
 - Windows: enable BitLocker; Linux: full-disk encryption — the laptop holds all business data.

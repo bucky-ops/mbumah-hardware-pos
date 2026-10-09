@@ -164,7 +164,7 @@ schtasks /create /tn "Mbumah POS" /sc onlogon /tr ^
    Go-Live Reset section above).
 5. Set `SEED_DATABASE=false` in `.env`.
 6. M-Pesa: fill Daraja credentials in `.env`, restart. Production callbacks
-   need a public HTTPS URL (see SELF_HOSTING_GUIDE.md).
+   need a public HTTPS URL (see docs/deployment.md (self-hosting).
 7. Verify: About dialog shows v2.7.x; test sale, receipt print, shift close.
 
 ---
