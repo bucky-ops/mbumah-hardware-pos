@@ -41,8 +41,9 @@ export function EmptyCartState() {
         <div className="absolute -bottom-1 left-2 w-1 h-1 bg-amber-400/15 rounded-full animate-float" style={{ '--float-duration': '6s', '--float-delay': '2s' } as React.CSSProperties} />
       </div>
       <p className="text-sm font-medium text-muted-foreground">Your cart is empty</p>
-      <p className="text-xs text-muted-foreground/50 mt-1.5">Click on products to add them here</p>
-      <div className="mt-4 flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground/35">
+      {/* Contrast bumped /50 -> /70 for WCAG AA on the drawer background. */}
+      <p className="text-xs text-muted-foreground/70 mt-1.5">Click on products to add them here</p>
+      <div className="mt-4 flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground/60">
         <Keyboard className="h-3 w-3" />
         <span>Press <kbd className="px-1 py-0.5 rounded border bg-muted text-[9px]">F9</kbd> to checkout</span>
       </div>
