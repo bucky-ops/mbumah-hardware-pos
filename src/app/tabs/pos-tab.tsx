@@ -72,6 +72,16 @@ import {
   Lightbulb, PartyPopper, AlertTriangle, MessageSquare,
 } from 'lucide-react';
 
+// v2.13.3 SMART RECOMMENDATIONS: client-side affinity engine — works from the
+// first cart on day one (server co-occurrence needs sales history).
+import {
+  computeAffinitySuggestions,
+  computeBestSellerSuggestions,
+  cartHasAffinities,
+  MAX_RECOMMENDATION_CHIPS,
+  type AffinitySuggestion,
+} from '@/lib/product-affinities';
+
 // Extracted sub-components
 import { EmptyCartState } from '@/components/pos/empty-cart-state';
 import { EmptyProductsState } from '@/components/pos/empty-products-state';
@@ -252,8 +262,24 @@ export default function POSTab() {
     setManagerAuthOpen(true);
   }, []);
 
-  // Sell-More recommendations collapse
-  const [recommendationsOpen, setRecommendationsOpen] = useState(true);
+  // Sell-More recommendations collapse — v2.13.3: persisted per user in
+  // localStorage so a cashier who prefers it tucked away keeps it tucked away.
+  const [recommendationsOpen, setRecommendationsOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    try {
+      return localStorage.getItem('mbt_sell_more_open') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const toggleRecommendationsOpen = useCallback(() => {
+    setRecommendationsOpen((prev) => {
+      try {
+        localStorage.setItem('mbt_sell_more_open', prev ? '0' : '1');
+      } catch { /* private mode — collapse still works this session */ }
+      return !prev;
+    });
+  }, []);
 
   // ── Offline-first POS state ──
   // Tracks live browser connectivity so the cashier sees an "Offline" badge
@@ -793,19 +819,58 @@ export default function POSTab() {
   const recommendations: Array<{ product?: ProductListItem; productId?: string; productName?: string; pricePerUnit?: number; coOccurrence?: number; count?: number; imageUrl?: string; unitType?: string; quantityInStock?: number }> =
     Array.isArray(recommendationsData?.data) ? (recommendationsData!.data as Array<{ product?: ProductListItem; productId?: string; productName?: string; pricePerUnit?: number; coOccurrence?: number; count?: number; imageUrl?: string; unitType?: string; quantityInStock?: number }>) : [];
 
-  // Filter out products already in cart & out-of-stock recommendations
-  const visibleRecommendations = useMemo(() => {
-    return recommendations
+  // ── v2.13.3 SMART RECOMMENDATIONS (Sell More) — three sources merged ────
+  // 1. Client-side affinity map (spec PART 3 — works from the FIRST cart,
+  //    no sales history needed — critical for a new branch like Thika)
+  // 2. Server co-occurrence (mined from real transactions once history exists)
+  // 3. Best-seller chips when the cart is EMPTY (spec default)
+  // Ranked by frequency (how many cart lines suggest the same product),
+  // cart items & out-of-stock lines dropped, top 6 shown.
+  const visibleRecommendations = useMemo<AffinitySuggestion[]>(() => {
+    const catalog: AffinitySuggestion['product'][] = Array.isArray(productsData?.data) ? productsData.data : [];
+    const cartNames = cart.items.map((i) => i.productName);
+    if (cartNames.length === 0) {
+      return computeBestSellerSuggestions(catalog);
+    }
+    const affinity = computeAffinitySuggestions(cartNames, catalog);
+    const seen = new Set(affinity.map((s) => s.product.id));
+    const serverRecs = recommendations
       .filter((r) => {
         const id = r.product?.id || r.productId;
-        if (!id) return false;
+        if (!id || seen.has(id)) return false;
         if (cartProductIds.includes(id)) return false;
         const stock = r.product?.quantityInStock ?? r.quantityInStock ?? 0;
-        if (stock <= 0) return false;
+        const rental = r.product?.isRental ?? false;
+        if (stock <= 0 && !rental) return false;
         return true;
       })
-      .slice(0, 8);
-  }, [recommendations, cartProductIds]);
+      .map((r) => {
+        const id = r.product?.id || r.productId!;
+        // Prefer the catalog's full object (category/color for the chip dot);
+        // fall back to the API's embedded product.
+        const full = (productsData?.data as AffinitySuggestion['product'][] | undefined)?.find?.((p) => p.id === id);
+        const product = full ?? r.product;
+        if (!product) return null;
+        return { product, score: (r.coOccurrence ?? r.count ?? 0), source: 'history' as const };
+      })
+      .filter((s): s is AffinitySuggestion => s !== null)
+      .sort((a, b) => b.score - a.score);
+    return [...affinity, ...serverRecs].slice(0, MAX_RECOMMENDATION_CHIPS);
+  }, [recommendations, cartProductIds, cart.items, productsData]);
+
+  // Best sellers are ALWAYS available as fallback chips (spec: "still show
+  // default best sellers chips below" the edge-case text).
+  const bestSellerSuggestions = useMemo<AffinitySuggestion[]>(() => {
+    const catalog: AffinitySuggestion['product'][] = Array.isArray(productsData?.data) ? productsData.data : [];
+    return computeBestSellerSuggestions(catalog);
+  }, [productsData]);
+
+  // True when the cart itself triggered at least one mapped affinity — used to
+  // label the section count badge honestly (suggestions vs best sellers).
+  const cartHasMappedAffinities = useMemo(
+    () => cartHasAffinities(cart.items.map((i) => i.productName)),
+    [cart.items],
+  );
 
   const handleAddRecommendation = (rec: { product?: ProductListItem; productId?: string; productName?: string; pricePerUnit?: number; imageUrl?: string; unitType?: string; quantityInStock?: number }) => {
     // If a full product is provided, use it; otherwise synthesise a minimal item
@@ -929,7 +994,9 @@ export default function POSTab() {
     } else if (stock <= reorder && !product.isRental) {
       toast.warning(`${product.name}: Low stock — only ${stock} left (reorder at ${reorder}). Restock soon.`);
     } else {
-      toast.success(`${product.name} added to cart`);
+      // v2.13.3 spec wording — green toast names the product AND the price so
+      // the cashier gets instant price feedback while ringing.
+      toast.success(`Added ${product.name} — ${formatKES(Number(product.pricePerUnit) || 0)}`);
     }
   };
 
@@ -939,7 +1006,9 @@ export default function POSTab() {
   const handleSearchInput = (value: string) => {
     setSearchInput(value);
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    searchDebounceRef.current = setTimeout(() => setSearchQuery(value), 200);
+    // v2.13.3: 150ms per the functional-POS spec (was 200ms) — faster filter
+    // feedback while still batching keystrokes so the grid never thrashes.
+    searchDebounceRef.current = setTimeout(() => setSearchQuery(value), 150);
   };
 
   // AUDIT FIX (Task 3-e): barcode scanner hardening — thermal scanners emit
@@ -989,6 +1058,8 @@ export default function POSTab() {
       heldList = [];
     }
     const holdId = `hold_${Date.now()}`;
+    // v2.13.3: capture the count BEFORE the cart is cleared — the toast names it.
+    const heldCount = cart.getItemCount();
     // AUDIT FIX (Task 3-e): append picker metadata — unit count + pre-tax total
     // (Σ lineTotal, after line discounts) at hold time, so the picker can render
     // rows without rebuilding the cart.
@@ -1002,7 +1073,7 @@ export default function POSTab() {
       customer: selectedCustomer,
       notes: cartNotes,
       timestamp: new Date().toISOString(),
-      count: cart.getItemCount(),
+      count: heldCount,
       total: heldTotal,
     });
     localStorage.setItem('mbt_held_carts', JSON.stringify(heldList));
@@ -1011,7 +1082,8 @@ export default function POSTab() {
     setCartDiscountInput('');
     setSelectedCustomer('');
     refreshHeldCarts();
-    toast.success('Cart held successfully');
+    // v2.13.3 spec wording — "Cart held - 7 items" names exactly what is parked.
+    toast.success(`Cart held - ${heldCount} item${heldCount !== 1 ? 's' : ''}`);
   };
 
   // AUDIT FIX (Task 3-e): out-of-order resume — restore a specific held cart by
@@ -1688,12 +1760,15 @@ export default function POSTab() {
           </Card>
         )}
 
-        {/* Sell More — Frequently Bought Together recommendations */}
-        {cart.items.length > 0 && (
+        {/* v2.13.3 Sell More — Customers also bought. Shows affinity chips from
+            the cart map, server co-occurrence on top, or best sellers when the
+            cart is empty — the section is ALWAYS visible (spec PART 3) so the
+            cashier has an upsell prompt in every state. */}
+        {(visibleRecommendations.length > 0 || cart.items.length > 0 || bestSellerSuggestions.length > 0) && (
           <Card className="border-primary/30 bg-gradient-to-br from-primary/5 via-card to-card overflow-hidden">
             <button
               type="button"
-              onClick={() => setRecommendationsOpen(!recommendationsOpen)}
+              onClick={toggleRecommendationsOpen}
               className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors"
               aria-expanded={recommendationsOpen}
             >
@@ -1703,8 +1778,15 @@ export default function POSTab() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold flex items-center gap-2">
-                    Sell More — Customers also bought
-                    <Badge variant="secondary" className="text-[10px] h-5 px-1.5">{visibleRecommendations.length}</Badge>
+                    💡 Sell More — Customers also bought
+                    <Badge className="text-[10px] h-5 px-1.5 bg-blue-600 hover:bg-blue-600 text-white border-0">
+                      {visibleRecommendations.length > 0
+                        ? visibleRecommendations.length
+                        : bestSellerSuggestions.length}
+                    </Badge>
+                    {!cartHasMappedAffinities && cart.items.length === 0 && bestSellerSuggestions.length > 0 && (
+                      <span className="text-[10px] font-normal text-muted-foreground hidden sm:inline">· best sellers</span>
+                    )}
                   </p>
                   <p className="text-[11px] text-muted-foreground truncate">Tap a chip to add it to the cart</p>
                 </div>
@@ -1713,43 +1795,51 @@ export default function POSTab() {
             </button>
             {recommendationsOpen && (
               <div className="px-4 pb-4 pt-1">
-                {recommendationsLoading ? (
+                {recommendationsLoading && cart.items.length > 0 && visibleRecommendations.length === 0 ? (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     Finding related products…
                   </div>
-                ) : visibleRecommendations.length === 0 ? (
+                ) : visibleRecommendations.length === 0 && bestSellerSuggestions.length === 0 ? (
                   <p className="text-xs text-muted-foreground py-2">
                     No frequent add-on suggestions yet for this cart. Sell more of these items and recommendations will appear here.
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {safeMap(visibleRecommendations, (rec) => {
-                      const name = rec.product?.name || rec.productName || 'Product';
-                      const price = rec.product?.pricePerUnit ?? rec.pricePerUnit ?? 0;
-                      const unit = rec.product?.unitType || rec.unitType || 'PIECE';
-                      const co = rec.coOccurrence ?? rec.count ?? 0;
-                      const stock = rec.product?.quantityInStock ?? rec.quantityInStock ?? 0;
+                    {visibleRecommendations.length === 0 && cart.items.length > 0 && (
+                      <p className="w-full text-xs text-muted-foreground py-1">
+                        No frequent add-on suggestions yet for this cart. Sell more of these items and recommendations will appear here.
+                      </p>
+                    )}
+                    {(visibleRecommendations.length > 0
+                      ? visibleRecommendations
+                      : bestSellerSuggestions
+                    ).map((rec) => {
+                      const name = rec.product.name;
+                      const price = Number(rec.product.pricePerUnit) || 0;
+                      const stock = Number(rec.product.quantityInStock) || 0;
+                      const catColor = rec.product.category?.color || '#64748b';
+                      const isBestSellerChip = rec.source === 'best-seller';
                       return (
                         <button
-                          key={rec.product?.id || rec.productId}
+                          key={`rec-${rec.product.id}`}
                           type="button"
-                          onClick={() => handleAddRecommendation(rec)}
-                          className="group flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full border border-border bg-background hover:border-primary/40 hover:bg-primary/5 transition-all min-h-[44px] focus:outline-none focus:ring-2 focus:ring-ring"
-                          title={`Add ${name} to cart`}
+                          onClick={() => handleAddRecommendation({ product: rec.product as ProductListItem })}
+                          className="group flex items-center gap-1.5 pl-1.5 pr-3 py-1.5 rounded-full border border-border bg-white dark:bg-background hover:border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all min-h-[36px] focus:outline-none focus:ring-2 focus:ring-ring"
+                          title={`Add ${name} — ${formatKES(price)}`}
                         >
-                          <div className="h-8 w-8 rounded-full bg-muted overflow-hidden flex items-center justify-center shrink-0">
-                            <ProductImage imageUrl={rec.product?.imageUrl ?? rec.imageUrl} categoryId={rec.product?.categoryId} name={name} className="h-8 w-8 rounded-full" />
-                          </div>
-                          <div className="flex flex-col items-start leading-tight min-w-0">
-                            <span className="text-xs font-medium line-clamp-1 break-words max-w-[160px]">{name}</span>
-                            <span className="text-[10px] text-muted-foreground">
-                              {formatKES(price)} · {unit}
-                              {co > 0 && <span className="text-primary/80"> · bought together {co}×</span>}
-                              {stock > 0 && stock <= 5 && <span className="text-amber-600"> · {stock} left</span>}
-                            </span>
-                          </div>
-                          <Plus className="h-3.5 w-3.5 text-primary shrink-0 group-hover:scale-110 transition-transform" />
+                          <span className="h-4 w-4 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform" aria-hidden>
+                            <Plus className="h-3 w-3" />
+                          </span>
+                          <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: catColor }} aria-hidden />
+                          <span className="text-xs font-medium text-foreground/90 line-clamp-1 break-words max-w-[150px]">{name}</span>
+                          <span className="text-[11px] font-semibold text-foreground/70 whitespace-nowrap">{formatKES(price)}</span>
+                          {isBestSellerChip && (
+                            <Badge variant="outline" className="text-[8px] h-3.5 px-1 py-0 border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800 shrink-0">TOP</Badge>
+                          )}
+                          {stock > 0 && stock <= 5 && (
+                            <span className="text-[10px] text-amber-600 whitespace-nowrap">· {stock} left</span>
+                          )}
                         </button>
                       );
                     })}

@@ -233,17 +233,23 @@ export function AppSidebar() {
         }`}
       >
         <div className="flex flex-col h-full">
-          {/* Logo + Collapse Toggle — flat dark-navy header with emerald brand mark */}
-          <div className={`flex items-center gap-3 border-b border-white/10 relative ${collapsed ? 'px-2 py-4 justify-center' : 'px-4 py-5'}`}>
-            <div className={`rounded-lg bg-emerald-600 flex items-center justify-center shrink-0 font-bold text-white tracking-tight ${collapsed ? 'w-8 h-8 text-[11px]' : 'w-9 h-9 text-xs'}`}>
-              MH
+          {/* Logo + Collapse Toggle — v2.13.3 brand refresh: the 3D Mbumah logo
+              (navy gear · orange house · silver trowel) sits in a WHITE rounded-xl
+              container with drop shadow so it pops on the dark #0f172a sidebar
+              (spec PART 1). Replaces the old flat green "MH" initials square. */}
+          <div className={`flex items-center gap-3 border-b border-white/10 relative ${collapsed ? 'px-2 py-4 justify-center' : 'px-4 py-4'}`}>
+            <div
+              className={`shrink-0 rounded-xl bg-white shadow-lg shadow-black/30 flex items-center justify-center overflow-hidden ${collapsed ? 'w-9 h-9' : 'w-[132px]'}`}
+            >
+              {/* Light/white background: full-colour logo as-is (spec PART 1) */}
+              <img
+                src={collapsed ? '/logo3d-gear-256.png' : '/logo3d-200.webp'}
+                alt="MBUMAH HARDWARE — Your Building Partner in Juja"
+                className={collapsed ? 'w-full h-full object-cover' : 'w-full h-auto'}
+                width={collapsed ? 36 : 132}
+                height={collapsed ? 36 : 132}
+              />
             </div>
-            {!collapsed && (
-              <div className="flex-1 min-w-0">
-                <h1 className="font-bold text-sm leading-tight text-white">Mbumah Hardware</h1>
-                <p className="text-xs text-slate-400">POS &amp; ERP</p>
-              </div>
-            )}
             {!collapsed && (
               <Button
                 variant="ghost"

@@ -2,6 +2,22 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.13.3] — Feature release: functional POS + new 3D logo + smart recommendations
+
+### Added
+- **New 3D brand logo everywhere (spec PART 1)**: the official MBUMAH HARDWARE artwork (navy gear · orange house · silver trowel · "Your Building Partner in Juja") now anchors the sidebar in a white rounded-xl container with drop shadow so it pops on the dark `#0f172a` rail — the old flat green "MH" initials square is gone. A gear-only crop marks the top bar (visible even when the sidebar is collapsed) and the favicon/PWA icons are regenerated from the same artwork. Light backgrounds use the full-colour logo as-is; dark surfaces get the white-container wrapper.
+- **Smart Sell More recommendations (spec PART 3)**: a client-side product-affinity engine (`src/lib/product-affinities.ts`) maps what's in the cart to what the same customer very likely still needs (cement → spade + mixer + nails; mabati → timber + nails; rebar → cement + binding wire…), ranks by frequency, drops items already in the cart or out of stock, and shows the top 6 as tappable chips (＋ icon, category dot, price). Works from the FIRST cart on day one — no sales history needed (the server's co-occurrence engine is merged in and takes over as history accumulates). An empty cart shows best-seller chips; a cart with no mapped affinity shows the coach text plus best sellers below. The section is collapsible and the collapse state persists per device.
+- **Thika branch catalog aligned to spec (PART 2)**: `scripts/seed-thika-catalog.ts` (idempotent, owner-run, StockMovement-audited) ensures the THI branch carries the 11 spec products at exact prices/stock — 4-inch Nails (Ksh 150/kg · 350), Bamburi Cement 50kg (750 · 180 bags), Dulux Weathershield 20L (8,500 · 20), Mabati 28/30-Gauge 8ft (800/650 · 200/350), Plywood 8x4ft 18mm (2,800 · 45), PVC Pipe 4-inch x 3m (800 · 90), Rebar 12mm x 12m (1,200 · 280), Simba Cement 50kg (720 · 120 bags), Spade Heavy Duty (1,200 · 40), Timber 2x4 x 12ft Cypress (800 · 60) — plus the rental Concrete Mixer (Ksh 85,000, RENTAL) and Chain Link 6ft x 50m (4,500) used by the demo cart.
+
+### Improved
+- **Instant, honest cart feedback (spec PART 2)**: product tiles now show a blue "1 in cart / 2 in cart" pill the moment a line lands (optimistic, <100ms — no network involved; pops on every re-add), add-toasts name the product and price ("Added Spade (Heavy Duty) — Ksh 1,200"), and Hold toasts say exactly what was parked ("Cart held - 7 items").
+- **Faster search**: the products query debounce drops 200ms → 150ms per the functional-POS spec; the input itself stays instantly responsive and barcode-scan Enter-to-cart behaviour is unchanged.
+- **Zero-sales KPI honesty (new branches)**: when a branch has no sales today, the Today's Revenue card shows a GRAY trend badge (never green/red at zero) with a hover tooltip "No sales yet today — start selling!" and the same coaching line as the card sub-text. Live/updated/auto-refresh-30s behaviour from v2.13.0 is untouched.
+
+### Notes
+- RBAC, manager-PIN overrides, abuse detection and the audit trail (v2.12.x–v2.13.0) are unchanged and fully enforced.
+- No schema changes; no changes to totals, VAT math, payments, debt or discount gates.
+
 ## [2.13.2] — Hotfix: checkout 500 regression + limited-dashboard money card
 
 ### Fixed

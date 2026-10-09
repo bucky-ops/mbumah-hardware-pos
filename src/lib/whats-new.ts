@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.13.3',
+    title: 'New logo, faster POS & smart Sell More suggestions',
+    bullets: [
+      'Fresh 3D MBUMAH HARDWARE logo now leads the sidebar, top bar and app icon.',
+      'Sell More chips: add cement and the till suggests spades, mixers and nails — tap a chip to add it instantly (best sellers show on an empty cart).',
+      'Blue "in cart" pill pops on the product tile the moment you tap +, and toasts now name the item and price.',
+      'New branch? Today\u2019s Revenue shows a calm gray trend and a "No sales yet today — start selling!" nudge instead of a misleading green arrow.',
+      'Thika branch catalog loaded with the full spec range — from 4-inch nails to the Concrete Mixer rental.',
+    ],
+  },
+  {
     version: '2.13.2',
     title: 'Checkout fix — sales flow restored',
     bullets: [
