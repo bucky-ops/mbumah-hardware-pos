@@ -436,11 +436,13 @@ export default function POSTab() {
   // v2.13.3 SMART RECOMMENDATIONS: full UNFILTERED branch catalog — the affinity
   // engine must see every product the branch stocks regardless of what's typed
   // in the search box (the filtered `products` query above only feeds the grid).
-  // Cached 5 min per store; one lightweight request.
+  // limit=500 (API max) so a 243-product branch isn't truncated to its first
+  // alphabetical page — Spade must be suggestable from a cement cart. Cached
+  // 5 min per store; one lightweight request.
   const { data: catalogAllData } = useQuery({
     queryKey: ['pos-catalog-all', currentStoreId],
     queryFn: async () => {
-      const res = await productsApi.list({ storeId: currentStoreId, limit: 100 });
+      const res = await productsApi.list({ storeId: currentStoreId, limit: 500 });
       return Array.isArray(res.data) ? res : { ...res, data: [] };
     },
     staleTime: 300_000,
