@@ -1,8 +1,6 @@
-# ============================================================================
-# MBUMAH HARDWARE POS — Production Dockerfile
+# MBUMAH HARDWARE POS - Production Dockerfile
 # Multi-stage build for minimal image size with standalone Next.js output
-# ============================================================================
-# ── Stage 1: Base — Install dependencies ──────────────────────────────────────
+# Stage 1: Base - Install dependencies
 FROM node:20-alpine AS base
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
@@ -11,13 +9,13 @@ WORKDIR /app
 RUN npm install -g bun@1.2.15
 # Copy dependency manifests first for better layer caching
 # NOTE: the repo uses the TEXT lockfile (bun.lock, bun >= 1.2 default).
-# `bun.lockb` no longer exists — copying it failed every docker build.
+# `bun.lockb` no longer exists - copying it failed every docker build.
 COPY package.json bun.lock ./
 
 # Install ALL dependencies (including devDependencies for the build stage)
 RUN bun install --frozen-lockfile
 
-# ── Stage 2: Builder — Compile the Next.js application ────────────────────────
+# Stage 2: Builder - Compile the Next.js application
 FROM base AS builder
 WORKDIR /app
 
@@ -42,7 +40,7 @@ RUN npx prisma generate
 ENV SKIP_ENV_VALIDATION=1
 RUN bun run build
 
-# ── Stage 3: Runner — Minimal production image ────────────────────────────────
+# Stage 3: Runner - Minimal production image
 FROM node:20-alpine AS runner
 RUN apk add --no-cache libc6-compat
 
@@ -100,7 +98,7 @@ EXPOSE 3000
 ENV HOSTNAME="0.0.0.0"
 ENV PORT=3000
 
-# Health check — verifies the app is responding
+# Health check - verifies the app is responding
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
 
