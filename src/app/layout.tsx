@@ -76,8 +76,9 @@ export const metadata: Metadata = {
     telephone: false,
   },
   icons: {
-    icon: "/logo.svg",
-    apple: "/logo.svg",
+    // v2.13.3: favicon cut from the 3D gear part of the new logo (spec PART 1).
+    icon: "/favicon-32.png",
+    apple: "/icons/icon-180.png",
   },
 };
 

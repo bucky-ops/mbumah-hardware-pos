@@ -127,6 +127,16 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
             {isSidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
           </Button>
           <div className="flex items-center gap-2 min-w-0">
+            {/* v2.13.3: small 3D brand mark in the top bar — keeps the logo
+                visible when the sidebar is collapsed (spec PART 1). Falls back
+                to the gear-only crop so it stays crisp at 24px. */}
+            <img
+              src="/logo3d-gear-256.png"
+              alt="MBUMAH HARDWARE logo"
+              width={24}
+              height={24}
+              className="h-6 w-6 shrink-0 rounded-md ring-1 ring-slate-200 dark:ring-slate-800 object-cover"
+            />
             <TabIcon className="h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
             <h2 className="truncate font-semibold text-base sm:text-lg text-slate-900 dark:text-slate-100">{currentTab?.label || 'Dashboard'}</h2>
           </div>

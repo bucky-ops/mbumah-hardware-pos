@@ -778,6 +778,22 @@ function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppT
   const revenueChange = typeof changeRaw === 'number' && Number.isFinite(changeRaw) ? changeRaw : 0;
   const showTrendBadge = revenueChange !== 0 || todayRevenue > 0;
 
+  // v2.13.3 (spec PART 2 — KPI fixes for a NEW branch): with zero sales today
+  // the trend badge must read GRAY (never green/red — there is nothing to
+  // celebrate or alarm about at 0) and the card must coach the cashier with
+  // "No sales yet today — start selling!" instead of a bare 0.00.
+  const noSalesToday = todayRevenue === 0 && txns === 0;
+  const zeroSalesTrendBadge = noSalesToday ? (
+    <span
+      title="No sales yet today — start selling!"
+      aria-label="No sales yet today — start selling!"
+      className="inline-flex cursor-help items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400"
+    >
+      <Minus className="h-3 w-3" aria-hidden="true" />
+      {`${Math.abs(revenueChange).toFixed(1)}%`}
+    </span>
+  ) : null;
+
   // Real series only — never fabricate a sparkline.
   const revenueSpark = (data.revenueTrend7d?.days ?? [])
     .map((day) => num(day?.revenue))
@@ -800,8 +816,8 @@ function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppT
         value={formatKES(todayRevenue)}
         icon={Banknote}
         iconClass="bg-emerald-100 text-emerald-600"
-        badge={showTrendBadge ? <TrendBadge pct={revenueChange} /> : undefined}
-        sub={<span>net of VAT · today</span>}
+        badge={noSalesToday ? zeroSalesTrendBadge : showTrendBadge ? <TrendBadge pct={revenueChange} /> : undefined}
+        sub={<span>{noSalesToday ? 'No sales yet today — start selling!' : 'net of VAT · today'}</span>}
         sparkline={revenueSpark.length >= 2 ? revenueSpark : null}
         sparklineClass="text-emerald-500"
       />

@@ -1,27 +1,44 @@
 {
   "name": "MBUMAH HARDWARE POS & ERP",
   "short_name": "MBUMAH POS",
-  "description": "Enterprise Point of Sale & ERP System for MBUMAH HARDWARE. Manage sales, inventory, customers, rentals, and financials — with offline-first checkout.",
+  "description": "Enterprise Point of Sale & ERP System for MBUMAH HARDWARE. Manage sales, inventory, customers, rentals, and financials \u2014 with offline-first checkout.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
-  "categories": ["business", "productivity", "finance", "shopping"],
+  "categories": [
+    "business",
+    "productivity",
+    "finance",
+    "shopping"
+  ],
   "lang": "en-KE",
   "dir": "ltr",
   "icons": [
     {
-      "src": "/logo.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/logo.svg",
-      "sizes": "192x192 512x512",
-      "type": "image/svg+xml",
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ],
@@ -31,14 +48,26 @@
       "short_name": "POS",
       "description": "Open the Point of Sale screen to process a new sale",
       "url": "/?tab=pos",
-      "icons": [{ "src": "/logo.svg", "sizes": "96x96", "type": "image/svg+xml" }]
+      "icons": [
+        {
+          "src": "/logo.svg",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
     },
     {
       "name": "Dashboard",
       "short_name": "Dashboard",
       "description": "View today's sales, revenue, and low-stock alerts",
       "url": "/?tab=dashboard",
-      "icons": [{ "src": "/logo.svg", "sizes": "96x96", "type": "image/svg+xml" }]
+      "icons": [
+        {
+          "src": "/logo.svg",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
     }
   ]
 }

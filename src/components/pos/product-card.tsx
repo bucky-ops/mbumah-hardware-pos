@@ -160,10 +160,16 @@ export function ProductCard({
         />
       )}
 
-      {/* In-cart indicator */}
+      {/* In-cart indicator — v2.13.3: blue pill with words ("1 in cart") per the
+          functional-POS spec; instantly visible optimistic feedback that the
+          + tap registered, pops on every re-add. */}
       {cartQuantity && cartQuantity > 0 && (
-        <div className="absolute top-1.5 right-1.5 z-10 bg-primary text-primary-foreground text-[11px] font-bold rounded-full min-w-[22px] h-[22px] flex items-center justify-center px-1.5 shadow-md ring-2 ring-background animate-badge-pop">
-          {cartQuantity}
+        <div
+          key={cartQuantity}
+          className="absolute top-1.5 right-1.5 z-10 bg-blue-600 text-white text-[11px] font-bold rounded-full h-[22px] flex items-center justify-center px-2.5 shadow-md ring-2 ring-background animate-badge-pop whitespace-nowrap"
+          aria-label={`${cartQuantity} in cart`}
+        >
+          {cartQuantity} in cart
         </div>
       )}
 
