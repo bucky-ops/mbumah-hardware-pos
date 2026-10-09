@@ -42,12 +42,27 @@ const USER_SELECT = {
   role: true,
   phone: true,
   isActive: true,
+  // v2.14.0: engraved (self-healing) bootstrap admin flag - drives the
+  // delete/demote guards below and the admin UI shield badge.
+  isEngraved: true,
   lastLoginAt: true,
   createdAt: true,
   updatedAt: true,
   storeId: true,
   store: { select: { id: true, name: true } },
 } as const;
+
+/** Standard 403 body for any mutation that would damage the engraved admin. */
+function engravedAdminProtected(): Response {
+  return Response.json(
+    {
+      success: false,
+      error: 'ENGRAVED_ADMIN_PROTECTED',
+      message: 'The engraved system administrator cannot be deleted.',
+    },
+    { status: 403 }
+  );
+}
 
 /** Load + authorize the target user. Returns { user } or a Response error. */
 async function loadAuthorizedTarget(
@@ -123,6 +138,12 @@ async function updateUserHandler(
   const result = await loadAuthorizedTarget(id, session);
   if ('error' in result) return result.error;
   const target = result.user;
+
+  // v2.14.0: the engraved bootstrap admin can never be deactivated or demoted
+  // (that is what self-healing would just undo on the next boot).
+  if (target.isEngraved && (isActive === false || (role !== undefined && role !== 'SUPER_ADMIN'))) {
+    return engravedAdminProtected();
+  }
 
   // Segregation of duties on role changes (mirrors POST /api/users)
   if (role !== undefined && role !== target.role) {
@@ -240,6 +261,11 @@ async function deactivateUserHandler(
   const result = await loadAuthorizedTarget(id, session);
   if ('error' in result) return result.error;
   const target = result.user;
+
+  // v2.14.0: the engraved bootstrap admin is protected from soft delete.
+  if (target.isEngraved) {
+    return engravedAdminProtected();
+  }
 
   if (target.id === session.userId) {
     return Response.json({ success: false, error: 'You cannot deactivate your own account.' }, { status: 409 });

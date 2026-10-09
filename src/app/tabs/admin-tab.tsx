@@ -26,6 +26,8 @@ import { VAT_RATE_QUERY_KEY } from '@/hooks/use-vat-rate';
 import { unitLabel } from '@/lib/units';
 import { UpdatesSafetySection } from '@/components/admin/updates-safety-section';
 import { FleetRemoteOpsSection } from '@/components/admin/fleet-remote-ops-section';
+// v2.14.0: Power-On Self-Test card (boot diagnostics + engraved-admin self-heal).
+import { SystemHealthSection } from '@/components/admin/system-health-section';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -1351,6 +1353,11 @@ function UserManagement({ storeId }: { storeId: string }) {
   };
 
   const handleDeactivate = (user: UserItem) => {
+    // v2.14.0: the engraved bootstrap admin can never be deactivated.
+    if (user.isEngraved) {
+      toast.error('The engraved system administrator cannot be deactivated.');
+      return;
+    }
     toggleUserActiveMutation.mutate(user);
   };
 
@@ -1491,6 +1498,11 @@ function UserManagement({ storeId }: { storeId: string }) {
                     <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-4 border ${style.badge}`}>
                       {ROLE_LABELS[user.role] || user.role}
                     </Badge>
+                    {user.isEngraved && (
+                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400" title="Engraved bootstrap admin - protected from deletion and demotion">
+                        <ShieldCheck className="h-2.5 w-2.5 mr-0.5" /> Engraved
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <p className="text-[10px] text-muted-foreground">{user.email}</p>
@@ -1514,9 +1526,12 @@ function UserManagement({ storeId }: { storeId: string }) {
                         variant="ghost"
                         size="sm"
                         className="h-7 w-7 p-0"
-                        title={user.isActive ? 'Deactivate User' : 'Activate User'}
+                        disabled={user.isEngraved}
+                        title={user.isEngraved ? 'The engraved system administrator cannot be deactivated' : user.isActive ? 'Deactivate User' : 'Activate User'}
                       >
-                        {user.isActive ? <UserX className="h-3 w-3 text-red-500" /> : <UserCheck className="h-3 w-3 text-green-500" />}
+                        {user.isEngraved ? (
+                          <ShieldCheck className="h-3 w-3 text-amber-600 dark:text-amber-500" />
+                        ) : user.isActive ? <UserX className="h-3 w-3 text-red-500" /> : <UserCheck className="h-3 w-3 text-green-500" />}
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
@@ -1804,6 +1819,11 @@ export default function AdminTab() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ================================================================== */}
+      {/* System Health - Power-On Self-Test (v2.14.0, auto-refresh 60s)      */}
+      {/* ================================================================== */}
+      <SystemHealthSection />
 
       {/* ================================================================== */}
       {/* User Management & Quick Actions Row                                 */}
