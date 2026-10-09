@@ -340,6 +340,29 @@ export async function discardQueuedTransaction(id: string): Promise<boolean> {
   }
 }
 
+/**
+ * Permanently remove EVERY queued transaction from the local queue. Used by
+ * the "Clear Queue" action in the Offline Queue dialog (AlertDialog
+ * confirmed) when the cashier knowingly discards unsynced sales - rows
+ * removed here never reach the server. Returns the number of rows that were
+ * deleted (0 when the queue was already empty or IndexedDB is unavailable).
+ * Same style and guarantees as `discardQueuedTransaction` above: SSR-safe,
+ * failure-tolerant, and notifies subscribers so the reactive count drops.
+ */
+export async function clearOfflineQueue(): Promise<number> {
+  const db = getDB();
+  if (!db) return 0;
+  try {
+    const conn = await db;
+    const count = await conn.count(STORE_NAME);
+    await conn.clear(STORE_NAME);
+    notifyCountChange();
+    return count;
+  } catch {
+    return 0;
+  }
+}
+
 // Reactive count subscription (for the POS badge)
 //
 // A tiny pub/sub so React components can subscribe to queue-count changes

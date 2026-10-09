@@ -3,6 +3,8 @@
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
+// v2.14.0: fire-and-forget self-heal of the engraved bootstrap admin.
+import { ensureEngravedAdminExists } from '@/lib/engraved-admin';
 
 // Force this route to be dynamically rendered at request time.
 // This prevents Next.js from attempting to collect page data / statically
@@ -57,6 +59,10 @@ async function getMeHandler(...args: unknown[]): Promise<Response> {
       { status: 403 }
     );
   }
+
+  // v2.14.0: every authenticated app load re-ensures the engraved bootstrap
+  // admin (fire-and-forget - it must never block or fail this response).
+  void ensureEngravedAdminExists().catch(() => {});
 
   const user = session.user;
 

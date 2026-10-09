@@ -90,6 +90,39 @@ class CheckoutInputError extends Error {
   }
 }
 
+// v2.14.0 machine-readable stock contract. Every insufficient-stock
+// rejection (bundle constituent, regular line, concurrent-sale race)
+// surfaces the same client contract: HTTP 400 with
+// { success: false, error: 'INSUFFICIENT_STOCK', code: 'INSUFFICIENT_STOCK',
+//   details: StockShortageDetail[], message: <human text> }.
+// The details array lets the POS react programmatically - toast the first
+// shortage, clamp the cart line to the available stock, or offer removal
+// when nothing is left - instead of parsing message text.
+interface StockShortageDetail {
+  productId: string;
+  productName: string;
+  /** Total needed in BASE units (what quantityInStock counts). */
+  requested: number;
+  /** Stock on hand in BASE units at rejection time. */
+  available: number;
+  /** BASE unit label (e.g. METER, TON). */
+  unitType?: string;
+}
+
+// Thrown from INSIDE the checkout $transaction when the atomic concurrent
+// decrement loses the race (claimed.count === 0). The throw still aborts
+// the whole transaction - stock math is untouched - and
+// createTransactionHandler maps it to the same 400 contract the friendly
+// pre-check returns.
+class InsufficientStockError extends Error {
+  readonly details: StockShortageDetail[];
+  constructor(message: string, details: StockShortageDetail[]) {
+    super(message);
+    this.name = 'InsufficientStockError';
+    this.details = details;
+  }
+}
+
 async function getTransactionsHandler(
   request: NextRequest,
   _session: AuthSession,
@@ -263,6 +296,21 @@ async function createTransactionHandler(
 
     if (err instanceof CheckoutInputError) {
       return Response.json({ success: false, error: err.message }, { status: 400 });
+    }
+    if (err instanceof InsufficientStockError) {
+      // v2.14.0: the concurrent-sale race loser gets the SAME machine-readable
+      // 400 the friendly pre-check returns - the client clamps or removes the
+      // short lines and the cashier retries in one tap.
+      return Response.json(
+        {
+          success: false,
+          error: 'INSUFFICIENT_STOCK',
+          code: 'INSUFFICIENT_STOCK',
+          details: err.details,
+          message: err.message,
+        },
+        { status: 400 }
+      );
     }
     throw err;
   }
@@ -537,6 +585,14 @@ async function createTransactionInner(
     }
   >();
 
+  // v2.14.0: aggregated stock-shortage report. The pre-transaction loop is
+  // read-only, so scanning ALL items before rejecting cannot leave partial
+  // writes - fail-fast is preserved (the checkout $transaction never opens
+  // while any shortage exists) and the 400 carries EVERY short item, not
+  // just the first one the old fail-fast return happened to hit.
+  const stockShortages = new Map<string, StockShortageDetail>();
+  let firstShortageMessage = '';
+
   for (const item of items) {
     const product = productMap.get(item.productId);
     if (!product) continue;
@@ -576,13 +632,20 @@ async function createTransactionInner(
         const totalSoldUnits = (existing?.soldUnits || 0) + childSoldUnits;
 
         if (toDec(childProduct.quantityInStock).lt(toDec(totalNeeded))) {
-          return Response.json(
-            {
-              success: false,
-              error: `Insufficient stock for "${childProduct.name}" (bundle constituent). Available: ${Number(childProduct.quantityInStock)} ${childProduct.unitType} (base), Needed: ${totalNeeded} ${childProduct.unitType} (base)`,
-            },
-            { status: 400 }
-          );
+          // v2.14.0: record instead of failing fast - the single 400 below
+          // carries ALL shortages. The deduction still lands in the map so
+          // later cart lines of the same constituent keep accumulating the
+          // true need while the scan continues.
+          if (!firstShortageMessage) {
+            firstShortageMessage = `Insufficient stock for "${childProduct.name}" (bundle constituent). Available: ${Number(childProduct.quantityInStock)} ${childProduct.unitType} (base), Needed: ${totalNeeded} ${childProduct.unitType} (base)`;
+          }
+          stockShortages.set(childProduct.id, {
+            productId: childProduct.id,
+            productName: childProduct.name,
+            requested: Number(totalNeeded),
+            available: Number(childProduct.quantityInStock),
+            unitType: childProduct.unitType,
+          });
         }
 
         stockDeductions.set(childProduct.id, {
@@ -594,35 +657,47 @@ async function createTransactionInner(
     } else {
       // Regular product
       if (!product.isRental) {
+        // v2.6.0: selling units → BASE units for the stock claim.
+        // (Hoisted above the low-stock guard so the recorded shortage can
+        // carry the true BASE-unit need - same math, same rounding.)
+        const baseQty = round4(toDec(quantity).mul(toDec(conversionFactor)));
         // Low-stock guard (QA Phase 5): a product at/below its configured
         // minimum stock level cannot be sold until restocked. Default
         // minimumStockLevel is 0, so only genuinely empty stock is blocked
         // unless the store raises the floor.
         // v2.6.0: unchanged semantics - both sides are BASE units
         // (quantityInStock and minimumStockLevel were always base).
+        // v2.14.0: recorded into the aggregated shortage report (400 below)
+        // instead of an early 409 - one machine-readable contract for the
+        // client, fail-fast semantics unchanged (checkout never opens).
         if (Number(product.quantityInStock) <= Number(product.minimumStockLevel ?? 0)) {
-          return Response.json(
-            {
-              success: false,
-              error: `Low Stock: "${product.name}" cannot be sold until restocked (stock ${Number(product.quantityInStock)}, minimum ${Number(product.minimumStockLevel ?? 0)}).`,
-            },
-            { status: 409 }
-          );
+          if (!firstShortageMessage) {
+            firstShortageMessage = `Low Stock: "${product.name}" cannot be sold until restocked (stock ${Number(product.quantityInStock)}, minimum ${Number(product.minimumStockLevel ?? 0)}).`;
+          }
+          stockShortages.set(product.id, {
+            productId: product.id,
+            productName: product.name,
+            requested: baseQty,
+            available: Number(product.quantityInStock),
+            unitType: product.unitType,
+          });
+          continue;
         }
-        // v2.6.0: selling units → BASE units for the stock claim.
-        const baseQty = round4(toDec(quantity).mul(toDec(conversionFactor)));
         const existing = stockDeductions.get(product.id);
         const totalNeeded = round4(toDec(existing?.quantity || 0).plus(toDec(baseQty)));
         const totalSoldUnits = (existing?.soldUnits || 0) + quantity;
 
         if (toDec(product.quantityInStock).lt(toDec(totalNeeded))) {
-          return Response.json(
-            {
-              success: false,
-              error: `Insufficient stock for "${product.name}". Available: ${Number(product.quantityInStock)} ${product.unitType} (base), Needed: ${totalNeeded} ${product.unitType} (base)`,
-            },
-            { status: 400 }
-          );
+          if (!firstShortageMessage) {
+            firstShortageMessage = `Insufficient stock for "${product.name}". Available: ${Number(product.quantityInStock)} ${product.unitType} (base), Needed: ${totalNeeded} ${product.unitType} (base)`;
+          }
+          stockShortages.set(product.id, {
+            productId: product.id,
+            productName: product.name,
+            requested: Number(totalNeeded),
+            available: Number(product.quantityInStock),
+            unitType: product.unitType,
+          });
         }
 
         stockDeductions.set(product.id, {
@@ -632,6 +707,22 @@ async function createTransactionInner(
         });
       }
     }
+  }
+
+  // v2.14.0: ONE machine-readable rejection for every shortage recorded
+  // above. Returned BEFORE the checkout transaction opens - no partial
+  // writes, and stock math, pricing, VAT and idempotency are untouched.
+  if (stockShortages.size > 0) {
+    return Response.json(
+      {
+        success: false,
+        error: 'INSUFFICIENT_STOCK',
+        code: 'INSUFFICIENT_STOCK',
+        details: [...stockShortages.values()],
+        message: firstShortageMessage || 'Insufficient stock for one or more cart items.',
+      },
+      { status: 400 }
+    );
   }
 
   // F5-1: server-authoritative pricing
@@ -1374,8 +1465,26 @@ async function createTransactionInner(
           data: { quantityInStock: { decrement: quantity } },
         });
         if (claimed.count === 0) {
-          throw new Error(
+          // v2.14.0: the race loser throws a TYPED error carrying the fresh
+          // in-transaction stock reading, so the handler can return the same
+          // 400 INSUFFICIENT_STOCK contract as the friendly pre-check (with
+          // the real available quantity the client clamps to). The throw
+          // still rolls back the whole transaction.
+          const fresh = await tx.product.findUnique({
+            where: { id: productId },
+            select: { quantityInStock: true },
+          });
+          throw new InsufficientStockError(
             `Insufficient stock for "${product.name}". Needed: ${quantity} ${product.unitType} (base units). (Concurrent sale may have consumed the remaining stock.)`,
+            [
+              {
+                productId,
+                productName: product.name,
+                requested: quantity,
+                available: fresh ? Math.max(0, Number(fresh.quantityInStock)) : 0,
+                unitType: product.unitType,
+              },
+            ],
           );
         }
       }

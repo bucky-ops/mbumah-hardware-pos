@@ -2418,6 +2418,10 @@ export interface UserItem {
   role: string;
   phone: string | null;
   isActive: boolean;
+  // v2.14.0: engraved (self-healing) bootstrap admin flag - drives the
+  // "Engraved" shield badge and disables the deactivate control in the
+  // admin users list (the server rejects those mutations with 403 anyway).
+  isEngraved?: boolean;
   lastLoginAt: string | null;
   createdAt: string;
   storeId: string | null;

@@ -682,6 +682,59 @@ export default function POSTab() {
           return;
         }
 
+        // v2.14.0 machine-readable stock contract: a 400 INSUFFICIENT_STOCK
+        // body carries the per-item shortage list (productId, requested,
+        // available in BASE units). Toast the server's human message for the
+        // first shortage, then reconcile the cart in place: clamp lines the
+        // server still has sellable stock for (cashier retries checkout in
+        // one tap) and route zero-stock lines to the existing low-stock
+        // popup (warning + Remove from cart) instead of new UI.
+        if (err.status === 400 && body.code === 'INSUFFICIENT_STOCK') {
+          const stockBody = (err.body ?? {}) as {
+            message?: string;
+            details?: Array<{
+              productId: string;
+              productName: string;
+              requested: number;
+              available: number;
+              unitType?: string;
+            }>;
+          };
+          const shortages = Array.isArray(stockBody.details) ? stockBody.details : [];
+          const first = shortages[0];
+          const unitLabel = (u?: string) => (u ? ` ${u}` : '');
+          toast.error(
+            (typeof stockBody.message === 'string' && stockBody.message) ||
+              (first
+                ? `Insufficient stock for "${first.productName}". Available: ${first.available}${unitLabel(first.unitType)} (base), Needed: ${first.requested}${unitLabel(first.unitType)} (base)`
+                : 'Insufficient stock for one or more cart items. The sale was not completed.'),
+            { duration: 7000 }
+          );
+          for (const shortage of shortages) {
+            const line = cart.items.find((i) => i.productId === shortage.productId);
+            if (!line) continue;
+            const factor = Number(line.conversionFactor) > 0 ? Number(line.conversionFactor) : 1;
+            const sellableQty = Math.floor(shortage.available / factor);
+            if (sellableQty > 0) {
+              if (line.quantity > sellableQty) {
+                // Clamp the line to what the server can actually fulfil -
+                // the cart recomputes totals and the retry is one tap away.
+                cart.updateQuantity(shortage.productId, sellableQty);
+              }
+            } else {
+              // Zero sellable stock - reuse the QA Phase 5 low-stock popup
+              // (warning copy + Remove from cart) rather than new UI.
+              setLowStockPopupItem({
+                productId: shortage.productId,
+                name: shortage.productName,
+                stock: shortage.available,
+                minimumStockLevel: line.minimumStockLevel ?? 0,
+              });
+            }
+          }
+          return;
+        }
+
         const msg = err.message || '';
         if (err.status === 403 && /manager approval/i.test(msg)) {
           toast.error('Manager approval failed — check credentials/role');

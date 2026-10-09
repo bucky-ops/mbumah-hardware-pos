@@ -59,6 +59,9 @@ async function getUsersHandler(
         role: true,
         phone: true,
         isActive: true,
+        // v2.14.0: engraved (self-healing) bootstrap admin flag - drives the
+        // admin UI shield badge and the client-side delete guard.
+        isEngraved: true,
         lastLoginAt: true,
         createdAt: true,
         storeId: true,

@@ -156,6 +156,10 @@ model User {
   phone               String?
   avatarUrl           String?
   isActive            Boolean   @default(true)
+  // v2.14.0: engraved (self-healing) bootstrap admin. Cannot be deleted or
+  // demoted via the API so a fresh deployment always has a working login.
+  isEngraved          Boolean   @default(false)
+  isSystem            Boolean   @default(false)
   lastLoginAt         DateTime?
   lockedUntil         DateTime? // Account locked until this time
   failedLoginAttempts Int       @default(0)
@@ -281,7 +285,7 @@ model Product {
   // units one SELLING unit contains (1 FOOT = 0.3048 METER, 1 BAG = 0.05 TON).
   // Checkout deducts quantity × conversionFactor from quantityInStock.
   sellingUnit       String?
-  conversionFactor  Decimal  @default(1) @db.Decimal(12, 6)
+  conversionFactor  Decimal  @default(1)
   quantityInStock   Decimal  @default(0)
   reorderLevel      Decimal  @default(10)
   pricePerUnit      Decimal // Selling price
@@ -370,6 +374,8 @@ model WarehouseStock {
 
 model StockMovement {
   id           String   @id @default(cuid())
+  // v2.14.0: client-generated key so offline sync replays never double-apply a movement.
+  idempotencyKey String? @unique
   storeId      String
   productId    String
   movementType String // PURCHASE, SALE, ADJUSTMENT, TRANSFER, RETURN, RENTAL_OUT, RENTAL_RETURN
@@ -604,6 +610,8 @@ model MpesaTransaction {
 
 model DebtLedger {
   id             String    @id @default(cuid())
+  // v2.14.0: idempotent replay protection for offline debt capture.
+  idempotencyKey String?   @unique
   storeId        String
   customerId     String
   transactionId  String?
@@ -657,6 +665,8 @@ model DebtPayment {
 
 model EquipmentRental {
   id                 String    @id @default(cuid())
+  // v2.14.0: idempotent replay protection for offline rental capture.
+  idempotencyKey     String?   @unique
   storeId            String
   productId          String
   customerId         String
@@ -950,6 +960,8 @@ model PurchaseOrderItem {
 
 model Expense {
   id             String    @id @default(cuid())
+  // v2.14.0: idempotent replay protection for offline expense capture.
+  idempotencyKey String?   @unique
   storeId        String
   description    String
   amount         Decimal

@@ -206,6 +206,17 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // v2.14.0 Power-On Self-Test + self-heal: public in DEVELOPMENT only so
+  // boot diagnostics and local healing work without a login. In production
+  // the routes enforce their own SUPER_ADMIN gate in-file, so the proxy must
+  // NOT bypass auth there.
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    (pathname === '/api/system/post' || pathname === '/api/system/heal')
+  ) {
+    return NextResponse.next();
+  }
+
   const clientIp = getClientIp(request);
 
   // Layer 1: Rate Limiting
