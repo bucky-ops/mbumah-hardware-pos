@@ -1,18 +1,18 @@
 // GET /api/health/retry-demo
 //
-// Phase 4 — Demonstrates the retry framework with exponential backoff.
+// Phase 4 - Demonstrates the retry framework with exponential backoff.
 // This is a PUBLIC health endpoint (no auth required) that simulates a
 // flaky operation: it fails the first N times, then succeeds. The response
 // includes the full retry trace so you can observe the backoff + jitter
 // behaviour in action.
 //
 // Query params:
-//   ?failTimes=2   — Number of times to fail before succeeding (default 2).
+//   ?failTimes=2 - Number of times to fail before succeeding (default 2).
 //                    The function will throw a synthetic 503 on attempts
 //                    1..failTimes, then succeed on attempt failTimes+1.
-//   ?maxAttempts=5 — Max retry attempts (default 5).
-//   ?baseDelay=50  — Base delay in ms (default 50, kept small for demo).
-//   ?errorType=503 — Type of error to throw: '503', '429', 'network',
+//   ?maxAttempts=5 - Max retry attempts (default 5).
+//   ?baseDelay=50 - Base delay in ms (default 50, kept small for demo).
+//   ?errorType=503 - Type of error to throw: '503', '429', 'network',
 //                    'timeout', '400' (non-retryable). Default '503'.
 //
 // Example:
@@ -35,7 +35,7 @@
 //     "timestamp": "..."
 //   }
 //
-// Response (500) — when all attempts fail:
+// Response (500) - when all attempts fail:
 //   {
 //     "success": false,
 //     "error": "HTTP 503 ...",
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
   const baseDelay = Math.max(0, Math.min(5000, parseInt(url.searchParams.get('baseDelay') || '50', 10)));
   const errorType = (url.searchParams.get('errorType') || '503') as '503' | '429' | 'network' | 'timeout' | '400';
 
-  // ── Synthetic flaky operation ──────────────────────────────────────────
+  // Synthetic flaky operation
   // Each invocation increments a counter. While the counter is <= failTimes,
   // we throw the requested error type. After that, we succeed.
   let callCount = 0;
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
         return err;
       }
       case '400': {
-        // 400 is NON-retryable — the loop should fail fast.
+        // 400 is NON-retryable - the loop should fail fast.
         const err = new Error('HTTP 400 Bad Request (simulated, non-retryable)') as Error & { status?: number };
         err.status = 400;
         return err;

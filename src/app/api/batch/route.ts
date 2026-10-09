@@ -1,9 +1,9 @@
-// POST /api/batch — Batch operations for products
+// POST /api/batch - Batch operations for products
 //
 // Supported operations:
-//   • batchUpdatePrices    — Update multiple product prices at once
-//   • batchUpdateStock     — Update multiple product stock levels
-//   • batchDeleteProducts  — Soft-delete (deactivate) multiple products
+//   • batchUpdatePrices - Update multiple product prices at once
+//   • batchUpdateStock - Update multiple product stock levels
+//   • batchDeleteProducts - Soft-delete (deactivate) multiple products
 //
 // All operations are transaction-based: all succeed or all fail.
 // Requires SUPER_ADMIN or STORE_OWNER role.
@@ -17,7 +17,7 @@ import { APIError, ErrorCode } from '@/lib/api-error';
 
 export const dynamic = 'force-dynamic';
 
-// ─── Type Definitions ───────────────────────────────────────────────────────
+// Type Definitions
 
 interface BatchUpdatePricesItem {
   productId: string;
@@ -41,7 +41,7 @@ interface BatchRequest {
   items: BatchUpdatePricesItem[] | BatchUpdateStockItem[] | BatchDeleteItem[];
 }
 
-// ─── Validation ──────────────────────────────────────────────────────────────
+// Validation
 
 function validateBatchRequest(body: unknown): BatchRequest {
   if (!body || typeof body !== 'object') {
@@ -125,7 +125,7 @@ function validateBatchRequest(body: unknown): BatchRequest {
   };
 }
 
-// ─── Batch Operation Handlers ────────────────────────────────────────────────
+// Batch Operation Handlers
 
 async function batchUpdatePrices(
   storeId: string,
@@ -205,11 +205,11 @@ async function batchUpdateStock(
     );
   }
 
-  // ── F3-6 remediation ────────────────────────────────────────────────────
-  // The old implementation (a) SET absolute quantities from a pre-tx read —
+  // F3-6 remediation
+  // The old implementation (a) SET absolute quantities from a pre-tx read -
   // clobbering concurrent sales/receipts (lost updates), and (b) logged the
   // NEW TOTAL as the movement quantity in a SEPARATE transaction whose
-  // failures were swallowed — so the movement ledger could never reconcile
+  // failures were swallowed - so the movement ledger could never reconcile
   // with balances (stock 100→50 was logged as ADJUSTMENT +50).
   // Now: one transaction; per-item DELTA computed from a fresh in-tx read
   // and applied via atomic increment; the movement row (quantity = delta)
@@ -317,7 +317,7 @@ async function batchDeleteProducts(
   return { deleted: result.length };
 }
 
-// ─── Route Handler ───────────────────────────────────────────────────────────
+// Route Handler
 
 async function batchHandler(
   request: NextRequest,
@@ -360,7 +360,7 @@ async function batchHandler(
   });
 }
 
-// ─── Export ───────────────────────────────────────────────────────────────────
+// Export
 
 export const POST = withErrorBoundary(
   requireAuth(batchHandler, { roles: ['SUPER_ADMIN', 'STORE_OWNER'] }),

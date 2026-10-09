@@ -5,16 +5,16 @@
 // src/lib/debt-helpers.ts REMINDER_RULES).
 //
 // This route is the FIRST half of the two-phase reminder pipeline:
-//   1. POST /api/reminders/debt/schedule  — cheap, no network calls. Creates
+//   1. POST /api/reminders/debt/schedule - cheap, no network calls. Creates
 //      PENDING rows based on aging rules + last-reminder timestamps.
-//   2. POST /api/reminders/debt/process   — actually sends the messages via
+//   2. POST /api/reminders/debt/process - actually sends the messages via
 //      SMS/WhatsApp/Email (Twilio/Resend). Network-bound.
 //
 // Splitting them lets a cron / scheduler run (1) frequently and cheaply, and
 // (2) in a separate worker with longer timeouts.
 //
 // Body:
-//   { storeId?: string }  — defaults to the caller's session storeId.
+//   { storeId?: string } - defaults to the caller's session storeId.
 //
 // Returns:
 //   {

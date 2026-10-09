@@ -2,17 +2,17 @@
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { env } from '@/lib/env'; // Eager env validation — fails fast on missing DATABASE_URL
+import { env } from '@/lib/env'; // Eager env validation - fails fast on missing DATABASE_URL
 import { withErrorBoundary } from '@/lib/logger';
 import { requireStoreAccess, type AuthSession } from '@/lib/auth';
-// FINANCIAL MATH AUDIT (Task 12-b): Prisma Decimal valueOf() returns a STRING —
+// FINANCIAL MATH AUDIT (Task 12-b): Prisma Decimal valueOf() returns a STRING -
 // `number + decimal` concatenates. All accumulation below flows through
 // toDec()/round2() and emits plain numbers only at the JSON boundary.
 import { toDec, round2 } from '@/lib/utils/financialMath';
-// v2.12.0 (Task DASH-BE): server-only insight builders — every block is
+// v2.12.0 (Task DASH-BE): server-only insight builders - every block is
 // fault-isolated so the dashboard NEVER throws (see module header).
 import { buildDashboardInsights, sanitizeActivity } from '@/lib/dashboard-insights';
-// v2.12.2 (PR B — RBAC): revenue visibility gate for the limited dashboard.
+// v2.12.2 (PR B - RBAC): revenue visibility gate for the limited dashboard.
 import { hasFeaturePermission } from '@/lib/permissions';
 
 /**
@@ -20,7 +20,7 @@ import { hasFeaturePermission } from '@/lib/permissions';
  * gross; extract the VAT component at the line's own rate:
  *   net = lineTotal − lineTotal × rate / (100 + rate)
  * (≡ lineTotal × 100 / (100 + rate)). Rate 0 (exempt) → the line as-is.
- * VAT is money owed to KRA — never counted as revenue.
+ * VAT is money owed to KRA - never counted as revenue.
  */
 const lineNetRevenue = (lineTotal: Parameters<typeof toDec>[0], taxRate: Parameters<typeof toDec>[0]) => {
   const gross = toDec(lineTotal);
@@ -57,18 +57,18 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
   const todayEnd = new Date();
   todayEnd.setHours(23, 59, 59, 999);
 
-  // ── v2.12.2 (PR B — RBAC): LIMITED DASHBOARD for revenue-denied roles ───
+  // v2.12.2 (PR B - RBAC): LIMITED DASHBOARD for revenue-denied roles
   // A role without 'dashboard.view.revenue' (today: CASHIER,
   // INVENTORY_MANAGER) gets ONLY: own-activity KPIs, stock counts and their
   // own last 10 sales. Deliberately NOT computed, NOT shipped: revenue
   // trends, revenueChange, debt totals/aging (debtCrisis), alerts carrying
   // debt amounts, topCustomers/topProducts revenue, payment-method amounts,
   // inventoryValue, profit/margin inputs and the full recentActivities feed.
-  // This is an EARLY RETURN — the debt/insight queries never even run for
+  // This is an EARLY RETURN - the debt/insight queries never even run for
   // these roles, so the restricted payload cannot leak by construction.
   //
   // v2.13.1: the two KPI aggregates are SCOPED TO THE CALLER (cashierId =
-  // session.userId) — "Today's Sales", "Transactions" and "Avg Order" on
+  // session.userId) - "Today's Sales", "Transactions" and "Avg Order" on
   // the limited dashboard now count the cashier's OWN sales, matching the
   // RBAC spec ('My Sales', not the branch total). Low-stock stays a
   // store-level signal (stock health is a shared operational concern and
@@ -107,7 +107,7 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
         db.product.count({
           where: { storeId, isActive: true, quantityInStock: { lte: 0 } },
         }),
-        // My Sales: the caller's own last 10 sales only — receipt shell
+        // My Sales: the caller's own last 10 sales only - receipt shell
         // fields (no customer names, no cost/profit columns).
         db.salesTransaction.findMany({
           where: { storeId, cashierId: session.userId, transactionType: 'SALE' },
@@ -135,7 +135,7 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
       data: {
         limitedView: true,
         // v2.13.2 HOTFIX: "Today's Sales" is a MONEY card ("net of VAT ·
-        // your sales") — it must carry the net revenue figure (same
+        // your sales") - it must carry the net revenue figure (same
         // semantic as the full dashboard's todaySales), not the
         // transaction count. The count-as-money bug made the card show
         // "Ksh 1.00" after a single sale while the true revenue only
@@ -194,7 +194,7 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
 
     db.product.findMany({
       // v2.5.8 FIX: the KPI used a hardcoded `lte: 10` cutoff that ignored
-      // each product's own reorderLevel — healthy items with reorderLevel 50
+      // each product's own reorderLevel - healthy items with reorderLevel 50
       // were flagged while items with reorderLevel 5 were missed. Compare
       // against the per-product reorder level instead (Prisma field
       // reference, same pattern as email-service.ts low-stock alerts).
@@ -246,7 +246,7 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
       where: { storeId, createdAt: { gte: todayStart, lte: todayEnd }, transactionType: 'SALE', paymentStatus: { in: ['COMPLETED', 'PARTIAL'] } },
       // Task 12-b: taxAmount needed for the VAT-exclusive hourly series.
       // v2.12.0 (DASH-BE): paymentMethod added so today's debt-tender share
-      // (debtRatioToday) is computed from the SAME rows — no second query.
+      // (debtRatioToday) is computed from the SAME rows - no second query.
       select: { createdAt: true, totalAmount: true, taxAmount: true, paymentMethod: true },
     }),
     db.salesTransaction.groupBy({
@@ -263,7 +263,7 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
     }),
   ]);
 
-  // Compute hourly sales — accumulated in Decimal (was: `amount += tx.totalAmount`
+  // Compute hourly sales - accumulated in Decimal (was: `amount += tx.totalAmount`
   // which STRING-CONCATENATED because Prisma Decimal.valueOf() returns a string).
   // Amount basis: NET revenue (totalAmount − taxAmount) per the uniform revenue
   // policy; the field name stays `amount`.
@@ -331,17 +331,17 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
   const allProductsForInventory = await db.product.findMany({
     where: { storeId, isActive: true },
     // v2.12.0 (DASH-BE): reorderLevel added so the store-health stock score
-    // (healthy = qty > reorderLevel) reuses these rows — no second scan.
+    // (healthy = qty > reorderLevel) reuses these rows - no second scan.
     select: { quantityInStock: true, costPrice: true, pricePerUnit: true, reorderLevel: true },
   });
 
-  // Task 12-b: revenue KPIs are NET of VAT (totalAmount − taxAmount) — VAT is
+  // Task 12-b: revenue KPIs are NET of VAT (totalAmount − taxAmount) - VAT is
   // owed to KRA, not revenue. Plain numbers emitted here (JSON boundary).
   const todayRev = toDec(todayRevenue._sum.totalAmount).minus(toDec(todayRevenue._sum.taxAmount)).toNumber();
   const yesterdayRev = toDec(yesterdayRevenue._sum.totalAmount).minus(toDec(yesterdayRevenue._sum.taxAmount)).toNumber();
   const revenueChange = yesterdayRev > 0 ? ((todayRev - yesterdayRev) / yesterdayRev) * 100 : todayRev > 0 ? 100 : 0;
 
-  // ── v2.12.0 (Task DASH-BE) derived figures shared with the insights ──
+  // v2.12.0 (Task DASH-BE) derived figures shared with the insights
   // Today's NET debt-tender revenue from the SAME rows as the hourly series.
   const todayDebtSales = round2(
     salesByHourData
@@ -357,8 +357,8 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
     (p) => toDec(p.quantityInStock).gt(toDec(p.reorderLevel)),
   ).length;
 
-  // ── v2.12.0 insight blocks (shift / debtCrisis / alerts / storeHealth /
-  //    revenueTrend7d / precise stock counts). Fault-isolated internally. ──
+  // v2.12.0 insight blocks (shift / debtCrisis / alerts / storeHealth /
+  //    revenueTrend7d / precise stock counts). Fault-isolated internally.
   const insights = await buildDashboardInsights(storeId, {
     todayRevenue: todayRev,
     todayTransactions,
@@ -390,7 +390,7 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
       todaySales: todayTransactions,
       todayTransactions,
       todayRevenue: todayRev,
-      // Net-revenue AOV (was tax-inclusive _avg.totalAmount) — consistent with
+      // Net-revenue AOV (was tax-inclusive _avg.totalAmount) - consistent with
       // the net revenue basis above.
       averageTransactionValue,
       revenueChangePercent: Math.round(revenueChange * 100) / 100,
@@ -402,7 +402,7 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
       outstandingDebtCount: outstandingDebt._count,
       topProducts: topProductsResult,
       salesByHour,
-      // TENDER by method (tax-inclusive) by design — labelled by payment method,
+      // TENDER by method (tax-inclusive) by design - labelled by payment method,
       // this is money collected, not revenue. Decimal-safe conversion only.
       paymentMethodBreakdown: paymentMethodGrouped.map((pm) => ({ method: pm.paymentMethod, count: pm._count, amount: toDec(pm._sum.totalAmount).toNumber() })),
       recentTransactions,
@@ -419,11 +419,11 @@ async function getDashboardHandler(...args: unknown[]): Promise<Response> {
         totalQuantity: allProductsForInventory.reduce((acc, p) => acc.plus(toDec(p.quantityInStock)), toDec(0)).toNumber(),
       },
       // v2.12.0 (DASH-BE) ACTIVITY SANITIZATION: rows mapped through the
-      // leak-free sanitizer — ids stripped, displayMessage humanized,
+      // leak-free sanitizer - ids stripped, displayMessage humanized,
       // metadata gated, actor id dropped.
       recentActivities: recentActivities.map(sanitizeActivity),
 
-      // ══ v2.12.0 (Task DASH-BE) NEW insight fields ══
+      // v2.12.0 (Task DASH-BE) NEW insight fields
       // Active-shift snapshot with the user's expected-cash formula.
       shift: insights.shift,
       // Debt aging + ratio + high-risk customers.

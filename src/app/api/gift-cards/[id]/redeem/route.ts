@@ -6,7 +6,7 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { withSessionAuth } from '@/lib/auth';
 // Task 12-c: canonical financial math (HALF_UP 2dp). Prisma Decimal
-// `valueOf()` returns a STRING — the old `giftCard.currentBalance - amount`
+// `valueOf()` returns a STRING - the old `giftCard.currentBalance - amount`
 // coerced through float, and the absolute-balance write was a double-spend
 // race (two concurrent redemptions both passed the same stale read).
 import { toDec, round2 } from '@/lib/utils/financialMath';
@@ -35,7 +35,7 @@ async function redeemGiftCardHandler(...args: unknown[]): Promise<Response> {
 
   const { amount, transactionId, redeemedBy, notes } = body;
 
-  // Task 12-c: Decimal coercion — garbage/NaN → 0, rejected below.
+  // Task 12-c: Decimal coercion - garbage/NaN → 0, rejected below.
   const redeemAmountDec = toDec(amount);
   if (!redeemAmountDec.gt(0)) {
     return Response.json(
@@ -73,7 +73,7 @@ async function redeemGiftCardHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Advisory fast-fail only — the AUTHORITATIVE guard is the conditional
+  // Advisory fast-fail only - the AUTHORITATIVE guard is the conditional
   // updateMany inside the transaction below (gte predicate re-check).
   if (redeemAmountDec.gt(toDec(giftCard.currentBalance))) {
     return Response.json(
@@ -82,9 +82,9 @@ async function redeemGiftCardHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // ── Task 12-c: ATOMIC redemption ────────────────────────────────────────
+  // Task 12-c: ATOMIC redemption
   // The old flow computed `newBalance = currentBalance - amount` from a
-  // STALE pre-transaction read and wrote the ABSOLUTE value back — two
+  // STALE pre-transaction read and wrote the ABSOLUTE value back - two
   // concurrent redemptions both passed the check and both drained the card
   // (double-spend). The `gte` predicate makes the balance check and
   // decrement one atomic operation; the race loser aborts with a 400.

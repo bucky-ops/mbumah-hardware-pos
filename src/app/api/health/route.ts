@@ -17,7 +17,7 @@ export async function GET() {
   const startTime = Date.now();
   const checks: Record<string, HealthCheck> = {};
 
-  // Check environment variables — only report set/missing, NOT actual values
+  // Check environment variables - only report set/missing, NOT actual values
   const requiredEnvVars = ['DATABASE_URL', 'NEXTAUTH_SECRET', 'JWT_SECRET'];
   const optionalEnvVars = ['DIRECT_URL'];
   
@@ -80,7 +80,7 @@ export async function GET() {
     };
   }
 
-  // Seeded-state check — a reachable but EMPTY database (fresh install where
+  // Seeded-state check - a reachable but EMPTY database (fresh install where
   // the seed never ran, or the server pointed at the wrong file) used to look
   // "healthy" here because `SELECT 1` succeeds on any SQLite/Postgres. The
   // frontend then shows the backend as unavailable for every module. A
@@ -133,7 +133,7 @@ export async function GET() {
     checks.account_security = { status: 'ok', detail: 'Account security check skipped' };
   }
 
-  // Check financial ledger integrity (lightweight — last 24h only)
+  // Check financial ledger integrity (lightweight - last 24h only)
   try {
     const { quickIntegrityCheck } = await import('@/lib/financial-audit');
     const integrity = await quickIntegrityCheck();
@@ -162,10 +162,10 @@ export async function GET() {
   const allOk = Object.values(checks).every(c => c.status === 'ok' || c.status === 'warning');
   const hasErrors = Object.values(checks).some(c => c.status === 'error');
 
-  // AUDIT FIX (Finding 7.2 — health response contract): expose uptime and
+  // AUDIT FIX (Finding 7.2 - health response contract): expose uptime and
   // process memory so load balancers / monitoring can distinguish "app
   // starting up" (tiny uptime) from "app degraded" (bloated heap) instead of
-  // guessing from HTTP status alone. Additive fields only — existing
+  // guessing from HTTP status alone. Additive fields only - existing
   // consumers (CI health check, uptime monitors) read status/checks.
   const memory = process.memoryUsage();
 
@@ -175,7 +175,7 @@ export async function GET() {
     nodeEnv: process.env.NODE_ENV,
     responseTime: `${totalResponseTime}ms`,
     // npm_package_version is an npm-lifecycle env var and is NOT present in
-    // the Vercel runtime — import the version from package.json instead so
+    // the Vercel runtime - import the version from package.json instead so
     // /api/health always reports the true release version.
     version: pkg.version,
     uptimeSeconds: Math.floor(process.uptime()),

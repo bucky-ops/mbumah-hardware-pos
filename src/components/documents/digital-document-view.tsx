@@ -6,12 +6,12 @@ import { formatKES } from '@/lib/utils/financialMath';
  *
  * Colored, mobile-friendly digital copies of the five business documents
  * (INVOICE / QUOTATION / PROFORMA / CREDIT NOTE / DEBIT NOTE) and delivery
- * notes — the exact same views the public /r/<docNumber> page renders when a
+ * notes - the exact same views the public /r/<docNumber> page renders when a
  * customer scans the QR on a printed document, reused inline by the in-app
  * DigitalReceiptViewer (scroll + autofit) so staff see precisely what the
  * customer sees.
  *
- * UNIVERSAL COMPONENT: no 'use client', no hooks, no window access — renders
+ * UNIVERSAL COMPONENT: no 'use client', no hooks, no window access - renders
  * on the server (public page, React Server Component) and inside client
  * dialogs alike. Callers map their data (Prisma rows or API contracts) into
  * the plain props below.
@@ -21,7 +21,7 @@ import { formatKES } from '@/lib/utils/financialMath';
  * supplier or internal data.
  */
 
-// ─── Invoice-family documents (the five types) ──────────────────────────────
+// Invoice-family documents (the five types)
 
 export interface DigitalDocLine {
   name: string;
@@ -137,7 +137,7 @@ export function DigitalDocumentView({
   );
 }
 
-// ─── Delivery notes ──────────────────────────────────────────────────────────
+// Delivery notes
 
 export interface DigitalDeliveryViewProps {
   docNumber: string;
@@ -240,7 +240,7 @@ export function DigitalDeliveryView({
   );
 }
 
-// ─── Shared shell ────────────────────────────────────────────────────────────
+// Shared shell
 
 function DigitalDocShell({
   accent,

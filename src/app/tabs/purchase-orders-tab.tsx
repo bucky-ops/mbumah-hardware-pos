@@ -49,7 +49,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-// ─── Constants ──────────────────────────────────────────────
+// Constants
 
 const PO_STATUSES = [
   'DRAFT',
@@ -70,7 +70,7 @@ const STATUS_FLOW: string[] = [
   'DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT', 'CONFIRMED', 'PARTIALLY_RECEIVED', 'RECEIVED',
 ];
 
-// ─── Helper: status badge styling ──────────────────────────
+// Helper: status badge styling
 
 function getStatusBadgeClasses(status: string): string {
   switch (status) {
@@ -113,7 +113,7 @@ function formatStatusLabel(status: string): string {
   return status.replace(/_/g, ' ');
 }
 
-// ─── Sub-components ─────────────────────────────────────────
+// Sub-components
 
 function POStatusTimeline({ status }: { status: string }) {
   const isCancelled = status === 'CANCELLED';
@@ -188,7 +188,7 @@ function POStatusTimeline({ status }: { status: string }) {
   );
 }
 
-// ─── Create PO Dialog ──────────────────────────────────────
+// Create PO Dialog
 
 function CreatePODialog({
   open,
@@ -548,7 +548,7 @@ function CreatePODialog({
   );
 }
 
-// ─── Receive Items Dialog ──────────────────────────────────
+// Receive Items Dialog
 
 function ReceiveItemsDialog({
   open,
@@ -710,7 +710,7 @@ function ReceiveItemsDialog({
   );
 }
 
-// ─── PO Detail View ────────────────────────────────────────
+// PO Detail View
 
 function PODetailView({
   po,
@@ -1229,7 +1229,7 @@ function PODetailView({
   );
 }
 
-// ─── Info Item Helper ──────────────────────────────────────
+// Info Item Helper
 
 function InfoItem({
   icon,
@@ -1251,7 +1251,7 @@ function InfoItem({
   );
 }
 
-// ─── Summary Card ──────────────────────────────────────────
+// Summary Card
 
 function SummaryCard({
   icon,
@@ -1288,7 +1288,7 @@ function SummaryCard({
   );
 }
 
-// ─── Main Component ────────────────────────────────────────
+// Main Component
 
 export default function PurchaseOrdersTab() {
   const { currentStoreId } = useAppStore();
@@ -1349,7 +1349,7 @@ export default function PurchaseOrdersTab() {
   });
   const suppliers: SupplierItem[] = Array.isArray(suppliersData?.data) ? suppliersData.data : [];
 
-  // ── Derived summary stats ──
+  // Derived summary stats
   const stats = useMemo(() => {
     const all = purchaseOrders;
     const totalPOs = all.length;
@@ -1372,7 +1372,7 @@ export default function PurchaseOrdersTab() {
     return { totalPOs, pendingApproval, inTransit, receivedThisMonth, totalValue };
   }, [purchaseOrders]);
 
-  // ── Sort ──
+  // Sort
   const sortedPOs = useMemo(() => {
     const filtered = search.trim()
       ? purchaseOrders.filter(
@@ -1421,7 +1421,7 @@ export default function PurchaseOrdersTab() {
   const hasActiveFilters =
     search || statusFilter !== 'ALL' || supplierFilter !== 'ALL' || dateFrom || dateTo;
 
-  // ─── Render ────────────────────────────────────────────
+  // Render
 
   return (
     <div className="space-y-4">

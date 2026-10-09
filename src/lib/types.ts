@@ -6,11 +6,11 @@ export const UserRole = {
   BRANCH_MANAGER: 'BRANCH_MANAGER',
   CASHIER: 'CASHIER',
   ACCOUNTANT: 'ACCOUNTANT',
-  // v2.12.2 (PR B — RBAC): catalog/inventory steward. Sees Catalog, Inventory
+  // v2.12.2 (PR B - RBAC): catalog/inventory steward. Sees Catalog, Inventory
   // and Transfers only; can create/update products and read purchase orders.
   // NO sales-override powers, NO financial visibility, NO cost-price blindness
-  // (they DO see cost — it is their job). Persisted in the plain-string
-  // User.role column — NO schema change is required or permitted for this PR
+  // (they DO see cost - it is their job). Persisted in the plain-string
+  // User.role column - NO schema change is required or permitted for this PR
   // (User.role is `String @default("CASHIER")` in prisma/schema.prisma; the
   // allowed values are enforced at the API layer, not by a DB enum).
   INVENTORY_MANAGER: 'INVENTORY_MANAGER',
@@ -109,7 +109,7 @@ export const AccountType = {
 
 export type AccountType = (typeof AccountType)[keyof typeof AccountType];
 
-// ── ISO 9001 / GAAP Accounting domain types (Phase 1 — Accounting Module) ────
+// ISO 9001 / GAAP Accounting domain types (Phase 1 - Accounting Module)
 //
 // These string-union types mirror the Prisma schema models (Account,
 // JournalEntry, JournalEntryLine, FinancialPeriod, TrialBalanceSnapshot,
@@ -150,10 +150,10 @@ export type NormalBalance = (typeof NormalBalance)[keyof typeof NormalBalance];
 
 /**
  * Financial period lifecycle.
- *   OPEN   — entries can be posted into this period.
- *   CLOSED — no new entries; period is being reviewed / audited. Existing
+ *   OPEN - entries can be posted into this period.
+ *   CLOSED - no new entries; period is being reviewed / audited. Existing
  *            posted entries remain visible and reportable.
- *   LOCKED — frozen permanently. No mutations of any kind permitted. This is
+ *   LOCKED - frozen permanently. No mutations of any kind permitted. This is
  *            the terminal state for a closed-and-audited period (ISO 9001).
  */
 export const FinancialPeriodStatus = {
@@ -202,11 +202,11 @@ export type ReferenceDocumentType = (typeof ReferenceDocumentType)[keyof typeof 
 /**
  * Derived journal-entry status for UI presentation. Computed from the
  * isPosted / isApproved / isVoided flags, NOT stored directly.
- *   DRAFT     — created, not submitted, not posted.
- *   SUBMITTED — created and saved pending approval (isApproved = false).
- *   APPROVED  — approved by an authorized user, ready to post.
- *   POSTED    — posted to the ledger (isPosted = true).
- *   VOIDED    — voided via a reversing entry (isVoided = true).
+ *   DRAFT - created, not submitted, not posted.
+ *   SUBMITTED - created and saved pending approval (isApproved = false).
+ *   APPROVED - approved by an authorized user, ready to post.
+ *   POSTED - posted to the ledger (isPosted = true).
+ *   VOIDED - voided via a reversing entry (isVoided = true).
  */
 export const JournalEntryStatus = {
   DRAFT: 'DRAFT',
@@ -288,14 +288,14 @@ export interface CartItem {
   lineTotal: number;
   isRentalItem: boolean;
   isBundle: boolean;
-  // ── Low-stock UX metadata (snapshot captured at add-to-cart time) ──
+  // Low-stock UX metadata (snapshot captured at add-to-cart time)
   // Optional so previously persisted carts (localStorage/IndexedDB) stay
   // valid. The checkout API strips unknown keys via its Zod schema, so these
   // never leak into the sale payload's validated shape.
   stockSnapshot?: number;
   minimumStockLevel?: number;
   reorderLevel?: number;
-  // ── v2.6.0 UoM conversion snapshot (optional for persisted-cart compat) ──
+  // v2.6.0 UoM conversion snapshot (optional for persisted-cart compat)
   // `quantity` is expressed in the SELLING unit (e.g. FOOT); the server
   // converts to BASE units via the authoritative product.conversionFactor.
   sellingUnit?: string;
@@ -317,8 +317,8 @@ export interface CheckoutPayload {
   // `code: 'DEBT_BLOCKED_OVERDUE'` + `requiresManagerOverride: true` until
   // the request carries managerOverride: true AND the authenticated session
   // role is manager-level (SUPER_ADMIN / STORE_OWNER / BRANCH_MANAGER).
-  // v2.12.5 (PR B — RBAC): the override may ALSO be a verified credential
-  // object from the Manager Authorization modal — it unlocks the 5–10%
+  // v2.12.5 (PR B - RBAC): the override may ALSO be a verified credential
+  // object from the Manager Authorization modal - it unlocks the 5-10%
   // discount band and the high-risk debt gate for cashiers (verified
   // server-side via src/lib/manager-auth.ts).
   managerOverride?:
@@ -383,7 +383,7 @@ export interface DashboardStats {
   topProducts: TopProduct[];
   salesByHour: { hour: string; amount: number }[];
   paymentMethodBreakdown: { method: string; count: number; amount: number }[];
-  // ── v2.12.0 (Task DASH-BE) dashboard-insights extension ────────────────
+  // v2.12.0 (Task DASH-BE) dashboard-insights extension
   // All new fields are ALWAYS present in the GET /api/dashboard response;
   // they are typed optional so legacy constructors of this interface stay
   // valid. The UI agent (DASH-UI) can rely on them at runtime.
@@ -403,7 +403,7 @@ export interface DashboardStats {
   recentActivities?: SanitizedActivity[];
 }
 
-// ── v2.12.0 dashboard-insight DTOs (server: src/lib/dashboard-insights.ts) ──
+// v2.12.0 dashboard-insight DTOs (server: src/lib/dashboard-insights.ts)
 
 export interface DashboardStockItem {
   id: string;
@@ -641,9 +641,9 @@ export const PERMISSION_MATRIX: Record<UserRole, Record<string, string[]>> = {
     debt: ['read', 'update', 'remind'],
     purchase_orders: ['read', 'approve'],
   },
-  // v2.12.2 (PR B — RBAC): catalog/inventory steward. products create/read/
+  // v2.12.2 (PR B - RBAC): catalog/inventory steward. products create/read/
   // update; purchase_orders create/read/update/receive; read-only customers.
-  // Everything money- or override-shaped is empty — an inventory manager
+  // Everything money- or override-shaped is empty - an inventory manager
   // never sells, never voids, never sees financials.
   INVENTORY_MANAGER: {
     products: ['create', 'read', 'update'],
@@ -803,7 +803,7 @@ export interface EndShiftPayload {
   notes?: string;
 }
 
-// ── v2.6.0 step-up manager approval (credit-limit override) ────────────
+// v2.6.0 step-up manager approval (credit-limit override)
 // When a DEBT sale would exceed the customer's debtLimit, the POS blocks it
 // unless a manager re-authenticates. The server verifies these credentials
 // against a MANAGER_UP user of the SAME store and writes an audit-trail

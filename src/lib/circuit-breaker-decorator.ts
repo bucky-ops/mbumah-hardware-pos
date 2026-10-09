@@ -1,24 +1,20 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Circuit Breaker Decorators (HOF wrappers)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Circuit Breaker Decorators (HOF wrappers)
 //
-// Phase 5 — Error Handling & Resilience Framework
+// Phase 5 - Error Handling & Resilience Framework
 //
 // This module provides ergonomic, higher-order wrappers around the
 // `CircuitBreaker` class in `src/lib/circuit-breaker.ts`. The wrappers
 // compose the circuit breaker (Phase 5) with the retry engine (Phase 4) so
 // that each external service call gets BOTH layers of protection:
 //
-//   ┌──────────────────────────────────────────────────────────────┐
-//   │  withCircuitBreaker(name, preset, () =>                      │
-//   │    executeWithRetry(() => callService(), retryPreset)        │
-//   │  )                                                           │
-//   └──────────────────────────────────────────────────────────────┘
+//   withCircuitBreaker(name, preset, () =>
+//     executeWithRetry(() => callService(), retryPreset)
+//   )
 //
-//   • OUTER: Circuit breaker — fails fast if the service is known-down.
-//   • INNER: Retry — handles transient blips without tripping the breaker.
+//   • OUTER: Circuit breaker - fails fast if the service is known-down.
+//   • INNER: Retry - handles transient blips without tripping the breaker.
 //
-// ── Why compose both? ────────────────────────────────────────────────────────
+// Why compose both?
 //
 //   Retry alone:    A 5-min Daraja outage → every request retries 3x →
 //                   3x the load on Daraja (which is already down) →
@@ -33,13 +29,12 @@
 //                   subsequent requests fail INSTANTLY (no retry, no
 //                   network call) → app stays responsive.
 //
-// ── Default logging hooks ────────────────────────────────────────────────────
+// Default logging hooks
 //
 // Every state transition (CLOSED→OPEN, OPEN→HALF_OPEN, HALF_OPEN→CLOSED) is
 // logged to the SystemLog table with the breaker name + metrics snapshot.
 // This makes outages visible in the admin UI and Sentry.
 //
-// ─────────────────────────────────────────────────────────────────────────────
 
 import {
   CircuitOpenError,
@@ -51,13 +46,13 @@ import {
 } from './circuit-breaker';
 import type { RetryOptions } from './retry';
 
-// ── Lazy server-only imports (for logging) ───────────────────────────────────
+// Lazy server-only imports (for logging)
 //
 // systemLog + LogSeverity + LogComponent are imported dynamically inside the
 // hooks so this module remains safe to import on the client (e.g. for type
 // definitions). The hooks no-op on the client.
 
-// ── withCircuitBreaker ───────────────────────────────────────────────────────
+// withCircuitBreaker
 
 /**
  * Options for `withCircuitBreaker`. Combines breaker config with optional
@@ -74,7 +69,7 @@ export interface WithCircuitBreakerOptions {
   /**
    * Optional retry options. If provided, the wrapped function is also
    * wrapped in `executeWithRetry` (Phase 4). The retry runs INSIDE the
-   * breaker — so a retried-and-succeeded call counts as a SUCCESS for the
+   * breaker - so a retried-and-succeeded call counts as a SUCCESS for the
    * breaker, and a retried-and-failed call counts as a single FAILURE.
    *
    * Pass `null` or omit to apply the breaker WITHOUT retry (useful when the
@@ -111,10 +106,10 @@ export function withCircuitBreaker<A extends unknown[], R>(
   opts: WithCircuitBreakerOptions,
   fn: (...args: [...A, number]) => Promise<R>,
 ): (...args: A) => Promise<R> {
-  // ── Resolve breaker options ──────────────────────────────────────────────
+  // Resolve breaker options
   const breakerOpts: CircuitBreakerOptions =
     typeof opts.breaker === 'string'
-      ? // Preset name — spread the preset, but the caller MUST provide the
+      ? // Preset name - spread the preset, but the caller MUST provide the
         // name separately... actually the preset doesn't have a name. So
         // the preset-name form requires the caller to also pass `name`.
         // We handle this by requiring the full object form in practice.
@@ -127,7 +122,7 @@ export function withCircuitBreaker<A extends unknown[], R>(
     );
   }
 
-  // ── Get or create the breaker (idempotent across hot reloads) ────────────
+  // Get or create the breaker (idempotent across hot reloads)
   const breaker = circuitBreakerRegistry.getOrCreate({
     ...breakerOpts,
     // Attach default logging hooks (composed with any caller-provided hooks).
@@ -143,7 +138,7 @@ export function withCircuitBreaker<A extends unknown[], R>(
   const retryOpts = opts.retry;
 
   return async (...args: A): Promise<R> => {
-    // ── If retry is enabled, compose: breaker.execute(retry(fn)) ──────────
+    // If retry is enabled, compose: breaker.execute(retry(fn))
     if (retryOpts) {
       // We import executeWithRetry lazily to avoid a circular dependency
       // at module load (retry.ts imports from error-handler.ts, which is
@@ -158,16 +153,16 @@ export function withCircuitBreaker<A extends unknown[], R>(
       });
     }
 
-    // ── Breaker only — call fn with attempt=1 (for signature compat) ──────
+    // Breaker only - call fn with attempt=1 (for signature compat)
     return breaker.execute(() => fn(...args, 1 as number));
   };
 }
 
-// ── Convenience: get breaker state without calling ───────────────────────────
+// Convenience: get breaker state without calling
 
 /**
  * Get the current state of a named circuit breaker. Returns 'CLOSED' if the
- * breaker doesn't exist (defensive — treating unknown breakers as healthy
+ * breaker doesn't exist (defensive - treating unknown breakers as healthy
  * avoids false alarms).
  */
 export function getCircuitState(name: string): CircuitState {
@@ -189,7 +184,7 @@ export function getCircuitMetrics(name: string): CircuitBreakerMetrics | null {
   return circuitBreakerRegistry.get(name)?.getMetrics() ?? null;
 }
 
-// ── Hook composition helper ──────────────────────────────────────────────────
+// Hook composition helper
 
 /**
  * Compose two hook functions. The caller's hook runs first; the default hook
@@ -204,27 +199,27 @@ function composeHook(
     try {
       userHook(m);
     } catch {
-      // User hook threw — don't let it break the transition. The default
+      // User hook threw - don't let it break the transition. The default
       // hook (logging) should still run.
     }
     defaultHook(m);
   };
 }
 
-// ── Default logging hook ─────────────────────────────────────────────────────
+// Default logging hook
 
 /**
  * Log a circuit breaker state transition to the SystemLog table (server-side)
  * and console (client-side). Fire-and-forget.
  */
 function logTransition(name: string, state: CircuitState, metrics: CircuitBreakerMetrics): void {
-  // ── Client-side: console.warn (no SystemLog in browser) ──────────────────
+  // Client-side: console.warn (no SystemLog in browser)
   if (typeof window !== 'undefined') {
     console.warn(`[CircuitBreaker] "${name}" → ${state}`, metrics);
     return;
   }
 
-  // ── Server-side: systemLog ────────────────────────────────────────────────
+  // Server-side: systemLog
   void (async () => {
     try {
       const { systemLog } = await import('@/lib/logger');
@@ -264,13 +259,13 @@ function logTransition(name: string, state: CircuitState, metrics: CircuitBreake
         },
       });
     } catch {
-      // Logging failed — fall back to console.
+      // Logging failed - fall back to console.
       console.warn(`[CircuitBreaker] "${name}" → ${state} (logging failed)`, metrics);
     }
   })();
 }
 
-// ── Re-exports ───────────────────────────────────────────────────────────────
+// Re-exports
 
 export {
   CircuitBreaker,

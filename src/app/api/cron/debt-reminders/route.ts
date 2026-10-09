@@ -1,8 +1,8 @@
-// GET /api/cron/debt-reminders — Vercel Cron entry point for the aged
+// GET /api/cron/debt-reminders - Vercel Cron entry point for the aged
 // debt-reminder sweep (v2.6.0).
 //
 // WHAT IT DOES (08:00 UTC = 11:00 EAT daily, see vercel.json crons):
-//   1. ORG-WIDE sweep (runWithoutTenant — this is not a store-scoped
+//   1. ORG-WIDE sweep (runWithoutTenant - this is not a store-scoped
 //      request) of DebtLedger rows that are genuinely late:
 //        status ∈ (OUTSTANDING, PARTIAL, OVERDUE)
 //        agingBucket ∈ (DAYS_30, DAYS_60, DAYS_90_PLUS)
@@ -10,16 +10,16 @@
 //        lastReminderAt is null or older than 7 days (anti-spam throttle)
 //   2. Composes a bucket-specific, polite statement (30/60/90+ days) with
 //      the KES balance and due date, per-customer store name.
-//   3. Sends via the customer's preferred channel — WhatsApp
+//   3. Sends via the customer's preferred channel - WhatsApp
 //      (preferredChannel === 'WHATSAPP') or SMS. Twilio-unconfigured dev
 //      no-op is tolerated (send result is success with a sim_ id).
-//   4. Writes an OutboxEvent kind='DEBT_REMINDER' (status COMPLETED — a
+//   4. Writes an OutboxEvent kind='DEBT_REMINDER' (status COMPLETED - a
 //      durable audit record of the send; there is deliberately NO pump
 //      handler for this kind, the message is sent synchronously here, so a
 //      PENDING row would only be failed by the generic outbox pump) and a
 //      DebtReminder row so the send shows up in the reminders dashboard.
 //   5. Updates DebtLedger.lastReminderAt ONLY when the send result indicates
-//      success (including the unconfigured no-op — so dev dry-runs don't
+//      success (including the unconfigured no-op - so dev dry-runs don't
 //      re-trigger every cron tick and production retries wait 7 days).
 //
 // AUTH: identical CRON_SECRET gate to /api/cron/outbox (x-cron-secret
@@ -36,7 +36,7 @@ export const dynamic = 'force-dynamic';
 // up by the next daily run).
 export const maxDuration = 60;
 
-// ── Shared cron secret gate (verbatim /api/cron/outbox pattern) ─────────────
+// Shared cron secret gate (verbatim /api/cron/outbox pattern)
 async function verifyCronSecret(request: Request): Promise<Response | null> {
   const secret = process.env.CRON_SECRET;
   const provided = request.headers.get('x-cron-secret');
@@ -65,7 +65,7 @@ async function verifyCronSecret(request: Request): Promise<Response | null> {
   return null;
 }
 
-// ── Bucket-specific message templates (polite statement tone) ────────────────
+// Bucket-specific message templates (polite statement tone)
 function composeReminderMessage(opts: {
   customerName: string;
   storeName: string;
@@ -112,7 +112,7 @@ interface DebtReminderSweepResult {
 }
 
 async function runDebtReminderSweep(): Promise<DebtReminderSweepResult> {
-  // Org-wide sweep — no tenant context (see module header).
+  // Org-wide sweep - no tenant context (see module header).
   return runWithoutTenant(async (): Promise<DebtReminderSweepResult> => {
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -175,7 +175,7 @@ async function runDebtReminderSweep(): Promise<DebtReminderSweepResult> {
           ? await notificationService.sendWhatsApp(ledger.customer.phone, message)
           : await notificationService.sendSms(ledger.customer.phone, message);
 
-      // Durable audit records — OutboxEvent (spec: audit trail) + DebtReminder
+      // Durable audit records - OutboxEvent (spec: audit trail) + DebtReminder
       // row (feeds the existing /api/reminders/debt dashboard).
       try {
         await db.outboxEvent.create({
@@ -192,7 +192,7 @@ async function runDebtReminderSweep(): Promise<DebtReminderSweepResult> {
               providerMessageId: result.providerMessageId ?? null,
             }),
             // COMPLETED, not PENDING: the send already happened synchronously
-            // and no pump handler exists for this kind — a PENDING row would
+            // and no pump handler exists for this kind - a PENDING row would
             // only be dead-lettered by the generic outbox pump.
             status: 'COMPLETED',
             processedAt: new Date(),
@@ -223,7 +223,7 @@ async function runDebtReminderSweep(): Promise<DebtReminderSweepResult> {
       }
 
       if (result.success) {
-        // Success (including the unconfigured no-op) — throttle the next
+        // Success (including the unconfigured no-op) - throttle the next
         // reminder by 7 days. Dry-runs must not re-send every cron tick.
         await db.debtLedger.update({
           where: { id: ledger.id },

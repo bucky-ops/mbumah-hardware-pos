@@ -1,12 +1,12 @@
 'use client';
 
 /**
- * document-pdf — A4 PDF download for branded business documents (v2.8.0).
+ * document-pdf - A4 PDF download for branded business documents (v2.8.0).
  *
  * CLIENT REQUEST: "Add Download PDF option on all invoices and on Delivery
  * invoices/notes." Those documents are built as standalone branded HTML
  * strings (document-print.buildBrandedDocumentHtml) and printed via a popup
- * window — there was no DOM node to canvas-capture and no PDF path at all.
+ * window - there was no DOM node to canvas-capture and no PDF path at all.
  *
  * Pipeline (generateDocumentPdf):
  *   branded HTML → extract <style> + <body> → mount offscreen A4-width
@@ -62,7 +62,7 @@ async function waitForFonts(timeoutMs = 3000): Promise<void> {
       new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
     ]);
   } catch {
-    // Fonts are best-effort — capture proceeds with whatever is loaded.
+    // Fonts are best-effort - capture proceeds with whatever is loaded.
   }
 }
 
@@ -77,7 +77,7 @@ export interface GenerateDocumentPdfOptions {
 
 /**
  * Generate and download an A4 PDF of a branded business document.
- * Throws on any failure — callers own the user-facing error UX.
+ * Throws on any failure - callers own the user-facing error UX.
  */
 export async function generateDocumentPdf(
   opts: GenerateDocumentPdfOptions,
@@ -98,7 +98,7 @@ export async function generateDocumentPdf(
     'background:#ffffff',
     'z-index:-1',
   ].join(';');
-  // The branded doc styles target plain tags/classes — scope them under the
+  // The branded doc styles target plain tags/classes - scope them under the
   // host by injecting the extracted <style> verbatim plus a body reset.
   const style = extractStyle(html);
   const body = extractBody(html);

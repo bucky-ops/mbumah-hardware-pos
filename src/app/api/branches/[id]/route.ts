@@ -2,14 +2,14 @@
 //
 // BRANCH CODES (v2.3.0): branch detail + code assignment.
 //
-//   GET    — one branch (includes the unique `code`).
-//   PATCH  — update name / code / location / address / phone / email /
+//   GET - one branch (includes the unique `code`).
+//   PATCH - update name / code / location / address / phone / email /
 //            taxPin / status. The branch `code` is the linchpin of the
 //            coding system: it flows into product SKUs (MBM-<CODE>-…),
 //            employee staff numbers (MBM-<CODE>-E###) and transfer
 //            destination SKUs, so it is validated (2-6 letters/digits,
 //            uppercase) and checked for uniqueness before save (409 on a
-//            clash). Manager-or-above only — branch identity is an
+//            clash). Manager-or-above only - branch identity is an
 //            organization-level setting.
 //
 // Why PATCH matters operationally: without it, a branch code could only be
@@ -89,7 +89,7 @@ async function updateBranchHandler(...args: unknown[]): Promise<Response> {
     }
   }
 
-  // ── Branch code: normalize + uniqueness guard ────────────────────
+  // Branch code: normalize + uniqueness guard
   if (body.code !== undefined) {
     if (body.code === null || body.code === '') {
       // Explicit clearing is refused: an uncoded branch breaks SKU/employee

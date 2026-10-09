@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * ExportTypeCard — a single tile in the "Export Types" grid.
+ * ExportTypeCard - a single tile in the "Export Types" grid.
  *
  * Each card shows an icon (colour-coded per export type), a title, a short
  * description, and a "Generate" button that opens the create-export dialog
@@ -160,7 +160,7 @@ const STAGGER_CLASSES = [
 
 interface ExportTypeCardProps {
   meta: ExportTypeMeta;
-  /** Position in the grid (0-indexed) — used to compute the stagger delay. */
+  /** Position in the grid (0-indexed) - used to compute the stagger delay. */
   index: number;
   onGenerate: (type: DataExportType) => void;
   disabled?: boolean;

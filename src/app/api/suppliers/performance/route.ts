@@ -193,7 +193,7 @@ async function getSuppliersPerformanceHandler(...args: unknown[]): Promise<Respo
 }
 
 // AUDIT FIX (Task 3-d): session-validated + storeId-param scoping
-// (requireStoreAccess). Any store role — read-only supplier metrics.
+// (requireStoreAccess). Any store role - read-only supplier metrics.
 export const GET = withErrorBoundary(
   requireStoreAccess(getSuppliersPerformanceHandler),
   'SUPPLIERS_PERFORMANCE',

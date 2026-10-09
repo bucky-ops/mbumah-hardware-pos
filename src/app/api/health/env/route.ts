@@ -14,7 +14,7 @@ function maskUrl(url: string): string {
     const auth = u.username ? `${u.username}${pass ? ':' + pass : ''}@` : '';
     return `${u.protocol}//${auth}${u.host}${u.pathname}${u.search}`;
   } catch {
-    // Not a valid URL — return a length-based mask
+    // Not a valid URL - return a length-based mask
     return url.length > 20 ? `${url.slice(0, 10)}…${url.slice(-6)}` : '***';
   }
 }

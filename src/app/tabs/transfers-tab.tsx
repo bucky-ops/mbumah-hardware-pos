@@ -28,7 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { formatQty, unitLabel } from '@/lib/utils/financialMath';
 
-// ─── Store type ─────────────────────────────────────────────
+// Store type
 
 interface StoreInfo {
   id: string;
@@ -36,7 +36,7 @@ interface StoreInfo {
   location?: string;
 }
 
-// ─── Helpers ────────────────────────────────────────────────
+// Helpers
 
 function transferStatusBadge(status: StoreTransferItem['status']) {
   const map: Record<string, { label: string; className: string; icon?: React.ReactNode }> = {
@@ -54,7 +54,7 @@ function transferStatusBadge(status: StoreTransferItem['status']) {
   );
 }
 
-// ─── Transfer Detail Dialog ─────────────────────────────────
+// Transfer Detail Dialog
 
 function TransferDetailDialog({
   transfer,
@@ -231,7 +231,7 @@ function TransferDetailDialog({
   );
 }
 
-// ─── Main Component ─────────────────────────────────────────
+// Main Component
 
 export default function TransfersTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
@@ -265,7 +265,7 @@ export default function TransfersTab() {
   // Fetch stores (for from/to selection)
   // BUGFIX (client report: "Select source/destination store" dropdowns not
   // functioning): the edge proxy rejects any /api request without an
-  // Authorization: Bearer header — the old bare fetch('/api/stores') got a
+  // Authorization: Bearer header - the old bare fetch('/api/stores') got a
   // silent 401 and rendered EMPTY dropdowns. authorizedFetchJson attaches
   // the session token (same pattern as the inventory tab).
   const { data: storesData, isLoading: storesLoading, error: storesError, refetch: refetchStores } = useQuery({

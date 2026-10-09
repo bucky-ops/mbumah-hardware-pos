@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 export interface NotificationData {
   id: string;
-  // v2.12.7 (PR C): 'security' — durable SECURITY-category Notification rows
+  // v2.12.7 (PR C): 'security' - durable SECURITY-category Notification rows
   // (privilege-abuse lockouts, discount-spam alerts) now surface in the feed.
   type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security';
   title: string;
@@ -20,7 +20,7 @@ export interface NotificationData {
   isRead: boolean;
   targetTab: string;
   // v2.12.7 (PR C): raw Notification.category so the Alerts panel can filter
-  // (the synthesized sections below carry no category — undefined).
+  // (the synthesized sections below carry no category - undefined).
   category?: string;
 }
 
@@ -229,16 +229,16 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
       }
     }
 
-    // 7. ── v2.12.7 (PR C): durable SECURITY-category notifications ─────────
+    // 7. v2.12.7 (PR C): durable SECURITY-category notifications
     // The privilege-abuse lockout engine (auth.ts noteDeniedAndMaybeLock) and
     // the discount-spam detector (src/lib/abuse.ts) write Notification rows
     // (category SECURITY) addressed to BRANCH_MANAGERs / SUPER_ADMINs. This
     // feed previously surfaced NONE of them (sections 1-6 are synthesized
-    // from business tables) — so the bell badge and the Alerts panel silently
+    // from business tables) - so the bell badge and the Alerts panel silently
     // dropped security alerts. Pull the recipient's rows explicitly.
     //
     // runWithoutTenant: security notifications are addressed BY USER ID, not
-    // by branch — a SUPER_ADMIN's rows carry the OFFENDER's storeId (or null),
+    // by branch - a SUPER_ADMIN's rows carry the OFFENDER's storeId (or null),
     // and the tenant extension would hide them while browsing another branch.
     if (session?.userId) {
       try {
@@ -295,6 +295,6 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
 }
 
 // AUDIT FIX (Task 3-d): session-validated + storeId-param scoping
-// (requireStoreAccess). Any store role — dashboard notifications.
+// (requireStoreAccess). Any store role - dashboard notifications.
 // The handler's inner runWithTenant(storeId) keeps its original behavior.
 export const GET = withErrorBoundary(requireStoreAccess(getHandler), 'NOTIFICATIONS');

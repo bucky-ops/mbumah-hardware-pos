@@ -8,13 +8,13 @@
 //
 // This maintenance endpoint re-derives header totals from the ACTUAL line
 // sums for entries where:
-//   • referenceType = 'RENTAL'           (narrow scope — the R12 bug class)
+//   • referenceType = 'RENTAL'           (narrow scope - the R12 bug class)
 //   • |totalDebit − totalCredit| > 0.009 (header unbalanced)
 //   • Σ(line debits) ≈ Σ(line credits)   (lines themselves ARE balanced)
 //
 // It NEVER touches journal lines. Guard rails:
 //   • SUPER_ADMIN only
-//   • dryRun by default — pass { "dryRun": false } to actually repair
+//   • dryRun by default - pass { "dryRun": false } to actually repair
 //   • max 50 entries per call (idempotent; re-run until "remaining" = 0)
 //   • full before/after audit via systemLog
 
@@ -36,7 +36,7 @@ const MAX_REPAIRS_PER_CALL = 50;
 
 async function repairJournalHeadersHandler(request: NextRequest): Promise<Response> {
   const body = await request.json().catch(() => ({}));
-  const dryRun = body?.dryRun !== false; // default true — must opt in to repair
+  const dryRun = body?.dryRun !== false; // default true - must opt in to repair
 
   // Candidates: unbalanced RENTAL headers. Aggregate line sums per entry.
   const entries = await db.journalEntry.findMany({
@@ -54,7 +54,7 @@ async function repairJournalHeadersHandler(request: NextRequest): Promise<Respon
       if (headerDrift <= BALANCE_EPSILON) return false;
       const lineDebits = e.lines.reduce((acc, l) => acc + Number(l.debit), 0);
       const lineCredits = e.lines.reduce((acc, l) => acc + Number(l.credit), 0);
-      // Only repair when the LINES balance — otherwise the entry needs a
+      // Only repair when the LINES balance - otherwise the entry needs a
       // human accountant, not a mechanical fix.
       return Math.abs(round2(lineDebits - lineCredits)) <= BALANCE_EPSILON;
     })

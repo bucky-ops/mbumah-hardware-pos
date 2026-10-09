@@ -45,7 +45,7 @@ export function UserHoursBreakdown({ stats, isLoading }: UserHoursBreakdownProps
 
   const users = stats?.perUserHours ?? [];
   const maxHours = users.length > 0 ? Math.max(...users.map((u) => u.hours)) : 0;
-  // Avg of scheduled staff — used to flag over/under-scheduled.
+  // Avg of scheduled staff - used to flag over/under-scheduled.
   const avgHours = stats?.avgHoursPerStaff ?? 0;
 
   return (

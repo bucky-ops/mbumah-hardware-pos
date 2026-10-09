@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 
-/** Animated counter hook — smoothly transitions from previous value to target. */
+/** Animated counter hook - smoothly transitions from previous value to target. */
 export function useAnimatedCounter(target: number, duration = 800) {
   const [count, setCount] = useState(0);
   const prevTarget = useRef(0);

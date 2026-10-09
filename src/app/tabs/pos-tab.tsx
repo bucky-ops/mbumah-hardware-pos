@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * MBUMAH HARDWARE POS — POS Tab
+ * MBUMAH HARDWARE POS - POS Tab
  * Sub-components extracted to src/components/pos/ for maintainability.
  */
 
@@ -72,7 +72,7 @@ import {
   Lightbulb, PartyPopper, AlertTriangle, MessageSquare,
 } from 'lucide-react';
 
-// v2.13.3 SMART RECOMMENDATIONS: client-side affinity engine — works from the
+// v2.13.3 SMART RECOMMENDATIONS: client-side affinity engine - works from the
 // first cart on day one (server co-occurrence needs sales history).
 import {
   computeAffinitySuggestions,
@@ -98,7 +98,7 @@ import { HeldCartsDialog, type HeldCartRecord } from '@/components/pos/held-cart
 // Escape HTML special chars for safe inclusion in print-window HTML strings.
 
 /**
- * v2.6.0 UoM UX: format a conversion factor for humans — trim trailing zeros
+ * v2.6.0 UoM UX: format a conversion factor for humans - trim trailing zeros
  * and cap at 4 decimal places (1.5 → "1.5", 0.3048 → "0.3048", 2 → "2").
  */
 function formatConversionFactor(factor: number): string {
@@ -107,7 +107,7 @@ function formatConversionFactor(factor: number): string {
 }
 
 /**
- * v2.6.0 UoM UX: muted hint under a product tile —
+ * v2.6.0 UoM UX: muted hint under a product tile -
  * "1 FOOT = 0.3048 METER" (selling unit → base stock unit).
  */
 function UomHint({ sellingUnit, conversionFactor, baseUnit }: { sellingUnit: string; conversionFactor: number; baseUnit: string }) {
@@ -119,7 +119,7 @@ function UomHint({ sellingUnit, conversionFactor, baseUnit }: { sellingUnit: str
 }
 
 /**
- * v2.6.0 UoM UX: muted sub-line under a cart line —
+ * v2.6.0 UoM UX: muted sub-line under a cart line -
  * "= 3.048 METER stock" (qty × conversionFactor, in the BASE stock unit).
  * Rendered by pos-tab (CartItemRow is a shared component; the sub-line is
  * additive and cannot disturb its layout).
@@ -165,7 +165,7 @@ export default function POSTab() {
 
   // v2.5.0 (cart scrollbar feature): keep the newly-added cart row in view.
   // Long carts scroll inside their own always-visible cart-scrollbar; without
-  // this, adding an item to a scrolled cart gives no visual confirmation —
+  // this, adding an item to a scrolled cart gives no visual confirmation -
   // the row is added BELOW the fold and the cashier thinks the tap failed.
   const cartListRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -223,14 +223,14 @@ export default function POSTab() {
   const [receiptSendPhone, setReceiptSendPhone] = useState('');
   const [receiptSending, setReceiptSending] = useState(false);
 
-  // ── v2.6.0 MANAGER APPROVAL (credit-limit override) state ──
+  // v2.6.0 MANAGER APPROVAL (credit-limit override) state
   // Lives HERE (not in the dialog) because handleCheckout builds the payload.
   // The dialog only renders the form; a 400 CREDIT_LIMIT_EXCEEDED from the
   // server auto-opens it.
   const [managerApprovalOpen, setManagerApprovalOpen] = useState(false);
   const [managerApprovalEmail, setManagerApprovalEmail] = useState('');
   const [managerApprovalPassword, setManagerApprovalPassword] = useState('');
-  // v2.6.0: unified open/close — closing the approval form ALWAYS wipes the
+  // v2.6.0: unified open/close - closing the approval form ALWAYS wipes the
   // manager password from state (SECURITY), open just shows the form.
   const handleManagerApprovalOpenChange = useCallback((open: boolean) => {
     setManagerApprovalOpen(open);
@@ -240,11 +240,11 @@ export default function POSTab() {
     }
   }, []);
 
-  // ── v2.12.5 RBAC: Manager Authorization modal state ──
-  // Step-up approval for the 5–10% discount band, high-risk credit sales and
+  // v2.12.5 RBAC: Manager Authorization modal state
+  // Step-up approval for the 5-10% discount band, high-risk credit sales and
   // the 90+ day credit hold. The modal verifies credentials against
   // /api/auth/manager-authorize, then handleCheckout retries ONCE with a
-  // managerOverride payload (credential object — or `true` for the
+  // managerOverride payload (credential object - or `true` for the
   // DEBT_BLOCKED_OVERDUE manager-session path).
   const [managerAuthOpen, setManagerAuthOpen] = useState(false);
   const [managerAuthContext, setManagerAuthContext] = useState('');
@@ -262,7 +262,7 @@ export default function POSTab() {
     setManagerAuthOpen(true);
   }, []);
 
-  // Sell-More recommendations collapse — v2.13.3: persisted per user in
+  // Sell-More recommendations collapse - v2.13.3: persisted per user in
   // localStorage so a cashier who prefers it tucked away keeps it tucked away.
   const [recommendationsOpen, setRecommendationsOpen] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
@@ -281,7 +281,7 @@ export default function POSTab() {
     });
   }, []);
 
-  // ── Offline-first POS state ──
+  // Offline-first POS state
   // Tracks live browser connectivity so the cashier sees an "Offline" badge
   // and the checkout mutation knows to enqueue the sale locally instead of
   // attempting a doomed network request.
@@ -290,12 +290,12 @@ export default function POSTab() {
   const offlineQueueCount = useSyncExternalStore(
     subscribeOfflineCount,
     getOfflineCountSnapshot,
-    () => 0, // SSR snapshot — no queue on the server
+    () => 0, // SSR snapshot - no queue on the server
   );
   const [isSyncing, setIsSyncing] = useState(false);
 
   // AUDIT FIX (Task 3-e): held carts (localStorage 'mbt_held_carts') mirrored in
-  // state so the picker is reactive. Replaces the blind LIFO `pop()` recall —
+  // state so the picker is reactive. Replaces the blind LIFO `pop()` recall -
   // any held cart can now be resumed out of order or deleted.
   const [heldCarts, setHeldCarts] = useState<HeldCartRecord[]>([]);
   const [heldCartsOpen, setHeldCartsOpen] = useState(false);
@@ -313,13 +313,13 @@ export default function POSTab() {
   const authUser = useAuthStore((s) => s.user);
   const cart = useCartStore();
   // v2.8.0: admin-controlled VAT rate for display labels (server rate is
-  // authoritative at checkout — see /api/transactions).
+  // authoritative at checkout - see /api/transactions).
   const { vatRate } = useVatRate();
   const subtotal = cart.getSubtotal();
   // v2.13.1 VAT ALIGNMENT: the info-only "VAT (x% incl.)" figure is now
   // defined right after finalTotal (below) so it can reflect the POST-
   // DISCOUNT total per the spec formula Total × rate/(100 + rate).
-  // FINANCIAL MATH AUDIT — VAT-INCLUSIVE pricing: the VAT component is
+  // FINANCIAL MATH AUDIT - VAT-INCLUSIVE pricing: the VAT component is
   // INSIDE the line totals, so the pre-discount total is simply the gross
   // subtotal (the old `subtotal + tax` double-counted VAT as a basis for
   // gift-card / voucher math).
@@ -341,7 +341,7 @@ export default function POSTab() {
     };
   }, [cart.items.length]);
 
-  // ── Offline-first POS: connectivity tracking + auto-sync ──
+  // Offline-first POS: connectivity tracking + auto-sync
   // On mount: prime the cached queue count, register the online/offline
   // window listeners (which auto-fire syncQueue when connectivity returns),
   // and subscribe to background-sync results so we can toast the cashier.
@@ -390,7 +390,7 @@ export default function POSTab() {
     };
   }, []);
 
-  // Manual "Sync now" handler — triggered by the offline badge button.
+  // Manual "Sync now" handler - triggered by the offline badge button.
   const handleManualSync = useCallback(async () => {
     if (isSyncing || offlineQueueCount === 0) return;
     setIsSyncing(true);
@@ -433,11 +433,11 @@ export default function POSTab() {
     },
   });
 
-  // v2.13.3 SMART RECOMMENDATIONS: full UNFILTERED branch catalog — the affinity
+  // v2.13.3 SMART RECOMMENDATIONS: full UNFILTERED branch catalog - the affinity
   // engine must see every product the branch stocks regardless of what's typed
   // in the search box (the filtered `products` query above only feeds the grid).
   // limit=500 (API max) so a 243-product branch isn't truncated to its first
-  // alphabetical page — Spade must be suggestable from a cement cart. Cached
+  // alphabetical page - Spade must be suggestable from a cement cart. Cached
   // 5 min per store; one lightweight request.
   const { data: catalogAllData } = useQuery({
     queryKey: ['pos-catalog-all', currentStoreId],
@@ -516,7 +516,7 @@ export default function POSTab() {
   const checkoutMutation = useMutation({
     mutationFn: async (payload: CheckoutPayload) => {
       console.log('[MUTATION-FN] checkoutMutation.mutationFn CALLED, payload items=', payload?.items?.length);
-      // ── Offline-first checkout ──
+      // Offline-first checkout
       // If the browser is known to be offline, skip the doomed network
       // request entirely and persist the sale to the IndexedDB queue. The
       // cashier gets an immediate synthetic receipt (with a client-generated
@@ -544,7 +544,7 @@ export default function POSTab() {
       } catch (err) {
         // Network-layer failure while "online" (e.g. DNS down, server
         // unreachable, connection dropped mid-request). `fetch` throws a
-        // TypeError for these — distinguish from a genuine server-side 4xx/5xx
+        // TypeError for these - distinguish from a genuine server-side 4xx/5xx
         // error (which `request()` rejects with a real Error carrying the
         // server message).
         const isNetworkError =
@@ -561,7 +561,7 @@ export default function POSTab() {
             return { success: true, data: synthetic };
           }
         }
-        // Genuine server error (4xx/5xx) or queue failure — surface to onError.
+        // Genuine server error (4xx/5xx) or queue failure - surface to onError.
         throw err;
       }
     },
@@ -589,7 +589,7 @@ export default function POSTab() {
       setCartNotes({});
       setCartDiscountInput('');
       setCheckoutOpen(false);
-      // v2.6.0: sale complete — wipe the manager-approval credentials (the
+      // v2.6.0: sale complete - wipe the manager-approval credentials (the
       // password must never linger in state) and close the approval form.
       setManagerApprovalOpen(false);
       setManagerApprovalPassword('');
@@ -610,16 +610,16 @@ export default function POSTab() {
       queryClient.invalidateQueries({ queryKey: ['giftCards'] });
       queryClient.invalidateQueries({ queryKey: ['vouchers'] });
       // Offline sales don't hit the server immediately, so the dashboard /
-      // transactions lists won't reflect them yet — skip invalidating those
+      // transactions lists won't reflect them yet - skip invalidating those
       // (they'll refresh naturally when syncQueue completes).
     },
     onError: (err: unknown) => {
       // v2.6.0 MANAGER APPROVAL error surface:
-      //   • 403 'Manager approval failed: …' → credentials/role wrong — toast
+      //   • 403 'Manager approval failed: …' → credentials/role wrong - toast
       //     the dedicated message, reopen the form, wipe the password.
       //   • 400 with requiresManagerApproval (CREDIT_LIMIT_EXCEEDED) and no
       //     approval attached → auto-open the approval form.
-      // ── v2.12.5 RBAC: typed permission denials first ──
+      // v2.12.5 RBAC: typed permission denials first
       // 403 bodies carry { code, permission, message, requiresManagerOverride }.
       if (err instanceof ApiRequestError) {
         const body = (err.body ?? {}) as {
@@ -635,7 +635,7 @@ export default function POSTab() {
         // server message.
         if (err.status === 403 && body.code === 'PERMISSION_DENIED') {
           if (body.permission === 'pos.discount.gt10') {
-            // Not overridable at the counter — hard error, no modal.
+            // Not overridable at the counter - hard error, no modal.
             toast.error(err.message || 'Discounts above 10% require Store Owner approval', { duration: 7000 });
             return;
           }
@@ -653,7 +653,7 @@ export default function POSTab() {
           return;
         }
 
-        // DEBT_BLOCKED_OVERDUE (90+ day credit hold) — the backend only
+        // DEBT_BLOCKED_OVERDUE (90+ day credit hold) - the backend only
         // accepts managerOverride:true AND a manager-level SESSION. Manager
         // sessions get a confirm dialog + one retry with `true`; cashier
         // sessions cannot override, so show the server message + guidance.
@@ -699,7 +699,7 @@ export default function POSTab() {
     },
   });
 
-  // M-Pesa Daraja STK Push mutation — uses paymentsApi.darajaStk if available, falls back to direct fetch
+  // M-Pesa Daraja STK Push mutation - uses paymentsApi.darajaStk if available, falls back to direct fetch
   const mpesaMutation = useMutation({
     mutationFn: async (data: { phoneNumber: string; amount: number; accountReference: string; transactionDesc: string }) => {
       // Prefer the typed client method if BE-1 added it
@@ -742,7 +742,7 @@ export default function POSTab() {
     },
   });
 
-  // Poll Daraja STK status — uses paymentsApi.checkStkStatus if available, falls back to direct fetch
+  // Poll Daraja STK status - uses paymentsApi.checkStkStatus if available, falls back to direct fetch
   const startStkPolling = useCallback((checkoutRequestId: string) => {
     if (stkPollRef.current) clearInterval(stkPollRef.current);
     if (!checkoutRequestId) return;
@@ -779,7 +779,7 @@ export default function POSTab() {
           setStkResultDesc(result.resultDesc || 'Payment failed or cancelled.');
         }
       } catch (err) {
-        // Network blip — keep polling unless too many attempts
+        // Network blip - keep polling unless too many attempts
         console.warn('STK status poll error', err);
       }
       if (attempts >= 60) { // ~5 min @ 5s interval
@@ -834,9 +834,9 @@ export default function POSTab() {
   const recommendations: Array<{ product?: ProductListItem; productId?: string; productName?: string; pricePerUnit?: number; coOccurrence?: number; count?: number; imageUrl?: string; unitType?: string; quantityInStock?: number }> =
     Array.isArray(recommendationsData?.data) ? (recommendationsData!.data as Array<{ product?: ProductListItem; productId?: string; productName?: string; pricePerUnit?: number; coOccurrence?: number; count?: number; imageUrl?: string; unitType?: string; quantityInStock?: number }>) : [];
 
-  // ── v2.13.3 SMART RECOMMENDATIONS (Sell More) — three sources merged ────
-  // 1. Client-side affinity map (spec PART 3 — works from the FIRST cart,
-  //    no sales history needed — critical for a new branch like Thika)
+  // v2.13.3 SMART RECOMMENDATIONS (Sell More) - three sources merged
+  // 1. Client-side affinity map (spec PART 3 - works from the FIRST cart,
+  //    no sales history needed - critical for a new branch like Thika)
   // 2. Server co-occurrence (mined from real transactions once history exists)
   // 3. Best-seller chips when the cart is EMPTY (spec default)
   // Ranked by frequency (how many cart lines suggest the same product),
@@ -880,7 +880,7 @@ export default function POSTab() {
     return computeBestSellerSuggestions(catalog);
   }, [catalogAllData]);
 
-  // True when the cart itself triggered at least one mapped affinity — used to
+  // True when the cart itself triggered at least one mapped affinity - used to
   // label the section count badge honestly (suggestions vs best sellers).
   const cartHasMappedAffinities = useMemo(
     () => cartHasAffinities(cart.items.map((i) => i.productName)),
@@ -949,13 +949,13 @@ export default function POSTab() {
   const totalDiscount = giftCardDiscount + voucherDiscount + cartDiscount;
   const finalTotal = Math.max(0, preDiscountTotal - totalDiscount);
 
-  // ── v2.13.1 VAT DISPLAY ALIGNMENT (spec formula) ─────────────────────
+  // v2.13.1 VAT DISPLAY ALIGNMENT (spec formula)
   // "VAT (x% incl.)" = the VAT component INSIDE the amount the customer
   // actually pays: finalTotal × rate/(100 + rate). Identical to the old
   // per-line extraction (cart.getTax()) when nothing is discounted; once a
   // gift card / voucher / cart discount is applied the figure drops with
   // the total and matches the server's post-discount taxAmount exactly
-  // (same formula, same rate source). Info-only — Total math untouched.
+  // (same formula, same rate source). Info-only - Total math untouched.
   const tax = finalTotal > 0 && vatRate > 0
     ? Math.round(((finalTotal * vatRate) / (100 + vatRate)) * 100) / 100
     : 0;
@@ -1009,7 +1009,7 @@ export default function POSTab() {
     } else if (stock <= reorder && !product.isRental) {
       toast.warning(`${product.name}: Low stock — only ${stock} left (reorder at ${reorder}). Restock soon.`);
     } else {
-      // v2.13.3 spec wording — green toast names the product AND the price so
+      // v2.13.3 spec wording - green toast names the product AND the price so
       // the cashier gets instant price feedback while ringing.
       toast.success(`Added ${product.name} — ${formatKES(Number(product.pricePerUnit) || 0)}`);
     }
@@ -1021,12 +1021,12 @@ export default function POSTab() {
   const handleSearchInput = (value: string) => {
     setSearchInput(value);
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    // v2.13.3: 150ms per the functional-POS spec (was 200ms) — faster filter
+    // v2.13.3: 150ms per the functional-POS spec (was 200ms) - faster filter
     // feedback while still batching keystrokes so the grid never thrashes.
     searchDebounceRef.current = setTimeout(() => setSearchQuery(value), 150);
   };
 
-  // AUDIT FIX (Task 3-e): barcode scanner hardening — thermal scanners emit
+  // AUDIT FIX (Task 3-e): barcode scanner hardening - thermal scanners emit
   // <code>\n, so Enter means "scan finished". An exact (case-insensitive) match
   // on barcode OR SKU goes straight to the cart and the input is cleared, making
   // scan → in-cart deterministic and preventing concatenation between scans.
@@ -1073,9 +1073,9 @@ export default function POSTab() {
       heldList = [];
     }
     const holdId = `hold_${Date.now()}`;
-    // v2.13.3: capture the count BEFORE the cart is cleared — the toast names it.
+    // v2.13.3: capture the count BEFORE the cart is cleared - the toast names it.
     const heldCount = cart.getItemCount();
-    // AUDIT FIX (Task 3-e): append picker metadata — unit count + pre-tax total
+    // AUDIT FIX (Task 3-e): append picker metadata - unit count + pre-tax total
     // (Σ lineTotal, after line discounts) at hold time, so the picker can render
     // rows without rebuilding the cart.
     const heldTotal = cart.items.reduce(
@@ -1097,11 +1097,11 @@ export default function POSTab() {
     setCartDiscountInput('');
     setSelectedCustomer('');
     refreshHeldCarts();
-    // v2.13.3 spec wording — "Cart held - 7 items" names exactly what is parked.
+    // v2.13.3 spec wording - "Cart held - 7 items" names exactly what is parked.
     toast.success(`Cart held - ${heldCount} item${heldCount !== 1 ? 's' : ''}`);
   };
 
-  // AUDIT FIX (Task 3-e): out-of-order resume — restore a specific held cart by
+  // AUDIT FIX (Task 3-e): out-of-order resume - restore a specific held cart by
   // id (was a blind `heldCarts.pop()` LIFO-only recall). Restore logic unchanged.
   const resumeHeldCart = (holdId: string) => {
     let heldList: HeldCartRecord[] = [];
@@ -1148,7 +1148,7 @@ export default function POSTab() {
 
   // AUDIT FIX (Task 3-e): drop a held cart. Stock is never reserved while a cart
   // is held (hold is localStorage-only, no server call), so nothing needs to be
-  // released — deleting just discards the record.
+  // released - deleting just discards the record.
   const deleteHeldCart = (holdId: string) => {
     let heldList: HeldCartRecord[] = [];
     try {
@@ -1197,10 +1197,10 @@ export default function POSTab() {
       return;
     }
 
-    // ── v2.12.5 RBAC: discount permission gate (client pre-flight) ──
+    // v2.12.5 RBAC: discount permission gate (client pre-flight)
     // Mirrors the server's effective-discount rule: max(largest per-line
     // discountPercent, cart flat discount as % of the pre-discount total).
-    // The server stays authoritative — this pre-flight opens the Manager
+    // The server stays authoritative - this pre-flight opens the Manager
     // Authorization modal BEFORE a doomed request writes SecurityEvent noise.
     const retryOverride = pendingRetryOverrideRef.current;
     pendingRetryOverrideRef.current = null;
@@ -1218,12 +1218,12 @@ export default function POSTab() {
 
     if (!retryOverride) {
       if (effectiveDiscountPercent > 10 + DISCOUNT_EPS && !canFeature(role, 'pos.discount.gt10')) {
-        // Hard stop — no counter override exists for >10% (Store Owner tier).
+        // Hard stop - no counter override exists for >10% (Store Owner tier).
         toast.error('Discounts above 10% require Store Owner approval', { duration: 6000 });
         return;
       }
       if (effectiveDiscountPercent > 5 + DISCOUNT_EPS && !canFeature(role, 'pos.discount.gt5')) {
-        // Cashier in the 5–10% band → collect manager credentials, then retry.
+        // Cashier in the 5-10% band → collect manager credentials, then retry.
         openManagerAuth({
           context: `Discount ${effectiveDiscountPercent.toFixed(1)}% exceeds the cashier limit of 5%. A Branch Manager must authorize this sale.`,
         });
@@ -1258,9 +1258,9 @@ export default function POSTab() {
       }
       const cust = customers.find((c) => c.id === selectedCustomer);
       debtOverLimit = !!cust && finalTotal > (cust.debtLimit - cust.currentDebtBalance);
-      // ── v2.12.5 RBAC: high-risk credit pre-flight ──
+      // v2.12.5 RBAC: high-risk credit pre-flight
       // Outstanding > KES 150,000 requires debt.approve.high_risk (Branch
-      // Manager tier) or a verified managerOverride credential object —
+      // Manager tier) or a verified managerOverride credential object -
       // mirrors the server gate so the modal opens before the request.
       const selectedOutstanding = Number(cust?.currentDebtBalance ?? 0);
       if (
@@ -1275,7 +1275,7 @@ export default function POSTab() {
         return;
       }
       if (debtOverLimit && (!managerApprovalEmail.trim() || !managerApprovalPassword)) {
-        // v2.6.0: still blocked, but no longer a dead end — open the inline
+        // v2.6.0: still blocked, but no longer a dead end - open the inline
         // manager-approval form; submitting it re-runs handleCheckout with
         // the managerApproval attached.
         toast.error("Sale exceeds the customer's available debt limit — manager approval required");
@@ -1293,7 +1293,7 @@ export default function POSTab() {
       customerId: selectedCustomer || undefined,
       cashierId: useAuthStore.getState().user?.id || '',
       // Ensure all numeric fields are properly typed as numbers before sending
-      // to the API — prevents 400 validation errors from string-type values.
+      // to the API - prevents 400 validation errors from string-type values.
       items: cart.items.map(item => ({
         ...item,
         pricePerUnit: Number(item.pricePerUnit) || 0,
@@ -1312,11 +1312,11 @@ export default function POSTab() {
         debtOverLimit && managerApprovalEmail.trim() && managerApprovalPassword
           ? { loginEmail: managerApprovalEmail.trim(), password: managerApprovalPassword }
           : undefined,
-      // v2.12.5 RBAC: managerOverride — a verified credential object from the
-      // Manager Authorization modal (unlocks the 5–10% discount band and the
+      // v2.12.5 RBAC: managerOverride - a verified credential object from the
+      // Manager Authorization modal (unlocks the 5-10% discount band and the
       // high-risk debt gate), or `true` for the DEBT_BLOCKED_OVERDUE retry
       // from a manager-level session (backend requires the boolean form on
-      // that path — the session itself is the approver).
+      // that path - the session itself is the approver).
       managerOverride:
         retryOverride === true
           ? true
@@ -1345,7 +1345,7 @@ export default function POSTab() {
     });
   };
 
-  // v2.12.5 RBAC: the Manager Authorization modal verified the approver —
+  // v2.12.5 RBAC: the Manager Authorization modal verified the approver -
   // queue the override and retry the checkout exactly once. confirmOnly mode
   // (manager session on the DEBT_BLOCKED_OVERDUE path) retries with the
   // boolean `true` form; the credentials mode retries with the object.
@@ -1375,7 +1375,7 @@ export default function POSTab() {
     });
   };
 
-  // Send receipt via WhatsApp — uses whatsappApi.sendDocument with a fetch fallback
+  // Send receipt via WhatsApp - uses whatsappApi.sendDocument with a fetch fallback
   const handleSendReceiptWhatsApp = async () => {
     if (!lastTransaction) return;
     if (!receiptSendPhone || receiptSendPhone.length < 9) {
@@ -1424,7 +1424,7 @@ export default function POSTab() {
     }
   };
 
-  // Send receipt via SMS — SMS twin of handleSendReceiptWhatsApp: opens an
+  // Send receipt via SMS - SMS twin of handleSendReceiptWhatsApp: opens an
   // sms: deep link with a compact receipt text (openSMS normalizes 07xx →
   // 2547xx); with no phone the empty recipient opens the SMS app chooser.
   const handleSendReceiptSms = () => {
@@ -1446,10 +1446,10 @@ export default function POSTab() {
     }
   };
 
-  // Print receipt — opens the branded ReceiptPrintPreview modal, which owns
+  // Print receipt - opens the branded ReceiptPrintPreview modal, which owns
   // the modern colored receipt with QR verification, real PDF download and
   // the print-root isolation (see src/lib/receipt-pdf.ts + globals.css).
-  // (Previously this hand-wrote a monospace HTML popup — duplicated, unbranded
+  // (Previously this hand-wrote a monospace HTML popup - duplicated, unbranded
   // and bypassed the QR/PDF pipeline; the modal is now the single source.)
   const handlePrintReceipt = () => {
     if (!lastTransaction) return;
@@ -1458,7 +1458,7 @@ export default function POSTab() {
   };
 
   // FINANCIAL MATH AUDIT: Change Due = max(0, cash rendered − total),
-  // Decimal-exact (spec §4) — never a float subtraction artifact.
+  // Decimal-exact (spec §4) - never a float subtraction artifact.
   const change = paymentMethod === 'CASH' && cashReceived
     ? changeDueOf(Number(cashReceived), finalTotal)
     : 0;
@@ -1480,7 +1480,7 @@ export default function POSTab() {
 
   // Auto-adjust grid columns based on number of products visible:
   //  - Very few (≤8): fewer cols, bigger cards
-  //  - Medium (9–24): standard grid
+  //  - Medium (9-24): standard grid
   //  - Many (>24): denser grid
   const gridColsClass = useMemo(() => {
     const n = sortedProducts.length;
@@ -1500,7 +1500,7 @@ export default function POSTab() {
     return counts;
   }, [products]);
 
-  // Best seller IDs from dashboard topProducts (if available) — passed to ProductCard
+  // Best seller IDs from dashboard topProducts (if available) - passed to ProductCard
   const bestSellerIds = useMemo(() => {
     // Fallback heuristic: products that are recently updated AND have low stock
     // (low stock + recent activity = popular). This is purely a visual cue.
@@ -2228,7 +2228,7 @@ export default function POSTab() {
         cartItems={cart.items}
         subtotal={subtotal}
         taxAmount={tax}
-        // v2.6.0 MANAGER APPROVAL — parent owns the credential state so
+        // v2.6.0 MANAGER APPROVAL - parent owns the credential state so
         // handleCheckout can attach it to the checkout payload.
         managerApprovalEmail={managerApprovalEmail}
         onManagerApprovalEmailChange={setManagerApprovalEmail}

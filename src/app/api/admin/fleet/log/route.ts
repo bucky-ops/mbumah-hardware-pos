@@ -1,8 +1,6 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Fleet activity log API (RAK, v2.11.0)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Fleet activity log API (RAK, v2.11.0)
 //
-// GET /api/admin/fleet/log — merged, newest-first view of the per-store
+// GET /api/admin/fleet/log - merged, newest-first view of the per-store
 // ledgers (`ledger/<store-id>.jsonl`) in the ops-log repo. Each row carries
 // the event type, the acting store, and whatever detail the agent reported
 // (command outcomes include versions, backup paths, durations).
@@ -10,7 +8,6 @@
 // Query params: ?limit=50 (max 200) · ?store=<id> (single store).
 // Auth: SUPER_ADMIN or STORE_OWNER. Served through the 60 s fleet cache so
 // the console never hammers the GitHub API.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { withErrorBoundary } from '@/lib/logger';
@@ -101,7 +98,7 @@ async function getLogHandler(
   const storeParam = searchParams.get('store');
   const storeFilter = storeParam ? storeParam.trim() : null;
 
-  // NOTE: deliberately not cached — this route shares no cache slot with the
+  // NOTE: deliberately not cached - this route shares no cache slot with the
   // fleet snapshot, reads are on-demand (opening the activity drawer), and
   // GitHub raw reads are cheap at this frequency.
   const data = await buildLog(storeFilter, limit);

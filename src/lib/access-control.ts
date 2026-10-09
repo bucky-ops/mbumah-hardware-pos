@@ -1,26 +1,23 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Enhanced Access Control (ISO 27001 A.9)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Enhanced Access Control (ISO 27001 A.9)
 //
-// Phase 7 — ISO 27001 + ISO 9001 Compliance
+// Phase 7 - ISO 27001 + ISO 9001 Compliance
 //
 // ISO 27001 Annex A.9 (Access Control) requires:
-//   A.9.1.1 — Access control policy
-//   A.9.2.1 — User registration and de-registration
-//   A.9.2.2 — User access provisioning
-//   A.9.2.3 — Management of privileged access rights
-//   A.9.2.5 — Review of user access rights
-//   A.9.4.2 — Secure log-on procedures
-//   A.9.4.3 — Password management system
+//   A.9.1.1 - Access control policy
+//   A.9.2.1 - User registration and de-registration
+//   A.9.2.2 - User access provisioning
+//   A.9.2.3 - Management of privileged access rights
+//   A.9.2.5 - Review of user access rights
+//   A.9.4.2 - Secure log-on procedures
+//   A.9.4.3 - Password management system
 //
 // This module provides:
-//   1. `verifyAccess()` — Pre-flight permission check with audit logging
-//   2. `getAccessMatrix()` — The complete RBAC permission matrix
-//   3. `reviewAccessRights()` — ISO 27001 A.9.2.5 compliance check
-//   4. `getAccessMetrics()` — Dashboard metrics for access control
-//   5. `PasswordPolicy` — Configurable password requirements (A.9.4.3)
+//   1. `verifyAccess()` - Pre-flight permission check with audit logging
+//   2. `getAccessMatrix()` - The complete RBAC permission matrix
+//   3. `reviewAccessRights()` - ISO 27001 A.9.2.5 compliance check
+//   4. `getAccessMetrics()` - Dashboard metrics for access control
+//   5. `PasswordPolicy` - Configurable password requirements (A.9.4.3)
 //
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { db } from '@/lib/db';
 import { systemLog } from '@/lib/logger';
@@ -32,7 +29,7 @@ import {
 } from '@/lib/types';
 import { auditTrail, AuditAction } from './audit-trail';
 
-// ── Password Policy ──────────────────────────────────────────────────────────
+// Password Policy
 
 export const PasswordPolicy = {
   /** Minimum password length. ISO 27001 A.9.4.3. */
@@ -113,13 +110,13 @@ export function validatePassword(
   return violations;
 }
 
-// ── Access Control Verification ──────────────────────────────────────────────
+// Access Control Verification
 
 /**
  * Verify that a user has the required permission for an action.
  * If the permission is denied, an audit event is logged (security event).
  *
- * This is the RECOMMENDED way to check permissions in API routes — it
+ * This is the RECOMMENDED way to check permissions in API routes - it
  * provides audit logging for both granted and denied access, satisfying
  * ISO 27001 A.9.2.5 (review of user access rights) and A.9.4.2
  * (secure log-on procedures).
@@ -139,7 +136,7 @@ export async function verifyAccess(options: {
   const permitted = hasPermission(role as UserRole, resource, action);
 
   if (!permitted) {
-    // ── Access denied — log as a security event ──────────────────────────
+    // Access denied - log as a security event
     await auditTrail.log({
       actorId: userId,
       actorRole: role,
@@ -177,7 +174,7 @@ export async function verifyAccess(options: {
   return permitted;
 }
 
-// ── Access Rights Review (ISO 27001 A.9.2.5) ────────────────────────────────
+// Access Rights Review (ISO 27001 A.9.2.5)
 
 export interface AccessReviewResult {
   /** Total active users reviewed. */
@@ -224,7 +221,7 @@ export async function reviewAccessRights(): Promise<AccessReviewResult> {
   const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  // ── Get all active users ────────────────────────────────────────────────
+  // Get all active users
   const users = await db.user.findMany({
     where: { isActive: true },
     select: {
@@ -239,7 +236,7 @@ export async function reviewAccessRights(): Promise<AccessReviewResult> {
     },
   });
 
-  // ── Find stale accounts (90+ days inactive) ────────────────────────────
+  // Find stale accounts (90+ days inactive)
   const staleAccounts = users
     .filter((u) => {
       if (!u.lastLoginAt) return true; // Never logged in
@@ -255,7 +252,7 @@ export async function reviewAccessRights(): Promise<AccessReviewResult> {
         : 999,
     }));
 
-  // ── Find excessive permissions ──────────────────────────────────────────
+  // Find excessive permissions
   const excessivePermissions = users
     .filter((u) => {
       // SUPER_ADMIN or STORE_OWNER who hasn't been active in 30 days
@@ -272,7 +269,7 @@ export async function reviewAccessRights(): Promise<AccessReviewResult> {
       concern: `High-privilege role '${u.role}' with no recent activity (30+ days).`,
     }));
 
-  // ── Find users with multiple active sessions ───────────────────────────
+  // Find users with multiple active sessions
   const multipleSessions = users
     .filter((u) => u.sessions.length > 2)
     .map((u) => ({
@@ -282,7 +279,7 @@ export async function reviewAccessRights(): Promise<AccessReviewResult> {
       activeSessionCount: u.sessions.length,
     }));
 
-  // ── Compute compliance score ───────────────────────────────────────────
+  // Compute compliance score
   const totalIssues =
     staleAccounts.length * 2 + // Stale accounts are a moderate concern
     excessivePermissions.length * 5 + // Excessive permissions are critical
@@ -293,7 +290,7 @@ export async function reviewAccessRights(): Promise<AccessReviewResult> {
     ? 100
     : Math.max(0, Math.round(100 - (totalIssues / maxPossibleIssues) * 100));
 
-  // ── Generate recommendations ───────────────────────────────────────────
+  // Generate recommendations
   const recommendations: string[] = [];
 
   if (staleAccounts.length > 0) {
@@ -336,7 +333,7 @@ export async function reviewAccessRights(): Promise<AccessReviewResult> {
   };
 }
 
-// ── Access Control Metrics ───────────────────────────────────────────────────
+// Access Control Metrics
 
 export interface AccessControlMetrics {
   /** Total active users by role. */

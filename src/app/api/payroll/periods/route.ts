@@ -1,8 +1,8 @@
 // GET/POST /api/payroll/periods
 //
 // Manage payroll periods (cycles) for a store.
-//   GET  — list periods for a store (optionally filtered by status)
-//   POST — create a new payroll period (DRAFT status)
+//   GET - list periods for a store (optionally filtered by status)
+//   POST - create a new payroll period (DRAFT status)
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -12,7 +12,7 @@ import { requireStoreAccess } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-// ── GET: List payroll periods for a store ────────────────────────────────────
+// GET: List payroll periods for a store
 async function listPeriodsHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null }
@@ -68,7 +68,7 @@ export const GET = withErrorBoundary(
   'PAYROLL_PERIODS_LIST'
 );
 
-// ── POST: Create a new payroll period ────────────────────────────────────────
+// POST: Create a new payroll period
 async function createPeriodHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null; email: string }

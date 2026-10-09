@@ -1,23 +1,21 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Payroll Calculation Engine (Kenyan Statutory Compliance)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Payroll Calculation Engine (Kenyan Statutory Compliance)
 //
 // This module implements the full Kenyan payroll calculation pipeline:
 //
 //   1. Gross pay = basicSalary + allowances + overtimePay
 //   2. Statutory deductions:
-//      • NSSF        — National Social Security Fund (Tier I + Tier II, 2024 rates)
-//      • NHIF/SHIF    — National Hospital Insurance Fund / Social Health Insurance Fund
-//      • PAYE        — Pay As You Earn income tax (monthly bands, 2024)
-//      • Housing Levy — Affordable Housing Act 2024 (1.5% employee + 1.5% employer)
+//      • NSSF - National Social Security Fund (Tier I + Tier II, 2024 rates)
+//      • NHIF/SHIF - National Hospital Insurance Fund / Social Health Insurance Fund
+//      • PAYE - Pay As You Earn income tax (monthly bands, 2024)
+//      • Housing Levy - Affordable Housing Act 2024 (1.5% employee + 1.5% employer)
 //   3. Other deductions: loans, arrears, other
 //   4. Net pay = grossPay - totalDeductions
 //
-// ── LEGAL REFERENCES (Kenya, 2024/2025) ──
+// LEGAL REFERENCES (Kenya, 2024/2025)
 //
 //   • NSSF Act 2013 (effective Feb 2024):
 //       Tier I:  6% of pensionable earnings up to KES 8,000  → max KES 480
-//       Tier II: 6% of pensionable earnings from 8,001–72,000 → max KES 3,840
+//       Tier II: 6% of pensionable earnings from 8,001-72,000 → max KES 3,840
 //       Total max employee contribution: KES 4,320/month
 //
 //   • SHIF (replaces NHIF, effective Oct 2024):
@@ -26,10 +24,10 @@
 //
 //   • PAYE (effective July 2024):
 //       Monthly taxable income bands:
-//         0 – 24,000           → 10%
-//         24,001 – 32,333      → 25%
-//         32,334 – 500,000     → 30%
-//         500,001 – 800,000    → 32.5%
+//         0-24,000           → 10%
+//         24,001-32,333      → 25%
+//         32,334-500,000     → 30%
+//         500,001-800,000    → 32.5%
 //         800,001+             → 35%
 //       Personal relief: KES 2,400/month (KES 28,800/year)
 //       Housing Levy + SHIF are deductible from taxable income BEFORE PAYE.
@@ -40,7 +38,7 @@
 //       Capped at gross pay (no upper limit in the Act, but practically
 //       follows the NSSF ceiling of KES 72,000 pensionable earnings).
 //
-// ── IMPORTANT ──
+// IMPORTANT
 //
 //   Tax laws change. The rates below are parametrised as constants at the top
 //   of this file so they can be updated in ONE place when KRA / KENHA revises
@@ -51,13 +49,12 @@
 //   All monetary values are in KES (Kenyan Shillings). Float is used for
 //   consistency with the rest of the schema; rounding to 2 decimal places is
 //   applied at the end of each calculation to avoid floating-point drift.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { db, withImmutabilityBypass, runWithoutTenant } from '@/lib/db';
 import { systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
-// ── 1. Statutory deduction rate constants (Kenya 2024/2025) ──────────────────
+// 1. Statutory deduction rate constants (Kenya 2024/2025)
 
 export const NSSF_RATES = {
   tier1Rate: 0.06,            // 6%
@@ -87,13 +84,13 @@ export const PAYE_RELIEF = {
 // PAYE monthly bands (2024): [lowerBound, upperBound (Infinity for top), rate]
 export const PAYE_BANDS: ReadonlyArray<readonly [number, number, number]> = [
   [0, 24000, 0.10],           // 10% on first 24,000
-  [24000, 32333, 0.25],       // 25% on 24,001 – 32,333
-  [32333, 500000, 0.30],      // 30% on 32,334 – 500,000
-  [500000, 800000, 0.325],    // 32.5% on 500,001 – 800,000
+  [24000, 32333, 0.25],       // 25% on 24,001-32,333
+  [32333, 500000, 0.30],      // 30% on 32,334-500,000
+  [500000, 800000, 0.325],    // 32.5% on 500,001-800,000
   [800000, Infinity, 0.35],   // 35% on 800,001+
 ] as const;
 
-// ── 2. Types ─────────────────────────────────────────────────────────────────
+// 2. Types
 
 export interface PayrollCalculationInput {
   // Employee's compensation config
@@ -183,13 +180,13 @@ export interface PayrollCalculationResult {
   };
 }
 
-// ── 3. Utility: round to 2 decimal places ────────────────────────────────────
+// 3. Utility: round to 2 decimal places
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-// ── 4. NSSF calculation (Tier I + Tier II) ───────────────────────────────────
+// 4. NSSF calculation (Tier I + Tier II)
 
 export interface NSSFResult {
   tier1: number;
@@ -222,7 +219,7 @@ export function calculateNSSF(pensionableEarnings: number, exempt: boolean): NSS
   };
 }
 
-// ── 5. SHIF (formerly NHIF) calculation ──────────────────────────────────────
+// 5. SHIF (formerly NHIF) calculation
 
 export function calculateSHIF(grossPay: number, exempt: boolean): number {
   if (exempt) return 0;
@@ -232,7 +229,7 @@ export function calculateSHIF(grossPay: number, exempt: boolean): number {
   return Math.max(calculated, SHIF_RATES.minimum);
 }
 
-// ── 6. Housing Levy calculation ──────────────────────────────────────────────
+// 6. Housing Levy calculation
 
 export function calculateHousingLevy(basicSalary: number): number {
   // 1.5% of basic salary (employee portion). The employer also contributes
@@ -241,7 +238,7 @@ export function calculateHousingLevy(basicSalary: number): number {
   return round2(basicSalary * HOUSING_LEVY_RATES.employeeRate);
 }
 
-// ── 7. PAYE calculation (progressive bands, post-deduction taxable income) ───
+// 7. PAYE calculation (progressive bands, post-deduction taxable income)
 
 export interface PAYEResult {
   grossTax: number;
@@ -302,7 +299,7 @@ export function calculatePAYE(
   };
 }
 
-// ── 8. Overtime calculation ──────────────────────────────────────────────────
+// 8. Overtime calculation
 
 export function calculateOvertimePay(
   overtimeHours: number,
@@ -327,12 +324,12 @@ export function calculateOvertimePay(
   return round2(overtimeHours * derivedHourlyRate * 1.5);
 }
 
-// ── 9. Main calculation function ─────────────────────────────────────────────
+// 9. Main calculation function
 
 /**
  * Calculate the full payroll breakdown for a single employee for one period.
  *
- * This is a PURE function — it does NOT touch the database. It takes the
+ * This is a PURE function - it does NOT touch the database. It takes the
  * employee's compensation config + working stats and returns the complete
  * earnings/deductions/netPay breakdown with a full audit trail.
  *
@@ -366,7 +363,7 @@ export function calculatePayForPeriod(input: PayrollCalculationInput): PayrollCa
   const payeArrears = input.deductionsOverride?.payeArrears ?? 0;
   const otherDeductions = input.deductionsOverride?.otherDeductions ?? 0;
 
-  // ── Earnings ──
+  // Earnings
   const overtimePay = calculateOvertimePay(
     input.overtimeHours,
     input.hourlyRate,
@@ -383,11 +380,11 @@ export function calculatePayForPeriod(input: PayrollCalculationInput): PayrollCa
     overtimePay
   );
 
-  // ── Statutory deductions ──
+  // Statutory deductions
 
   // GUARD: statutory deductions may only be levied on earnings ACTUALLY PAID.
   // When grossPay <= 0 (e.g. zero attendance on a supplemental run) every
-  // statutory deduction must be zero — charging NSSF/SHIF/Housing Levy against
+  // statutory deduction must be zero - charging NSSF/SHIF/Housing Levy against
   // zero earnings produces a NEGATIVE netPay (incident June 2026: supplemental
   // run stored housingLevy 2,699.99 against grossPay 0 → netPay −2,699.99).
   const hasEarnings = grossPay > 0;
@@ -395,10 +392,10 @@ export function calculatePayForPeriod(input: PayrollCalculationInput): PayrollCa
   // NSSF: based on pensionable earnings (= basic salary, capped at 72,000)
   const nssfResult = calculateNSSF(input.basicSalary, input.nssfExempt || !hasEarnings);
 
-  // SHIF: 2.75% of gross pay, min 300 — only when there are earnings
+  // SHIF: 2.75% of gross pay, min 300 - only when there are earnings
   const nhif = hasEarnings ? calculateSHIF(grossPay, input.nhifExempt) : 0;
 
-  // Housing Levy: 1.5% of basic salary — only when there are earnings
+  // Housing Levy: 1.5% of basic salary - only when there are earnings
   const housingLevy = hasEarnings ? calculateHousingLevy(input.basicSalary) : 0;
 
   // PAYE: taxable income = grossPay - NSSF - SHIF - Housing Levy
@@ -413,7 +410,7 @@ export function calculatePayForPeriod(input: PayrollCalculationInput): PayrollCa
   );
   const finalPAYE = Math.max(0, round2(payeResult.netPAYE - insuranceRelief));
 
-  // ── Total deductions ──
+  // Total deductions
   const totalDeductions = round2(
     finalPAYE +
     nssfResult.total +
@@ -424,10 +421,10 @@ export function calculatePayForPeriod(input: PayrollCalculationInput): PayrollCa
     otherDeductions
   );
 
-  // ── Net pay ──
+  // Net pay
   const netPay = round2(grossPay - totalDeductions);
 
-  // ── Working stats ──
+  // Working stats
   const daysWorked = input.daysPresent + input.overtimeHours > 0
     ? input.daysPresent
     : 0;
@@ -483,7 +480,7 @@ export function calculatePayForPeriod(input: PayrollCalculationInput): PayrollCa
   };
 }
 
-// ── 10. Process a full payroll run ───────────────────────────────────────────
+// 10. Process a full payroll run
 
 export interface ProcessPayrollRunResult {
   payrollRunId: string;
@@ -650,7 +647,7 @@ export async function processPayrollRun(
             overtimeHours,
           });
 
-          // Create the PayrollDetail (immutable record) — use bypass since
+          // Create the PayrollDetail (immutable record) - use bypass since
           // this is the initial creation, not a mutation of existing records.
           await withImmutabilityBypass(async () => {
             return tx.payrollDetail.create({
@@ -762,7 +759,7 @@ export async function processPayrollRun(
   };
 }
 
-// ── 11. Leave balance management ─────────────────────────────────────────────
+// 11. Leave balance management
 
 /**
  * Get or create the leave balance for an employee + leave type + year.
@@ -895,7 +892,7 @@ export async function updateLeaveBalanceOnStatusChange(
 /**
  * Calculate the number of working days between two dates (inclusive),
  * excluding weekends (Saturday + Sunday). Kenyan public holidays are
- * NOT subtracted here — that's a future enhancement (a Holidays table).
+ * NOT subtracted here - that's a future enhancement (a Holidays table).
  */
 export function calculateWorkingDays(startDate: Date, endDate: Date): number {
   if (startDate > endDate) return 0;
@@ -918,11 +915,11 @@ export function calculateWorkingDays(startDate: Date, endDate: Date): number {
   return workingDays;
 }
 
-// ── 12. Seed default leave types (organisation-wide) ─────────────────────────
+// 12. Seed default leave types (organisation-wide)
 
 /**
  * Seed the organisation-wide leave types required by Kenyan labour law.
- * Idempotent — safe to call multiple times.
+ * Idempotent - safe to call multiple times.
  */
 export async function seedDefaultLeaveTypes(): Promise<void> {
   const defaultTypes = [

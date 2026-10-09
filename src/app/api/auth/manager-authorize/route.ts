@@ -1,6 +1,6 @@
 // POST /api/auth/manager-authorize
 //
-// v2.12.2 (PR B — RBAC, Task REL-ROADMAP-B1): step-up authorization endpoint
+// v2.12.2 (PR B - RBAC, Task REL-ROADMAP-B1): step-up authorization endpoint
 // for the phase-2 Manager PIN/credentials modal. A logged-in user (typically a
 // CASHIER at the counter) submits a manager's email + password + a reason and
 // receives a durable authorization record in the security feed.
@@ -11,7 +11,7 @@
 //     400 validation error
 //     401 no session
 //     403 { code: 'INVALID_CREDENTIALS' | 'INSUFFICIENT_ROLE' }
-//     429 { code: 'BRUTE_FORCE_PIN' }  — 3 failed attempts / 5 min / email+ip
+//     429 { code: 'BRUTE_FORCE_PIN' } - 3 failed attempts / 5 min / email+ip
 //
 // The credential verification itself lives in src/lib/manager-auth.ts so the
 // transactions route's managerOverride object and this endpoint share ONE
@@ -20,7 +20,7 @@
 // Every outcome is recorded:
 //   • success → SecurityEvent INFO 'MANAGER_AUTHORIZED' (in authorizeManager)
 //               + hash-chained AuditLog 'MANAGER_AUTHORIZED' w/ reason
-//   • failure → typed error (generic copy — never reveals which check failed)
+//   • failure → typed error (generic copy - never reveals which check failed)
 //               + SecurityEvent 'BRUTE_FORCE' when the window trips (in
 //               authorizeManager)
 
@@ -100,7 +100,7 @@ async function managerAuthorizeHandler(
     );
   }
 
-  // ── Success: durable AuditLog entry with the business reason ──
+  // Success: durable AuditLog entry with the business reason
   try {
     await auditTrail.log({
       actorId: session.userId,

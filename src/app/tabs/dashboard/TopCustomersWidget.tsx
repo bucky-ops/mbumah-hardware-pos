@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * TopCustomersWidget — leaderboard of top customers by total spend.
+ * TopCustomersWidget - leaderboard of top customers by total spend.
  *
  * Pulls from /api/customers/top. Shows top 5 customers with rank badge,
  * avatar initials, name, order count, total spend, loyalty tier badge, and
@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { formatKES } from '@/lib/api';
 import type { AppTab } from '@/lib/stores';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 interface TopCustomer {
   rank: number;
@@ -39,7 +39,7 @@ interface TopCustomer {
   firstPurchaseAt: string;
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// Helpers
 
 const TIER_BADGE_STYLES: Record<string, string> = {
   BRONZE: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400',
@@ -62,7 +62,7 @@ function RankIcon({ rank }: { rank: number }) {
   return <span className="text-xs font-bold text-muted-foreground">#{rank}</span>;
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
+// Component
 
 export interface TopCustomersWidgetProps {
   storeId: string;

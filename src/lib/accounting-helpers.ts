@@ -1,36 +1,32 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Accounting Business Logic (Phase 2)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Accounting Business Logic (Phase 2)
 //
 // This module is the **single source of truth** for all general-purpose
 // accounting operations on the double-entry ledger. It complements:
 //
-//   • `account-helper.ts`   — the legacy SALE-path helper (recordSaleJournalEntry,
+//   • `account-helper.ts` - the legacy SALE-path helper (recordSaleJournalEntry,
 //                              recordGiftCardIssuance, WAC inventory costing).
 //                              Preserved unchanged; sale flows stay there.
-//   • `financial-audit.ts`  — read-only integrity verification (trial balance,
+//   • `financial-audit.ts` - read-only integrity verification (trial balance,
 //                              per-entry balance check, period-close audit).
 //                              Preserved unchanged; this module IMPORTS from it.
 //
 // WHAT LIVES HERE (the "accounting controller layer")
-// ─────────────────────────────────────────────────────────────────────────────
-//   1. Pure validation      — computeEntryTotals, validateJournalEntryBalancing
-//   2. Period validation    — findPeriodForDate, assertPeriodOpen,
+//   1. Pure validation - computeEntryTotals, validateJournalEntryBalancing
+//   2. Period validation - findPeriodForDate, assertPeriodOpen,
 //                              validateEntryAgainstPeriod
-//   3. Account balance      — calculateAccountBalance (as-of / for-period)
-//   4. Journal lifecycle    — createJournalEntry → approveJournalEntry →
+//   3. Account balance - calculateAccountBalance (as-of / for-period)
+//   4. Journal lifecycle - createJournalEntry → approveJournalEntry →
 //                              postJournalEntry → (voidJournalEntry)
-//   5. Account CRUD         — createAccount, updateAccount (with audit)
-//   6. Period lifecycle     — createFinancialPeriod → closeFinancialPeriod →
+//   5. Account CRUD - createAccount, updateAccount (with audit)
+//   6. Period lifecycle - createFinancialPeriod → closeFinancialPeriod →
 //                              lockFinancialPeriod (+ reopenFinancialPeriod)
-//   7. Trial balance snap   — captureTrialBalanceSnapshot (point-in-time freeze)
-//   8. Budget management    — setBudget, recalculateBudgetActuals
-//   9. Reconciliation       — reconcileJournalEntryLine (bank rec)
-//  10. Audit trail          — recordAuditLog, listAuditTrail
-//  11. Status derivation    — deriveJournalEntryStatus (DRAFT/POSTED/VOIDED/…)
+//   7. Trial balance snap - captureTrialBalanceSnapshot (point-in-time freeze)
+//   8. Budget management - setBudget, recalculateBudgetActuals
+//   9. Reconciliation - reconcileJournalEntryLine (bank rec)
+//  10. Audit trail - recordAuditLog, listAuditTrail
+//  11. Status derivation - deriveJournalEntryStatus (DRAFT/POSTED/VOIDED/…)
 //
 // DESIGN PRINCIPLES (ISO 9001 Process Control + ISO 27001 Integrity)
-// ─────────────────────────────────────────────────────────────────────────────
 //   • **Money, never float.** Every monetary value flows through the `Money`
 //     class (decimal.js, banker's rounding). Prisma Decimal ↔ Money conversion
 //     is centralised in `toMoney()`.
@@ -51,7 +47,6 @@
 //     links the original to its reversal. The original is never mutated except
 //     for the void flag + reversingEntryId.
 //
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { db, withImmutabilityBypass } from "./db";
 import { Money } from "./money";
@@ -81,20 +76,18 @@ import type {
   AuditLog,
 } from "@prisma/client";
 
-// ── Re-export the ReferenceDocumentType const for ergonomic import ──────────
+// Re-export the ReferenceDocumentType const for ergonomic import
 export { ReferenceDocumentType } from "./types";
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 0. Shared types & helpers
-// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Accepted input shapes for any monetary field. Resolved to `Money` via
  * `toMoney()`. Accepts:
- *   • `number`   — 1234.56 (WARNING: floats lose precision; prefer strings)
- *   • `string`   — "1234.56", "Ksh 1,234.56" (cleaned by Money.cleanNumericString)
- *   • `Decimal`  — decimal.js or Prisma.Decimal instance (exact)
- *   • `Money`    — already wrapped (returned as-is)
+ *   • `number` - 1234.56 (WARNING: floats lose precision; prefer strings)
+ *   • `string` - "1234.56", "Ksh 1,234.56" (cleaned by Money.cleanNumericString)
+ *   • `Decimal` - decimal.js or Prisma.Decimal instance (exact)
+ *   • `Money` - already wrapped (returned as-is)
  */
 export type MoneyInput = number | string | Decimal | Money;
 
@@ -111,13 +104,13 @@ export function toMoney(value: MoneyInput | null | undefined): Money {
   if (value instanceof Money) return value;
   if (typeof value === "number") return Money.fromNumber(value);
   if (typeof value === "string") return Money.fromString(value);
-  // Decimal (decimal.js OR Prisma.Decimal — both have toString())
+  // Decimal (decimal.js OR Prisma.Decimal - both have toString())
   return new Money(new Decimal(value.toString()));
 }
 
 /**
  * A single journal-entry line as supplied by API callers. Debit OR credit
- * (never both > 0 — enforced in `computeEntryTotals`). Tax fields are optional
+ * (never both > 0 - enforced in `computeEntryTotals`). Tax fields are optional
  * and only populated for VAT lines.
  */
 export interface JournalEntryLineInput {
@@ -138,7 +131,7 @@ export interface EntryTotals {
   variance: Money;
 }
 
-// ── Audit-log writer helper ──────────────────────────────────────────────────
+// Audit-log writer helper
 //
 // Centralises the Prisma JSON-null handling. Prisma's `Json?` fields require
 // `Prisma.DbNull` (SQL NULL) or `Prisma.JsonNull` (JSON literal null) instead
@@ -167,7 +160,7 @@ export interface AuditLogEntry {
  * union. `Record<string, unknown>` is not structurally assignable to
  * `InputJsonValue` (which requires recursively-JSON values), so we cast. This
  * is safe because callers only pass primitive-only objects constructed in this
- * module (no Date, Decimal, or class instances — those are stringified first).
+ * module (no Date, Decimal, or class instances - those are stringified first).
  */
 function toJsonInput(
   value: Record<string, unknown> | null | undefined,
@@ -201,18 +194,16 @@ async function writeAuditLog(
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 1. Pure balance validation
-// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Sum the debit and credit columns of a set of journal-entry lines and test
  * whether they balance (golden rule of double-entry: Σdebit === Σcredit).
  *
- * Pure function — no DB access, no side effects. Trivially unit-testable.
+ * Pure function - no DB access, no side effects. Trivially unit-testable.
  * Throws `APIError(400)` on:
  *   • Negative debit or credit (data integrity violation)
- *   • A line where BOTH debit and credit are > 0 (category error — use two lines)
+ *   • A line where BOTH debit and credit are > 0 (category error - use two lines)
  *
  * Tolerance: 0.005 (half a cent) to absorb rounding from percentage allocations.
  */
@@ -243,7 +234,7 @@ export function computeEntryTotals(lines: JournalEntryLineInput[]): EntryTotals 
   }
 
   const variance = totalDebit.subtract(totalCredit);
-  // Half-cent tolerance — absorbs banker's-rounding residue from allocations.
+  // Half-cent tolerance - absorbs banker's-rounding residue from allocations.
   const isBalanced = variance.abs().amount.lessThanOrEqualTo("0.005");
 
   return { totalDebit, totalCredit, isBalanced, variance };
@@ -280,9 +271,7 @@ export function validateJournalEntryBalancing(
   return totals;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 2. Financial-period validation
-// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Find the financial period that contains `date` for a given store. If multiple
@@ -307,9 +296,9 @@ export async function findPeriodForDate(
 
 /**
  * Assert that a period exists and is OPEN. Throws:
- *   • 400 — period is null (no period for this date)
- *   • 409 — period is CLOSED (must reopen to post)
- *   • 403 — period is LOCKED (terminal state, no mutations ever)
+ *   • 400 - period is null (no period for this date)
+ *   • 409 - period is CLOSED (must reopen to post)
+ *   • 403 - period is LOCKED (terminal state, no mutations ever)
  */
 export function assertPeriodOpen(
   period: FinancialPeriod | null,
@@ -357,9 +346,7 @@ export function validateEntryAgainstPeriod(
   assertPeriodOpen(period);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 3. Account balance calculation
-// ─────────────────────────────────────────────────────────────────────────────
 
 export interface AccountBalanceOptions {
   /** Include entries dated ≤ this date. Default: now. */
@@ -398,7 +385,7 @@ export interface AccountBalanceResult {
  * Contra accounts (e.g. Sales Discounts, Accumulated Depreciation) carry an
  * overridden `normalBalance` and are honoured here.
  *
- * This function is the **authoritative** source of account balances — the
+ * This function is the **authoritative** source of account balances - the
  * `Account.balance` column is a denormalised cache that must be reconciled
  * against this computation (see `reconcileAccount` in financial-audit.ts).
  */
@@ -469,9 +456,7 @@ export async function calculateAccountBalance(
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 4. Journal-entry lifecycle (create → approve → post → void)
-// ─────────────────────────────────────────────────────────────────────────────
 
 export interface CreateJournalEntryInput {
   storeId: string;
@@ -491,7 +476,7 @@ export interface CreateJournalEntryInput {
   /** Explicit period; if omitted, the period containing entryDate is auto-resolved. */
   financialPeriodId?: string;
   /**
-   * Post immediately after creation. Requires `bypassApproval` semantics —
+   * Post immediately after creation. Requires `bypassApproval` semantics -
    * use ONLY for system-generated entries (sales, M-Pesa callbacks) where the
    * entry is balanced by construction and segregation-of-duties does not apply.
    */
@@ -539,10 +524,10 @@ export async function createJournalEntry(
     );
   }
 
-  // ── 1. Balance validation ──
+  // 1. Balance validation
   const totals = validateJournalEntryBalancing(lines);
 
-  // ── 2. Account validation ──
+  // 2. Account validation
   const accountIds = [...new Set(lines.map((l) => l.accountId))];
   const accounts = await db.account.findMany({
     where: { id: { in: accountIds }, organizationId, isActive: true },
@@ -557,7 +542,7 @@ export async function createJournalEntry(
     );
   }
 
-  // ── 3. Period validation ──
+  // 3. Period validation
   let period: FinancialPeriod | null = null;
   if (financialPeriodId) {
     period = await db.financialPeriod.findUnique({
@@ -572,7 +557,7 @@ export async function createJournalEntry(
   // If no period exists at all, we still allow the entry (the org may not use
   // period-close discipline). The entry's financialPeriodId stays null.
 
-  // ── 4. Create entry + lines + audit log in a transaction ──
+  // 4. Create entry + lines + audit log in a transaction
   const entryNumber = generateJournalEntryNumber();
   const entry = await db.$transaction(async (tx) => {
     const created = await tx.journalEntry.create({
@@ -639,7 +624,7 @@ export async function createJournalEntry(
     return created;
   });
 
-  // ── 5. Optional immediate posting (system-generated entries only) ──
+  // 5. Optional immediate posting (system-generated entries only)
   if (postImmediately) {
     return postJournalEntry(entry.id, userId, {
       ipAddress,
@@ -838,11 +823,11 @@ export async function postJournalEntry(
  * is posted immediately, and is linked to the original via `reversingEntryId`.
  * The original is marked `isVoided=true` with the void reason and timestamp.
  *
- * This is the ONLY sanctioned correction mechanism for posted entries —
+ * This is the ONLY sanctioned correction mechanism for posted entries -
  * deletes and direct edits are blocked by the immutability guard. It satisfies
  * ISO 9001's "error correction without loss of traceability" requirement.
  *
- * @param reason Mandatory (≥ 3 chars) — recorded in the audit trail.
+ * @param reason Mandatory (≥ 3 chars) - recorded in the audit trail.
  */
 export async function voidJournalEntry(
   journalEntryId: string,
@@ -870,7 +855,7 @@ export async function voidJournalEntry(
     throw APIError.conflict(`Entry ${entry.entryNumber} is already voided.`);
   }
   // F7-2 remediation: voiding a DRAFT (never posted, contributes nothing to
-  // balances) used to mint a POSTED reversing entry out of nothing — silently
+  // balances) used to mint a POSTED reversing entry out of nothing - silently
   // corrupting every affected account and the trial balance. Drafts are voided
   // in place (flag only); only POSTED entries get a reversing entry.
   if (!entry.isPosted) {
@@ -900,7 +885,7 @@ export async function voidJournalEntry(
 
   return withImmutabilityBypass(async () => {
     return db.$transaction(async (tx) => {
-      // 1. Create the reversing entry — posted immediately, auto-approved by the voiding user.
+      // 1. Create the reversing entry - posted immediately, auto-approved by the voiding user.
       const reversingEntry = await tx.journalEntry.create({
         data: {
           storeId: entry.storeId,
@@ -997,9 +982,7 @@ export async function voidJournalEntry(
   }, `void_journal_entry_${journalEntryId}`);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 5. Account CRUD (with audit)
-// ─────────────────────────────────────────────────────────────────────────────
 
 export interface CreateAccountInput {
   organizationId: string;
@@ -1007,7 +990,7 @@ export interface CreateAccountInput {
   name: string;
   type: string; // AccountType
   subType?: string; // AccountSubType
-  normalBalance?: string; // NormalBalance — defaults based on type
+  normalBalance?: string; // NormalBalance - defaults based on type
   description?: string;
   isActive?: boolean;
   createdByUserId: string;
@@ -1091,7 +1074,7 @@ export interface UpdateAccountInput {
   description?: string;
   subType?: string;
   isActive?: boolean;
-  // NOTE: `code`, `type`, and `normalBalance` are NOT updatable — changing them
+  // NOTE: `code`, `type`, and `normalBalance` are NOT updatable - changing them
   // would invalidate historical journal entries. Create a new account instead.
 }
 
@@ -1100,7 +1083,7 @@ export interface UpdateAccountInput {
  *
  * Deactivation is blocked if the account has a non-zero balance (would corrupt
  * historical reports). `code`, `type`, and `normalBalance` are immutable by
- * design — change them by creating a new account.
+ * design - change them by creating a new account.
  */
 export async function updateAccount(
   accountId: string,
@@ -1156,9 +1139,7 @@ export async function updateAccount(
   return updated;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 6. Financial-period lifecycle (create → close → lock, + reopen)
-// ─────────────────────────────────────────────────────────────────────────────
 
 export interface CreateFinancialPeriodInput {
   storeId: string;
@@ -1200,7 +1181,7 @@ export async function createFinancialPeriod(
     );
   }
 
-  // Overlap check — no two periods for the same store may cover the same day.
+  // Overlap check - no two periods for the same store may cover the same day.
   const overlapping = await db.financialPeriod.findFirst({
     where: {
       storeId,
@@ -1256,7 +1237,7 @@ export async function createFinancialPeriod(
  *   3. The period-close audit (from financial-audit.ts) finds no CRITICAL or
  *      HIGH issues (unbalanced entries, trial-balance mismatch, etc.).
  *
- * Closing does NOT freeze the period — entries can still be posted if it is
+ * Closing does NOT freeze the period - entries can still be posted if it is
  * later reopened. Use `lockFinancialPeriod` for the terminal freeze.
  */
 export async function closeFinancialPeriod(
@@ -1343,7 +1324,7 @@ export async function closeFinancialPeriod(
 }
 
 /**
- * Lock a CLOSED financial period. LOCKED is the terminal state — no mutations
+ * Lock a CLOSED financial period. LOCKED is the terminal state - no mutations
  * of any kind are permitted, and the period cannot be reopened. Use this after
  * the period has been closed AND audited AND reported.
  */
@@ -1448,9 +1429,7 @@ export async function reopenFinancialPeriod(
   return updated;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 7. Trial-balance snapshot (point-in-time freeze)
-// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Capture a point-in-time trial-balance snapshot for a store. The snapshot
@@ -1459,7 +1438,7 @@ export async function reopenFinancialPeriod(
  * accounts may change later, but the snapshot reflects the state AS IT WAS).
  *
  * Typically called at period close to freeze the financial position for
- * archival and audit purposes (ISO 9001 — verifiable financial position).
+ * archival and audit purposes (ISO 9001 - verifiable financial position).
  */
 export async function captureTrialBalanceSnapshot(
   storeId: string,
@@ -1520,7 +1499,7 @@ export async function captureTrialBalanceSnapshot(
     userAgent,
   });
 
-  // Warn if the snapshot is unbalanced — this is a serious red flag.
+  // Warn if the snapshot is unbalanced - this is a serious red flag.
   if (!tb.isBalanced) {
     await systemLog({
       storeId,
@@ -1540,9 +1519,7 @@ export async function captureTrialBalanceSnapshot(
   return snapshot;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 8. Budget management
-// ─────────────────────────────────────────────────────────────────────────────
 
 export interface SetBudgetInput {
   storeId: string;
@@ -1557,7 +1534,7 @@ export interface SetBudgetInput {
 
 /**
  * Set or update the budgeted amount for an account within a financial period.
- * One budget per (period, account) — enforced by a unique constraint; this
+ * One budget per (period, account) - enforced by a unique constraint; this
  * function upserts accordingly. The `variance` is recomputed as
  * `budgetedAmount − actualAmount` (actuals are 0 until refreshed).
  *
@@ -1668,7 +1645,7 @@ export async function setBudget(input: SetBudgetInput): Promise<Budget> {
  * account's normal balance.
  *
  * This is an expensive operation (one query per budget) and is intended to be
- * run on-demand from the UI or by a nightly background job — NOT in real-time.
+ * run on-demand from the UI or by a nightly background job - NOT in real-time.
  */
 export async function recalculateBudgetActuals(
   periodId: string,
@@ -1734,9 +1711,7 @@ export async function recalculateBudgetActuals(
   return { updated: updatedBudgets.length, budgets: updatedBudgets };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 9. Reconciliation (bank / account rec)
-// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Mark a single journal-entry line as reconciled. Used during bank/account
@@ -1804,9 +1779,7 @@ export async function reconcileJournalEntryLine(
   }, `reconcile_journal_line_${lineId}`);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 10. Audit-trail query helper
-// ─────────────────────────────────────────────────────────────────────────────
 
 export interface AuditTrailFilters {
   storeId?: string;
@@ -1912,19 +1885,17 @@ export async function recordAuditLog(params: {
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 11. Journal-entry status derivation (UI helper)
-// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Derive the display status of a journal entry from its boolean flags. The
  * status is NOT stored on the model (it's computed) to avoid the model
  * drifting from the truth.
  *
- *   VOIDED  — isVoided === true (overrides everything)
- *   POSTED  — isPosted === true
- *   APPROVED — isApproved === true (not yet posted)
- *   DRAFT   — none of the above
+ *   VOIDED - isVoided === true (overrides everything)
+ *   POSTED - isPosted === true
+ *   APPROVED - isApproved === true (not yet posted)
+ *   DRAFT - none of the above
  *
  * NOTE: "SUBMITTED" is not currently distinguishable from DRAFT because the
  * schema has no `isSubmitted` flag. If a formal submit-step is needed later,
@@ -1941,9 +1912,7 @@ export function deriveJournalEntryStatus(entry: {
   return JournalEntryStatus.DRAFT;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Re-exports for ergonomic single-import usage
-// ─────────────────────────────────────────────────────────────────────────────
 
 export { Money, KES } from "./money";
 export { withImmutabilityBypass } from "./db";

@@ -8,7 +8,7 @@ import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, UserRole } from '@/lib/types';
 import { withSessionAuth, getSessionFromRequest } from '@/lib/auth';
 // Task 12-c: canonical financial math. Prisma Decimal `valueOf()` returns a
-// STRING — the GET summary reduce `sum + e.amount` STRING-CONCATENATED and
+// STRING - the GET summary reduce `sum + e.amount` STRING-CONCATENATED and
 // the POST balance mixed `Number(_sum) + amount` float dust into the ledger.
 import { toDec, round2 } from '@/lib/utils/financialMath';
 
@@ -166,7 +166,7 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // AUDIT FIX: read-latest-row lost-update race — the previous findFirst
+  // AUDIT FIX: read-latest-row lost-update race - the previous findFirst
   // (latest row balance) silently dropped concurrent drawer writes. Derive
   // the running balance from the SUM of all drawer amounts instead (same
   // aggregate pattern as src/app/api/transactions/route.ts R6 remediation).
@@ -193,10 +193,10 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
   }
 
     // Task 12-c: Decimal balance math (HALF_UP 2dp).
-    // NOTE: CashDrawerLog is an APPEND-ONLY ledger — there is no mutable
+    // NOTE: CashDrawerLog is an APPEND-ONLY ledger - there is no mutable
     // balance row, so Prisma's atomic increment/decrement does not apply here
     // (the `balance` column is an insert-time snapshot of the running sum,
-    // which the SUM-derived derivation below keeps concurrency-safe — see the
+    // which the SUM-derived derivation below keeps concurrency-safe - see the
     // R6 remediation notes). The arithmetic itself is exact Decimal.
     let newBalanceDec = currentBalanceDec;
     switch (eventType) {
@@ -328,7 +328,7 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
     },
   });
 
-  // v2.6.0: tamper-evident audit entry for drawer OPEN — the opening float
+  // v2.6.0: tamper-evident audit entry for drawer OPEN - the opening float
   // seeds the Z-read expected-cash chain, so who opened the drawer and with
   // how much belongs in the chained audit log (plain JSON numbers only).
   if (eventType === 'OPEN') {
@@ -358,7 +358,7 @@ async function createCashDrawerHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: logEntry }, { status: 201 });
 }
 
-// AUDIT FIX (RBAC): GET was FINANCIAL_ROLES.WRITE — per the audit directive
+// AUDIT FIX (RBAC): GET was FINANCIAL_ROLES.WRITE - per the audit directive
 // any store role may VIEW drawer data; destructive POST events (CLOSE /
 // CASH_OUT) are additionally gated to manager-or-above inside the handler.
 export const GET = withErrorBoundary(withSessionAuth(getCashDrawerHandler, STORE_ROLES), 'CASH_DRAWER_LIST');

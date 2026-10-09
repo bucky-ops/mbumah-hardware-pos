@@ -5,7 +5,7 @@
 // AUDIT REMEDIATION (F9-6): the block previously wrote the key
 // `*:${ip}:*` into the rate-limit map, but no consumer of isRateLimited()
 // ever reads that format (auth/login checks the RAW ip; brute-force writes
-// `login:${ip}`) — blocking was a silent no-op. The block is now stored under
+// `login:${ip}`) - blocking was a silent no-op. The block is now stored under
 // the exact key(s) the Node-runtime checks read, plus a DB-backed SecurityEvent
 // so the decision is auditable and visible across serverless instances.
 //
@@ -14,7 +14,7 @@
 // keys and cannot be reached from this Node runtime (no shared memory, and
 // Edge cannot import Prisma). Requests already rate-limit-tracked by the
 // proxy therefore bypass this block until that map is moved to a shared
-// store (Redis/Postgres) — tracked as the F9-5/F9-6 remediation item.
+// store (Redis/Postgres) - tracked as the F9-5/F9-6 remediation item.
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -39,11 +39,11 @@ async function blockIPHandler(
   const durationMs = (duration || 60) * 60 * 1000; // Default 1 hour
 
   // AUDIT REMEDIATION (F9-6): store the block under the key format that
-  // isRateLimited() consumers actually read — auth/login checks the raw IP
+  // isRateLimited() consumers actually read - auth/login checks the raw IP
   // (`isRateLimited(ip, 'AUTH')`), so block that key (not `*:${ip}:*`).
   blockKey(ipAddress, durationMs);
 
-  // AUDIT REMEDIATION (F9-6): DB-backed record — the in-memory block is
+  // AUDIT REMEDIATION (F9-6): DB-backed record - the in-memory block is
   // per-instance and dies on cold start; the SecurityEvent row persists and
   // is queryable for audit/forensics across all instances.
   await db.securityEvent.create({

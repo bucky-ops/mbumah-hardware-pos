@@ -86,7 +86,7 @@ function getDateRange(preset: DatePreset): { from: Date; to: Date } {
 
 type TransactionType = 'sale' | 'refund' | 'void';
 
-// Framer-motion stagger variants — wrap the transactions tab wrapper.
+// Framer-motion stagger variants - wrap the transactions tab wrapper.
 const _staggerContainer = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.04 } },
@@ -291,7 +291,7 @@ function ReceiptModal({
 }) {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
 
-  // Recipient input state (email or phone) — prefilled from the customer record
+  // Recipient input state (email or phone) - prefilled from the customer record
   // when the user picks a channel. State is reset via `onOpenChange` when the
   // modal closes (see the wrapped handler below).
   const [distChannel, setDistChannel] = useState<'EMAIL' | 'WHATSAPP' | 'SMS' | null>(null);
@@ -641,7 +641,7 @@ export default function TransactionsTab() {
   const [amountFilterMax, setAmountFilterMax] = useState('');
   const [showAmountFilter, setShowAmountFilter] = useState(false);
 
-  // Debounce search (300ms) — search is client-side, but this prevents the
+  // Debounce search (300ms) - search is client-side, but this prevents the
   // filter+sort from running on every keystroke for large transaction lists.
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -657,7 +657,7 @@ export default function TransactionsTab() {
   // Receipt modal state
   const [receiptTransaction, setReceiptTransaction] = useState<TransactionItem | null>(null);
   const [receiptOpen, setReceiptOpen] = useState(false);
-  // Receipt distribution state (Phase 4 — Email/WhatsApp)
+  // Receipt distribution state (Phase 4 - Email/WhatsApp)
   const [distributing, setDistributing] = useState<'EMAIL' | 'WHATSAPP' | 'SMS' | null>(null);
 
   // Refund/Void dialog state

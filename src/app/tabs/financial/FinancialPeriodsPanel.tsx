@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * FinancialPeriodsPanel — Phase 3 sub-tab.
+ * FinancialPeriodsPanel - Phase 3 sub-tab.
  *
  * Lists all financial periods for the current store, ordered by start date
  * descending. Provides:

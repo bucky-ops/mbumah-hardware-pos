@@ -7,7 +7,7 @@
 //
 // Query params:
 //   - period  : today | week | month | year   (default: week)
-//   - storeId : REQUIRED — scope to a store
+//   - storeId : REQUIRED - scope to a store
 //
 // Response:
 //   { success, data: { period, buckets: AggregatedBucket[], summary } }
@@ -93,7 +93,7 @@ async function getSalesTrendHandler(
     }),
   ]);
 
-  // Items sold per bucket — pull sale items for the current window.
+  // Items sold per bucket - pull sale items for the current window.
   // We do this in a separate query and join by transactionId timestamp bucket
   // so we don't have to round-trip every SaleItem through JSON.
   let itemsSoldByBucket: Record<string, number> = {};
@@ -167,7 +167,7 @@ async function getSalesTrendHandler(
     ? ((avgOrderValue - prevAvgOrderValue) / prevAvgOrderValue) * 100
     : avgOrderValue > 0 ? 100 : 0;
 
-  // Previous-period series (for the dashed comparison line) — re-bucketed to
+  // Previous-period series (for the dashed comparison line) - re-bucketed to
   // the current window's labels so the chart can overlay them 1:1.
   const previousSeries = prevBuckets.map((b, i) => ({
     label: buckets[i]?.label ?? b.label,

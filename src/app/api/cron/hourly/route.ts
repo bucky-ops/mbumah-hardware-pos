@@ -1,9 +1,9 @@
-// GET /api/cron/hourly — combined hourly cron dispatcher.
+// GET /api/cron/hourly - combined hourly cron dispatcher.
 //
 // DEPLOY-INCIDENT FIX (2026-09, PR #15 follow-up):
 //   vercel.json declared FOUR cron jobs (outbox, payments-sweeper,
 //   reconciliation, retention). Vercel's Hobby plan allows TWO cron jobs per
-//   project — every deployment since the crons landed was REJECTED at
+//   project - every deployment since the crons landed was REJECTED at
 //   config validation (commit status links to the Vercel cron-jobs docs),
 //   which froze production on a stale build while the codebase moved ahead.
 //   This dispatcher consolidates the two hourly jobs into ONE scheduled
@@ -12,12 +12,12 @@
 //   triggered manually or by external schedulers.
 //
 // MAPPING (verbatim cadences preserved):
-//   /api/cron/outbox           (was "0 * * * *")  ─┐
-//   /api/cron/payments-sweeper (was "5 * * * *")  ─┴─> /api/cron/hourly "0 * * * *"
+//   /api/cron/outbox           (was "0 * * * *")  -> /api/cron/hourly "0 * * * *"
+//   /api/cron/payments-sweeper (was "5 * * * *")  -> /api/cron/hourly "0 * * * *"
 //
-// SCHEDULE NOTE (Vercel Hobby plan — updated by the FINANCIAL MATH AUDIT
+// SCHEDULE NOTE (Vercel Hobby plan - updated by the FINANCIAL MATH AUDIT
 // remediation, PR #17): Vercel now ENFORCES once-daily cron schedules on
-// Hobby at config validation — the previous "0 * * * *" expression (which
+// Hobby at config validation - the previous "0 * * * *" expression (which
 // used to be silently clamped to daily) is REJECTED outright and fails the
 // whole deployment with a commit status linking to the cron usage-and-
 // pricing docs. vercel.json therefore schedules this dispatcher daily
@@ -29,11 +29,11 @@
 // so daily sweeping slows only the retry of edge-case missed pumps.
 //
 // AUTH: same CRON_SECRET gate as the sibling routes (fail-open with a WARN
-// systemLog when CRON_SECRET is unset — Vercel Cron cannot send per-run
+// systemLog when CRON_SECRET is unset - Vercel Cron cannot send per-run
 // secrets on all plans). The incoming Request is passed through UNMODIFIED,
 // so each sub-route re-verifies the header itself.
 //
-// PARALLELISM: sub-jobs run concurrently — they touch disjoint tables
+// PARALLELISM: sub-jobs run concurrently - they touch disjoint tables
 // (outbox_events vs M-Pesa/payment sweeps) and each is independently
 // guarded against double-delivery, so parallel execution is safe and keeps
 // wall-clock time within the 60s serverless cap on Hobby.
@@ -43,7 +43,7 @@ import { LogSeverity, LogComponent } from '@/lib/types';
 import { GET as outboxGET } from '@/app/api/cron/outbox/route';
 import { GET as paymentsSweeperGET } from '@/app/api/cron/payments-sweeper/route';
 // v2.6.1: the eTIMS retry queue and the debt-reminder sweep originally
-// shipped as dedicated vercel.json cron entries — which pushed the project
+// shipped as dedicated vercel.json cron entries - which pushed the project
 // past Vercel Hobby's TWO-cron-jobs-per-project limit and REJECTED every
 // deployment (commit status links to the cron usage-and-pricing docs; prod
 // froze on v2.5.8). Same remediation as the original dispatcher: fold them
@@ -135,7 +135,7 @@ async function hourlyCronHandler(...args: unknown[]): Promise<Response> {
     // The debt-reminder sweep carries a 7-day per-ledger re-reminder guard,
     // so a daily tick here preserves the 30/60/90+ bucket semantics without
     // a dedicated cron entry. Runs at the dispatcher's 03:00 UTC tick
-    // (06:00 EAT) — statement times shift with the schedule, not the code.
+    // (06:00 EAT) - statement times shift with the schedule, not the code.
     { name: 'debt-reminders', run: () => debtRemindersGET(request) },
   ]);
 

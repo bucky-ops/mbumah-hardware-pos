@@ -195,7 +195,7 @@ async function createDeliveryNoteHandler(...args: unknown[]): Promise<Response> 
 }
 
 // AUDIT FIX (Task 3-d): session-validated (was Bearer-presence only).
-// Any store role — delivery workflows involve cashiers/drivers.
+// Any store role - delivery workflows involve cashiers/drivers.
 export const GET = withErrorBoundary(
   withSessionAuth(getDeliveryNotesHandler),
   'DELIVERY_NOTES_LIST',

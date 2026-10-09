@@ -1,23 +1,23 @@
-// GET /api/cron/payments-sweeper — expire abandoned M-Pesa STK pushes.
+// GET /api/cron/payments-sweeper - expire abandoned M-Pesa STK pushes.
 //
-// AUDIT REFERENCE — FINANCIAL_MODULE_AUDIT_REPORT.md (F6 race atlas / Wave 1):
+// AUDIT REFERENCE - FINANCIAL_MODULE_AUDIT_REPORT.md (F6 race atlas / Wave 1):
 //   An STK push that is never completed (customer dismissed the prompt, phone
-//   offline, wrong PIN) leaves MpesaTransaction rows stuck in 'PENDING' and —
-//   for STK-initiated sales — SalesTransaction rows stuck in paymentStatus
+//   offline, wrong PIN) leaves MpesaTransaction rows stuck in 'PENDING' and -
+//   for STK-initiated sales - SalesTransaction rows stuck in paymentStatus
 //   'PENDING' forever. Safaricom expires the request after ~2 minutes, but
 //   the Daraja failure callback can be lost, so nothing closes the loop.
 //
-// ── IMPORTANT — stock compensation is NOT done here ──────────────────────────
+// IMPORTANT - stock compensation is NOT done here
 // When Daraja DOES deliver the failure callback, /api/payments/mpesa/callback
 // already restores stock and posts the failure journal. This sweeper only
 // closes rows whose callbacks never arrive (network loss, callback endpoint
 // down, lambda frozen before the callback was recorded). It deliberately
 // targets only sales still in paymentStatus 'PENDING' so it can never race a
 // callback that already flipped the sale to COMPLETED, and every status flip
-// re-asserts the old status in its `where` clause (conditional update — see
+// re-asserts the old status in its `where` clause (conditional update - see
 // R1 in the audit's race atlas) so a late callback always wins.
 //
-// SCHEDULE NOTE (Vercel Hobby plan): Hobby clamps crons to a daily minimum —
+// SCHEDULE NOTE (Vercel Hobby plan): Hobby clamps crons to a daily minimum -
 // the hourly "5 * * * *" expression is accepted syntax and degrades
 // gracefully (runs once daily at 00:05 UTC on Hobby).
 //
@@ -113,7 +113,7 @@ async function paymentsSweeperHandler(...args: unknown[]): Promise<Response> {
 
     for (const txn of toExpire) {
       // Claim the M-Pesa row with a guarded compare-and-set: count === 0
-      // means a Daraja callback flipped the row mid-sweep — it wins, we skip.
+      // means a Daraja callback flipped the row mid-sweep - it wins, we skip.
       const claimed = await db.mpesaTransaction.updateMany({
         where: { id: txn.id, status: 'PENDING' },
         data: {
@@ -124,7 +124,7 @@ async function paymentsSweeperHandler(...args: unknown[]): Promise<Response> {
       if (claimed.count === 0) continue;
       cancelled++;
 
-      // Flip the linked sale — guarded on paymentStatus 'PENDING' for the
+      // Flip the linked sale - guarded on paymentStatus 'PENDING' for the
       // same race-safety reason as above.
       const flipped = await db.salesTransaction.updateMany({
         where: { id: txn.transactionId, paymentStatus: 'PENDING' },

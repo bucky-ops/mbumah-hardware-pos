@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * HourlySalesWidget — compact 24-cell heatmap of today's sales by hour.
+ * HourlySalesWidget - compact 24-cell heatmap of today's sales by hour.
  *
  * Uses dashboard's `salesByHour` data. Shows a horizontal bar of 24 cells
  * colored by revenue intensity. Below: peak hour + quiet hour + total transactions.
@@ -16,7 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { dashboardApi, formatKES } from '@/lib/api';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// Helpers
 
 interface HourPoint {
   hour: string;
@@ -44,7 +44,7 @@ function heatColor(intensity: number): string {
   return 'bg-rose-500 dark:bg-rose-600/80';
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
+// Component
 
 export interface HourlySalesWidgetProps {
   storeId: string;

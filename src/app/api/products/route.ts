@@ -11,12 +11,12 @@ import { resolveProductImage } from '@/lib/product-images';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { requireStoreAccess, MANAGER_PLUS_ROLES, type AuthSession } from '@/lib/auth';
 import { parsePagination, buildPaginationMeta } from '@/lib/api-pagination';
-// v2.12.2 (PR B — RBAC): supplier-cost visibility gate + product-edit roles.
+// v2.12.2 (PR B - RBAC): supplier-cost visibility gate + product-edit roles.
 import { hasFeaturePermission } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
-/** v2.12.2 (PR B — RBAC): roles allowed to EDIT catalog items —
+/** v2.12.2 (PR B - RBAC): roles allowed to EDIT catalog items -
  *  MANAGER_PLUS_ROLES + INVENTORY_MANAGER (PERMISSION_MATRIX.products
  *  create/update and FEATURE_PERMISSIONS['inventory.edit']). */
 const PRODUCT_EDIT_ROLES: readonly string[] = [...MANAGER_PLUS_ROLES, 'INVENTORY_MANAGER'];
@@ -43,7 +43,7 @@ async function getProductsHandler(
   const isActive = searchParams.get('isActive');
   // AUDIT FIX (Finding 2.1): pagination parsing centralised + sanitised.
   // Previously `parseInt(searchParams.get('page') || '1')` with no clamping
-  // — `?page=-5` produced a negative skip (Prisma throws) and a NaN limit
+  // `?page=-5` produced a negative skip (Prisma throws) and a NaN limit
   // from `?limit=abc` reached the query. Defaults unchanged (page 1, limit
   // 50); limit is now clamped to [1, 500].
   const { page, limit, skip } = parsePagination(searchParams, {
@@ -53,7 +53,7 @@ async function getProductsHandler(
   const sortBy = searchParams.get('sortBy') || 'name';
   const sortOrder = searchParams.get('sortOrder') || 'asc';
 
-  // v2.12.2 (PR B — RBAC): supplier-cost visibility. Roles without
+  // v2.12.2 (PR B - RBAC): supplier-cost visibility. Roles without
   // 'inventory.view.cost' (CASHIER, ACCOUNTANT) get costPrice nulled.
   const canViewCost = hasFeaturePermission(session.role, 'inventory.view.cost');
 
@@ -119,7 +119,7 @@ async function getProductsHandler(
     success: true,
     // DECIMAL-STRING AUDIT FIX (v2.5.0): Decimal money fields → numbers at
     // the API boundary (string totals corrupted client math historically).
-    // v2.5.8: quantityInStock/reorderLevel are Decimal(65,30) too — they were
+    // v2.5.8: quantityInStock/reorderLevel are Decimal(65,30) too - they were
     // still serialized as strings, so client comparisons like
     // `p.quantityInStock <= p.reorderLevel` compared LEXICOGRAPHICALLY
     // ("9" <= "10" → false, "10" <= "9" → true) and produced phantom
@@ -132,8 +132,8 @@ async function getProductsHandler(
       quantityInStock: Number(p.quantityInStock),
       reorderLevel: Number(p.reorderLevel),
       pricePerUnit: Number(p.pricePerUnit),
-      // v2.12.2 (PR B — RBAC): nulled for roles without 'inventory.view.cost'
-      // (CASHIER / ACCOUNTANT) — supplier cost is a margin leak on the shop
+      // v2.12.2 (PR B - RBAC): nulled for roles without 'inventory.view.cost'
+      // (CASHIER / ACCOUNTANT) - supplier cost is a margin leak on the shop
       // floor. The key stays on the wire (null) so legacy client spreads
       // don't crash; clients must treat null as "hidden".
       costPrice: canViewCost ? Number(p.costPrice) : null,
@@ -188,7 +188,7 @@ async function createProductHandler(
   }
 
     // SKU generation (v2.3.0): auto-generated SKUs carry the branch code so
-    // every restocked product traces back to the branch that stocks it —
+    // every restocked product traces back to the branch that stocks it -
     // MBM-<branchCode>-<cat>-XXXX (e.g. MBM-NAK-CEM-0042). The category code
     // is derived from the category name's first 3 letters when a categoryId
     // is supplied. Explicit caller SKUs pass through unchanged.
@@ -214,11 +214,11 @@ async function createProductHandler(
 
     // BARCODE AUTOGEN (v2.5.2): when the caller does not supply one, a valid
     // EAN-13 (GS1 Kenya 620 prefix + checksum) is generated server-side so
-    // EVERY product is scanner-ready — mirrors the add-product form draft.
+    // EVERY product is scanner-ready - mirrors the add-product form draft.
     const productBarcode = barcode || generateEan13Barcode();
     // IMAGE DEFAULT (v2.5.2): a new product immediately shows a matching
-    // picture — the name-matched studio shot from /public/products, else the
-    // category icon ("similar icon appears") — unless a real photo URL is
+    // picture - the name-matched studio shot from /public/products, else the
+    // category icon ("similar icon appears") - unless a real photo URL is
     // supplied by the caller.
     let categoryForImage: { name: string } | null = null;
     if (!imageUrl && categoryId) {
@@ -242,7 +242,7 @@ async function createProductHandler(
     const existingBarcode = await db.product.findUnique({ where: { barcode: productBarcode } });
     if (existingBarcode) {
       if (barcode) {
-        // Caller explicitly picked a duplicate barcode — refuse so they can
+        // Caller explicitly picked a duplicate barcode - refuse so they can
         // choose another; generated collisions are retried below instead.
         return Response.json(
           { success: false, error: 'A product with this barcode already exists.' },

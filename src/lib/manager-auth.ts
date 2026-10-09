@@ -1,12 +1,10 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Shared Manager Step-up Authorization (v2.12.2, PR B)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Shared Manager Step-up Authorization (v2.12.2, PR B)
 //
 // ONE credential check shared by BOTH step-up surfaces:
 //
 //   • POST /api/auth/manager-authorize  (phase-2 Manager PIN modal pre-check)
 //   • POST /api/transactions             (managerOverride credential object on
-//     the 5–10% discount band + high-risk debt gate)
+//     the 5-10% discount band + high-risk debt gate)
 //
 // previously the transactions route had a private verifyManagerPassword and
 // the manager-authorization flow didn't exist; extracting it here means the
@@ -14,16 +12,16 @@
 // between the two callers.
 //
 // Verifies, in order:
-//   1. BRUTE-FORCE WINDOW — 3 failed attempts for the same email+IP within
+//   1. BRUTE-FORCE WINDOW - 3 failed attempts for the same email+IP within
 //      5 minutes → reject with code 'BRUTE_FORCE_PIN' (+ SecurityEvent
 //      BRUTE_FORCE row once per trip) until the window ages out.
 //   2. USER EXISTS + isActive (unknown email vs wrong password are ONE
-//      generic 'INVALID_CREDENTIALS' failure — never reveal which check
+//      generic 'INVALID_CREDENTIALS' failure - never reveal which check
 //      failed; mirrors the login route and the credit-limit override).
-//   3. PASSWORD — bcrypt compare with the legacy "hashed_" fallback, byte-for-
+//   3. PASSWORD - bcrypt compare with the legacy "hashed_" fallback, byte-for-
 //      byte the same algorithm as src/app/api/auth/login/route.ts's
 //      verifyPassword (the transactions route previously duplicated it).
-//   4. ROLE — the approver must be MANAGER-or-above (MANAGER_PLUS_ROLES =
+//   4. ROLE - the approver must be MANAGER-or-above (MANAGER_PLUS_ROLES =
 //      SUPER_ADMIN / STORE_OWNER / BRANCH_MANAGER).
 //
 // On success: SecurityEvent INFO 'MANAGER_AUTHORIZED' is written by the
@@ -34,7 +32,6 @@
 // SERVERLESS NOTE: the failure window is in-memory per instance (same
 // best-effort posture as src/lib/brute-force.ts and the abuse lockout in
 // src/lib/auth.ts). The SecurityEvent feed remains the durable record.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
@@ -42,7 +39,7 @@ import { systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { MANAGER_PLUS_ROLES } from '@/lib/auth';
 
-// ── Brute-force window (per email+ip) ────────────────────────────────────────
+// Brute-force window (per email+ip)
 
 const FAILURE_WINDOW_MS = 5 * 60 * 1000;  // trailing 5 minutes
 const MAX_FAILURES = 3;                    // 3 failures in the window → block
@@ -69,7 +66,7 @@ function failureKey(email: string, ip: string): string {
   return `mgr-auth:${email.trim().toLowerCase()}|${ip}`;
 }
 
-// ── Password verification (identical to the login route) ─────────────────────
+// Password verification (identical to the login route)
 
 /**
  * bcrypt compare + the legacy "hashed_" fallback. Kept byte-for-byte
@@ -85,7 +82,7 @@ export async function verifyManagerPassword(
       return await bcrypt.compare(password, storedHash);
     }
   } catch {
-    /* ignore bcrypt errors — falls through to legacy check */
+    /* ignore bcrypt errors - falls through to legacy check */
   }
   if (storedHash.startsWith('hashed_')) {
     const plainPart = storedHash.replace('hashed_', '').replace(/_\d+$/, '');
@@ -94,7 +91,7 @@ export async function verifyManagerPassword(
   return false;
 }
 
-// ── Public API ───────────────────────────────────────────────────────────────
+// Public API
 
 export interface AuthorizeManagerInput {
   approverEmail: string;
@@ -105,7 +102,7 @@ export interface AuthorizeManagerContext {
   /** Client IP (x-forwarded-for first hop) for the brute-force key + records. */
   ip?: string;
   userAgent?: string;
-  /** Optional store scoping — when set, the approver must belong to it. */
+  /** Optional store scoping - when set, the approver must belong to it. */
   storeId?: string;
   /** Actor whose session is requesting the step-up (for the audit trail). */
   requesterId?: string;
@@ -127,7 +124,7 @@ export type ManagerAuthResult =
 
 /**
  * Verify a manager's credentials for a step-up authorization.
- * Never throws — every failure mode maps to a typed result.
+ * Never throws - every failure mode maps to a typed result.
  */
 export async function authorizeManager(
   input: AuthorizeManagerInput,
@@ -138,7 +135,7 @@ export async function authorizeManager(
   const key = failureKey(email, ip);
   const now = Date.now();
 
-  // ── 1. Brute-force window ──
+  // 1. Brute-force window
   const entry = authorizeFailures.get(key);
   if (entry && now - entry.lastAttemptAt <= FAILURE_WINDOW_MS && entry.count >= MAX_FAILURES) {
     const retryAfterMinutes = Math.max(
@@ -153,7 +150,7 @@ export async function authorizeManager(
     };
   }
 
-  // ── 2. User lookup ──
+  // 2. User lookup
   const manager = await db.user.findUnique({ where: { email } });
 
   const passwordOk = manager
@@ -169,7 +166,7 @@ export async function authorizeManager(
     };
   }
 
-  // ── 3. Role gate (manager-or-above) ──
+  // 3. Role gate (manager-or-above)
   if (!MANAGER_PLUS_ROLES.includes(manager.role)) {
     await noteFailure(key, email, ip, ctx);
     await systemLog({
@@ -199,10 +196,10 @@ export async function authorizeManager(
     };
   }
 
-  // ── Success: reset the failure window ──
+  // Success: reset the failure window
   authorizeFailures.delete(key);
 
-  // SecurityEvent INFO — one durable row per successful authorization.
+  // SecurityEvent INFO - one durable row per successful authorization.
   try {
     await db.securityEvent.create({
       data: {

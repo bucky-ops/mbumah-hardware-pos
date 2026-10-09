@@ -2,10 +2,10 @@
 //
 // Fetch payroll detail (payslip) records.
 //   Query params:
-//     payrollRunId   — get all payslips for a specific run
-//     employeeId     — get all payslips for a specific employee
-//     storeId        — tenant scoping (required for non-admin)
-//     paymentStatus  — filter by PENDING / PAID / FAILED / HELD
+//     payrollRunId - get all payslips for a specific run
+//     employeeId - get all payslips for a specific employee
+//     storeId - tenant scoping (required for non-admin)
+//     paymentStatus - filter by PENDING / PAID / FAILED / HELD
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';

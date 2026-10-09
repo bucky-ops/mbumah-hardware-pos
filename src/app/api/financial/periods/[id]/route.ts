@@ -1,5 +1,5 @@
-// GET /api/financial/periods/[id] — fetch a single financial period by id.
-// PUT /api/financial/periods/[id] — perform a lifecycle action on a period
+// GET /api/financial/periods/[id] - fetch a single financial period by id.
+// PUT /api/financial/periods/[id] - perform a lifecycle action on a period
 //      (CLOSE | LOCK | REOPEN). Body: { action, userId, reason? }.
 
 import { type NextRequest } from 'next/server';

@@ -4,7 +4,7 @@
 // Returns the customer's name and address (KRA does not return contact details).
 //
 // Query params:
-//   tin — required (KRA PIN, format A + 9 digits + letter)
+//   tin - required (KRA PIN, format A + 9 digits + letter)
 //
 // Auth: any authenticated user (cashiers may look up a B2B customer's name
 // before issuing an invoice).
@@ -37,7 +37,7 @@ async function customerSearchHandler(
     return Response.json({ success: false, error: 'storeId is required.' }, { status: 400 });
   }
 
-  // ── 1. Validate PIN ───────────────────────────────────────────────────────
+  // 1. Validate PIN
   const pinCheck = validateKraPin(tinRaw);
   if (!pinCheck.valid || !pinCheck.normalized) {
     return Response.json(
@@ -47,7 +47,7 @@ async function customerSearchHandler(
   }
   const tin = pinCheck.normalized;
 
-  // ── 2. Look up existing Customer locally (cache hit) ──────────────────────
+  // 2. Look up existing Customer locally (cache hit)
   // We try to find a Customer with this TIN (stored in idNumber) locally first.
   // If found, we still hit KRA to refresh the name (in case it changed), but we
   // return the local customerId so the UI can pre-fill the form.
@@ -56,10 +56,10 @@ async function customerSearchHandler(
     select: { id: true, name: true, phone: true, email: true, address: true, idNumber: true },
   });
 
-  // ── 3. Load eTIMS client ──────────────────────────────────────────────────
+  // 3. Load eTIMS client
   const client = await initializeEtimsClientFromStore(storeId);
   if (!client) {
-    // No eTIMS profile — return only the local record (if any).
+    // No eTIMS profile - return only the local record (if any).
     return Response.json({
       success: true,
       data: {
@@ -82,10 +82,10 @@ async function customerSearchHandler(
     });
   }
 
-  // ── 4. Query KRA ──────────────────────────────────────────────────────────
+  // 4. Query KRA
   const result = await client.customerSearch(tin);
 
-  // ── 5. Audit log ──────────────────────────────────────────────────────────
+  // 5. Audit log
   await systemLog({
     action: 'ETIMS_CUSTOMER_SEARCH',
     component: LogComponent.AUTH,

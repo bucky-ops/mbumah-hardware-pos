@@ -1,6 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Sentry Error Tracking Integration
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Sentry Error Tracking Integration
 //
 // Sentry is initialised lazily on the server side ONLY when `SENTRY_DSN` is
 // present in the environment. This keeps local dev zero-config and avoids
@@ -25,19 +23,18 @@
 //   Both are complementary. The DB log is the system-of-record; Sentry is the
 //  pager / aggregation layer.
 //
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { systemLog } from "./logger";
 import { LogSeverity, LogComponent } from "./types";
 
-// ── Lazy singleton ───────────────────────────────────────────────────────────
+// Lazy singleton
 
 let sentryInitialized = false;
 let sentryAvailable = false;
 
 /**
  * Check whether Sentry is configured (SENTRY_DSN present). Does NOT import
- * the Sentry SDK — use this for feature-gating without the bundle cost.
+ * the Sentry SDK - use this for feature-gating without the bundle cost.
  */
 export function isSentryConfigured(): boolean {
   return Boolean(process.env.SENTRY_DSN);
@@ -60,21 +57,21 @@ async function ensureSentry(): Promise<boolean> {
   }
 
   try {
-    // Dynamic import — avoids loading @sentry/nextjs when DSN is absent.
+    // Dynamic import - avoids loading @sentry/nextjs when DSN is absent.
     const Sentry = await import("@sentry/nextjs");
 
     Sentry.init({
       dsn,
       environment: process.env.NODE_ENV ?? "development",
       release: process.env.VERCEL_GIT_COMMIT_SHA ?? "local",
-      // 10% transaction sample rate — stays within Sentry free tier for a
+      // 10% transaction sample rate - stays within Sentry free tier for a
       // single-store POS with modest traffic. Increase to 1.0 for launch
       // debugging, then dial back.
       tracesSampleRate: 0.1,
-      // Capture 100% of errors — errors are rare and high-value.
+      // Capture 100% of errors - errors are rare and high-value.
       replaysSessionSampleRate: 0,
       replaysOnErrorSampleRate: 1.0,
-      // Don't send PII to Sentry — Kenyan data protection law (DPA 2019).
+      // Don't send PII to Sentry - Kenyan data protection law (DPA 2019).
       beforeSend(event: any) {
         if (event.request) {
           // Strip cookies and auth headers from the event.
@@ -112,7 +109,7 @@ async function ensureSentry(): Promise<boolean> {
     sentryAvailable = true;
     return true;
   } catch (error) {
-    // Sentry failed to init — log to SystemLog but never crash the app.
+    // Sentry failed to init - log to SystemLog but never crash the app.
     await systemLog({
       action: "SENTRY_INIT_FAILED",
       component: LogComponent.SYSTEM,
@@ -124,7 +121,7 @@ async function ensureSentry(): Promise<boolean> {
   }
 }
 
-// ── Public API ───────────────────────────────────────────────────────────────
+// Public API
 
 /**
  * Capture an exception in Sentry. Falls back silently to the DB system log
@@ -150,7 +147,7 @@ export async function captureError(
       metadata: context,
     });
   } catch {
-    // DB logging failed — fall through to Sentry.
+    // DB logging failed - fall through to Sentry.
   }
 
   // Attempt Sentry capture.
@@ -170,14 +167,14 @@ export async function captureError(
       Sentry.captureException(error);
     }
   } catch {
-    // Sentry capture failed — nothing more we can do. The DB log is the
+    // Sentry capture failed - nothing more we can do. The DB log is the
     // fallback system-of-record.
   }
 }
 
 /**
  * Capture an API route error with structured context. This is the companion
- * to `withErrorBoundary` in logger.ts — call it from the catch block to send
+ * to `withErrorBoundary` in logger.ts - call it from the catch block to send
  * the error to Sentry in addition to the DB log.
  */
 export async function captureAPIError(
@@ -222,7 +219,7 @@ export async function setSentryUser(user: {
     if (user) {
       Sentry.setUser({
         id: user.id,
-        // Email is PII — only include if explicitly provided and DPA consent
+        // Email is PII - only include if explicitly provided and DPA consent
         // is on file. In most cases we send only the internal user ID.
         email: user.email,
         role: user.role,
@@ -232,7 +229,7 @@ export async function setSentryUser(user: {
       Sentry.setUser(null);
     }
   } catch {
-    // Non-critical — user attribution is best-effort.
+    // Non-critical - user attribution is best-effort.
   }
 }
 

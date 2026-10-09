@@ -1,12 +1,9 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Multi-currency utilities (East African trade)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Multi-currency utilities (East African trade)
 //
 // WHY THIS EXISTS
-// ───────────────
 // Mbumah Hardware operates primarily in Kenyan Shillings (KES), but
-// cross-border trade with Uganda (UGX) and Tanzania (TZS) — plus
-// occasional USD invoicing for imported stock — requires the POS to
+// cross-border trade with Uganda (UGX) and Tanzania (TZS) - plus
+// occasional USD invoicing for imported stock - requires the POS to
 // display, convert, and accept amounts in multiple currencies.
 //
 // This module is the SINGLE SOURCE OF TRUTH for currency metadata and
@@ -14,25 +11,23 @@
 // the `/api/currency/rates` endpoint and the `CurrencyRate` Prisma model.
 //
 // DESIGN NOTES
-// ────────────
 // • All monetary MATH must go through `decimal.js` (see `src/lib/money.ts`).
 //   This module handles only DISPLAY formatting and approximate
 //   cross-currency conversion for display purposes.
 // • Decimal places per currency follow ISO 4217:
 //     KES  → 2 (cents)
 //     USD  → 2 (cents)
-//     UGX  → 0 (no minor unit — shilling is the smallest unit)
-//     TZS  → 0 (no minor unit — shilling is the smallest unit)
+//     UGX  → 0 (no minor unit - shilling is the smallest unit)
+//     TZS  → 0 (no minor unit - shilling is the smallest unit)
 // • Static exchange rates are expressed as "1 unit of currency X =
 //   N units of KES" so conversion can be done by multiplying the
 //   source amount by its rate-to-KES, then dividing by the target's
 //   rate-to-KES.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import Decimal from "decimal.js";
 import type { CurrencyCode } from "@/lib/money";
 // FINANCIAL MATH AUDIT: rounding policy + the canonical KES formatter are
-// owned by financialMath.ts — this module must not set its own mode.
+// owned by financialMath.ts - this module must not set its own mode.
 import { MONEY_ROUNDING, formatKES as formatKESCanonical } from "@/lib/utils/financialMath";
 
 // Re-export CurrencyCode from money.ts so callers have a single import path.
@@ -40,7 +35,7 @@ export type { CurrencyCode } from "@/lib/money";
 
 /**
  * Static metadata for every supported currency. `exchangeRateToKES` is the
- * number of KES equivalent to 1 unit of this currency — used for offline
+ * number of KES equivalent to 1 unit of this currency - used for offline
  * display conversions when no live `CurrencyRate` row is available.
  *
  * Rates are approximate (Q1 2025) and for DISPLAY ONLY. Actual invoicing
@@ -145,7 +140,7 @@ export function getCurrencyByCountry(countryCode: string): CurrencyCode {
  *
  * Uses `decimal.js` internally to avoid IEEE-754 float artifacts in the
  * displayed string (e.g. `0.1 + 0.2` would otherwise render as
- * "KES 0.30000000000000004" — unacceptable for a POS).
+ * "KES 0.30000000000000004" - unacceptable for a POS).
  *
  * @example formatCurrency(1234.5, "KES")   → "KES 1,234.50"
  * @example formatCurrency(1234.5, "USD")   → "$ 1,234.50"
@@ -159,7 +154,7 @@ export function formatCurrency(
   const meta = CURRENCY_BY_CODE[currency] ?? CURRENCY_BY_CODE.KES;
 
   // KES (the store's home currency) always renders through the ONE canonical
-  // en-KE formatter — including the null/undefined → "KES 0.00" case.
+  // en-KE formatter - including the null/undefined → "KES 0.00" case.
   if (currency === "KES") {
     return formatKESCanonical((amount ?? 0) as number | string | Decimal);
   }
@@ -201,7 +196,7 @@ export function formatCurrency(
 
 /**
  * Convert an amount from one currency to another using the static
- * `exchangeRateToKES` rates. KES is the pivot currency — every amount is
+ * `exchangeRateToKES` rates. KES is the pivot currency - every amount is
  * first converted to KES, then from KES to the target currency.
  *
  * Returns a `number` for convenience in display contexts. For financial
@@ -286,7 +281,7 @@ export function parseCurrencyInput(input: string | number | null | undefined): n
 }
 
 /**
- * List only the currency codes — useful for dropdown option generation
+ * List only the currency codes - useful for dropdown option generation
  * without pulling the full metadata.
  */
 export const CURRENCY_CODES: readonly CurrencyCode[] = SUPPORTED_CURRENCIES.map(

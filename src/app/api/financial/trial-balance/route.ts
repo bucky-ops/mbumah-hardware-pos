@@ -5,8 +5,8 @@
 // equal total credits.
 //
 // Query params:
-//   storeId   — scope to a single store (SUPER_ADMIN only). Omit for org-wide.
-//   asOfDate  — ISO date (default: now)
+//   storeId - scope to a single store (SUPER_ADMIN only). Omit for org-wide.
+//   asOfDate - ISO date (default: now)
 
 import { type NextRequest } from 'next/server';
 import { generateTrialBalance } from '@/lib/financial-audit';

@@ -1,17 +1,14 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Unified profit & revenue formulas (single source of truth)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Unified profit & revenue formulas (single source of truth)
 //
 // WHY THIS EXISTS
-// ───────────────
 // Audit finding (worklog Tasks 2-a/2-b): three conflicting profit formulas
 // existed across the API surface:
 //
-//   1. reports/sales-summary — grossProfit = (TAX-INCLUSIVE totalAmount) − COGS
+//   1. reports/sales-summary - grossProfit = (TAX-INCLUSIVE totalAmount) − COGS
 //      → overstated profit by the VAT component and ignored discounts.
-//   2. transactions/[id]     — grossProfit = pretax subtotal − cost
+//   2. transactions/[id] - grossProfit = pretax subtotal − cost
 //      → correct basis (VAT-exclusive, net of discount) but defined locally.
-//   3. financial/revenue-trend — "grossProfit" = revenue − ALL expense debits
+//   3. financial/revenue-trend - "grossProfit" = revenue − ALL expense debits
 //      → actually a net-profit-style figure wearing a gross label.
 //
 // This module defines the ONE canonical chain used everywhere:
@@ -26,7 +23,7 @@
 //         (totalAmount = subtotal − discount + tax, see helpers.calculateLineTotal),
 //         so grossRevenue(totalAmount, taxAmount) is already net-of-discount.
 //         Callers MUST NOT pass a discount that is already embedded in
-//         totalAmount — that double-subtracts. Pass a discount only when the
+//         totalAmount - that double-subtracts. Pass a discount only when the
 //         gross input is PRE-discount (e.g. the stored `subtotal` sum).
 //   grossProfit(netRevenue, cogs) = netRevenue − COGS
 //       · COGS = Σ(quantity × costPrice snapshot) from SaleItem.
@@ -34,19 +31,18 @@
 //       · Operating expenses exclude COGS. When an expense figure already
 //         bundles COGS (e.g. all EXPENSE-type journal debits incl. account
 //         5000), pass grossProfit(netRevenue, 0) as the input so COGS is not
-//         double-counted — the composite then equals netRevenue − allExpenses.
+//         double-counted - the composite then equals netRevenue − allExpenses.
 //
 // Rounding discipline: every operand is rounded HALF_EVEN (banker's rounding,
 // the IFRS/KRA-VAT standard) to the currency minor unit (2dp for KES) BEFORE
 // the subtraction. Subtraction of two 2dp values is exact at 2dp, so results
 // are cent-exact and free of IEEE-754 dust. All math goes through the `Money`
-// primitive (src/lib/money.ts) — never raw float arithmetic.
+// primitive (src/lib/money.ts) - never raw float arithmetic.
 //
-// Purity: these functions are pure — no logging, no I/O, no console noise.
+// Purity: these functions are pure - no logging, no I/O, no console noise.
 // Missing (null/undefined) operands are treated as 0. Non-finite numbers
 // (NaN/±Infinity, e.g. from Number(undefined)) are treated as 0 so a single
 // malformed row can never 500 an aggregation endpoint.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import Decimal from 'decimal.js';
 import { KES } from '@/lib/money';
@@ -72,7 +68,7 @@ function toRoundedKES(value: MoneyLike): ReturnType<typeof KES> {
 }
 
 /**
- * grossRevenue — VAT-exclusive revenue.
+ * grossRevenue - VAT-exclusive revenue.
  *
  *   grossRevenue = totalAmount − taxAmount
  *
@@ -86,7 +82,7 @@ export function grossRevenue(totalAmount: MoneyLike, taxAmount: MoneyLike): numb
 }
 
 /**
- * netRevenue — revenue after discounts.
+ * netRevenue - revenue after discounts.
  *
  *   netRevenue = grossRevenue − discountAmount
  *
@@ -99,7 +95,7 @@ export function netRevenue(grossRevenueValue: MoneyLike, discountAmount: MoneyLi
 }
 
 /**
- * grossProfit — netRevenue minus cost of goods sold.
+ * grossProfit - netRevenue minus cost of goods sold.
  *
  *   grossProfit = netRevenue − cogs
  */
@@ -108,7 +104,7 @@ export function grossProfit(netRevenueValue: MoneyLike, cogs: MoneyLike): number
 }
 
 /**
- * netProfit — grossProfit minus operating expenses (COGS excluded).
+ * netProfit - grossProfit minus operating expenses (COGS excluded).
  *
  *   netProfit = grossProfit − operatingExpenses
  */
@@ -119,7 +115,7 @@ export function netProfit(grossProfitValue: MoneyLike, operatingExpenses: MoneyL
 /**
  * Recover the VAT-exclusive amount of a TAX-INCLUSIVE line when the stored
  * tax AMOUNT is absent but the tax RATE is known (SaleItem stores lineTotal
- * + taxRate but no per-line tax column — documented schema limitation).
+ * + taxRate but no per-line tax column - documented schema limitation).
  *
  *   vatExclusive = totalInclusive × 100 / (100 + taxRatePercent)
  *

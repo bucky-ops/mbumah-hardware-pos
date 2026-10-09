@@ -1,14 +1,12 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Request Context (AsyncLocalStorage)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Request Context (AsyncLocalStorage)
 //
 // This module provides a per-request context store backed by Node.js
-// `AsyncLocalStorage`. It carries request-scoped metadata — the request ID,
-// start time, method, path, authenticated user, store, client IP — through
+// `AsyncLocalStorage`. It carries request-scoped metadata - the request ID,
+// start time, method, path, authenticated user, store, client IP - through
 // the entire async call chain WITHOUT requiring it to be passed as explicit
 // arguments to every function.
 //
-// ── Why AsyncLocalStorage? ───────────────────────────────────────────────────
+// Why AsyncLocalStorage?
 //
 // In a Next.js API route, a single request triggers a deep call chain:
 //
@@ -21,7 +19,7 @@
 // to forget. `AsyncLocalStorage` solves this: the store is automatically
 // propagated through `await` boundaries, `setTimeout`, `setImmediate`, etc.
 //
-// ── Lifecycle ────────────────────────────────────────────────────────────────
+// Lifecycle
 //
 //   1. Edge middleware (src/middleware.ts) extracts or generates `X-Request-ID`
 //      and forwards it as a request header to the Node.js runtime.
@@ -34,32 +32,31 @@
 //        e. Runs `fn` inside the ALS store.
 //   3. Any code running inside `fn` (or its async descendants) can call
 //      `getRequestContext()`, `getRequestId()`, or `getRequestDuration()` to
-//      read the current context — no arguments needed.
+//      read the current context - no arguments needed.
 //   4. Auth middleware enriches the context with `userId` / `storeId` via
 //      `enrichRequestContext()` after verifying the JWT.
 //
-// ── Integration with Sentry & logging ────────────────────────────────────────
+// Integration with Sentry & logging
 //
 // `captureError()` and `captureAPIError()` (src/lib/sentry.ts) automatically
-// attach the request context to every Sentry event — so a single error in
+// attach the request context to every Sentry event - so a single error in
 // Sentry shows the request ID, duration, path, user, and store. This makes
 // it trivial to pivot from a Sentry issue to the corresponding SystemLog
 // rows (filter by requestId in the metadata column).
 //
-// ── Edge Runtime compatibility ───────────────────────────────────────────────
+// Edge Runtime compatibility
 //
 // `AsyncLocalStorage` is a Node.js core API. It is NOT available in the Edge
 // Runtime (where middleware.ts runs). This module is therefore SERVER-ONLY:
 // it must only be imported by API route handlers, server actions, and
-// server-side lib code. The middleware itself does NOT import this module —
+// server-side lib code. The middleware itself does NOT import this module -
 // it only sets the `X-Request-ID` header, which the Node.js side reads.
 //
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 /**
  * The per-request context. All fields except `requestId` and `startTime`
@@ -73,7 +70,7 @@ export interface RequestContext {
   /** High-resolution start time (nanoseconds since arbitrary epoch). */
   readonly startTime: bigint;
 
-  /** Wall-clock start time (ISO 8601) — for human-readable logs. */
+  /** Wall-clock start time (ISO 8601) - for human-readable logs. */
   readonly startedAt: string;
 
   /** HTTP method (GET, POST, etc.). */
@@ -126,12 +123,12 @@ export interface RequestContextSnapshot {
   isOfflineSync?: boolean;
 }
 
-// ── AsyncLocalStorage singleton ──────────────────────────────────────────────
+// AsyncLocalStorage singleton
 //
 // The store is created ONCE at module load. `als.enterWith(store)` and
 // `als.run(store, fn)` propagate the store through the async chain. We use
 // `run()` (not `enterWith()`) because `run()` guarantees the store is
-// cleared when `fn` returns — `enterWith()` leaks the store across requests
+// cleared when `fn` returns - `enterWith()` leaks the store across requests
 // in serverless environments (a known footgun).
 //
 // NOTE: This singleton is process-scoped. In Vercel serverless, each
@@ -140,10 +137,10 @@ export interface RequestContextSnapshot {
 // scoped to each request.
 const requestContextStorage = new AsyncLocalStorage<RequestContext>();
 
-// ── Initialisation ───────────────────────────────────────────────────────────
+// Initialisation
 
 /**
- * Initialise the request context subsystem. Idempotent — safe to call
+ * Initialise the request context subsystem. Idempotent - safe to call
  * multiple times. Currently a no-op (the ALS singleton is created at module
  * load), but exported so that `instrumentation.ts` can call it explicitly
  * in the future (e.g. to register telemetry hooks).
@@ -160,11 +157,11 @@ export function initRequestContext(): () => void {
   };
 }
 
-// ── ID generation ────────────────────────────────────────────────────────────
+// ID generation
 
 /**
  * Generate a new request ID. Uses `crypto.randomUUID()` (Node 19+) which
- * produces a v4 UUID — globally unique, URL-safe, and sortable-ish (v4 is
+ * produces a v4 UUID - globally unique, URL-safe, and sortable-ish (v4 is
  * random, but the format is fixed-length and lexicographically comparable).
  *
  * Exposed so tests / middleware can generate IDs deterministically.
@@ -182,7 +179,7 @@ export function generateRequestId(): string {
  */
 export const REQUEST_ID_HEADER = 'X-Request-ID';
 
-// ── Context creation ─────────────────────────────────────────────────────────
+// Context creation
 
 /**
  * Extract the request ID from a Request's headers, or generate a new one if
@@ -194,7 +191,7 @@ export const REQUEST_ID_HEADER = 'X-Request-ID';
  * @param req Any standard `Request` (Next.js `NextRequest` extends this).
  */
 export function createRequestContextFromRequest(req: Request): RequestContext {
-  // ── Request ID ────────────────────────────────────────────────────────────
+  // Request ID
   // Read the X-Request-ID header (set by edge middleware). If absent (e.g.
   // a direct server-to-server call that bypassed middleware), generate one.
   const incomingId = req.headers.get(REQUEST_ID_HEADER.toLowerCase());
@@ -203,7 +200,7 @@ export function createRequestContextFromRequest(req: Request): RequestContext {
       ? incomingId.trim()
       : generateRequestId();
 
-  // ── Method + URL ──────────────────────────────────────────────────────────
+  // Method + URL
   let path = 'unknown';
   let url = 'unknown';
   try {
@@ -217,9 +214,9 @@ export function createRequestContextFromRequest(req: Request): RequestContext {
     path = url;
   }
 
-  // ── Client IP (best-effort) ───────────────────────────────────────────────
+  // Client IP (best-effort)
   // On Vercel, the client IP is in `x-forwarded-for` (first entry) or
-  // `x-real-ip`. On local dev, both are absent — we record 'unknown'.
+  // `x-real-ip`. On local dev, both are absent - we record 'unknown'.
   const forwardedFor = req.headers.get('x-forwarded-for');
   let ipAddress: string | undefined;
   if (forwardedFor) {
@@ -231,7 +228,7 @@ export function createRequestContextFromRequest(req: Request): RequestContext {
     if (realIp) ipAddress = realIp.trim();
   }
 
-  // ── User-Agent ────────────────────────────────────────────────────────────
+  // User-Agent
   const userAgent = req.headers.get('user-agent') ?? undefined;
 
   return {
@@ -246,14 +243,14 @@ export function createRequestContextFromRequest(req: Request): RequestContext {
   };
 }
 
-// ── Context runner ───────────────────────────────────────────────────────────
+// Context runner
 
 /**
  * Run `fn` inside a request context. The context is automatically
  * propagated through all `await` boundaries and async descendants (timers,
  * callbacks, etc.) within `fn`.
  *
- * This is the PRIMARY entry point — API route handlers should wrap their
+ * This is the PRIMARY entry point - API route handlers should wrap their
  * body in this. The `apiHandler()` and `withErrorBoundary()` wrappers in
  * `api-error.ts` / `logger.ts` call this automatically, so most route
  * handlers do NOT need to call it directly.
@@ -291,7 +288,7 @@ export async function withRequestContextValue<T>(
   return requestContextStorage.run(context, fn);
 }
 
-// ── Context accessors ────────────────────────────────────────────────────────
+// Context accessors
 
 /**
  * Get the current request context, or `null` if not running inside one.
@@ -306,7 +303,7 @@ export function getRequestContext(): RequestContext | null {
 /**
  * Get the current request ID, or `'unknown'` if not in a request context.
  *
- * This is the most-used accessor — safe to call from anywhere, including
+ * This is the most-used accessor - safe to call from anywhere, including
  * code that may run outside a request (it returns 'unknown' rather than
  * throwing).
  */
@@ -344,14 +341,14 @@ export function getRequestStoreId(): string | undefined {
   return requestContextStorage.getStore()?.storeId;
 }
 
-// ── Context enrichment ───────────────────────────────────────────────────────
+// Context enrichment
 //
 // The context is created at request ENTRY (before auth runs), so `userId`
 // and `storeId` are initially undefined. After the JWT is verified, the
 // auth layer calls `enrichRequestContext()` to add them.
 //
 // Because `AsyncLocalStorage` returns a reference to the store object, we
-// can mutate it in place — all downstream readers (via `getRequestContext()`)
+// can mutate it in place - all downstream readers (via `getRequestContext()`)
 // will see the updated fields. This is safe because:
 //   1. The store is scoped to a single request (no cross-request sharing).
 //   2. Mutation happens synchronously before any downstream async work
@@ -381,14 +378,14 @@ export function enrichRequestContext(
 ): void {
   const ctx = requestContextStorage.getStore();
   if (!ctx) return;
-  // Mutate in place — downstream readers see the updates immediately.
+  // Mutate in place - downstream readers see the updates immediately.
   // The `readonly` modifier on RequestContext fields prevents accidental
   // reassignment elsewhere, but we bypass it here via a cast because
   // enrichment is a sanctioned mutation point.
   Object.assign(ctx as Record<string, unknown>, updates);
 }
 
-// ── Snapshot (for logging / Sentry) ──────────────────────────────────────────
+// Snapshot (for logging / Sentry)
 
 /**
  * Produce a serialisable snapshot of the current request context for

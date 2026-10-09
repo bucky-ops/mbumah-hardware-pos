@@ -1,9 +1,9 @@
 // GET/PATCH/DELETE /api/messages/conversations/[id]
 //
 // Manage a single conversation thread.
-//   GET    — fetch one conversation with resolved participant details + counts
-//   PATCH  — update title, add/remove participants, or change type
-//   DELETE — soft delete a conversation (cascades to messages via onDelete: Cascade)
+//   GET - fetch one conversation with resolved participant details + counts
+//   PATCH - update title, add/remove participants, or change type
+//   DELETE - soft delete a conversation (cascades to messages via onDelete: Cascade)
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -19,12 +19,12 @@ const VALID_TYPES = ['INTERNAL', 'CUSTOMER_SUPPORT'];
  * Privileged roles that may JOIN any thread in their own store (v2.5.6
  * OWNER-VISIBILITY): the owner/manager browses store threads via the scope
  * toggle and joins the ones they want. They still cannot view, post or edit
- * threads they have NOT joined — joining is the explicit gate.
+ * threads they have NOT joined - joining is the explicit gate.
  */
 const CAN_JOIN_STORE_THREADS = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'];
 
 /**
- * Helper — load a conversation + verify the caller is a participant
+ * Helper - load a conversation + verify the caller is a participant
  * (or SUPER_ADMIN). Returns the conversation row or a 403/404 Response.
  */
 async function loadConversationForCaller(
@@ -67,7 +67,7 @@ async function loadConversationForCaller(
   return { ok: true, conversation };
 }
 
-// ── GET: fetch one conversation ──────────────────────────────────────────────
+// GET: fetch one conversation
 async function getConversationHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null },
@@ -120,7 +120,7 @@ async function getConversationHandler(
   });
 }
 
-// ── PATCH: update conversation metadata ───────────────────────────────────────
+// PATCH: update conversation metadata
 async function patchConversationHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null; email: string },
@@ -253,7 +253,7 @@ async function patchConversationHandler(
   });
 }
 
-// ── DELETE: remove a conversation (cascades to messages) ──────────────────────
+// DELETE: remove a conversation (cascades to messages)
 async function deleteConversationHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null; email: string },

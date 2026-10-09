@@ -1,8 +1,6 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Retry Decorators (HOF wrappers)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Retry Decorators (HOF wrappers)
 //
-// Phase 4 — Error Handling & Resilience Framework
+// Phase 4 - Error Handling & Resilience Framework
 //
 // This module provides high-level, ergonomic wrappers around the core
 // `executeWithRetry` engine in `src/lib/retry.ts`. The wrappers are designed
@@ -13,7 +11,7 @@
 //   • `withPrismaTxRetry(fn, opts)`   → wrap a Prisma `$transaction` callback
 //   • `withNotificationRetry(fn)`     → for INotificationService methods
 //
-// ── Design principles ────────────────────────────────────────────────────────
+// Design principles
 //
 // 1. ZERO-POLLUTION: Callers should not need to thread retry options through
 //    every signature. The HOFs capture options at decoration time.
@@ -28,23 +26,22 @@
 //    via `init.retryOnMethods` or an `Idempotency-Key` header (the standard
 //    RFC draft header that lets servers dedupe retries).
 //
-// 4. NO HIDDEN TIMEOUTS: The wrappers do NOT add their own timeouts — the
+// 4. NO HIDDEN TIMEOUTS: The wrappers do NOT add their own timeouts - the
 //    caller controls timeouts via `init.signal` (fetch) or the `signal`
 //    option (executeWithRetry). This avoids double-timeout confusion.
 //
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { executeWithRetry, defaultIsRetryable, RETRY_PRESETS, type RetryOptions, type RetryResult } from './retry';
 import { normaliseError } from './error-handler';
 
-// ── Lazy imports for server-only deps ────────────────────────────────────────
+// Lazy imports for server-only deps
 //
 // `systemLog` lives in `@/lib/logger`, which is safe to import on both client
 // and server, but we want to AVOID importing it at module top-level so that
 // the retry primitives remain tree-shakeable for pure utility use. We use a
 // dynamic import inside the onRetry hook.
 
-// ── withRetry ────────────────────────────────────────────────────────────────
+// withRetry
 
 /**
  * Wrap an async function with retry logic. Returns a new function with the
@@ -89,7 +86,7 @@ export function withRetryValue<A extends unknown[], R>(
   return async (...args: A): Promise<R> => (await wrapped(...args)).value;
 }
 
-// ── retryableFetch ───────────────────────────────────────────────────────────
+// retryableFetch
 
 /**
  * Extended `RequestInit` with retry-specific options. These are stripped
@@ -134,7 +131,7 @@ const DEFAULT_RETRY_METHODS = ['GET', 'HEAD', 'OPTIONS'];
  *   • 4xx (except 429) are NOT retried.
  *
  * Usage:
- *   // Drop-in replacement — works exactly like fetch()
+ *   // Drop-in replacement - works exactly like fetch()
  *   const res = await retryableFetch('https://api.example.com/users');
  *
  *   // With retry options
@@ -159,10 +156,10 @@ export async function retryableFetch(
     ...fetchInit
   } = init;
 
-  // ── Determine the HTTP method (default GET) ──────────────────────────────
+  // Determine the HTTP method (default GET)
   const method = (fetchInit.method || 'GET').toUpperCase();
 
-  // ── Check idempotency: is this method safe to retry? ─────────────────────
+  // Check idempotency: is this method safe to retry?
   const isMethodRetryable = retryOnMethods.includes(method);
   const hasIdempotencyKey =
     respectIdempotencyKey &&
@@ -181,27 +178,27 @@ export async function retryableFetch(
 
   const eligibleForRetry = isMethodRetryable || hasIdempotencyKey;
 
-  // ── If not eligible, do a single fetch with no retry ─────────────────────
+  // If not eligible, do a single fetch with no retry
   if (!eligibleForRetry) {
     return fetch(input, fetchInit);
   }
 
-  // ── Retryable execution ──────────────────────────────────────────────────
+  // Retryable execution
   // We use executeWithRetry with a custom isRetryable that:
   //   1. Uses the default classifier (network errors, 5xx, etc.)
   //   2. ALSO treats the Response itself as retryable if its status is in
   //      RETRYABLE_HTTP_STATUS (so we can retry on 503 even though fetch
-  //      doesn't throw on 5xx — it resolves with res.ok === false).
+  //      doesn't throw on 5xx - it resolves with res.ok === false).
   const { value: response } = await executeWithRetry(
     async (attempt: number) => {
       const res = await fetch(input, fetchInit);
 
-      // ── 2xx success — return immediately ─────────────────────────────
+      // 2xx success - return immediately
       if (res.ok) {
         return res;
       }
 
-      // ── 429: honour Retry-After ─────────────────────────────────────────
+      // 429: honour Retry-After
       // We don't sleep here (the retry engine handles sleeping). Instead we
       // throw so the engine catches it, classifies it as retryable, and
       // sleeps. We pass the Retry-After hint via a custom error.
@@ -216,7 +213,7 @@ export async function retryableFetch(
         throw err;
       }
 
-      // ── 5xx: throw a RetryableHttpError so the engine can retry ──────
+      // 5xx: throw a RetryableHttpError so the engine can retry
       if (res.status >= 500) {
         // Clone the response so the caller can still read the body if all
         // retries fail (the original res will be consumed by reading it).
@@ -230,8 +227,8 @@ export async function retryableFetch(
         );
       }
 
-      // ── 4xx (non-429): NOT retryable. Return the response so the caller
-      //    can handle it. We do NOT throw — the engine would retry it.
+      // 4xx (non-429): NOT retryable. Return the response so the caller
+      //    can handle it. We do NOT throw - the engine would retry it.
       //    Instead, we wrap it in a non-retryable error to stop the loop,
       //    but the caller wants the Response object, so we return it via
       //    a special sentinel.
@@ -292,12 +289,12 @@ export class RetryableHttpError extends Error {
 export function parseRetryAfter(value: string): number | undefined {
   const trimmed = value.trim();
 
-  // ── Integer seconds ───────────────────────────────────────────────────────
+  // Integer seconds
   if (/^\d+$/.test(trimmed)) {
     return parseInt(trimmed, 10) * 1000;
   }
 
-  // ── HTTP-date ─────────────────────────────────────────────────────────────
+  // HTTP-date
   const date = Date.parse(trimmed);
   if (!isNaN(date)) {
     return Math.max(0, date - Date.now());
@@ -306,7 +303,7 @@ export function parseRetryAfter(value: string): number | undefined {
   return undefined;
 }
 
-// ── withPrismaTxRetry ────────────────────────────────────────────────────────
+// withPrismaTxRetry
 
 /**
  * Wrap a Prisma `$transaction` callback so that P2034 (write-write conflict)
@@ -314,7 +311,7 @@ export function parseRetryAfter(value: string): number | undefined {
  *
  * Prisma's `$transaction` with the default isolation level can throw P2034
  * when two concurrent transactions conflict. The recommended fix (per
- * Prisma docs) is to retry the WHOLE transaction — this wrapper does that
+ * Prisma docs) is to retry the WHOLE transaction - this wrapper does that
  * automatically.
  *
  * Usage:
@@ -328,7 +325,7 @@ export function parseRetryAfter(value: string): number | undefined {
  *     { operation: 'transferFunds' }
  *   );
  *
- * IMPORTANT: The callback MUST be idempotent — it may execute more than once.
+ * IMPORTANT: The callback MUST be idempotent - it may execute more than once.
  * Avoid side effects outside the transaction (e.g. sending an email) inside
  * the callback.
  */
@@ -346,7 +343,7 @@ export async function withPrismaTxRetry<T>(
   return (await executeWithRetry(fn, mergedOpts)).value;
 }
 
-// ── withNotificationRetry ────────────────────────────────────────────────────
+// withNotificationRetry
 
 /**
  * Wrap an `INotificationService` send method (sendSms, sendWhatsApp,
@@ -355,7 +352,7 @@ export async function withPrismaTxRetry<T>(
  * Notification sends are inherently idempotent from the app's perspective:
  *   • SMS/WhatsApp: Twilio dedupes based on the `To` + `Body` hash within a
  *     short window (5+ minutes). Even if a duplicate slips through, the
- *     customer simply receives two identical messages — annoying but not
+ *     customer simply receives two identical messages - annoying but not
  *     dangerous.
  *   • Email: Resend does NOT dedupe, so we rely on the caller passing an
  *     `Idempotency-Key` (or accept the small risk of duplicate emails).
@@ -366,7 +363,7 @@ export async function withPrismaTxRetry<T>(
  *   • HTTP 5xx (Twilio/Resend server error)
  *
  * It does NOT retry on:
- *   • 4xx (non-429) — auth failures, invalid phone, etc.
+ *   • 4xx (non-429) - auth failures, invalid phone, etc.
  *   • The notification service's own `success: false` return value (that's
  *     a deliberate failure, not a transient one).
  */
@@ -386,7 +383,7 @@ export function withNotificationRetry<TArgs extends unknown[], TResult>(
   };
 }
 
-// ── onRetry hook factory ─────────────────────────────────────────────────────
+// onRetry hook factory
 
 /**
  * Create an `onRetry` callback that:
@@ -403,16 +400,16 @@ function createOnRetryHook(
   fetchInput?: string | URL | Request,
 ): NonNullable<RetryOptions['onRetry']> {
   return (err: unknown, attempt: number, nextDelayMs: number) => {
-    // ── Delegate to the user's hook first (may throw to abort) ──────────────
+    // Delegate to the user's hook first (may throw to abort)
     if (userOnRetry) {
       userOnRetry(err, attempt, nextDelayMs);
     }
 
-    // ── Log the retry ────────────────────────────────────────────────────────
-    // Fire-and-forget — never blocks the retry loop.
+    // Log the retry
+    // Fire-and-forget - never blocks the retry loop.
     void logRetryAttempt(err, attempt, nextDelayMs, operation, fetchInput).catch(
       () => {
-        // Logging failed — nothing we can do. The retry proceeds.
+        // Logging failed - nothing we can do. The retry proceeds.
       },
     );
   };
@@ -429,13 +426,13 @@ async function logRetryAttempt(
   operation: string | undefined,
   fetchInput?: string | URL | Request,
 ): Promise<void> {
-  // ── Client-side: just console.warn ───────────────────────────────────────
+  // Client-side: just console.warn
   if (typeof window !== 'undefined') {
     console.warn(`[Retry] ${operation ?? 'unknown'} attempt ${attempt} failed, retrying in ${nextDelayMs}ms`, err);
     return;
   }
 
-  // ── Server-side: systemLog ────────────────────────────────────────────────
+  // Server-side: systemLog
   try {
     const { systemLog } = await import('@/lib/logger');
     const { LogSeverity, LogComponent } = await import('@/lib/types');
@@ -458,12 +455,12 @@ async function logRetryAttempt(
       },
     });
   } catch {
-    // systemLog failed — fall back to console.
+    // systemLog failed - fall back to console.
     console.warn(`[Retry] ${operation ?? 'unknown'} attempt ${attempt} failed (logging also failed)`, err);
   }
 }
 
-// ── Re-exports ───────────────────────────────────────────────────────────────
+// Re-exports
 
 export {
   executeWithRetry,

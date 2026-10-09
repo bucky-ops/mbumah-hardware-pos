@@ -1,6 +1,4 @@
-// ════════════════════════════════════════════════════════════════════════════
 // src/lib/data-export-utils.ts
-// ════════════════════════════════════════════════════════════════════════════
 //
 // Server-side data export utilities for the Data Export Dashboard.
 //
@@ -20,7 +18,7 @@
 import { db } from '@/lib/db';
 import { calculateAgingBucket } from '@/lib/debt-helpers';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 export type ExportType =
   | 'PRODUCTS'
@@ -49,14 +47,14 @@ export interface GenerateResult {
   recordCount: number;
 }
 
-// ── CSV helpers ──────────────────────────────────────────────────────────────
+// CSV helpers
 
 /**
  * Escape a CSV field per RFC 4180. Wraps the value in double quotes if it
  * contains a comma, double quote, newline, or carriage return; doubles any
  * embedded double quotes.
  *
- * v2.12.6 (PR C): now exported — shared by the admin audit-trail CSV export.
+ * v2.12.6 (PR C): now exported - shared by the admin audit-trail CSV export.
  */
 export function escapeCsvField(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -71,7 +69,7 @@ export function escapeCsvField(value: unknown): string {
  * Build a CSV string from an array of row objects and an ordered list of
  * columns. The first line is the header row (using `headerLabels` if provided).
  *
- * v2.12.6 (PR C): now exported — shared by the admin audit-trail CSV export
+ * v2.12.6 (PR C): now exported - shared by the admin audit-trail CSV export
  * (GET /api/admin/audit-trail?format=csv).
  */
 export function buildCsv(
@@ -96,7 +94,7 @@ function toNumber(value: unknown): number {
     const n = parseFloat(value);
     return Number.isFinite(n) ? n : 0;
   }
-  // Prisma Decimal — call .toNumber() if available.
+  // Prisma Decimal - call .toNumber() if available.
   const maybeDecimal = value as { toNumber?: () => number };
   if (typeof maybeDecimal.toNumber === 'function') {
     const n = maybeDecimal.toNumber();
@@ -120,7 +118,7 @@ function fmtDate(value: Date | string | null | undefined): string {
   }
 }
 
-// ── Filter parser ────────────────────────────────────────────────────────────
+// Filter parser
 
 /**
  * Parse the JSON-encoded `filters` string from a DataExport row into a typed
@@ -139,10 +137,10 @@ export function parseExportFilters(raw: string | null | undefined): ExportFilter
   return {};
 }
 
-// ── Generators ───────────────────────────────────────────────────────────────
+// Generators
 
 /**
- * PRODUCTS — every product in the store with category, pricing, stock, flags.
+ * PRODUCTS - every product in the store with category, pricing, stock, flags.
  */
 export async function generateProductsCsv(
   storeId: string,
@@ -212,7 +210,7 @@ export async function generateProductsCsv(
 }
 
 /**
- * CUSTOMERS — every customer with contact info, debt balance, loyalty tier.
+ * CUSTOMERS - every customer with contact info, debt balance, loyalty tier.
  */
 export async function generateCustomersCsv(
   storeId: string,
@@ -268,7 +266,7 @@ export async function generateCustomersCsv(
 }
 
 /**
- * TRANSACTIONS — sales transactions with totals, payment method, cashier,
+ * TRANSACTIONS - sales transactions with totals, payment method, cashier,
  * customer, and item count. Scoped to a date range.
  */
 export async function generateTransactionsCsv(
@@ -343,7 +341,7 @@ export async function generateTransactionsCsv(
 }
 
 /**
- * DEBT — outstanding debt ledger entries with customer info, balances, and
+ * DEBT - outstanding debt ledger entries with customer info, balances, and
  * aging buckets. Filters by status if provided.
  */
 export async function generateDebtCsv(
@@ -414,7 +412,7 @@ export async function generateDebtCsv(
 }
 
 /**
- * INVENTORY — products with stock levels, reorder points, and bin locations.
+ * INVENTORY - products with stock levels, reorder points, and bin locations.
  * Includes stock status (LOW STOCK / OK / OUT OF STOCK).
  */
 export async function generateInventoryCsv(
@@ -488,7 +486,7 @@ export async function generateInventoryCsv(
 }
 
 /**
- * EMPLOYEES — every employee with role, contact info, salary, and employment
+ * EMPLOYEES - every employee with role, contact info, salary, and employment
  * status.
  */
 export async function generateEmployeesCsv(storeId: string): Promise<GenerateResult> {
@@ -561,7 +559,7 @@ export async function generateEmployeesCsv(storeId: string): Promise<GenerateRes
 }
 
 /**
- * SUPPLIERS — every supplier with contact info, payment terms, rating.
+ * SUPPLIERS - every supplier with contact info, payment terms, rating.
  */
 export async function generateSuppliersCsv(storeId: string): Promise<GenerateResult> {
   const suppliers = await db.supplier.findMany({
@@ -605,7 +603,7 @@ export async function generateSuppliersCsv(storeId: string): Promise<GenerateRes
 }
 
 /**
- * LOYALTY — customers with loyalty points, tier, total earned/redeemed, and
+ * LOYALTY - customers with loyalty points, tier, total earned/redeemed, and
  * transaction counts.
  */
 export async function generateLoyaltyCsv(storeId: string): Promise<GenerateResult> {
@@ -659,7 +657,7 @@ export async function generateLoyaltyCsv(storeId: string): Promise<GenerateResul
 }
 
 /**
- * TAX — transactions in a date range with VAT breakdown (subtotal, tax,
+ * TAX - transactions in a date range with VAT breakdown (subtotal, tax,
  * total). Useful for KRA VAT returns.
  */
 export async function generateTaxCsv(
@@ -727,7 +725,7 @@ export async function generateTaxCsv(
 }
 
 /**
- * SALES_SUMMARY — daily aggregated sales for a date range. One row per day
+ * SALES_SUMMARY - daily aggregated sales for a date range. One row per day
  * with revenue, transaction count, average transaction value, total tax, and
  * (optionally) per-payment-method breakdown.
  */
@@ -841,7 +839,7 @@ export async function generateSalesSummaryCsv(
   return { csv, recordCount: rows.length };
 }
 
-// ── Dispatcher ───────────────────────────────────────────────────────────────
+// Dispatcher
 
 /**
  * Run the appropriate generator for the given export type. Returns the CSV
@@ -883,7 +881,7 @@ export async function runExportGenerator(
 
 /**
  * Wrap a CSV string as a JSON document. The JSON is an array of row objects
- * keyed by the column labels. This is a simple convenience wrapper — for
+ * keyed by the column labels. This is a simple convenience wrapper - for
  * structured JSON exports of complex types, callers should write dedicated
  * generators.
  */

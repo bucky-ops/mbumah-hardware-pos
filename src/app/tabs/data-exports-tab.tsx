@@ -1,12 +1,12 @@
 'use client';
 
 /**
- * Data Exports Tab — unified export center for the POS.
+ * Data Exports Tab - unified export center for the POS.
  *
  * Layout:
  *   1. Header with title + "New Export" button
  *   2. Stats cards row (ExportsStatsCards)
- *   3. "Export Types" grid — 10 cards (2/3/4 cols responsive) with stagger
+ *   3. "Export Types" grid - 10 cards (2/3/4 cols responsive) with stagger
  *   4. "Export History" table with filter chips
  *
  * Data is fetched via tanstack-query. Clicking a card (or the "New Export"
@@ -44,7 +44,7 @@ export function DataExportsTab() {
     undefined,
   );
 
-  // ── Data: stats ────────────────────────────────────────────────────────
+  // Data: stats
   const {
     data: stats,
     isLoading: statsLoading,
@@ -66,7 +66,7 @@ export function DataExportsTab() {
     }
   }, [statsError]);
 
-  // ── Data: exports list ─────────────────────────────────────────────────
+  // Data: exports list
   const {
     data: exports,
     isLoading: exportsLoading,
@@ -89,7 +89,7 @@ export function DataExportsTab() {
     }
   }, [exportsError]);
 
-  // ── Handlers ──────────────────────────────────────────────────────────
+  // Handlers
   const handleRefresh = () => {
     refetchExports();
     refetchStats();

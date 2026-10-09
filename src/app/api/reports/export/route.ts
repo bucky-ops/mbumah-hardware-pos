@@ -1,5 +1,5 @@
 // GET  /api/reports/export (CSV: sales, inventory, debt, rentals)
-// POST /api/reports/export (Receipt distribution — Email via Resend / WhatsApp via Twilio)
+// POST /api/reports/export (Receipt distribution - Email via Resend / WhatsApp via Twilio)
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -238,13 +238,13 @@ async function getExportHandler(...args: unknown[]): Promise<Response> {
 }
 
 // AUDIT FIX (Task 3-d): CSV export (incl. cost/margin columns) =
-// manager-or-above — exports leak cost & margin data to lower roles.
+// manager-or-above - exports leak cost & margin data to lower roles.
 export const GET = withErrorBoundary(
   withSessionAuth(getExportHandler, { roles: MANAGER_PLUS_ROLES }),
   'REPORTS_EXPORT',
 );
 
-// ── POST /api/reports/export ────────────────────────────────────────────────
+// POST /api/reports/export
 //
 // Receipt distribution endpoint. Accepts a transaction ID and channel
 // ('EMAIL', 'WHATSAPP' or 'SMS') and sends the branded receipt to the customer

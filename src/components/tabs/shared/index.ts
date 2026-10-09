@@ -1,5 +1,5 @@
 /**
- * Shared tab sub-components — reusable building blocks extracted from the
+ * Shared tab sub-components - reusable building blocks extracted from the
  * oversized tab files (dashboard, financial, reports, etc.).
  *
  * These are intentionally framework-agnostic and presentational: they receive

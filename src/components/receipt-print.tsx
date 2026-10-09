@@ -1,29 +1,29 @@
 'use client';
 
 /**
- * MBUMAH HARDWARE POS — Receipt generation, preview, print & PDF export.
+ * MBUMAH HARDWARE POS - Receipt generation, preview, print & PDF export.
  *
- * INCIDENT FIXES (2026-09 — "blank receipts / dead Download button"):
- *   1. BLANK PRINT — the old @media print rules hid every direct child of
+ * INCIDENT FIXES (2026-09 - "blank receipts / dead Download button"):
+ *   1. BLANK PRINT - the old @media print rules hid every direct child of
  *      [role="dialog"] except a `.receipt-printable-wrapper` class that did
  *      not exist anywhere in the DOM, so the whole dialog (receipt included)
  *      collapsed to display:none and the printer received a blank page.
  *      Printing now goes through printReceiptElement() which clones the
  *      receipt into #print-root; globals.css shows ONLY that container.
- *   2. DEAD DOWNLOAD — the Download button was disabled / merely called
+ *   2. DEAD DOWNLOAD - the Download button was disabled / merely called
  *      window.print(). It now runs generateReceiptPdf()
  *      (html2canvas-pro → jsPDF, 80mm dynamic-height page) with full
  *      try/catch + [RECEIPT_DOWNLOAD_ERROR] console logging + toast.
- *   3. PLACEHOLDER QR — the dashed "QrCode icon" box is replaced by a real,
+ *   3. PLACEHOLDER QR - the dashed "QrCode icon" box is replaced by a real,
  *      scannable QR code encoding the verification payload
  *      `TX:<receiptNumber>|Date:<createdAt>|Total:<totalAmount>`.
- *   4. html2canvas (classic) cannot parse Tailwind v4 oklch() colors —
+ *   4. html2canvas (classic) cannot parse Tailwind v4 oklch() colors -
  *      html2canvas-pro (API-compatible fork) is used instead, otherwise the
  *      PDF canvas comes out blank/broken.
  *
  * Component layout:
- *   ReceiptDocument      — the printable, branded receipt (colored, QR).
- *   ReceiptPrintPreview  — ResponsiveDialog wrapper with Print / Download
+ *   ReceiptDocument - the printable, branded receipt (colored, QR).
+ *   ReceiptPrintPreview - ResponsiveDialog wrapper with Print / Download
  *                          PDF / Copy / WhatsApp / SMS / New Sale actions.
  */
 
@@ -74,7 +74,7 @@ import {
 } from '@/lib/receipt-pdf';
 import { buildReceiptQrPayload } from '@/lib/receipt-qr';
 
-// ─── Props ──────────────────────────────────────────────────────────────────
+// Props
 
 export interface ReceiptPrintPreviewProps {
   /** Whether the dialog is open */
@@ -83,11 +83,11 @@ export interface ReceiptPrintPreviewProps {
   onOpenChange: (open: boolean) => void;
   /** The completed transaction data */
   transaction: TransactionItem | null;
-  /** Cash amount received (for CASH payments — to show change) */
+  /** Cash amount received (for CASH payments - to show change) */
   cashReceived?: number;
   /** M-Pesa phone used (for MPESA payments) */
   mpesaPhone?: string;
-  /** Current store ID — to look up branch info */
+  /** Current store ID - to look up branch info */
   storeId: string;
   /** Called when user clicks "New Sale" */
   onNewSale: () => void;
@@ -111,7 +111,7 @@ export interface ReceiptDocumentProps {
   className?: string;
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// Helpers
 
 /** Fractional quantities stay exact: 2.5 → "2.5", 3 → "3" (never 2.50). */
 function formatQuantity(qty: number): string {
@@ -123,7 +123,7 @@ function formatQuantity(qty: number): string {
 function formatQuantityWithUnit(item: SaleItemDetail): string {
   const unit = (item.unitType || '').trim();
   const bare = formatQuantity(item.quantity);
-  // "EA" (each) / "UNIT" add no information on paper — print the bare count.
+  // "EA" (each) / "UNIT" add no information on paper - print the bare count.
   if (!unit || /^(ea|unit|pcs?)$/i.test(unit)) return bare;
   return `${bare} ${unit}`;
 }
@@ -173,7 +173,7 @@ function PaymentMethodBadge({ method }: { method: string }) {
   );
 }
 
-/** Kenyan flag accent bar — 4 horizontal stripes (black, red, green, white) */
+/** Kenyan flag accent bar - 4 horizontal stripes (black, red, green, white) */
 function KenyanFlagBar() {
   return (
     <div className="flex h-2 w-full overflow-hidden rounded-sm" aria-hidden="true">
@@ -228,7 +228,7 @@ function buildReceiptText(
 
   lines.push(divider);
   lines.push(`Subtotal:        ${formatKES(tx.subtotal).padStart(14)}`);
-  // v2.8.0: label no longer hardcodes 16% — the amount is the stored, correct
+  // v2.8.0: label no longer hardcodes 16% - the amount is the stored, correct
   // tax component whatever the admin rate was at sale time.
   lines.push(`VAT:             ${formatKES(tx.taxAmount).padStart(14)}`);
   if (tx.discountAmount > 0) {
@@ -274,7 +274,7 @@ function buildReceiptText(
   return lines.join('\n');
 }
 
-// ─── ReceiptDocument — the branded, printable receipt ───────────────────────
+// ReceiptDocument - the branded, printable receipt
 
 export function ReceiptDocument({
   transaction,
@@ -303,7 +303,7 @@ export function ReceiptDocument({
     ? (serverChangeDue ?? changeDueOf(effectiveCash, toNum(transaction.totalAmount)))
     : 0;
 
-  // VAT breakdown — mode-agnostic and Decimal-exact. For every stored
+  // VAT breakdown - mode-agnostic and Decimal-exact. For every stored
   // transaction (legacy VAT-exclusive AND current VAT-inclusive pricing)
   // `totalAmount − taxAmount` is the NET (VAT-exclusive) revenue, and
   // taxAmount / rate recovers the standard-rated net value; whatever net
@@ -623,7 +623,7 @@ export function ReceiptDocument({
   );
 }
 
-// ─── ReceiptPrintPreview — dialog wrapper with actions ──────────────────────
+// ReceiptPrintPreview - dialog wrapper with actions
 
 export function ReceiptPrintPreview({
   open,
@@ -685,7 +685,7 @@ export function ReceiptPrintPreview({
     window.open(url, '_blank', 'noopener');
   }, [transaction, store, receiptTextOpts]);
 
-  // SMS twin of handleShareWhatsApp — same receipt text opened as an sms:
+  // SMS twin of handleShareWhatsApp - same receipt text opened as an sms:
   // deep link; the empty phone produces `sms:?body=…` which opens the SMS app
   // so the user picks the recipient (same chooser UX as the wa.me share).
   const handleShareSms = useCallback(() => {

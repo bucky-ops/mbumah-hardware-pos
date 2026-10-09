@@ -1,8 +1,8 @@
-// POST /api/vouchers/send — deliver a voucher via Email / SMS / WhatsApp
+// POST /api/vouchers/send - deliver a voucher via Email / SMS / WhatsApp
 //
 // VF-1 (v2.8.0): the client reported "Vouchers are not sending via Email,
 // Text (SMS), or WhatsApp". Root cause: the vouchers tab only composed
-// prompt()+wa.me/sms:/mailto: DEEP LINKS — nothing was ever actually sent,
+// prompt()+wa.me/sms:/mailto: DEEP LINKS - nothing was ever actually sent,
 // and the unconfigured Twilio paths returned FAKE success (sim_ message ids).
 // This endpoint performs the REAL dispatch (Resend for email, Twilio for
 // SMS/WhatsApp), records an honest delivery status on the existing Message
@@ -12,13 +12,13 @@
 // Request:  { voucherId, channel: 'EMAIL'|'SMS'|'WHATSAPP', recipient, customerId? }
 // Response: { success, data: { status: 'SENT'|'FAILED'|'SIMULATED',
 //             messageId, message, waLink?, providerMessageId?, error?, channel, recipient } }
-//   • SENT      — the gateway accepted the message (providerMessageId set).
-//   • FAILED    — gateway unconfigured or provider error (error explains why).
-//   • SIMULATED — same as FAILED but specifically "gateway not configured";
+//   • SENT - the gateway accepted the message (providerMessageId set).
+//   • FAILED - gateway unconfigured or provider error (error explains why).
+//   • SIMULATED - same as FAILED but specifically "gateway not configured";
 //                 the Message row still records FAILED (nothing was delivered).
 //
 // Auth: any store role (withSessionAuth). The session is NOT passed to the
-// handler — re-derive it with getSessionFromRequest(request) (v2.7.1 learning:
+// handler - re-derive it with getSessionFromRequest(request) (v2.7.1 learning:
 // withSessionAuth publishes the tenant context via AsyncLocalStorage instead).
 
 import { type NextRequest } from 'next/server';
@@ -48,7 +48,7 @@ function normalizeKePhone(phone: string): string | null {
   return null;
 }
 
-/** Minimal HTML escaping — voucher name/description are user-entered. */
+/** Minimal HTML escaping - voucher name/description are user-entered. */
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -58,14 +58,14 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
-// Prisma's generated Decimal type (structural — avoids importing the runtime).
+// Prisma's generated Decimal type (structural - avoids importing the runtime).
 type PrismaDecimal = Parameters<typeof formatKES>[0];
 
 /**
  * Build the voucher message text. MIRRORS the 'voucher' branch of
  * /api/whatsapp/send-document (same emojis, same field order) so every
  * channel carries an identical, WhatsApp-styled rendition. Store name comes
- * from the voucher's store record — never hardcoded.
+ * from the voucher's store record - never hardcoded.
  */
 function buildVoucherMessage(
   voucher: {
@@ -113,7 +113,7 @@ function buildVoucherMessage(
 async function sendVoucherHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
 
-  // withSessionAuth does NOT pass the session to the handler — re-derive it.
+  // withSessionAuth does NOT pass the session to the handler - re-derive it.
   const session = await getSessionFromRequest(request);
   if (!session) {
     return Response.json(
@@ -158,7 +158,7 @@ async function sendVoucherHandler(...args: unknown[]): Promise<Response> {
 
   const storeName = voucher.store?.name || 'Mbumah Hardware';
 
-  // Per-channel recipient validation (fail fast with a clean 400 — nothing
+  // Per-channel recipient validation (fail fast with a clean 400 - nothing
   // was attempted yet, so no Message row is persisted for input errors).
   let normalizedPhone: string | null = null;
   if (sendChannel === 'EMAIL') {
@@ -190,14 +190,14 @@ async function sendVoucherHandler(...args: unknown[]): Promise<Response> {
   <p style="font-size: 12px; color: #6b7280;">Show this code at checkout or enter it in the Voucher field of your order.</p>
 </div>`;
 
-  // ── Dispatch through the real gateways ─────────────────────────────────────
+  // Dispatch through the real gateways
   let status: 'SENT' | 'FAILED' = 'FAILED';
   let simulated = false;
   let providerMessageId: string | undefined;
   let errorMessage: string | undefined;
 
   if (sendChannel === 'EMAIL') {
-    // Resend path (email-service never throws — failures come back as results).
+    // Resend path (email-service never throws - failures come back as results).
     if (!isEmailConfigured()) {
       errorMessage = 'Email gateway not configured (RESEND_API_KEY missing)';
     } else {
@@ -232,7 +232,7 @@ async function sendVoucherHandler(...args: unknown[]): Promise<Response> {
     }
   }
 
-  // wa.me deep-link fallback (WHATSAPP only) — built like send-document so
+  // wa.me deep-link fallback (WHATSAPP only) - built like send-document so
   // the UI can offer "Open in WhatsApp" when the gateway is unconfigured.
   let waLink: string | null = null;
   if (sendChannel === 'WHATSAPP' && normalizedPhone) {
@@ -240,7 +240,7 @@ async function sendVoucherHandler(...args: unknown[]): Promise<Response> {
     waLink = `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
   }
 
-  // ── Persist an honest Message row (existing model — no schema change). ─────
+  // Persist an honest Message row (existing model - no schema change).
   // SIMULATED sends are stored as FAILED: nothing actually left the building.
   let messageId = '';
   try {

@@ -1,4 +1,4 @@
-// Shift Schedule — utilities for the planned/roster shift feature.
+// Shift Schedule - utilities for the planned/roster shift feature.
 //
 // The `ShiftSchedule` model (table `shift_schedules`) records *planned*
 // shifts (recurring weekly or one-off), distinct from the `Shift` model
@@ -6,17 +6,17 @@
 //
 // Time handling:
 //   - `startTime` / `endTime` are stored as DateTime values (SQLite
-//     compatibility — there's no native TIME type). Only the time-of-day
+//     compatibility - there's no native TIME type). Only the time-of-day
 //     portion matters; the date portion is a fixed epoch (1970-01-01).
 //   - Overnight shifts are encoded as endTime < startTime (e.g. start at
 //     22:00 and end at 06:00 the next day). `calculateShiftDurationHours`
 //     handles this case.
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 export type ShiftScheduleStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED';
 
-/** Shape used by the expansion helpers — a minimal projection of the DB row. */
+/** Shape used by the expansion helpers - a minimal projection of the DB row. */
 export interface ScheduleLike {
   id: string;
   /** 0 = Sunday … 6 = Saturday. `null` when `specificDate` is set. */
@@ -30,7 +30,7 @@ export interface ScheduleLike {
   status?: string;
 }
 
-// ── Color palette ────────────────────────────────────────────────────────────
+// Color palette
 //
 // Statically-declared color tokens so Tailwind's JIT can find every class
 // in the build. `bg`, `text`, and `border` hold full Tailwind class strings
@@ -134,7 +134,7 @@ export function getColor(value: string | null | undefined): ShiftColor {
   return COLOR_MAP.emerald;
 }
 
-// ── Day helpers ──────────────────────────────────────────────────────────────
+// Day helpers
 
 export const DAY_NAMES = [
   'Sunday',
@@ -161,7 +161,7 @@ export function getWeekStart(date: Date): Date {
 }
 
 /**
- * Returns the 7 Date objects (Sun–Sat) for the week starting at `weekStart`.
+ * Returns the 7 Date objects (Sun - Sat) for the week starting at `weekStart`.
  * Each Date is normalized to local midnight.
  */
 export function getWeekDays(weekStart: Date): Date[] {
@@ -200,13 +200,13 @@ function isInRange(target: Date, start: Date | null, end: Date | null): boolean 
   return true;
 }
 
-// ── Expansion ────────────────────────────────────────────────────────────────
+// Expansion
 //
 // A recurring schedule (dayOfWeek set) applies to every week between its
 // implicit start (createdAt or the week of createdAt) and recurrenceEndDate.
 // A one-off schedule (specificDate set) only applies to that single day.
 //
-// We don't store a startDate on the model — the implicit lower bound for
+// We don't store a startDate on the model - the implicit lower bound for
 // recurring schedules is the schedule's createdAt (so a schedule created on
 // Wednesday doesn't retroactively appear on the previous Tuesday). When the
 // caller passes a week that contains createdAt we still emit the matching
@@ -215,7 +215,7 @@ function isInRange(target: Date, start: Date | null, end: Date | null): boolean 
 function scheduleStartDate(schedule: ScheduleLike): Date | null {
   // The model doesn't expose createdAt on ScheduleLike; the caller can pass
   // it in if needed. For our pure helpers we treat the lower bound as
-  // "no bound" when it isn't supplied — practical use passes the actual
+  // "no bound" when it isn't supplied - practical use passes the actual
   // createdAt through the API serialization so the lower bound is honored.
   // We accept an optional `_createdAt` field for callers that have it.
   const created = (schedule as ScheduleLike & { _createdAt?: string | Date })._createdAt;
@@ -267,7 +267,7 @@ export function expandScheduleForMonth(schedule: ScheduleLike, monthStart: Date)
 }
 
 /**
- * Returns the schedules that apply to a specific date — either a one-off
+ * Returns the schedules that apply to a specific date - either a one-off
  * whose specificDate matches, or a recurring schedule whose dayOfWeek matches
  * AND is within its recurrence range AND status=ACTIVE.
  *
@@ -302,7 +302,7 @@ export function getSchedulesForDate<T extends ScheduleLike>(
   });
 }
 
-// ── Time helpers ─────────────────────────────────────────────────────────────
+// Time helpers
 
 function toDate(value: string | Date): Date {
   return value instanceof Date ? value : new Date(value);
@@ -334,7 +334,7 @@ export function formatTimeRange(
 
 /**
  * Computes the duration of a shift in hours (decimal). Handles overnight
- * shifts — when endTime's time-of-day is earlier than startTime's, the end
+ * shifts - when endTime's time-of-day is earlier than startTime's, the end
  * is assumed to be the next day (so 22:00 → 06:00 = 8h, not -16h).
  *
  * Returns 0 when either input is missing/invalid.
@@ -355,7 +355,7 @@ export function calculateShiftDurationHours(
   if (endMin >= startMin) {
     diffMin = endMin - startMin;
   } else {
-    // Overnight — wrap around 24h.
+    // Overnight - wrap around 24h.
     diffMin = 24 * 60 - startMin + endMin;
   }
   return Math.round((diffMin / 60) * 100) / 100;

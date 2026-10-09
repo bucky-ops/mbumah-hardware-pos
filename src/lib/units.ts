@@ -1,5 +1,5 @@
 /**
- * Unit display helpers (v2.12.1 hotfix — the "per NULL" bug).
+ * Unit display helpers (v2.12.1 hotfix - the "per NULL" bug).
  *
  * A batch of legacy products (e.g. Bamburi Cement rows) was saved with a
  * NULL `unitType`, which made the product card render a dangling "per "
@@ -12,7 +12,7 @@
 
 /**
  * Full unit label for "per UNIT" style badges. NULL/empty → 'UNIT' fallback.
- * `per {unitLabel(p.unitType)}` — never renders a dangling "per " again.
+ * `per {unitLabel(p.unitType)}` - never renders a dangling "per " again.
  */
 export function unitLabel(unit: string | null | undefined): string {
   const trimmed = unit?.trim().toUpperCase();

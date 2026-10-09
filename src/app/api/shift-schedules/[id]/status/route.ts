@@ -4,7 +4,7 @@
 //
 //   ACTIVE   → PAUSED or COMPLETED
 //   PAUSED   → ACTIVE or COMPLETED
-//   COMPLETED → (terminal — no transitions allowed)
+//   COMPLETED → (terminal - no transitions allowed)
 //
 // Body: { status: 'ACTIVE' | 'PAUSED' | 'COMPLETED' }
 
@@ -92,7 +92,7 @@ async function statusHandler(...args: unknown[]): Promise<Response> {
   const current = existing.status as ShiftScheduleStatus;
 
   if (current === target) {
-    // No-op — return current state without an UPDATE.
+    // No-op - return current state without an UPDATE.
     return Response.json({ success: true, data: serialize(existing) });
   }
 

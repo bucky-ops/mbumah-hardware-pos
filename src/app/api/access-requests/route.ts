@@ -1,6 +1,6 @@
 // POST /api/access-requests
 //
-// v2.12.5 (PR B phase 2 — RBAC frontend, Task REL-ROADMAP-B2): the "Request
+// v2.12.5 (PR B phase 2 - RBAC frontend, Task REL-ROADMAP-B2): the "Request
 // Access" action on LockedCard. A user who hits a locked feature tells their
 // manager they need it; the request is durably recorded and the right people
 // are notified.
@@ -13,13 +13,13 @@
 //
 // Writes:
 //   • SecurityEvent(eventType: 'ACCESS_REQUEST', severity: INFO,
-//     details: { permission, email, role, note? }) — the durable audit record
+//     details: { permission, email, role, note? }) - the durable audit record
 //   • Notification rows for EVERY active SUPER_ADMIN + BRANCH_MANAGER of the
-//     requester's organization (except the requester themself) — mirrors the
+//     requester's organization (except the requester themself) - mirrors the
 //     phase-1 privilege-abuse lockout notification pattern in src/lib/auth.ts
 //   • systemLog INFO breadcrumb
 //
-// NOTE: no permission is ever GRANTED here — the route only records intent.
+// NOTE: no permission is ever GRANTED here - the route only records intent.
 // Grants remain an admin action (role change is settings.roles.manage =
 // SUPER_ADMIN-only since phase 1).
 
@@ -59,7 +59,7 @@ async function accessRequestHandler(
   }
   const { permission, note } = validation.data;
 
-  // Fail fast on unknown keys — keeps the security feed clean of noise.
+  // Fail fast on unknown keys - keeps the security feed clean of noise.
   if (!FEATURE_PERMISSIONS[permission]) {
     return Response.json(
       { success: false, error: `Unknown permission key: ${permission}` },
@@ -67,7 +67,7 @@ async function accessRequestHandler(
     );
   }
 
-  // Durable security record (SecurityEvent — the feed auditors read).
+  // Durable security record (SecurityEvent - the feed auditors read).
   try {
     await db.securityEvent.create({
       data: {
@@ -92,7 +92,7 @@ async function accessRequestHandler(
   }
 
   // Notify every active SUPER_ADMIN + BRANCH_MANAGER of the org (durable
-  // Notification rows — same shape as the phase-1 lockout notifications).
+  // Notification rows - same shape as the phase-1 lockout notifications).
   try {
     const approvers = await db.user.findMany({
       where: {

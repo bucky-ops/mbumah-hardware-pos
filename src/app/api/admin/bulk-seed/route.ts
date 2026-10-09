@@ -1,26 +1,26 @@
 // POST /api/admin/bulk-seed
 //
 // DEMO DATA LOADER (v2.5.7): SUPER_ADMIN-only bulk loader used to populate a
-// (demo) database with realistic hardware-store data — the owner asked for a
+// (demo) database with realistic hardware-store data - the owner asked for a
 // "fully populated" database (>1000 rows per core table: catalog, customers,
 // suppliers, HR, sales history) plus simulated staff chat conversations.
 //
 // Design contracts (READ BEFORE USE):
-//   • IDEMPOTENT — every row carries a deterministic primary key with the
+//   • IDEMPOTENT - every row carries a deterministic primary key with the
 //     prefix `seed` (e.g. `seedp_000123`). Flat inserts pre-filter rows whose
 //     id already exists; nested inserts (transactions/chats) tolerate P2002.
 //     Re-running the same chunk is a safe no-op.
-//   • PURGEABLE — every seeded row is identifiable by its id prefix
+//   • PURGEABLE - every seeded row is identifiable by its id prefix
 //     `seedp_/seedc_/seeds_/seede_/seedt_/seedm_/seedr_/seedv_/seedmsg_`,
 //     so a future cleanup can delete in FK-safe order:
 //       1. stock_movements (seedm_)  2. receipts (seedr_)
-//       3. sales_transactions (seedt_) — cascades sale_items + payments
-//       4. conversations (seedv_) — cascades conversation_messages
+//       3. sales_transactions (seedt_) - cascades sale_items + payments
+//       4. conversations (seedv_) - cascades conversation_messages
 //       5. products (seedp_) / customers (seedc_) / suppliers (seeds_) /
 //          employees (seede_)
-//   • EXISTING DATA IS NEVER MODIFIED — seed products already carry their
+//   • EXISTING DATA IS NEVER MODIFIED - seed products already carry their
 //     post-sale quantityInStock; no UPDATEs are issued to non-seed rows.
-//   • FK SAFETY — all referenced ids (stores, users, products, categories,
+//   • FK SAFETY - all referenced ids (stores, users, products, categories,
 //     customers) are validated against the live DB before any insert.
 //
 // Chunk limits (Vercel serverless friendly):
@@ -41,7 +41,7 @@ import { isCSRFValid } from '@/lib/security';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-// ── chunk limits ─────────────────────────────────────────────────────────────
+// chunk limits
 const MAX_FLAT_ROWS = 400;
 const MAX_TRANSACTION_ROWS = 40;
 const MAX_CHAT_ROWS = 8;
@@ -67,7 +67,7 @@ const ALLOWED_TABLES: readonly SeedTable[] = [
   'chats',
 ];
 
-// ── tiny safe parsers (a seed script sends plain JSON) ───────────────────────
+// tiny safe parsers (a seed script sends plain JSON)
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v !== null && typeof v === 'object' && !Array.isArray(v)
@@ -100,7 +100,7 @@ function isoDate(v: unknown): Date | undefined {
 const dec = (v: unknown, d = 0) => new Prisma.Decimal(num(v) ?? d);
 const decOrNull = (v: unknown) => (num(v) === null ? undefined : new Prisma.Decimal(num(v) as number));
 
-// ── FK collection + validation ───────────────────────────────────────────────
+// FK collection + validation
 
 interface FkRefs {
   stores: Set<string>;
@@ -172,7 +172,7 @@ function collectFks(table: SeedTable, rows: Record<string, unknown>[], refs: FkR
 }
 
 /**
- * Idempotency helper — return the subset of `ids` that ALREADY exists in the
+ * Idempotency helper - return the subset of `ids` that ALREADY exists in the
  * target table. Deterministic seed ids make re-running a chunk a no-op.
  * (Flat createMany on the SQLite client cannot use skipDuplicates, so we
  * pre-filter instead; behavior is identical on PostgreSQL.)
@@ -232,7 +232,7 @@ async function findMissingFks(refs: FkRefs): Promise<string[]> {
   return [...all].filter((id) => !found.has(id));
 }
 
-// ── row builders (validate + whitelist fields defensively) ──────────────────
+// row builders (validate + whitelist fields defensively)
 
 type RowResult<T> = { ok: T | null; error?: string };
 
@@ -556,7 +556,7 @@ function buildChat(r: Record<string, unknown>): RowResult<ChatRow> {
   return { ok: { conv, id: str(r.id) ?? `seedv_${storeId}` } };
 }
 
-// ── handler ──────────────────────────────────────────────────────────────────
+// handler
 
 async function bulkSeedHandler(request: NextRequest): Promise<Response> {
   if (!isCSRFValid(request)) {
@@ -639,8 +639,8 @@ async function bulkSeedHandler(request: NextRequest): Promise<Response> {
   }
 
   // IDEMPOTENCY: drop rows whose deterministic id already exists. (Flat
-  // createMany here cannot use skipDuplicates — the SQLite client does not
-  // accept the flag — so we pre-filter by id instead, which also keeps re-run
+  // createMany here cannot use skipDuplicates - the SQLite client does not
+  // accept the flag - so we pre-filter by id instead, which also keeps re-run
   // behavior identical on PostgreSQL.)
   const seedIds = rawRows
     .map((r) => asRecord(r))

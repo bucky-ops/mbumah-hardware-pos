@@ -11,7 +11,7 @@ import { idbCartStorage } from './cart-persist';
 // uses the SAME line formula as the server (financialMath.calculateLineItem,
 // VAT-INCLUSIVE retail pricing) so what the cashier sees is exactly what
 // POST /api/transactions persists. financialMath is isomorphic (no node
-// imports) — safe in the client bundle.
+// imports) - safe in the client bundle.
 import { calculateLineItem, toDec, round2, max0 } from '@/lib/utils/financialMath';
 import Decimal from 'decimal.js';
 const Decimal0 = new Decimal(0);
@@ -34,14 +34,14 @@ interface AuthState {
  * authenticated user's OWN store for everyone except SUPER_ADMIN.
  *
  * `currentStoreId` is persisted in localStorage (`mbt_app_store`) and defaults
- * to `store_juja_main` — previously a non-admin user (who cannot switch
+ * to `store_juja_main` - previously a non-admin user (who cannot switch
  * branches) silently kept whatever store id the last browser session had.
  * Every tab then queried `/api/...?storeId=<that store>` so a Nakuru cashier
  * could end up reading ANOTHER branch's customers, debts and transactions.
  *
  * SUPER_ADMIN is exempt: they legitimately switch branches and the sidebar
  * persists their choice. Users without a store assignment (org-level roles)
- * keep the persisted value — the server treats them as unscoped.
+ * keep the persisted value - the server treats them as unscoped.
  */
 function syncStoreScopeToUser(user: AuthUser | null | undefined): void {
   try {
@@ -132,22 +132,22 @@ export const useAuthStore = create<AuthState>((set) => ({
       // store on every boot (see syncStoreScopeToUser docstring).
       syncStoreScopeToUser(user);
     } catch {
-      // Corrupted localStorage — clear and start fresh
+      // Corrupted localStorage - clear and start fresh
       localStorage.removeItem('mbt_token');
       localStorage.removeItem('mbt_user');
     }
   },
 }));
 
-// R10 FIX (v2.5.1 — login flash/reload loop): the API layer dispatches
+// R10 FIX (v2.5.1 - login flash/reload loop): the API layer dispatches
 // `mbt:session-expired` instead of calling window.location.reload() when a
 // request comes back 401 (see api.ts handleSessionExpired). React by flipping
-// the SPA to the LoginScreen in place — no reload, no flash loop, UI state
+// the SPA to the LoginScreen in place - no reload, no flash loop, UI state
 // simply resets alongside the session.
 //
 // v2.6.0 (CART SURVIVAL): the handler NO LONGER calls clearCart(). The cart
 // now persists in IndexedDB (see useCartStore below) and MUST survive logout,
-// 401s and idle timeouts — a cashier whose session expired mid-sale logs back
+// 401s and idle timeouts - a cashier whose session expired mid-sale logs back
 // in and finds the sale exactly as they left it. page.tsx shows the
 // "Previous cart restored (N items)" toast after re-login.
 if (typeof window !== 'undefined') {
@@ -180,7 +180,7 @@ interface CartState {
 
 /**
  * FINANCIAL MATH AUDIT: identical formula to the server-side
- * calculateLineTotal — HALF_UP 2dp, VAT-INCLUSIVE retail pricing.
+ * calculateLineTotal - HALF_UP 2dp, VAT-INCLUSIVE retail pricing.
  * `lineTotal` is the VAT-INCLUSIVE gross the customer pays for the line
  * (pricePerUnit is the shelf price; the VAT component lives inside it).
  */
@@ -189,7 +189,7 @@ function calculateLineTotal(item: Omit<CartItem, 'lineTotal'>): number {
 }
 
 /**
- * The VAT component of a cart line — extracted FROM the VAT-inclusive
+ * The VAT component of a cart line - extracted FROM the VAT-inclusive
  * lineTotal (net = gross / (1 + rate)); 0 for exempt lines. Decimal-exact.
  */
 function lineVatComponent(item: CartItem): number {
@@ -273,16 +273,16 @@ export const useCartStore = create<CartState>()(
   clearCart: () => set({ items: [], discount: 0 }),
 
   getSubtotal: () => {
-    // Σ lineTotal — each line is exact at 2dp and the sum runs in Decimal,
+    // Σ lineTotal - each line is exact at 2dp and the sum runs in Decimal,
     // so this is the exact VAT-inclusive merchandise value.
     return round2(get().items.reduce((sum, item) => sum.plus(toDec(item.lineTotal)), Decimal0));
   },
 
   getTax: () => {
     // Σ per-line VAT components EXTRACTED from the VAT-inclusive line
-    // totals (never `lineTotal × rate%` on top — that would double-count
+    // totals (never `lineTotal × rate%` on top - that would double-count
     // VAT under inclusive pricing). v2.13.1: the POS UI no longer uses
-    // this for the "VAT (incl.)" info line — that figure is now the VAT
+    // this for the "VAT (incl.)" info line - that figure is now the VAT
     // inside the POST-DISCOUNT total (spec formula Total × rate/(100+rate),
     // see pos-tab.tsx). Kept as the per-line component for any consumer
     // that needs the pre-discount extraction.
@@ -291,7 +291,7 @@ export const useCartStore = create<CartState>()(
 
   getTotal: () => {
     // Cart-level flat discount is subtracted from the gross (VAT-inclusive)
-    // subtotal. Never returns negative — discount is clamped in setDiscount,
+    // subtotal. Never returns negative - discount is clamped in setDiscount,
     // but we guard here too for safety (ISO 9001 financial integrity).
     return round2(max0(toDec(get().getSubtotal()).minus(toDec(get().discount))));
   },
@@ -301,15 +301,15 @@ export const useCartStore = create<CartState>()(
   },
     }),
     {
-      // v2.6.0 CART PERSISTENCE — durable IndexedDB (NOT localStorage):
+      // v2.6.0 CART PERSISTENCE - durable IndexedDB (NOT localStorage):
       //   • survives logout / idle timeout / refresh / browser restart;
-      //   • `skipHydration: true` keeps SSR safe — page.tsx manually calls
+      //   • `skipHydration: true` keeps SSR safe - page.tsx manually calls
       //     useCartStore.persist.rehydrate() on first client mount (same
       //     pattern as useAppStore) and toasts "Previous cart restored".
       name: 'mbt_cart_v1',
       version: 1,
       storage: createJSONStorage(() => idbCartStorage),
-      // Persist ONLY cart data — actions (addItem etc.) are never serialized.
+      // Persist ONLY cart data - actions (addItem etc.) are never serialized.
       partialize: (state): CartPersistSlice => ({
         items: state.items,
         discount: state.discount,
@@ -331,7 +331,7 @@ interface AppState {
   sidebarOpen: boolean;
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
-  /** Desktop sidebar collapsed state — true = icon-only (w-16), false = full (w-64) */
+  /** Desktop sidebar collapsed state - true = icon-only (w-16), false = full (w-64) */
   isSidebarCollapsed: boolean;
   toggleSidebarCollapse: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
@@ -369,9 +369,9 @@ export const useAppStore = create<AppState>()(
       name: 'mbt_app_store',
       // skipHydration prevents auto-rehydration on the server (SSR safety).
       // We manually call useAppStore.persist.rehydrate() in a client-only
-      // useEffect in page.tsx — see the hydrateFromStorage effect.
+      // useEffect in page.tsx - see the hydrateFromStorage effect.
       skipHydration: true,
-      // Only persist these fields — exclude transient state like sidebarOpen
+      // Only persist these fields - exclude transient state like sidebarOpen
       // (mobile overlay should never persist across sessions).
       partialize: (state) => ({
         activeTab: state.activeTab,

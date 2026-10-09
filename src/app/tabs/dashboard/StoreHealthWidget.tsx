@@ -1,13 +1,13 @@
 'use client';
 
 /**
- * StoreHealthWidget — circular gauge showing overall store health score.
+ * StoreHealthWidget - circular gauge showing overall store health score.
  *
  * The score is computed client-side from existing dashboard data:
- *   • Revenue trend (today vs avg of last 7 days) — 30%
- *   • Stock health (low stock items / total) — 25%
- *   • Debt collection (outstanding debt ratio) — 25%
- *   • Customer engagement (transactions today) — 20%
+ *   • Revenue trend (today vs avg of last 7 days) - 30%
+ *   • Stock health (low stock items / total) - 25%
+ *   • Debt collection (outstanding debt ratio) - 25%
+ *   • Customer engagement (transactions today) - 20%
  *
  * Score is 0-100. Color: 0-39 red, 40-69 amber, 70-100 emerald.
  * Also shows a small breakdown of each component score.
@@ -23,7 +23,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { dashboardApi, formatKES } from '@/lib/api';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// Helpers
 
 interface HealthBreakdownItem {
   label: string;
@@ -120,7 +120,7 @@ function HealthGauge({ score, color }: { score: number; color: string }) {
   );
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
+// Component
 
 export interface StoreHealthWidgetProps {
   storeId: string;

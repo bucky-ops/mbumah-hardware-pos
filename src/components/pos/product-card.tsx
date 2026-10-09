@@ -14,7 +14,7 @@ export interface ProductCardProps {
   product: ProductListItem;
   onAdd: (p: ProductListItem, qty?: number) => void;
   cartQuantity?: number;
-  /** Mark this product as a top seller — shows gold "Best Seller" badge with star icon */
+  /** Mark this product as a top seller - shows gold "Best Seller" badge with star icon */
   isBestSeller?: boolean;
   /** Original price (pre-discount). When set and > product.pricePerUnit, shows "On Sale" badge */
   originalPrice?: number;
@@ -130,7 +130,7 @@ export function ProductCard({
   };
 
   // Low-stock UX: out-of-stock products stay CLICKABLE so the cashier can add
-  // them to the cart — the cart row glows red, a popup explains the item
+  // them to the cart - the cart row glows red, a popup explains the item
   // cannot be sold until restocked, and checkout blocks the sale. Selling the
   // item itself is enforced server-side (minimum stock level guard).
   const sellBlocked = isOutOfStock && !product.isRental;

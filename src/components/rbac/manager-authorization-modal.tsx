@@ -1,15 +1,15 @@
 'use client';
 
 /**
- * ManagerAuthorizationModal — v2.12.5 (PR B phase 2 — RBAC, Task REL-ROADMAP-B2)
+ * ManagerAuthorizationModal - v2.12.5 (PR B phase 2 - RBAC, Task REL-ROADMAP-B2)
  *
  * Step-up authorization at the counter. When the POS (or any surface) hits a
- * permission that needs manager approval — 5–10% discount band, high-risk
- * credit sale, 90+ day debt override — this dialog collects the approving
+ * permission that needs manager approval - 5-10% discount band, high-risk
+ * credit sale, 90+ day debt override - this dialog collects the approving
  * manager's email + password, verifies them against
  * POST /api/auth/manager-authorize, and hands the verified credentials back to
  * the caller so it can resubmit the request with a `managerOverride` object
- * (verified server-side by src/lib/manager-auth.ts — the credentials are
+ * (verified server-side by src/lib/manager-auth.ts - the credentials are
  * re-checked on the API call itself; the modal only pre-screens them so the
  * cashier gets immediate feedback).
  *
@@ -20,12 +20,12 @@
  *     server's generic copy (never reveals which check failed).
  *
  * `confirmOnly` mode: the signed-in user IS manager-level (e.g. a Branch
- * Manager hitting DEBT_BLOCKED_OVERDUE). No credentials are collected — the
+ * Manager hitting DEBT_BLOCKED_OVERDUE). No credentials are collected - the
  * dialog records intent + reason and the caller resubmits with
  * `managerOverride: true` (which the backend requires for that path).
  *
  * SECURITY: the manager password is wiped from state whenever the dialog
- * closes and after a successful submit — it never lingers.
+ * closes and after a successful submit - it never lingers.
  */
 
 import { useEffect, useState } from 'react';
@@ -64,7 +64,7 @@ export interface ManagerAuthorizationModalProps {
   context: string;
   /** Prefill for the optional reason field (e.g. the server's 403 message). */
   reason?: string;
-  /** Manager-level session path — collect no credentials, just confirm + reason. */
+  /** Manager-level session path - collect no credentials, just confirm + reason. */
   confirmOnly?: boolean;
   onSuccess: (
     manager: VerifiedManager | null,
@@ -160,7 +160,7 @@ export function ManagerAuthorizationModal({
         return;
       }
 
-      // Success — hand the verified credentials to the caller for the retry.
+      // Success - hand the verified credentials to the caller for the retry.
       onSuccess(
         { id: json.manager.id, name: json.manager.name, role: json.manager.role },
         { approverEmail: email.trim(), approverPassword: password, reason: reasonText || undefined }

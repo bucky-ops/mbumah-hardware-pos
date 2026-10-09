@@ -118,7 +118,7 @@ function formatKenyanPhone(value: string): string {
 type SortField = 'name' | 'debt' | 'loyalty' | 'created';
 type SortDirection = 'asc' | 'desc';
 
-// ─── Customer History Types ──────────────────────────────────────────────────
+// Customer History Types
 
 interface HistoryEntry {
   id: string;
@@ -212,7 +212,7 @@ function CustomerHistoryDialog({
     queryKey: ['customer-history', customer?.id, storeId],
     queryFn: async (): Promise<CustomerHistoryData | null> => {
       if (!customer) return null;
-      // Preferred path — typed API client (returns ApiResponse<CustomerHistoryResult>).
+      // Preferred path - typed API client (returns ApiResponse<CustomerHistoryResult>).
       try {
         const response = await customersApi.getHistory(customer.id);
         const payload: CustomerHistoryResult | undefined = response?.data;
@@ -228,7 +228,7 @@ function CustomerHistoryDialog({
       } catch {
         // fall through to direct fetch
       }
-      // Fallback: direct fetch — QA FIX: attach Bearer auth (session is
+      // Fallback: direct fetch - QA FIX: attach Bearer auth (session is
       // Bearer-token based, NOT cookie based; a bare same-origin fetch 401s).
       const res = await authorizedFetchJson(`/api/customers/${customer.id}/history`);
       if (!res.ok || !res.json?.success || !res.json.data) {
@@ -266,7 +266,7 @@ function CustomerHistoryDialog({
         storeId,
         phone,
       });
-      // whatsappApi.sendDocument returns ApiResponse<{waLink,...}> — unwrap .data
+      // whatsappApi.sendDocument returns ApiResponse<{waLink,...}> - unwrap .data
       const waLink = res?.data?.waLink;
       const title = res?.data?.documentTitle;
       if (waLink) {
@@ -283,7 +283,7 @@ function CustomerHistoryDialog({
     }
   }
 
-  // SMS twin of handleSendStatement — compact (~<=320 chars) account summary
+  // SMS twin of handleSendStatement - compact (~<=320 chars) account summary
   // built from the ALREADY-FETCHED history data (no new API calls); openSMS
   // normalizes 07xx → 2547xx.
   async function handleSendStatementSms() {
@@ -418,7 +418,7 @@ function CustomerHistoryDialog({
         ) : isError ? (
           (() => {
             // R8 FIX (v2.5): a record that lives in ANOTHER branch (or was
-            // removed) must not read like a bug — phrase it as a branch
+            // removed) must not read like a bug - phrase it as a branch
             // limitation, and only blame "initialization" on real 5xx faults.
             const friendly = friendlyLookupError(error);
             return (
@@ -583,7 +583,7 @@ export default function CustomersTab() {
   const debts = Array.isArray(debtData?.data) ? debtData.data : [];
 
   // QA FIX (Kenya Plumbing Co. incident): POST /api/debt is gated by
-  // FINANCIAL_ROLES.WRITE — CASHIER and BRANCH_MANAGER get a 403 at submit
+  // FINANCIAL_ROLES.WRITE - CASHIER and BRANCH_MANAGER get a 403 at submit
   // time. Hide the entry points instead of letting staff fill a dialog that
   // can never succeed.
   const canRecordDebtPayments = (
@@ -591,7 +591,7 @@ export default function CustomersTab() {
     authUser?.role === 'STORE_OWNER' ||
     authUser?.role === 'ACCOUNTANT'
   );
-  // R14: the statement endpoint is gated by MANAGER_PLUS_ROLES server-side —
+  // R14: the statement endpoint is gated by MANAGER_PLUS_ROLES server-side -
   // mirror that here so the button only shows for roles that can succeed.
   const canPrintStatement = (
     authUser?.role === 'SUPER_ADMIN' ||
@@ -625,7 +625,7 @@ export default function CustomersTab() {
       const blobUrl = URL.createObjectURL(blob);
       const win = window.open(blobUrl, '_blank');
       if (!win) {
-        // Popup blocked — fall back to a programmatic anchor click.
+        // Popup blocked - fall back to a programmatic anchor click.
         const a = document.createElement('a');
         a.href = blobUrl;
         a.target = '_blank';
@@ -634,7 +634,7 @@ export default function CustomersTab() {
         a.click();
         a.remove();
       }
-      // Revoke late — the print dialog may still be open.
+      // Revoke late - the print dialog may still be open.
       setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000);
       toast.success('Account statement ready — Ctrl/Cmd+P to save as PDF.');
     } catch (err) {
@@ -689,14 +689,14 @@ export default function CustomersTab() {
   const activeDebts = debts.filter((d) => d.status !== 'SETTLED');
   const paymentAmountNum = parseFloat(debtPaymentAmount) || 0;
   // QA FIX (Kenya Plumbing Co. incident): when the customer has exactly ONE
-  // active debt the record selector is hidden — derive the effective selection
+  // active debt the record selector is hidden - derive the effective selection
   // so the submit button is never silently stuck disabled for an entry path
   // that didn't preselect (derived value, no setState-in-effect).
   const effectiveSelectedDebtLedgerId =
     selectedDebtLedgerId || (activeDebts.length === 1 ? activeDebts[0]?.id || '' : '');
   const selectedDebt = activeDebts.find((d) => d.id === effectiveSelectedDebtLedgerId);
   // QA FIX (Kenya Plumbing Co. incident): money fields can arrive as Decimal
-  // strings — coerce with Number() before arithmetic/comparisons so Math.min,
+  // strings - coerce with Number() before arithmetic/comparisons so Math.min,
   // the >-check and the preview can never misbehave.
   const currentDebtBalance = selectedDebt
     ? Number(selectedDebt.amountOwed) - Number(selectedDebt.amountPaid)
@@ -1394,7 +1394,7 @@ export default function CustomersTab() {
               onClick={() => {
                 if (!effectiveSelectedDebtLedgerId || paymentAmountNum <= 0) return;
                 // QA FIX (Kenya Plumbing Co. incident): the payload MUST carry
-                // storeId — POST /api/debt validates presence of all four
+                // storeId - POST /api/debt validates presence of all four
                 // required fields and rejected every payment recorded from
                 // this dialog with "storeId, debtLedgerId, amount, and
                 // paymentMethod are required." (HTTP 400).

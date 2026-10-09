@@ -20,7 +20,7 @@ async function getSecurityDashboardHandler(
   const last7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const last30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  // Base where clause — non-SUPER_ADMIN users scoped to their store
+  // Base where clause - non-SUPER_ADMIN users scoped to their store
   const baseWhere: Record<string, unknown> = {};
   if (session.role !== 'SUPER_ADMIN') {
     baseWhere.storeId = session.storeId || '';

@@ -1,9 +1,7 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Cart IndexedDB persistence (zustand PersistStorage)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Cart IndexedDB persistence (zustand PersistStorage)
 //
 // v2.6.0: the POS cart must survive logout, idle timeouts, tab refreshes and
-// browser restarts. Previously the cart lived ONLY in memory — any session
+// browser restarts. Previously the cart lived ONLY in memory - any session
 // expiry wiped a cashier's carefully-built sale. (The offline-sales queue in
 // offline-sync.ts already proved the pattern: IndexedDB via the `idb`
 // Promise wrapper.)
@@ -16,7 +14,6 @@
 // SSR-safety: every accessor no-ops (returns null) when `window`/`indexedDB`
 // are unavailable, so importing this module from a client component can never
 // break the server render.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { StateStorage } from 'zustand/middleware';
@@ -33,7 +30,7 @@ interface CartPersistDB extends DBSchema {
   };
 }
 
-// ── Singleton DB handle (lazy) ────────────────────────────────────────────────
+// Singleton DB handle (lazy)
 
 let cartDbPromise: Promise<IDBPDatabase<CartPersistDB>> | null = null;
 
@@ -56,7 +53,7 @@ function getCartDB(): Promise<IDBPDatabase<CartPersistDB>> | null {
 /**
  * String-based storage adapter for zustand's createJSONStorage.
  * Reads/writes the `{ state, version }` JSON envelope under the store's
- * persistence name ('mbt_cart_v1') inside IndexedDB — durable across
+ * persistence name ('mbt_cart_v1') inside IndexedDB - durable across
  * logout, refresh and restart (unlike localStorage-per-tab memory).
  */
 export const idbCartStorage: StateStorage = {
@@ -67,7 +64,7 @@ export const idbCartStorage: StateStorage = {
       const row = await db.get(CART_STORE, name);
       return typeof row === 'string' ? row : null;
     } catch {
-      // Corrupted / blocked IndexedDB must never break the POS — start fresh.
+      // Corrupted / blocked IndexedDB must never break the POS - start fresh.
       return null;
     }
   },
@@ -78,7 +75,7 @@ export const idbCartStorage: StateStorage = {
       if (!db) return;
       await db.put(CART_STORE, value, name);
     } catch {
-      // Quota exceeded / private mode — cart persistence degrades silently;
+      // Quota exceeded / private mode - cart persistence degrades silently;
       // the in-memory cart keeps working for the current session.
     }
   },
@@ -89,7 +86,7 @@ export const idbCartStorage: StateStorage = {
       if (!db) return;
       await db.delete(CART_STORE, name);
     } catch {
-      // Ignore — nothing to clean up if the DB is unreachable.
+      // Ignore - nothing to clean up if the DB is unreachable.
     }
   },
 };

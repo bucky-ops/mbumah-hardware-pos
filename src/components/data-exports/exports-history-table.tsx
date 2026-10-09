@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * ExportsHistoryTable — table of past data exports with filter chips and
+ * ExportsHistoryTable - table of past data exports with filter chips and
  * per-row Download / Delete actions. Wraps the existing shadcn/ui Table
  * components and the shared EmptyState.
  *
@@ -63,7 +63,7 @@ import { EXPORT_TYPES } from './export-type-card';
 interface ExportsHistoryTableProps {
   exports: DataExportItem[];
   isLoading?: boolean;
-  /** Optional filter override — if provided, the internal chips are hidden. */
+  /** Optional filter override - if provided, the internal chips are hidden. */
   externalFilter?: DataExportStatus | 'all' | 'processing';
 }
 
@@ -71,7 +71,7 @@ type FilterKey = 'all' | 'completed' | 'failed' | 'processing';
 
 /**
  * A COMPLETED export whose expiresAt (created + 7 days) has passed is no
- * longer downloadable — the download endpoint answers 410 Gone for these.
+ * longer downloadable - the download endpoint answers 410 Gone for these.
  * Surfacing it here prevents a pointless click and a confusing error toast.
  */
 function isExportExpired(item: DataExportItem): boolean {
@@ -113,7 +113,7 @@ const TYPE_META: Record<string, { title: string; color: string }> =
     {} as Record<string, { title: string; color: string }>,
   );
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// Helpers
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes <= 0) return '0 B';
@@ -190,7 +190,7 @@ function TypeBadge({ type }: { type: string }) {
   );
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
+// Component
 
 export function ExportsHistoryTable({
   exports,
@@ -201,7 +201,7 @@ export function ExportsHistoryTable({
   const [filter, setFilter] = useState<FilterKey>('all');
   const [deleteTarget, setDeleteTarget] = useState<DataExportItem | null>(null);
 
-  // Effective filter — allow parent override (e.g. always show 'all').
+  // Effective filter - allow parent override (e.g. always show 'all').
   const effectiveFilter: FilterKey = externalFilter ?? filter;
 
   const filtered = useMemo(() => {
@@ -235,7 +235,7 @@ export function ExportsHistoryTable({
     };
   }, [exports]);
 
-  // ── Download mutation ──────────────────────────────────────────────────
+  // Download mutation
   const downloadMutation = useMutation({
     mutationFn: async (item: DataExportItem) => {
       await dataExportsApi.download(item.id, item.exportType);
@@ -252,7 +252,7 @@ export function ExportsHistoryTable({
     },
   });
 
-  // ── Delete mutation ────────────────────────────────────────────────────
+  // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => dataExportsApi.delete(id),
     onSuccess: () => {

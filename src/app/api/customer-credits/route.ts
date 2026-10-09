@@ -6,7 +6,7 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
 // Task 12-c: canonical financial math. Prisma Decimal `valueOf()` returns a
-// STRING — `previousBalance + Math.abs(amount)` used to STRING-CONCATENATE
+// STRING - `previousBalance + Math.abs(amount)` used to STRING-CONCATENATE
 // when previousBalance came from the last credit row's Decimal balance.
 import { toDec, round2 } from '@/lib/utils/financialMath';
 

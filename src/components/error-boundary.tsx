@@ -311,7 +311,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     if (this.state.hasError) {
       // If the error overlay was dismissed, show a safe minimal fallback
       // instead of re-rendering children (which would crash again and
-      // cause React to unmount the entire tree — the root cause of the
+      // cause React to unmount the entire tree - the root cause of the
       // permanent "Loading..." screen on Vercel).
       if (this.state.dismissed) {
         return (
@@ -393,7 +393,7 @@ export class ConflictError extends AppError {
   }
 }
 
-// ─── Section Error Boundary ────────────────────────────────────────────────
+// Section Error Boundary
 // Lightweight error boundary for wrapping individual sections/tabs.
 // Shows a compact fallback instead of a full-page overlay, preventing one
 // tab's crash from taking down the entire app.

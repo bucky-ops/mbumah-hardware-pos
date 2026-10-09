@@ -1,13 +1,10 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Global Error Boundary
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Global Error Boundary
 //
-// This file catches errors that error.tsx CANNOT — specifically, errors thrown
+// This file catches errors that error.tsx CANNOT - specifically, errors thrown
 // by the root layout.tsx itself. When the root layout fails to render, Next.js
 // falls back to global-error.tsx, which must render its own <html> and <body>.
 //
 // See: https://nextjs.org/docs/app/api-reference/file-conventions/error
-// ─────────────────────────────────────────────────────────────────────────────
 
 'use client';
 

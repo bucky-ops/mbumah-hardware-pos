@@ -4,7 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { withSessionAuth, getSessionFromRequest } from '@/lib/auth';
-// v2.12.2 (PR B — RBAC): supplier-cost visibility gate.
+// v2.12.2 (PR B - RBAC): supplier-cost visibility gate.
 import { hasFeaturePermission } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
@@ -24,7 +24,7 @@ async function searchProductsHandler(...args: unknown[]): Promise<Response> {
   // (a transfer/POS search for "nail" found no "4-inch Nails" in production),
   // so Postgres gets `mode: 'insensitive'`. SQLite (the laptop deployment
   // kits) rejects the `mode` argument at runtime, but its ASCII contains is
-  // already case-insensitive there — so it just uses the plain form.
+  // already case-insensitive there - so it just uses the plain form.
   const isPostgres = (process.env.DATABASE_URL || '').trim().toLowerCase().startsWith('postgres');
   const ci = () => (isPostgres ? { contains: q, mode: 'insensitive' as const } : { contains: q });
 
@@ -37,7 +37,7 @@ async function searchProductsHandler(...args: unknown[]): Promise<Response> {
     where.storeId = storeId;
   }
 
-  // v2.12.2 (PR B — RBAC): POS search is the cashier's main product feed —
+  // v2.12.2 (PR B - RBAC): POS search is the cashier's main product feed -
   // the supplier cost must not ride along here either (list + detail already
   // strip it). Roles without 'inventory.view.cost' get costPrice nulled.
   const searchSession = await getSessionFromRequest(request);
@@ -81,7 +81,7 @@ async function searchProductsHandler(...args: unknown[]): Promise<Response> {
 }
 
 // AUDIT FIX (Task 3-d): session-validated (was Bearer-presence only).
-// Any store role — POS product search is a CASHIER 'products: read' action.
+// Any store role - POS product search is a CASHIER 'products: read' action.
 export const GET = withErrorBoundary(
   withSessionAuth(searchProductsHandler),
   'PRODUCTS_SEARCH',

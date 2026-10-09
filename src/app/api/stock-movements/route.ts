@@ -1,14 +1,14 @@
-// GET /api/stock-movements  — list paginated stock movements with product details
-// POST /api/stock-movements — create a manual stock adjustment (PURCHASE, ADJUSTMENT, RETURN, TRANSFER)
+// GET /api/stock-movements - list paginated stock movements with product details
+// POST /api/stock-movements - create a manual stock adjustment (PURCHASE, ADJUSTMENT, RETURN, TRANSFER)
 //
-// Auth (GET):  any authenticated user (requireStoreAccess — store-scoped).
+// Auth (GET):  any authenticated user (requireStoreAccess - store-scoped).
 // Auth (POST): SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER (role-restricted via requireAuth).
 //
 // Backward compatibility:
 //   GET accepts both `type` (new spec) and `movementType` (legacy) query params.
 //   GET accepts both `offset` (new spec) and `page` (legacy) for pagination.
 //   POST accepts both `type` (new spec) and `adjustmentType` (legacy), and
-//   both `note` (new spec) and `reason` (legacy). Either may be omitted —
+//   both `note` (new spec) and `reason` (legacy). Either may be omitted -
 //   EXCEPT for write-offs (negative quantity), where `reason` (min 3 chars)
 //   is mandatory and a DAMAGED/STOLEN/EXPIRED `category` may be supplied.
 //
@@ -67,7 +67,7 @@ function roundMoney(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-// ── GET /api/stock-movements ────────────────────────────────────────────────
+// GET /api/stock-movements
 
 async function getStockMovementsHandler(
   request: NextRequest,
@@ -152,7 +152,7 @@ async function getStockMovementsHandler(
     db.stockMovement.count({ where }),
   ]);
 
-  // Summary by movement type for the filtered window — useful for the UI
+  // Summary by movement type for the filtered window - useful for the UI
   // to render type counters next to the filter chips.
   const summaryWhere: Record<string, unknown> = { storeId };
   if (dateFrom || dateTo) {
@@ -192,7 +192,7 @@ async function getStockMovementsHandler(
   });
 }
 
-// ── POST /api/stock-movements ───────────────────────────────────────────────
+// POST /api/stock-movements
 
 async function createStockAdjustmentHandler(
   request: NextRequest,
@@ -271,7 +271,7 @@ async function createStockAdjustmentHandler(
     );
   }
 
-  // PURCHASE represents receiving new stock at a known unit cost — it MUST
+  // PURCHASE represents receiving new stock at a known unit cost - it MUST
   // carry a unitCost so we can blend the WAC. Other movement types issue
   // stock at the current WAC and don't need a unitCost.
   const parsedUnitCost =
@@ -306,11 +306,11 @@ async function createStockAdjustmentHandler(
   }
 
   // AUDIT FIX (TOCTOU/oversell): the old outside-the-tx stock pre-check was a
-  // read-then-act race — it could not see concurrent decrements and is now
+  // read-then-act race - it could not see concurrent decrements and is now
   // replaced by a conditional updateMany INSIDE the transaction below
   // (count === 0 → typed 409). Stock sufficiency is enforced atomically there.
 
-  // ── Write-off governance (negative quantity) ──
+  // Write-off governance (negative quantity)
   // AUDIT FIX (governance): a write-off previously required no reason and was
   // never classified or valued in the GL. Negative movements now REQUIRE a
   // documented reason (min 3 chars) and persist a DAMAGED/STOLEN/EXPIRED
@@ -345,8 +345,8 @@ async function createStockAdjustmentHandler(
     );
   }
 
-  // ── WAC recompute (PURCHASE only) ──
-  // R11 FIX (v2.5.1): `currentStockNum` was referenced but never declared —
+  // WAC recompute (PURCHASE only)
+  // R11 FIX (v2.5.1): `currentStockNum` was referenced but never declared -
   // every PURCHASE movement crashed with ReferenceError → 500. The advisory
   // typecheck (issue #8) masked it because the identifier came from a stale
   // refactor. Defined here from the authoritative product row fetched above.
@@ -362,7 +362,7 @@ async function createStockAdjustmentHandler(
     newWac = wac.newWac;
   }
 
-  // Compose a readable notes string: "[WRITE_OFF: X] reason — note". The
+  // Compose a readable notes string: "[WRITE_OFF: X] reason - note". The
   // classification is encoded here because StockMovement has no category column.
   const writeOffPrefix = writeOffCategory ? `[WRITE_OFF: ${writeOffCategory}] ` : '';
   const composedNotes =
@@ -395,7 +395,7 @@ async function createStockAdjustmentHandler(
         movementType: movementTypeValue,
         quantity: adjustmentQuantity,
         notes: composedNotes,
-        // AUDIT FIX (governance): actor identity is session-only — the request
+        // AUDIT FIX (governance): actor identity is session-only - the request
         // body must never be able to impersonate another user.
         performedBy: session.userId,
       },
@@ -412,7 +412,7 @@ async function createStockAdjustmentHandler(
       },
     });
 
-    // Atomic stock-level update — keeps StockMovement and Product.quantityInStock
+    // Atomic stock-level update - keeps StockMovement and Product.quantityInStock
     // consistent regardless of concurrent requests.
     if (adjustmentQuantity > 0) {
       await tx.product.update({
@@ -423,14 +423,14 @@ async function createStockAdjustmentHandler(
         },
       });
     } else {
-      // AUDIT FIX (write-off JE): shrinkage previously never touched the GL —
+      // AUDIT FIX (write-off JE): shrinkage previously never touched the GL -
       // Inventory (1300) was only ever credited by POS COGS, so every write-off
       // drifted the books. Post a balanced JE in the SAME tx, following the
       // recordGoodsReceiptEntry style:
-      //   Dr Cost of Goods Sold (5000) — the seeded expense account already
+      //   Dr Cost of Goods Sold (5000) - the seeded expense account already
       //     used for inventory reductions (see recordSaleJournalEntry COGS leg)
       //   Cr Inventory (1300)
-      // valued at the product's WAC (costPrice) × units written off — the same
+      // valued at the product's WAC (costPrice) × units written off - the same
       // Σ(wac × qty) valuation COGS uses elsewhere.
       const writeOffValue = roundMoney(Math.abs(adjustmentQuantity) * Number(product.costPrice));
       if (writeOffValue > 0) {
@@ -526,7 +526,7 @@ async function createStockAdjustmentHandler(
 
   // v2.6.0: tamper-evident audit entry for the inventory adjustment. Captures
   // the stock level BEFORE (from the pre-transaction product read) and AFTER
-  // the movement. All values are Number()-coerced plain JSON — Prisma
+  // the movement. All values are Number()-coerced plain JSON - Prisma
   // Decimals must never reach the audit chain (string-serialization trap).
   try {
     const { auditTrail } = await import('@/lib/audit-trail');

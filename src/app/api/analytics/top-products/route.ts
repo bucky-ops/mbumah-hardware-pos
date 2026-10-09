@@ -3,7 +3,7 @@
 // Returns the top-selling products by revenue for the selected period.
 // Uses an in-memory aggregation over recent sale items (SQLite does not
 // support groupBy on relations cleanly, so we do it the same way the existing
-// /api/dashboard route does — fetch transactions, then fetch their items).
+// /api/dashboard route does - fetch transactions, then fetch their items).
 //
 // Query params:
 //   - storeId : REQUIRED
@@ -18,7 +18,7 @@ import { db } from '@/lib/db';
 import { requireAuth, type AuthSession } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
 import { getPeriodWindow, type AnalyticsPeriod } from '@/lib/analytics-utils';
-// Task 12-b: Prisma Decimal valueOf() returns a STRING — all accumulation runs
+// Task 12-b: Prisma Decimal valueOf() returns a STRING - all accumulation runs
 // through toDec(); revenue is the VAT-exclusive net per line; emit 2dp HALF_UP
 // numbers via round2().
 import { toDec, round2 } from '@/lib/utils/financialMath';
@@ -124,7 +124,7 @@ async function getTopProductsHandler(
     },
   });
 
-  // Aggregate by productId — all accumulators Decimal (Task 12-b).
+  // Aggregate by productId - all accumulators Decimal (Task 12-b).
   const agg = new Map<
     string,
     {

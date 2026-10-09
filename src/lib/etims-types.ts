@@ -1,6 +1,4 @@
-// ════════════════════════════════════════════════════════════════════════════
 // src/lib/etims-types.ts
-// ════════════════════════════════════════════════════════════════════════════
 //
 // TypeScript types & enums for the KRA eTIMS (electronic Tax Invoice
 // Management System) integration.
@@ -13,14 +11,13 @@
 // The actual HTTP layer lives in `src/lib/etims-service.ts` and the format
 // helpers (date / invoice-number / PIN validation / tax breakdown) live in
 // `src/lib/etims-utils.ts`.
-// ════════════════════════════════════════════════════════════════════════════
 
-// ── Enums ────────────────────────────────────────────────────────────────────
+// Enums
 
 /**
  * KRA eTIMS environments.
- *   sandbox    — etims-api-sbx.kra.go.ke (test)
- *   production — etims-api.kra.go.ke     (live)
+ *   sandbox - etims-api-sbx.kra.go.ke (test)
+ *   production - etims-api.kra.go.ke     (live)
  */
 export const EtimsEnvironment = {
   SANDBOX: 'sandbox',
@@ -30,10 +27,10 @@ export type EtimsEnvironment = (typeof EtimsEnvironment)[keyof typeof EtimsEnvir
 
 /**
  * KRA item tax-type codes (Product.etimsTaxType).
- *   A — VAT (16% standard rate)
- *   B — Zero-rated (0% VAT, but VAT-registered)
- *   C — Exempt (no VAT charged)
- *   D — Not subject to VAT (out of scope)
+ *   A - VAT (16% standard rate)
+ *   B - Zero-rated (0% VAT, but VAT-registered)
+ *   C - Exempt (no VAT charged)
+ *   D - Not subject to VAT (out of scope)
  */
 export const EtimsTaxType = {
   VAT: 'A',
@@ -45,10 +42,10 @@ export type EtimsTaxType = (typeof EtimsTaxType)[keyof typeof EtimsTaxType];
 
 /**
  * Invoice lifecycle status (SalesTransaction.etimsStatus / InvoiceForKRA).
- *   PENDING  — Created locally, not yet submitted to KRA
- *   ISSUED   — Submitted and accepted by KRA (CU PIN + QR returned)
- *   CANCELLED — Cancelled after issue (credit note)
- *   FAILED   — Submission attempt failed (network / 4xx / 5xx)
+ *   PENDING - Created locally, not yet submitted to KRA
+ *   ISSUED - Submitted and accepted by KRA (CU PIN + QR returned)
+ *   CANCELLED - Cancelled after issue (credit note)
+ *   FAILED - Submission attempt failed (network / 4xx / 5xx)
  */
 export const EtimsInvoiceStatus = {
   PENDING: 'PENDING',
@@ -74,7 +71,7 @@ export const EtimsPaymentCode = {
 } as const;
 export type EtimsPaymentCode = (typeof EtimsPaymentCode)[keyof typeof EtimsPaymentCode];
 
-// ── Configuration ────────────────────────────────────────────────────────────
+// Configuration
 
 /**
  * Configuration for an authenticated eTIMS client. Built from a store's
@@ -82,7 +79,7 @@ export type EtimsPaymentCode = (typeof EtimsPaymentCode)[keyof typeof EtimsPayme
  * (branchId, deviceSerial, BVSN) issued by KRA when the device is registered.
  */
 export interface EtimsConfig {
-  /** Base URL — sandbox or production. */
+  /** Base URL - sandbox or production. */
   baseUrl: string;
   /** Branch Verification Serial Number (issued by KRA on device registration). */
   bvsn: string;
@@ -102,13 +99,13 @@ export interface EtimsConfig {
   timeoutMs?: number;
 }
 
-// ── Product Registration ─────────────────────────────────────────────────────
+// Product Registration
 
 /**
- * Payload for `registerProduct` — creates an item in the KRA item master.
+ * Payload for `registerProduct` - creates an item in the KRA item master.
  */
 export interface EtimsProduct {
-  /** Internal Product.id — used for traceability in logs. */
+  /** Internal Product.id - used for traceability in logs. */
   productId?: string;
   /** Item name as it will appear on the KRA invoice. */
   name: string;
@@ -116,7 +113,7 @@ export interface EtimsProduct {
   sku?: string;
   /** KRA HS code (Harmonised System). Default 0000.00.00 if unknown. */
   hsCode?: string;
-  /** Tax type — A/B/C/D. Defaults to A (VAT 16%). */
+  /** Tax type - A/B/C/D. Defaults to A (VAT 16%). */
   taxType: EtimsTaxType;
   /** Unit of measure (PIECE, KILOGRAM, METER, etc.). */
   unitType: string;
@@ -151,7 +148,7 @@ export interface EtimsProductResponse {
   latencyMs: number;
 }
 
-// ── Customer ─────────────────────────────────────────────────────────────────
+// Customer
 
 /**
  * Customer information for an eTIMS invoice.
@@ -186,7 +183,7 @@ export interface EtimsCustomerSearchResponse {
   latencyMs: number;
 }
 
-// ── Invoice Items & Payments ─────────────────────────────────────────────────
+// Invoice Items & Payments
 
 /**
  * A single line item in an eTIMS invoice.
@@ -196,7 +193,7 @@ export interface EtimsItem {
   itemCode?: string;
   /** Item name. */
   name: string;
-  /** Quantity sold (supports fractional — KG, M, L). */
+  /** Quantity sold (supports fractional - KG, M, L). */
   qty: number;
   /** Unit price (KES, exclusive of VAT). */
   price: number;
@@ -222,10 +219,10 @@ export interface EtimsPayment {
   reference?: string;
 }
 
-// ── Invoice ──────────────────────────────────────────────────────────────────
+// Invoice
 
 /**
- * Payload for `issueInvoice` — the full electronic tax invoice.
+ * Payload for `issueInvoice` - the full electronic tax invoice.
  */
 export interface EtimsInvoice {
   /** KRA-compliant invoice number (format: <TIN>-<YYYYMMDD>-<seq>). */
@@ -307,10 +304,10 @@ export interface EtimsCancelResponse {
   latencyMs: number;
 }
 
-// ── Branch Info ──────────────────────────────────────────────────────────────
+// Branch Info
 
 /**
- * Response from `branchInfo` — fetches metadata about the KRA-registered
+ * Response from `branchInfo` - fetches metadata about the KRA-registered
  * branch (address, contact, registration status).
  */
 export interface EtimsBranchInfo {
@@ -326,7 +323,7 @@ export interface EtimsBranchInfo {
   latencyMs: number;
 }
 
-// ── Stock Master Report ──────────────────────────────────────────────────────
+// Stock Master Report
 
 /**
  * A single row in the KRA stock master report.
@@ -371,7 +368,7 @@ export interface EtimsStockMasterResponse {
   latencyMs: number;
 }
 
-// ── Errors ───────────────────────────────────────────────────────────────────
+// Errors
 
 /**
  * Typed error for eTIMS operations. Carries the HTTP status (when available)
@@ -408,7 +405,7 @@ export class EtimsError extends Error {
   }
 }
 
-// ── Client interface ─────────────────────────────────────────────────────────
+// Client interface
 
 /**
  * Abstract eTIMS client. API routes depend on this interface, not the

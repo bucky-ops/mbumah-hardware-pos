@@ -1,9 +1,9 @@
 // POST /api/payroll/runs/[id]/void
 //
 // Void a payroll run that was never paid and never posted to the general
-// ledger. This is the functional "correcting entry" for broken runs — e.g.
+// ledger. This is the functional "correcting entry" for broken runs - e.g.
 // the June 2026 SUPPLEMENTAL run that booked deductions (housing levy) on
-// zero earnings, producing netPay −2,699.99 — without polluting the GL with
+// zero earnings, producing netPay −2,699.99 - without polluting the GL with
 // a reversing journal entry for a transaction that never posted.
 //
 // Guards (a run can ONLY be voided when it is safe to do so):
@@ -33,7 +33,7 @@ async function voidRunHandler(
   ...args: unknown[]
 ): Promise<Response> {
   // NEXT-16 FIX: dynamic route context arrives as { params: Promise<{ id }> }
-  // — the wrapper forwards it via args.slice(1), so args[0] is the context,
+  // the wrapper forwards it via args.slice(1), so args[0] is the context,
   // NOT the params object itself.
   const context = args[0] as RouteContext | undefined;
   if (!context?.params) {
@@ -138,7 +138,7 @@ async function voidRunHandler(
     },
   });
 
-  // Tamper-evident audit entry (best-effort — never blocks the void)
+  // Tamper-evident audit entry (best-effort - never blocks the void)
   try {
     const { auditTrail } = await import('@/lib/audit-trail');
     await auditTrail.log({

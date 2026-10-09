@@ -1,7 +1,5 @@
 #!/usr/bin/env bun
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Nightly Financial Audit Script
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Nightly Financial Audit Script
 //
 // Run via: `bun run audit:financial` or as a Vercel Cron job.
 //
@@ -9,7 +7,6 @@
 // any CRITICAL issues to the system log + Sentry. Exits with code 1 if any
 // CRITICAL issues are found (so cron alerting can trigger on non-zero exit).
 //
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { runFinancialAudit } from '../src/lib/financial-audit';
 import { runWithoutTenant } from '../src/lib/db';

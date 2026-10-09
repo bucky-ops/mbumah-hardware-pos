@@ -43,7 +43,7 @@ async function updateExpenseHandler(...args: unknown[]): Promise<Response> {
   }
 
   // F1-9 remediation: an expense whose journal entry was already posted is
-  // a FINALISED financial record — editing its amount/category desynchronised
+  // a FINALISED financial record - editing its amount/category desynchronised
   // the source document from the GL with no compensating entry (silent P&L
   // misstatement). Posted expenses are now immutable: void + re-create.
   if ((body.amount !== undefined || body.category !== undefined) && existing?.journalEntryId) {
@@ -171,7 +171,7 @@ async function deleteExpenseHandler(...args: unknown[]): Promise<Response> {
 
   if (existing.journalEntryId) {
     // Voiding the linked JournalEntry is a sanctioned mutation on the
-    // append-only financial ledger — wrapped in withImmutabilityBypass().
+    // append-only financial ledger - wrapped in withImmutabilityBypass().
     await withImmutabilityBypass(() =>
       db.journalEntry.update({
         where: { id: existing.journalEntryId! },

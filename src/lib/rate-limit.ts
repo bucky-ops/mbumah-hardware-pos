@@ -82,7 +82,7 @@ export function isRateLimited(
     };
   }
 
-  // No entry or expired window — start fresh
+  // No entry or expired window - start fresh
   if (!entry || entry.resetAt < now) {
     limits.set(key, { count: 1, resetAt: now + options.windowMs, blocked: false, blockedUntil: 0 });
     return { limited: false, remaining: options.max - 1, resetAt: now + options.windowMs };

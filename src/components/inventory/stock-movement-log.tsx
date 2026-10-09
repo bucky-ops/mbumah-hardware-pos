@@ -1,6 +1,6 @@
 'use client';
 
-// StockMovementLog — a self-contained inventory audit trail table.
+// StockMovementLog - a self-contained inventory audit trail table.
 //
 // Features:
 //   • Table of recent stock movements with product + user details.
@@ -15,10 +15,10 @@
 //   • Empty state with a friendly message when no movements match.
 //
 // Props:
-//   storeId — required. The store whose movements to display.
-//   productId — optional. When set, the log is scoped to that product
+//   storeId - required. The store whose movements to display.
+//   productId - optional. When set, the log is scoped to that product
 //     (used by the product detail drawer).
-//   pageSize — optional, default 10.
+//   pageSize - optional, default 10.
 
 import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -41,7 +41,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 
-// ── Types ───────────────────────────────────────────────────────────────────
+// Types
 
 interface StockMovementProduct {
   id: string;
@@ -77,7 +77,7 @@ interface StockMovementsResponse {
   summary?: Array<{ type: string; count: number; totalQuantity: number }>;
 }
 
-// ── Movement type config ────────────────────────────────────────────────────
+// Movement type config
 
 type MovementTypeKey =
   | 'PURCHASE' | 'SALE' | 'ADJUSTMENT' | 'RETURN'
@@ -153,7 +153,7 @@ const FILTER_TYPES: Array<{ value: string; label: string }> = [
   { value: 'RENTAL_RETURN', label: 'Rental Return' },
 ];
 
-// ── Component ───────────────────────────────────────────────────────────────
+// Component
 
 export function StockMovementLog({
   storeId,

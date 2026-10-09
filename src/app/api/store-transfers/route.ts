@@ -1,9 +1,9 @@
 // GET/POST /api/store-transfers
 //
-// AUDIT REMEDIATION — FINANCIAL_MODULE_AUDIT_REPORT.md:
+// AUDIT REMEDIATION - FINANCIAL_MODULE_AUDIT_REPORT.md:
 //   • SYS-1/P0-3: both endpoints were unauthenticated (any non-empty Bearer
 //     passed the proxy). Now wrapped in `requireStoreAccess`.
-//   • SYS-2/F1-3: `requestedBy` previously came from the request body —
+//   • SYS-2/F1-3: `requestedBy` previously came from the request body -
 //     spoofable. Now derived from the authenticated session.
 //   • F3-5: a non-admin can only create transfers FROM their own store.
 
@@ -21,7 +21,7 @@ function generateTransferNumber(): string {
   const dateStr = now.getFullYear().toString() +
     String(now.getMonth() + 1).padStart(2, '0') +
     String(now.getDate()).padStart(2, '0');
-  // crypto.randomBytes instead of Math.random — receipt/transfer numbers must
+  // crypto.randomBytes instead of Math.random - receipt/transfer numbers must
   // not be predictable (they are referenced in payment descriptions) and the
   // larger space reduces birthday collisions (SYS-7).
   const random = crypto.randomBytes(3).toString('hex').toUpperCase();

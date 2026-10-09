@@ -1,22 +1,19 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Fleet status API (RAK, v2.11.0)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Fleet status API (RAK, v2.11.0)
 //
-// GET /api/admin/fleet — one honest snapshot of the store fleet + cloud row,
+// GET /api/admin/fleet - one honest snapshot of the store fleet + cloud row,
 // consumed by the Admin "Fleet & Remote Ops" console:
 //
-//   • agents[]     — discovered from `ledger/*.jsonl` in the ops-log repo:
+//   • agents[] - discovered from `ledger/*.jsonl` in the ops-log repo:
 //                    last heartbeat (version/health/frozen), derived status
 //                    (online/stale/offline), pending command if any, and
 //                    version drift vs the latest GitHub release.
-//   • cloud        — the deployment the console itself runs on (version +
+//   • cloud - the deployment the console itself runs on (version +
 //                    latest release + updateAvailable).
-//   • rings        — optional `fleet/ring-assignment.json` from the ops repo.
+//   • rings - optional `fleet/ring-assignment.json` from the ops repo.
 //
 // Auth: SUPER_ADMIN or STORE_OWNER (same posture as /api/admin/updates).
-// Every upstream read is individually fault-isolated — this route ALWAYS
+// Every upstream read is individually fault-isolated - this route ALWAYS
 // answers with what it actually knows and never throws "up".
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { withErrorBoundary } from '@/lib/logger';
@@ -127,7 +124,7 @@ async function buildFleet(): Promise<Record<string, unknown>> {
     };
   }
 
-  // ── Read the ops-log repo (each step fault-isolated) ──
+  // Read the ops-log repo (each step fault-isolated)
   const ledgerDir = await listDir(config, 'ledger');
 
   if (ledgerDir.error) {
@@ -203,7 +200,7 @@ async function buildFleet(): Promise<Record<string, unknown>> {
             reason: typeof cmd.reason === 'string' ? cmd.reason : null,
           };
         } catch {
-          // Malformed pending file — surface as an unreadable pending command.
+          // Malformed pending file - surface as an unreadable pending command.
           view.pendingCommand = {
             commandId: '',
             type: 'unreadable',

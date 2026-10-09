@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * RecentTransactions — recent activity feed (sales + system activity).
+ * RecentTransactions - recent activity feed (sales + system activity).
  *
  * Extracted from `dashboard-tab.tsx` to slim down the orchestrator. Renders
  * the latest 5 transactions and the latest 8 system activities in a single

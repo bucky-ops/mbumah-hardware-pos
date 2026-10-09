@@ -1,4 +1,4 @@
-name: ✨ Feature Request
+name: Feature Request
 description: Suggest a new feature or enhancement for Mbumah Hardware POS
 title: "[FEATURE] <short summary>"
 labels: ["enhancement", "needs-triage"]
@@ -9,7 +9,7 @@ body:
       value: |
         Thanks for suggesting a feature! Please:
         - **Search** existing issues first to avoid duplicates.
-        - Keep it focused — one feature per request.
+        - Keep it focused: one feature per request.
         - Remember this project is built for the **Kenyan hardware store** context.
 
   - type: textarea
@@ -81,10 +81,10 @@ body:
       label: Priority
       description: How impactful is this for store operations?
       options:
-        - Low — nice to have
-        - Medium — meaningful improvement
-        - High — significant operational impact
-        - Critical — blocking daily operations
+        - Low: nice to have
+        - Medium: meaningful improvement
+        - High: significant operational impact
+        - Critical: blocking daily operations
     validations:
       required: true
 
@@ -94,9 +94,9 @@ body:
       label: Willingness to Contribute
       description: Are you able to help implement this feature?
       options:
-        - Yes — I'm willing to open a PR
-        - Maybe — I can help test / review but not code
-        - No — I'm requesting this be built by maintainers
+        - Yes: I'm willing to open a PR
+        - Maybe: I can help test / review but not code
+        - No: I'm requesting this be built by maintainers
     validations:
       required: true
 

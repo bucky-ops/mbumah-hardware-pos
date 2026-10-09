@@ -6,7 +6,7 @@
 //
 // Body:
 //   {
-//     purchaseOrderId?: string,  // optional — if provided, format the PO
+//     purchaseOrderId?: string,  // optional - if provided, format the PO
 //     message?: string,          // used when purchaseOrderId is omitted
 //     channel?: 'WHATSAPP'|'EMAIL' (default WHATSAPP)
 //   }
@@ -145,7 +145,7 @@ async function sendSupplierOrderHandler(
     }
     waLink = `https://wa.me/${normalisedPhone}?text=${encodeURIComponent(formattedMessage)}`;
   } else {
-    // EMAIL channel — produce a mailto: link
+    // EMAIL channel - produce a mailto: link
     if (!supplier.email) {
       return Response.json(
         {
@@ -175,7 +175,7 @@ async function sendSupplierOrderHandler(
       },
     });
   } catch {
-    // Non-blocking — return the link even if audit logging fails.
+    // Non-blocking - return the link even if audit logging fails.
   }
 
   await systemLog({

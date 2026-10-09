@@ -96,7 +96,7 @@ async function createCustomerHandler(...args: unknown[]): Promise<Response> {
   const body = await request.json();
 
   // AUDIT FIX (Finding 1.4): same schema and status code as before, but the
-  // failure response now uses the canonical validation shape — a summary
+  // failure response now uses the canonical validation shape - a summary
   // string plus a machine-readable per-field `errors` map clients can use
   // for form highlighting.
   const parsed = createCustomerSchema.safeParse(body);
@@ -157,7 +157,7 @@ async function createCustomerHandler(...args: unknown[]): Promise<Response> {
 // AUDIT FIX (Task 3-d): GET = any store role. POST intentionally allows ALL
 // store roles (integration decision): walk-in customer creation is a core POS
 // checkout workflow and the audit deny-list for cashiers covers price edits,
-// profit visibility, invoice deletion and user administration — not customer
+// profit visibility, invoice deletion and user administration - not customer
 // intake. Customer edits/deletes remain manager-or-above (customers/[id]).
 export const GET = withErrorBoundary(withSessionAuth(getCustomersHandler), 'CUSTOMERS_LIST');
 export const POST = withErrorBoundary(withSessionAuth(createCustomerHandler), 'CUSTOMERS_CREATE');

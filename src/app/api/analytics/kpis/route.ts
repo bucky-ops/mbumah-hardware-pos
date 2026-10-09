@@ -23,7 +23,7 @@ import { db } from '@/lib/db';
 import { requireAuth, type AuthSession } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
 import { calculateKPIs, type KPIInput } from '@/lib/analytics-utils';
-// Task 12-b: Prisma Decimal valueOf() returns a STRING — net revenue is derived
+// Task 12-b: Prisma Decimal valueOf() returns a STRING - net revenue is derived
 // in Decimal (ΣtotalAmount − ΣtaxAmount) and emitted as a number at the boundary.
 import { toDec, round2 } from '@/lib/utils/financialMath';
 
@@ -98,7 +98,7 @@ async function getKPIsHandler(
         quantityInStock: { lte: 10 },
       },
     }),
-    // yesterday's low-stock snapshot — we approximate with the current count
+    // yesterday's low-stock snapshot - we approximate with the current count
     // since we don't keep historical stock levels per day. This still gives
     // a meaningful "neutral" trend (delta = 0) instead of crashing.
     db.product.count({
@@ -123,7 +123,7 @@ async function getKPIsHandler(
     }),
   ]);
 
-  // Task 12-b: revenue KPIs are NET of VAT — netRevenue = Σ(totalAmount) −
+  // Task 12-b: revenue KPIs are NET of VAT - netRevenue = Σ(totalAmount) −
   // Σ(taxAmount) accumulated in Decimal (never float, never string-concat).
   // averageOrderValue follows the same net basis (net revenue / transactions).
   const todayNetRevenue = toDec(todayAgg._sum.totalAmount).minus(toDec(todayAgg._sum.taxAmount));

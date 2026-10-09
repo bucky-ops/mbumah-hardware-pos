@@ -55,7 +55,7 @@ function serialize(s: {
   };
 }
 
-// ── GET ──────────────────────────────────────────────────────────────────────
+// GET
 
 async function getScheduleHandler(...args: unknown[]): Promise<Response> {
   const context = args[1] as RouteContext;
@@ -79,7 +79,7 @@ async function getScheduleHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: serialize(schedule) });
 }
 
-// ── PATCH ────────────────────────────────────────────────────────────────────
+// PATCH
 
 interface PatchBody {
   title?: string;
@@ -284,7 +284,7 @@ async function patchScheduleHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: serialize(updated) });
 }
 
-// ── DELETE ───────────────────────────────────────────────────────────────────
+// DELETE
 
 async function deleteScheduleHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;

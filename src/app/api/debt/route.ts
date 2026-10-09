@@ -8,7 +8,7 @@ import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, DebtStatus } from '@/lib/types';
 import { withSessionAuth, FINANCIAL_ROLES, getSessionFromRequest } from '@/lib/auth';
 // Task 12-c: canonical financial math. Prisma Decimal `valueOf()` returns a
-// STRING — the summary reduce `sum + d.balance` used to STRING-CONCATENATE
+// STRING - the summary reduce `sum + d.balance` used to STRING-CONCATENATE
 // (0 + Decimal("123.45") → "0123.45").
 import { toDec, round2 } from '@/lib/utils/financialMath';
 
@@ -76,7 +76,7 @@ async function getDebtHandler(...args: unknown[]): Promise<Response> {
 
   // QA FIX (Kenya Plumbing Co. incident): Prisma Decimal rows serialize as
   // STRINGS through Response.json (decimal.js toJSON). The api.ts contract
-  // says numbers — emit numbers so client arithmetic (balance previews,
+  // says numbers - emit numbers so client arithmetic (balance previews,
   // Math.min caps, aging math) can never string-concatenate.
   const numericDebts = debts.map((d) => ({
     ...d,
@@ -155,7 +155,7 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
     notes: _bodyNotes, // notes intentionally not persisted to ledger after R3 rework
   } = body;
 
-  // SYS-2: the receiving actor ALWAYS comes from the authenticated session —
+  // SYS-2: the receiving actor ALWAYS comes from the authenticated session -
   // a body-supplied `receivedBy` allowed payments to be attributed to anyone.
   const session = await getSessionFromRequest(request);
   const receivedBy = session?.userId ?? null;
@@ -163,7 +163,7 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
   // QA FIX (Kenya Plumbing Co. incident): validate REQUIRED-FIELD PRESENCE
   // first, and name exactly which fields are missing. The old order checked
   // the paymentMethod whitelist before presence, and treated `amount: 0` as
-  // "missing" (falsy) — producing a misleading "required fields" message for
+  // "missing" (falsy) - producing a misleading "required fields" message for
   // a zero amount instead of the "greater than zero" one.
   const missing: string[] = [];
   if (!storeId) missing.push('storeId');
@@ -181,7 +181,7 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
   }
 
   // F9 (journal integrity): only tender methods backed by a real asset
-  // account are accepted — arbitrary strings used to debit whichever
+  // account are accepted - arbitrary strings used to debit whichever
   // account the journal mapping resolved to.
   if (!['CASH', 'MPESA'].includes(paymentMethod)) {
     return Response.json(
@@ -241,7 +241,7 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
 
   const result = await db.$transaction(async (tx) => {
     // R3 remediation: ATOMIC conditional claim. The old code computed
-    // `amountPaid + payment` from a STALE pre-transaction read — two
+    // `amountPaid + payment` from a STALE pre-transaction read - two
     // concurrent submissions (double-click) both passed the balance check
     // and both wrote, collecting cash twice. The `gte` predicate makes the
     // balance check + decrement one atomic operation; the loser aborts.
@@ -405,7 +405,7 @@ async function recordDebtPaymentHandler(...args: unknown[]): Promise<Response> {
     console.error('Failed to write tamper-evident audit entry for debt payment:', error);
   }
 
-  // QA FIX: the updated ledger row carries Prisma Decimals — serialize the
+  // QA FIX: the updated ledger row carries Prisma Decimals - serialize the
   // money fields as numbers (the api.ts contract) so the success toast's
   // "New balance" (and any further client math) can't hit string values.
   return Response.json({

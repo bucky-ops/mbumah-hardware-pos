@@ -13,7 +13,7 @@
 //   - For overnight shifts, endTime's time-of-day may be earlier than
 //     startTime's (e.g. 22:00 → 06:00); that's allowed.
 //   - For recurring shifts, recurrenceEndDate is recommended (warned, not
-//     required — open-ended schedules are valid).
+//     required - open-ended schedules are valid).
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -33,7 +33,7 @@ const WRITE_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'] as const;
 const VALID_STATUSES: ShiftScheduleStatus[] = ['ACTIVE', 'PAUSED', 'COMPLETED'];
 const VALID_COLORS = ['emerald', 'teal', 'amber', 'rose', 'violet', 'cyan', 'orange', 'purple'];
 
-// ── GET: list schedules ──────────────────────────────────────────────────────
+// GET: list schedules
 
 async function listSchedulesHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
@@ -97,7 +97,7 @@ async function listSchedulesHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data });
 }
 
-// ── POST: create a schedule ──────────────────────────────────────────────────
+// POST: create a schedule
 
 interface CreateBody {
   storeId?: string;
@@ -129,7 +129,7 @@ async function createScheduleHandler(...args: unknown[]): Promise<Response> {
     notes,
   } = body ?? {};
 
-  // ── Required fields ──────────────────────────────────────────────────────
+  // Required fields
   if (!storeId || !userId || !title || !startTime || !endTime) {
     return Response.json(
       {
@@ -149,7 +149,7 @@ async function createScheduleHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // ── dayOfWeek / specificDate mutual exclusivity ─────────────────────────
+  // dayOfWeek / specificDate mutual exclusivity
   const hasDow = dayOfWeek != null && !Number.isNaN(Number(dayOfWeek));
   const hasSpecific = Boolean(specificDate);
 
@@ -186,7 +186,7 @@ async function createScheduleHandler(...args: unknown[]): Promise<Response> {
     }
   }
 
-  // ── Parse times ──────────────────────────────────────────────────────────
+  // Parse times
   const start = new Date(startTime);
   const end = new Date(endTime);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
@@ -197,7 +197,7 @@ async function createScheduleHandler(...args: unknown[]): Promise<Response> {
   }
 
   // For one-off shifts, endTime must be after startTime (no overnight for
-  // a specific-date shift). For recurring shifts, overnight is allowed — we
+  // a specific-date shift). For recurring shifts, overnight is allowed - we
   // only check that start and end are not exactly equal.
   const startMin = start.getHours() * 60 + start.getMinutes();
   const endMin = end.getHours() * 60 + end.getMinutes();
@@ -218,7 +218,7 @@ async function createScheduleHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // ── specificDate / recurrenceEndDate ─────────────────────────────────────
+  // specificDate / recurrenceEndDate
   let specificDateVal: Date | null = null;
   if (hasSpecific) {
     specificDateVal = new Date(specificDate as string);
@@ -247,10 +247,10 @@ async function createScheduleHandler(...args: unknown[]): Promise<Response> {
     }
   }
 
-  // ── Color ────────────────────────────────────────────────────────────────
+  // Color
   const colorVal = color && VALID_COLORS.includes(color) ? color : 'emerald';
 
-  // ── Verify user + store ───────────────────────────────────────────────────
+  // Verify user + store
   const session = await getSessionFromRequest(request);
   const createdById = session?.userId;
   if (!createdById) {
@@ -272,7 +272,7 @@ async function createScheduleHandler(...args: unknown[]): Promise<Response> {
     return Response.json({ success: false, error: 'Store not found.' }, { status: 404 });
   }
 
-  // ── Persist ──────────────────────────────────────────────────────────────
+  // Persist
   const created = await db.shiftSchedule.create({
     data: {
       storeId,

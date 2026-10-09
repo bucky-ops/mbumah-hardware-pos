@@ -15,9 +15,9 @@
 //
 // Returns:
 //   200 { success: true, data: DistributionResult }
-//   400 { success: false, error: "..." }  — missing recipient
-//   404 { success: false, error: "..." }  — transaction not found
-//   500 { success: false, error: "..." }  — provider failure
+//   400 { success: false, error: "..." } - missing recipient
+//   404 { success: false, error: "..." } - transaction not found
+//   500 { success: false, error: "..." } - provider failure
 
 import { type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/auth";

@@ -24,7 +24,7 @@ import {
 
 type NotificationFilter = 'all' | 'critical' | 'warning' | 'info' | 'security';
 
-// ── v2.12.7 (PR C): Security filter tab ─────────────────────────────────────
+// v2.12.7 (PR C): Security filter tab
 // Roles allowed to see the Security tab + the merged recent SecurityEvent feed
 // (mirrors the /api/security/events role gate). SUPER_ADMIN/STORE_OWNER/
 // BRANCH_MANAGER.
@@ -49,7 +49,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   MANAGER_AUTHORIZED: 'Manager Authorized',
 };
 
-/** One merged SecurityEvent row (read-only — from /api/security/events). */
+/** One merged SecurityEvent row (read-only - from /api/security/events). */
 interface SecurityEventEntry {
   id: string;
   eventType: string;
@@ -169,7 +169,7 @@ export function NotificationCenter({
   const role = useAuthStore((s) => s.user?.role || '');
   const canSeeSecurity = SECURITY_TAB_ROLES.includes(role);
 
-  // Shared external store — the sidebar/top-bar badge mirrors every change instantly.
+  // Shared external store - the sidebar/top-bar badge mirrors every change instantly.
   const {
     readIds, dismissedIds,
     markRead, markAllRead, dismiss, restore, restoreDismissed, reset,
@@ -186,7 +186,7 @@ export function NotificationCenter({
 
   const allNotifications = useMemo(() => notificationsData || [], [notificationsData]);
 
-  // v2.12.7 (PR C): recent SecurityEvents (limit 10, abuse set) — only fetched
+  // v2.12.7 (PR C): recent SecurityEvents (limit 10, abuse set) - only fetched
   // while the Security tab is open for a manager-role viewer.
   const { data: securityEvents, isLoading: securityEventsLoading } = useQuery({
     queryKey: ['security-events-feed'],
@@ -206,7 +206,7 @@ export function NotificationCenter({
     [allNotifications, dismissedIds]
   );
 
-  // Apply severity filter — 'security' narrows to SECURITY-category items.
+  // Apply severity filter - 'security' narrows to SECURITY-category items.
   const filteredNotifications = useMemo(() => {
     if (filter === 'all') return activeNotifications;
     if (filter === 'security') {
@@ -249,7 +249,7 @@ export function NotificationCenter({
   };
 
   const handleMarkAllRead = () => {
-    // Mark EVERYTHING active — the severity filter must not hide unread items.
+    // Mark EVERYTHING active - the severity filter must not hide unread items.
     markAllRead(activeNotifications.map((n) => n.id));
     // Re-pull from the server so the list also picks up brand-new notifications.
     invalidateNotificationQueries();
@@ -288,7 +288,7 @@ export function NotificationCenter({
       case 'large_debt': return <CircleDollarSign className="h-4 w-4 text-amber-500" />;
       case 'new_customer': return <UserPlus className="h-4 w-4 text-green-500" />;
       case 'recent_transaction': return <Receipt className="h-4 w-4 text-blue-500" />;
-      // v2.12.7 (PR C): security rows — red shield.
+      // v2.12.7 (PR C): security rows - red shield.
       case 'security': return <ShieldAlert className="h-4 w-4 text-red-500" />;
     }
   };
@@ -306,7 +306,7 @@ export function NotificationCenter({
     { id: 'critical', label: 'Critical', count: activeNotifications.filter((n) => n.severity === 'critical').length },
     { id: 'warning', label: 'Warnings', count: activeNotifications.filter((n) => n.severity === 'warning').length },
     { id: 'info', label: 'Info', count: activeNotifications.filter((n) => n.severity === 'info').length },
-    // v2.12.7 (PR C): Security tab — red shield, manager roles only. Existing
+    // v2.12.7 (PR C): Security tab - red shield, manager roles only. Existing
     // tabs stay intact for every role.
     ...(canSeeSecurity
       ? [{

@@ -2,13 +2,13 @@
 //
 // Per-user email notification preferences. Each authenticated user has
 // their own row of toggles on the User model:
-//   • emailNotifications — master switch (false = no email at all)
-//   • receiptEmails      — receive customer receipt copies
-//   • stockAlertEmails   — receive low-stock alerts
-//   • reportEmails       — receive daily sales reports
+//   • emailNotifications - master switch (false = no email at all)
+//   • receiptEmails - receive customer receipt copies
+//   • stockAlertEmails - receive low-stock alerts
+//   • reportEmails - receive daily sales reports
 //
 // GET returns the current user's settings.
-// PATCH updates them — only the four boolean fields above are accepted; any
+// PATCH updates them - only the four boolean fields above are accepted; any
 // other field in the body is silently ignored to prevent mass-assignment
 // vulnerabilities.
 //
@@ -44,7 +44,7 @@ function toBool(value: unknown): boolean | null {
   return null;
 }
 
-// ── GET ──────────────────────────────────────────────────────────────────────
+// GET
 
 async function getSettingsHandler(
   _request: NextRequest,
@@ -84,7 +84,7 @@ async function getSettingsHandler(
   });
 }
 
-// ── PATCH ────────────────────────────────────────────────────────────────────
+// PATCH
 
 async function patchSettingsHandler(
   request: NextRequest,
@@ -149,7 +149,7 @@ async function patchSettingsHandler(
     },
   });
 
-  // Best-effort audit log — never block the response on logging.
+  // Best-effort audit log - never block the response on logging.
   void systemLog({
     action: 'NOTIFICATION_SETTINGS_UPDATED',
     component: LogComponent.AUDIT,

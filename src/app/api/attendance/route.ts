@@ -1,8 +1,8 @@
 // GET/POST /api/attendance
 //
 // Attendance / time-tracking.
-//   GET  — list attendance records (filter by storeId, employeeId, date range, status)
-//   POST — clock in or clock out for an employee
+//   GET - list attendance records (filter by storeId, employeeId, date range, status)
+//   POST - clock in or clock out for an employee
 //
 // Clock-in/out logic:
 //   • If no record exists for (employeeId, today) → create one with checkIn = now
@@ -17,7 +17,7 @@ import { requireStoreAccess } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-// ── GET: List attendance records ─────────────────────────────────────────────
+// GET: List attendance records
 async function listAttendanceHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null }
@@ -98,7 +98,7 @@ export const GET = withErrorBoundary(
   'ATTENDANCE_LIST'
 );
 
-// ── POST: Clock in / clock out ───────────────────────────────────────────────
+// POST: Clock in / clock out
 async function clockInOutHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null; email: string }
@@ -133,7 +133,7 @@ async function clockInOutHandler(
     );
   }
 
-  // Today's date (midnight UTC — the schema stores date-only semantics)
+  // Today's date (midnight UTC - the schema stores date-only semantics)
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
 

@@ -1,5 +1,5 @@
-// GET  /api/financial/trial-balance/snapshot — list snapshots for a store (newest first).
-// POST /api/financial/trial-balance/snapshot — capture a new point-in-time snapshot.
+// GET  /api/financial/trial-balance/snapshot - list snapshots for a store (newest first).
+// POST /api/financial/trial-balance/snapshot - capture a new point-in-time snapshot.
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';

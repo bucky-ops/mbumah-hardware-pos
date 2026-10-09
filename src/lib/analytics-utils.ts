@@ -1,24 +1,22 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Analytics utility helpers
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Analytics utility helpers
 //
 // Pure, framework-agnostic helpers used by both the analytics API routes
 // (server-side aggregation) and the analytics dashboard components
 // (client-side chart shaping). Keeping these pure makes them trivial to test
 // and lets the same code run in both runtimes.
 //
-// All functions are defensive: they never throw on bad input — they return
+// All functions are defensive: they never throw on bad input - they return
 // empty arrays / zero values so the UI can render "No data" placeholders
 // instead of crashing on a cold store with no transactions.
 
 import type { SalesTransaction } from '@prisma/client';
-// FINANCIAL MATH AUDIT (Task 12-b): Prisma Decimal valueOf() returns a STRING —
+// FINANCIAL MATH AUDIT (Task 12-b): Prisma Decimal valueOf() returns a STRING -
 // all bucket accumulation flows through toDec() and emits 2dp HALF_UP numbers
 // via round2() at the bucket boundary. Revenue basis is NET of VAT
 // (totalAmount − taxAmount) per the uniform revenue policy.
 import { toDec, round2 } from '@/lib/utils/financialMath';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 export type AnalyticsPeriod = 'today' | 'week' | 'month' | 'year';
 
@@ -99,7 +97,7 @@ export interface ChartPoint {
   [key: string]: string | number;
 }
 
-// ── Period helpers ───────────────────────────────────────────────────────────
+// Period helpers
 
 interface PeriodWindow {
   start: Date;
@@ -110,7 +108,7 @@ interface PeriodWindow {
   bucketCount: number;
   /** Function to produce a sortable ISO key + label from a Date. */
   keyOf: (d: Date) => { key: string; label: string };
-  /** Step function — advance a Date by one bucket. */
+  /** Step function - advance a Date by one bucket. */
   step: (d: Date) => Date;
 }
 
@@ -196,7 +194,7 @@ export function getPeriodWindow(period: AnalyticsPeriod, now: Date = new Date())
 }
 
 /**
- * Returns the equivalent previous window for a period — used to compute
+ * Returns the equivalent previous window for a period - used to compute
  * comparison deltas (e.g. "this week vs last week").
  */
 export function getPreviousPeriodWindow(period: AnalyticsPeriod, now: Date = new Date()): PeriodWindow {
@@ -207,7 +205,7 @@ export function getPreviousPeriodWindow(period: AnalyticsPeriod, now: Date = new
   return { ...current, start: prevStart, end: prevEnd };
 }
 
-// ── Aggregation ──────────────────────────────────────────────────────────────
+// Aggregation
 
 /**
  * Group a list of transactions into time buckets for the requested period.
@@ -272,7 +270,7 @@ export function aggregateSalesByPeriod(
   return Array.from(buckets.values());
 }
 
-// ── KPI calculation ──────────────────────────────────────────────────────────
+// KPI calculation
 
 /**
  * Compute percentage delta between two values.
@@ -328,7 +326,7 @@ export function calculateKPIs(input: KPIInput): KPIResult {
   };
 }
 
-// ── Chart shaping ────────────────────────────────────────────────────────────
+// Chart shaping
 
 export type ChartFormat = 'area' | 'bar' | 'donut' | 'sparkline';
 
@@ -394,7 +392,7 @@ export function buildHourlyHeatmap(transactions: TransactionSlice[]): HeatmapMat
       const cellKey = `${day}:${hour}`;
       revenueByCell.set(cellKey, (revenueByCell.get(cellKey) || toDec(0)).plus(net));
       cells[day][hour].transactions += 1;
-      // Decimal is immutable — plus() returns a NEW instance, so reassign.
+      // Decimal is immutable - plus() returns a NEW instance, so reassign.
       totalRevenueDec = totalRevenueDec.plus(net);
     }
   }
@@ -432,7 +430,7 @@ export function getPeakHours(heatmap: HeatmapMatrix, topN = 3): PeakHour[] {
   return flat.sort((a, b) => b.revenue - a.revenue).slice(0, topN);
 }
 
-// ── Misc utilities ───────────────────────────────────────────────────────────
+// Misc utilities
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DAY_NAMES_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -458,7 +456,7 @@ export function toTransactionSlice(tx: SalesTransaction | TransactionSlice): Tra
     createdAt: tx.createdAt,
     totalAmount: toDec(tx.totalAmount).toNumber(),
     // SalesTransaction.taxAmount is Decimal; TransactionSlice.taxAmount is
-    // optional number — both land in toDec's Numeric union.
+    // optional number - both land in toDec's Numeric union.
     taxAmount: toDec(tx.taxAmount).toNumber(),
     paymentMethod: tx.paymentMethod,
     paymentStatus: tx.paymentStatus,
@@ -509,7 +507,7 @@ export function paymentMethodLabel(method: string): string {
 }
 
 /**
- * Returns a color intensity class (0–4) for a heatmap cell based on its value
+ * Returns a color intensity class (0-4) for a heatmap cell based on its value
  * relative to the max. 0 = empty (lightest), 4 = peak (darkest).
  */
 export function heatIntensity(value: number, max: number): 0 | 1 | 2 | 3 | 4 {
@@ -521,7 +519,6 @@ export function heatIntensity(value: number, max: number): 0 | 1 | 2 | 3 | 4 {
   return 1;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Public task-spec helpers
 //
 // The functions below are the public API named in the analytics dashboard task
@@ -529,7 +526,6 @@ export function heatIntensity(value: number, max: number): 0 | 1 | 2 | 3 | 4 {
 // (which use the internal names like `getPeriodWindow` / `computeDelta` /
 // `formatChartData`) keep working unchanged, while new code can use the
 // spec-named versions for clarity.
-// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Calculate the percentage change between a current and previous value.
@@ -580,7 +576,7 @@ export function getPeriodDateRange(
  *   formatTrendData([{ label: 'Mon', revenue: 1000, transactions: 5 }])
  *     → [{ label: 'Mon', value: 1000, transactions: 5 }]
  *
- * Always returns an array (possibly empty) — never throws on bad input.
+ * Always returns an array (possibly empty) - never throws on bad input.
  */
 export function formatTrendData<
   T extends { label?: string; name?: string; value?: number; revenue?: number; [k: string]: unknown },

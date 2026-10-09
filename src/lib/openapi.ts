@@ -1,16 +1,16 @@
 // OpenAPI 3.0 specification for the MBUMAH HARDWARE POS & ERP API.
 //
-// AUDIT FIX (Finding 6.2 — missing API documentation): the README lists 60+
+// AUDIT FIX (Finding 6.2 - missing API documentation): the README lists 60+
 // endpoints but there was no machine-readable contract, so frontend/backend
 // integration relied on reverse-engineering route handlers. This module is
 // the canonical, hand-maintained contract for the highest-traffic surfaces:
 //
-//   • GET /api/openapi            — this document (public, no secrets)
+//   • GET /api/openapi - this document (public, no secrets)
 //   • POST /api/auth/login
 //   • GET/POST /api/products
 //   • GET/POST /api/customers
 //   • /api/debt-payment-plans (list/create, stats, item, approve,
-//     installments, installment pay/waive) — the contract hardened in
+//     installments, installment pay/waive) - the contract hardened in
 //     DEBT_PLAN_MODULE_AUDIT.md / PR #18
 //   • GET /api/health
 //   • POST /api/payments/mpesa/stkpush + callback (rate limited, see PR for
@@ -19,13 +19,13 @@
 // It is served as JSON at /api/openapi so it can be pasted into Swagger UI,
 // Insomnia, or Postman, and can later drive client-SDK generation and
 // contract tests. Keep it in sync with route handlers when changing request/
-// response shapes — a follow-up issue tracks generating this automatically.
+// response shapes - a follow-up issue tracks generating this automatically.
 //
 // NOTE: schemas intentionally describe the JSON envelope level (success/
 // error/pagination) rather than every model field; exhaustive per-model
 // schemas should be generated from the Prisma schema in a follow-up.
 
-// VERSION SOURCE (v2.6.2): info.version previously hardcode-oscillated — it
+// VERSION SOURCE (v2.6.2): info.version previously hardcode-oscillated - it
 // was left at '2.5.7' while package.json shipped 2.6.0/2.6.1, so every
 // consumer of GET /api/openapi was shown a stale API version. It now reads
 // the single source of truth (src/lib/version.ts → package.json) and can

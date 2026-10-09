@@ -5,10 +5,10 @@
 // etimsTaxType) suitable for the registration grid.
 //
 // Query params:
-//   storeId          — required
-//   onlyUnregistered — if "true", return only products with etimsItemCode=null
-//   search           — optional substring match on name / sku
-//   limit            — default 100, max 500
+//   storeId - required
+//   onlyUnregistered - if "true", return only products with etimsItemCode=null
+//   search - optional substring match on name / sku
+//   limit - default 100, max 500
 //
 // Auth: any authenticated user with store access.
 

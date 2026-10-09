@@ -2,25 +2,25 @@
 //
 // Usage patterns:
 //
-//   1. requireAuth(handler)                       — any authenticated user
-//   2. requireAuth(handler, { roles: ['SUPER_ADMIN'] }) — role-restricted
-//   3. requireStoreAccess(handler)                — scoping to own store
+//   1. requireAuth(handler) - any authenticated user
+//   2. requireAuth(handler, { roles: ['SUPER_ADMIN'] }) - role-restricted
+//   3. requireStoreAccess(handler) - scoping to own store
 //
 // The middleware (src/middleware.ts) guarantees a Bearer token header is
 // present on protected routes. These helpers perform the full DB-backed
 // validation.
 //
-// ── Enforcement model (defense-in-depth) ────────────────────────────────────
+// Enforcement model (defense-in-depth)
 //
-//   Layer 1  src/proxy.ts            — cheap edge check: Bearer PRESENCE only
+//   Layer 1  src/proxy.ts - cheap edge check: Bearer PRESENCE only
 //                                      (rejects empty headers, not junk tokens).
-//   Layer 2  these wrappers          — DB-backed session validation on every
+//   Layer 2  these wrappers - DB-backed session validation on every
 //                                      route (401) + optional role membership
 //                                      (403, SecurityEvent-style log).
-//   Layer 3  assertPermission()      — fine-grained PERMISSION_MATRIX
+//   Layer 3  assertPermission() - fine-grained PERMISSION_MATRIX
 //                                      action/resource checks (see
 //                                      src/lib/types.ts + use-permissions.ts).
-//   Layer 4  src/lib/db.ts tenancy   — ORM-level storeId filtering so a valid
+//   Layer 4  src/lib/db.ts tenancy - ORM-level storeId filtering so a valid
 //                                      session can only touch its own store.
 //
 // A route is properly guarded only when Layers 2+ are applied in-file; the
@@ -30,17 +30,17 @@ import { type NextRequest } from 'next/server';
 import { db, runWithTenant, runWithoutTenant } from '@/lib/db';
 import { systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent, hasPermission, type UserRole } from '@/lib/types';
-// v2.12.2 (PR B — RBAC): feature-level permission keys + friendly denial copy.
+// v2.12.2 (PR B - RBAC): feature-level permission keys + friendly denial copy.
 // permissions.ts is PURE (no server-only imports) so this stays safe.
 import {
   hasFeaturePermission,
   PERMISSION_DENIED_MESSAGES,
   type FeaturePermissionKey,
 } from '@/lib/permissions';
-// v2.12.2 (PR B — RBAC): tamper-evident AuditLog entries for denials/overrides.
+// v2.12.2 (PR B - RBAC): tamper-evident AuditLog entries for denials/overrides.
 import { auditTrail } from '@/lib/audit-trail';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 export interface AuthSession {
   userId: string;
@@ -50,7 +50,7 @@ export interface AuthSession {
   organizationId: string;
 }
 
-// ── Core session extraction ──────────────────────────────────────────────────
+// Core session extraction
 
 /**
  * Extract the Bearer token from the request, validate it against the database,
@@ -85,13 +85,13 @@ export async function getSessionFromRequest(
   // No session found
   if (!session || !session.user || !session.user.isActive) return null;
 
-  // Expired — clean it up
+  // Expired - clean it up
   if (session.expiresAt < new Date()) {
     await db.session.delete({ where: { id: session.id } }).catch(() => {});
     return null;
   }
 
-  // ── v2.12.2 (PR B — RBAC) privilege-abuse lockout enforcement ───────────
+  // v2.12.2 (PR B - RBAC) privilege-abuse lockout enforcement
   // A user who burned the abuse counter (5+ permission denials in 10 minutes,
   // see noteDeniedAndMaybeLock below) is locked out of the API for 15 minutes:
   // resolving their session yields null → every guarded route answers 401.
@@ -108,7 +108,7 @@ export async function getSessionFromRequest(
   };
 }
 
-// ── Tenant scoping helper ────────────────────────────────────────────────────
+// Tenant scoping helper
 //
 // Wraps a handler in the appropriate ORM-level tenant context so that every
 // store-scoped Prisma query inside it is automatically filtered by `storeId`
@@ -125,7 +125,7 @@ function runWithSessionTenant<T>(
   return runWithTenant(session.storeId, fn);
 }
 
-// ── Shared role sets (PERMISSION_MATRIX-aligned) ─────────────────────────────
+// Shared role sets (PERMISSION_MATRIX-aligned)
 
 /** Manager-or-above: matrix grants create/update on catalog, customers,
  *  campaigns, tax config only to these roles (CASHIER/ACCOUNTANT excluded). */
@@ -138,7 +138,7 @@ export const MANAGER_PLUS_ROLES: readonly string[] = [
 /** Owner-or-above: org-level configuration (stores/branches, system config). */
 export const OWNER_ROLES: readonly string[] = ['SUPER_ADMIN', 'STORE_OWNER'];
 
-// ── Route wrapper: requireAuth ───────────────────────────────────────────────
+// Route wrapper: requireAuth
 
 type AuthedHandler = (
   request: NextRequest,
@@ -205,7 +205,7 @@ export function requireAuth(
   };
 }
 
-// ── Role middleware ──────────────────────────────────────────────────────────
+// Role middleware
 
 /**
  * Returns a function that checks whether the authenticated user has one of the
@@ -231,7 +231,7 @@ export function requireRole(...roles: string[]) {
 }
 
 /**
- * withSessionAuth — the mechanical remediation for the audit's SYS-1 finding:
+ * withSessionAuth - the mechanical remediation for the audit's SYS-1 finding:
  * dozens of money-moving routes exported handlers wrapped ONLY in
  * `withErrorBoundary`, so the edge proxy's non-empty-Bearer check was the
  * only gate (any junk token passed). This wrapper keeps the handler's
@@ -248,7 +248,7 @@ export function requireRole(...roles: string[]) {
  *   );
  */
 /** Options accepted by `withSessionAuth` / `requireStoreAccess` (Task 3-d).
- *  `roles` — allowed role names; SUPER_ADMIN always bypasses. */
+ *  `roles` - allowed role names; SUPER_ADMIN always bypasses. */
 export interface SessionGuardOptions {
   roles?: readonly string[];
 }
@@ -321,7 +321,7 @@ export function withSessionAuth(
       );
     }
 
-    // R7/R9 (v2.5): shared store-scope validation — a non-admin whose
+    // R7/R9 (v2.5): shared store-scope validation - a non-admin whose
     // explicit `storeId`/`store` query param points at ANOTHER store gets a
     // clear 403 (instead of a silently empty list) and the probe is recorded
     // in the security feed. SUPER_ADMIN passes through untouched.
@@ -332,13 +332,13 @@ export function withSessionAuth(
   };
 }
 
-// ── Store-scope validation (R7/R9 — QA 2026-09, v2.5) ──────────────────────
+// Store-scope validation (R7/R9 - QA 2026-09, v2.5)
 //
 // Rejects (403) and SECURITY-LOGS any request from a non-SUPER_ADMIN session
 // whose explicit `storeId`/`store` query param points at ANOTHER store.
 //
 // Why: v2.4.1 made the ORM layer (injectTenant) always-narrow so cross-store
-// reads return empty lists — but an empty list is a SILENT denial. Several
+// reads return empty lists - but an empty list is a SILENT denial. Several
 // list routes (debt, customers, transactions, reports, …) accept a storeId
 // query param and are wrapped in withSessionAuth WITHOUT requireStoreAccess,
 // so a probing user got an empty grid with no explanation and no trace.
@@ -351,7 +351,7 @@ export function withSessionAuth(
 //     and the ops log (R9)
 //
 // SUPER_ADMIN is exempt (org-wide role). Sessions without a store assignment
-// are still rejected — they can never be safely scoped.
+// are still rejected - they can never be safely scoped.
 async function denyCrossStoreAccess(
   request: NextRequest,
   session: AuthSession,
@@ -447,7 +447,7 @@ export async function assertStoreScope(
   return null;
 }
 
-// ── Store-scoped access ─────────────────────────────────────────────────────
+// Store-scoped access
 
 type StoreScopedHandler = (
   request: NextRequest,
@@ -522,7 +522,7 @@ export function requireStoreAccess(
       return handler(request, session, ...args.slice(1));
     }
 
-    // R7/R9 (v2.5): shared store-scope validation — replaces the previous
+    // R7/R9 (v2.5): shared store-scope validation - replaces the previous
     // inline no-store-assignment + query-param checks (identical 403 bodies,
     // now with the SecurityEvent feed write added).
     const storeScopeDenied = await assertStoreScope(request, session);
@@ -536,7 +536,7 @@ export function requireStoreAccess(
   };
 }
 
-// ── Permission-matrix enforcement (Task 3-d) ───────────────────────────────────
+// Permission-matrix enforcement (Task 3-d)
 //
 // The PERMISSION_MATRIX in src/lib/types.ts was previously consulted only by
 // the client (use-permissions.ts). `assertPermission` exposes it server-side
@@ -545,7 +545,7 @@ export function requireStoreAccess(
 // bypass is kept explicit so new matrix entries can never lock out admins).
 
 /** Check `action` on `resource` for a session's role against
- *  PERMISSION_MATRIX. Returns `{ allowed, reason? }` — never throws. */
+ *  PERMISSION_MATRIX. Returns `{ allowed, reason? }` - never throws. */
 export function assertPermission(
   session: { role: string },
   action: string,
@@ -583,14 +583,14 @@ export function hasPermissionOr403(
   );
 }
 
-// ── Financial-route auth wrapper ─────────────────────────────────────────────
+// Financial-route auth wrapper
 //
 // Composable auth + role guard for financial API routes. Wraps an existing
 // handler (typically already wrapped by `withErrorBoundary`) and enforces:
-//   1. Authentication — a valid Bearer session must be present (401 otherwise).
-//   2. Role membership — the user's role must be in `allowedRoles` (403 otherwise).
+//   1. Authentication - a valid Bearer session must be present (401 otherwise).
+//   2. Role membership - the user's role must be in `allowedRoles` (403 otherwise).
 //
-// Unlike `requireAuth`, this wrapper does NOT change the handler's signature —
+// Unlike `requireAuth`, this wrapper does NOT change the handler's signature -
 // the wrapped handler keeps its `(...args: unknown[]) => Promise<Response>`
 // shape, so it composes cleanly with the existing financial route handlers
 // that extract `request = args[0]` and `context = args[1]`.
@@ -601,9 +601,9 @@ export function hasPermissionOr403(
 //     FINANCIAL_ROLES.READ,
 //   );
 //
-// ISO 27001: A.9.4.1 — Access restriction (users can only access financial
+// ISO 27001: A.9.4.1 - Access restriction (users can only access financial
 //                       data appropriate to their role)
-// ISO 27001: A.9.2.5 — Review of user access rights (role matrix is explicit)
+// ISO 27001: A.9.2.5 - Review of user access rights (role matrix is explicit)
 
 /** Roles permitted to READ financial data (trial balance, accounts, reports). */
 export const FINANCIAL_ROLES = {
@@ -659,7 +659,7 @@ export function withFinancialAuth(
       );
     }
 
-    // Authorized — delegate to the wrapped handler. The handler keeps its
+    // Authorized - delegate to the wrapped handler. The handler keeps its
     // original signature and is responsible for its own storeId filtering
     // (financial routes accept storeId as a query param, and SUPER_ADMIN can
     // query cross-store).
@@ -668,28 +668,26 @@ export function withFinancialAuth(
 }
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// v2.12.2 — v2.12.5 (PR B, Task REL-ROADMAP-B1) FEATURE PERMISSION ENFORCEMENT
-// ═════════════════════════════════════════════════════════════════════════════
+// v2.12.2 - v2.12.5 (PR B, Task REL-ROADMAP-B1) FEATURE PERMISSION ENFORCEMENT
 //
 // Server-side counterpart of src/lib/permissions.ts (which stays pure and
 // client-importable). This block provides:
 //
-//   1. requireFeaturePermission(key) — composable guard in the requireRole()
+//   1. requireFeaturePermission(key) - composable guard in the requireRole()
 //      style: returns a 403 Response shaped { code:'PERMISSION_DENIED',
 //      permission, message } or null when allowed.
-//   2. recordPermissionDenied(...)   — durable SecurityEvent + ops systemLog +
+//   2. recordPermissionDenied(...) - durable SecurityEvent + ops systemLog +
 //      hash-chained AuditLog row. NEVER creates Notifications (single denials
 //      are noise; the abuse engine below owns notification).
-//   3. noteDeniedAndMaybeLock(...)   — sliding-window abuse counter. ≥5
+//   3. noteDeniedAndMaybeLock(...) - sliding-window abuse counter. ≥5
 //      denials in a trailing 10 minutes → 15-minute in-memory lock + Security
 //      Event (ACCOUNT_LOCKED, ERROR) + Notification to every active
 //      SUPER_ADMIN of the org. The lock is ENFORCED in getSessionFromRequest
 //      (returns null → 401 while locked).
-//   4. isAccountLocked(userId)       — lock-map probe (used by #1's enforcement
+//   4. isAccountLocked(userId) - lock-map probe (used by #1's enforcement
 //      point above and available for login-route UX).
 //
-// ── SERVERLESS LIMITATION (documented, accepted for v2.12.x) ─────────────────
+// SERVERLESS LIMITATION (documented, accepted for v2.12.x)
 // The denial counter and the lock map are MODULE-SCOPE in-memory state. On
 // Vercel serverless each warm instance keeps its own map, so (a) a user can
 // split denials across instances to delay the lock, and (b) a lock set on one
@@ -699,7 +697,7 @@ export function withFinancialAuth(
 // rows), which phase C's audit + abuse UI reads. A shared store (Redis/DB) is
 // the post-2.13 follow-up if abuse becomes an operational problem.
 
-// ── Abuse state (per serverless instance — see limitation note above) ───────
+// Abuse state (per serverless instance - see limitation note above)
 
 /** Sliding-window denial timestamps per userId. */
 const denialWindowMs = 10 * 60 * 1000; // trailing 10 minutes
@@ -750,7 +748,7 @@ function clientIpFromRequest(request: NextRequest): string | undefined {
   );
 }
 
-// ── 1. Feature-permission guard ──────────────────────────────────────────────
+// 1. Feature-permission guard
 
 /**
  * Composable feature-permission guard in the `requireRole(...)` style.
@@ -764,7 +762,7 @@ function clientIpFromRequest(request: NextRequest): string | undefined {
  * message: PERMISSION_DENIED_MESSAGES[key] ?? generic }. SUPER_ADMIN always
  * passes (hasFeaturePermission short-circuits for the admin role).
  *
- * NOTE: this guard returns the Response — it does NOT write the denial
+ * NOTE: this guard returns the Response - it does NOT write the denial
  * SecurityEvent itself. Routes that should feed the abuse engine call
  * recordPermissionDenied(...) + noteDeniedAndMaybeLock(...) explicitly (see
  * the transactions / users routes), keeping read-level strips (dashboard,
@@ -787,7 +785,7 @@ export function requireFeaturePermission(key: FeaturePermissionKey) {
   };
 }
 
-// ── 2. Durable denial record (SecurityEvent + systemLog + AuditLog) ─────────
+// 2. Durable denial record (SecurityEvent + systemLog + AuditLog)
 
 export interface RecordPermissionDeniedOptions {
   session: AuthSession;
@@ -796,7 +794,7 @@ export interface RecordPermissionDeniedOptions {
   request: NextRequest;
   /** Override the resource path (defaults to the request pathname). */
   resource?: string;
-  /** SecurityEvent.eventType — 'PERMISSION_DENIED' (default) or 'HIGH_RISK_ATTEMPT'. */
+  /** SecurityEvent.eventType - 'PERMISSION_DENIED' (default) or 'HIGH_RISK_ATTEMPT'. */
   kind?: 'PERMISSION_DENIED' | 'HIGH_RISK_ATTEMPT';
 }
 
@@ -804,13 +802,13 @@ export interface RecordPermissionDeniedOptions {
  * Durably record one permission denial. Writes:
  *   • SecurityEvent { eventType: kind ?? 'PERMISSION_DENIED', severity WARN,
  *     blocked: true, resource: path, details: {role, permission, email} }
- *   • systemLog ACCESS_DENIED (ops log — same pattern as denyCrossStoreAccess)
- *   • auditTrail.log(action 'PERMISSION_DENIED') — hash-chained AuditLog row
+ *   • systemLog ACCESS_DENIED (ops log - same pattern as denyCrossStoreAccess)
+ *   • auditTrail.log(action 'PERMISSION_DENIED') - hash-chained AuditLog row
  *
  * IMPORTANT: this function deliberately does NOT create Notification rows.
  * Single denials are operational noise; only the abuse engine
  * (noteDeniedAndMaybeLock) notifies SUPER_ADMINs, and only at lock time.
- * Logging failures are swallowed — a denial must never 500 the route.
+ * Logging failures are swallowed - a denial must never 500 the route.
  */
 export async function recordPermissionDenied(
   opts: RecordPermissionDeniedOptions
@@ -820,7 +818,7 @@ export async function recordPermissionDenied(
   const ipAddress = clientIpFromRequest(request);
   const userAgent = request.headers.get('user-agent') || undefined;
 
-  // SecurityEvent — the durable, dashboard-visible record.
+  // SecurityEvent - the durable, dashboard-visible record.
   try {
     await db.securityEvent.create({
       data: {
@@ -844,7 +842,7 @@ export async function recordPermissionDenied(
     /* logging must never block the auth decision */
   }
 
-  // Ops log — consistent with the existing ACCESS_DENIED breadcrumbs.
+  // Ops log - consistent with the existing ACCESS_DENIED breadcrumbs.
   try {
     await systemLog({
       action: 'ACCESS_DENIED',
@@ -879,12 +877,12 @@ export async function recordPermissionDenied(
     /* ignore logging errors */
   }
 
-  // ── v2.12.7 (PR C): privilege-abuse PATTERN detection ──────────────────────
+  // v2.12.7 (PR C): privilege-abuse PATTERN detection
   // Beyond the hard-lockout engine (noteDeniedAndMaybeLock, called by the
   // routes themselves), slow-drip abuse patterns get their own detector:
   // a cashier repeatedly denied 'pos.discount.gt5' (4x in 1 hour) pages the
   // BRANCH_MANAGERs + SUPER_ADMINs once per hour and writes a
-  // PRIVILEGE_ABUSE_PATTERN SecurityEvent. Best-effort — a detector failure
+  // PRIVILEGE_ABUSE_PATTERN SecurityEvent. Best-effort - a detector failure
   // must never turn a 403 into a 500.
   try {
     const { noteDiscountSpam } = await import('@/lib/abuse');
@@ -899,7 +897,7 @@ export async function recordPermissionDenied(
   }
 }
 
-// ── 3. Abuse engine: sliding window + lockout + SUPER_ADMIN notification ────
+// 3. Abuse engine: sliding window + lockout + SUPER_ADMIN notification
 
 export interface NoteDeniedOptions {
   session: AuthSession;
@@ -916,7 +914,7 @@ export interface NoteDeniedOptions {
  *   • in-memory lockMap entry (ENFORCED by getSessionFromRequest → 401)
  *   • SecurityEvent ACCOUNT_LOCKED (severity ERROR, details include reason)
  *   • Notification rows for EVERY active SUPER_ADMIN of the org
- *     (type WARNING / category SECURITY / priority URGENT — see the
+ *     (type WARNING / category SECURITY / priority URGENT - see the
  *     Notification model's documented type set)
  *
  * Returns { locked } so callers can tailor their response copy if they wish.
@@ -938,7 +936,7 @@ export async function noteDeniedAndMaybeLock(
     return { locked: isAccountLocked(session.userId) };
   }
 
-  // ── Trip: lock the account ──
+  // Trip: lock the account
   const lockedUntil = now + lockDurationMs;
   lockMap.set(session.userId, lockedUntil);
   denialTimestamps.delete(session.userId); // fresh window after the lock
@@ -946,7 +944,7 @@ export async function noteDeniedAndMaybeLock(
   const lockedMinutes = Math.round(lockDurationMs / 60000);
   const ipAddress = clientIpFromRequest(request);
 
-  // SecurityEvent ACCOUNT_LOCKED (ERROR) — the durable record.
+  // SecurityEvent ACCOUNT_LOCKED (ERROR) - the durable record.
   try {
     await db.securityEvent.create({
       data: {
@@ -972,7 +970,7 @@ export async function noteDeniedAndMaybeLock(
     /* never block the lockout on logging */
   }
 
-  // Notify every active SUPER_ADMIN of the org (durable Notification rows —
+  // Notify every active SUPER_ADMIN of the org (durable Notification rows -
   // the notification center's Security filter reads these in phase 2/3).
   try {
     const superAdmins = await db.user.findMany({

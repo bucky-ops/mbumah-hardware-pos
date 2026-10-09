@@ -1,7 +1,7 @@
-// POST /api/payments/mpesa/callback — Safaricom Daraja STK push result webhook.
+// POST /api/payments/mpesa/callback - Safaricom Daraja STK push result webhook.
 //
-// AUDIT REMEDIATION — FINANCIAL_MODULE_AUDIT_REPORT.md:
-//   • F6-1 (P0): this endpoint was publicly forgeable — no credential check,
+// AUDIT REMEDIATION - FINANCIAL_MODULE_AUDIT_REPORT.md:
+//   • F6-1 (P0): this endpoint was publicly forgeable - no credential check,
 //     no IP allowlist, and it accepted a flat "mock" body shape. Now validates
 //     HTTP Basic credentials (MPESA_CALLBACK_USERNAME / MPESA_CALLBACK_PASSWORD)
 //     and an optional IP allowlist (MPESA_CALLBACK_IPS), and rejects the mock
@@ -11,23 +11,23 @@
 //     MpesaTransaction had already been flipped COMPLETED *outside* the tx.
 //     Now: an atomic claim (`updateMany` on PENDING+callbackReceived=false)
 //     runs FIRST inside one $transaction; the drawer entry uses the seeded
-//     system user (see prisma/seed.ts) and is skipped — never fatal — when
+//     system user (see prisma/seed.ts) and is skipped - never fatal - when
 //     that user is absent; the pending journal is POSTED AS-IS (Dr M-Pesa
-//     Account is the correct debit — the tender was M-Pesa). The old
+//     Account is the correct debit - the tender was M-Pesa). The old
 //     `journalEntryLine.updateMany` account rewrite (history rewriting of a
 //     posted ledger line) is REMOVED.
-//   • F6-3/F6-4: idempotency — duplicate Daraja callbacks return 200 without
+//   • F6-3/F6-4: idempotency - duplicate Daraja callbacks return 200 without
 //     re-applying anything; the DB-level `@@unique([storeId, mpesaReceiptNumber])`
 //     constraint guarantees one receipt settles at most one transaction.
 //   • F6-4: the callback Amount is compared to the expected amount; a mismatch
 //     routes the transaction to reconciliation (PROCESSING) instead of settling.
-//   • F6-5: the failure path now runs a SYMMETRIC compensating transaction —
-//     restock + SALE_CANCELLED stock movement + void the pending journal —
+//   • F6-5: the failure path now runs a SYMMETRIC compensating transaction -
+//     restock + SALE_CANCELLED stock movement + void the pending journal -
 //     so a cancelled/timeout STK push no longer permanently shrinks inventory.
 //
 // NOTE: this route stays PUBLIC (Safaricom cannot present a user session) but
 // is credentialed. `export const POST` is deliberately not wrapped in
-// requireAuth — do not "fix" that.
+// requireAuth - do not "fix" that.
 
 import { type NextRequest } from 'next/server';
 import nodeCrypto from 'crypto';
@@ -39,7 +39,7 @@ import { getClientIp } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
-// ── Request body shapes ──────────────────────────────────────────────────────
+// Request body shapes
 
 interface MpesaCallbackBody {
   Body?: {
@@ -53,7 +53,7 @@ interface MpesaCallbackBody {
       };
     };
   };
-  // Flat "mock" format — only honoured when MOCK_CALLBACKS_ENABLED=true
+  // Flat "mock" format - only honoured when MOCK_CALLBACKS_ENABLED=true
   // (development / docker mock). Rejected in production (F6-1).
   checkoutRequestId?: string;
   merchantRequestId?: string;
@@ -69,7 +69,7 @@ function mockCallbacksAllowed(): boolean {
   return process.env.MOCK_CALLBACKS_ENABLED === 'true';
 }
 
-// ── F6-1: credential + origin validation ─────────────────────────────────────
+// F6-1: credential + origin validation
 
 async function logSecurityEvent(opts: {
   eventType: string;
@@ -110,7 +110,7 @@ async function authorizeCallback(request: NextRequest): Promise<Response | null>
   const user = process.env.MPESA_CALLBACK_USERNAME;
   const pass = process.env.MPESA_CALLBACK_PASSWORD;
 
-  // 1. Shared-credential check (Daraja supports basic-auth URLs — register the
+  // 1. Shared-credential check (Daraja supports basic-auth URLs - register the
   //    callback as https://user:pass@host/api/... or set the header upstream).
   if (user && pass) {
     const header = request.headers.get('authorization') || '';
@@ -154,7 +154,7 @@ async function authorizeCallback(request: NextRequest): Promise<Response | null>
   return null;
 }
 
-// ── Payload extraction ───────────────────────────────────────────────────────
+// Payload extraction
 
 function extractCallbackData(body: MpesaCallbackBody) {
   if (body.Body?.stkCallback) {
@@ -175,7 +175,7 @@ function extractCallbackData(body: MpesaCallbackBody) {
       amount: (metadata.Amount as number) || 0,
     };
   }
-  // Flat mock shape — only permitted when explicitly enabled (dev/docker).
+  // Flat mock shape - only permitted when explicitly enabled (dev/docker).
   return {
     isDarajaShape: false as const,
     checkoutRequestId: body.checkoutRequestId || '',
@@ -189,16 +189,16 @@ function extractCallbackData(body: MpesaCallbackBody) {
   };
 }
 
-// ── Handler ──────────────────────────────────────────────────────────────────
+// Handler
 
 async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
 
-  // AUDIT FIX (Finding 5.2 — rate limiting on public endpoints): the callback
+  // AUDIT FIX (Finding 5.2 - rate limiting on public endpoints): the callback
   // is a PUBLIC (credentialed) webhook, so cap request floods per source IP
   // before any DB work. 60 req/min/IP absorbs legitimate Daraja retries; a
   // flood is rejected 429 (with Retry-After) and written to SecurityEvent.
-  // Idempotency of legitimate duplicate callbacks is unaffected — they are
+  // Idempotency of legitimate duplicate callbacks is unaffected - they are
   // deduplicated downstream by the atomic PENDING claim + receipt unique
   // constraint, not by this throttle.
   const clientIp = getClientIp(request) || 'unknown';
@@ -216,14 +216,14 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // F6-1 — credential / IP gate before anything else.
+  // F6-1 - credential / IP gate before anything else.
   const rejection = await authorizeCallback(request);
   if (rejection) return rejection;
 
   const body: MpesaCallbackBody = await request.json();
   const data = extractCallbackData(body);
 
-  // F6-1 — reject the flat mock shape outside explicitly-enabled environments.
+  // F6-1 - reject the flat mock shape outside explicitly-enabled environments.
   if (!data.isDarajaShape && !mockCallbacksAllowed()) {
     await logSecurityEvent({
       eventType: 'SUSPICIOUS_ACTIVITY',
@@ -247,7 +247,7 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
   });
 
   if (!mpesaTx) {
-    // Unknown checkout id — could be a probe or a stale push. Acknowledge 200
+    // Unknown checkout id - could be a probe or a stale push. Acknowledge 200
     // (Daraja stops retrying on 200) but record it for forensics.
     await logSecurityEvent({
       eventType: 'SUSPICIOUS_ACTIVITY',
@@ -270,8 +270,8 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
     return Response.json({ success: true, message: 'Callback received (no matching record).' });
   }
 
-  // ── Idempotency gate (F6-3/F6-4) ─────────────────────────────────────────
-  // A terminal transaction must never be re-processed — Daraja retries
+  // Idempotency gate (F6-3/F6-4)
+  // A terminal transaction must never be re-processed - Daraja retries
   // aggressively and double delivery used to double-count the cash drawer.
   if (mpesaTx.callbackReceived || mpesaTx.status === 'COMPLETED' || mpesaTx.status === 'FAILED') {
     await systemLog({
@@ -285,15 +285,15 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
     return Response.json({ success: true, message: 'Callback already processed.' });
   }
 
-  // ── Amount verification (F6-4) ───────────────────────────────────────────
-  // Partial/over settlement is not accepted silently — route to reconciliation.
+  // Amount verification (F6-4)
+  // Partial/over settlement is not accepted silently - route to reconciliation.
   if (isSuccess && data.amount > 0) {
     const expected = Number(mpesaTx.amount);
     if (Math.abs(data.amount - expected) > 0.01) {
       await db.mpesaTransaction.update({
         where: { id: mpesaTx.id },
         data: {
-          status: 'PROCESSING', // reconciliation queue — NOT settled
+          status: 'PROCESSING', // reconciliation queue - NOT settled
           resultCode: data.resultCode,
           resultDesc: `AMOUNT_MISMATCH: expected ${expected}, got ${data.amount}`,
           callbackReceived: true,
@@ -312,7 +312,7 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
   }
 
   if (isSuccess) {
-    // ── SUCCESS: one transaction, claim-first (F6-3) ────────────────────────
+    // SUCCESS: one transaction, claim-first (F6-3)
     let settled = true;
     try {
       await db.$transaction(async (tx) => {
@@ -334,7 +334,7 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
         }
 
         if (mpesaTx.transactionId) {
-          // 2. Mark the sale paid — guarded so we never clobber a terminal state.
+          // 2. Mark the sale paid - guarded so we never clobber a terminal state.
           await tx.salesTransaction.updateMany({
             where: { id: mpesaTx.transactionId, paymentStatus: PaymentStatus.PENDING },
             data: { paymentStatus: PaymentStatus.COMPLETED },
@@ -346,7 +346,7 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
             data: { status: PaymentStatus.COMPLETED, reference: data.mpesaReceiptNumber },
           });
 
-          // 4. Cash-drawer log — uses the seeded `system` user (F6-3 FK fix).
+          // 4. Cash-drawer log - uses the seeded `system` user (F6-3 FK fix).
           //    Missing system user degrades to a skip + warning, NEVER a crash.
           const systemUser = await tx.user.findUnique({
             where: { id: 'system' },
@@ -386,7 +386,7 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
           });
           if (pendingJE) {
             // Posting a pending journal entry is a sanctioned lifecycle
-            // mutation on the append-only models — the audited bypass scope.
+            // mutation on the append-only models - the audited bypass scope.
             await withImmutabilityBypass(async () => {
               await tx.journalEntry.update({
                 where: { id: pendingJE.id },
@@ -409,7 +409,7 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
         });
       });
     } catch (err) {
-      // Unique receipt collision ⇒ this receipt already settled another row —
+      // Unique receipt collision ⇒ this receipt already settled another row -
       // treat as duplicate settlement, not an error (F6-4).
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('mpesa_transactions_store_id_mpesa_receipt_number_key')) {
@@ -423,7 +423,7 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
         });
         return Response.json({ success: true, message: 'Duplicate receipt ignored.' });
       }
-      throw err; // real failure — withErrorBoundary → 500, Daraja will retry
+      throw err; // real failure - withErrorBoundary → 500, Daraja will retry
     }
 
     if (!settled) {
@@ -446,10 +446,10 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
     return Response.json({ success: true, message: 'Callback processed successfully.' });
   }
 
-  // ── FAILURE: symmetric compensation (F6-5) ───────────────────────────────
+  // FAILURE: symmetric compensation (F6-5)
   // Stock was decremented optimistically at checkout; a cancelled/expired STK
   // push must restore it, write a compensating movement, and void the pending
-  // journal — otherwise every failed push permanently shrinks inventory.
+  // journal - otherwise every failed push permanently shrinks inventory.
   let compensated = true;
   try {
     await db.$transaction(async (tx) => {
@@ -477,7 +477,7 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
           data: { status: PaymentStatus.FAILED },
         });
 
-        // Compensating restock — one row per line item of the failed sale.
+        // Compensating restock - one row per line item of the failed sale.
         const saleItems = await tx.saleItem.findMany({
           where: { transactionId: mpesaTx.transactionId },
           select: { productId: true, quantity: true },
@@ -516,7 +516,7 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
     });
   } catch (compensationErr) {
     // Compensation failure must not 500 the webhook (Daraja would retry into
-    // the same fault) — surface loudly for the reconciliation cron instead.
+    // the same fault) - surface loudly for the reconciliation cron instead.
     await systemLog({
       action: 'MPESA_COMPENSATION_FAILED',
       component: LogComponent.PAYMENT,

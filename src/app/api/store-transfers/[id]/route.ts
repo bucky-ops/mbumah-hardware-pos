@@ -1,8 +1,8 @@
 // GET/PUT /api/store-transfers/[id]
 //
-// AUDIT REMEDIATION — FINANCIAL_MODULE_AUDIT_REPORT.md:
-//   • F3-2 (P0): the receive handler used to write `receivedBy` — a field that
-//     did not exist on the StoreTransfer model — crashing with a
+// AUDIT REMEDIATION - FINANCIAL_MODULE_AUDIT_REPORT.md:
+//   • F3-2 (P0): the receive handler used to write `receivedBy` - a field that
+//     did not exist on the StoreTransfer model - crashing with a
 //     PrismaClientValidationError AFTER destination stock had already been
 //     credited. Every retry double-credited stock. The columns now exist in
 //     the schema and every stock mutation is wrapped in ONE $transaction with
@@ -12,14 +12,14 @@
 //     action now claims `IN_TRANSIT AND shippedAt = null` atomically.
 //   • F3-4 (P1): `PARTIAL` was a terminal dead-end (couldn't re-receive or
 //     cancel); cancel-after-ship wrote no reversal movement. PARTIAL can now
-//     be received (to completion) or cancelled — with the un-received
+//     be received (to completion) or cancelled - with the un-received
 //     remainder restored to origin and compensating TRANSFER movements
 //     recorded. Status vocabulary aligned to the schema (`RECEIVED`).
-//   • F3-5 (P1): client-supplied `receivedQty` was unbounded — arbitrary
+//   • F3-5 (P1): client-supplied `receivedQty` was unbounded - arbitrary
 //     inventory credit/debit. Now validated: `0 < qty ≤ remaining`.
 //   • P0-3/SYS-1/SYS-2: endpoints are wrapped in `requireStoreAccess` and all
 //     actor identities (approvedBy/shippedBy/receivedBy/cancelledBy) are
-//     derived from the authenticated session — never the request body.
+//     derived from the authenticated session - never the request body.
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -124,7 +124,7 @@ async function updateStoreTransferHandler(
   const action = body.action; // approve, ship, receive, cancel
   const actorId = session.userId; // SYS-2: identity always from the session
 
-  // ── APPROVE ──────────────────────────────────────────────────────────────
+  // APPROVE
   if (action === 'approve') {
     // Atomic claim: only PENDING can move to IN_TRANSIT.
     const claimed = await db.storeTransfer.updateMany({
@@ -159,10 +159,10 @@ async function updateStoreTransferHandler(
     return Response.json({ success: true, data: transfer });
   }
 
-  // ── SHIP ─────────────────────────────────────────────────────────────────
+  // SHIP
   if (action === 'ship') {
     // All stock deduction + movement writes happen in ONE transaction, gated
-    // by an atomic claim on (status = IN_TRANSIT, shippedAt = null) — the
+    // by an atomic claim on (status = IN_TRANSIT, shippedAt = null) - the
     // double-ship window is closed (F3-3).
     const result = await db.$transaction(async (tx) => {
       const claimed = await tx.storeTransfer.updateMany({
@@ -174,7 +174,7 @@ async function updateStoreTransferHandler(
       for (const item of existing.items) {
         const shippedQty = Number(item.quantity);
         // QA FIX (dual source of truth): ship MUST operate on
-        // Product.quantityInStock — the same ledger POS sales and stock
+        // Product.quantityInStock - the same ledger POS sales and stock
         // movements use. The legacy Inventory table is maintained by nothing
         // else in the system, so keying ship on it stranded every product
         // created through the catalog API ("Origin store has no inventory
@@ -264,7 +264,7 @@ async function updateStoreTransferHandler(
     return Response.json({ success: true, data: transfer });
   }
 
-  // ── RECEIVE ──────────────────────────────────────────────────────────────
+  // RECEIVE
   if (action === 'receive') {
     // PARTIAL transfers are re-receivable (F3-4); IN_TRANSIT is the first receipt.
     if (existing.status !== 'IN_TRANSIT' && existing.status !== 'PARTIAL') {
@@ -301,7 +301,7 @@ async function updateStoreTransferHandler(
     }
 
     const result = await db.$transaction(async (tx) => {
-      // Atomic claim — receive is single-shot per receipt batch (F3-2).
+      // Atomic claim - receive is single-shot per receipt batch (F3-2).
       const claimStatuses = ['IN_TRANSIT', 'PARTIAL'];
       const claimed = await tx.storeTransfer.updateMany({
         where: { id, status: { in: claimStatuses }, shippedAt: { not: null } },
@@ -324,7 +324,7 @@ async function updateStoreTransferHandler(
 
         // QA FIX (destination credit): received stock must become SELLABLE at
         // the destination. POS sales read Product.quantityInStock, but the old
-        // receive path credited ONLY the legacy Inventory ledger — so a
+        // receive path credited ONLY the legacy Inventory ledger - so a
         // completed transfer never appeared in the destination catalog.
         // Product.sku is globally unique, so the destination row is matched by
         // a deterministic derived SKU (`<originSku>--<branchCode>` when the
@@ -364,7 +364,7 @@ async function updateStoreTransferHandler(
           }
         }
 
-        // Credit destination inventory (legacy ledger — keep in sync, create
+        // Credit destination inventory (legacy ledger - keep in sync, create
         // when the row is missing).
         const destInventory = await tx.inventory.findFirst({
           where: { productId: item.productId, storeId: existing.toStoreId },
@@ -450,9 +450,9 @@ async function updateStoreTransferHandler(
     return Response.json({ success: true, data: transfer });
   }
 
-  // ── CANCEL ───────────────────────────────────────────────────────────────
+  // CANCEL
   if (action === 'cancel') {
-    // PARTIAL transfers are cancellable now (F3-4) — the un-received remainder
+    // PARTIAL transfers are cancellable now (F3-4) - the un-received remainder
     // is restored to origin with compensating movements.
     if (!['PENDING', 'IN_TRANSIT', 'PARTIAL'].includes(existing.status)) {
       return Response.json(
@@ -483,7 +483,7 @@ async function updateStoreTransferHandler(
               data: { quantityInStock: { increment: outstanding } },
             });
           }
-          // Compensating movement — previously missing entirely (F3-4).
+          // Compensating movement - previously missing entirely (F3-4).
           await tx.stockMovement.create({
             data: {
               productId: item.productId,
@@ -528,7 +528,7 @@ async function updateStoreTransferHandler(
     return Response.json({ success: true, data: transfer });
   }
 
-  // ── Notes-only update ────────────────────────────────────────────────────
+  // Notes-only update
   if (body.notes !== undefined) {
     const transfer = await db.storeTransfer.update({
       where: { id },
@@ -548,7 +548,7 @@ async function updateStoreTransferHandler(
   );
 }
 
-// SYS-1: these endpoints mutate stock in two stores — session + membership
+// SYS-1: these endpoints mutate stock in two stores - session + membership
 // enforced (F3-3/P0-3). withErrorBoundary composes around the auth wrapper.
 export const GET = withErrorBoundary(requireStoreAccess(getStoreTransferHandler) as (...args: unknown[]) => Promise<Response>, 'STORE_TRANSFER_DETAIL');
 export const PUT = withErrorBoundary(requireStoreAccess(updateStoreTransferHandler) as (...args: unknown[]) => Promise<Response>, 'STORE_TRANSFER_UPDATE');

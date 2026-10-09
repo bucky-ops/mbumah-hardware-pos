@@ -76,7 +76,7 @@ export function CategoryChips({
     }
   };
 
-  // Compute total count if not provided — sum of all category counts
+  // Compute total count if not provided - sum of all category counts
   const computedTotal = useMemo(() => {
     if (typeof totalCount === 'number') return totalCount;
     if (!productCounts) return 0;

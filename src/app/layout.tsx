@@ -6,12 +6,12 @@ import "./globals.css";
 import { Providers } from "@/lib/providers";
 import { getEnv } from "@/lib/env";
 
-// ── Startup env validation ──────────────────────────────────────────────────
+// Startup env validation
 // Calling `getEnv()` at module load enforces Zod validation the moment the
 // root layout is first rendered on the server. Because the result is cached
 // inside env.ts, this is a one-time cost. If a required env var is missing
 // (and we are NOT in a build/skip-validation phase), this throws an
-// `EnvValidationError` with a full diagnostic — failing fast on boot is far
+// `EnvValidationError` with a full diagnostic - failing fast on boot is far
 // better than discovering a missing DATABASE_URL mid-request.
 //
 // NOTE: wrapped in try/catch + console.error so that, in the rare case a
@@ -24,12 +24,12 @@ try {
   console.error(envError);
 }
 
-// ── Font configuration ──────────────────────────────────────────────────────
+// Font configuration
 // BOTH font variants use `preload: false`.
 //
 // Why: Next.js `next/font` emits `<link rel="preload">` tags for every font
 // marked `preload: true`. On the login screen (the first surface most users
-// hit), only the sans variant is actually painted — the mono variant is used
+// hit), only the sans variant is actually painted - the mono variant is used
 // in receipts, serial numbers, and code-like figures deeper in the app.
 // Chrome logged a console warning about the unused preloaded mono font
 // (`797e433ab948586e-s.p.29207c2f.woff2`) because it was fetched eagerly but
@@ -39,11 +39,11 @@ try {
 // CSS actually references them (via the `--font-geist-sans` /
 // `--font-geist-mono` CSS variables). This eliminates the Chrome console
 // warning entirely. The fonts are still cached on first paint of any element
-// that uses them, so there is no perceivable latency cost — the only thing
+// that uses them, so there is no perceivable latency cost - the only thing
 // removed is the WASTED eager fetch of the mono woff2 on the login screen.
 //
 // `display: "swap"` ensures text is visible immediately with a system fallback
-// and swaps to the web font once it arrives (no FOIT — Flash of Invisible
+// and swaps to the web font once it arrives (no FOIT - Flash of Invisible
 // Text).
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -82,7 +82,7 @@ export const metadata: Metadata = {
   },
 };
 
-// PWA / standalone capabilities — allows the app to be installed as a
+// PWA / standalone capabilities - allows the app to be installed as a
 // standalone desktop or mobile app (Phase 3 offline-first foundation).
 export const viewport: Viewport = {
   themeColor: "#0f172a",

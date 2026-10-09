@@ -1,5 +1,5 @@
 // GET /api/financial/accounts
-// POST /api/financial/accounts — create a new account in the chart of accounts.
+// POST /api/financial/accounts - create a new account in the chart of accounts.
 
 import { type NextRequest } from 'next/server';
 import type Decimal from 'decimal.js';
@@ -9,7 +9,7 @@ import { LogComponent } from '@/lib/types';
 import { withFinancialAuth, FINANCIAL_ROLES } from '@/lib/auth';
 import { createAccount } from '@/lib/accounting-helpers';
 import { APIError } from '@/lib/api-error';
-// Task 12-b: Prisma Decimal valueOf() returns a STRING — `sum + line.debit`
+// Task 12-b: Prisma Decimal valueOf() returns a STRING - `sum + line.debit`
 // STRING-CONCATENATED. Balances accumulate via toDec() and emit 2dp HALF_UP.
 import { toDec, round2 } from '@/lib/utils/financialMath';
 
@@ -145,7 +145,7 @@ export const GET = withErrorBoundary(
   LogComponent.FINANCIAL,
 );
 
-// ── POST /api/financial/accounts ────────────────────────────────────────────
+// POST /api/financial/accounts
 //
 // Create a new account in the chart of accounts via `createAccount()`. The
 // normalBalance defaults by type (DEBIT for ASSET/EXPENSE, CREDIT for others)

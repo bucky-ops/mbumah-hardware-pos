@@ -64,7 +64,7 @@ import {
   printReport,
 } from './financial/shared';
 
-// Phase 3 — new sub-tab panels.
+// Phase 3 - new sub-tab panels.
 import FinancialPeriodsPanel from './financial/FinancialPeriodsPanel';
 import TrialBalancePanel from './financial/TrialBalancePanel';
 import BudgetsPanel from './financial/BudgetsPanel';
@@ -289,7 +289,7 @@ function RecordPaymentDialog({ debt, open, onOpenChange, onRecordPayment }: {
 // Main Component
 
 /**
- * FINANCIAL AUDIT GUARD — Decimal-safe numeric coercion.
+ * FINANCIAL AUDIT GUARD - Decimal-safe numeric coercion.
  *
  * Monetary fields from API payloads historically arrived as STRINGS (Prisma
  * Decimal → decimal.js toJSON). Any `+` against a string CONCATENATES
@@ -352,7 +352,7 @@ export default function FinancialTab() {
     ],
   });
 
-  // Phase 3 — Chart of Accounts CRUD state
+  // Phase 3 - Chart of Accounts CRUD state
   const [showAccountDialog, setShowAccountDialog] = useState(false);
   const [editAccountTarget, setEditAccountTarget] = useState<AccountItem | null>(null);
   const [deactivateAccountTarget, setDeactivateAccountTarget] = useState<AccountItem | null>(null);
@@ -374,7 +374,7 @@ export default function FinancialTab() {
     isActive: true,
   });
 
-  // Phase 3 — sub-tab navigation
+  // Phase 3 - sub-tab navigation
   const [activeSubTab, setActiveSubTab] = useState<string>('overview');
 
   const toggleJournal = (id: string) => {
@@ -538,7 +538,7 @@ export default function FinancialTab() {
     },
   });
 
-  // Phase 3 — Account CRUD mutations
+  // Phase 3 - Account CRUD mutations
   const createAccountMutation = useMutation({
     mutationFn: (data: {
       organizationId: string;
@@ -593,7 +593,7 @@ export default function FinancialTab() {
     onError: (error: Error) => toast.error(`Failed to deactivate account: ${error.message}`),
   });
 
-  // ── Phase 3 — Account CRUD handlers ───────────────────────────────────────
+  // Phase 3 - Account CRUD handlers
   const openAddAccount = () => {
     setEditAccountTarget(null);
     setAccountForm({
@@ -672,7 +672,7 @@ export default function FinancialTab() {
     });
   };
 
-  // ── Phase 3 — Journal entry status derivation (frontend) ──────────────────
+  // Phase 3 - Journal entry status derivation (frontend)
   const deriveJournalStatus = (je: { isPosted: boolean; isApproved: boolean; isVoided: boolean }): 'DRAFT' | 'APPROVED' | 'POSTED' | 'VOIDED' => {
     if (je.isVoided) return 'VOIDED';
     if (je.isPosted) return 'POSTED';
@@ -719,7 +719,7 @@ export default function FinancialTab() {
       toast.error('At least 2 journal lines with amounts are required');
       return;
     }
-    // Form line values are raw input strings — parse them explicitly (a bare
+    // Form line values are raw input strings - parse them explicitly (a bare
     // `s + l.debit` string-concatenates: "0100" + "50" → "010050").
     const totalDebit = validLines.reduce((s, l) => s + (parseFloat(String(l.debit)) || 0), 0);
     const totalCredit = validLines.reduce((s, l) => s + (parseFloat(String(l.credit)) || 0), 0);
@@ -817,7 +817,7 @@ export default function FinancialTab() {
     return [];
   }, [paymentBreakdown, revenueTrendData]);
 
-  // Profit & Loss calculations — every operand passes through toNum(); a
+  // Profit & Loss calculations - every operand passes through toNum(); a
   // single raw string in these reduce chains digit-concatenates the running
   // total (financial audit: Ksh 3.8e+89 Net Loss incident).
   const totalRevenue = journals.reduce((s, je) => {
@@ -834,7 +834,7 @@ export default function FinancialTab() {
   const _profitMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 
   // Sanity guard (financial audit): expenses exceeding revenue 100x signals a
-  // data/serialization anomaly — surface it loudly instead of rendering a
+  // data/serialization anomaly - surface it loudly instead of rendering a
   // nonsense statement.
   if (totalRevenue > 0 && totalExpenses > totalRevenue * 100) {
     console.warn(
@@ -845,7 +845,7 @@ export default function FinancialTab() {
   // P&L detailed breakdowns
   const plBreakdown = useMemo(() => {
     // Revenue breakdown by CANONICAL ACCOUNT CODE (4000 Sales, 4100 Rental,
-    // 4200 Late Fee — see src/lib/account-helper.ts ACCOUNT_DEFAULTS) with a
+    // 4200 Late Fee - see src/lib/account-helper.ts ACCOUNT_DEFAULTS) with a
     // subType fallback for custom charts. The previous subType-only filter
     // ('SALES'/'RENTAL'/'LATE_FEE') never matched the seeded chart (whose
     // subTypes are OPERATING_REVENUE / OTHER_REVENUE), so Sales / Rental /
@@ -866,7 +866,7 @@ export default function FinancialTab() {
     const otherRevenue = totalRevenue - salesRevenue - rentalRevenue - lateFeeRevenue;
 
     // COGS: the canonical Cost of Goods Sold account is 5000 (seeded with
-    // subType 'OPERATING_EXPENSE', NOT 'COGS' — the old subType-only filter
+    // subType 'OPERATING_EXPENSE', NOT 'COGS' - the old subType-only filter
     // matched nothing, so Direct Costs always showed KES 0.00).
     const isCogsLine = (l: { account?: { code?: string; subType?: string | null } | null }) =>
       l.account?.code === '5000' || l.account?.subType === 'COGS';

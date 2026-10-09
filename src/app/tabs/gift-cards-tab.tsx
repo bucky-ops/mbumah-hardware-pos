@@ -64,14 +64,14 @@ import {
   DropdownMenuLabel, DropdownMenuGroup,
 } from '@/components/ui/dropdown-menu';
 
-// ─── Props ────────────────────────────────────────────────────────
+// Props
 interface GiftCardsTabProps {
   storeId: string;
   userRole: string;
   userId: string;
 }
 
-// ─── Reason Config ─────────────────────────────────────────────────
+// Reason Config
 const REASON_CONFIG: Record<GiftCardReason, { label: string; description: string; color: string; bgClass: string; textClass: string; icon: React.ReactNode }> = {
   CUSTOMER_LOYALTY: {
     label: 'Customer Loyalty',
@@ -139,7 +139,7 @@ const REASON_CONFIG: Record<GiftCardReason, { label: string; description: string
   },
 };
 
-// ─── Status Config ─────────────────────────────────────────────────
+// Status Config
 const STATUS_CONFIG: Record<GiftCardStatus, { label: string; bgClass: string; textClass: string; dotClass: string }> = {
   ACTIVE: {
     label: 'Active',
@@ -173,11 +173,11 @@ const STATUS_CONFIG: Record<GiftCardStatus, { label: string; bgClass: string; te
   },
 };
 
-// ─── Sort Options ──────────────────────────────────────────────────
+// Sort Options
 type SortField = 'date' | 'balance' | 'status';
 type SortOrder = 'asc' | 'desc';
 
-// ─── Permission Helpers ────────────────────────────────────────────
+// Permission Helpers
 function canCreate(role: string): boolean {
   return ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'CASHIER'].includes(role);
 }
@@ -200,7 +200,7 @@ function canViewDetails(_role: string): boolean {
   return true; // All roles can view
 }
 
-// ─── Auto-generate gift card code ─────────────────────────────────
+// Auto-generate gift card code
 function generateGiftCardCode(): string {
   const prefix = 'GC';
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -211,7 +211,7 @@ function generateGiftCardCode(): string {
   return code;
 }
 
-// ─── Sub-Components ────────────────────────────────────────────────
+// Sub-Components
 
 function ReasonBadge({ reason }: { reason: GiftCardReason }) {
   const config = REASON_CONFIG[reason];
@@ -292,7 +292,7 @@ function AutoAdjustIndicator({ autoAdjust, isVisible }: { autoAdjust: boolean; i
   );
 }
 
-// ─── Loading Skeleton ──────────────────────────────────────────────
+// Loading Skeleton
 function GiftCardGridSkeleton() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -317,7 +317,7 @@ function GiftCardGridSkeleton() {
   );
 }
 
-// ─── Empty State ───────────────────────────────────────────────────
+// Empty State
 function EmptyState({ onCreateClick, canCreateCards }: { onCreateClick: () => void; canCreateCards: boolean }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4">
@@ -338,11 +338,11 @@ function EmptyState({ onCreateClick, canCreateCards }: { onCreateClick: () => vo
   );
 }
 
-// ─── Main Component ────────────────────────────────────────────────
+// Main Component
 export default function GiftCardsTab({ storeId, userRole, userId: _userId }: GiftCardsTabProps) {
   const queryClient = useQueryClient();
 
-  // ── State ──
+  // State
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -351,7 +351,7 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [showFilters, setShowFilters] = useState(false);
 
-  // Debounce search (300ms) — gift cards list filters server-side, so this
+  // Debounce search (300ms) - gift cards list filters server-side, so this
   // prevents an API round-trip on every keystroke.
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -450,7 +450,7 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerSearchResults, setCustomerSearchResults] = useState<Array<{ id: string; name: string; phone: string | null; email: string | null }>>([]);
 
-  // ── Queries ──
+  // Queries
   const { data: giftCardsData, isLoading, error } = useQuery({
     queryKey: ['giftCards', storeId, statusFilter, reasonFilter, debouncedSearch, sortField, sortOrder],
     queryFn: async () => {
@@ -491,7 +491,7 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
     }
   }, [customerSearchData]);
 
-  // ── Mutations ──
+  // Mutations
   const createMutation = useMutation({
     mutationFn: async () => {
       const balance = parseFloat(createForm.initialBalance);
@@ -664,7 +664,7 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
     },
   });
 
-  // ── Helpers ──
+  // Helpers
   const handleSendGiftCardWhatsApp = useCallback(async (card: GiftCardItem) => {
     try {
       const phone = prompt('Enter WhatsApp phone number:', card.recipientPhone || '') || '';
@@ -685,7 +685,7 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
     }
   }, [storeId]);
 
-  // SMS twin of handleSendGiftCardWhatsApp — compact (~<=320 chars) sms: deep
+  // SMS twin of handleSendGiftCardWhatsApp - compact (~<=320 chars) sms: deep
   // link built client-side; openSMS normalizes 07xx → 2547xx.
   const handleSendGiftCardSms = useCallback(async (card: GiftCardItem) => {
     try {
@@ -773,7 +773,7 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
     return new Date(card.expiryDate) < new Date();
   }, []);
 
-  // ── Render ──
+  // Render
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
       {/* Header */}

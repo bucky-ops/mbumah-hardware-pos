@@ -90,3 +90,8 @@ nginx/ssl/archive/
 nginx/logs/*.log
 scripts/populate/state.json
 scripts/populate/*.log
+
+# Local environment backups and agent handover artifacts (never commit)
+.env.bak
+.env.*.bak
+worklog.md

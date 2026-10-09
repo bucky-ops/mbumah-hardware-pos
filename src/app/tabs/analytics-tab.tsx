@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Analytics Tab — wraps the AnalyticsDashboard component in the tab system.
+ * Analytics Tab - wraps the AnalyticsDashboard component in the tab system.
  * Reads the current storeId from the app store and passes it through.
  */
 

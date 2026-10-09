@@ -1,9 +1,6 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Money class (financial-integer primitive)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Money class (financial-integer primitive)
 //
 // WHY THIS EXISTS
-// ───────────────
 // JavaScript `number` is an IEEE-754 double-precision float. It CANNOT
 // represent most decimal fractions exactly:
 //
@@ -12,24 +9,23 @@
 //     0.1 * 3 === 0.30000000000000004
 //
 // For a POS / accounting system this is unacceptable. A Ksh 0.01 rounding
-// error multiplied across 100,000 transactions is Ksh 1,000 — real money,
+// error multiplied across 100,000 transactions is Ksh 1,000 - real money,
 // real audit findings, real customer complaints. The fix is to use a
 // arbitrary-precision decimal type (`decimal.js`) for ALL monetary math and
 // to centralise every money operation behind this `Money` class so that:
 //
 //   1. No floating-point ever touches a money field in application code.
-//   2. Rounding is explicit and uses HALF_UP to 2dp — the FINANCIAL MATH
-//      AUDIT policy (KRA/eTIMS-aligned, Kenya retail standard) — owned by
+//   2. Rounding is explicit and uses HALF_UP to 2dp - the FINANCIAL MATH
+//      AUDIT policy (KRA/eTIMS-aligned, Kenya retail standard) - owned by
 //      src/lib/utils/financialMath.ts so no module can diverge.
 //   3. Currency is attached to every amount, preventing accidental KES/KES
 //      cross-currency arithmetic.
-//   4. Allocation (splitting an amount into ratios) is exact — no penny
+//   4. Allocation (splitting an amount into ratios) is exact - no penny
 //      left behind, no penny created. `allocate([1, 1, 1])` of Ksh 1.00
-//      returns [0.34, 0.33, 0.33] — never [0.33, 0.33, 0.33] (which loses
+//      returns [0.34, 0.33, 0.33] - never [0.33, 0.33, 0.33] (which loses
 //      Ksh 0.01) or [0.34, 0.34, 0.34] (which creates Ksh 0.02).
 //
 // USAGE
-// ─────
 //   import { Money, KES } from '@/lib/money';
 //
 //   const unit  = KES(500);                    // Ksh 500.00
@@ -46,18 +42,16 @@
 //   const parsed = Money.tryParse('1,234.50');  // Money(1234.50) | null
 //
 // RELATIONSHIP TO PRISMA
-// ──────────────────────
 // Prisma `@db.Decimal(12,2)` columns are returned as `Prisma.Decimal` (a
 // re-export of `decimal.js`). `Money.fromPrisma()` accepts that type
 // directly, so there is zero conversion friction at the DB boundary. When
-// writing back, pass `money.toDecimal()` — Prisma accepts the `Decimal`
+// writing back, pass `money.toDecimal()` - Prisma accepts the `Decimal`
 // instance natively.
 //
-// ─────────────────────────────────────────────────────────────────────────────
 
 import Decimal from "decimal.js";
 
-// ── Global decimal.js config — OWNED by financialMath.ts ────────────────────
+// Global decimal.js config - OWNED by financialMath.ts
 //
 // FINANCIAL MATH AUDIT: the strict rounding policy (HALF_UP, 2dp at the
 // line level) and the decimal.js global configuration are owned by
@@ -69,16 +63,16 @@ import Decimal from "decimal.js";
 import '@/lib/utils/financialMath';
 import { MONEY_ROUNDING, formatKES as formatKESCanonical } from '@/lib/utils/financialMath';
 
-// ── Currency codes we accept (extensible) ────────────────────────────────────
+// Currency codes we accept (extensible)
 export type CurrencyCode = "KES" | "USD" | "EUR" | "GBP" | "TZS" | "UGX";
 
 const CURRENCY_DECIMALS: Readonly<Record<CurrencyCode, number>> = {
-  KES: 2, // Kenyan Shilling — 2 decimals (cents)
+  KES: 2, // Kenyan Shilling - 2 decimals (cents)
   USD: 2,
   EUR: 2,
   GBP: 2,
-  TZS: 0, // Tanzanian Shilling — no minor unit
-  UGX: 0, // Ugandan Shilling — no minor unit
+  TZS: 0, // Tanzanian Shilling - no minor unit
+  UGX: 0, // Ugandan Shilling - no minor unit
 };
 
 /**
@@ -91,7 +85,7 @@ export function currencyDecimals(currency: CurrencyCode = "KES"): number {
 }
 
 /**
- * A monetary amount tagged with a currency. Immutable — every arithmetic
+ * A monetary amount tagged with a currency. Immutable - every arithmetic
  * operation returns a NEW `Money` instance, so `a.add(b)` never mutates `a`.
  *
  * The internal value is a `Decimal` (arbitrary precision, base-10), so there
@@ -117,7 +111,7 @@ export class Money {
     this.currency = currency;
   }
 
-  // ── Factory methods ────────────────────────────────────────────────────────
+  // Factory methods
 
   /** Zero in the given currency. Common starting point for running totals. */
   static zero(currency: CurrencyCode = "KES"): Money {
@@ -149,7 +143,7 @@ export class Money {
 
   /**
    * Construct from a Prisma `Decimal` field, a string, a number, or null/undefined.
-   * This is the bridge between the database and the Money class — Prisma
+   * This is the bridge between the database and the Money class - Prisma
    * `@db.Decimal(12,2)` columns arrive as `Prisma.Decimal`, which is a re-export
    * of `decimal.js`, so `new Decimal(prismaDecimal)` works natively.
    *
@@ -167,7 +161,7 @@ export class Money {
   }
 
   /**
-   * Safe parse — returns `null` on bad input instead of throwing. Use this for
+   * Safe parse - returns `null` on bad input instead of throwing. Use this for
    * user-supplied form input where a throw would force a try/catch at every
    * call site. Accepts the same formats as `fromString`.
    */
@@ -211,7 +205,7 @@ export class Money {
     return s;
   }
 
-  // ── Arithmetic (all immutable — return new Money) ──────────────────────────
+  // Arithmetic (all immutable - return new Money)
 
   /** Add another Money (must be the same currency) or a plain number. */
   add(other: Money | number | Decimal): Money {
@@ -227,7 +221,7 @@ export class Money {
 
   /**
    * Multiply by a scalar (quantity, tax rate as decimal, etc.). The argument
-   * is a NUMBER or Decimal — NOT a Money — because multiplying two monetary
+   * is a NUMBER or Decimal - NOT a Money - because multiplying two monetary
    * amounts is a category error (you don't multiply "Ksh 100" by "Ksh 50").
    *
    * @example
@@ -239,7 +233,7 @@ export class Money {
   }
 
   /**
-   * Divide by a scalar. Throws on division by zero — that is a genuine bug
+   * Divide by a scalar. Throws on division by zero - that is a genuine bug
    * (dividing money by zero has no meaningful result).
    */
   divide(divisor: number | Decimal): Money {
@@ -259,7 +253,7 @@ export class Money {
     return new Money(this.amount.abs(), this.currency);
   }
 
-  // ── Financial operations ───────────────────────────────────────────────────
+  // Financial operations
 
   /**
    * Apply a percentage discount and return the DISCOUNTED amount.
@@ -303,7 +297,7 @@ export class Money {
 
   /**
    * What percentage of `total` is this amount? Returns a plain Decimal
-   * (not a Money — the result is a ratio, not an amount).
+   * (not a Money - the result is a ratio, not an amount).
    *
    * @example KES(160).percentOf(KES(1160))  // 13.793103...
    */
@@ -314,7 +308,7 @@ export class Money {
   }
 
   /**
-   * Allocate this amount across `ratios` with EXACT penny distribution — no
+   * Allocate this amount across `ratios` with EXACT penny distribution - no
    * rounding loss, no created pennies. The classic problem: splitting Ksh 1.00
    * three ways. Naive `1.00 / 3 = 0.33` loses Ksh 0.01. This algorithm
    * (largest-remainder) distributes the residual penny(s) to the ratios with
@@ -365,14 +359,14 @@ export class Money {
     return floored.map((minor) => new Money(minor.div(unit), this.currency));
   }
 
-  // ── Rounding ───────────────────────────────────────────────────────────────
+  // Rounding
 
   /**
    * Round to the currency's minor-unit precision using the audit-mandated
    * HALF_UP policy (0.005 → 0.01). KES rounds to 2 decimals (cents);
    * TZS / UGX to 0 decimals.
    *
-   * This does NOT mutate — returns a new Money.
+   * This does NOT mutate - returns a new Money.
    */
   round(): Money {
     const decimals = currencyDecimals(this.currency);
@@ -382,7 +376,7 @@ export class Money {
     );
   }
 
-  // ── Comparison ─────────────────────────────────────────────────────────────
+  // Comparison
 
   /** Equal value AND same currency. */
   eq(other: Money): boolean {
@@ -447,16 +441,16 @@ export class Money {
     return values.reduce((acc, m) => acc.add(m), Money.zero(currency));
   }
 
-  // ── Conversion ─────────────────────────────────────────────────────────────
+  // Conversion
 
-  /** Convert to a JS `number`. Loses precision for very large amounts — use
+  /** Convert to a JS `number`. Loses precision for very large amounts - use
    *  `toDecimal()` for financial math, `toNumber()` only for display / JSON
    *  serialization to legacy APIs that don't accept Decimal. */
   toNumber(): number {
     return this.amount.toNumber();
   }
 
-  /** The underlying `Decimal` — pass this to Prisma when writing to a
+  /** The underlying `Decimal` - pass this to Prisma when writing to a
    *  `@db.Decimal` column. Prisma accepts `Decimal` natively. */
   toDecimal(): Decimal {
     return new Decimal(this.amount); // defensive copy
@@ -467,16 +461,16 @@ export class Money {
     return this.amount.toFixed(currencyDecimals(this.currency));
   }
 
-  /** JSON serialisation — returns a string so the value survives JSON
+  /** JSON serialisation - returns a string so the value survives JSON
    *  round-tripping without float corruption. */
   toJSON(): string {
     return this.toString();
   }
 
-  // ── Formatting ─────────────────────────────────────────────────────────────
+  // Formatting
 
   /**
-   * Format as a Kenyan-Shilling display string — delegates to the ONE
+   * Format as a Kenyan-Shilling display string - delegates to the ONE
    * canonical en-KE formatter (financialMath.formatKES) so a receipt, an
    * e-mail and a UI table render the identical string for the same amount:
    * `KES(1234567.5).formatKES()` → "KES 1,234,567.50".
@@ -509,7 +503,7 @@ export class Money {
     return `${prefix}${sign}${abs.toFixed(0)}`;
   }
 
-  // ── Internal helpers ───────────────────────────────────────────────────────
+  // Internal helpers
 
   /**
    * Coerce another Money to this Money's currency. Currently ONLY allows
@@ -531,7 +525,7 @@ export class Money {
   }
 }
 
-// ── Convenience constructor: KES(500) === Money.fromNumber(500, 'KES') ───────
+// Convenience constructor: KES(500) === Money.fromNumber(500, 'KES')
 /**
  * Shorthand for `Money.fromNumber(value, 'KES')`. The most common case in
  * this codebase (Mbumah Hardware operates in Kenyan Shillings).
@@ -548,7 +542,7 @@ export function KES(value: number | string | Decimal | null | undefined): Money 
   // A Prisma Decimal field can be an instance of a DIFFERENT decimal.js copy
   // than the one bundled for the app (dual-package identity), so instanceof
   // fails and the value used to fall through to Money.fromString(value) with
-  // an OBJECT — cleanNumericString rejected it and every DEBT checkout died
+  // an OBJECT - cleanNumericString rejected it and every DEBT checkout died
   // with 'Money.fromString: cannot parse "…" as a number.' after the sale was
   // otherwise fully validated. Normalize through the Decimal's exact string
   // form instead: decimal.js toString() is lossless, and fromString keeps the
@@ -556,7 +550,7 @@ export function KES(value: number | string | Decimal | null | undefined): Money 
   return Money.fromString(String(value), "KES");
 }
 
-// ── Helpers for bulk conversion of Prisma result rows ────────────────────────
+// Helpers for bulk conversion of Prisma result rows
 
 /**
  * Map a Prisma Decimal field (or string / number / null) to a `Money` in a

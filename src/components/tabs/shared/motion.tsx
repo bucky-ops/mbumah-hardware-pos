@@ -16,7 +16,7 @@ import type { Variants } from 'framer-motion';
 import { motion } from 'framer-motion';
 import React from 'react';
 
-/** Parent container — children stagger in 60ms apart, fade + slide up. */
+/** Parent container - children stagger in 60ms apart, fade + slide up. */
 export const staggerContainer: Variants = {
   hidden: { opacity: 0 },
   visible: {
@@ -28,7 +28,7 @@ export const staggerContainer: Variants = {
   },
 };
 
-/** Child item — fade-in + 8px slide-up. */
+/** Child item - fade-in + 8px slide-up. */
 export const staggerItem: Variants = {
   hidden: { opacity: 0, y: 8 },
   visible: {
@@ -45,7 +45,7 @@ export const quickFade: Variants = {
 };
 
 /**
- * MotionDiv — thin wrapper around `motion.div` with sensible defaults so call
+ * MotionDiv - thin wrapper around `motion.div` with sensible defaults so call
  * sites don't need to import framer-motion directly. Pass `variants` to
  * customize, otherwise uses `staggerItem`.
  */
@@ -71,7 +71,7 @@ export function MotionDiv({
 }
 
 /**
- * StaggerGroup — wraps children with the stagger container variants so any
+ * StaggerGroup - wraps children with the stagger container variants so any
  * direct `MotionDiv`/`motion.*` children animate in sequence.
  */
 export function StaggerGroup({

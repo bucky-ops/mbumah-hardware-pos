@@ -93,7 +93,7 @@ export function PlanDetailsDialog({
   const [waiveInstallment, setWaiveInstallment] = useState<DebtPlanInstallmentItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
-  // Task 12-d: current user id — used to hide the Approve button from the
+  // Task 12-d: current user id - used to hide the Approve button from the
   // plan creator (the server 409s self-approval; showing the button was a
   // guaranteed-failure UX trap).
   const sessionUserId = useAuthStore((s) => s.user?.id ?? null);
@@ -110,7 +110,7 @@ export function PlanDetailsDialog({
     staleTime: 5_000,
   });
 
-  // Reset child dialogs whenever the parent closes — event-driven (not
+  // Reset child dialogs whenever the parent closes - event-driven (not
   // useEffect-driven) to avoid the set-state-in-effect lint rule.
   const handleOpenChange = (next: boolean) => {
     if (!next) {
@@ -131,7 +131,7 @@ export function PlanDetailsDialog({
     return total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
   }, [current]);
 
-  // ── Mutations: approve / pause / resume / cancel / delete ──────────────
+  // Mutations: approve / pause / resume / cancel / delete
   const approveMutation = useMutation({
     mutationFn: async () => debtPaymentPlansApi.approve(current!.id),
     onSuccess: () => {
@@ -194,7 +194,7 @@ export function PlanDetailsDialog({
   }
 
   const installments = current.installments ?? [];
-  // Task 12-d: the plan creator cannot approve (segregation of duties — the
+  // Task 12-d: the plan creator cannot approve (segregation of duties - the
   // server returns 409). Hide the button and explain why instead of showing
   // a guaranteed-failing action.
   const isCreator = Boolean(current.createdById && sessionUserId && current.createdById === sessionUserId);
@@ -202,10 +202,10 @@ export function PlanDetailsDialog({
   const canPause = current.status === 'ACTIVE';
   const canResume = current.status === 'PAUSED';
   // Task 12-d: DEFAULTED plans can now be cancelled (the old state machine
-  // left them with no exit — payments/waivers were blocked server-side too).
+  // left them with no exit - payments/waivers were blocked server-side too).
   const canCancel =
     current.status === 'ACTIVE' || current.status === 'PAUSED' || current.status === 'DEFAULTED';
-  // Client request: once a plan has been CLEARED (status COMPLETED — balance
+  // Client request: once a plan has been CLEARED (status COMPLETED - balance
   // fully paid) show the delete option so the record can be tidied up.
   // Collected payments stay in the debt ledger; only the plan + installments
   // schedule are removed (server enforces the same rule).

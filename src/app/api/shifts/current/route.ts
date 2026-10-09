@@ -5,14 +5,14 @@
 //   • role ∈ OWNER_ROLES (SUPER_ADMIN, STORE_OWNER) → cash figures visible
 //     by default; `?blind=1` forces a blind read; `?blind=0` explicitly
 //     un-blinds (owners only).
-//   • role ∉ OWNER_ROLES (or no session — fail closed) → BLIND:
+//   • role ∉ OWNER_ROLES (or no session - fail closed) → BLIND:
 //       - cashDifference is nulled (the variance reveals the expected figure
 //         by implication),
 //       - the SHIFT_CASH_BREAKDOWN JSON persisted in Shift.notes by the
 //         Z-read (which contains expectedCash/difference) is redacted from
-//         `notes` — otherwise the blind rule would leak through free text.
+//         `notes` - otherwise the blind rule would leak through free text.
 //
-// AUTH NOTE: the route intentionally stays session-OPTIONAL (no hard 401) —
+// AUTH NOTE: the route intentionally stays session-OPTIONAL (no hard 401) -
 // the frontend calls it during initial hydration before a token exists, and
 // the pre-v2.6 contract returns `{ success: true, data: null }` there.
 // Unauthenticated callers are treated as non-owners (fail-closed blind), so
@@ -25,7 +25,7 @@ import { getSessionFromRequest, OWNER_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-// Marker written by POST /api/shifts/[id]/end — the persisted machine-
+// Marker written by POST /api/shifts/[id]/end - the persisted machine-
 // readable cash breakdown (contains expectedCash + difference). Kept in
 // sync with BREAKDOWN_MARKER in that route.
 const BREAKDOWN_MARKER = 'SHIFT_CASH_BREAKDOWN:';
@@ -42,7 +42,7 @@ async function getCurrentShiftHandler(...args: unknown[]): Promise<Response> {
     return Response.json({ success: true, data: null });
   }
 
-  // ── v2.6.0 blind-closeout resolution (session-optional, fail-closed) ──
+  // v2.6.0 blind-closeout resolution (session-optional, fail-closed)
   const session = await getSessionFromRequest(request);
   const isOwner = session ? OWNER_ROLES.includes(session.role) : false;
   const blindParam = searchParams.get('blind');
@@ -77,7 +77,7 @@ async function getCurrentShiftHandler(...args: unknown[]): Promise<Response> {
     startingCash: shift.startingCash,
     endingCash: shift.endingCash,
     countedCash: shift.countedCash,
-    // Blind closeout: the variance reveals the expected figure — hidden
+    // Blind closeout: the variance reveals the expected figure - hidden
     // (null) unless the caller is owner-or-above and has not asked for a
     // blind read.
     cashDifference: blind ? null : shift.cashDifference,

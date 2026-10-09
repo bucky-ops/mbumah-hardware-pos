@@ -1,8 +1,8 @@
-// GET /api/cron/reconciliation — READ-ONLY financial invariant checks.
+// GET /api/cron/reconciliation - READ-ONLY financial invariant checks.
 //
-// AUDIT REFERENCE — FINANCIAL_MODULE_AUDIT_REPORT.md (SYS cross-cutting /
+// AUDIT REFERENCE - FINANCIAL_MODULE_AUDIT_REPORT.md (SYS cross-cutting /
 // Wave 2 reconciliation): runs four invariants and ALERTS via systemLog.
-// This route NEVER mutates financial data — the only writes it performs are
+// This route NEVER mutates financial data - the only writes it performs are
 // its own SystemConfig drift-baseline row and system_logs entries:
 //
 //   a. Stock ledger: products."quantityInStock" vs
@@ -17,7 +17,7 @@
 //      baseline so a known change does not re-alert every night).
 //
 //   b. Trial balance: SUM(journal_entry_lines.debit) must equal
-//      SUM(journal_entry_lines.credit) within 0.01 — double-entry integrity.
+//      SUM(journal_entry_lines.credit) within 0.01 - double-entry integrity.
 //
 //   c. Stale M-Pesa: MpesaTransaction rows still PENDING after 10 minutes
 //      (the payments-sweeper closes these hourly; a non-zero count means the
@@ -27,11 +27,11 @@
 //      (the generating lambda died mid-export; they will never complete).
 //
 // The stock-ledger raw SQL is guarded in try/catch because the test suite
-// runs on SQLite where raw quoted-identifier SQL can behave differently —
+// runs on SQLite where raw quoted-identifier SQL can behave differently -
 // a failed check is logged as WARN and reported as skipped; the cron must
 // never crash because one probe could not run.
 //
-// SCHEDULE NOTE (Vercel Hobby plan): Hobby clamps crons to a daily minimum —
+// SCHEDULE NOTE (Vercel Hobby plan): Hobby clamps crons to a daily minimum -
 // the nightly "30 2 * * *" expression is fine on every plan.
 
 import { db, runWithoutTenant } from '@/lib/db';
@@ -85,7 +85,7 @@ function toNum(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-// ── (a) Stock ledger invariant ───────────────────────────────────────────────
+// (a) Stock ledger invariant
 
 interface StockLedgerRow {
   id: string;
@@ -138,7 +138,7 @@ async function checkStockLedger(): Promise<{
     const anomalies: StockDriftAnomaly[] = [];
 
     if (!baselineRow) {
-      // First run: persist the current drift map and log INFO — establishes
+      // First run: persist the current drift map and log INFO - establishes
       // the reference point without spamming alerts for historical baseline.
       await db.systemConfig.upsert({
         where: { key: STOCK_DRIFT_BASELINE_KEY },
@@ -170,7 +170,7 @@ async function checkStockLedger(): Promise<{
 
     for (const [productId, current] of Object.entries(currentDrift)) {
       const prev = previous[productId];
-      // Products never seen before have no baseline — record, don't alarm.
+      // Products never seen before have no baseline - record, don't alarm.
       if (typeof prev !== 'number') continue;
       const delta = current - prev;
       if (Math.abs(delta) > DRIFT_TOLERANCE) {
@@ -196,7 +196,7 @@ async function checkStockLedger(): Promise<{
       });
     }
 
-    // Refresh the baseline so this run's drift is the new reference —
+    // Refresh the baseline so this run's drift is the new reference -
     // otherwise every subsequent nightly run re-alerts on the same change.
     await db.systemConfig.update({
       where: { key: STOCK_DRIFT_BASELINE_KEY },
@@ -224,7 +224,7 @@ async function checkStockLedger(): Promise<{
   }
 }
 
-// ── (b) Trial balance invariant ──────────────────────────────────────────────
+// (b) Trial balance invariant
 
 async function checkTrialBalance(): Promise<{
   totalDebit: number;
@@ -257,7 +257,7 @@ async function checkTrialBalance(): Promise<{
   return { totalDebit, totalCredit, imbalance, balanced };
 }
 
-// ── (c) + (d) Operational staleness probes ───────────────────────────────────
+// (c) + (d) Operational staleness probes
 
 async function checkStaleMpesa(): Promise<{ count: number }> {
   const cutoff = new Date(Date.now() - MPESA_STALE_MINUTES * 60_000);
@@ -297,7 +297,7 @@ async function checkStuckExports(): Promise<{ count: number }> {
   return { count };
 }
 
-// ── Route handler ────────────────────────────────────────────────────────────
+// Route handler
 
 async function reconciliationHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as Request;
@@ -305,7 +305,7 @@ async function reconciliationHandler(...args: unknown[]): Promise<Response> {
   if (denied) return denied;
 
   // Cross-tenant by design: invariants are org-wide. Read-only against all
-  // financial tables — the only writes are the SystemConfig baseline row and
+  // financial tables - the only writes are the SystemConfig baseline row and
   // system_logs audit entries.
   const result = await runWithoutTenant(async () => {
     const stock = await checkStockLedger();

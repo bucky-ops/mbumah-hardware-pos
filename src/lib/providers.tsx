@@ -24,7 +24,7 @@ function GlobalErrorHandler({ children }: { children: ReactNode }) {
 
       // LOGIN POPUP FIX (v2.5.2): global error TOASTS only fire for signed-in
       // users. On the login screen an unexpected rejection used to pop
-      // "Unexpected Error" over the form — with retries it felt like popup
+      // "Unexpected Error" over the form - with retries it felt like popup
       // spam and contributed to the "cannot access the login" report. Before
       // login we log to the console and keep the screen silent; the inline
       // login error banner handles the feedback users actually need.

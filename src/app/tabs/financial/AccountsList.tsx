@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * AccountsList — chart of accounts with group balances + trial balance summary.
+ * AccountsList - chart of accounts with group balances + trial balance summary.
  *
  * Extracted from `financial-tab.tsx` to slim down the orchestrator. Renders
  * the chart of accounts grouped by type (ASSET, LIABILITY, EQUITY, REVENUE,
@@ -30,7 +30,7 @@ export interface AccountsListProps {
   /** Set of expanded group types */
   expandedAccountGroups: Set<string>;
   onToggleGroup: (type: string) => void;
-  /** Trial balance summary — if totalDebits or totalCredits > 0 the summary renders */
+  /** Trial balance summary - if totalDebits or totalCredits > 0 the summary renders */
   trialBalance: {
     totalDebits: number;
     totalCredits: number;

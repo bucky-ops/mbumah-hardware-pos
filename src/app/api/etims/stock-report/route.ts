@@ -5,9 +5,9 @@
 // expects the data we'd compute locally anyway).
 //
 // Query params:
-//   storeId   — required (enforced by requireStoreAccess)
-//   startDate — required (YYYY-MM-DD, inclusive)
-//   endDate   — required (YYYY-MM-DD, inclusive)
+//   storeId - required (enforced by requireStoreAccess)
+//   startDate - required (YYYY-MM-DD, inclusive)
+//   endDate - required (YYYY-MM-DD, inclusive)
 //
 // Auth: SUPER_ADMIN, ACCOUNTANT (financial reporting roles only).
 //
@@ -50,7 +50,7 @@ async function stockReportHandler(
     );
   }
 
-  // Parse dates. The end date is treated as inclusive — extend to 23:59:59.
+  // Parse dates. The end date is treated as inclusive - extend to 23:59:59.
   const startDate = new Date(startDateStr + 'T00:00:00');
   const endDate = new Date(endDateStr + 'T23:59:59.999');
   if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
@@ -66,12 +66,12 @@ async function stockReportHandler(
     );
   }
 
-  // ── 1. Load eTIMS client (optional — the report is computed locally, but we
+  // 1. Load eTIMS client (optional - the report is computed locally, but we
   //       still log via the client for audit and may POST to KRA in production)
   //       If no profile is configured, we still build the report from local data.
   const client = await initializeEtimsClientFromStore(storeId);
 
-  // ── 2. Build the report ───────────────────────────────────────────────────
+  // 2. Build the report
   // The EtimsClient.stockMasterReport helper does the DB aggregation. If no
   // client is configured, we fall back to a local-only computation.
   let result;
@@ -125,7 +125,7 @@ async function stockReportHandler(
     };
   }
 
-  // ── 3. Audit log ──────────────────────────────────────────────────────────
+  // 3. Audit log
   await systemLog({
     action: 'ETIMS_STOCK_REPORT_GENERATED',
     component: LogComponent.INVENTORY,

@@ -35,7 +35,7 @@ async function statsHandler(...args: unknown[]): Promise<Response> {
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
   // Active = ACTIVE or PAUSED (in-progress) plans.
-  // Task 12-d: DEFAULTED plan balances are also tracked separately — they
+  // Task 12-d: DEFAULTED plan balances are also tracked separately - they
   // are the most at-risk exposure and were previously invisible on the
   // dashboard (Outstanding counted only ACTIVE/PAUSED plans).
   const [activePlans, pendingPlans, completedThisMonthRows, overduePlans, defaultedPlans] = await Promise.all([
@@ -81,14 +81,14 @@ async function statsHandler(...args: unknown[]): Promise<Response> {
     0,
   );
 
-  // Task 12-d: DEFAULTED exposure — visible separately so the dashboard can
+  // Task 12-d: DEFAULTED exposure - visible separately so the dashboard can
   // surface at-risk balances that the Outstanding card intentionally excludes.
   const totalDefaultedOutstanding = defaultedPlans.reduce(
     (sum, p) => sum + toNumber(p.balance),
     0,
   );
 
-  // Collected this month = sum of (each installment's amountPaid) — this is
+  // Collected this month = sum of (each installment's amountPaid) - this is
   // a reasonable lower bound for cash collected against plans this month.
   // (We could refine further with a payment ledger, but this is accurate
   // enough for dashboard stats.)

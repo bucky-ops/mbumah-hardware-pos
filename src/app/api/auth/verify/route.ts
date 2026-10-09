@@ -1,4 +1,4 @@
-// GET /api/auth/verify — Validate a Bearer token and return the session data.
+// GET /api/auth/verify - Validate a Bearer token and return the session data.
 // Used by the middleware and other services that need to verify tokens
 // without duplicating the DB lookup logic.
 

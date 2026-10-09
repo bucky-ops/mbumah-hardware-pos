@@ -1,17 +1,17 @@
 'use client';
 
 /**
- * Debt Management Tab — overdue customer board + reminder pipeline controls.
+ * Debt Management Tab - overdue customer board + reminder pipeline controls.
  *
  * Three sub-sections (tabs):
- *   1. Overdue Board  — customers with overdue debts, sorted by aging bucket
+ *   1. Overdue Board - customers with overdue debts, sorted by aging bucket
  *                       (worst first) + total overdue. Shows pending-reminder
  *                       count per customer.
- *   2. Pipeline       — the two-phase reminder scheduler:
+ *   2. Pipeline - the two-phase reminder scheduler:
  *                       (a) Schedule: scan overdue debts → create PENDING rows
  *                       (b) Process:  send PENDING reminders via SMS/WA/Email
  *                       Plus a live summary of reminder status counts.
- *   3. History        — full DebtReminder audit log with filters.
+ *   3. History - full DebtReminder audit log with filters.
  */
 
 import React, { useState, useMemo } from 'react';
@@ -52,7 +52,7 @@ import {
 } from '@/components/ui/collapsible';
 import { Progress } from '@/components/ui/progress';
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// Constants
 
 const SENIOR_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'];
 
@@ -142,7 +142,7 @@ const REMINDER_STATUS_CONFIG: Record<
   },
 };
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// Helpers
 
 // formatKES: canonical en-KE KES formatter imported from '@/lib/api' (task 12-d)
 
@@ -160,7 +160,7 @@ function daysSince(date: string | Date): number {
   return Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-// ── Overdue Board Section ────────────────────────────────────────────────────
+// Overdue Board Section
 
 function OverdueBoardSection({ storeId }: { storeId: string }) {
   const { data, isLoading, refetch, isFetching } = useQuery({
@@ -374,7 +374,7 @@ function OverdueCustomerCard({ customer }: { customer: OverdueCustomerItem }) {
   );
 }
 
-// ── Pipeline Section ─────────────────────────────────────────────────────────
+// Pipeline Section
 
 function PipelineSection({ storeId }: { storeId: string }) {
   const queryClient = useQueryClient();
@@ -679,7 +679,7 @@ function StatusTile({
   );
 }
 
-// ── History Section ──────────────────────────────────────────────────────────
+// History Section
 
 function HistorySection({ storeId }: { storeId: string }) {
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -843,7 +843,7 @@ function HistorySection({ storeId }: { storeId: string }) {
   );
 }
 
-// ── Main Component ───────────────────────────────────────────────────────────
+// Main Component
 
 export default function DebtManagementTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);

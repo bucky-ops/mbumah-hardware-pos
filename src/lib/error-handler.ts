@@ -11,7 +11,7 @@
  *
  * The existing `AppError` family (in components/error-boundary.tsx) is re-used
  * for typed error propagation. This module adds the "last mile" of UX: turning
- * any error — network, zod, prisma, AppError, plain string — into a consistent,
+ * any error - network, zod, prisma, AppError, plain string - into a consistent,
  * actionable message for the user and a structured log entry.
  */
 
@@ -37,7 +37,7 @@ export const ERROR_CODES = {
  * the REAL HTTP status of the failed response.
  *
  * Previously `request()` threw a plain `Error(serverMessage)` and discarded
- * `response.status` — `normaliseError()` then stamped EVERY failed request
+ * `response.status` - `normaliseError()` then stamped EVERY failed request
  * as `code: UNKNOWN_ERROR, statusCode: 500`. A server-side 400 ("storeId,
  * debtLedgerId, amount, and paymentMethod are required.") reached the
  * console labelled as a 500, which is what originally misled the Kenya
@@ -56,7 +56,7 @@ export class ApiRequestError extends Error {
    * v2.12.5 (RBAC): the parsed JSON error body, when one was available.
    * Carries typed denial payloads (code / permission / requiresManagerOverride)
    * so callers can branch on machine-readable codes instead of matching
-   * message text — e.g. the POS opening the Manager Authorization modal on
+   * message text - e.g. the POS opening the Manager Authorization modal on
    * { code: 'PERMISSION_DENIED', requiresManagerOverride: true }.
    */
   readonly body?: Record<string, unknown>;
@@ -97,7 +97,7 @@ export interface NormalisedError {
 export function toErrorMessage(err: unknown): string {
   if (!err) return 'An unknown error occurred';
 
-  // AppError family — already structured
+  // AppError family - already structured
   if (err instanceof AppError) {
     return err.message;
   }
@@ -147,7 +147,7 @@ export function normaliseError(err: unknown): NormalisedError {
   if (err instanceof AppError) {
     return { message: err.message, code: err.code, statusCode: err.statusCode, details: err.details, raw: err };
   }
-  // R2 FIX: structured API errors carry the real HTTP status — surface it
+  // R2 FIX: structured API errors carry the real HTTP status - surface it
   // truthfully instead of mislabelling client errors as 500/UNKNOWN.
   if (err instanceof ApiRequestError) {
     return {
@@ -288,7 +288,7 @@ export { AppError, ValidationError, NotFoundError, UnauthorizedError, ForbiddenE
  * failures in customer-facing sheets (loyalty card, customer history, …).
  *
  * Pre-fix, a branch-scoped user opening a record that lives in ANOTHER
- * branch saw the raw API text ("Customer not found.") with a Retry button —
+ * branch saw the raw API text ("Customer not found.") with a Retry button -
  * retrying could never succeed (the record will never be visible from that
  * branch) and the wording implied a bug. This helper classifies the error:
  *

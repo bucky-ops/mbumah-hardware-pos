@@ -83,7 +83,7 @@ async function getJournalEntriesHandler(...args: unknown[]): Promise<Response> {
     _count: true,
   });
 
-  // DECIMAL SERIALIZATION GUARD (financial audit — P&L 3.8e+89 incident):
+  // DECIMAL SERIALIZATION GUARD (financial audit - P&L 3.8e+89 incident):
   // Prisma Decimal fields pass through Response.json as STRINGS (decimal.js
   // toJSON). Client-side aggregations then string-concatenate instead of
   // adding ("0" + "3800" → "03800", then "03800" + "120" → "03800120"…),

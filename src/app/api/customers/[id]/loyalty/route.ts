@@ -40,7 +40,7 @@ async function getCustomerLoyaltyHandler(
   const context = rest[0] as RouteContext;
   const customerId = (await context.params).id;
 
-  // ── Load customer (with loyalty fields) and recent transactions in parallel ──
+  // Load customer (with loyalty fields) and recent transactions in parallel
   const [customer, recentTransactions] = await Promise.all([
     db.customer.findUnique({
       where: { id: customerId },

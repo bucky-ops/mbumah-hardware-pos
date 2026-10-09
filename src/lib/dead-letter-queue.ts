@@ -1,42 +1,25 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Dead Letter Queue (Offline Sync Error Handling)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Dead Letter Queue (Offline Sync Error Handling)
 //
-// Phase 6 — Error Handling & Resilience Framework
+// Phase 6 - Error Handling & Resilience Framework
 //
 // When an external service call (SMS, Email, M-Pesa) fails after ALL retries
-// AND the circuit breaker is open, the operation is NOT silently dropped —
+// AND the circuit breaker is open, the operation is NOT silently dropped -
 // it's enqueued in the Dead Letter Queue for later retry. This ensures:
 //
-//   • No customer notification is lost — it's persisted to SQLite and will
+//   • No customer notification is lost - it's persisted to SQLite and will
 //     be retried when the service recovers.
-//   • No payment is stuck — M-Pesa STK pushes that fail get queued and
+//   • No payment is stuck - M-Pesa STK pushes that fail get queued and
 //     retried (with a fresh CheckoutRequestID) when Daraja comes back.
-//   • Full observability — every enqueued item has a status, error history,
+//   • Full observability - every enqueued item has a status, error history,
 //     and can be inspected via the admin API.
 //
-// ── Architecture ──────────────────────────────────────────────────────────────
+// Architecture
 //
-//   ┌──────────────┐    all retries     ┌──────────────┐
-//   │  API route   │ ──── failed ─────▶ │  DLQ enqueue │
-//   │  (caller)    │                    │  (this file) │
-//   └──────────────┘                    └──────┬───────┘
-//                                              │ persisted to SQLite
-//                                              ▼
-//                                     ┌─────────────────┐
-//                                     │  dead_letter_   │
-//                                     │  queue table    │
-//                                     └────────┬────────┘
-//                                              │
-//                          ┌───────────────────┼───────────────────┐
-//                          │                   │                   │
-//                          ▼                   ▼                   ▼
-//                   ┌──────────┐       ┌──────────────┐    ┌──────────┐
-//                   │ Auto-    │       │  Admin API   │    │ Metrics  │
-//                   │ processor│       │  (manual)    │    │ & logs   │
-//                   └──────────┘       └──────────────┘    └──────────┘
+//   API route (caller) -- all retries failed --> DLQ enqueue (this file)
+//     -> persisted to SQLite (dead_letter_queue table)
+//     -> Auto-processor | Admin API (manual) | Metrics & logs
 //
-// ── Integration with Phase 4 & 5 ──────────────────────────────────────────────
+// Integration with Phase 4 & 5
 //
 //   1. Caller → circuit breaker (Phase 5) → retry (Phase 4) → external service
 //   2. If circuit breaker is OPEN → CircuitOpenError → enqueue to DLQ
@@ -45,14 +28,13 @@
 //      if still OPEN → skip (wait for next cycle)
 //      if CLOSED/HALF_OPEN → attempt delivery
 //
-// ── DLQ item lifecycle ────────────────────────────────────────────────────────
+// DLQ item lifecycle
 //
 //   PENDING → RETRYING → COMPLETED (success!)
 //                     ↘ DEAD (max retries exhausted)
 //   PENDING → CANCELLED (admin action)
 //   DEAD → RETRYING (admin re-queues)
 //
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { db } from '@/lib/db';
 import { systemLog } from '@/lib/logger';
@@ -60,7 +42,7 @@ import { LogSeverity, LogComponent } from '@/lib/types';
 import { circuitBreakerRegistry } from '@/lib/circuit-breaker';
 import { normaliseError } from '@/lib/error-handler';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 /**
  * Status values for a DLQ item. Mirrors the Prisma schema comments.
@@ -69,7 +51,7 @@ export const DLQStatus = {
   PENDING: 'PENDING',
   RETRYING: 'RETRYING',
   COMPLETED: 'COMPLETED',
-  DEAD: 'CANCELLED', // Keep backwards compat — actually CANCELLED
+  DEAD: 'CANCELLED', // Keep backwards compat - actually CANCELLED
   CANCELLED: 'CANCELLED',
   EXHAUSTED: 'DEAD',   // Max retries hit
 } as const;
@@ -184,7 +166,7 @@ export type DLQHandler = (
   item: { id: string; operationType: string; targetService: string; retryCount: number },
 ) => Promise<{ success: boolean; error?: string }>;
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// Constants
 
 /** Default max retries before an item is marked DEAD. */
 const DEFAULT_MAX_RETRIES = 5;
@@ -198,16 +180,16 @@ const DLQ_RETRY_MAX_DELAY_MS = 3_600_000; // 1 hour
 /** Maximum items to process in a single auto-processor cycle. */
 const MAX_PROCESS_BATCH_SIZE = 50;
 
-// ── Dead Letter Queue Service ────────────────────────────────────────────────
+// Dead Letter Queue Service
 
 /**
  * Core DLQ service. Provides methods to:
- *   • `enqueue()`     — add a failed operation to the queue
- *   • `retryItem()`   — manually retry a specific item
- *   • `retryAll()`    — retry all PENDING items for a service
- *   • `purge()`       — remove completed/dead items
- *   • `getMetrics()`  — observability
- *   • `process()`     — auto-processor cycle (called by scheduler)
+ *   • `enqueue()` - add a failed operation to the queue
+ *   • `retryItem()` - manually retry a specific item
+ *   • `retryAll()` - retry all PENDING items for a service
+ *   • `purge()` - remove completed/dead items
+ *   • `getMetrics()` - observability
+ *   • `process()` - auto-processor cycle (called by scheduler)
  *
  * Designed as a class (not standalone functions) so it can hold the
  * handler registry and be easily mocked in tests.
@@ -215,7 +197,7 @@ const MAX_PROCESS_BATCH_SIZE = 50;
 export class DeadLetterQueueService {
   private readonly handlers = new Map<string, DLQHandler>();
 
-  // ── Handler registration ─────────────────────────────────────────────────
+  // Handler registration
 
   /**
    * Register a handler for a specific operation type. The auto-processor
@@ -235,7 +217,7 @@ export class DeadLetterQueueService {
     return this.handlers.get(operationType);
   }
 
-  // ── Enqueue ──────────────────────────────────────────────────────────────
+  // Enqueue
 
   /**
    * Enqueue a failed operation for later retry.
@@ -295,7 +277,7 @@ export class DeadLetterQueueService {
     return item.id;
   }
 
-  // ── Manual retry ─────────────────────────────────────────────────────────
+  // Manual retry
 
   /**
    * Manually retry a specific DLQ item by ID. Resets the retry count
@@ -373,7 +355,7 @@ export class DeadLetterQueueService {
     return result.count;
   }
 
-  // ── Cancel ───────────────────────────────────────────────────────────────
+  // Cancel
 
   /**
    * Cancel a specific DLQ item. It will not be retried.
@@ -394,7 +376,7 @@ export class DeadLetterQueueService {
     return true;
   }
 
-  // ── Purge ────────────────────────────────────────────────────────────────
+  // Purge
 
   /**
    * Remove completed, cancelled, or dead items older than `olderThanMs`.
@@ -435,7 +417,7 @@ export class DeadLetterQueueService {
     return result.count;
   }
 
-  // ── List ─────────────────────────────────────────────────────────────────
+  // List
 
   /**
    * List DLQ items with filtering and pagination.
@@ -477,7 +459,7 @@ export class DeadLetterQueueService {
     return db.deadLetterQueue.findUnique({ where: { id } });
   }
 
-  // ── Metrics ──────────────────────────────────────────────────────────────
+  // Metrics
 
   /**
    * Get a metrics snapshot of the current DLQ state.
@@ -533,7 +515,7 @@ export class DeadLetterQueueService {
     };
   }
 
-  // ── Auto-processor ───────────────────────────────────────────────────────
+  // Auto-processor
 
   /**
    * Run one cycle of the auto-processor. Finds processable items (PENDING
@@ -541,7 +523,7 @@ export class DeadLetterQueueService {
    * attempts delivery.
    *
    * This method is idempotent and safe to call concurrently (the RETRYING
-   * status acts as a lock — only one processor cycle handles an item at a
+   * status acts as a lock - only one processor cycle handles an item at a
    * time).
    *
    * @param options.maxItems - Max items to process in this cycle. Default: 50.
@@ -551,7 +533,7 @@ export class DeadLetterQueueService {
     const maxItems = Math.min(options.maxItems ?? MAX_PROCESS_BATCH_SIZE, MAX_PROCESS_BATCH_SIZE);
     const result: RetryResult = { processed: 0, succeeded: 0, failed: 0, died: 0, skipped: 0 };
 
-    // ── Find processable items ───────────────────────────────────────────
+    // Find processable items
     const items = await db.deadLetterQueue.findMany({
       where: {
         status: { in: ['PENDING', 'RETRYING'] },
@@ -564,7 +546,7 @@ export class DeadLetterQueueService {
     for (const item of items) {
       result.processed++;
 
-      // ── Check circuit breaker state ───────────────────────────────────
+      // Check circuit breaker state
       // If the circuit for this service is OPEN, skip the item (it will
       // be retried on the next cycle when the breaker transitions to
       // HALF_OPEN or CLOSED). This prevents wasting a retry attempt on
@@ -585,7 +567,7 @@ export class DeadLetterQueueService {
         }
       }
 
-      // ── Mark as RETRYING (acts as a lock) ─────────────────────────────
+      // Mark as RETRYING (acts as a lock)
       await db.deadLetterQueue.update({
         where: { id: item.id },
         data: {
@@ -594,10 +576,10 @@ export class DeadLetterQueueService {
         },
       });
 
-      // ── Attempt delivery ──────────────────────────────────────────────
+      // Attempt delivery
       const handler = this.handlers.get(item.operationType);
       if (!handler) {
-        // No handler registered — mark as DEAD (we can't retry it).
+        // No handler registered - mark as DEAD (we can't retry it).
         await db.deadLetterQueue.update({
           where: { id: item.id },
           data: {
@@ -619,7 +601,7 @@ export class DeadLetterQueueService {
         });
 
         if (retryResult.success) {
-          // ── Success! Mark as COMPLETED. ──────────────────────────────
+          // Success! Mark as COMPLETED.
           await db.deadLetterQueue.update({
             where: { id: item.id },
             data: {
@@ -646,7 +628,7 @@ export class DeadLetterQueueService {
             },
           }).catch(() => {});
         } else {
-          // ── Handler returned failure. Re-queue or mark DEAD. ─────────
+          // Handler returned failure. Re-queue or mark DEAD.
           await this.handleRetryFailure(item, retryResult.error ?? 'Unknown error');
           const newRetryCount = item.retryCount + 1;
           if (newRetryCount >= item.maxRetries) {
@@ -703,7 +685,7 @@ export class DeadLetterQueueService {
     const newRetryCount = item.retryCount + 1;
 
     if (newRetryCount >= item.maxRetries) {
-      // ── Max retries exhausted → mark as DEAD ──────────────────────────
+      // Max retries exhausted → mark as DEAD
       await db.deadLetterQueue.update({
         where: { id: item.id },
         data: {
@@ -731,7 +713,7 @@ export class DeadLetterQueueService {
         },
       }).catch(() => {});
     } else {
-      // ── Re-queue with exponential backoff ──────────────────────────────
+      // Re-queue with exponential backoff
       const delay = computeDLQRetryDelay(newRetryCount);
       const nextRetryAt = new Date(Date.now() + delay);
 
@@ -748,7 +730,7 @@ export class DeadLetterQueueService {
   }
 }
 
-// ── Exponential backoff for DLQ retries ──────────────────────────────────────
+// Exponential backoff for DLQ retries
 
 /**
  * Compute the delay before the next DLQ retry attempt using exponential
@@ -770,7 +752,7 @@ export function computeDLQRetryDelay(retryCount: number): number {
   return Math.max(0, Math.floor(Math.random() * clamped));
 }
 
-// ── Singleton ────────────────────────────────────────────────────────────────
+// Singleton
 
 /**
  * Default DLQ service instance. Import this in API routes and the scheduler.

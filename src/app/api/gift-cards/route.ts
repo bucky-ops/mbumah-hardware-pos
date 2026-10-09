@@ -141,9 +141,9 @@ async function createGiftCardHandler(...args: unknown[]): Promise<Response> {
   const isAutoAdjust = autoAdjustItems ?? false;
   const isVisible = isAutoAdjust ? initialBalance > 0 : true;
 
-  // ── F5-4 remediation ────────────────────────────────────────────────────
+  // F5-4 remediation
   // Issuance previously minted spendable value with NO tender record and NO
-  // journal — the Gift Card Liability (2300) account was credited only at
+  // journal - the Gift Card Liability (2300) account was credited only at
   // redemption, structurally driving it negative while the card spent real
   // money. Now the card, the liability posting (recordGiftCardIssuance: Dr
   // Cash/M-Pesa, Cr Gift Card Liability) and a cash-drawer tender entry are
@@ -176,7 +176,7 @@ async function createGiftCardHandler(...args: unknown[]): Promise<Response> {
       },
     });
 
-    // Post the liability (and tender debit) — never call on zero-value cards.
+    // Post the liability (and tender debit) - never call on zero-value cards.
     if (Number(initialBalance) > 0) {
       const store = await tx.store.findUnique({
         where: { id: storeId },
@@ -194,7 +194,7 @@ async function createGiftCardHandler(...args: unknown[]): Promise<Response> {
         cashierId: session?.userId || 'system', // 'system' actor seeded in prisma/seed.ts
       });
 
-      // Cash-drawer tender entry — SUM-derived balance (R6 pattern).
+      // Cash-drawer tender entry - SUM-derived balance (R6 pattern).
       const drawerAgg = await tx.cashDrawerLog.aggregate({
         where: { storeId },
         _sum: { amount: true },

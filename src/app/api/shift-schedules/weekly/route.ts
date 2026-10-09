@@ -2,7 +2,7 @@
 //
 // Returns expanded schedules for the given week (Sun → Sat). Each day in the
 // week is represented as an object with the calendar date and the array of
-// schedules that apply on that day — both recurring schedules (expanded by
+// schedules that apply on that day - both recurring schedules (expanded by
 // dayOfWeek) and one-off schedules whose specificDate falls in the week.
 //
 // Response shape:
@@ -95,7 +95,7 @@ async function weeklyHandler(...args: unknown[]): Promise<Response> {
     const daySchedules: WeeklySchedule[] = [];
 
     for (const s of schedules) {
-      // Skip paused schedules — they don't appear on the weekly grid.
+      // Skip paused schedules - they don't appear on the weekly grid.
       if (s.status === 'PAUSED') continue;
 
       let applies = false;

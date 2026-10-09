@@ -1,8 +1,8 @@
-// POST /api/gift-cards/redeem — redeem a gift card BY CODE (no card ID needed)
+// POST /api/gift-cards/redeem - redeem a gift card BY CODE (no card ID needed)
 //
 // WHY THIS ROUTE EXISTS: the POS "Pay with Gift Card" dialog has always
 // called `giftCardsApi.redeemByCode({ code, storeId, amount })`, but that
-// method — and any endpoint behind it — was never implemented. The click
+// method - and any endpoint behind it - was never implemented. The click
 // threw "giftCardsApi.redeemByCode is not a function" (minified in
 // production as "u.giftCardsApi.redeemByCode is not a function"), so gift
 // card payment at the till was completely broken. This route implements the
@@ -49,7 +49,7 @@ async function redeemGiftCardByCodeHandler(...args: unknown[]): Promise<Response
   const request = args[0] as NextRequest;
   const body = (await request.json()) as RedeemByCodeBody;
 
-  // ── 1. Validate input ───────────────────────────────────────────────────
+  // 1. Validate input
   const rawCode = typeof body.code === 'string' ? body.code.trim() : '';
   if (!rawCode) {
     return Response.json(
@@ -67,7 +67,7 @@ async function redeemGiftCardByCodeHandler(...args: unknown[]): Promise<Response
   }
 
   // The POS dialog uppercases the input; still resolve case-insensitively
-  // WITHOUT Prisma's Postgres-only `mode: 'insensitive'` — this repo runs a
+  // WITHOUT Prisma's Postgres-only `mode: 'insensitive'` - this repo runs a
   // dual provider (Postgres prod / SQLite local), so we match candidate
   // casings with a plain `in` filter instead.
   const candidates = Array.from(new Set([rawCode, rawCode.toUpperCase(), rawCode.toLowerCase()]));
@@ -82,7 +82,7 @@ async function redeemGiftCardByCodeHandler(...args: unknown[]): Promise<Response
     );
   }
 
-  // ── 2. Store scoping — a card redeems only where it was issued ─────────
+  // 2. Store scoping - a card redeems only where it was issued
   const requestedStoreId = typeof body.storeId === 'string' ? body.storeId : '';
   if (requestedStoreId && giftCard.storeId !== requestedStoreId) {
     return Response.json(
@@ -91,7 +91,7 @@ async function redeemGiftCardByCodeHandler(...args: unknown[]): Promise<Response
     );
   }
 
-  // ── 3. Status + expiry gates (same policy as the [id] route) ───────────
+  // 3. Status + expiry gates (same policy as the [id] route)
   if (giftCard.status !== 'ACTIVE' && giftCard.status !== 'PARTIALLY_REDEEMED') {
     return Response.json(
       { success: false, error: `Cannot redeem gift card with status "${giftCard.status}". Only ACTIVE or PARTIALLY_REDEEMED cards can be redeemed.` },
@@ -118,7 +118,7 @@ async function redeemGiftCardByCodeHandler(...args: unknown[]): Promise<Response
     );
   }
 
-  // ── 4. "Apply up to" capping ────────────────────────────────────────────
+  // 4. "Apply up to" capping
   // requested = body.amount ?? full remaining balance; applied = min(requested, balance).
   // Garbage/NaN amounts (toDec → 0) fall back to the full balance so a
   // malformed payload can never brick a redemption at the till.
@@ -139,7 +139,7 @@ async function redeemGiftCardByCodeHandler(...args: unknown[]): Promise<Response
   const transactionId = typeof body.transactionId === 'string' ? body.transactionId : null;
   const notes = typeof body.notes === 'string' ? body.notes : null;
 
-  // ── 5. ATOMIC balance claim (identical double-spend guard) ─────────────
+  // 5. ATOMIC balance claim (identical double-spend guard)
   let redemption;
   let updatedGiftCard;
   try {
@@ -233,7 +233,7 @@ async function redeemGiftCardByCodeHandler(...args: unknown[]): Promise<Response
     data: {
       giftCard: updatedGiftCard,
       redemption,
-      // The POS dialog applies this as a cart discount — it is the capped
+      // The POS dialog applies this as a cart discount - it is the capped
       // applied amount, NOT the requested amount.
       discountAmount: redeemAmount,
       remainingBalance: newBalance,

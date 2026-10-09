@@ -32,7 +32,7 @@ interface HourlyHeatmapProps {
 
 const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-// Tailwind-compatible bg classes by intensity (0–4).
+// Tailwind-compatible bg classes by intensity (0-4).
 // We use emerald for "hot" intensity, fading to muted for cold cells.
 const INTENSITY_BG: Record<0 | 1 | 2 | 3 | 4, string> = {
   0: 'bg-muted/30',

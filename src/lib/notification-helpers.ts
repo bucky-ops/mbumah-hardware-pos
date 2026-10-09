@@ -1,20 +1,18 @@
-// ════════════════════════════════════════════════════════════════════════════
 // src/lib/notification-helpers.ts
-// ════════════════════════════════════════════════════════════════════════════
 //
-// Unified notification service — sends messages via SMS (Twilio), Email
+// Unified notification service - sends messages via SMS (Twilio), Email
 // (Resend), and in-app (DB-persisted). Conforms to the INotificationService
 // interface so the transport layer can be swapped or mocked.
 //
 // Design decisions:
 //   • Provider credentials come from env vars (TWILIO_*, RESEND_*). If a
 //     provider isn't configured, the corresponding send method logs a warning
-//     and returns { success: false, simulated: true } — an HONEST failure
+//     and returns { success: false, simulated: true } - an HONEST failure
 //     (v2.8.0 VF-1). The previous fake-success (sim_ message ids) made the UI
 //     report "Sent" for messages that were NEVER delivered, which is exactly
 //     how the "vouchers are not sending" client report happened. Callers
 //     (processPendingDebtReminders, the debt cron, the DLQ handlers) already
-//     handle success:false by marking rows FAILED, so nothing crashes — the
+//     handle success:false by marking rows FAILED, so nothing crashes - the
 //     dashboards now just tell the truth.
 //   • Env-name aliases: the self-hosting docs (.env.example) advertise
 //     TWILIO_PHONE_NUMBER while the code historically read TWILIO_FROM_PHONE
@@ -31,7 +29,7 @@ import { db } from '@/lib/db';
 import { systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
-// ── Enum-like constants (mirror NotificationPreference schema) ───────────────
+// Enum-like constants (mirror NotificationPreference schema)
 
 export const NotificationChannel = {
   EMAIL: 'EMAIL',
@@ -41,7 +39,7 @@ export const NotificationChannel = {
 } as const;
 export type NotificationChannel = (typeof NotificationChannel)[keyof typeof NotificationChannel];
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 export interface SendResult {
   success: boolean;
@@ -59,7 +57,7 @@ export interface NotificationPreferenceRow {
   isEnabled: boolean;
 }
 
-// ── Interface (the "port") ───────────────────────────────────────────────────
+// Interface (the "port")
 
 /**
  * Abstract notification service. API routes and the debt-reminder scheduler
@@ -98,11 +96,11 @@ export interface INotificationService {
   ): Promise<boolean>;
 }
 
-// ── Provider configuration helpers ───────────────────────────────────────────
+// Provider configuration helpers
 
 /**
  * Twilio credentials. When TWILIO_ACCOUNT_SID/AUTH_TOKEN/FROM are unset,
- * SMS/WhatsApp sends short-circuit with an honest simulated:false result —
+ * SMS/WhatsApp sends short-circuit with an honest simulated:false result -
  * the UI must never claim "Sent" for a message that never left the building.
  *
  * FROM-number aliases (VF-1, v2.8.0): .env.example documents
@@ -166,7 +164,7 @@ function normalizeKePhone(phone: string): string | null {
   return null;
 }
 
-// ── Concrete Implementation ──────────────────────────────────────────────────
+// Concrete Implementation
 
 /**
  * Concrete notification service. Sends via Twilio (SMS/WhatsApp) and Resend
@@ -178,7 +176,7 @@ export class NotificationService implements INotificationService {
    * Send an SMS via Twilio.
    * Returns { success: true, providerMessageId } on success.
    * If Twilio isn't configured, returns an HONEST failure
-   * ({ success: false, simulated: true }) — VF-1 (v2.8.0). The old fake
+   * ({ success: false, simulated: true }) - VF-1 (v2.8.0). The old fake
    * success (sim_ ids) made the UI report "Sent" for undelivered messages.
    */
   async sendSms(to: string, message: string): Promise<SendResult> {
@@ -239,7 +237,7 @@ export class NotificationService implements INotificationService {
    * Send an email via Resend.
    */
   async sendEmail(to: string, subject: string, html: string): Promise<SendResult> {
-    // VF-1 (v2.8.0): honest failure when Resend is unconfigured — the old
+    // VF-1 (v2.8.0): honest failure when Resend is unconfigured - the old
     // sim_ fake success let the UI claim "Sent" with no email ever leaving.
     if (!isResendConfigured()) {
       console.warn(
@@ -424,7 +422,7 @@ export class NotificationService implements INotificationService {
   }
 }
 
-// ── Singleton instance ───────────────────────────────────────────────────────
+// Singleton instance
 
 /**
  * Default singleton. Import in API routes / schedulers:
@@ -433,7 +431,7 @@ export class NotificationService implements INotificationService {
  */
 export const notificationService: INotificationService = new NotificationService();
 
-// ── Higher-level orchestration: process pending DebtReminders ────────────────
+// Higher-level orchestration: process pending DebtReminders
 
 /**
  * Process all PENDING DebtReminder rows for a store: send the message via the

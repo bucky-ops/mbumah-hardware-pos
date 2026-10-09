@@ -1,9 +1,7 @@
-# ============================================================================
-# AUTOMATIC RELEASE — tag + GitHub Release on every version bump to main
-# ============================================================================
+# AUTOMATIC RELEASE - tag + GitHub Release on every version bump to main
 #
 # WHY THIS EXISTS: RELEASE_FLOW.md step 4 (tag vX.Y.Z + publish the GitHub
-# Release) was a MANUAL step and it was forgotten TWICE — v2.5.8 and v2.6.1
+# Release) was a MANUAL step and it was forgotten TWICE - v2.5.8 and v2.6.1
 # both shipped to production before anyone remembered to cut the release.
 #
 # GUARANTEE: after this workflow, the rule "every version that reaches main
@@ -17,7 +15,6 @@
 #
 # The release notes are generated from the commits since the previous tag,
 # so the release page always lists exactly what shipped in that version.
-# ============================================================================
 name: Release
 
 on:
@@ -37,7 +34,7 @@ jobs:
     name: Tag & publish release
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (full history — needed to resolve previous tag)
+      - name: Checkout (full history - needed to resolve previous tag)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0

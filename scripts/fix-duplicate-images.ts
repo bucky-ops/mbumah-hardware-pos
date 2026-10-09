@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 
-// ── v2.12.1 HOTFIX — owner-run data fix: duplicate nail product images ──────
+// v2.12.1 HOTFIX - owner-run data fix: duplicate nail product images
 // Bug: several nail products were seeded with the SAME imageUrl, so the POS
 // grid showed the identical photo on every nail row. Clearing `imageUrl`
 // makes those cards fall back to the category image instead.
@@ -16,7 +16,7 @@ import { PrismaClient } from '@prisma/client';
 //   DATABASE_URL="postgres://…" npx tsx scripts/fix-duplicate-images.ts
 //   (add --dry-run to preview without writing)
 
-// AUDIT FIX (Finding 1.2 — no hardcoded developer path):
+// AUDIT FIX (Finding 1.2 - no hardcoded developer path):
 // The datasource URL resolves from the environment (DATABASE_URL), with a
 // portable repo-relative fallback for local SQLite use.
 const prisma = new PrismaClient({

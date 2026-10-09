@@ -1,4 +1,4 @@
-// GET /api/cron/nightly — combined nightly cron dispatcher.
+// GET /api/cron/nightly - combined nightly cron dispatcher.
 //
 // DEPLOY-INCIDENT FIX (2026-09, PR #15 follow-up): see
 // src/app/api/cron/hourly/route.ts for the full incident write-up (Vercel
@@ -6,11 +6,11 @@
 // This dispatcher consolidates the two nightly jobs into ONE scheduled
 // endpoint:
 //
-//   /api/cron/reconciliation (was "30 2 * * *") ─┐
-//   /api/cron/retention      (was "0 3 * * *")  ─┴─> /api/cron/nightly "30 2 * * *"
+//   /api/cron/reconciliation (was "30 2 * * *") -> /api/cron/nightly "30 2 * * *"
+//   /api/cron/retention      (was "0 3 * * *")  -> /api/cron/nightly "30 2 * * *"
 //
 // Both original routes remain live for manual/external triggers. Retention
-// shifts from 03:00 to 02:30 UTC — acceptable: reconciliation aggregates
+// shifts from 03:00 to 02:30 UTC - acceptable: reconciliation aggregates
 // financial summaries while retention purges EXPIRED records (retention +
 // grace period, e.g. years-old rows), and each category is individually
 // try/caught, so the overlap does not produce meaningful contention.

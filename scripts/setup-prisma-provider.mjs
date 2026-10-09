@@ -1,7 +1,5 @@
 #!/usr/bin/env node
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Prisma provider auto-detection
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Prisma provider auto-detection
 //
 // This script runs BEFORE `prisma generate` (in both `postinstall` and
 // `vercel-build`) to set the correct `provider` in `prisma/schema.prisma`
@@ -25,13 +23,12 @@
 // SQLITE @db.Decimal STRIPPING (Phase 2 addition):
 //   The committed schema uses PostgreSQL-specific `@db.Decimal(12, 2)` type
 //   modifiers for monetary / quantity / rate fields (KRA eTIMS compliance).
-//   SQLite does NOT understand `@db.Decimal(p, s)` — Prisma validation fails
+//   SQLite does NOT understand `@db.Decimal(p, s)` - Prisma validation fails
 //   with "This line is not a valid field or attribute definition" on every
 //   such field. This script strips the `@db.Decimal(N, M)` attribute (keeping
 //   the base `Decimal` type, which SQLite stores as REAL/TEXT) when the
 //   provider is sqlite. The committed schema always retains the full
 //   `@db.Decimal(...)` for PostgreSQL production.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -63,8 +60,8 @@ if (databaseUrl.startsWith('postgresql:') || databaseUrl.startsWith('postgres:')
 
 let schema = readFileSync(schemaPath, 'utf8');
 
-// ── Strip @db.Decimal(N, M) for SQLite ──────────────────────────────────────
-// SQLite doesn't support native Decimal types — Prisma's `Decimal` (without
+// Strip @db.Decimal(N, M) for SQLite
+// SQLite doesn't support native Decimal types - Prisma's `Decimal` (without
 // the @db modifier) stores as REAL. We strip the `@db.Decimal(N, M)` attribute
 // (and any immediately preceding redundant whitespace) so SQLite generation
 // succeeds. The base `Decimal` type is preserved.

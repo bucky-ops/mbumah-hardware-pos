@@ -5,14 +5,14 @@
 //
 // Task 12-d (debt-plan audit) changes:
 //   - The status check + update are now a single ATOMIC conditional
-//     `updateMany({ where: { id, status: 'PENDING_APPROVAL' } })` — two
+//     `updateMany({ where: { id, status: 'PENDING_APPROVAL' } })` - two
 //     concurrent approvals could previously both pass the pre-check and both
 //     write, the second silently overwriting the first approver's record.
 //   - `approvedAt` is now stamped alongside approvedById (schema migration
 //     20260909120000_add_plan_approved_at) so the segregation-of-duties
 //     trail records WHO and WHEN.
 //   - The response is serialized through the shared `serializePlanRow`
-//     helper — this route previously returned the raw Prisma row with
+//     helper - this route previously returned the raw Prisma row with
 //     unserialized Decimal fields (JSON.stringify emits those as strings,
 //     which broke numeric consumers of the response).
 
@@ -55,7 +55,7 @@ async function approvePlanHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // AUDIT REMEDIATION (F9-4): segregation of duties — the requester can never
+  // AUDIT REMEDIATION (F9-4): segregation of duties - the requester can never
   // be the approver. DebtPaymentPlan.createdById is the user who raised the
   // plan; block self-approval with 409 before any state change.
   if (existing.createdById === session.userId) {

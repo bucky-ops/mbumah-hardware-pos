@@ -54,7 +54,7 @@ import { MessagePreviewDialog } from '@/components/documents/message-preview-dia
 import { generateDocumentPdf, buildDocumentFileName } from '@/lib/document-pdf';
 
 
-// ─── Helpers ─────────────────────────────────────────────
+// Helpers
 
 function getStatusBadge(status: string) {
   switch (status) {
@@ -135,7 +135,7 @@ function DeliveryTimeline({ status }: { status: string }) {
   );
 }
 
-// ─── Item type for create form ───────────────────────────
+// Item type for create form
 
 interface DeliveryFormItem {
   productName: string;
@@ -151,7 +151,7 @@ const EMPTY_ITEM: DeliveryFormItem = {
   notes: '',
 };
 
-// ─── Main Component ──────────────────────────────────────
+// Main Component
 
 export default function DeliveryNotesTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
@@ -201,7 +201,7 @@ export default function DeliveryNotesTab() {
   const [formItems, setFormItems] = useState<DeliveryFormItem[]>([{ ...EMPTY_ITEM }]);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  // ─── Queries ─────────────────────────────────────────
+  // Queries
 
   const { data: notesData, isLoading } = useQuery({
     queryKey: ['delivery-notes', currentStoreId, statusFilter],
@@ -218,7 +218,7 @@ export default function DeliveryNotesTab() {
     enabled: !!selectedNote,
   });
 
-  // ─── Mutations ───────────────────────────────────────
+  // Mutations
 
   const createMutation = useMutation({
     mutationFn: deliveryNotesApi.create,
@@ -234,7 +234,7 @@ export default function DeliveryNotesTab() {
     },
   });
 
-  // v2.8.0: hard-delete mutation (client request — remove a finished delivery
+  // v2.8.0: hard-delete mutation (client request - remove a finished delivery
   // note, with confirmation). Role-gated server-side.
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deliveryNotesApi.remove(id),
@@ -265,7 +265,7 @@ export default function DeliveryNotesTab() {
     },
   });
 
-  // ─── Data ────────────────────────────────────────────
+  // Data
 
   const deliveryNotes: DeliveryNoteItem[] = useMemo(() => {
     const raw = Array.isArray(notesData?.data) ? notesData.data : [];
@@ -285,7 +285,7 @@ export default function DeliveryNotesTab() {
 
   // v2.10.0: digital receipt viewer (opens from the QR / "View receipt")
   const [receiptViewerOpen, setReceiptViewerOpen] = useState(false);
-  // v2.10.0: map the loaded note into the shared digital view — the SAME
+  // v2.10.0: map the loaded note into the shared digital view - the SAME
   // layout the public /r/<deliveryNumber> page renders for scanned QRs.
   const viewerDoc = useMemo(() => {
     if (!noteDetail) return null;
@@ -324,7 +324,7 @@ export default function DeliveryNotesTab() {
     };
   }, [notesData]);
 
-  // ─── Form helpers ────────────────────────────────────
+  // Form helpers
 
   function resetCreateForm() {
     setFormCustomerName('');
@@ -418,7 +418,7 @@ export default function DeliveryNotesTab() {
     });
   }
 
-  // SMS twin of handleSendWhatsApp — v2.8.0: enlarged, scrollable output
+  // SMS twin of handleSendWhatsApp - v2.8.0: enlarged, scrollable output
   // preview (same visibility fix as WhatsApp) before opening the sms: link.
   function handleSendSms(note: DeliveryNoteItem) {
     const phone = prompt('Enter SMS phone number:', note.customerPhone || '') || '';
@@ -448,7 +448,7 @@ export default function DeliveryNotesTab() {
     updateMutation.mutate({ id, data: { status: newStatus } });
   }
 
-  // Print a delivery note — fetches detail (with items) if needed, then opens a
+  // Print a delivery note - fetches detail (with items) if needed, then opens a
   // print-friendly window. Works for both the row-level print button and the
   // view-dialog print button.
   // Task 35-b: branded delivery note (accent band + logo + QR + thank-you).
@@ -514,7 +514,7 @@ export default function DeliveryNotesTab() {
           <tbody>${rows || '<tr><td colspan="5" class="text-center muted">No items</td></tr>'}</tbody>
         </table>
       `,
-      // Delivery notes move goods, not money — the totals block reports the
+      // Delivery notes move goods, not money - the totals block reports the
       // consignment size instead of inventing amounts.
       totalsHtml: `
         <div class="totals">
@@ -564,7 +564,7 @@ export default function DeliveryNotesTab() {
     }
   }
 
-  // ─── Loading skeleton ────────────────────────────────
+  // Loading skeleton
 
   if (isLoading) {
     return (
@@ -580,7 +580,7 @@ export default function DeliveryNotesTab() {
     );
   }
 
-  // ─── Render ──────────────────────────────────────────
+  // Render
 
   return (
     <div className="space-y-4 p-4">

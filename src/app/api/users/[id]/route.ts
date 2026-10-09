@@ -2,11 +2,11 @@
 //
 // EMPLOYEE-CRUD FIX (2026-09-10): until now /api/users only exposed list +
 // create. The Admin tab's "Edit user" and "Deactivate user" buttons showed
-// success toasts but NEVER called the server — edits were silently lost and
+// success toasts but NEVER called the server - edits were silently lost and
 // deactivated users stayed active. This route completes the DML surface:
-//   GET    — one user (never returns passwordHash)
-//   PATCH  — update name / phone / role / isActive / password / store reset
-//   DELETE — SOFT delete (isActive=false). Hard deletes are not offered:
+//   GET - one user (never returns passwordHash)
+//   PATCH - update name / phone / role / isActive / password / store reset
+//   DELETE - SOFT delete (isActive=false). Hard deletes are not offered:
 //            sales, journal entries and audit logs reference users forever.
 //
 // Security model (mirrors /api/users POST):
@@ -24,7 +24,7 @@ import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { requireAuth, recordPermissionDenied, noteDeniedAndMaybeLock, type AuthSession } from '@/lib/auth';
-// v2.12.2 (PR B — RBAC): feature-level role-management gate.
+// v2.12.2 (PR B - RBAC): feature-level role-management gate.
 import { hasFeaturePermission, PERMISSION_DENIED_MESSAGES } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
@@ -77,7 +77,7 @@ async function loadAuthorizedTarget(
   return { user: user as never };
 }
 
-// ── GET: user detail (never leaks passwordHash) ──────────────────────────────
+// GET: user detail (never leaks passwordHash)
 async function getUserHandler(
   request: NextRequest,
   session: AuthSession,
@@ -89,7 +89,7 @@ async function getUserHandler(
   return Response.json({ success: true, data: result.user });
 }
 
-// ── PATCH: update user ───────────────────────────────────────────────────────
+// PATCH: update user
 async function updateUserHandler(
   request: NextRequest,
   session: AuthSession,
@@ -124,10 +124,10 @@ async function updateUserHandler(
   if ('error' in result) return result.error;
   const target = result.user;
 
-  // ── Segregation of duties on role changes (mirrors POST /api/users) ──
+  // Segregation of duties on role changes (mirrors POST /api/users)
   if (role !== undefined && role !== target.role) {
-    // v2.12.2 (PR B — RBAC): role CHANGES are gated to
-    // 'settings.roles.manage' — SUPER_ADMIN only. BEHAVIOUR CHANGE
+    // v2.12.2 (PR B - RBAC): role CHANGES are gated to
+    // 'settings.roles.manage' - SUPER_ADMIN only. BEHAVIOUR CHANGE
     // (deliberate, security release): STORE_OWNER can no longer change
     // roles; denials are durably recorded and feed the abuse lockout.
     if (!hasFeaturePermission(session.role, 'settings.roles.manage')) {
@@ -169,12 +169,12 @@ async function updateUserHandler(
     }
   }
 
-  // ── Self-deactivation guard ──
+  // Self-deactivation guard
   if (isActive === false && target.id === session.userId) {
     return Response.json({ success: false, error: 'You cannot deactivate your own account.' }, { status: 409 });
   }
 
-  // ── Last-active-SUPER_ADMIN guard on deactivation and demotion ──
+  // Last-active-SUPER_ADMIN guard on deactivation and demotion
   if ((isActive === false || (role !== undefined && role !== 'SUPER_ADMIN')) && target.role === 'SUPER_ADMIN' && target.isActive) {
     const activeSuperAdmins = await db.user.count({
       where: { role: 'SUPER_ADMIN', isActive: true, organizationId: target.organizationId },
@@ -229,7 +229,7 @@ async function updateUserHandler(
   return Response.json({ success: true, data: updated });
 }
 
-// ── DELETE: soft delete (deactivate) — history keeps referring to this row ──
+// DELETE: soft delete (deactivate) - history keeps referring to this row
 async function deactivateUserHandler(
   request: NextRequest,
   session: AuthSession,

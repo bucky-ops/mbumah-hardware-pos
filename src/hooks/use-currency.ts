@@ -1,8 +1,6 @@
 'use client';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — useCurrency hook
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - useCurrency hook
 //
 // Single entry point for currency-aware display formatting throughout the POS.
 // Subscribes to the `activeCurrency` field of `useAppStore`, so any component
@@ -10,7 +8,6 @@
 // via the CurrencySwitcher dropdown.
 //
 // USAGE
-// ─────
 //   const { currency, format, convert, switchCurrency } = useCurrency();
 //
 //   <span>{format(1234.5)}</span>            // "Ksh 1,234.50" or "$ 8.13"
@@ -18,13 +15,11 @@
 //   <button onClick={() => switchCurrency('UGX')}>Switch to UGX</button>
 //
 // IMPORTANT
-// ─────────
 // • All amounts are DISPLAY-ONLY conversions using static exchange rates.
 //   Financial ledger postings / tax computation must use the `Money` class
 //   with KES as the canonical accounting currency.
 // • When `activeCurrency === 'KES'` (the default), `format()` is a pure
 //   formatter (no conversion), so existing KES amounts render unchanged.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useMemo } from 'react';
 import { useAppStore } from '@/lib/stores';
@@ -63,7 +58,7 @@ export function useCurrency(): UseCurrencyReturn {
 
   const format = useCallback(
     (amount: number | string | null | undefined, fromCurrency: CurrencyCode = 'KES') => {
-      // If from === active, no conversion needed — just format.
+      // If from === active, no conversion needed - just format.
       if (fromCurrency === activeCurrency) {
         return formatCurrency(amount, activeCurrency);
       }

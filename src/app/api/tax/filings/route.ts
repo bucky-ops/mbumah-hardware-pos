@@ -1,12 +1,12 @@
 // GET/POST /api/tax/filings
 //
 // AUDIT FIX (Task 3-f): POST previously persisted client-supplied totalSales /
-// totalTax with NO server verification — a caller could file any figures it
+// totalTax with NO server verification - a caller could file any figures it
 // liked. The handler now recomputes the period's sales + VAT directly from
 // SalesTransaction rows and stores the SERVER-computed totals as authoritative.
 // If the declared figures differ by more than DISCREPANCY_THRESHOLD (KES 0.05),
 // the response carries additive `discrepancy` + `hasDiscrepancy` + `warning`
-// fields (filing corrections are a business workflow — we flag, not fail).
+// fields (filing corrections are a business workflow - we flag, not fail).
 // Existing response consumers are unaffected (additive fields only).
 
 import { type NextRequest } from 'next/server';
@@ -119,7 +119,7 @@ async function createTaxFilingHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   // AUDIT FIX (Task 3-f): pull the authenticated session for store scoping.
   // NOTE: withSessionAuth invokes handler(...args) WITHOUT injecting the
-  // session (unlike requireStoreAccess), so the session is re-resolved here —
+  // session (unlike requireStoreAccess), so the session is re-resolved here -
   // the established in-handler pattern (gift-cards / debt / data-exports).
   const session: AuthSession | null = await getSessionFromRequest(request);
   const body = await request.json();
@@ -169,7 +169,7 @@ async function createTaxFilingHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // ── AUDIT FIX (Task 3-f): server-side recompute of declared totals ─────────
+  // AUDIT FIX (Task 3-f): server-side recompute of declared totals
   // Declared figures are parsed defensively (a garbage string previously hit
   // the Prisma Decimal column and 500'd; now it degrades to 0 + a warning).
   const declaredSalesProvided = totalSales !== undefined && totalSales !== null;
@@ -194,7 +194,7 @@ async function createTaxFilingHandler(...args: unknown[]): Promise<Response> {
 
     // Same scope as the reporting endpoints (sales-summary / daily): SALE
     // transactions that reached COMPLETED or PARTIAL payment. REFUND / VOID /
-    // PENDING rows are excluded — refund netting is a documented limitation
+    // PENDING rows are excluded - refund netting is a documented limitation
     // shared with the reports until a dedicated credit-note flow exists.
     const posAggregate = await db.salesTransaction.aggregate({
       where: {
@@ -215,7 +215,7 @@ async function createTaxFilingHandler(...args: unknown[]): Promise<Response> {
     computedTax = KES(posAggregate._sum.taxAmount || 0).round().toNumber();
     sourceTransactionCount = posAggregate._count;
   } else {
-    // Unparseable period — nothing to recompute against. Legacy behaviour
+    // Unparseable period - nothing to recompute against. Legacy behaviour
     // (store declared totals) with an explicit warning; hard-failing here
     // would break existing consumers that file non-YYYY-MM periods.
     recomputeNote = 'FILING_PERIOD_NOT_YYYY_MM — server recompute skipped; declared totals stored unverified.';
@@ -223,13 +223,13 @@ async function createTaxFilingHandler(...args: unknown[]): Promise<Response> {
 
   // Authoritative stored totals = server-computed when available. totalWht has
   // no POS data source (no withholding rows in SalesTransaction) and remains
-  // as declared — documented limitation.
+  // as declared - documented limitation.
   const storedTotalSales = computedSales !== null ? KES(computedSales).toDecimal() : declaredSales.toDecimal();
   const storedTotalTax = computedTax !== null ? KES(computedTax).toDecimal() : declaredTax.toDecimal();
 
   // Discrepancy check (per figure, > KES 0.05 → flag, don't fail). Deltas are
   // only meaningful when a server recompute exists (both figures are set or
-  // skipped together); otherwise 0 — no flag.
+  // skipped together); otherwise 0 - no flag.
   const salesDelta = computedSales !== null ? declaredSales.subtract(KES(computedSales)).toNumber() : 0;
   const taxDelta = computedTax !== null ? declaredTax.subtract(KES(computedTax)).toNumber() : 0;
   const hasDiscrepancy =
@@ -283,7 +283,7 @@ async function createTaxFilingHandler(...args: unknown[]): Promise<Response> {
     },
   });
 
-  // Additive response fields only — existing consumers of `{ success, data }`
+  // Additive response fields only - existing consumers of `{ success, data }`
   // keep working; verification detail is extra.
   return Response.json(
     {

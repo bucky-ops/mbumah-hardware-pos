@@ -1,13 +1,13 @@
 // Gapless-per-store reference number sequences.
 //
-// AUDIT REFERENCE — FINANCIAL_MODULE_AUDIT_REPORT.md:
+// AUDIT REFERENCE - FINANCIAL_MODULE_AUDIT_REPORT.md:
 //   • SYS-7 / F1-6 / F5-6 / F6-3: document numbers (PO, JE, receipt, invoice)
 //     were generated with `Math.random()` or unsynchronised `count()+1`
 //     lookups. Under concurrency that produces P2002 unique-constraint 500s
 //     in the middle of a sale, and KRA/eTIMS requires gapless, per-device
 //     sequential numbering.
 //
-// Design (works on both PostgreSQL and SQLite — tests run on SQLite):
+// Design (works on both PostgreSQL and SQLite - tests run on SQLite):
 //   1. Serialise allocation per (storeId, prefix) using a PostgreSQL advisory
 //     transaction lock when available (no-ops on SQLite, where the single
 //     writer connection already serialises).
@@ -17,11 +17,11 @@
 //     `withSequenceRetry`) as a belt-and-braces backstop for the window
 //     between two concurrent transactions on READ COMMITTED.
 //
-// Server-only module — imports Prisma client types only.
+// Server-only module - imports Prisma client types only.
 
 import type { PrismaClient } from '@prisma/client';
 
-/** Minimal tx surface we need — works with both `db` and interactive tx clients. */
+/** Minimal tx surface we need - works with both `db` and interactive tx clients. */
 type SequenceTx = Pick<PrismaClient, '$queryRaw' | '$queryRawUnsafe'>;
 
 /** Is the runtime database PostgreSQL (tests use SQLite)? */
@@ -48,7 +48,7 @@ export async function nextSequence(
   if (isPostgres()) {
     try {
       const dayKey = date.toISOString().slice(0, 10);
-      // Advisory xact-scoped lock — released automatically at COMMIT/ROLLBACK.
+      // Advisory xact-scoped lock - released automatically at COMMIT/ROLLBACK.
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`seq:${storeId}:${prefix}:${dayKey}`}))`;
     } catch {
       // Lock failure must never block the business transaction; the retry
@@ -132,7 +132,7 @@ export async function withSequenceRetry<T>(
     } catch (err) {
       lastErr = err;
       if (!isP2002(err) || attempt === attempts) throw err;
-      // Exponential backoff: 50ms, 150ms — enough for the contending tx to commit.
+      // Exponential backoff: 50ms, 150ms - enough for the contending tx to commit.
       await new Promise((r) => setTimeout(r, 50 * attempt * attempt));
     }
   }

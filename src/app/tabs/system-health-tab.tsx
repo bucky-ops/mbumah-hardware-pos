@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * MBUMAH HARDWARE — System Health & Monitoring Tab
+ * MBUMAH HARDWARE - System Health & Monitoring Tab
  *
- * Phase 8 — Real-time system health dashboard that aggregates:
+ * Phase 8 - Real-time system health dashboard that aggregates:
  *   • Overall system status
  *   • Database health
  *   • Circuit breaker states
@@ -50,7 +50,7 @@ import {
 } from '@/components/ui/tooltip';
 
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Types
 
 interface BreakerMetrics {
   name: string;
@@ -133,7 +133,7 @@ interface SystemStatus {
   auditTrail?: Record<string, unknown>;
 }
 
-// ── Helper functions ───────────────────────────────────────────────────────
+// Helper functions
 
 function formatUptime(seconds: number): string {
   const days = Math.floor(seconds / 86400);
@@ -161,7 +161,7 @@ function getBreakerIcon(name: string) {
   return Globe;
 }
 
-// ── Status Badge Component ─────────────────────────────────────────────────
+// Status Badge Component
 
 function StatusBadge({ status, size = 'sm' }: { status: string; size?: 'sm' | 'md' | 'lg' }) {
   const sizeClass = size === 'lg' ? 'text-sm px-3 py-1' : size === 'md' ? 'text-xs px-2.5 py-0.5' : 'text-[10px] px-2 py-0.5';
@@ -208,7 +208,7 @@ function StatusBadge({ status, size = 'sm' }: { status: string; size?: 'sm' | 'm
   }
 }
 
-// ── Pulse Indicator ────────────────────────────────────────────────────────
+// Pulse Indicator
 
 function PulseIndicator({ status }: { status: string }) {
   const color =
@@ -224,7 +224,7 @@ function PulseIndicator({ status }: { status: string }) {
   );
 }
 
-// ── Main Component ─────────────────────────────────────────────────────────
+// Main Component
 
 export default function SystemHealthTab() {
   const queryClient = useQueryClient();
@@ -232,7 +232,7 @@ export default function SystemHealthTab() {
   const [dlqFilter, setDlqFilter] = useState<string>('all');
   const [confirmAction, setConfirmAction] = useState<{ type: string; target?: string } | null>(null);
 
-  // ── Fetch system status ─────────────────────────────────────────────
+  // Fetch system status
   const {
     data: statusData,
     isLoading: statusLoading,
@@ -249,7 +249,7 @@ export default function SystemHealthTab() {
     staleTime: 10000,
   });
 
-  // ── Fetch DLQ items ─────────────────────────────────────────────────
+  // Fetch DLQ items
   const {
     data: dlqData,
     isLoading: dlqLoading,
@@ -267,7 +267,7 @@ export default function SystemHealthTab() {
     staleTime: 10000,
   });
 
-  // ── DLQ Admin action mutation ───────────────────────────────────────
+  // DLQ Admin action mutation
   const dlqAction = useMutation({
     mutationFn: async ({ action, id, targetService }: { action: string; id?: string; targetService?: string }) => {
       const res = await fetch('/api/health/dlq', {
@@ -293,7 +293,7 @@ export default function SystemHealthTab() {
     },
   });
 
-  // ── Circuit breaker admin action mutation ───────────────────────────
+  // Circuit breaker admin action mutation
   const breakerAction = useMutation({
     mutationFn: async ({ action, name }: { action: string; name?: string }) => {
       const res = await fetch('/api/health/circuit-breaker', {
@@ -320,7 +320,7 @@ export default function SystemHealthTab() {
 
   const status = statusData;
 
-  // ── Render ──────────────────────────────────────────────────────────
+  // Render
 
   return (
     <div className="space-y-6 pb-4">
@@ -1104,7 +1104,7 @@ export default function SystemHealthTab() {
   );
 }
 
-// ── Sub-Components ────────────────────────────────────────────────────────
+// Sub-Components
 
 function QuickStatCard({ title, icon: Icon, value, status, detail }: {
   title: string;

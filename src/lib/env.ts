@@ -1,6 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Environment-variable validation (Zod)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Environment-variable validation (Zod)
 //
 // This module validates required environment variables using the
 // `SKIP_ENV_VALIDATION` pattern (popularized by create-t3-app).
@@ -9,7 +7,7 @@
 //
 // Previous versions of this module threw `EnvValidationError` EAGERLY at
 // module-import time. This caused OPAQUE 500 errors on Vercel when ANY single
-// env var was malformed — e.g. if `NEXTAUTH_URL` was set to a random string
+// env var was malformed - e.g. if `NEXTAUTH_URL` was set to a random string
 // instead of a URL, the ENTIRE `/api/auth/login` route would crash during
 // module evaluation, BEFORE the route handler ever ran. The `withErrorBoundary`
 // wrapper could NOT catch this (it only wraps the handler, not module init),
@@ -17,7 +15,7 @@
 //
 // The fix: validation is now LAZY. The `env` export returns a Proxy that
 // validates on FIRST property access (not at import). This means:
-//   • Importing `@/lib/env` NEVER throws — routes always load successfully.
+//   • Importing `@/lib/env` NEVER throws - routes always load successfully.
 //   • Validation runs once on the first `env.DATABASE_URL` access.
 //   • If validation fails, the error is thrown at the call site (inside the
 //     route handler), where `withErrorBoundary` CAN catch it and return a
@@ -26,21 +24,17 @@
 //
 // ## How it works
 //
-//   ┌──────────────────────────────────────────────────────────────────────┐
-//   │  `SKIP_ENV_VALIDATION` is truthy OR NEXT_PHASE=phase-production-build?│
-//   │                                                                      │
-//   │   YES (build phase / vercel-build script)                            │
-//   │     → Skip Zod validation entirely.                                  │
-//   │     → Export `process.env` cast to the schema type.                  │
-//   │     → Lets `next build` collect page data for /api/* routes          │
-//   │       WITHOUT crashing on missing runtime secrets.                   │
-//   │                                                                      │
-//   │   NO (runtime: Vercel serverless, `bun run dev`)                     │
-//   │     → Return a LAZY proxy.                                           │
-//   │     → First property access triggers Zod `safeParse`.                │
-//   │     → If validation fails, throws `EnvValidationError` at call site. │
-//   │     → `withErrorBoundary` catches it → JSON 500 with details.        │
-//   └──────────────────────────────────────────────────────────────────────┘
+//   If `SKIP_ENV_VALIDATION` is truthy OR NEXT_PHASE=phase-production-build:
+//     YES (build phase / vercel-build script):
+//       - Skip Zod validation entirely.
+//       - Export `process.env` cast to the schema type.
+//       - Lets `next build` collect page data for /api/* routes
+//         WITHOUT crashing on missing runtime secrets.
+//     NO (runtime: Vercel serverless, `bun run dev`):
+//       - Return a LAZY proxy.
+//       - First property access triggers Zod `safeParse`.
+//       - If validation fails, throws `EnvValidationError` at call site.
+//       - `withErrorBoundary` catches it -> JSON 500 with details.
 //
 // ## Usage
 //
@@ -48,7 +42,6 @@
 //   const url = env.DATABASE_URL;            // validates on first access
 //   const secret = requireEnv('JWT_SECRET'); // enforces specific key
 //
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { z } from 'zod';
 
@@ -86,9 +79,9 @@ export class EnvValidationError extends Error {
   }
 }
 
-// ── Schema ───────────────────────────────────────────────────────────────────
+// Schema
 //
-// `DATABASE_URL` is required — the app cannot function without a database.
+// `DATABASE_URL` is required - the app cannot function without a database.
 // The auth secrets (NEXTAUTH_SECRET, JWT_SECRET, NEXTAUTH_URL) are optional at
 // import time; they are enforced lazily via `requireEnv()` in the routes that
 // actually need them, so a dev env that hasn't set up auth can still boot.
@@ -98,14 +91,14 @@ export class EnvValidationError extends Error {
 // does NOT crash the entire app. The URL format is validated lazily by the
 // routes that actually need a valid URL (e.g. NextAuth callbacks).
 const envSchema = z.object({
-  // Database — required. The db.ts module does the richer Neon/Supabase
+  // Database - required. The db.ts module does the richer Neon/Supabase
   // pooling validation; here we just confirm presence.
   DATABASE_URL: z
     .string()
     .min(1, 'DATABASE_URL is required (use the Neon/Supabase POOLED connection string).'),
 
-  // NextAuth — NEXTAUTH_URL is the canonical public URL of the deployment.
-  // Uses .min(1) NOT .url() — a malformed value should not crash the app.
+  // NextAuth - NEXTAUTH_URL is the canonical public URL of the deployment.
+  // Uses .min(1) NOT .url() - a malformed value should not crash the app.
   // Routes that need a valid URL validate it explicitly.
   NEXTAUTH_URL: z
     .string()
@@ -118,24 +111,24 @@ const envSchema = z.object({
     .min(16, 'NEXTAUTH_SECRET should be at least 16 characters (use `openssl rand -base64 32`).')
     .optional(),
 
-  // JWT_SECRET — used by the custom token-based auth in login/route.ts.
+  // JWT_SECRET - used by the custom token-based auth in login/route.ts.
   JWT_SECRET: z
     .string()
     .min(16, 'JWT_SECRET should be at least 16 characters (use `openssl rand -base64 32`).')
     .optional(),
 
-  // NODE_ENV — typed enum so downstream code can branch safely.
+  // NODE_ENV - typed enum so downstream code can branch safely.
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
     .optional()
     .default('development'),
 
-  // ── Notification gateways (VF-1, v2.8.0) — ALL OPTIONAL. ───────────────────
+  // Notification gateways (VF-1, v2.8.0) - ALL OPTIONAL.
   // Presence-only documentation: notification-helpers.ts and email-service.ts
   // read process.env directly and degrade HONESTLY (status FAILED/Simulated,
   // never a fake "Sent") when these are unset. Declaring them here (a) keeps
   // a record of the supported names beside the required ones without making
-  // startup depend on them — dev / self-host installs ship without gateways —
+  // startup depend on them - dev / self-host installs ship without gateways -
   // and (b) documents the TWILIO_FROM_PHONE ↔ TWILIO_PHONE_NUMBER alias pair
   // that .env.example also documents. Do NOT promote any of these to
   // required: that would crash every gateway-less deployment at first env
@@ -149,7 +142,7 @@ const envSchema = z.object({
   TWILIO_SMS_FROM: z.string().optional(), // optional SMS sender override
   TWILIO_WHATSAPP_FROM: z.string().optional(), // defaults to the Twilio sandbox number
 
-  // ── Updates / rollback / backups (v2.9.0) — ALL OPTIONAL. ──────────────────
+  // Updates / rollback / backups (v2.9.0) - ALL OPTIONAL.
   // Presence-only documentation (same contract as the gateway block above):
   //   VERCEL_TOKEN + VERCEL_PROJECT_ID power the admin "Roll back production"
   //   button (Vercel deployments API); VERCEL_TEAM_ID scopes it to a team.
@@ -162,12 +155,12 @@ const envSchema = z.object({
   VERCEL_PROJECT_ID: z.string().optional(),
   VERCEL_TEAM_ID: z.string().optional(), // optional team scope for Vercel API calls
   GITHUB_TOKEN: z.string().optional(), // raises GitHub API rate limits for release checks
-  // ── Remote Access Kit / fleet ops (v2.11.0) — all optional ──
+  // Remote Access Kit / fleet ops (v2.11.0) - all optional
   //   OPS_GITHUB_TOKEN: fine-grained PAT with Contents RW on the ops-log repo
-  //     ONLY — lets the admin console commit fleet commands and read ledgers.
+  //     ONLY - lets the admin console commit fleet commands and read ledgers.
   //   OPS_LOG_REPO: "owner/repo" of the private audit repo
   //     (default bucky-ops/mbumah-ops-log).
-  //   OPS_SIGNING_KEY: shared HMAC key — commands are signed by the cloud and
+  //   OPS_SIGNING_KEY: shared HMAC key - commands are signed by the cloud and
   //     verified by store agents; without it no command can be issued.
   OPS_GITHUB_TOKEN: z.string().optional(),
   OPS_LOG_REPO: z.string().optional(),
@@ -176,7 +169,7 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
-// ── Build-phase detection ────────────────────────────────────────────────────
+// Build-phase detection
 //
 // `isBuildTime` is true during `next build` (when env vars aren't injected)
 // so that eager validation is skipped and page-data collection succeeds.
@@ -188,18 +181,18 @@ export const isBuildTime =
   // Layer 2: Next.js sets NEXT_PHASE automatically during `next build`
   // (value: 'phase-production-build') and instrumentation. This makes
   // `next build` work even if SKIP_ENV_VALIDATION=1 isn't prefixed on
-  // the command line — Next.js itself signals the build phase.
+  // the command line - Next.js itself signals the build phase.
   process.env.NEXT_PHASE === 'phase-production-build' ||
   process.env.NEXT_PHASE === 'phase-instrumentation';
 
-// ── Validation (lazy — runs on first access, NOT at import) ──────────────────
+// Validation (lazy - runs on first access, NOT at import)
 
 /**
  * Run the full Zod safeParse and return the validated env (or throw).
  * Called lazily on first `env.X` access so that module import NEVER throws.
  */
 function validateEnv(): Env {
-  // Client bundle guard — this module is server-only, but prevent a
+  // Client bundle guard - this module is server-only, but prevent a
   // confusing crash if a client component accidentally imports it.
   if (typeof window !== 'undefined') {
     return {
@@ -208,8 +201,8 @@ function validateEnv(): Env {
     } as unknown as Env;
   }
 
-  // ── BUILD PHASE: skip validation when SKIP_ENV_VALIDATION is truthy OR ──
-  // ── when Next.js signals the build phase via NEXT_PHASE. ──────────────────
+  // BUILD PHASE: skip validation when SKIP_ENV_VALIDATION is truthy OR
+  // when Next.js signals the build phase via NEXT_PHASE.
   const NEXT_PHASE_BUILD = 'phase-production-build';
   const NEXT_PHASE_INSTRUMENT = 'phase-instrumentation';
   if (
@@ -222,7 +215,7 @@ function validateEnv(): Env {
     return process.env as unknown as Env;
   }
 
-  // ── RUNTIME: run the full Zod safeParse and throw on failure. ──────────────
+  // RUNTIME: run the full Zod safeParse and throw on failure.
   //
   // `safeParse` (not `parse`) so we can collect ALL issues into a single
   // descriptive `EnvValidationError` rather than throwing on the first one.
@@ -237,14 +230,14 @@ function validateEnv(): Env {
   return parsed.data;
 }
 
-// ── Lazy proxy: validates on first property access ───────────────────────────
+// Lazy proxy: validates on first property access
 //
 // This is the KEY change. Instead of `export const env = validateEnv()` (which
 // runs validation at import time and can crash module loading), we return a
 // Proxy that defers validation until the first property is accessed.
 //
 // Benefits:
-//   1. Importing `@/lib/env` NEVER throws — all routes load successfully.
+//   1. Importing `@/lib/env` NEVER throws - all routes load successfully.
 //   2. Validation runs exactly once (cached after first access).
 //   3. If validation fails, the error is thrown at the CALL SITE (inside a
 //      route handler), where withErrorBoundary CAN catch it → JSON 500.
@@ -254,7 +247,7 @@ let cachedEnv: Env | null = null;
 
 /**
  * Run (or return cached) environment validation. Exported so that callers
- * which want EAGER validation on startup — e.g. `src/app/layout.tsx` — can
+ * which want EAGER validation on startup - e.g. `src/app/layout.tsx` - can
  * trigger it explicitly without relying on the lazy proxy's first-access
  * behaviour. Calling this multiple times is cheap: the result is cached.
  *

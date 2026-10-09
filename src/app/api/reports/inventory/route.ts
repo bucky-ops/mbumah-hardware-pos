@@ -4,7 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
-// Task 12-b: Prisma Decimal valueOf() returns a STRING — `number + decimal`
+// Task 12-b: Prisma Decimal valueOf() returns a STRING - `number + decimal`
 // concatenates and relational operators compare as strings. Valuation runs
 // through toDec(); numbers emitted at the JSON boundary.
 import { toDec } from '@/lib/utils/financialMath';
@@ -84,7 +84,7 @@ async function getInventoryReportHandler(...args: unknown[]): Promise<Response> 
     const stockValue = stockValueDec.toNumber();
     const retailValue = retailValueDec.toNumber();
     const potentialProfit = retailValueDec.minus(stockValueDec).toNumber();
-    // Decimal comparisons — `<=` on Decimals is a STRING comparison.
+    // Decimal comparisons - `<=` on Decimals is a STRING comparison.
     const isLowStock = toDec(product.quantityInStock).lte(toDec(product.reorderLevel));
     const isOutOfStock = toDec(product.quantityInStock).lte(0);
 

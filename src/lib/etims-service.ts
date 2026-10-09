@@ -1,11 +1,8 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — KRA eTIMS Service (Mock Implementation)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - KRA eTIMS Service (Mock Implementation)
 //
 // Service for Kenya Revenue Authority eTIMS API integration.
 // This is a mock implementation that simulates KRA API responses.
 // In production, replace the mock calls with actual KRA eTIMS API requests.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { formatEtimsDate, generateInvoiceNumber, validateKraPin, buildQrCodePayload } from './etims-utils';
 
@@ -172,7 +169,7 @@ export function getEtimsConfig(): EtimsConfig {
 
 /**
  * F9-2 remediation: detect when the active eTIMS client is the built-in mock
- * (no ETIMS_API_URL configured / mock flag). Compliance control — the
+ * (no ETIMS_API_URL configured / mock flag). Compliance control - the
  * issue-invoice route refuses to mark tax invoices as ISSUED when this is
  * true unless ETIMS_ALLOW_MOCK_ISSUANCE is explicitly set.
  */

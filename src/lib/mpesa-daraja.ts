@@ -1,12 +1,12 @@
-// M-Pesa Daraja STK push core — shared by the HTTP route and the outbox pump.
+// M-Pesa Daraja STK push core - shared by the HTTP route and the outbox pump.
 //
-// AUDIT REMEDIATION — FINANCIAL_MODULE_AUDIT_REPORT.md (F6-2, P0):
+// AUDIT REMEDIATION - FINANCIAL_MODULE_AUDIT_REPORT.md (F6-2, P0):
 //   The checkout route used to initiate the server-side STK push with a
 //   RELATIVE-URL fetch (`fetch('/api/payments/mpesa/stkpush?XTransformPort=3001')`)
-//   which can never resolve in Node serverless — every M-Pesa sale silently
+//   which can never resolve in Node serverless - every M-Pesa sale silently
 //   stuck PENDING with no push ever sent. The initiation logic now lives here
 //   and is invoked DIRECTLY (in-process) by the outbox handler after the
-//   checkout transaction commits — no HTTP self-call, no gateway artifacts.
+//   checkout transaction commits - no HTTP self-call, no gateway artifacts.
 //
 // Server-only module.
 
@@ -123,7 +123,7 @@ async function darajaStkPush(params: {
   try {
     json = JSON.parse(rawBody) as Record<string, string>;
   } catch {
-    // Non-JSON response from Daraja — keep rawBody for diagnostics.
+    // Non-JSON response from Daraja - keep rawBody for diagnostics.
   }
 
   if (!res.ok || (json.ResponseCode && json.ResponseCode !== '0')) {
@@ -145,7 +145,7 @@ async function darajaStkPush(params: {
 /**
  * Initiate an STK push for an (already-created, PENDING) MpesaTransaction row.
  * Persists the CheckoutRequestID on the row (or creates a row when the caller
- * did not pre-create one). Never throws — failures degrade to 'simulated'
+ * did not pre-create one). Never throws - failures degrade to 'simulated'
  * with a loud log so the caller's business transaction is unaffected.
  */
 export async function initiateStkPush(req: StkPushRequest): Promise<StkPushResult> {
@@ -175,7 +175,7 @@ export async function initiateStkPush(req: StkPushRequest): Promise<StkPushResul
   const isProduction = process.env.NODE_ENV === 'production';
   const darajaConfigured = Boolean(consumerKey && consumerSecret && shortcode && passkey);
 
-  // ── REAL DARAJA PATH ──────────────────────────────────────────────────────
+  // REAL DARAJA PATH
   if (darajaConfigured) {
     try {
       const result = await darajaStkPush({
@@ -245,7 +245,7 @@ export async function initiateStkPush(req: StkPushRequest): Promise<StkPushResul
     }
   }
 
-  // ── SIMULATED PATH (mock / no credentials) ────────────────────────────────
+  // SIMULATED PATH (mock / no credentials)
   try {
     const mockResponse = await fetch('http://localhost:3001/api/mpesa/stkpush', {
       method: 'POST',

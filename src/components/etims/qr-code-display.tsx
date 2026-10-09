@@ -6,9 +6,9 @@ import { Button } from '@/components/ui/button';
 import { QRCodeCanvas } from 'qrcode.react';
 
 // v2.8.0 SCANNING FIX: this component used to draw a HASH-BASED lookalike
-// grid (generateQrPattern) that a phone could NEVER scan — KRA eTIMS invoice
+// grid (generateQrPattern) that a phone could NEVER scan - KRA eTIMS invoice
 // cards "displayed" a QR that wasn't one. It now renders a REAL QR code
-// (qrcode.react — the same library as the working receipt QR) encoding the
+// (qrcode.react - the same library as the working receipt QR) encoding the
 // actual KRA verification payload, so "scan to verify" genuinely works.
 
 interface QrCodeDisplayProps {
@@ -40,7 +40,7 @@ export function QrCodeDisplay({
   };
 
   // Export the REAL rendered QR canvas as a PNG (replaces the old fake-SVG
-  // download — the PNG is scannable too).
+  // download - the PNG is scannable too).
   const handleDownload = () => {
     const wrap = canvasWrapRef.current;
     const canvas = wrap?.querySelector('canvas');

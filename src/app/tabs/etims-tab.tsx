@@ -1,15 +1,15 @@
 'use client';
 
 /**
- * eTIMS Tab — KRA electronic Tax Invoice Management System integration.
+ * eTIMS Tab - KRA electronic Tax Invoice Management System integration.
  *
  * Three sub-sections (tabs):
- *   1. Profile     — configure the store's KRA business profile (PIN, creds,
+ *   1. Profile - configure the store's KRA business profile (PIN, creds,
  *                    sandbox vs production). Manager+ only.
- *   2. Invoices    — list of InvoiceForKRA rows with submission status pipeline
+ *   2. Invoices - list of InvoiceForKRA rows with submission status pipeline
  *                    (PENDING → SUBMITTED → ACCEPTED | REJECTED | FAILED).
  *                    Supports dry-run preview + live submit + status polling.
- *   3. Audit Log   — full KraSubmission history (every KRA API call).
+ *   3. Audit Log - full KraSubmission history (every KRA API call).
  */
 
 import React, { useState, useMemo } from 'react';
@@ -51,7 +51,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// ── Status badge config ──────────────────────────────────────────────────────
+// Status badge config
 
 const SUBMISSION_STATUS_CONFIG: Record<
   string,
@@ -97,7 +97,7 @@ const ENVIRONMENT_CONFIG: Record<string, { label: string; color: string }> = {
 
 const SENIOR_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'];
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// Helpers
 
 function parseTaxBreakdown(json: string | null): {
   items: Array<{ name: string; quantity: number; unitPrice: number; vatRate: number; vatAmount: number; total: number }>;
@@ -114,7 +114,7 @@ function parseTaxBreakdown(json: string | null): {
   }
 }
 
-// ── Profile Sub-Tab ──────────────────────────────────────────────────────────
+// Profile Sub-Tab
 
 function ProfileSection({ storeId }: { storeId: string }) {
   const queryClient = useQueryClient();
@@ -435,7 +435,7 @@ function ProfileField({
   );
 }
 
-// ── Invoices Sub-Tab ─────────────────────────────────────────────────────────
+// Invoices Sub-Tab
 
 function InvoicesSection({ storeId }: { storeId: string }) {
   const queryClient = useQueryClient();
@@ -931,7 +931,7 @@ function SubmissionHistoryRow({ submission }: { submission: KraSubmissionItem })
   );
 }
 
-// ── Audit Log Sub-Tab ────────────────────────────────────────────────────────
+// Audit Log Sub-Tab
 
 function AuditLogSection({ storeId }: { storeId: string }) {
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -1045,7 +1045,7 @@ function AuditLogSection({ storeId }: { storeId: string }) {
   );
 }
 
-// ── Main Component ───────────────────────────────────────────────────────────
+// Main Component
 
 export default function EtimsTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);

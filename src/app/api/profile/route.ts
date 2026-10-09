@@ -1,18 +1,18 @@
-// GET/PATCH /api/profile — SELF-SERVICE profile endpoint (v2.7.0)
+// GET/PATCH /api/profile - SELF-SERVICE profile endpoint (v2.7.0)
 //
 // WHY THIS ROUTE EXISTS: the sidebar's "Profile & Settings" menu item used to
 // show `toast.info('Profile settings coming soon')`. The only way a user could
 // change their own name/phone was to ask a SUPER_ADMIN to run the Admin tab's
 // user editor. This route completes the self-service surface:
-//   GET   — the signed-in user's full profile (org + store included)
-//   PATCH — update your OWN name / phone / avatarUrl (never role/email/store —
+//   GET - the signed-in user's full profile (org + store included)
+//   PATCH - update your OWN name / phone / avatarUrl (never role/email/store -
 //           those stay admin-only through /api/users/[id] so a cashier cannot
 //           promote themselves or escape their branch scope)
 //
 // Security model:
 //   • Session-authenticated (Bearer token → db.session → user), same as
 //     /api/auth/me. No role list: EVERY authenticated user may edit their
-//     own profile — this is the one DML surface that is deliberately open.
+//     own profile - this is the one DML surface that is deliberately open.
 //   • Self-scoped by construction: writes go to session.userId only.
 //   • Every PATCH is written to the SystemLog audit trail (who changed what).
 //
@@ -81,7 +81,7 @@ async function getProfileHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   // NOTE: withSessionAuth does NOT pass the session as args[1] (it sets the
   // ORM tenant context via AsyncLocalStorage). Re-derive it from the request
-  // — same pattern as POST /api/gift-cards/redeem.
+  // same pattern as POST /api/gift-cards/redeem.
   const session = await getSessionFromRequest(request);
   if (!session) {
     return Response.json(
@@ -106,7 +106,7 @@ async function getProfileHandler(...args: unknown[]): Promise<Response> {
 
 async function patchProfileHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
-  // Re-derive the session — see the note in getProfileHandler above.
+  // Re-derive the session - see the note in getProfileHandler above.
   const session = await getSessionFromRequest(request);
   if (!session) {
     return Response.json(
@@ -120,7 +120,7 @@ async function patchProfileHandler(...args: unknown[]): Promise<Response> {
     avatarUrl?: unknown;
   };
 
-  // ── Validate (same field policy as the Admin tab's user editor) ─────────
+  // Validate (same field policy as the Admin tab's user editor)
   const updates: { name?: string; phone?: string | null; avatarUrl?: string | null } = {};
 
   if (body.name !== undefined) {
@@ -139,7 +139,7 @@ async function patchProfileHandler(...args: unknown[]): Promise<Response> {
       updates.phone = null;
     } else if (typeof body.phone === 'string') {
       const phone = body.phone.trim();
-      // Loose phone check: digits, spaces, +, -, () — e.g. "+254 795 191 909"
+      // Loose phone check: digits, spaces, +, -, () - e.g. "+254 795 191 909"
       if (phone.length > 32 || !/^[0-9+()\-\s]+$/.test(phone)) {
         return Response.json(
           { success: false, error: 'Phone must be 32 characters or fewer and contain only digits and + ( ) - characters.' },
@@ -160,7 +160,7 @@ async function patchProfileHandler(...args: unknown[]): Promise<Response> {
       updates.avatarUrl = null;
     } else if (typeof body.avatarUrl === 'string') {
       const url = body.avatarUrl.trim();
-      // Only http(s) URLs — blocks javascript:/data: injection into <img src>.
+      // Only http(s) URLs - blocks javascript:/data: injection into <img src>.
       if (url.length > 500 || !/^https?:\/\//i.test(url)) {
         return Response.json(
           { success: false, error: 'Avatar URL must be an http(s) link (500 characters or fewer).' },

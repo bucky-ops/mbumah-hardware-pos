@@ -37,9 +37,7 @@ import {
 } from '@/components/ui/table';
 import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
-// ---------------------------------------------------------------------------
 // Types & helpers for Trends & Predictions
-// ---------------------------------------------------------------------------
 
 type TrendsRange = '7d' | '30d' | '90d';
 
@@ -104,7 +102,7 @@ interface FrequentlyBoughtResult {
   isDemo?: boolean;
 }
 
-/** Fetch trends analysis with graceful fallback — works whether or not BE-1
+/** Fetch trends analysis with graceful fallback - works whether or not BE-1
  *  has shipped /api/trends/analysis. Returns a safe empty shape on failure. */
 async function fetchTrendsAnalysis(storeId: string, range: TrendsRange): Promise<TrendsAnalysis> {
   const params = new URLSearchParams({ storeId, range });
@@ -395,9 +393,7 @@ function SVGLineChart({ data, height = 200 }: { data: { label: string; value: nu
   );
 }
 
-// ---------------------------------------------------------------------------
 // Trends & Predictions Section
-// ---------------------------------------------------------------------------
 
 const TRENDS_RANGE_OPTIONS: { value: TrendsRange; label: string }[] = [
   { value: '7d', label: 'Last 7 days' },
@@ -427,7 +423,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
   const [range, setRange] = useState<TrendsRange>('7d');
   const [drilldown, setDrilldown] = useState<{ title: string; rows: React.ReactNode } | null>(null);
 
-  // Trends analysis query — uses direct fetch with graceful fallback
+  // Trends analysis query - uses direct fetch with graceful fallback
   const { data: trends, isLoading: trendsLoading, error: trendsError } = useQuery<TrendsAnalysis>({
     queryKey: ['trends-analysis', storeId, range],
     queryFn: () => fetchTrendsAnalysis(storeId, range),
@@ -435,7 +431,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
     staleTime: 60_000,
   });
 
-  // Frequently bought together — uses direct fetch with graceful fallback
+  // Frequently bought together - uses direct fetch with graceful fallback
   const { data: reco, isLoading: recoLoading } = useQuery<FrequentlyBoughtResult>({
     queryKey: ['frequently-bought', storeId, range],
     queryFn: () => fetchFrequentlyBought(storeId, range),

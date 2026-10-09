@@ -4,12 +4,12 @@
 // created but never updated or deleted (list/create-only API, no [id]
 // route). "Anything that can be added must be editable and removable."
 //
-//   PUT    — update name / description / icon / color / sortOrder / isActive
+//   PUT - update name / description / icon / color / sortOrder / isActive
 //            (duplicate-name guard per store, manager-or-above).
-//   DELETE — hard delete ONLY when no products reference the category;
+//   DELETE - hard delete ONLY when no products reference the category;
 //            otherwise 409 with the referencing product count so the caller
 //            can reassign or delete products first (keeps referential
-//            integrity — products cascade nowhere silently).
+//            integrity - products cascade nowhere silently).
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';

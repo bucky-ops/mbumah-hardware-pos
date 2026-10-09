@@ -24,14 +24,14 @@ import {
   ShieldCheck, Lock, X,
 } from 'lucide-react';
 
-// ─── Shared checkout dialog (ResponsiveDialog) ───────────────────────────────
+// Shared checkout dialog (ResponsiveDialog)
 // Used by both desktop & mobile POS so the payment flow stays consistent.
 // Order: Cash → Debt → Either/Split → M-Pesa.
 //
 // Multi-step flow (added enhancement):
-//   Step 1 — Customer & Payment Method
-//   Step 2 — Payment Details (amounts, split payments, M-Pesa phone)
-//   Step 3 — Review & Confirm (order summary + Process Payment)
+//   Step 1 - Customer & Payment Method
+//   Step 2 - Payment Details (amounts, split payments, M-Pesa phone)
+//   Step 3 - Review & Confirm (order summary + Process Payment)
 
 export interface CheckoutDialogProps {
   open: boolean;
@@ -147,7 +147,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
   const exceedsDebt = customer ? finalTotal > debtAvailable : false;
 
   // v2.6.0 MANAGER APPROVAL: the DEBT block stays, but is no longer a
-  // dead-end — the cashier can summon a manager whose credentials are
+  // dead-end - the cashier can summon a manager whose credentials are
   // attached to the checkout payload (top-level `managerApproval` field).
   // The server verifies the manager (same store, MANAGER_UP role) and writes
   // an audit-trail CREDIT_LIMIT_OVERRIDE entry.
@@ -163,7 +163,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
   const splitValid = (Number(splitCashAmount) || 0) + (Number(splitMpesaAmount) || 0) >= finalTotal && (Number(splitMpesaAmount) || 0) > 0 ? !!mpesaPhone && mpesaPhone.length >= 9 : true;
   const mpesaValid = !!mpesaPhone && mpesaPhone.length >= 9;
 
-  // Step state — start at step 1 (Customer & Payment Method)
+  // Step state - start at step 1 (Customer & Payment Method)
   const [step, setStep] = useState<Step>(1);
   // Direction of step transition (for slide animation)
   const [stepDirection, setStepDirection] = useState<'right' | 'left'>('right');
@@ -225,7 +225,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
     return false;
   }, [paymentMethod, cashValid, selectedCustomer, exceedsDebt, managerApprovalFilled, splitValid, mpesaValid]);
 
-  // Show the M-Pesa processing panel as a special "step 2.5" — when mpesa is processing/success/failed,
+  // Show the M-Pesa processing panel as a special "step 2.5" - when mpesa is processing/success/failed,
   // we still show step 2 content (STK status) but the footer changes via renderFooter.
   const goToStep = (nextStep: Step) => {
     if (nextStep > step) setStepDirection('right');
@@ -336,7 +336,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
         </>
       );
     }
-    // Step 3: Review & Confirm — "Process Payment" with gradient + loading spinner
+    // Step 3: Review & Confirm - "Process Payment" with gradient + loading spinner
     return (
       <>
         <Button variant="outline" onClick={() => goToStep(2)} disabled={isProcessingMpesa}>
@@ -468,7 +468,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
     );
   };
 
-  // Success screen — shown briefly when mpesaStatus === 'success'
+  // Success screen - shown briefly when mpesaStatus === 'success'
   const renderSuccessScreen = () => (
     <div className="text-center py-6 space-y-3 animate-scale-in">
       <div className="relative mx-auto w-16 h-16">

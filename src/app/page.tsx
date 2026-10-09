@@ -27,7 +27,7 @@ import { WhatsNewDialog } from '@/components/whats-new-dialog';
 //
 // AUDIT FIX (Finding 2.2): the import thunks moved to src/lib/tab-preload.ts
 // so the sidebar can prefetch a tab's chunk on pointerenter/focus (see
-// preloadTab) — the first switch to a tab no longer waits on a cold chunk
+// preloadTab) - the first switch to a tab no longer waits on a cold chunk
 // fetch. Specifiers are unchanged, so chunking is identical to before.
 const LazyDashboardTab = lazy(TAB_LOADERS.dashboard);
 const LazyInventoryTab = lazy(TAB_LOADERS.inventory);
@@ -63,7 +63,7 @@ const LazyPOSTab = lazy(TAB_LOADERS.pos);
 /**
  * Live online/offline indicator for the footer status chip (v2.13.0).
  * useSyncExternalStore mirrors navigator.onLine + the browser's online/offline
- * events — no effect setState, and the server snapshot (optimistic 'online')
+ * events - no effect setState, and the server snapshot (optimistic 'online')
  * only ever matters pre-mount, since the footer renders client-side inside
  * MainApp.
  */
@@ -103,7 +103,7 @@ function MainApp() {
   const online = useOnlineStatus();
   const searchBtnRef = useRef<HTMLButtonElement | null>(null);
 
-  // v2.6.0 IDLE TIMEOUT (30 min): reuse the EXACT 401 session-expired path —
+  // v2.6.0 IDLE TIMEOUT (30 min): reuse the EXACT 401 session-expired path -
   // clear the auth tokens and dispatch `mbt:session-expired`, which the
   // auth-store listener (stores.ts) handles by flipping the SPA to the
   // LoginScreen. The cart now PERSISTS in IndexedDB (no clearCart on this
@@ -117,7 +117,7 @@ function MainApp() {
         window.dispatchEvent(new CustomEvent('mbt:session-expired'));
       }
     } catch {
-      // Storage unavailable — still flip to the login screen via the event.
+      // Storage unavailable - still flip to the login screen via the event.
     }
     toast.info('Session timed out after 30 minutes — your cart was saved and will be restored on next login.', {
       duration: 8000,
@@ -283,7 +283,7 @@ function useHasMounted() {
 }
 
 /**
- * Loading watchdog — if the app remains on the "Loading…" screen for more
+ * Loading watchdog - if the app remains on the "Loading…" screen for more
  * than 5 seconds, log a diagnostic error. After 10 seconds, surface a retry UI.
  */
 const LOADING_WARN_MS = 5000;
@@ -338,7 +338,7 @@ export default function HomePage() {
 
   // Hydrate auth state from localStorage on first client mount.
   // Also rehydrate the persisted app store (sidebar state, active tab, etc.)
-  // and — since v2.6.0 — the persisted CART (IndexedDB 'mbt_cart_v1').
+  // and - since v2.6.0 - the persisted CART (IndexedDB 'mbt_cart_v1').
   // Defensive checks ensure this never crashes even if persist middleware
   // is removed or the store structure changes.
   useEffect(() => {
@@ -352,7 +352,7 @@ export default function HomePage() {
     }
 
     // v2.6.0 CART RESTORATION: the cart store persists to IndexedDB with
-    // skipHydration: true — rehydrate it manually here (async storage, so
+    // skipHydration: true - rehydrate it manually here (async storage, so
     // rehydrate() resolves AFTER the cart slice is merged). If a non-empty
     // cart came back, toast ONCE so the cashier knows their sale survived
     // the logout/idle-timeout. Gated on an existing token so the toast is

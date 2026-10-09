@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 // AUDIT FIX: shifts routes previously had NO session auth (any Bearer token
 // could mutate shifts). Every store role from PERMISSION_MATRIX may view/open
-// shifts; destructive ops (shift end) are manager-or-above — see
+// shifts; destructive ops (shift end) are manager-or-above - see
 // src/app/api/shifts/[id]/end/route.ts.
 const STORE_ROLES: string[] = Object.values(UserRole);
 
@@ -91,7 +91,7 @@ async function createShiftHandler(...args: unknown[]): Promise<Response> {
 
   // Single-active enforcement (ISO 27001 data integrity): block a new shift
   // if ANY open shift exists for this user+store. We check `endedAt: null` as
-  // the canonical "open" signal — more robust than `status` alone, which can
+  // the canonical "open" signal - more robust than `status` alone, which can
   // drift out of sync if a prior end-shift call crashed midway (ghost shift).
   // The `status: 'ACTIVE'` clause catches legacy rows with status set but
   // endedAt populated.
@@ -137,7 +137,7 @@ async function createShiftHandler(...args: unknown[]): Promise<Response> {
     });
 
     // Record opening balance in the cash drawer ledger.
-    // AUDIT FIX: read-latest-row lost-update race — the previous findFirst
+    // AUDIT FIX: read-latest-row lost-update race - the previous findFirst
     // (latest row balance) silently dropped concurrent drawer writes. Derive
     // the running balance from the SUM of all drawer amounts instead (same
     // aggregate pattern as src/app/api/transactions/route.ts R6 remediation).

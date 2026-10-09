@@ -1,19 +1,19 @@
 // Single source of truth for lazy tab-module loading.
 //
-// AUDIT FIX (Finding 2.2 — lazy-loading overhead): the main page lazy-loads
+// AUDIT FIX (Finding 2.2 - lazy-loading overhead): the main page lazy-loads
 // 30 tab components, so the FIRST switch to a tab pays a network round-trip
-// for its chunk (100–200ms on mobile) before anything renders. There was no
+// for its chunk (100-200ms on mobile) before anything renders. There was no
 // prefetch path, so users saw the loading skeleton on every cold tab switch.
 //
 // This map is shared by BOTH consumers of the dynamic imports:
-//   • src/app/page.tsx — `lazy(TAB_LOADERS.xxx)` for rendering
-//   • src/components/layout/app-sidebar.tsx — `preloadTab(id)` on
+//   • src/app/page.tsx - `lazy(TAB_LOADERS.xxx)` for rendering
+//   • src/components/layout/app-sidebar.tsx - `preloadTab(id)` on
 //     pointerenter/focus, which warms the browser cache while the user is
 //     still moving the pointer toward the item, so the chunk is typically
 //     ready by the time the click lands.
 //
 // The import specifiers are IDENTICAL to the ones previously inline in
-// page.tsx, so webpack produces the same chunks — prefetching merely
+// page.tsx, so webpack produces the same chunks - prefetching merely
 // requests them earlier.
 
 import type { ComponentType } from 'react';
@@ -56,7 +56,7 @@ export const TAB_LOADERS: Record<AppTab, TabLoader> = {
 
 /**
  * Warm the chunk for a tab without rendering it. Fire-and-forget: failures
- * (offline, chunk fetch race during a deploy) are swallowed — React.lazy
+ * (offline, chunk fetch race during a deploy) are swallowed - React.lazy
  * will simply fetch again on the real navigation.
  */
 export function preloadTab(tab: AppTab): void {

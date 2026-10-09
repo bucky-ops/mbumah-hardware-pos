@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Shift Scheduling Tab — main UI for the planned shift roster feature.
+ * Shift Scheduling Tab - main UI for the planned shift roster feature.
  *
  * Layout:
  *   1. Header with title + week navigation (prev/next/today) + "Add Shift"
@@ -57,7 +57,7 @@ export function ShiftSchedulingTab() {
   const [presetDate, setPresetDate] = useState<string | null>(null);
   const [editSchedule, setEditSchedule] = useState<ShiftScheduleItem | null>(null);
 
-  // ── Week navigation ──────────────────────────────────────────────────────
+  // Week navigation
   const handlePrevWeek = () => {
     const d = new Date(weekStartStr);
     d.setDate(d.getDate() - 7);
@@ -78,7 +78,7 @@ export function ShiftSchedulingTab() {
     return formatWeekRange(new Date(weekStartStr));
   }, [weekStartStr]);
 
-  // ── Data: weekly schedules ────────────────────────────────────────────────
+  // Data: weekly schedules
   const weeklyQueryKey = useMemo(
     () => ['shift-schedules-weekly', currentStoreId, weekStartStr] as const,
     [currentStoreId, weekStartStr],
@@ -108,7 +108,7 @@ export function ShiftSchedulingTab() {
     }
   }, [weeklyError]);
 
-  // ── Data: stats ─────────────────────────────────────────────────────────
+  // Data: stats
   const statsQueryKey = useMemo(
     () => ['shift-schedules-stats', currentStoreId, weekStartStr] as const,
     [currentStoreId, weekStartStr],
@@ -137,7 +137,7 @@ export function ShiftSchedulingTab() {
     }
   }, [statsError]);
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
+  // Handlers
   const handleRefresh = () => {
     refetchWeekly();
     refetchStats();

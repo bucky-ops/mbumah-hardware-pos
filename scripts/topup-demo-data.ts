@@ -1,6 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Guarded Demo-Data Top-Up
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Guarded Demo-Data Top-Up
 // Fills ONLY the entities that are missing when the production database was
 // seeded by an older seed.ts version (which left branch sales, purchase
 // orders, equipment rentals, gift cards, suppliers and chart-of-accounts
@@ -8,7 +6,7 @@
 //
 // Every insert is guarded:
 //   • existence check on a natural/hardcoded key (receiptNumber, poNumber, id…)
-//   • FK pre-verification — referenced rows must exist or the field is nulled
+//   • FK pre-verification - referenced rows must exist or the field is nulled
 //     and the omission is logged (walk-in semantics for customers)
 //   • per-entity try/catch so one failure never aborts the run
 //
@@ -18,7 +16,6 @@
 //
 // Recommended against the DIRECT (non-pooler) Neon endpoint for transactional
 // throughput. Connection string must never be committed.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { PrismaClient } from '@prisma/client';
 
@@ -29,7 +26,7 @@ const created: string[] = [];
 const skipped: string[] = [];
 const failed: { item: string; err: string }[] = [];
 
-// ── date helpers (mirror prisma/seed.ts exactly) ────────────────────────────
+// date helpers (mirror prisma/seed.ts exactly)
 function daysAgo(n: number): Date {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -58,10 +55,10 @@ function poDateStr(d: Date): string {
 async function main() {
   console.log(`\n=== MBUMAH demo-data top-up — mode: ${APPLY ? '🟢 APPLY' : '🟡 DRY RUN'} ===\n`);
 
-  // ── before counts ─────────────────────────────────────────────────────────
+  // before counts
   const before = await snapshot();
 
-  // ── reference data ────────────────────────────────────────────────────────
+  // reference data
   const store = await prisma.store.findUnique({ where: { id: 'store_juja_main' } });
   const storeThika = await prisma.store.findUnique({ where: { id: 'store_thika' } });
   const storeRuiru = await prisma.store.findUnique({ where: { id: 'store_ruiru' } });
@@ -85,7 +82,7 @@ async function main() {
   const custOrNull = (id: string | null | undefined) =>
     id && customerIds.has(id) ? id : null;
 
-  // ── 1. SUPPLIERS (11 — Juja 3 + 8 branch) ─────────────────────────────────
+  // 1. SUPPLIERS (11 - Juja 3 + 8 branch)
   const suppliers = [
     { id: 'sup_juja_bamburi', storeId: store.id, name: 'Bamburi Cement Ltd', email: 'orders@bamburi.co.ke', phone: '0207654321', address: 'Mombasa Road, Nairobi', city: 'Nairobi', contactPerson: 'James Mwangi', taxPin: 'P058765432B', paymentTerms: 'NET_30', rating: 5, notes: 'Primary cement supplier' },
     { id: 'sup_juja_mabati', storeId: store.id, name: 'Mabati Rolling Mills', email: 'sales@mabati.co.ke', phone: '0207654322', address: 'Industrial Area, Nairobi', city: 'Nairobi', contactPerson: 'Ahmed Yusuf', taxPin: 'P058765433C', paymentTerms: 'NET_30', rating: 4, notes: 'Iron sheets and roofing supplier' },
@@ -107,7 +104,7 @@ async function main() {
     } catch (e) { failed.push({ item: `supplier:${s.id}`, err: String(e).slice(0, 160) }); }
   }
 
-  // ── 2. CHART OF ACCOUNTS (missing codes only) ─────────────────────────────
+  // 2. CHART OF ACCOUNTS (missing codes only)
   const accounts = [
     { code: '1400', name: 'Rental Deposits Held', type: 'ASSET', subType: 'CURRENT_ASSET', normalBalance: 'DEBIT' },
     { code: '2000', name: 'Accounts Payable', type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
@@ -135,7 +132,7 @@ async function main() {
     } catch (e) { failed.push({ item: `account:${a.code}`, err: String(e).slice(0, 160) }); }
   }
 
-  // ── 2b. BRANCH CATEGORIES (Nairobi 8 + Nakuru 8) ───────────────────────────
+  // 2b. BRANCH CATEGORIES (Nairobi 8 + Nakuru 8)
   const branchCategories = [
     { id: 'cat_nbi_cement', storeId: storeNairobiCbd.id, name: 'Cement', description: 'All types of cement', icon: 'building', color: '#8B7355', sortOrder: 1 },
     { id: 'cat_nbi_iron_sheets', storeId: storeNairobiCbd.id, name: 'Iron Sheets', description: 'Roofing iron sheets', icon: 'layout-grid', color: '#4A5568', sortOrder: 2 },
@@ -164,7 +161,7 @@ async function main() {
     } catch (e) { failed.push({ item: `category:${c.id}`, err: String(e).slice(0, 160) }); }
   }
 
-  // ── 2c. BRANCH PRODUCTS (Nairobi 11 + Nakuru 11) ───────────────────────────
+  // 2c. BRANCH PRODUCTS (Nairobi 11 + Nakuru 11)
   const branchProducts = [
     { id: 'prod_nbi_cement_bamburi', sku: 'NBI-CEM-0001', name: 'Bamburi Cement 50kg', categoryId: 'cat_nbi_cement', unitType: 'BAG', quantityInStock: 250, pricePerUnit: 760, costPrice: 690, reorderLevel: 50, storeId: storeNairobiCbd.id },
     { id: 'prod_nbi_cement_simba', sku: 'NBI-CEM-0002', name: 'Simba Cement 50kg', categoryId: 'cat_nbi_cement', unitType: 'BAG', quantityInStock: 200, pricePerUnit: 730, costPrice: 660, reorderLevel: 50, storeId: storeNairobiCbd.id },
@@ -198,7 +195,7 @@ async function main() {
     } catch (e) { failed.push({ item: `product:${p.id}`, err: String(e).slice(0, 160) }); }
   }
 
-  // ── 2d. BRANCH CUSTOMERS (Ruiru 1 + Nairobi 4 + Nakuru 4) ──────────────────
+  // 2d. BRANCH CUSTOMERS (Ruiru 1 + Nairobi 4 + Nakuru 4)
   const branchCustomers = [
     { id: 'cust_ruiru_4', storeId: storeRuiru.id, name: 'Tala Building Solutions', phone: '0727456789', email: 'info@talabuilding.co.ke', idNumber: '43437890', debtLimit: 200000, currentDebtBalance: 35000 },
     { id: 'cust_nbi_1', storeId: storeNairobiCbd.id, name: 'Westlands Contractors Ltd', phone: '0735123456', email: 'info@westlandscontractors.co.ke', idNumber: '50104567', debtLimit: 500000, currentDebtBalance: 125000 },
@@ -219,7 +216,7 @@ async function main() {
     } catch (e) { failed.push({ item: `customer:${c.id}`, err: String(e).slice(0, 160) }); }
   }
 
-  // ── 3. BRANCH SALES (12, with items + payments) ────────────────────────────
+  // 3. BRANCH SALES (12, with items + payments)
   const branchSales = [
     // Thika
     { id: 'tx_thk_001', storeId: storeThika.id, receiptNumber: 'THK-RCPT-001', customerId: 'cust_thk_1', cashierId: 'user_thika_manager', subtotal: 15000, taxAmount: 2400, discountAmount: 0, totalAmount: 17400, paymentMethod: 'CASH', paymentStatus: 'COMPLETED', transactionType: 'SALE', createdAt: daysAgoAtHour(1, 10),
@@ -295,7 +292,7 @@ async function main() {
   ];
   for (const sale of branchSales) {
     if (await prisma.salesTransaction.findUnique({ where: { receiptNumber: sale.receiptNumber } })) { skipped.push(`sale:${sale.receiptNumber}`); continue; }
-    // Verify items' products — drop rows with unknown products rather than fail.
+    // Verify items' products - drop rows with unknown products rather than fail.
     const validItems = sale.items.filter(i => productIds.has(i.productId));
     if (validItems.length < sale.items.length) {
       console.log(`   ⚠️  ${sale.receiptNumber}: dropping ${sale.items.length - validItems.length} item(s) with unknown productId`);
@@ -321,7 +318,7 @@ async function main() {
     } catch (e) { failed.push({ item: `sale:${sale.receiptNumber}`, err: String(e).slice(0, 160) }); }
   }
 
-  // ── 4. EXPENSES (Juja 5 + branch 8, fixed IDs) ─────────────────────────────
+  // 4. EXPENSES (Juja 5 + branch 8, fixed IDs)
   const expenses = [
     { id: 'exp_seed_juja_1', storeId: store.id, description: 'Shop rent - January', amount: 25000, category: 'RENT', paidBy: 'user_super_admin', paymentMethod: 'CASH', notes: 'Monthly rent for Juja Main shop' },
     { id: 'exp_seed_juja_2', storeId: store.id, description: 'Electricity bill', amount: 4500, category: 'UTILITIES', paidBy: 'user_accountant_1', paymentMethod: 'MPESA', notes: 'Kenya Power bill for Dec' },
@@ -346,7 +343,7 @@ async function main() {
     } catch (e) { failed.push({ item: `expense:${ex.id}`, err: String(e).slice(0, 160) }); }
   }
 
-  // ── 5. DEBT LEDGERS (6, transaction refs nulled if absent) ─────────────────
+  // 5. DEBT LEDGERS (6, transaction refs nulled if absent)
   const debtLedgers = [
     { id: 'debt_1', storeId: store.id, customerId: 'cust_2', transactionId: 'tx_004', amountOwed: 15000, amountPaid: 0, balance: 15000, dueDate: new Date('2025-01-15'), status: 'OUTSTANDING', agingBucket: 'DAYS_60' },
     { id: 'debt_2', storeId: store.id, customerId: 'cust_3', transactionId: 'tx_004', amountOwed: 45000, amountPaid: 5000, balance: 40000, dueDate: new Date('2025-01-01'), status: 'OVERDUE', agingBucket: 'DAYS_90_PLUS' },
@@ -367,7 +364,7 @@ async function main() {
     } catch (e) { failed.push({ item: `debt:${dl.id}`, err: String(e).slice(0, 160) }); }
   }
 
-  // ── 6. EQUIPMENT RENTALS (3) ───────────────────────────────────────────────
+  // 6. EQUIPMENT RENTALS (3)
   const rentals = [
     { id: 'rental_1', storeId: store.id, productId: 'prod_concrete_mixer', customerId: 'cust_3', status: 'ACTIVE', rentalStartDate: daysAgo(5), expectedReturnDate: daysAgo(-5), securityDeposit: 10000, ratePerDay: 3000, totalRentalCharge: 30000, lateFeeAccumulated: 0 },
     { id: 'rental_2', storeId: store.id, productId: 'prod_scaffolding', customerId: 'cust_4', status: 'OVERDUE', rentalStartDate: daysAgo(20), expectedReturnDate: daysAgo(3), securityDeposit: 15000, ratePerDay: 1500, totalRentalCharge: 30000, lateFeeAccumulated: 4500 },
@@ -384,7 +381,7 @@ async function main() {
     } catch (e) { failed.push({ item: `rental:${er.id}`, err: String(e).slice(0, 160) }); }
   }
 
-  // ── 7. PURCHASE ORDERS (5, guarded by poNumber) ────────────────────────────
+  // 7. PURCHASE ORDERS (5, guarded by poNumber)
   const jujaSuppliers = { bamburi: 'sup_juja_bamburi', mabati: 'sup_juja_mabati', dulux: 'sup_juja_dulux' };
   const jujaProducts = {
     cement: 'prod_cement_bamburi', mabati30: 'prod_mabati_30', dulux20l: 'prod_dulux_20l',
@@ -445,7 +442,7 @@ async function main() {
     } catch (e) { failed.push({ item: `po:${po.number}`, err: String(e).slice(0, 160) }); }
   }
 
-  // ── 8. GIFT CARDS (14) ─────────────────────────────────────────────────────
+  // 8. GIFT CARDS (14)
   const giftCards = [
     { id: 'gc_active_0001', storeId: store.id, code: 'GC-ACTIVE-0001', reason: 'CUSTOMER_LOYALTY', initialBalance: 5000, currentBalance: 3500, status: 'PARTIALLY_REDEEMED', recipientName: 'John Kamau', recipientPhone: '0722123456', issuedTo: 'cust_1', issuedBy: 'user_super_admin', autoAdjustItems: true, createdAt: daysAgo(30) },
     { id: 'gc_active_0002', storeId: store.id, code: 'GC-ACTIVE-0002', reason: 'PROMOTION', initialBalance: 2000, currentBalance: 2000, status: 'ACTIVE', recipientName: 'Walk-in Customer', issuedBy: 'user_cashier_1', autoAdjustItems: true, createdAt: daysAgo(14) },
@@ -474,7 +471,7 @@ async function main() {
     gcIdByCode.set(gc.code, gc.id);
   }
 
-  // ── 9. GIFT CARD REDEMPTIONS (11, one guard-set per card) ──────────────────
+  // 9. GIFT CARD REDEMPTIONS (11, one guard-set per card)
   const redemptions = [
     { code: 'GC-ACTIVE-0001', rows: [
       { amount: 1000, redeemedBy: 'user_cashier_1', notes: 'Partial redemption - cement purchase', createdAt: daysAgoAtHour(15, 11) },
@@ -507,7 +504,7 @@ async function main() {
       skipped.push(`redemption:${group.code}`); continue;
     }
     // AUDIT FIX (Finding 1.3): renamed shadow variable `any` →
-    // `hasValidRedemptions` — the old name collided with the TypeScript type
+    // `hasValidRedemptions` - the old name collided with the TypeScript type
     // keyword, confused readers, and masked its boolean intent.
     let hasValidRedemptions = false;
     for (const r of group.rows) {
@@ -522,7 +519,7 @@ async function main() {
     if (!hasValidRedemptions) skipped.push(`redemption:${group.code}`);
   }
 
-  // ── 10. AUDIT TRAIL ────────────────────────────────────────────────────────
+  // 10. AUDIT TRAIL
   if (APPLY && created.length > 0) {
     try {
       await prisma.systemLog.create({
@@ -539,7 +536,7 @@ async function main() {
     }
   }
 
-  // ── summary ────────────────────────────────────────────────────────────────
+  // summary
   console.log(`\n=== SUMMARY: ${created.length} to create, ${skipped.length} skipped (already present), ${failed.length} failed ===`);
   if (failed.length) console.log('Failures:', JSON.stringify(failed, null, 1));
   const after = await snapshot();
@@ -559,7 +556,7 @@ async function snapshot(): Promise<Record<string, number>> {
   ];
   const out: Record<string, number> = {};
   for (const [label, model] of models) {
-    // @ts-expect-error — dynamic delegate access for the summary only
+    // @ts-expect-error - dynamic delegate access for the summary only
     out[label] = await prisma[model].count();
   }
   return out;

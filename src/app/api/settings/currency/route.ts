@@ -1,19 +1,16 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Store Default Currency Settings API
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Store Default Currency Settings API
 //
-// GET   /api/settings/currency?storeId=...      — return the store's default currency
-// PATCH /api/settings/currency                  — update the store's default currency
+// GET   /api/settings/currency?storeId=... - return the store's default currency
+// PATCH /api/settings/currency - update the store's default currency
 //
 // The store's default currency is persisted on the `Store` model
 // (`defaultCurrency` column, defaults to "KES"). It is the currency a
-// cashier sees when they first log in — they can still override it via the
+// cashier sees when they first log in - they can still override it via the
 // CurrencySwitcher for the current session.
 //
 // Auth:
-//   • GET  — any authenticated user with store access.
-//   • PATCH — SUPER_ADMIN or STORE_OWNER only.
-// ─────────────────────────────────────────────────────────────────────────────
+//   • GET - any authenticated user with store access.
+//   • PATCH - SUPER_ADMIN or STORE_OWNER only.
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { db, runWithoutTenant } from '@/lib/db';
@@ -29,7 +26,7 @@ const SUPPORTED_CODES = SUPPORTED_CURRENCIES.map((c) => c.code) as [
   ...CurrencyCode[],
 ];
 
-// ── GET: return store default currency ──────────────────────────────────────
+// GET: return store default currency
 async function getHandler(
   request: NextRequest,
   session: AuthSession,
@@ -72,7 +69,7 @@ async function getHandler(
   });
 }
 
-// ── PATCH: update store default currency ────────────────────────────────────
+// PATCH: update store default currency
 const patchBodySchema = z.object({
   storeId: z.string().min(1, 'storeId is required'),
   defaultCurrency: z.enum(SUPPORTED_CODES),

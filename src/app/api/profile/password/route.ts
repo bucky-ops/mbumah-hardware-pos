@@ -1,14 +1,14 @@
-// POST /api/profile/password — SELF-SERVICE password change (v2.7.0)
+// POST /api/profile/password - SELF-SERVICE password change (v2.7.0)
 //
 // WHY THIS ROUTE EXISTS: until now the ONLY way to change a password was a
 // SUPER_ADMIN running the Admin tab's user editor. Users could not secure
 // their own accounts. This route lets any signed-in user rotate their own
-// password — the standard "Change password" flow every POS user expects.
+// password - the standard "Change password" flow every POS user expects.
 //
 // Security model:
 //   • Session-authenticated (Bearer token), self-scoped to session.userId.
-//   • REQUIRES the CURRENT password (bcrypt.compare, cost 12 hashes — same
-//     cost as /api/users POST) — a stolen unlocked laptop cannot lock the
+//   • REQUIRES the CURRENT password (bcrypt.compare, cost 12 hashes - same
+//     cost as /api/users POST) - a stolen unlocked laptop cannot lock the
 //     real user out without knowing the current password.
 //   • New password: min 8 chars, must differ from the current one.
 //   • SESSION HYGIENE: after a successful change, every OTHER session for
@@ -26,7 +26,7 @@ import { withSessionAuth, getSessionFromRequest } from '@/lib/auth';
 export const dynamic = 'force-dynamic';
 
 const MIN_PASSWORD_LENGTH = 8;
-const BCRYPT_ROUNDS = 12; // same cost as /api/users POST — do not lower
+const BCRYPT_ROUNDS = 12; // same cost as /api/users POST - do not lower
 
 interface ChangePasswordBody {
   currentPassword?: unknown;
@@ -37,7 +37,7 @@ async function changePasswordHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   // NOTE: withSessionAuth does NOT pass the session as args[1] (it sets the
   // ORM tenant context via AsyncLocalStorage). Re-derive it from the request
-  // — same pattern as POST /api/gift-cards/redeem.
+  // same pattern as POST /api/gift-cards/redeem.
   const session = await getSessionFromRequest(request);
   if (!session) {
     return Response.json(
@@ -85,13 +85,13 @@ async function changePasswordHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // ── Verify the CURRENT password (constant-time bcrypt compare) ─────────
+  // Verify the CURRENT password (constant-time bcrypt compare)
   const currentPasswordMatches = await bcrypt.compare(
     currentPassword,
     user.passwordHash
   );
   if (!currentPasswordMatches) {
-    // Same message for "user not found" style mistakes — no oracle.
+    // Same message for "user not found" style mistakes - no oracle.
     return Response.json(
       { success: false, error: 'Current password is incorrect.' },
       { status: 400 }
@@ -100,7 +100,7 @@ async function changePasswordHandler(...args: unknown[]): Promise<Response> {
 
   const newPasswordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
 
-  // ── Rotate the hash and revoke every OTHER session in one transaction ──
+  // Rotate the hash and revoke every OTHER session in one transaction
   // The current Bearer token is read from the Authorization header (the same
   // place getSessionFromRequest found it) and kept alive.
   const authHeader = request.headers.get('authorization');

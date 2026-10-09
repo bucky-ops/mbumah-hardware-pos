@@ -1,4 +1,4 @@
-name: 🐛 Bug Report
+name: Bug Report
 description: Report a bug or unexpected behavior in Mbumah Hardware POS
 title: "[BUG] <short summary>"
 labels: ["bug", "needs-triage"]
@@ -10,7 +10,7 @@ body:
         Thanks for taking the time to file a bug report! Before you continue,
         please:
         - **Search** existing issues to avoid duplicates.
-        - **Update** to the latest `main` — your bug may already be fixed.
+        - **Update** to the latest `main`; your bug may already be fixed.
         - For **security vulnerabilities**, do NOT use this form. See [SECURITY.md](https://github.com/bucky-ops/mbumah-hardware-pos/blob/main/SECURITY.md) and report privately.
 
   - type: textarea
@@ -88,9 +88,9 @@ body:
     id: browser
     attributes:
       label: Browser
-      description: Which browser did the bug occur in? (For non-UI bugs, select "N/A — server-side only".)
+      description: Which browser did the bug occur in? (For non-UI bugs, select "N/A (server-side only)".)
       options:
-        - N/A — server-side only (API / build / CLI)
+        - N/A (server-side only: API / build / CLI)
         - Chrome (desktop)
         - Firefox (desktop)
         - Safari (desktop)
@@ -145,7 +145,7 @@ body:
     id: store-context
     attributes:
       label: Store / POS Context
-      description: If the bug involves a specific store, payment, or rental, give context (do NOT paste real customer PII or real M-Pesa codes).
+      description: If the bug involves a specific store, payment, or rental, give context (do not paste real customer PII or real M-Pesa codes).
       placeholder: |
         - Store: e.g. Juja Main
         - Terminal type: Desktop / Tablet / Mobile
@@ -176,11 +176,11 @@ body:
       label: Severity
       description: How badly does this affect store operations?
       options:
-        - Critical — blocks daily operations / causes financial loss
-        - High — major feature broken, no workaround
-        - Medium — feature broken, workaround exists
-        - Low — cosmetic / minor inconvenience
-        - Unknown — not sure yet
+        - Critical: blocks daily operations or causes financial loss
+        - High: major feature broken, no workaround
+        - Medium: feature broken, workaround exists
+        - Low: cosmetic or minor inconvenience
+        - Unknown: not sure yet
     validations:
       required: true
 
@@ -193,7 +193,7 @@ body:
           required: true
         - label: I am running on the latest `main` branch (or have noted the commit SHA above).
           required: true
-        - label: This is NOT a security vulnerability (security issues go to SECURITY.md and must be reported PRIVATELY).
+        - label: This is not a security vulnerability (security issues go through SECURITY.md and must be reported privately).
           required: true
         - label: I have redacted any real customer PII, M-Pesa codes, or production credentials from my logs and screenshots.
           required: true

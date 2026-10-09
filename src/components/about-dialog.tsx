@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * AboutDialog (v2.7.0) — replaces the old "About this system" toast which
- * hardcoded "Version 1.0.0" (the app was on 2.6.x — the exact drift the
+ * AboutDialog (v2.7.0) - replaces the old "About this system" toast which
+ * hardcoded "Version 1.0.0" (the app was on 2.6.x - the exact drift the
  * version-governance release v2.6.2 set out to kill; the toast was missed).
  *
  * The version shown here comes from src/lib/version.ts (package.json is the

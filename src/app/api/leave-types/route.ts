@@ -1,8 +1,8 @@
 // GET/POST /api/leave-types
 //
 // Organisation-wide leave type management.
-//   GET  — list all leave types (optionally only active)
-//   POST — create a new leave type (SUPER_ADMIN / STORE_OWNER only)
+//   GET - list all leave types (optionally only active)
+//   POST - create a new leave type (SUPER_ADMIN / STORE_OWNER only)
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -13,7 +13,7 @@ import { seedDefaultLeaveTypes } from '@/lib/payroll-helpers';
 
 export const dynamic = 'force-dynamic';
 
-// ── GET: List leave types ────────────────────────────────────────────────────
+// GET: List leave types
 async function listLeaveTypesHandler(
   request: NextRequest,
   _session: { userId: string; role: string; storeId: string | null }
@@ -57,7 +57,7 @@ export const GET = withErrorBoundary(
   'LEAVE_TYPES_LIST'
 );
 
-// ── POST: Create a new leave type ────────────────────────────────────────────
+// POST: Create a new leave type
 async function createLeaveTypeHandler(
   request: NextRequest,
   session: { userId: string; role: string; email: string }

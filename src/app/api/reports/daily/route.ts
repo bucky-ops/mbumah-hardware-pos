@@ -9,14 +9,14 @@
 //   • Cashier breakdown (per-cashier revenue + transaction count)
 //
 // Query params:
-//   • date    — ISO date string (YYYY-MM-DD). Defaults to today (UTC).
-//   • storeId — required (store-scoped via requireStoreAccess)
-//   • format  — 'json' (default) | 'csv'
+//   • date - ISO date string (YYYY-MM-DD). Defaults to today (UTC).
+//   • storeId - required (store-scoped via requireStoreAccess)
+//   • format - 'json' (default) | 'csv'
 //
 // Used for end-of-day reconciliation: the closing manager prints this report
 // and verifies the counted cash drawer matches the expected cash sales.
 //
-// Auth: any authenticated user (requireStoreAccess — store-scoped).
+// Auth: any authenticated user (requireStoreAccess - store-scoped).
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -29,13 +29,13 @@ import {
   type DailyReportData,
 } from '@/lib/report-utils';
 // AUDIT FIX (Task 3-f): unified, VAT-exclusive revenue/profit formulas
-// (single source of truth — see src/lib/profit.ts).
+// (single source of truth - see src/lib/profit.ts).
 import { grossRevenue, PROFIT_FORMULA_VERSION } from '@/lib/profit';
 import { KES } from '@/lib/money';
 
 export const dynamic = 'force-dynamic';
 
-// ── AUDIT FIX (Task 3-d): profit/margin redaction at the response boundary ──
+// AUDIT FIX (Task 3-d): profit/margin redaction at the response boundary
 // Task 3-f owns the aggregation above; this block ONLY redacts profit/margin
 // fields for callers below branch-manager level (e.g. CASHIER). No-op today
 // (DailyReportData carries no profit fields) but keeps the response safe if
@@ -68,7 +68,7 @@ async function getDailyReportHandler(
     );
   }
 
-  // Resolve the target day — defaults to today in the server's local TZ.
+  // Resolve the target day - defaults to today in the server's local TZ.
   const dateStr = searchParams.get('date') || formatISODate(new Date());
   const dayStart = new Date(dateStr);
   if (Number.isNaN(dayStart.getTime())) {
@@ -137,7 +137,7 @@ async function getDailyReportHandler(
     }),
   ]);
 
-  // ── Sales totals (AUDIT FIX Task 3-f — canonical formulas, see src/lib/profit.ts)
+  // Sales totals (AUDIT FIX Task 3-f - canonical formulas, see src/lib/profit.ts)
   // totalRevenue is now VAT-EXCLUSIVE (totalAmount − taxAmount) so this report
   // agrees with sales-summary, revenue-trend and the tax-filings server
   // recompute on what "revenue" means. Header identity still holds:
@@ -158,14 +158,14 @@ async function getDailyReportHandler(
     ? KES(totalRevenue).divide(transactionCount).round().toNumber()
     : 0;
 
-  // ── Returns + voids (tender amounts, kept tax-inclusive; HALF_EVEN-rounded) ──
+  // Returns + voids (tender amounts, kept tax-inclusive; HALF_EVEN-rounded)
   const returnsCount = refundAggregate._count;
   const returnsRefunded = KES(refundAggregate._sum.totalAmount || 0).round().toNumber();
   const voidedCount = voidAggregate._count;
   const voidedAmount = KES(voidAggregate._sum.totalAmount || 0).round().toNumber();
 
-  // ── Payment-method breakdown (SALE transactions only) ──
-  // AUDIT FIX (Task 3-f): amounts stay TAX-INCLUSIVE — tender collected, the
+  // Payment-method breakdown (SALE transactions only)
+  // AUDIT FIX (Task 3-f): amounts stay TAX-INCLUSIVE - tender collected, the
   // figure to reconcile against the cash drawer.
   const paymentMap: Record<string, { count: number; amount: number }> = {};
   for (const tx of allTransactions) {
@@ -182,7 +182,7 @@ async function getDailyReportHandler(
     amount: KES(v.amount).round().toNumber(),
   }));
 
-  // ── Cashier breakdown (tender amounts, tax-inclusive — reconciliation basis) ──
+  // Cashier breakdown (tender amounts, tax-inclusive - reconciliation basis)
   const cashierMap: Record<string, { cashierId: string; cashierName: string; transactionCount: number; revenue: number }> = {};
   for (const tx of allTransactions) {
     if (tx.transactionType !== 'SALE') continue;
@@ -233,11 +233,11 @@ async function getDailyReportHandler(
   };
 
   // AUDIT FIX (Task 3-d): strip profit/margin fields for below-manager callers
-  // (response boundary only — aggregation untouched).
+  // (response boundary only - aggregation untouched).
   const viewerIsManagerPlus = MANAGER_PLUS_ROLES.includes(session.role);
   const outbound = viewerIsManagerPlus ? report : redactProfitFields(report);
 
-  // ── Audit log ──
+  // Audit log
   await systemLog({
     action: 'REPORT_GENERATED',
     component: LogComponent.SYSTEM,
@@ -257,7 +257,7 @@ async function getDailyReportHandler(
     },
   }).catch(() => {});
 
-  // ── CSV response ──
+  // CSV response
   if (format === 'csv') {
     const csv = generateDailyReportCSV(outbound);
     const filename = `daily_report_${formatISODate(dayStart)}.csv`;

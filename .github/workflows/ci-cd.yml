@@ -1,23 +1,20 @@
-# ============================================================================
-# MBUMAH HARDWARE POS & ERP — Unified CI/CD Pipeline
-# ============================================================================
+# MBUMAH HARDWARE POS & ERP - Unified CI/CD Pipeline
 #
 # This workflow replaces the fragmented node.js.yml / deploy.yml / pages.yml
 # with a single, linear pipeline that runs on every push and pull request.
 #
 # Stages:
-#   1. install      — Bun install with cache
-#   2. lint         — ESLint (0 errors required)
-#   3. typecheck    — tsc --noEmit (strict mode)
-#   4. security     — Dependency audit + Prisma schema validation
-#   5. test         — Vitest unit + integration tests
-#   6. build        — next build (only on main / develop / PRs to those)
-#   7. deploy       — Vercel deployment (only on main, after all checks pass)
-#   8. preview      — Vercel preview deployment (on PRs to main/develop)
-#   9. ci-pass      — Summary gate for branch protection
+#  1. install - Bun install with cache
+#  2. lint - ESLint (0 errors required)
+#  3. typecheck - tsc --noEmit (strict mode)
+#  4. security - Dependency audit + Prisma schema validation
+#  5. test - Vitest unit + integration tests
+#  6. build - next build (only on main / develop / PRs to those)
+#  7. deploy - Vercel deployment (only on main, after all checks pass)
+#  8. preview - Vercel preview deployment (on PRs to main/develop)
+#  9. ci-pass - Summary gate for branch protection
 #
 # Concurrency: a new push to the same branch cancels any in-progress run.
-# ============================================================================
 
 name: CI/CD
 
@@ -47,7 +44,7 @@ env:
   SKIP_ENV_VALIDATION: '1'
 
 jobs:
-  # ── Stage 1: Install dependencies ──────────────────────────────────────────
+  # Stage 1: Install dependencies
   install:
     name: Install
     runs-on: ubuntu-latest
@@ -75,7 +72,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-  # ── Stage 2: Lint ──────────────────────────────────────────────────────────
+  # Stage 2: Lint
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -99,7 +96,7 @@ jobs:
         env:
           SKIP_ENV_VALIDATION: '1'
 
-  # ── Stage 3: TypeScript type-check (ADVISORY) ──────────────────────────────
+  # Stage 3: TypeScript type-check (ADVISORY)
   # Non-blocking: ~665 strict-mode errors (mostly Prisma Decimal vs number
   # arithmetic) predate this pipeline; next.config.ts sets
   # `typescript.ignoreBuildErrors: true`, so builds never enforced them.
@@ -128,7 +125,7 @@ jobs:
         env:
           SKIP_ENV_VALIDATION: '1'
 
-  # ── Stage 4: Security & Schema Validation ──────────────────────────────────
+  # Stage 4: Security & Schema Validation
   security:
     name: Security & Schema
     runs-on: ubuntu-latest
@@ -154,7 +151,7 @@ jobs:
           # as a cross-check. We only fail on high/critical vulnerabilities.
           npx npm-audit --audit-level=high 2>/dev/null || {
             echo "::warning::npm audit found vulnerabilities. Check the output above."
-            # Don't fail the build on audit warnings — just surface them.
+            # Don't fail the build on audit warnings - just surface them.
             # When all vulnerabilities are resolved, remove the `||` fallback.
           }
 
@@ -201,7 +198,7 @@ jobs:
           fi
           echo "API route check complete."
 
-  # ── Stage 5: Tests ─────────────────────────────────────────────────────────
+  # Stage 5: Tests
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -210,7 +207,7 @@ jobs:
       # The Vitest suite is hermetic SQLite (see src/tests/setup.ts, which
       # forces file:<repo>/prisma/prisma/dev.db). Setting the URL at job level
       # means postinstall switches the schema provider to SQLite and generates
-      # a SQLite Prisma Client BEFORE tests run — a PostgreSQL client would
+      # a SQLite Prisma Client BEFORE tests run - a PostgreSQL client would
       # throw "URL must start with file:".
       DATABASE_URL: file:${{ github.workspace }}/prisma/prisma/dev.db
       DIRECT_URL: file:${{ github.workspace }}/prisma/prisma/dev.db
@@ -246,7 +243,7 @@ jobs:
             test-results/
           retention-days: 7
 
-  # ── Stage 6: Build (main / develop / PRs to those branches) ────────────────
+  # Stage 6: Build (main / develop / PRs to those branches)
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -276,7 +273,7 @@ jobs:
           JWT_SECRET: build-time-placeholder
           NEXTAUTH_SECRET: build-time-placeholder
 
-  # ── Stage 7: Deploy to Vercel Production (only on main push) ───────────────
+  # Stage 7: Deploy to Vercel Production (only on main push)
   deploy:
     name: Deploy (Production)
     runs-on: ubuntu-latest
@@ -330,7 +327,7 @@ jobs:
           echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           echo "- **URL**: https://mbumah-hardware-pos-one.vercel.app" >> $GITHUB_STEP_SUMMARY
 
-  # ── Stage 8: Preview Deployment (on PRs to main/develop) ───────────────────
+  # Stage 8: Preview Deployment (on PRs to main/develop)
   preview:
     name: Deploy (Preview)
     runs-on: ubuntu-latest
@@ -390,7 +387,7 @@ jobs:
               });
             }
 
-  # ── Stage 9: Summary job (for branch protection status checks) ────────────
+  # Stage 9: Summary job (for branch protection status checks)
   ci-pass:
     name: CI Pass
     runs-on: ubuntu-latest

@@ -6,7 +6,7 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
 // Task 12-c: canonical financial math. Prisma Decimal `valueOf()` returns a
-// STRING — `giftCard.currentBalance + amount` used to STRING-CONCATENATE
+// STRING - `giftCard.currentBalance + amount` used to STRING-CONCATENATE
 // ("500.00" + 100 → "500.00100") instead of adding.
 import { toDec, round2 } from '@/lib/utils/financialMath';
 
@@ -55,7 +55,7 @@ async function adjustGiftCardHandler(...args: unknown[]): Promise<Response> {
 
   const previousStatus = giftCard.status as string;
 
-  // Task 12-c: Decimal arithmetic (was `giftCard.currentBalance + amount` —
+  // Task 12-c: Decimal arithmetic (was `giftCard.currentBalance + amount` -
   // a number + Prisma-Decimal STRING concat). Rounded HALF_UP to 2dp.
   const adjustAmtDec = toDec(amount);
   // toDecimalPlaces(2) uses the global HALF_UP rounding owned by financialMath.

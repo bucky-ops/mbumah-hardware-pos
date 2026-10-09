@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * ResponsiveDialog — a Dialog wrapper that NEVER squeezes content.
+ * ResponsiveDialog - a Dialog wrapper that NEVER squeezes content.
  *
  * Solves the "words must fit within any window" requirement:
  *  - Auto-fits width up to a sensible max (configurable via `size`).

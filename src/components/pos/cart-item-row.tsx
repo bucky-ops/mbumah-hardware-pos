@@ -29,8 +29,8 @@ export function CartItemRow({
   const [isEditingQty, setIsEditingQty] = useState(false);
   const [qtyInput, setQtyInput] = useState(String(item.quantity));
 
-  // ── Low-stock UX (QA Phase 5) ──
-  // Red glow: item at/below its minimum stock level — cannot be sold until
+  // Low-stock UX (QA Phase 5)
+  // Red glow: item at/below its minimum stock level - cannot be sold until
   // restocked (checkout guard blocks the sale). Amber: below reorder level.
   const hasStockMeta = item.stockSnapshot !== undefined;
   const isBelowMinimum = hasStockMeta && !item.isRentalItem

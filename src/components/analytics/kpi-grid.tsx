@@ -35,7 +35,7 @@ export interface KpiCardConfig {
   gradient: string;
   /** Accent color (matches the gradient's primary hue). */
   accent: string;
-  /** For low-stock and pending-orders KPIs, "up" is bad — invert the trend color. */
+  /** For low-stock and pending-orders KPIs, "up" is bad - invert the trend color. */
   invertTrend?: boolean;
 }
 

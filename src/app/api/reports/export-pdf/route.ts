@@ -10,7 +10,7 @@
 // Supported types: sales, inventory, debt, rentals
 // Query params: storeId, type, dateFrom?, dateTo?
 //
-// Returns Content-Type: text/html — the client opens it in a new tab and
+// Returns Content-Type: text/html - the client opens it in a new tab and
 // the user uses the browser's "Save as PDF" (Ctrl+P → Save as PDF).
 
 import { type NextRequest } from 'next/server';
@@ -18,7 +18,7 @@ import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { formatKES, formatDate } from '@/lib/helpers';
-// Task 12-b: Prisma Decimal valueOf() returns a STRING — `number + decimal`
+// Task 12-b: Prisma Decimal valueOf() returns a STRING - `number + decimal`
 // concatenates. Totals below accumulate via toDec(); formatKES (canonical 2dp
 // en-KE formatter) is kept from '@/lib/helpers'.
 import { toDec, round2 } from '@/lib/utils/financialMath';
@@ -29,7 +29,7 @@ import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-// ── Logo embedding ───────────────────────────────────────────────────────────
+// Logo embedding
 //
 // Read the logo from /public and base64-encode it so the generated HTML is
 // fully self-contained (works in a print window even if the origin differs).
@@ -63,7 +63,7 @@ function escapeHtml(value: unknown): string {
   });
 }
 
-// ── Report builders ──────────────────────────────────────────────────────────
+// Report builders
 
 interface ReportContext {
   storeId: string;
@@ -158,7 +158,7 @@ async function buildInventoryReport(ctx: ReportContext): Promise<ReportResult> {
     (acc, p) => acc.plus(toDec(p.quantityInStock).mul(toDec(p.costPrice))),
     toDec(0),
   ).toNumber();
-  // Task 12-b: reorder-level comparison in Decimal — Decimals coerce to STRINGS
+  // Task 12-b: reorder-level comparison in Decimal - Decimals coerce to STRINGS
   // under `<=` (lexicographic: "10" <= "5" is true!), so use Decimal.lte.
   const lowStock = products.filter((p) => toDec(p.quantityInStock).lte(toDec(p.reorderLevel))).length;
 
@@ -187,7 +187,7 @@ async function buildDebtReport(ctx: ReportContext): Promise<ReportResult> {
   const rows = debts.map((d) => [
     d.customer?.name || '—',
     d.customer?.phone || '—',
-    // Task 12-b fix: DebtLedger has no `originalAmount` column — the original
+    // Task 12-b fix: DebtLedger has no `originalAmount` column - the original
     // debt is `amountOwed` (was rendering undefined → "KES 0.00").
     formatKES(d.amountOwed),
     formatKES(d.amountPaid),
@@ -217,7 +217,7 @@ async function buildRentalsReport(ctx: ReportContext): Promise<ReportResult> {
     where: { storeId: ctx.storeId },
     include: {
       customer: { select: { name: true, phone: true } },
-      // Task 12-b fix: EquipmentRental has no `equipmentName` column — the item
+      // Task 12-b fix: EquipmentRental has no `equipmentName` column - the item
       // is identified through its product relation.
       product: { select: { name: true } },
     },
@@ -254,12 +254,10 @@ async function buildRentalsReport(ctx: ReportContext): Promise<ReportResult> {
   };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// R14 (v2.5.1): CUSTOMER ACCOUNT STATEMENT — full account history for ONE
+// R14 (v2.5.1): CUSTOMER ACCOUNT STATEMENT - full account history for ONE
 // customer: statement table (chronological, running debt balance), activity
 // timeline, SVG graphs, summary cards and auto-generated key highlights.
 // Query: type=customer-statement&customerId=…&storeId=…
-// ═══════════════════════════════════════════════════════════════════════════
 
 function formatDateTimeEAT(d: Date | string): string {
   const date = typeof d === 'string' ? new Date(d) : d;
@@ -282,7 +280,7 @@ interface StatementEntry {
   debit: number;
   /** Amount the customer PAID / was charged against what they owe. */
   credit: number;
-  /** Memo-only row (deposit held/released) — excluded from debt balance. */
+  /** Memo-only row (deposit held/released) - excluded from debt balance. */
   memo: boolean;
 }
 
@@ -353,7 +351,7 @@ async function loadCustomerStatement(storeId: string, customerId: string): Promi
   const entries: StatementEntry[] = [];
   const n = (v: unknown): number => toDec(v as never).toNumber();
 
-  // ── Sales ──
+  // Sales
   let purchases = 0;
   let amountPaidSales = 0;
   for (const t of transactions) {
@@ -361,7 +359,7 @@ async function loadCustomerStatement(storeId: string, customerId: string): Promi
     if (t.paymentStatus === 'COMPLETED') amountPaidSales += n(t.totalAmount);
     const isDebt = t.paymentMethod === 'DEBT';
     // R15 FIX (v2.5.1): a DEBT-method sale and the debt-ledger row auto-created
-    // from it are the SAME credit event — the ledger row (which carries the
+    // from it are the SAME credit event - the ledger row (which carries the
     // due date + status) is the authoritative charge. The sale row is shown
     // balance-neutral here so the running balance does not DOUBLE-COUNT the
     // amount (Caroline's statement showed 12,696 instead of 6,348). Cash /
@@ -382,7 +380,7 @@ async function loadCustomerStatement(storeId: string, customerId: string): Promi
     });
   }
 
-  // ── Debt ledgers + payments ──
+  // Debt ledgers + payments
   let debtCharged = 0;
   let debtPaid = 0;
   for (const l of ledgers) {
@@ -414,7 +412,7 @@ async function loadCustomerStatement(storeId: string, customerId: string): Promi
     }
   }
 
-  // ── Rentals ──
+  // Rentals
   let rentalCharges = 0;
   let depositsHeld = 0;
   let depositsReleased = 0;
@@ -532,7 +530,7 @@ async function loadCustomerStatement(storeId: string, customerId: string): Promi
   };
 }
 
-/** Horizontal bar chart (SVG) — money by category. */
+/** Horizontal bar chart (SVG) - money by category. */
 function buildCategoryBarChart(rows: { label: string; value: number; color: string }[]): string {
   const max = Math.max(1, ...rows.map((r) => Math.abs(r.value)));
   const bars = rows.map((r) => {
@@ -637,7 +635,7 @@ async function buildCustomerStatement(storeId: string, customerId: string): Prom
   return { title: `Account Statement — ${data.customer.name}`, data, highlights };
 }
 
-// ── Statement HTML template (R14) ────────────────────────────────────────────
+// Statement HTML template (R14)
 
 async function buildHtmlStatement(
   report: StatementReport,
@@ -655,7 +653,7 @@ async function buildHtmlStatement(
   const c = data.customer;
   const t = data.totals;
 
-  // ── Summary cards ──
+  // Summary cards
   const debtBalance = round2(toDec(t.debtCharged).minus(t.debtPaid));
   const utilization = c.debtLimit > 0 ? Math.min(100, Math.round((debtBalance / c.debtLimit) * 100)) : 0;
   const summaryCards: { label: string; value: string; cls: string }[] = [
@@ -669,7 +667,7 @@ async function buildHtmlStatement(
     { label: 'Member since', value: formatDate(c.joinedAt), cls: '' },
   ];
 
-  // ── Statement table (chronological, running credit-account balance) ──
+  // Statement table (chronological, running credit-account balance)
   let running = 0;
   const statementRows = data.entries.map((e) => {
     if (!e.memo) {
@@ -690,7 +688,7 @@ async function buildHtmlStatement(
       </tr>`;
   }).join('');
 
-  // ── Timeline (most recent first) ──
+  // Timeline (most recent first)
   const timeline = [...data.entries].reverse().map((e) => `
     <div class="tl-row">
       <div class="tl-dot tl-${e.tone}">${e.icon}</div>
@@ -703,7 +701,7 @@ async function buildHtmlStatement(
       </div>
     </div>`).join('');
 
-  // ── Graphs ──
+  // Graphs
   const barChart = buildCategoryBarChart([
     { label: 'Purchases', value: t.purchases, color: '#0ea5a0' },
     { label: 'Store credit charged', value: t.debtCharged, color: '#f59e0b' },
@@ -714,7 +712,7 @@ async function buildHtmlStatement(
   ]);
   const balanceChart = buildBalanceChart(data.entries);
 
-  // ── Rentals table ──
+  // Rentals table
   const rentalsTable = data.rentals.length > 0 ? `
     <table>
       <thead><tr><th>Item</th><th>SKU</th><th>Start</th><th>Due</th><th>Returned</th><th class="right">Deposit</th><th class="right">Charge</th><th>Status</th></tr></thead>
@@ -735,7 +733,7 @@ async function buildHtmlStatement(
 
   const highlightsHtml = highlights.map((h) => `<li>${escapeHtml(h)}</li>`).join('');
 
-  // Task 35-b: verification QR — self-contained payload (no public statement
+  // Task 35-b: verification QR - self-contained payload (no public statement
   // page exists, so the QR carries the totals it verifies). Generated (awaited)
   // BEFORE template assembly as a base64 data URI so the printed HTML works
   // fully offline. QR is additive: a failure never blocks the statement.
@@ -752,7 +750,7 @@ async function buildHtmlStatement(
     <div class="qr-doc">Outstanding: ${escapeHtml(outstanding)}</div>
   </div>`;
   } catch {
-    // QR is decorative verification — statement must still print without it.
+    // QR is decorative verification - statement must still print without it.
   }
 
   return `<!doctype html>
@@ -895,7 +893,7 @@ async function buildHtmlStatement(
 </html>`;
 }
 
-// ── HTML template ────────────────────────────────────────────────────────────
+// HTML template
 
 function buildHtmlReport(
   report: ReportResult,
@@ -1026,7 +1024,7 @@ function buildHtmlReport(
 </html>`;
 }
 
-// ── Route handler ────────────────────────────────────────────────────────────
+// Route handler
 
 async function getExportPdfHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
@@ -1058,7 +1056,7 @@ async function getExportPdfHandler(...args: unknown[]): Promise<Response> {
 
   const ctx: ReportContext = { storeId, dateFrom, dateTo };
 
-  // R14 (v2.5.1): per-customer ACCOUNT STATEMENT — full history, timeline,
+  // R14 (v2.5.1): per-customer ACCOUNT STATEMENT - full history, timeline,
   // graphs and highlights. Must be handled before the generic table reports
   // because it renders a dedicated HTML template.
   if (type === 'customer-statement') {
@@ -1132,7 +1130,7 @@ async function getExportPdfHandler(...args: unknown[]): Promise<Response> {
 }
 
 // AUDIT FIX (Task 3-d): printable report export (sales/inventory/debt/rentals,
-// cost & margin columns) = manager-or-above — exports leak margin data.
+// cost & margin columns) = manager-or-above - exports leak margin data.
 export const GET = withErrorBoundary(
   withSessionAuth(getExportPdfHandler, { roles: MANAGER_PLUS_ROLES }),
   'REPORTS_EXPORT_PDF',

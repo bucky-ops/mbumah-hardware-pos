@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * ProfileSettingsDialog (v2.7.0) — the real "Profile & Settings" experience.
+ * ProfileSettingsDialog (v2.7.0) - the real "Profile & Settings" experience.
  *
  * Until this component shipped, the sidebar entry showed
  * `toast.info('Profile settings coming soon')` and the only way to change a
@@ -11,12 +11,12 @@
  *   GET/POST see src/app/api/profile/route.ts and .../password/route.ts
  *
  * Tabs:
- *   • Profile     — identity card (read-only: email/role/org/store) + editable
+ *   • Profile - identity card (read-only: email/role/org/store) + editable
  *                   name & phone. Saves through PATCH /api/profile and then
  *                   refreshes the auth store so the sidebar/topbar re-render.
- *   • Security    — self-service password change (requires the current
+ *   • Security - self-service password change (requires the current
  *                   password; revokes every OTHER session on success).
- *   • Preferences — theme (light/dark/system) and sidebar density, applied
+ *   • Preferences - theme (light/dark/system) and sidebar density, applied
  *                   instantly via next-themes / the app store.
  */
 
@@ -92,7 +92,7 @@ function formatDate(value: string | null): string {
   }
 }
 
-// ── Password strength (client-side hint only — server enforces the real rules)
+// Password strength (client-side hint only - server enforces the real rules)
 function passwordScore(pw: string): number {
   if (!pw) return 0;
   let score = 0;
@@ -136,7 +136,7 @@ export function ProfileSettingsDialog({
     staleTime: 30_000,
   });
 
-  // ── Editable profile fields ──
+  // Editable profile fields
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
@@ -174,7 +174,7 @@ export function ProfileSettingsDialog({
       }
     } catch (err) {
       // request() throws ApiRequestError with the server's message (e.g.
-      // validation failures) — surface it instead of generic copy.
+      // validation failures) - surface it instead of generic copy.
       toast.error(
         err instanceof Error && err.message
           ? err.message
@@ -233,7 +233,7 @@ export function ProfileSettingsDialog({
   );
 }
 
-// ── Tabs split out so the dialog body stays readable ────────────────────────
+// Tabs split out so the dialog body stays readable
 
 type ProfileTabsProps = {
   profile: ProfileData;
@@ -398,7 +398,7 @@ function ProfileTabs({
   );
 }
 
-// ── Password change (own tab content) ───────────────────────────────────────
+// Password change (own tab content)
 
 function PasswordChangeCard({ email }: { email: string }) {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -436,7 +436,7 @@ function PasswordChangeCard({ email }: { email: string }) {
         toast.error(res.error || 'Could not change password.');
       }
     } catch (err) {
-      // request() throws ApiRequestError with the server's message — e.g.
+      // request() throws ApiRequestError with the server's message - e.g.
       // "Current password is incorrect." Show it verbatim.
       toast.error(
         err instanceof Error && err.message

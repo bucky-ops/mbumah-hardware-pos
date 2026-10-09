@@ -3,17 +3,17 @@
 // EMPLOYEE-CRUD FIX (2026-09-10): until now /api/employees only exposed list +
 // create. The Payroll tab's Edit button opened a form that POSTed a DUPLICATE
 // employee (the code comment literally said "editing would use
-// PUT /api/employees/[id]" — which did not exist), and there was NO way to
+// PUT /api/employees/[id]" - which did not exist), and there was NO way to
 // remove/terminate an employee record at all. This route completes the DML
 // surface:
-//   GET    — one employee with relations + computed tenure
-//   PATCH  — edit identity / employment / compensation / status
-//   DELETE — SOFT delete: status → TERMINATED + terminationDate = now.
+//   GET - one employee with relations + computed tenure
+//   PATCH - edit identity / employment / compensation / status
+//   DELETE - SOFT delete: status → TERMINATED + terminationDate = now.
 //            Payroll history (PayrollDetail rows) must keep referencing a real
 //            employee row, so hard deletes are never offered.
 //
 // Security: requireStoreAccess (DB session + ORM tenant scoping). Non-admin
-// roles can only touch employees of their own store (defense in depth — the
+// roles can only touch employees of their own store (defense in depth - the
 // ORM interceptor already scopes reads/writes, this route re-checks).
 
 import { type NextRequest } from 'next/server';
@@ -38,7 +38,7 @@ async function loadEmployee(id: string) {
     where: { id },
     include: {
       user: { select: { id: true, email: true, name: true, role: true } },
-      // NOTE: relation is `leaveRequests` on the Employee model — `leaves`
+      // NOTE: relation is `leaveRequests` on the Employee model - `leaves`
       // does not exist and made PrismaClientValidationError 500 every
       // GET/UPDATE/TERMINATE of an employee.
       _count: { select: { payrollDetails: true, leaveRequests: true } },
@@ -110,7 +110,7 @@ function serializeEmployee(e: NonNullable<Awaited<ReturnType<typeof loadEmployee
   };
 }
 
-// ── GET: employee detail ─────────────────────────────────────────────────────
+// GET: employee detail
 async function getEmployeeHandler(
   request: NextRequest,
   session: AuthSession & { email: string },
@@ -126,7 +126,7 @@ async function getEmployeeHandler(
   return Response.json({ success: true, data: serializeEmployee(employee) });
 }
 
-// ── PATCH: update employee (full edit + status transitions) ─────────────────
+// PATCH: update employee (full edit + status transitions)
 async function updateEmployeeHandler(
   request: NextRequest,
   session: AuthSession & { email: string },
@@ -150,7 +150,7 @@ async function updateEmployeeHandler(
 
   const data: Record<string, unknown> = {};
 
-  // ── Identity (trimmed strings, null allowed for optionals) ──
+  // Identity (trimmed strings, null allowed for optionals)
   const strFields = [
     'firstName', 'lastName', 'email', 'phone', 'nationalId', 'kraPin',
     'nssfNumber', 'nhifNumber', 'jobTitle', 'photoUrl',
@@ -171,7 +171,7 @@ async function updateEmployeeHandler(
     }
   }
 
-  // ── Email uniqueness (per store) when changing ──
+  // Email uniqueness (per store) when changing
   if (data.email !== undefined && data.email !== null && data.email !== existing.email) {
     const clash = await db.employee.findUnique({
       where: { storeId_email: { storeId: existing.storeId, email: (data.email as string).toLowerCase() } },
@@ -186,7 +186,7 @@ async function updateEmployeeHandler(
     data.email = (data.email as string).toLowerCase();
   }
 
-  // ── Employee staff number (branch-coded, globally unique) ──
+  // Employee staff number (branch-coded, globally unique)
   // Accepts a bare suffix ("E012") or a full staff number ("MBM-JUJ-E012").
   if (body.employeeCode !== undefined) {
     if (body.employeeCode === null || body.employeeCode === '') {
@@ -216,7 +216,7 @@ async function updateEmployeeHandler(
     }
   }
 
-  // ── Enums ──
+  // Enums
   if (body.role !== undefined) {
     if (!VALID_ROLES.includes(String(body.role))) {
       return Response.json({ success: false, error: `role must be one of: ${VALID_ROLES.join(', ')}` }, { status: 400 });
@@ -230,7 +230,7 @@ async function updateEmployeeHandler(
     data.employmentType = body.employmentType;
   }
 
-  // ── Dates ──
+  // Dates
   if (body.hireDate !== undefined) {
     const d = new Date(String(body.hireDate));
     if (isNaN(d.getTime())) {
@@ -239,7 +239,7 @@ async function updateEmployeeHandler(
     data.hireDate = d;
   }
 
-  // ── Compensation (Decimal-safe via toDec; rejects negatives) ──
+  // Compensation (Decimal-safe via toDec; rejects negatives)
   const decFields = [
     'basicSalary', 'hourlyRate', 'houseAllowance',
     'transportAllowance', 'medicalAllowance', 'otherAllowances',
@@ -254,19 +254,19 @@ async function updateEmployeeHandler(
     }
   }
 
-  // ── Statutory exemptions ──
+  // Statutory exemptions
   for (const f of ['payeExempt', 'nssfExempt', 'nhifExempt'] as const) {
     if (body[f] !== undefined) data[f] = Boolean(body[f]);
   }
 
-  // ── Status transition (state machine) ──
+  // Status transition (state machine)
   let statusChangedTo: string | null = null;
   if (body.status !== undefined && body.status !== existing.status) {
     const next = String(body.status);
     if (!VALID_STATUSES.includes(next)) {
       return Response.json({ success: false, error: `status must be one of: ${VALID_STATUSES.join(', ')}` }, { status: 400 });
     }
-    // TERMINATED is terminal — a terminated employee cannot be reactivated by
+    // TERMINATED is terminal - a terminated employee cannot be reactivated by
     // accident; reinstate by creating a new record (or explicit reinstatement
     // via status change is still allowed for data corrections).
     if (existing.status === 'TERMINATED' && next !== 'TERMINATED') {
@@ -320,7 +320,7 @@ async function updateEmployeeHandler(
   return Response.json({ success: true, data: serializeEmployee(updated) });
 }
 
-// ── DELETE: soft delete — TERMINATED + terminationDate (payroll kept) ───────
+// DELETE: soft delete - TERMINATED + terminationDate (payroll kept)
 async function terminateEmployeeHandler(
   request: NextRequest,
   session: AuthSession & { email: string },

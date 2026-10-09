@@ -5,8 +5,8 @@
 //   2. Recalculates the parent plan's denormalized totals
 //   3. Marks the plan COMPLETED if balance reaches zero
 //   4. Records a DebtPayment against the underlying DebtLedger (so existing
-//      debt accounting — customer.currentDebtBalance, journal entry, cash
-//      drawer log — stays consistent)
+//      debt accounting - customer.currentDebtBalance, journal entry, cash
+//      drawer log - stays consistent)
 //
 // All of the above happens in a single `db.$transaction`.
 
@@ -19,7 +19,7 @@ import { generateJournalEntryNumber, calculateAgingBucket } from '@/lib/helpers'
 import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { toNumber, recalculatePlanTotals, getPlanStatus, serializePlanRow, serializeInstallmentRow } from '@/lib/debt-plan-utils';
 // Task 12-c: canonical financial math (HALF_UP 2dp). Prisma Decimal
-// `valueOf()` returns a STRING — the old float/tolerance math and the
+// `valueOf()` returns a STRING - the old float/tolerance math and the
 // read-then-write on the installment + DebtLedger allowed concurrent
 // double-pay. Money math below is Decimal; balance mutations are atomic
 // conditional claims (updateMany + count check), mirroring the R3 pattern
@@ -55,7 +55,7 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
 
   const { amount, paymentMethod, paymentReference } = body ?? {};
 
-  // ── Validate input ────────────────────────────────────────────────────────
+  // Validate input
   const payAmount = toNumber(amount);
   if (!Number.isFinite(payAmount) || payAmount <= 0) {
     return Response.json(
@@ -79,7 +79,7 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // ── Load plan + installment + debt ledger ────────────────────────────────
+  // Load plan + installment + debt ledger
   const plan = await db.debtPaymentPlan.findUnique({
     where: { id },
     include: {
@@ -100,7 +100,7 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
   // getPlanStatus flips a plan to DEFAULTED at ≥25% overdue installments, and
   // the old guard then made it impossible to record the very payments that
   // would cure the default (pay/waive required ACTIVE/PAUSED, and PATCH had
-  // no transition out of DEFAULTED — the plan was bricked). The status
+  // no transition out of DEFAULTED - the plan was bricked). The status
   // re-derivation below automatically promotes the plan back to ACTIVE once
   // the overdue ratio drops under the threshold.
   if (!['ACTIVE', 'PAUSED', 'DEFAULTED'].includes(plan.status)) {
@@ -158,10 +158,10 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // ── Execute the payment transaction ─────────────────────────────────────
+  // Execute the payment transaction
   const result = await db.$transaction(async (tx) => {
     // Task 12-c: ATOMIC installment claim. The old code read amountPaid,
-    // computed an absolute `amountPaid + pay` and wrote it back — two
+    // computed an absolute `amountPaid + pay` and wrote it back - two
     // concurrent submissions both passed the PAID check and both wrote
     // (double-pay). The status predicate makes the claim conditional: at
     // most ONE concurrent request can increment a non-settled installment.
@@ -201,7 +201,7 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
 
     // 2. Recompute plan totals from a FRESH in-transaction read of all
     //    installments. Task 12-d: the old code re-used the outside-tx
-    //    snapshot with only this installment patched — a concurrent pay or
+    //    snapshot with only this installment patched - a concurrent pay or
     //    waive on a DIFFERENT installment of the same plan could land between
     //    our read and our absolute totals write, and the loser silently
     //    reverted the winner's amountPaid/balance (lost update). The
@@ -213,7 +213,7 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
     });
     const totals = recalculatePlanTotals(plan, freshInstallments);
 
-    // 3. Derive new plan status — COMPLETED if balance is now 0 (exact
+    // 3. Derive new plan status - COMPLETED if balance is now 0 (exact
     // Decimal comparison, was float `totals.balance <= 0.001`).
     let newPlanStatus = getPlanStatus({
       ...plan,
@@ -239,7 +239,7 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
     const debt = plan.debtLedger;
     if (debt) {
       // Task 12-c: ATOMIC conditional claim (R3 pattern from
-      // src/app/api/debt/route.ts) — was read-modify-write of amountPaid +
+      // src/app/api/debt/route.ts) - was read-modify-write of amountPaid +
       // absolute balance, which could double-pay the ledger concurrently.
       const claimedDebt = await tx.debtLedger.updateMany({
         where: {
@@ -315,7 +315,7 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
         });
       }
 
-      // Journal entry — debit cash/mpesa, credit accounts receivable.
+      // Journal entry - debit cash/mpesa, credit accounts receivable.
       const store = await tx.store.findUnique({
         where: { id: plan.storeId },
         select: { organizationId: true },

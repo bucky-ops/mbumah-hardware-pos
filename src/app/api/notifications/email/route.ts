@@ -5,12 +5,12 @@
 // address, and a `data` payload that matches the chosen template's shape.
 //
 // Auth: SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER (senior staff who need to
-// trigger notifications — cashiers don't).
+// trigger notifications - cashiers don't).
 //
 // The route always returns 200 with `{ success, messageId?, error? }` so the
 // caller can distinguish "the API call worked" (200) from "the email was
 // delivered" (success=true). A 4xx/5xx status is only used for input
-// validation or auth failures — never for a Resend delivery failure, since
+// validation or auth failures - never for a Resend delivery failure, since
 // that's recorded in NotificationLog and surfaced to the UI.
 //
 // Every send is logged to the NotificationLog table by `sendEmail()`.
@@ -67,7 +67,7 @@ async function sendEmailHandler(
     data?: Record<string, unknown>;
   };
 
-  // ── Validate required fields ─────────────────────────────────────────────
+  // Validate required fields
   if (!type || !ALLOWED_TYPES.has(type)) {
     return Response.json(
       {
@@ -92,7 +92,7 @@ async function sendEmailHandler(
     );
   }
 
-  // ── Dispatch to the appropriate template function ───────────────────────
+  // Dispatch to the appropriate template function
   // Each branch casts `data` to its strongly-typed payload and calls the
   // corresponding `send*` helper from the email service. The helpers handle
   // env validation, NotificationLog persistence, and error swallowing.
@@ -224,7 +224,7 @@ async function sendEmailHandler(
       }
 
       default:
-        // Should never reach here — ALLOWED_TYPES filter above guarantees this.
+        // Should never reach here - ALLOWED_TYPES filter above guarantees this.
         return Response.json(
           { success: false, error: `Unsupported notification type: ${type}` },
           { status: 400 },
@@ -232,7 +232,7 @@ async function sendEmailHandler(
     }
   } catch (err) {
     // The email-service helpers swallow errors internally, so reaching this
-    // catch is a real bug — surface it.
+    // catch is a real bug - surface it.
     const errMsg = err instanceof Error ? err.message : 'Unknown error';
     return Response.json(
       { success: false, error: `Failed to send email: ${errMsg}` },

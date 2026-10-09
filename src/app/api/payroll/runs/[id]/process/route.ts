@@ -3,7 +3,7 @@
 // Process an existing DRAFT payroll run: calculate pay for all active
 // employees, create PayrollDetail records, update aggregate totals.
 //
-// This is the "process now" endpoint — called after a run is created in
+// This is the "process now" endpoint - called after a run is created in
 // DRAFT status, or to retry a FAILED run.
 
 import { type NextRequest } from 'next/server';
@@ -25,7 +25,7 @@ async function processRunHandler(
   ...args: unknown[]
 ): Promise<Response> {
   // NEXT-16 FIX: dynamic route context arrives as { params: Promise<{ id }> }.
-  // The old code cast args[0] to { id } — params.id was always undefined, so
+  // The old code cast args[0] to { id } - params.id was always undefined, so
   // this endpoint 400'd "Payroll run ID is required." on EVERY call and could
   // never have processed a run by id.
   const context = args[0] as RouteContext | undefined;

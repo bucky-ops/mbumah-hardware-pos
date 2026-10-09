@@ -1,4 +1,4 @@
-// Next.js 16 Proxy — Comprehensive security layer for /api/* routes
+// Next.js 16 Proxy - Comprehensive security layer for /api/* routes
 // Migrated from deprecated "middleware" convention to "proxy" convention.
 // Layers: Rate limiting → Request size → CSRF → Content-Type → Auth → Response headers
 //
@@ -7,7 +7,7 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 
-// ── In-Memory Rate Limiter (Edge-compatible) ─────────────────────────────────
+// In-Memory Rate Limiter (Edge-compatible)
 
 interface RateLimitEntry {
   count: number;
@@ -26,7 +26,7 @@ const RATE_LIMIT_TIERS: Record<string, { max: number; windowMs: number }> = {
   WRITE: { max: 30, windowMs: 60 * 1000 },
   SEARCH: { max: 30, windowMs: 60 * 1000 },
   MESSAGING: { max: 10, windowMs: 60 * 1000 },
-  // Client error logger — generous enough to catch burst errors but prevents abuse.
+  // Client error logger - generous enough to catch burst errors but prevents abuse.
   CLIENT_ERROR: { max: 5, windowMs: 60 * 1000 },
 };
 
@@ -69,7 +69,7 @@ function isRateLimited(key: string, tier: RateLimitTier): { limited: boolean; re
   return { limited: false, remaining: options.max - entry.count, resetAt: entry.resetAt };
 }
 
-// ── CSRF Validation (Edge-compatible) ────────────────────────────────────────
+// CSRF Validation (Edge-compatible)
 
 function isCSRFValid(request: NextRequest): boolean {
   const method = request.method.toUpperCase();
@@ -113,7 +113,7 @@ function isCSRFValid(request: NextRequest): boolean {
   return false;
 }
 
-// ── Client IP Extraction ────────────────────────────────────────────────────
+// Client IP Extraction
 
 function getClientIp(request: NextRequest): string {
   const forwardedFor = request.headers.get('x-forwarded-for');
@@ -126,7 +126,7 @@ function getClientIp(request: NextRequest): string {
   return 'unknown';
 }
 
-// ── Request Size Validation ─────────────────────────────────────────────────
+// Request Size Validation
 
 function isRequestSizeValid(request: NextRequest, maxBytes: number): boolean {
   const contentLength = request.headers.get('Content-Length');
@@ -136,7 +136,7 @@ function isRequestSizeValid(request: NextRequest, maxBytes: number): boolean {
   return length <= maxBytes;
 }
 
-// ── Content-Type Validation ─────────────────────────────────────────────────
+// Content-Type Validation
 
 function validateContentType(request: NextRequest): boolean {
   const method = request.method.toUpperCase();
@@ -146,31 +146,31 @@ function validateContentType(request: NextRequest): boolean {
   return contentType.toLowerCase().includes('application/json');
 }
 
-// ── Routes Configuration ────────────────────────────────────────────────────
+// Routes Configuration
 
 const PUBLIC_PATHS = [
   '/api/auth/login',
   '/api/auth/logout',
   '/api/payments/mpesa/callback',
   '/api/security/csrf-token',
-  // Client error logger — errors can happen before/during auth (e.g. hydration
+  // Client error logger - errors can happen before/during auth (e.g. hydration
   // crashes on the login page). Must be public so the error boundary can
   // report crashes even when the user is not authenticated.
   '/api/logs/client-error',
   // AUDIT FIX (Finding 6.2): the OpenAPI contract is metadata-only (shapes,
-  // no secrets, no data) — same public class as /api/health — so it must be
+  // no secrets, no data) - same public class as /api/health - so it must be
   // reachable without a session for Swagger UI / Postman / client-SDK gen.
   '/api/openapi',
 ];
 
 const CSRF_EXEMPT_PATHS = [
   '/api/payments/mpesa/callback',
-  // Client error logger — error boundaries use fire-and-forget fetch()
+  // Client error logger - error boundaries use fire-and-forget fetch()
   // which cannot include a CSRF token (the page may be in a broken state).
   '/api/logs/client-error',
 ];
 
-// ── Rate Limit Tier Resolution ──────────────────────────────────────────────
+// Rate Limit Tier Resolution
 
 function getRateLimitTier(pathname: string, method: string): RateLimitTier {
   if (pathname.startsWith('/api/auth/login')) return 'AUTH';
@@ -184,7 +184,7 @@ function getRateLimitTier(pathname: string, method: string): RateLimitTier {
   return 'WRITE';
 }
 
-// ── Main Middleware ─────────────────────────────────────────────────────────
+// Main Middleware
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -208,7 +208,7 @@ export async function proxy(request: NextRequest) {
 
   const clientIp = getClientIp(request);
 
-  // ── Layer 1: Rate Limiting ─────────────────────────────────────
+  // Layer 1: Rate Limiting
   const tier = getRateLimitTier(pathname, method);
   const rateLimitKey = `${tier}:${clientIp}:${pathname.split('/').slice(0, 3).join('/')}`;
   const rateLimitResult = isRateLimited(rateLimitKey, tier);
@@ -227,7 +227,7 @@ export async function proxy(request: NextRequest) {
     );
   }
 
-  // ── Layer 2: Request Size Validation ───────────────────────────
+  // Layer 2: Request Size Validation
   if (!isRequestSizeValid(request, 1048576)) {
     return Response.json(
       { success: false, error: 'Request payload too large. Maximum size is 1MB.' },
@@ -235,7 +235,7 @@ export async function proxy(request: NextRequest) {
     );
   }
 
-  // ── Layer 3: CSRF Protection ───────────────────────────────────
+  // Layer 3: CSRF Protection
   const isStateChanging = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
   const isCSRFExempt = CSRF_EXEMPT_PATHS.some(p => pathname.startsWith(p));
 
@@ -246,7 +246,7 @@ export async function proxy(request: NextRequest) {
     );
   }
 
-  // ── Layer 4: Content-Type Validation ───────────────────────────
+  // Layer 4: Content-Type Validation
   if (isStateChanging && !validateContentType(request)) {
     return Response.json(
       { success: false, error: 'Content-Type must be application/json.' },
@@ -254,7 +254,7 @@ export async function proxy(request: NextRequest) {
     );
   }
 
-  // ── Layer 5: Authentication ────────────────────────────────────
+  // Layer 5: Authentication
   const isPublicPath = PUBLIC_PATHS.some(p => pathname.startsWith(p));
 
   if (!isPublicPath) {
@@ -275,7 +275,7 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // ── Layer 6: Continue with rate limit headers ──────────────────
+  // Layer 6: Continue with rate limit headers
   const response = NextResponse.next();
 
   response.headers.set('X-RateLimit-Remaining', String(rateLimitResult.remaining));

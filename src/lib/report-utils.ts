@@ -14,7 +14,7 @@
 // All helpers are pure (no I/O) and safe to call from both server and
 // client components. `downloadCSV` is browser-only and no-ops on the server.
 
-// ── CSV primitives ──────────────────────────────────────────────────────────
+// CSV primitives
 
 /**
  * Escape a single value for inclusion in a CSV cell per RFC 4180.
@@ -38,7 +38,7 @@ export function toCSV(header: string[], rows: unknown[][]): string {
   return lines.join('\r\n');
 }
 
-// ── Date formatting ────────────────────────────────────────────────────────
+// Date formatting
 
 /**
  * Format a date for report headers: "Monday, January 1, 2025".
@@ -65,7 +65,7 @@ export function formatISODate(date: string | Date | number): string {
 }
 
 /**
- * Format a number for CSV — rounds to 2 dp, uses `.` as the decimal
+ * Format a number for CSV - rounds to 2 dp, uses `.` as the decimal
  * separator, and strips trailing zeros for cleaner output (1.50 → 1.5).
  * Null/NaN → empty string.
  */
@@ -76,7 +76,7 @@ export function formatNumber(value: number | null | undefined | string): string 
   return n.toFixed(2).replace(/\.?0+$/, '') || '0';
 }
 
-// ── Types ───────────────────────────────────────────────────────────────────
+// Types
 
 export interface SalesSummaryData {
   period: { startDate: string; endDate: string };
@@ -163,7 +163,7 @@ export interface ReportTransaction {
   transactionType?: string;
 }
 
-// ── CSV builders ────────────────────────────────────────────────────────────
+// CSV builders
 
 /**
  * Build a multi-section CSV for a sales-summary report. Includes:
@@ -180,7 +180,7 @@ export interface ReportTransaction {
 export function generateSalesCSV(data: SalesSummaryData): string {
   const sections: string[] = [];
 
-  // ── Header ──
+  // Header
   sections.push(toCSV(
     ['MBUMAH HARDWARE POS — Sales Summary Report'],
     [[]],
@@ -194,7 +194,7 @@ export function generateSalesCSV(data: SalesSummaryData): string {
     [[formatReportDate(data.period.startDate), formatReportDate(data.period.endDate)]],
   ));
 
-  // ── Totals ──
+  // Totals
   sections.push('');
   sections.push('Summary Totals');
   sections.push(toCSV(
@@ -211,7 +211,7 @@ export function generateSalesCSV(data: SalesSummaryData): string {
     ],
   ));
 
-  // ── Comparison ──
+  // Comparison
   if (data.comparison) {
     sections.push('');
     sections.push('Comparison vs Previous Period');
@@ -238,7 +238,7 @@ export function generateSalesCSV(data: SalesSummaryData): string {
     ));
   }
 
-  // ── Payment breakdown ──
+  // Payment breakdown
   sections.push('');
   sections.push('Payment Method Breakdown');
   sections.push(toCSV(
@@ -251,7 +251,7 @@ export function generateSalesCSV(data: SalesSummaryData): string {
     ]),
   ));
 
-  // ── Top products ──
+  // Top products
   sections.push('');
   sections.push('Top 10 Products');
   sections.push(toCSV(
@@ -267,7 +267,7 @@ export function generateSalesCSV(data: SalesSummaryData): string {
     ]),
   ));
 
-  // ── Hourly distribution ──
+  // Hourly distribution
   sections.push('');
   sections.push('Hourly Sales Distribution');
   sections.push(toCSV(
@@ -332,7 +332,7 @@ export function generateDailyReportCSV(data: DailyReportData): string {
   return sections.join('\r\n');
 }
 
-// ── Totals calculator ───────────────────────────────────────────────────────
+// Totals calculator
 
 /**
  * Sum revenue, tax, and discounts across a list of transactions. Accepts
@@ -368,14 +368,14 @@ export function calculateReportTotals(transactions: ReportTransaction[]): {
   };
 }
 
-// ── Browser download helper ─────────────────────────────────────────────────
+// Browser download helper
 
 /**
  * Trigger a browser download of a CSV string as a `.csv` file. No-ops on
  * the server (no `window` / `document`).
  *
  * Attaches a BOM ("\uFEFF") to the start of the file so Excel auto-detects
- * UTF-8 encoding (prevents the "–" character and accented letters from
+ * UTF-8 encoding (prevents the " - " character and accented letters from
  * showing as mojibake in Excel on Windows).
  */
 export function downloadCSV(csvString: string, filename: string): void {

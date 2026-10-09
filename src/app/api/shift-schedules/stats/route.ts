@@ -6,7 +6,7 @@
 //   - shiftsPerDay          [{ date, dayOfWeek, count, hours }]
 //   - coverageGaps          [{ date, dayOfWeek }]  (days with 0 shifts)
 //   - peakDay               { date, count, hours } | null
-//   - coverageDays          number (0-7) — how many days have ≥ 1 shift
+//   - coverageDays          number (0-7) - how many days have ≥ 1 shift
 //   - activeStaff           number of distinct staff with ≥ 1 shift this week
 
 import { type NextRequest } from 'next/server';
@@ -82,7 +82,7 @@ async function statsHandler(...args: unknown[]): Promise<Response> {
   const weekEndInclusive = new Date(weekEnd);
   weekEndInclusive.setHours(23, 59, 59, 999);
 
-  // Pull all schedules (active only — paused don't contribute to coverage).
+  // Pull all schedules (active only - paused don't contribute to coverage).
   const schedules = await db.shiftSchedule.findMany({
     where: {
       storeId,

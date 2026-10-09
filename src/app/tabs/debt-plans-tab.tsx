@@ -1,13 +1,13 @@
 'use client';
 
 /**
- * Debt Plans Tab — main UI for the Debt Payment Plans feature.
+ * Debt Plans Tab - main UI for the Debt Payment Plans feature.
  *
  * Layout:
  *   1. Header with title + "Create Plan" button
  *   2. Stats cards row (PlansStatsCards)
  *   3. Filter chips: All / Pending Approval / Active / Overdue / Completed
- *   4. Plans grid (PaymentPlanCard) — or empty state — or loading skeletons
+ *   4. Plans grid (PaymentPlanCard) - or empty state - or loading skeletons
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -76,7 +76,7 @@ export function DebtPlansTab() {
   const [createOpen, setCreateOpen] = useState(false);
   const [detailsPlan, setDetailsPlan] = useState<DebtPaymentPlanItem | null>(null);
 
-  // ── Data: stats ──────────────────────────────────────────────────────────
+  // Data: stats
   const {
     data: stats,
     isLoading: statsLoading,
@@ -98,7 +98,7 @@ export function DebtPlansTab() {
     }
   }, [statsError]);
 
-  // ── Data: plans list (filtered) ──────────────────────────────────────────
+  // Data: plans list (filtered)
   // We fetch one large bounded page and filter client-side, so filter chips
   // are instant and don't trigger extra network round-trips (truncation is
   // surfaced via the pagination envelope).
@@ -117,7 +117,7 @@ export function DebtPlansTab() {
     queryKey: ['debt-payment-plans', queryParams],
     queryFn: async () => {
       // Task 12-d: request is now server-capped (pageSize 100) and reports
-      // truncation via the pagination envelope — the old call was an
+      // truncation via the pagination envelope - the old call was an
       // unbounded findMany.
       const res = await debtPaymentPlansApi.list(queryParams);
       return {
@@ -251,7 +251,7 @@ export function DebtPlansTab() {
         </div>
       ) : plansError ? (
         // Task 12-d: a load failure previously looked identical to the empty
-        // state (toast only) — show an explicit error banner with a retry.
+        // state (toast only) - show an explicit error banner with a retry.
         <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-rose-200 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20 rounded-xl">
           <AlertTriangle className="h-12 w-12 text-rose-400 mb-3" />
           <h3 className="text-lg font-semibold">Failed to load payment plans</h3>

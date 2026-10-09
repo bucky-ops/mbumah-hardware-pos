@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 
-// AUDIT FIX (Finding 1.2 — hardcoded developer path removed):
+// AUDIT FIX (Finding 1.2 - hardcoded developer path removed):
 // The datasource URL now resolves from the environment (DATABASE_URL), with a
 // portable repo-relative fallback for local SQLite use. The previous
 // `file:/home/z/my-project/db/custom.db` override only worked on one machine,

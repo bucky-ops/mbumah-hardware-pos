@@ -1,17 +1,17 @@
 // GET  /api/health/retention
 // POST /api/health/retention
 //
-// Phase 7 — Data Retention Management endpoint (ISO 27001 A.8.3.2 / ISO 9001 7.5.3).
+// Phase 7 - Data Retention Management endpoint (ISO 27001 A.8.3.2 / ISO 9001 7.5.3).
 //
 // GET (any authenticated user):
 //   Returns the current retention policies AND metrics for the MBUMAH HARDWARE
-//   POS system. This is the "data lifecycle observability" view — it shows
+//   POS system. This is the "data lifecycle observability" view - it shows
 //   which data categories have retention policies, how many records are
 //   eligible for purge, and when the last auto-purge ran.
 //
 //   The response also includes a `purgeableEstimate` field from the dry-run
 //   estimation, so operators can see exactly how many records per category
-//   would be deleted if a purge were executed now — WITHOUT actually deleting
+//   would be deleted if a purge were executed now - WITHOUT actually deleting
 //   anything.
 //
 //   Response 200:
@@ -79,7 +79,7 @@
 //       }
 //     }
 //
-// ── Security considerations ────────────────────────────────────────────────────
+// Security considerations
 //
 // Both GET and POST require authentication. The POST action (which can
 // permanently delete data) is restricted to SUPER_ADMIN only. Every POST
@@ -95,20 +95,20 @@ import { dataRetention } from '@/lib/data-retention';
 
 export const dynamic = 'force-dynamic';
 
-// ── GET: retention policies + metrics ────────────────────────────────────────
+// GET: retention policies + metrics
 
 export const GET = requireAuth(async (_request, _session) => {
   try {
-    // ── Fetch retention metrics ──────────────────────────────────────────
+    // Fetch retention metrics
     // getMetrics() returns the full policy list, total counts, and
     // the last execution timestamp. It internally calls estimatePurgeable()
     // to compute the aggregate purgeable record count.
     const metrics = await dataRetention.getMetrics();
 
-    // ── Fetch per-category purgeable estimate ────────────────────────────
+    // Fetch per-category purgeable estimate
     // This gives the operator a breakdown of exactly how many records
     // per category are eligible for purge RIGHT NOW. It's a count-only
-    // operation — no data is modified.
+    // operation - no data is modified.
     const purgeableEstimate = await dataRetention.estimatePurgeable();
 
     return successResponse({
@@ -120,7 +120,7 @@ export const GET = requireAuth(async (_request, _session) => {
   }
 });
 
-// ── POST: admin actions (SUPER_ADMIN only) ───────────────────────────────────
+// POST: admin actions (SUPER_ADMIN only)
 
 type RetentionAction = 'dryRun' | 'execute';
 
@@ -135,7 +135,7 @@ export const POST = requireAuth(
     try {
       const body = (await _request.json()) as RetentionBody;
 
-      // ── Validate action ─────────────────────────────────────────────────
+      // Validate action
       if (!body.action || !VALID_ACTIONS.has(body.action)) {
         return Response.json(
           {
@@ -148,11 +148,11 @@ export const POST = requireAuth(
 
       const action = body.action;
 
-      // ── dryRun: estimate purgeable records without deleting ─────────────
+      // dryRun: estimate purgeable records without deleting
       // Returns a per-category breakdown so the admin can verify the
       // impact before committing. This is the "measure twice, cut once"
       // approach mandated by ISO 9001 10.2 (nonconformity and corrective
-      // action) — we preview the effect before applying irreversible changes.
+      // action) - we preview the effect before applying irreversible changes.
       if (action === 'dryRun') {
         const estimate = await dataRetention.estimatePurgeable();
         const totalPurgeable = Object.values(estimate).reduce(
@@ -171,7 +171,7 @@ export const POST = requireAuth(
         });
       }
 
-      // ── execute: actually purge expired records ────────────────────────
+      // execute: actually purge expired records
       // This is the IRREVERSIBLE operation. It iterates through every
       // retention policy category and deletes records that are past the
       // retention period + grace period. Each category result is returned
@@ -181,7 +181,7 @@ export const POST = requireAuth(
         const totalPurged = results.reduce((sum, r) => sum + r.purged, 0);
         const failedCategories = results.filter((r) => !r.success);
 
-        // Audit-log the execution — this is a CRITICAL operation that
+        // Audit-log the execution - this is a CRITICAL operation that
         // permanently deletes data, so we log at WARN severity (or ERROR
         // if any categories failed).
         const severity = failedCategories.length > 0
@@ -214,16 +214,16 @@ export const POST = requireAuth(
   { roles: ['SUPER_ADMIN'] },
 );
 
-// ── Audit log helper ─────────────────────────────────────────────────────────
+// Audit log helper
 //
 // Every admin action on data retention is audit-logged. This creates a
-// traceable record of WHO triggered a purge, WHEN, and WHAT was affected —
+// traceable record of WHO triggered a purge, WHEN, and WHAT was affected -
 // required for:
 //   • ISO 27001 A.12.4.1 (event logging)
 //   • ISO 27001 A.12.4.3 (administrator and operator logs)
 //   • ISO 9001 7.5.3 (control of documented information)
 //
-// Audit logging is best-effort — a logging failure never blocks the admin
+// Audit logging is best-effort - a logging failure never blocks the admin
 // action (the purge has already been committed at this point).
 
 async function logRetentionAction(
@@ -251,6 +251,6 @@ async function logRetentionAction(
       },
     });
   } catch {
-    // Audit logging is best-effort — never block the admin action.
+    // Audit logging is best-effort - never block the admin action.
   }
 }

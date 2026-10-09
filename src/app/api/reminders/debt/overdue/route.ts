@@ -1,21 +1,21 @@
 // GET /api/reminders/debt/overdue
 //
-// List customers with overdue debts for a store — the data the UI uses to
+// List customers with overdue debts for a store - the data the UI uses to
 // render the "Overdue Customers" board before any reminders are sent.
 //
 // Wraps the identifyOverdueCustomers() helper from src/lib/debt-helpers.ts,
 // which aggregates all overdue DebtLedger rows per customer and returns:
 //   • customerId / customerName / phone / email
-//   • totalOverdue  — sum of all overdue balances
-//   • oldestDueDate — the earliest due date among the customer's debts
-//   • agingBucket   — the WORST bucket across the customer's debts
+//   • totalOverdue - sum of all overdue balances
+//   • oldestDueDate - the earliest due date among the customer's debts
+//   • agingBucket - the WORST bucket across the customer's debts
 //                     (CURRENT < DAYS_30 < DAYS_60 < DAYS_90_PLUS)
-//   • debts[]       — per-debt detail (id, balance, dueDate, agingBucket)
+//   • debts[] - per-debt detail (id, balance, dueDate, agingBucket)
 //
 // Query params:
-//   storeId       — required (enforced by requireStoreAccess)
-//   daysThreshold — minimum days past due to be included (default 1)
-//   limit         — cap the customer count (default 50, max 500)
+//   storeId - required (enforced by requireStoreAccess)
+//   daysThreshold - minimum days past due to be included (default 1)
+//   limit - cap the customer count (default 50, max 500)
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -72,7 +72,7 @@ async function listOverdueHandler(
     },
   };
 
-  // Also fetch how many PENDING reminders exist per customer — useful for
+  // Also fetch how many PENDING reminders exist per customer - useful for
   // the UI to show "reminder scheduled" badges alongside each customer.
   const pendingCounts = await db.debtReminder.groupBy({
     by: ['customerId'],

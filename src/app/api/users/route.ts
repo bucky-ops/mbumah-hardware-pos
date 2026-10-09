@@ -1,7 +1,7 @@
 // GET/POST /api/users
 //
-// v2.12.2 (PR B — RBAC): POST (create user + role assignment) and role changes
-// anywhere are gated to 'settings.roles.manage' — SUPER_ADMIN only. GET stays
+// v2.12.2 (PR B - RBAC): POST (create user + role assignment) and role changes
+// anywhere are gated to 'settings.roles.manage' - SUPER_ADMIN only. GET stays
 // SUPER_ADMIN/STORE_OWNER (staff directory).
 
 import { type NextRequest } from 'next/server';
@@ -10,7 +10,7 @@ import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { requireAuth, recordPermissionDenied, noteDeniedAndMaybeLock, type AuthSession } from '@/lib/auth';
 import { createUserSchema, validateInput } from '@/lib/validations';
-// v2.12.2 (PR B — RBAC): feature-level role-management gate.
+// v2.12.2 (PR B - RBAC): feature-level role-management gate.
 import { hasFeaturePermission, PERMISSION_DENIED_MESSAGES } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
@@ -100,9 +100,9 @@ async function createUserHandler(
   }
   const { name, email, role, phone, storeId, organizationId, password } = validation.data;
 
-  // ── v2.12.2 (PR B — RBAC): role-management gate ('settings.roles.manage') ─
+  // v2.12.2 (PR B - RBAC): role-management gate ('settings.roles.manage') ─
   // Creating a user necessarily assigns a role, so the WHOLE create is now
-  // gated to roles holding 'settings.roles.manage' — SUPER_ADMIN only.
+  // gated to roles holding 'settings.roles.manage' - SUPER_ADMIN only.
   // BEHAVIOUR CHANGE (deliberate, security release): STORE_OWNER can no
   // longer mint users/roles; role administration is segregated to the
   // SUPER_ADMIN tier. Denials are durably recorded and feed the
@@ -126,7 +126,7 @@ async function createUserHandler(
     );
   }
 
-  // AUDIT REMEDIATION (F9-4): segregation of duties on role assignment —
+  // AUDIT REMEDIATION (F9-4): segregation of duties on role assignment -
   // only SUPER_ADMIN may mint SUPER_ADMIN or ACCOUNTANT users. Previously any
   // financial role reaching this route could escalate itself to SUPER_ADMIN
   // (bypassing all store checks via runWithoutTenant). The session here comes

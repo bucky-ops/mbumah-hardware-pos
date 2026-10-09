@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * useDebounce — debounce a rapidly-changing value.
+ * useDebounce - debounce a rapidly-changing value.
  *
  * Returns a debounced copy of `value` that only updates after `delay` ms have
  * elapsed without changes. Useful for search inputs where you don't want to

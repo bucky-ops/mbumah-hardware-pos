@@ -1,5 +1,5 @@
 /**
- * timeAgo — human relative-time strings for ISO timestamps / Date objects.
+ * timeAgo - human relative-time strings for ISO timestamps / Date objects.
  *
  * Shared utility (v2.12.0 DASH-UI): the dashboard activity feeds, shift
  * snapshot and alerts card all render "x mins ago" style labels. There was
@@ -7,7 +7,7 @@
  * component), so this is the ONE canonical implementation.
  *
  * Defensive by design: null/undefined/invalid input renders an em dash
- * instead of throwing — feed rows must never crash the dashboard.
+ * instead of throwing - feed rows must never crash the dashboard.
  */
 export function timeAgo(date: string | Date | null | undefined): string {
   if (!date) return '—';

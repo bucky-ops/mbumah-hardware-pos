@@ -1,11 +1,11 @@
 // GET /api/transactions/[id]
 //
-// AUDIT FIX (6): this route previously had NO server-side auth guard —
+// AUDIT FIX (6): this route previously had NO server-side auth guard -
 // any caller that slipped past the proxy's Bearer-presence check could read
 // ANY transaction, including the grossProfit / profitMargin analytics and
 // the per-line costPrice (supplier cost). It is now wrapped in
 // requireStoreAccess (DB-backed session validation + ORM-level tenant
-// scoping — the same pattern as the transactions list route), and
+// scoping - the same pattern as the transactions list route), and
 // cost/profit data is stripped unless the caller's role is BRANCH_MANAGER
 // or above (PERMISSION_MATRIX hierarchy in src/lib/types.ts).
 
@@ -27,7 +27,7 @@ interface RouteContext {
 const PROFIT_VISIBLE_ROLES: readonly string[] = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'];
 
 async function getTransactionDetailHandler(...args: unknown[]): Promise<Response> {
-  // requireStoreAccess passes (request, session, ...nextArgs) — for a dynamic
+  // requireStoreAccess passes (request, session, ...nextArgs) - for a dynamic
   // route, args[2] is the original route context ({ params }).
   const _request = args[0] as NextRequest;
   const session = args[1] as AuthSession;
@@ -70,11 +70,11 @@ async function getTransactionDetailHandler(...args: unknown[]): Promise<Response
     );
   }
 
-  // FINANCIAL MATH AUDIT — canonical profit chain (mirrors src/lib/profit.ts):
+  // FINANCIAL MATH AUDIT - canonical profit chain (mirrors src/lib/profit.ts):
   //   netRevenue  = totalAmount − taxAmount   (VAT belongs to KRA, not the
   //               store; this identity holds for legacy VAT-exclusive rows
   //               AND current VAT-inclusive rows)
-  //   COGS        = Σ(costPrice × quantity) — snapshot WAC at sale time
+  //   COGS        = Σ(costPrice × quantity) - snapshot WAC at sale time
   //   grossProfit = netRevenue − COGS − totalDiscounts (line + cart).
   // The previous formula (`subtotal − cost`, pre-discount, VAT-mixed basis)
   // overstated profit by every shilling of discount and the VAT component.

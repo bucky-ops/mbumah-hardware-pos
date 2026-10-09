@@ -1,10 +1,8 @@
 'use client';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MessagePreviewDialog — enlarged, scrollable WhatsApp/SMS output (v2.8.0)
-// ─────────────────────────────────────────────────────────────────────────────
+// MessagePreviewDialog - enlarged, scrollable WhatsApp/SMS output (v2.8.0)
 //
-// CLIENT REQUEST: "WhatsApp & SMS output is not visible enough — enlarge the
+// CLIENT REQUEST: "WhatsApp & SMS output is not visible enough - enlarge the
 // display size to be more visible, OR add a scrolling option." Previously the
 // composed message text was NEVER shown on screen: the app built it on the
 // server, discarded `res.message`, and just window.open'd the wa.me/sms:
@@ -13,15 +11,14 @@
 // Now every WhatsApp/SMS send (invoices, delivery notes, vouchers) opens this
 // preview FIRST: the full message in a large, scrollable, copyable box, then
 // an explicit user-gesture button opens the actual wa.me / sms: link (which
-// also fixes popup blocking) — and a Copy button as the universal fallback.
+// also fixes popup blocking) - and a Copy button as the universal fallback.
 //
-// VF-1 (v2.8.0) EXTENSION — honest delivery status: the dialog now accepts
+// VF-1 (v2.8.0) EXTENSION - honest delivery status: the dialog now accepts
 // optional `status` ('SENT' | 'FAILED' | 'SIMULATED') + `error` props so the
 // voucher-send flow can show the REAL gateway outcome (green Sent / amber
 // Failed / blue Simulated) above the message box, with the unconfigured-
 // gateway warning panel and its Open-in-app / Copy fallbacks. All new props
-// are optional — the plain invoice/delivery-note preview flow is unchanged.
-// ─────────────────────────────────────────────────────────────────────────────
+// are optional - the plain invoice/delivery-note preview flow is unchanged.
 
 import { useState } from 'react';
 import { Copy, Check, ExternalLink, MessageCircle, Smartphone, CheckCircle2, AlertTriangle } from 'lucide-react';
@@ -39,7 +36,7 @@ import { toast } from 'sonner';
 
 export type PreviewChannel = 'whatsapp' | 'sms';
 
-/** Honest gateway outcome for a send (VF-1) — omit for a plain preview. */
+/** Honest gateway outcome for a send (VF-1) - omit for a plain preview. */
 export type PreviewDeliveryStatus = 'SENT' | 'FAILED' | 'SIMULATED';
 
 interface MessagePreviewDialogProps {
@@ -50,11 +47,11 @@ interface MessagePreviewDialogProps {
   phone?: string;
   /** The FULL message the recipient will receive. */
   message: string;
-  /** Dialog title, e.g. "WhatsApp — INV-2026-0001". */
+  /** Dialog title, e.g. "WhatsApp - INV-2026-0001". */
   title?: string;
   /** Optional server-built wa.me link (used verbatim when provided). */
   waLink?: string;
-  /** VF-1: gateway outcome — renders the Sent/Failed/Simulated status strip. */
+  /** VF-1: gateway outcome - renders the Sent/Failed/Simulated status strip. */
   status?: PreviewDeliveryStatus;
   /** VF-1: gateway/config error text shown in the amber warning panel. */
   error?: string;
@@ -97,7 +94,7 @@ export function MessagePreviewDialog({
   const handleOpenApp = () => {
     if (channel === 'whatsapp') {
       // Prefer the server-built link (it carries the server-normalised phone
-      // and the exact server message) — fall back to building it locally.
+      // and the exact server message) - fall back to building it locally.
       const url = waLink || (() => {
         const clean = normalizeKePhone(phone);
         return clean

@@ -116,7 +116,7 @@ async function updateDeliveryNoteHandler(...args: unknown[]): Promise<Response> 
 }
 
 // AUDIT FIX (Task 3-d): session-validated (was Bearer-presence only).
-// Any store role — delivery status updates are part of the fulfillment flow.
+// Any store role - delivery status updates are part of the fulfillment flow.
 export const GET = withErrorBoundary(
   withSessionAuth(getDeliveryNoteHandler),
   'DELIVERY_NOTE_DETAIL',
@@ -126,11 +126,9 @@ export const PUT = withErrorBoundary(
   'DELIVERY_NOTE_UPDATE',
 );
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DELETE (v2.8.0) — permanently remove a delivery note (client request,
+// DELETE (v2.8.0) - permanently remove a delivery note (client request,
 // same as invoices: “done with it → remove it”, confirmation lives in the
 // UI AlertDialog; the API enforces the role gate and audit trail).
-// ─────────────────────────────────────────────────────────────────────────────
 async function deleteDeliveryNoteHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const context = args[1] as RouteContext;

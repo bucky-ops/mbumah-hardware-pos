@@ -1,15 +1,15 @@
-// Transactional outbox — reliable background side effects on serverless.
+// Transactional outbox - reliable background side effects on serverless.
 //
-// AUDIT REFERENCE — FINANCIAL_MODULE_AUDIT_REPORT.md (F8-4):
+// AUDIT REFERENCE - FINANCIAL_MODULE_AUDIT_REPORT.md (F8-4):
 //   Vercel serverless functions freeze shortly after the HTTP response is
-//   returned. Any fire-and-forget promise started inside a route handler —
+//   returned. Any fire-and-forget promise started inside a route handler -
 //   the old server-side STK push `fetch(...).catch(() => {})`, post-commit
-//   loyalty writes, notification sends — can silently die half-done.
+//   loyalty writes, notification sends - can silently die half-done.
 //
 // Pattern:
 //   1. Inside the business `$transaction`, call `enqueueOutbox(tx, ...)` to
 //      INSERT an OutboxEvent row. It commits atomically with the business
-//      change — no lost events, no duplicates.
+//      change - no lost events, no duplicates.
 //   2. `pumpOutbox(db)` runs from a cron-driven route (/api/cron/outbox) and
 //      ALSO opportunistically after checkout commits. It claims due events
 //      with a guarded `updateMany` (concurrency-safe), executes the handler,
@@ -84,7 +84,7 @@ function backoffMinutes(attempt: number): number {
   return Math.min(2 ** (attempt - 1), 60);
 }
 
-/** Batch size per pump invocation — keeps lambda duration bounded. */
+/** Batch size per pump invocation - keeps lambda duration bounded. */
 const BATCH = 25;
 
 /**

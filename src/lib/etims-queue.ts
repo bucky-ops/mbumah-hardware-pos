@@ -1,9 +1,6 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — KRA eTIMS Async Queue (v2.6.0)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - KRA eTIMS Async Queue (v2.6.0)
 //
 // WHY THIS EXISTS
-// ───────────────
 // KRA eTIMS availability must NEVER block (or fail) a POS checkout. Sales
 // commit with `SalesTransaction.etimsStatus = 'PENDING'` and the KRA invoice
 // is issued asynchronously through the transactional outbox:
@@ -17,10 +14,9 @@
 //
 // This module holds the SHARED core so the manual route
 // (/api/etims/issue-invoice), the outbox pump and the retry cron all run the
-// exact same submission logic — one implementation, three triggers.
+// exact same submission logic - one implementation, three triggers.
 //
 // Server-only module.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { db, runWithoutTenant } from '@/lib/db';
 import { getEtimsConfig, initializeEtimsClient, isEtimsMock } from '@/lib/etims-service';
@@ -37,16 +33,16 @@ export interface EtimsSubmissionResult {
   url?: string;
   /** QR payload (SalesTransaction.etimsQrCode). */
   qr?: string;
-  /** Always 'ISSUED' when ok — mirrors the EtimsInvoiceResponse contract. */
+  /** Always 'ISSUED' when ok - mirrors the EtimsInvoiceResponse contract. */
   status?: 'ISSUED';
   issuedAt?: Date;
   /** True when the invoice was ALREADY issued (idempotent no-op success). */
   skipped?: boolean;
-  /** Human-readable failure reason (safe to surface — no secrets). */
+  /** Human-readable failure reason (safe to surface - no secrets). */
   error?: string;
 }
 
-// Same compliance message the manual route returns as a 503 — kept in ONE
+// Same compliance message the manual route returns as a 503 - kept in ONE
 // place so the async queue surfaces the identical control.
 const MOCK_BLOCK_ERROR =
   'eTIMS integration is a mock — refusing to issue a tax invoice that was never transmitted to KRA (compliance control). Integrate the real KRA API or set ETIMS_ALLOW_MOCK_ISSUANCE=true to override.';
@@ -54,7 +50,7 @@ const MOCK_BLOCK_ERROR =
 /**
  * Perform ONE KRA eTIMS submission attempt for a committed SalesTransaction.
  *
- * Runs inside `runWithoutTenant` — the retry cron and the manual worker are
+ * Runs inside `runWithoutTenant` - the retry cron and the manual worker are
  * cross-store by design (they claim events from ALL stores); the manager-gated
  * worker route relies on that scope for other stores' stuck events.
  *
@@ -79,7 +75,7 @@ export async function submitEtimsInvoiceOnce(
       return { ok: false, error: 'Transaction not found' };
     }
 
-    // Idempotency: the invoice already exists — report success without
+    // Idempotency: the invoice already exists - report success without
     // consuming another sequence number.
     if (transaction.etimsStatus === 'ISSUED') {
       return {
@@ -102,7 +98,7 @@ export async function submitEtimsInvoiceOnce(
     const config = getEtimsConfig();
     const client = initializeEtimsClient(config);
 
-    // Per-store daily sequence (F9-2): deterministic, store-scoped — the
+    // Per-store daily sequence (F9-2): deterministic, store-scoped - the
     // same counting rule the manual route has always used.
     const dayStart = new Date(transaction.createdAt);
     dayStart.setHours(0, 0, 0, 0);
@@ -186,7 +182,7 @@ export async function submitEtimsInvoiceOnce(
   });
 }
 
-// ── Retry batch runner ───────────────────────────────────────────────────────
+// Retry batch runner
 
 /** Default claim size per invocation (spec: up to 10 due events per run). */
 export const ETIMS_RETRY_BATCH = 10;
@@ -250,7 +246,7 @@ export async function processEtimsRetryBatch(
     const results: EtimsRetryItemResult[] = [];
 
     for (const event of due) {
-      // Atomic claim — count===0 ⇒ another runner won the race.
+      // Atomic claim - count===0 ⇒ another runner won the race.
       const claimed = await db.outboxEvent.updateMany({
         where: { id: event.id, status: { in: ['PENDING', 'FAILED'] } },
         data: { status: 'PROCESSING' },
@@ -296,7 +292,7 @@ export async function processEtimsRetryBatch(
           status: exhausted ? 'DEAD' : 'FAILED',
           attempts,
           lastError: message,
-          // min(2^attempts × 60s, 1h) — exponential backoff, one-hour cap.
+          // min(2^attempts × 60s, 1h) - exponential backoff, one-hour cap.
           availableAt: new Date(Date.now() + Math.min(2 ** attempts * 60_000, 3_600_000)),
         },
       });

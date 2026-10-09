@@ -86,7 +86,7 @@ async function updateInvoiceHandler(...args: unknown[]): Promise<Response> {
   }
 
   if (body.discountAmount !== undefined) {
-    // FINANCIAL MATH AUDIT: Decimal-safe, validated discount — clamped to
+    // FINANCIAL MATH AUDIT: Decimal-safe, validated discount - clamped to
     // [0, subtotal] so a negative discount can never INCREASE the total
     // and an oversized one can never make it negative. Recomputed from
     // the stored (unmodified) subtotal/taxAmount.
@@ -131,18 +131,16 @@ async function updateInvoiceHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: invoice });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DELETE (v2.8.0) — permanently remove an invoice the business is done with.
+// DELETE (v2.8.0) - permanently remove an invoice the business is done with.
 // CLIENT REQUEST: "Add Delete option on all invoices… with confirmation."
 // Confirmation lives in the UI (AlertDialog); the API enforces role access.
 // InvoiceItems cascade automatically. Every deletion is audit-logged with
 // the previous status so the paper trail survives the hard delete.
-// ─────────────────────────────────────────────────────────────────────────────
 async function deleteInvoiceHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const context = args[1] as RouteContext;
   // withSessionAuth publishes tenant context via AsyncLocalStorage and does
-  // NOT append the session — re-derive it explicitly (repo pattern).
+  // NOT append the session - re-derive it explicitly (repo pattern).
   const session = await getSessionFromRequest(request);
   const { id } = await context.params;
 

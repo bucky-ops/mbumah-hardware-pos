@@ -1,4 +1,4 @@
-// GET /api/cron/etims-retry — Vercel Cron entry point for the KRA eTIMS
+// GET /api/cron/etims-retry - Vercel Cron entry point for the KRA eTIMS
 // async invoice queue (v2.6.0).
 //
 // Sales commit with SalesTransaction.etimsStatus = 'PENDING' and an
@@ -15,10 +15,10 @@
 //     then DEAD + ERROR systemLog (etimsStatus stays 'PENDING' so staff can
 //     re-issue manually via POST /api/etims/worker).
 //
-// AUTH: copied EXACTLY from /api/cron/outbox — Vercel Cron sends
+// AUTH: copied EXACTLY from /api/cron/outbox - Vercel Cron sends
 // unauthenticated GETs; we gate on the `x-cron-secret` header against the
 // CRON_SECRET env var (fail-open with a WARN systemLog when CRON_SECRET is
-// unset so the gap is visible and alertable — deploy with CRON_SECRET set).
+// unset so the gap is visible and alertable - deploy with CRON_SECRET set).
 
 import { withErrorBoundary } from '@/lib/logger';
 import { LogComponent } from '@/lib/types';
@@ -28,10 +28,10 @@ export const dynamic = 'force-dynamic';
 // leaving headroom for Neon cold starts on a fresh lambda instance.
 export const maxDuration = 60;
 
-// ── Shared cron secret gate (verbatim /api/cron/outbox pattern) ─────────────
+// Shared cron secret gate (verbatim /api/cron/outbox pattern)
 // Returns a 403 Response when the caller is not authorised, or null to allow
 // the request through. Inlined per cron route (cron routes are standalone by
-// design — no shared mutable state between schedulers).
+// design - no shared mutable state between schedulers).
 async function verifyCronSecret(request: Request): Promise<Response | null> {
   const secret = process.env.CRON_SECRET;
   const provided = request.headers.get('x-cron-secret');

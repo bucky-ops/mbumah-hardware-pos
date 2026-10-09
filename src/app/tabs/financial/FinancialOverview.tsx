@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * FinancialOverview — top-of-page banner + quick actions + date filter + stat cards.
+ * FinancialOverview - top-of-page banner + quick actions + date filter + stat cards.
  *
  * Extracted from `financial-tab.tsx` to slim down the orchestrator. Receives
  * all data and event handlers as props so the orchestrator remains the single

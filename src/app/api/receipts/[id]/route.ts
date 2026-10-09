@@ -11,7 +11,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { requireStoreAccess, type AuthSession } from '@/lib/auth';
-// Task 12-b: Prisma Decimal valueOf() returns a STRING — `number + decimal`
+// Task 12-b: Prisma Decimal valueOf() returns a STRING - `number + decimal`
 // concatenates. Receipt computed totals run through toDec().
 import { toDec } from '@/lib/utils/financialMath';
 
@@ -26,7 +26,7 @@ interface RouteContext {
 const PROFIT_VISIBLE_ROLES: readonly string[] = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'];
 
 async function getReceiptDetailHandler(...args: unknown[]): Promise<Response> {
-  // requireStoreAccess passes (request, session, ...nextArgs) — for a dynamic
+  // requireStoreAccess passes (request, session, ...nextArgs) - for a dynamic
   // route, args[2] is the original route context ({ params }).
   const _request = args[0] as NextRequest;
   const session = args[1] as AuthSession;
@@ -176,7 +176,7 @@ async function getReceiptDetailHandler(...args: unknown[]): Promise<Response> {
       quantity: item.quantity,
       unitType: item.unitType,
       pricePerUnit: item.pricePerUnit,
-      // AUDIT FIX (6): per-line costPrice is supplier-cost data — omitted
+      // AUDIT FIX (6): per-line costPrice is supplier-cost data - omitted
       // unless the caller's role is BRANCH_MANAGER or above.
       costPrice: canViewCost ? item.costPrice : undefined,
       discountPercent: item.discountPercent,

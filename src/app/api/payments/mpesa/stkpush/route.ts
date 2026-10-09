@@ -1,7 +1,7 @@
 // POST /api/payments/mpesa/stkpush
 //
-// AUDIT REMEDIATION — FINANCIAL_MODULE_AUDIT_REPORT.md:
-//   • SYS-1 (P0): this endpoint was unauthenticated — anyone could fire
+// AUDIT REMEDIATION - FINANCIAL_MODULE_AUDIT_REPORT.md:
+//   • SYS-1 (P0): this endpoint was unauthenticated - anyone could fire
 //     STK pushes to arbitrary phone numbers. Now requires an authenticated
 //     session (cashier-level roles).
 //   • F6-2 (P0): the initiation logic moved to `src/lib/mpesa-daraja.ts` so
@@ -31,7 +31,7 @@ async function stkPushHandler(
   request: NextRequest,
   ..._args: unknown[]
 ): Promise<Response> {
-  // AUDIT FIX (Finding 5.2 — rate limiting): each STK push costs a Daraja API
+  // AUDIT FIX (Finding 5.2 - rate limiting): each STK push costs a Daraja API
   // call (rate-limited by Safaricom and billable); a runaway client loop or a
   // compromised session could otherwise hammer it. Per-IP PAYMENT-tier cap
   // (20/min) with 429 + Retry-After. Session auth already ran via requireAuth.
@@ -70,7 +70,7 @@ async function stkPushHandler(
   return Response.json({ success: true, data: result });
 }
 
-// SYS-1: session required — any authenticated staff role may trigger a push
+// SYS-1: session required - any authenticated staff role may trigger a push
 // for a sale they are serving (cashiers initiate; the callback settles).
 export const POST = withErrorBoundary(
   requireAuth(stkPushHandler as (...args: unknown[]) => Promise<Response>),

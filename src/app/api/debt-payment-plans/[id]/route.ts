@@ -3,7 +3,7 @@
 // Single-plan operations. PENDING_APPROVAL plans can be edited freely;
 // ACTIVE plans may only be PAUSED or CANCELLED; DELETE is allowed on
 // PENDING_APPROVAL, CANCELLED and COMPLETED plans (COMPLETED = cleared /
-// fully paid — the client asked for a delete option once a plan has been
+// fully paid - the client asked for a delete option once a plan has been
 // cleared; the collected-payment history stays in the debt ledger).
 //
 // Task 12-d (debt-plan audit) changes:
@@ -12,7 +12,7 @@
 //     `findUnique({ where: { id } })` is auto-narrowed to the caller's store
 //     (previously any financial user could touch another store's plan by ID).
 //   - GET applies the overdue sweep with the shared `markOverdueInstallments`
-//     util and recomputes/persists totals with a single in-memory merge — the
+//     util and recomputes/persists totals with a single in-memory merge - the
 //     old implementation re-fetched the whole plan twice more (3 queries +
 //     2 reloads for one GET) and carried a dead `void markOverdueInstallments`
 //     import hack instead of using the helper that was exported for exactly
@@ -20,7 +20,7 @@
 //   - PATCH allows DEFAULTED → CANCELLED. The old transition table made a
 //     DEFAULTED plan a dead end: payments/waivers were blocked (pay/waive
 //     required ACTIVE/PAUSED), PATCH rejected every target, and DELETE only
-//     accepted PENDING_APPROVAL/CANCELLED — the plan could never leave
+//     accepted PENDING_APPROVAL/CANCELLED - the plan could never leave
 //     DEFAULTED. (Pay/waive on DEFAULTED plans is separately enabled in
 //     those routes so customers can catch up.)
 
@@ -61,7 +61,7 @@ const PLAN_INCLUDE = {
   installments: { orderBy: { installmentNumber: 'asc' } },
 } as const;
 
-// ── GET: single plan with installments ───────────────────────────────────────
+// GET: single plan with installments
 
 async function getPlanHandler(...args: unknown[]): Promise<Response> {
   const context = args[1] as RouteContext;
@@ -113,7 +113,7 @@ async function getPlanHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: serializePlanRow(plan) });
 }
 
-// ── PATCH: update notes/status (with state-machine rules) ───────────────────
+// PATCH: update notes/status (with state-machine rules)
 
 async function patchPlanHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
@@ -181,7 +181,7 @@ async function patchPlanHandler(...args: unknown[]): Promise<Response> {
       updates.cancelledAt = new Date();
     } else if (existing.status === 'DEFAULTED' && target === 'CANCELLED') {
       // Task 12-d: DEFAULTED plans were a state-machine dead end (no PATCH
-      // transition accepted, pay/waive blocked, DELETE rejected) — the plan
+      // transition accepted, pay/waive blocked, DELETE rejected) - the plan
       // could never leave DEFAULTED even when both parties agreed to abort.
       // Cancelling is the correct escape hatch; the underlying debt remains
       // collectible via the debt ledger outside the plan.
@@ -228,7 +228,7 @@ async function patchPlanHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: serializePlanRow(updated) });
 }
 
-// ── DELETE: PENDING_APPROVAL, CANCELLED, or COMPLETED (cleared) ─────────────
+// DELETE: PENDING_APPROVAL, CANCELLED, or COMPLETED (cleared)
 
 async function deletePlanHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;

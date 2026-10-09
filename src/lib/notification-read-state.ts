@@ -1,12 +1,10 @@
 'use client';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — notification read/dismissed state
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - notification read/dismissed state
 //
 // A tiny localStorage-backed external store shared by the NotificationCenter
 // panel AND the badge hook (useNotificationCount), so the sidebar/top-bar
-// bell recomputes in the same tick a notification is read/dismissed — no
+// bell recomputes in the same tick a notification is read/dismissed - no
 // more waiting for the next 60s react-query poll to notice "Mark all read".
 //
 // • Persists to the LEGACY keys (mbt_read_notifications / mbt_dismissed_notifications)
@@ -15,7 +13,6 @@
 // • SSR-safe: on the server every list is empty and no window is touched.
 // • Snapshots are frozen and identity-stable (only rebuilt on real change),
 //   which is what useSyncExternalStore requires.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { useMemo, useSyncExternalStore } from 'react';
 
@@ -32,7 +29,7 @@ export interface NotificationsReadStateSnapshot {
   readonly version: number;
 }
 
-// Server snapshot — a frozen constant so hydration never mismatches.
+// Server snapshot - a frozen constant so hydration never mismatches.
 const EMPTY_SNAPSHOT: NotificationsReadStateSnapshot = Object.freeze({
   readIds: Object.freeze([]),
   dismissedIds: Object.freeze([]),
@@ -85,7 +82,7 @@ function persist() {
       JSON.stringify([...dismissedIdSet].slice(-MAX_PERSISTED_IDS)),
     );
   } catch {
-    // Storage blocked/full — in-memory state still works for this tab.
+    // Storage blocked/full - in-memory state still works for this tab.
   }
 }
 
@@ -107,7 +104,7 @@ function syncFromStorage(notify: boolean) {
     nextRead = parseIdList(window.localStorage.getItem(READ_KEY));
     nextDismissed = parseIdList(window.localStorage.getItem(DISMISSED_KEY));
   } catch {
-    return; // storage unavailable — keep whatever we have in memory
+    return; // storage unavailable - keep whatever we have in memory
   }
   if (sameIdList(nextRead, readIdSet) && sameIdList(nextDismissed, dismissedIdSet)) return;
   readIdSet = nextRead;
@@ -139,7 +136,7 @@ export function subscribeNotificationsReadState(cb: () => void): () => void {
     syncFromStorage(false); // another tab may have written before we subscribed
 
     const handleStorage = (event: StorageEvent) => {
-      // key === null means another tab ran localStorage.clear() — resync too.
+      // key === null means another tab ran localStorage.clear() - resync too.
       if (event.key !== null && event.key !== READ_KEY && event.key !== DISMISSED_KEY) return;
       syncFromStorage(true);
     };
@@ -157,10 +154,10 @@ export function subscribeNotificationsReadState(cb: () => void): () => void {
   };
 }
 
-// ── Mutators (module-level → stable identities for the hook) ─────────────────
+// Mutators (module-level → stable identities for the hook)
 
 export function markNotificationRead(id: string): void {
-  if (readIdSet.has(id)) return; // already read — keep snapshot identity stable
+  if (readIdSet.has(id)) return; // already read - keep snapshot identity stable
   readIdSet.add(id);
   emitChange();
 }
@@ -200,7 +197,7 @@ export function resetNotificationReadState(): void {
   emitChange();
 }
 
-// ── React hook ───────────────────────────────────────────────────────────────
+// React hook
 
 export interface UseNotificationReadStateResult {
   readIds: ReadonlySet<string>;

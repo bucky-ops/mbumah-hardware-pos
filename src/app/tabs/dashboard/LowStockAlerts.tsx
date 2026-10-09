@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * LowStockAlerts — alerts & notifications panel.
+ * LowStockAlerts - alerts & notifications panel.
  *
  * Extracted from `dashboard-tab.tsx` to slim down the orchestrator. Aggregates
  * low-stock / out-of-stock notifications, overdue rentals, and overdue debt

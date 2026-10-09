@@ -1,17 +1,14 @@
 'use client';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Updates, Rollback & Backups (admin card, v2.9.0)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Updates, Rollback & Backups (admin card, v2.9.0)
 // One honest panel for the three architecture-plan components:
 //   • Current version + update availability (GitHub Releases, live check).
 //   • Data-protection state (last crash/manual backup) + "Back up now"
 //     (POST /api/admin/backup → JSON snapshot download).
 //   • Rollback: cloud = one-click re-point to a previous Vercel deployment;
 //     laptop kits are pointed at Rollback-Mbumah-POS.bat (deploy-kit).
-// Everything degrades honestly — nothing is ever shown as available when it
+// Everything degrades honestly - nothing is ever shown as available when it
 // is not configured.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -84,7 +81,7 @@ async function downloadBackupSnapshot(): Promise<string> {
       const body = (await res.json()) as { error?: string };
       if (body?.error) message = body.error;
     } catch {
-      // non-JSON error body — keep the HTTP-status message
+      // non-JSON error body - keep the HTTP-status message
     }
     throw new Error(message);
   }

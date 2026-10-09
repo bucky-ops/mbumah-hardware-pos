@@ -1,5 +1,5 @@
-// GET  /api/financial/periods — list financial periods for a store (ordered by startDate desc).
-// POST /api/financial/periods — create a new OPEN financial period.
+// GET  /api/financial/periods - list financial periods for a store (ordered by startDate desc).
+// POST /api/financial/periods - create a new OPEN financial period.
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';

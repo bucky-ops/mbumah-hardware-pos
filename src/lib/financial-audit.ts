@@ -1,18 +1,16 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Financial Audit & Integrity Module
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Financial Audit & Integrity Module
 //
 // This module provides runtime financial-integrity verification utilities that
 // ensure the double-entry ledger remains balanced at every layer:
 //
-//   1. **Per-entry balance check** — every JournalEntry must have
+//   1. **Per-entry balance check** - every JournalEntry must have
 //      sum(debit) === sum(credit) across its JournalEntryLine rows.
-//   2. **Trial balance** — across a date range, the sum of all debits must
+//   2. **Trial balance** - across a date range, the sum of all debits must
 //      equal the sum of all credits. If they don't, data corruption has
 //      occurred and the system is in a financially inconsistent state.
-//   3. **Posting integrity** — verify that posted entries are never voided
+//   3. **Posting integrity** - verify that posted entries are never voided
 //      and voided entries are never posted.
-//   4. **Immutability verification** — confirm that no JournalEntry has been
+//   4. **Immutability verification** - confirm that no JournalEntry has been
 //      mutated outside of sanctioned bypass paths (updatedAt > createdAt
 //      with no corresponding void/post action).
 //
@@ -22,16 +20,15 @@
 //   • The nightly cron job (full audit + alerting)
 //   • The financial close workflow (period-end verification)
 //
-// All comparisons use the Money class (decimal.js) — NEVER floating-point.
+// All comparisons use the Money class (decimal.js) - NEVER floating-point.
 //
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { db } from "./db";
 import { Money, KES } from "./money";
 import { systemLog } from "./logger";
 import { LogSeverity, LogComponent } from "./types";
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 export interface IntegrityIssue {
   type:
@@ -86,7 +83,7 @@ export interface TrialBalanceResult {
   accounts: TrialBalanceRow[];
 }
 
-// ── 1. Per-entry balance verification ────────────────────────────────────────
+// 1. Per-entry balance verification
 
 /**
  * Verify that a single JournalEntry is balanced (sum of debits === sum of credits).
@@ -94,7 +91,7 @@ export interface TrialBalanceResult {
  *
  * This is called:
  *   • After every `recordSaleJournalEntry()` / `recordGiftCardIssuance()` call
- *     (defence-in-depth — the helper already asserts balance, but this catches
+ *     (defence-in-depth - the helper already asserts balance, but this catches
  *     any future code path that bypasses the assertion).
  *   • During the nightly audit cron.
  */
@@ -120,7 +117,7 @@ export async function verifyEntryBalance(
     };
   }
 
-  // Skip voided entries — their lines may have been zeroed out by the void
+  // Skip voided entries - their lines may have been zeroed out by the void
   // process, which is correct behaviour.
   if (entry.isVoided) {
     return null;
@@ -190,14 +187,14 @@ export async function verifyEntryBalance(
   return null;
 }
 
-// ── 2. Trial balance ─────────────────────────────────────────────────────────
+// 2. Trial balance
 
 /**
  * Generate a trial balance as of a given date (or now). Sums all non-voided
  * JournalEntryLine rows grouped by account, and verifies that total debits
  * equal total credits.
  *
- * This is the cornerstone of financial integrity — if the trial balance does
+ * This is the cornerstone of financial integrity - if the trial balance does
  * not balance, the books are corrupted and must be investigated immediately.
  */
 export async function generateTrialBalance(
@@ -301,7 +298,7 @@ export async function generateTrialBalance(
   };
 }
 
-// ── 3. Full audit ────────────────────────────────────────────────────────────
+// 3. Full audit
 
 /**
  * Run a comprehensive financial integrity audit across a date range.
@@ -336,7 +333,7 @@ export async function runFinancialAudit(
     if (dateTo) entryWhere.entryDate.lte = dateTo;
   }
 
-  // ── Check 1: Per-entry balance ──
+  // Check 1: Per-entry balance
   const entries = await db.journalEntry.findMany({
     where: entryWhere,
     include: {
@@ -371,7 +368,7 @@ export async function runFinancialAudit(
     }
   }
 
-  // ── Check 2: Duplicate entry numbers ──
+  // Check 2: Duplicate entry numbers
   const entryNumbers = entries.map((e) => e.entryNumber);
   const seen = new Set<string>();
   const dupes = new Set<string>();
@@ -388,7 +385,7 @@ export async function runFinancialAudit(
     });
   }
 
-  // ── Check 3: Posting integrity (posted AND voided = corruption) ──
+  // Check 3: Posting integrity (posted AND voided = corruption)
   const postedAndVoided = entries.filter((e) => e.isPosted && e.isVoided);
   for (const entry of postedAndVoided) {
     issues.push({
@@ -401,7 +398,7 @@ export async function runFinancialAudit(
     });
   }
 
-  // ── Check 4: Trial balance ──
+  // Check 4: Trial balance
   const trialBalance = await generateTrialBalance(
     storeId,
     dateTo ?? new Date(),
@@ -418,7 +415,7 @@ export async function runFinancialAudit(
     });
   }
 
-  // ── Log CRITICAL issues to SystemLog for alerting ──
+  // Log CRITICAL issues to SystemLog for alerting
   const criticalIssues = issues.filter((i) => i.severity === "CRITICAL");
   if (criticalIssues.length > 0) {
     try {
@@ -457,11 +454,11 @@ export async function runFinancialAudit(
   };
 }
 
-// ── 4. Lightweight integrity check (for /api/health) ─────────────────────────
+// 4. Lightweight integrity check (for /api/health)
 
 /**
  * A fast, lightweight integrity check suitable for the health endpoint.
- * Counts unbalanced entries in the last 24 hours only — does NOT run a full
+ * Counts unbalanced entries in the last 24 hours only - does NOT run a full
  * trial balance. Returns true if healthy, false if corruption is detected.
  *
  * Time budget: < 200ms on a warm connection. The full audit is for cron.
@@ -486,7 +483,7 @@ export async function quickIntegrityCheck(): Promise<{
       totalCredit: true,
       lines: { select: { debit: true, credit: true } },
     },
-    take: 500, // Cap for performance — health checks must be fast.
+    take: 500, // Cap for performance - health checks must be fast.
   });
 
   let unbalanced = 0;
@@ -511,13 +508,13 @@ export async function quickIntegrityCheck(): Promise<{
   };
 }
 
-// removed: referenced nonexistent Account.balance (audit F7-8) — reconcile from
+// removed: referenced nonexistent Account.balance (audit F7-8) - reconcile from
 // journal lines instead. The former `reconcileAccount()` selected a `balance`
 // column that the Account model does not have; the per-account computed balance
 // is available from `generateTrialBalance()` (netBalance per account), which is
 // derived entirely from journal lines.
 
-// ── 5. Period close verification ─────────────────────────────────────────────
+// 5. Period close verification
 
 /**
  * Verify that a financial period can be safely closed. A period is closeable
@@ -562,6 +559,6 @@ export async function verifyPeriodClose(
   return issues;
 }
 
-// ── 7. Re-export Money for convenience ───────────────────────────────────────
+// 7. Re-export Money for convenience
 
 export { Money, KES };

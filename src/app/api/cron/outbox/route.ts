@@ -1,6 +1,6 @@
-// GET /api/cron/outbox — Vercel Cron entry point for the transactional outbox.
+// GET /api/cron/outbox - Vercel Cron entry point for the transactional outbox.
 //
-// AUDIT REFERENCE — FINANCIAL_MODULE_AUDIT_REPORT.md (F8-4 / Wave 0):
+// AUDIT REFERENCE - FINANCIAL_MODULE_AUDIT_REPORT.md (F8-4 / Wave 0):
 //   Vercel serverless functions freeze shortly after the HTTP response is
 //   returned, so outbox events enqueued during checkout (M-Pesa STK push,
 //   audit alerts) can silently die half-done if delivery is left to
@@ -10,7 +10,7 @@
 //   double-deliver.
 //
 // SCHEDULE NOTE (Vercel Hobby plan): Vercel limits crons on Hobby to a daily
-// minimum — the hourly "0 * * * *" expression is accepted syntax and degrades
+// minimum - the hourly "0 * * * *" expression is accepted syntax and degrades
 // gracefully (runs once daily at 00:00 UTC on Hobby). Upgrade to Pro for true
 // hourly runs. The outbox ALSO pumps opportunistically after checkout
 // commits, so Hobby-plan clamping only slows background retries, not delivery.
@@ -31,10 +31,10 @@ export const dynamic = 'force-dynamic';
 // 60s leaves headroom for Neon cold starts on a fresh lambda instance.
 export const maxDuration = 60;
 
-// ── Shared cron secret gate ──────────────────────────────────────────────────
+// Shared cron secret gate
 // Returns a 403 Response when the caller is not authorised, or null to allow
 // the request through. Inlined per cron route (cron routes are standalone by
-// design — no shared mutable state between schedulers).
+// design - no shared mutable state between schedulers).
 async function verifyCronSecret(request: Request): Promise<Response | null> {
   const secret = process.env.CRON_SECRET;
   const provided = request.headers.get('x-cron-secret');

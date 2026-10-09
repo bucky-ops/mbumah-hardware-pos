@@ -6,7 +6,7 @@
 //
 // Query params:
 //   - productId    : single product id (mutually exclusive with productIds)
-//   - productIds   : comma-separated list (cart-mode — products frequently
+//   - productIds   : comma-separated list (cart-mode - products frequently
 //                    bought WITH ANY of these)
 //   - storeId      : scope the mining to a single store (recommended)
 //   - limit        : default 8, max 20
@@ -40,7 +40,7 @@ async function frequentlyBoughtHandler(
   const limitParam = parseInt(searchParams.get('limit') || '8', 10);
   const limit = Math.min(Math.max(limitParam || 8, 1), 20);
 
-  // Build the seed list — prefer comma-separated list, fall back to single id
+  // Build the seed list - prefer comma-separated list, fall back to single id
   let seedIds: string[] = [];
   if (productIdsParam) {
     seedIds = productIdsParam

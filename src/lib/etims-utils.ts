@@ -1,12 +1,9 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — KRA eTIMS Utilities
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - KRA eTIMS Utilities
 //
 // Utility functions for Kenya Revenue Authority electronic Tax Invoice
 // Management System (eTIMS) integration. Includes PIN validation, date
 // formatting, invoice number generation, tax breakdown calculation, and
 // QR code payload building.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { Decimal } from 'decimal.js';
 
@@ -169,7 +166,7 @@ export function buildQrCodePayload(invoiceData: {
 
 /**
  * Generate a simple deterministic QR-like pattern from a string.
- * This is a visual placeholder — not a real QR code.
+ * This is a visual placeholder - not a real QR code.
  * Returns a 2D array of booleans (true = dark module).
  */
 export function generateQrPattern(data: string, size: number = 21): boolean[][] {

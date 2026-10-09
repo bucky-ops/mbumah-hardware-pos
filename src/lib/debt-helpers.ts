@@ -1,6 +1,4 @@
-// ════════════════════════════════════════════════════════════════════════════
 // src/lib/debt-helpers.ts
-// ════════════════════════════════════════════════════════════════════════════
 //
 // Debt management & customer-reminder helpers.
 //
@@ -12,23 +10,23 @@
 //
 // It depends on the Prisma client (db) for data access and the
 // notification-helpers module for actual message delivery. It does NOT
-// depend on any specific notification provider (Twilio/Resend) — that's
+// depend on any specific notification provider (Twilio/Resend) - that's
 // abstracted behind INotificationService.
 //
 // Escalation rules (configurable via REMINDER_RULES):
-//   • CURRENT (0–due date)     → no reminder (grace period)
-//   • DAYS_30 (1–30 days late) → weekly reminder
-//   • DAYS_60 (31–60 days late)→ every 3 days
+//   • CURRENT (0 - due date)     → no reminder (grace period)
+//   • DAYS_30 (1-30 days late) → weekly reminder
+//   • DAYS_60 (31-60 days late)→ every 3 days
 //   • DAYS_90_PLUS (61+ days)  → daily + manager alert
 
 import { db } from '@/lib/db';
 import { systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
-// Task 12-b: Prisma Decimal valueOf() returns a STRING — `entry.totalOverdue +=
+// Task 12-b: Prisma Decimal valueOf() returns a STRING - `entry.totalOverdue +=
 // debt.balance` STRING-CONCATENATED. All money math runs through toDec().
 import { toDec } from '@/lib/utils/financialMath';
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// Constants
 
 export const AgingBucket = {
   CURRENT: 'CURRENT',
@@ -85,7 +83,7 @@ export const REMINDER_RULES: Record<
   },
 };
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 export interface OverdueCustomer {
   customerId: string;
@@ -116,7 +114,7 @@ export interface ReminderScheduleResult {
   }>;
 }
 
-// ── Core functions ───────────────────────────────────────────────────────────
+// Core functions
 
 /**
  * Calculate the aging bucket for a debt based on its due date.
@@ -191,7 +189,7 @@ export async function identifyOverdueCustomers(
       byCustomer.set(debt.customerId, entry);
     }
     // Task 12-b: Decimal-safe accumulation (was `entry.totalOverdue +=
-    // debt.balance` — a `number += Decimal` STRING concatenation).
+    // debt.balance` - a `number += Decimal` STRING concatenation).
     entry.totalOverdue = toDec(entry.totalOverdue).plus(toDec(debt.balance)).toNumber();
     entry.debts.push({
       debtLedgerId: debt.id,
@@ -238,7 +236,7 @@ export function shouldSendReminder(
 /**
  * Schedule reminder tasks for all eligible overdue debts in a store.
  *
- * This function does NOT send the reminders directly — it creates DebtReminder
+ * This function does NOT send the reminders directly - it creates DebtReminder
  * rows with status PENDING, which are then picked up by the notification
  * service (see src/lib/notification-helpers.ts). This separation allows the
  * scheduling logic to run quickly (no network calls) while the actual message
@@ -327,7 +325,7 @@ export async function scheduleReminders(storeId: string): Promise<ReminderSchedu
     severity: LogSeverity.INFO,
     message: `Scheduled ${result.scheduled} debt reminder(s) for store ${storeId} (${result.skipped} skipped, ${result.errors} errors)`,
     storeId,
-    // TS interfaces lack implicit index signatures — cast for the metadata sink.
+    // TS interfaces lack implicit index signatures - cast for the metadata sink.
     metadata: result as unknown as Record<string, unknown>,
   });
 

@@ -1,16 +1,16 @@
 'use client';
 
 /**
- * Service Worker Registration — v1.2.0 Phase 3
+ * Service Worker Registration - v1.2.0 Phase 3
  *
  * Registers /sw.js on the client. Handles:
- *   - Initial registration (production only — dev server has HMR which
+ *   - Initial registration (production only - dev server has HMR which
  *     conflicts with cached assets).
  *   - Update detection: when a new SW takes over, prompts the user to reload.
  *   - Controller change: triggers a single window reload after the new SW
  *     activates.
  *
- * Renders null — this is a side-effect-only component. Mount it once near the
+ * Renders null - this is a side-effect-only component. Mount it once near the
  * root of the app (we use it inside Providers so it's always mounted).
  */
 
@@ -29,7 +29,7 @@ export function RegisterSW() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!('serviceWorker' in navigator)) return;
-    // Skip in development — Next.js HMR + cached assets = confusing reloads.
+    // Skip in development - Next.js HMR + cached assets = confusing reloads.
     if (process.env.NODE_ENV !== 'production') return;
     // Already registered (React StrictMode mounts effects twice).
     if (window.__mbumahSwRegistered) return;

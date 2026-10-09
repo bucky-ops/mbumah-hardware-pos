@@ -1,13 +1,13 @@
 // GET /api/loyalty/stats
 //
 // Aggregate loyalty stats across the store (or org-wide for SUPER_ADMIN):
-//   - totalMembers — distinct customers with at least 1 loyalty transaction
-//   - totalPointsOutstanding — sum of customer.loyaltyPoints
-//   - totalPointsEarned — sum of customer.totalLoyaltyEarned
-//   - totalPointsRedeemed — sum of customer.totalLoyaltyRedeemed
-//   - redemptionRate — totalRedeemed / totalEarned (0-1, guarded for divide-by-0)
-//   - tierBreakdown — count of customers in each tier (BRONZE/SILVER/GOLD/PLATINUM)
-//   - topMembers — top 5 customers by current loyaltyPoints balance
+//   - totalMembers - distinct customers with at least 1 loyalty transaction
+//   - totalPointsOutstanding - sum of customer.loyaltyPoints
+//   - totalPointsEarned - sum of customer.totalLoyaltyEarned
+//   - totalPointsRedeemed - sum of customer.totalLoyaltyRedeemed
+//   - redemptionRate - totalRedeemed / totalEarned (0-1, guarded for divide-by-0)
+//   - tierBreakdown - count of customers in each tier (BRONZE/SILVER/GOLD/PLATINUM)
+//   - topMembers - top 5 customers by current loyaltyPoints balance
 //
 // RBAC: SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER.
 
@@ -58,11 +58,11 @@ async function getLoyaltyStatsHandler(
       ? requestedStoreId || undefined
       : session.storeId || requestedStoreId || undefined;
 
-  // ── Build the `where` clause for customer queries ──
+  // Build the `where` clause for customer queries
   const customerWhere: Record<string, unknown> = {};
   if (storeId) customerWhere.storeId = storeId;
 
-  // ── Run all aggregations in parallel ──
+  // Run all aggregations in parallel
   const [
     totalMembersResult,
     pointsAggregate,
@@ -111,7 +111,7 @@ async function getLoyaltyStatsHandler(
       },
     }),
 
-    // Earned points (from LoyaltyTransaction table) — points > 0
+    // Earned points (from LoyaltyTransaction table) - points > 0
     db.loyaltyTransaction.aggregate({
       where: {
         ...(storeId ? { storeId } : {}),
@@ -121,7 +121,7 @@ async function getLoyaltyStatsHandler(
       _count: { _all: true },
     }),
 
-    // Redeemed points (from LoyaltyTransaction table) — points < 0
+    // Redeemed points (from LoyaltyTransaction table) - points < 0
     db.loyaltyTransaction.aggregate({
       where: {
         ...(storeId ? { storeId } : {}),
@@ -136,7 +136,7 @@ async function getLoyaltyStatsHandler(
   const totalRedeemedFromTx = Math.abs(redeemedTxAggregate._sum.points || 0);
 
   // Prefer the customer lifetime counters (denormalized) for the headline
-  // numbers — they are always in sync with the customer record. Fall back to
+  // numbers - they are always in sync with the customer record. Fall back to
   // the LoyaltyTransaction aggregates if the denormalized totals are zero
   // (e.g. for legacy customers created before Phase 3).
   const totalPointsEarned =

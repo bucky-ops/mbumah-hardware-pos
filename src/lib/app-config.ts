@@ -1,17 +1,17 @@
 /**
- * MBUMAH HARDWARE POS — Application Configuration
+ * MBUMAH HARDWARE POS - Application Configuration
  * Shared constants, role definitions, tab configuration, and utilities.
  */
 
 import type { AppTab } from '@/lib/stores';
 
-// ── Role Definitions ────────────────────────────────────────────────────────
+// Role Definitions
 
 export const ALL_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'CASHIER', 'ACCOUNTANT'];
 export const MGMT_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'];
 export const SENIOR_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'];
 export const ADMIN_ROLES = ['SUPER_ADMIN', 'STORE_OWNER'];
-// v2.12.2 (PR B — RBAC): catalog-steward role — catalog/inventory + inbound
+// v2.12.2 (PR B - RBAC): catalog-steward role - catalog/inventory + inbound
 // supply-chain tabs only (NO financial/sales/HR tabs). User.role is a string
 // column (no schema change); membership enforced via these role arrays.
 export const INVENTORY_STAFF_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT', 'INVENTORY_MANAGER'];
@@ -43,7 +43,7 @@ export function requiredRoleLabelFor(roles: string[]): string {
   return 'a higher role';
 }
 
-// ── Tab Configuration ───────────────────────────────────────────────────────
+// Tab Configuration
 
 import {
   Home, ShoppingCart, Tag, Package, Users, ShoppingBag,
@@ -87,7 +87,7 @@ export const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType; r
   { id: 'admin', label: 'Admin', icon: Settings, roles: ADMIN_ROLES },
 ];
 
-// ── Navigation Groups (used by AppSidebar) ──────────────────────────────────
+// Navigation Groups (used by AppSidebar)
 
 export const NAV_GROUPS: { label: string; ids: AppTab[] }[] = [
   { label: 'Main', ids: ['dashboard', 'pos', 'catalog', 'inventory', 'customers', 'transactions'] },
@@ -97,7 +97,7 @@ export const NAV_GROUPS: { label: string; ids: AppTab[] }[] = [
   { label: 'Compliance & System', ids: ['etims', 'reports', 'data-exports', 'security', 'admin'] },
 ];
 
-// ── Category Images ─────────────────────────────────────────────────────────
+// Category Images
 
 export const CATEGORY_IMAGES: Record<string, string> = {
   cat_cement: '/categories/cat_cement.png',
@@ -112,7 +112,7 @@ export const CATEGORY_IMAGES: Record<string, string> = {
   cat_nails_screws: '/categories/cat_nails.png',
 };
 
-// ── Utility Functions ───────────────────────────────────────────────────────
+// Utility Functions
 
 /** Returns the tabs visible to the given role. SUPER_ADMIN sees everything. */
 export function filterTabsByRole(role: string | undefined): typeof TAB_CONFIG {
@@ -124,7 +124,7 @@ export function filterTabsByRole(role: string | undefined): typeof TAB_CONFIG {
 /**
  * v2.12.5 (RBAC): returns the tab's config when `role` can open it, otherwise
  * null. Locked (no-access) tabs are NOT silently hidden by the sidebar anymore
- * — they render with a Lock icon; use this to distinguish access vs lock.
+ *they render with a Lock icon; use this to distinguish access vs lock.
  */
 export function tabAccessFor(role: string | undefined, id: AppTab): typeof TAB_CONFIG[number] | null {
   const tab = TAB_CONFIG.find((t) => t.id === id);

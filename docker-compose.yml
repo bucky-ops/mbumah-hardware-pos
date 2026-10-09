@@ -1,14 +1,10 @@
-# ============================================================================
 # MBUMAH HARDWARE POS & ERP - Local Development Docker Compose
 # PostgreSQL + Redis + Mock M-Pesa API Service
-# ============================================================================
 
 version: "3.9"
 
 services:
-  # --------------------------------------------------------------------------
   # PostgreSQL 15 with pg_trgm extension for fuzzy search
-  # --------------------------------------------------------------------------
   postgres:
     image: postgres:15-alpine
     container_name: mbumah_postgres
@@ -28,9 +24,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # --------------------------------------------------------------------------
   # Redis 7 Alpine - Caching & BullMQ Job Queue
-  # --------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
     container_name: mbumah_redis
@@ -46,9 +40,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # --------------------------------------------------------------------------
   # Mock M-Pesa Daraja API - Simulates Safaricom STK Push & Callbacks
-  # --------------------------------------------------------------------------
   mpesa-mock:
     image: node:20-alpine
     container_name: mbumah_mpesa_mock

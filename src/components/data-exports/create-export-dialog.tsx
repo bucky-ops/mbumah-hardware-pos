@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * CreateExportDialog — form for generating a new data export.
+ * CreateExportDialog - form for generating a new data export.
  *
  * Fields:
- *   • Export type (select with icons) — pre-set when launched from a card.
+ *   • Export type (select with icons) - pre-set when launched from a card.
  *   • Format (CSV / JSON).
  *   • Date range (only shown for TRANSACTIONS / TAX / SALES_SUMMARY).
  *   • Advanced filters (JSON textarea, hidden behind a toggle).
@@ -104,7 +104,7 @@ export function CreateExportDialog({
 }: CreateExportDialogProps) {
   const queryClient = useQueryClient();
 
-  // ── Form state ─────────────────────────────────────────────────────────
+  // Form state
   const [exportType, setExportType] = useState<DataExportType>(
     presetType ?? 'PRODUCTS',
   );
@@ -114,13 +114,13 @@ export function CreateExportDialog({
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
   const [filtersJson, setFiltersJson] = useState<string>('');
 
-  // Event-driven open/close handling — resets state when the dialog closes
+  // Event-driven open/close handling - resets state when the dialog closes
   // (avoids the react-hooks/set-state-in-effect rule) and re-applies the
   // preset type when it opens.
   const handleOpenChange = (next: boolean) => {
     if (next) {
       if (presetType) setExportType(presetType);
-      // Don't wipe other fields on open — preserve previous filters.
+      // Don't wipe other fields on open - preserve previous filters.
     } else {
       // Reset on close.
       setFormat('CSV');
@@ -136,7 +136,7 @@ export function CreateExportDialog({
   const currentMeta = TYPE_TO_META[exportType];
   const supportsDateRange = currentMeta?.supportsDateRange ?? false;
 
-  // ── Validation ─────────────────────────────────────────────────────────
+  // Validation
   const validationError = useMemo<string | null>(() => {
     if (!storeId) return 'No store selected.';
     if (supportsDateRange) {
@@ -166,7 +166,7 @@ export function CreateExportDialog({
     return null;
   }, [storeId, supportsDateRange, dateFrom, dateTo, showAdvanced, filtersJson]);
 
-  // ── Create mutation ────────────────────────────────────────────────────
+  // Create mutation
   const createMutation = useMutation({
     mutationFn: async () => {
       const filters = (() => {

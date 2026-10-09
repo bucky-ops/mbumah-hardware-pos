@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * LoadingSkeleton — flexible skeleton loaders with named variants.
+ * LoadingSkeleton - flexible skeleton loaders with named variants.
  *
  * Provides common skeleton patterns: rows, cards, and a generic block. Reduces
  * duplication of inline `<Skeleton className="h-10 w-full" />` boilerplate
@@ -14,13 +14,13 @@ import { cn } from '@/lib/utils';
 
 export interface LoadingSkeletonProps {
   variant?: 'rows' | 'cards' | 'block';
-  /** For 'rows' and 'cards' — how many items to render */
+  /** For 'rows' and 'cards' - how many items to render */
   count?: number;
-  /** For 'rows' — height of each skeleton row */
+  /** For 'rows' - height of each skeleton row */
   rowHeight?: string;
-  /** For 'cards' — grid template, defaults to a 4-col responsive grid */
+  /** For 'cards' - grid template, defaults to a 4-col responsive grid */
   cardClassName?: string;
-  /** For 'block' — explicit className for the single Skeleton */
+  /** For 'block' - explicit className for the single Skeleton */
   blockClassName?: string;
   /** Wrapper className */
   className?: string;

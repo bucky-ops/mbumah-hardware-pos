@@ -17,10 +17,10 @@ import { Label } from '@/components/ui/label';
  * DigitalDocumentView / DigitalDeliveryView components), with the two
  * behaviours the client asked for:
  *
- *  • SCROLL — in the default mode the receipt keeps its natural size inside a
+ *  • SCROLL - in the default mode the receipt keeps its natural size inside a
  *    styled scroll area, so a long receipt can be scrolled through after
  *    clicking the QR or the "View receipt" button.
- *  • AUTOFIT — the toggle measures the receipt against the viewer box
+ *  • AUTOFIT - the toggle measures the receipt against the viewer box
  *    (ResizeObserver) and CSS-scales the whole receipt so it FITS ON SCREEN
  *    with no scrolling (handy for showing a customer or projecting).
  *
@@ -31,7 +31,7 @@ import { Label } from '@/components/ui/label';
 interface DigitalReceiptViewerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Dialog title, e.g. "Digital receipt — INV-2026-0001". */
+  /** Dialog title, e.g. "Digital receipt - INV-2026-0001". */
   title: string;
   /** Subtitle under the title, e.g. the document type label. */
   subtitle?: string;

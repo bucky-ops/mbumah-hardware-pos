@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * usePagination — pagination state management for client-side lists.
+ * usePagination - pagination state management for client-side lists.
  *
  * Encapsulates the `page` + `pageSize` state pair plus helper calculations
  * (total pages, slice indices, page navigation) so list components don't
@@ -13,7 +13,7 @@ import { useCallback, useMemo, useState } from 'react';
 export interface UsePaginationOptions {
   initialPage?: number;
   initialPageSize?: number;
-  /** Total number of items — required to compute totalPages and to clamp the page */
+  /** Total number of items - required to compute totalPages and to clamp the page */
   totalItems: number;
 }
 
@@ -32,7 +32,7 @@ export interface UsePaginationResult {
   prevPage: () => void;
   canNextPage: boolean;
   canPrevPage: boolean;
-  /** Reset to the first page — useful when a filter changes */
+  /** Reset to the first page - useful when a filter changes */
   reset: () => void;
 }
 

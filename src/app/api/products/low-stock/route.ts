@@ -1,11 +1,11 @@
 // GET /api/products/low-stock
 //
-// Returns products at or below their reorder level — the inventory
+// Returns products at or below their reorder level - the inventory
 // "watchlist" used by the Low-Stock Alert Panel. Each item includes:
 //   • product details (name, sku, unitType, category)
 //   • current stock + reorder level + min/max thresholds
 //   • supplier info (resolved from the most recent PurchaseOrder that
-//     contained this product) — null if the product has never been
+//     contained this product) - null if the product has never been
 //     ordered through a PO
 //   • the date the product was last restocked (most recent PURCHASE
 //     StockMovement)
@@ -15,7 +15,7 @@
 //   2. Then by stock deficit (reorderLevel - quantityInStock), largest
 //      deficit first
 //
-// Auth: any authenticated user (requireStoreAccess — store-scoped).
+// Auth: any authenticated user (requireStoreAccess - store-scoped).
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -38,7 +38,7 @@ async function getLowStockProductsHandler(
     );
   }
 
-  // Optional filter — when `includeNear=true` we widen the threshold to
+  // Optional filter - when `includeNear=true` we widen the threshold to
   // `quantityInStock <= reorderLevel * 1.5` so the panel can also surface
   // items that are *approaching* the reorder level (yellow band).
   const includeNear = searchParams.get('includeNear') === 'true';
@@ -118,7 +118,7 @@ async function getLowStockProductsHandler(
     }),
   ]);
 
-  // Index — only the LATEST PO item per product (most recent PO date).
+  // Index - only the LATEST PO item per product (most recent PO date).
   const supplierByProductId = new Map<string, (typeof lastPoItems)[number]>();
   for (const item of lastPoItems) {
     const existing = supplierByProductId.get(item.productId);
@@ -128,7 +128,7 @@ async function getLowStockProductsHandler(
     }
   }
 
-  // Index — most recent PURCHASE movement per product.
+  // Index - most recent PURCHASE movement per product.
   const lastRestockByProductId = new Map<string, (typeof lastPurchaseMovements)[number]>();
   for (const m of lastPurchaseMovements) {
     if (!lastRestockByProductId.has(m.productId)) {
@@ -166,7 +166,7 @@ async function getLowStockProductsHandler(
       deficit,
       urgency,
       // Suggested reorder qty: bring stock up to 1.5× reorder level (a
-      // sensible default for hardware retail) — caller can override.
+      // sensible default for hardware retail) - caller can override.
       suggestedReorderQty: Math.max(0, Math.ceil(reorder * 1.5 - stock)),
       supplier: poItem
         ? {

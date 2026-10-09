@@ -4,7 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
-// v2.12.2 (PR B — RBAC): supplier-cost visibility gate + product-edit roles.
+// v2.12.2 (PR B - RBAC): supplier-cost visibility gate + product-edit roles.
 // v2.12.7 (PR C): recordPermissionDenied feeds the HIGH_RISK_ATTEMPT price-guard
 // denial into the SecurityEvent feed + the hash-chained AuditLog.
 import {
@@ -15,12 +15,12 @@ import {
 } from '@/lib/auth';
 import { hasFeaturePermission } from '@/lib/permissions';
 // v2.12.7 (PR C): manager step-up for the ±20% price guard (same credential
-// rules as checkout + /api/auth/manager-authorize — never a drifting copy).
+// rules as checkout + /api/auth/manager-authorize - never a drifting copy).
 import { authorizeManager, clientIpFromHeaders } from '@/lib/manager-auth';
 
 export const dynamic = 'force-dynamic';
 
-/** v2.12.2 (PR B — RBAC): roles allowed to EDIT catalog items —
+/** v2.12.2 (PR B - RBAC): roles allowed to EDIT catalog items -
  *  MANAGER_PLUS_ROLES + INVENTORY_MANAGER (PERMISSION_MATRIX.products
  *  create/update and FEATURE_PERMISSIONS['inventory.edit']). */
 const PRODUCT_EDIT_ROLES: readonly string[] = [...MANAGER_PLUS_ROLES, 'INVENTORY_MANAGER'];
@@ -70,9 +70,9 @@ async function getProductHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // v2.12.2 (PR B — RBAC): supplier-cost visibility. Roles without
+  // v2.12.2 (PR B - RBAC): supplier-cost visibility. Roles without
   // 'inventory.view.cost' (CASHIER / ACCOUNTANT) get costPrice nulled on the
-  // detail payload too (the list route strips the same field — the detail
+  // detail payload too (the list route strips the same field - the detail
   // route must not be the leak-around).
   const detailSession = await getSessionFromRequest(_request);
   const canViewCost = hasFeaturePermission(detailSession?.role, 'inventory.view.cost');
@@ -93,7 +93,7 @@ async function updateProductHandler(...args: unknown[]): Promise<Response> {
   const body = await request.json();
 
   // v2.12.7 (PR C): session resolved once up-front (was previously re-resolved
-  // inside the price-change audit block) — the price guard below needs it.
+  // inside the price-change audit block) - the price guard below needs it.
   const session = await getSessionFromRequest(request);
 
   const existing = await db.product.findUnique({ where: { id } });
@@ -120,14 +120,14 @@ async function updateProductHandler(...args: unknown[]): Promise<Response> {
     'reorderLevel', 'pricePerUnit', 'costPrice', 'taxRate',
     'isRental', 'isBundle', 'imageUrl', 'isActive',
     // v2.6.1 UoM conversion: `sellingUnit` (string; ''/null clears it) and
-    // `conversionFactor` (how many BASE units one SELLING unit contains —
+    // `conversionFactor` (how many BASE units one SELLING unit contains -
     // validated below). The checkout deducts quantity × conversionFactor.
     'sellingUnit', 'conversionFactor',
   ];
 
   // SKU is editable so legacy products can be re-coded to the branch-code
   // convention (MBM-<branchCode>-…) without deleting historical records.
-  // Globally unique — 409 on a clash.
+  // Globally unique - 409 on a clash.
   if (body.sku !== undefined) {
     const newSku = String(body.sku).trim();
     if (newSku.length < 2) {
@@ -179,13 +179,13 @@ async function updateProductHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // ── v2.12.7 (PR C): INVENTORY_MANAGER price guard (±20% of cost) ──────────
+  // v2.12.7 (PR C): INVENTORY_MANAGER price guard (±20% of cost)
   // INVENTORY_MANAGER is the catalog steward (PRODUCT_EDIT_ROLES) but a
   // business-price decision that moves the price more than ±20% away from the
   // cost basis is a manager-tier call. Deviations beyond that threshold from a
   // bare INVENTORY_MANAGER session are refused with MANAGER_APPROVAL_REQUIRED
   // and recorded as a HIGH_RISK_ATTEMPT (SecurityEvent + AuditLog PERMISSION_DENIED
-  // row — visible in the Audit Trail). The SAME managerOverride credential
+  // row - visible in the Audit Trail). The SAME managerOverride credential
   // object used at checkout ({approverEmail, approverPassword, reason}) lets a
   // Branch Manager+ approve the change inline; the approval consumes one
   // MANAGER_OVERRIDE hash-chained audit row (overrideContext
@@ -334,10 +334,10 @@ async function updateProductHandler(...args: unknown[]): Promise<Response> {
     },
   });
 
-  // v2.6.0: price-change audit — any change to pricePerUnit or costPrice is
+  // v2.6.0: price-change audit - any change to pricePerUnit or costPrice is
   // a money-moving event and gets a tamper-evident trail entry with the old
   // and new prices. Values are Number()-coerced plain JSON (Prisma Decimals
-  // serialize as strings through Response.json — never let them reach the
+  // serialize as strings through Response.json - never let them reach the
   // audit chain).
   const priceChanged =
     updateData.pricePerUnit !== undefined &&
@@ -347,7 +347,7 @@ async function updateProductHandler(...args: unknown[]): Promise<Response> {
     Number(updateData.costPrice) !== Number(existing.costPrice);
   if (priceChanged || costChanged) {
     try {
-      // (session is resolved once at the top of the handler — v2.12.7)
+      // (session is resolved once at the top of the handler - v2.12.7)
       const { auditTrail } = await import('@/lib/audit-trail');
       await auditTrail.log({
         action: 'UPDATE',

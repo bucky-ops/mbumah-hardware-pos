@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * EmptyState — reusable empty state illustration.
+ * EmptyState - reusable empty state illustration.
  *
  * Renders a centered icon + title + description with an optional call-to-action
  * button. Used inside tables, lists, and cards when there is no data to show.

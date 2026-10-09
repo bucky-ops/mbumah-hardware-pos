@@ -4,7 +4,7 @@
 // `db.$transaction` that atomically:
 //   1. Creates the SalesTransaction + SaleItem rows.
 //   2. Records Payment row(s) (single or SPLIT).
-//   3. Deducts stock + writes StockMovement rows — with an in-tx re-check
+//   3. Deducts stock + writes StockMovement rows - with an in-tx re-check
 //      that refuses to let any product go negative (ISO 9001 integrity).
 //   4. Records payment-method side effects:
 //        CASH      → CashDrawerLog entry
@@ -12,13 +12,13 @@
 //        DEBT      → DebtLedger entry + customer balance increment
 //        GIFT_CARD → GiftCard balance decrement + GiftCardRedemption row
 //   5. Writes ONE balanced double-entry JournalEntry via
-//      `recordSaleJournalEntry` — credits Sales Revenue + VAT Payable,
+//      `recordSaleJournalEntry` - credits Sales Revenue + VAT Payable,
 //      debits the relevant payment asset / receivable / gift-card
 //      liability, debits Sales Discounts (contra-revenue) for cart-level
 //      discounts, and records COGS. Throws if debits ≠ credits.
 //   6. Creates the Receipt row.
 //
-// If ANY step throws, the entire transaction rolls back — no partial
+// If ANY step throws, the entire transaction rolls back - no partial
 // sales, no orphaned stock movements, no unbalanced journal entries.
 
 import { type NextRequest } from 'next/server';
@@ -31,7 +31,7 @@ import { LogSeverity, LogComponent, PaymentMethod, PaymentStatus } from '@/lib/t
 import { checkoutSchema, validateInput } from '@/lib/validations';
 import { calculateEarnedPoints, getTierFromPoints } from '@/lib/loyalty-utils';
 import { requireStoreAccess, MANAGER_PLUS_ROLES, recordPermissionDenied, noteDeniedAndMaybeLock, type AuthSession } from '@/lib/auth';
-// v2.12.2 (PR B — RBAC): feature-permission gates + shared manager step-up.
+// v2.12.2 (PR B - RBAC): feature-permission gates + shared manager step-up.
 import { hasFeaturePermission, PERMISSION_DENIED_MESSAGES } from '@/lib/permissions';
 import { authorizeManager, clientIpFromHeaders } from '@/lib/manager-auth';
 import { auditTrail } from '@/lib/audit-trail';
@@ -44,14 +44,14 @@ import { withSequenceRetry, isP2002 } from '@/lib/sequence';
 
 export const dynamic = 'force-dynamic';
 
-// v2.6.0: quantity rounding for UoM conversion — HALF_UP 4dp. Stock is held
+// v2.6.0: quantity rounding for UoM conversion - HALF_UP 4dp. Stock is held
 // in the product's BASE unit; a cart line's quantity × conversionFactor is
 // frozen at 4dp before it touches quantityInStock or a StockMovement row.
 function round4(d: Decimal): number {
   return d.toDecimalPlaces(4, Decimal.ROUND_HALF_UP).toNumber();
 }
 
-// v2.6.0: manager step-up credential verification — the SAME bcrypt + legacy
+// v2.6.0: manager step-up credential verification - the SAME bcrypt + legacy
 // "hashed_" fallback the login route uses, so an approving manager's stored
 // hash verifies identically at checkout.
 async function verifyManagerPassword(password: string, storedHash: string): Promise<boolean> {
@@ -187,7 +187,7 @@ async function getTransactionsHandler(
     success: true,
     // DECIMAL-STRING AUDIT FIX (v2.5.0): Prisma Decimals serialize as STRINGS
     // through Response.json (decimal.js toJSON). The api.ts contract says
-    // numbers — emit numbers so client money math (totals, discounts,
+    // numbers - emit numbers so client money math (totals, discounts,
     // change-due, daily-takings sums) can never string-concatenate. Same
     // class of bug as the v2.3.0 P&L 3.8e+90 incident.
     data: transactions.map((t) => ({
@@ -217,13 +217,12 @@ async function getTransactionsHandler(
   });
 }
 
-// ═════════════════════════════════════════════════════════════════════
-// POST /api/transactions — error-containment wrapper.
+// POST /api/transactions - error-containment wrapper.
 //
 // ROOT-CAUSE RUNBOOK (checkout 500 incident, 2026-09):
 // A production 500 with body {"error":"An unexpected error occurred. Please
 // try again."} was completely undiagnosable: no payload on stdout, no detail
-// in the response. The actual cause was Prisma P2022 — the deployed Neon
+// in the response. The actual cause was Prisma P2022 - the deployed Neon
 // database was missing the `idempotencyKey` column added by the financial
 // remediation because the Vercel build never synced the schema (fixed by
 // scripts/sync-db-schema.mjs, wired into `npm run vercel-build`).
@@ -232,13 +231,12 @@ async function getTransactionsHandler(
 //   1. Malformed JSON → 400 (previously an unhandled throw → 500).
 //   2. ANY unhandled error from the checkout flow is logged to stdout as
 //      [TRANSACTION-API-ERROR] with the error, its stack, and a PII-redacted,
-//      size-capped copy of the request payload — Vercel Runtime Logs captures
+//      size-capped copy of the request payload - Vercel Runtime Logs captures
 //      console.error, so production failures are triageable from the logs.
 //   3. CheckoutInputError (bad item field values) → clean 400.
 //   4. Everything else rethrows to withErrorBoundary, which emits the
 //      [API-ERROR] stdout breadcrumb and a sanitized 500 carrying the
 //      non-sensitive {name, code, component} diagnostic pair.
-// ═════════════════════════════════════════════════════════════════════
 async function createTransactionHandler(
   request: NextRequest,
   session: AuthSession,
@@ -275,12 +273,12 @@ async function createTransactionInner(
   session: AuthSession,
   body: unknown,
 ): Promise<Response> {
-  // ── SYS-10: idempotent checkout replay ──────────────────────────────────
+  // SYS-10: idempotent checkout replay
   // The offline queue (src/lib/offline-sync.ts) re-POSTs sales whose response
   // was lost. A client-generated idempotencyKey makes that replay safe: the
   // original committed transaction is returned instead of re-applying stock,
   // payments and journals.
-  // `body` arrives typed `unknown` from the error-containment wrapper —
+  // `body` arrives typed `unknown` from the error-containment wrapper -
   // narrow through a Record cast before touching the optional key.
   const rawBody = (body ?? {}) as Record<string, unknown>;
   const rawIdempotencyKey = rawBody.idempotencyKey;
@@ -320,16 +318,16 @@ async function createTransactionInner(
     serials,
     managerApproval,
     // v2.12.0 (Task DASH-BE): debt-sale blocking step-up flag.
-    // v2.12.2 (PR B — RBAC): may now ALSO be a credential object
-    // { approverEmail, approverPassword, ... } — normalized below.
+    // v2.12.2 (PR B - RBAC): may now ALSO be a credential object
+    // { approverEmail, approverPassword, ... } - normalized below.
     managerOverride,
   } = validation.data;
 
-  // ── v2.12.2 (PR B — RBAC): managerOverride normalization + verification ──
+  // v2.12.2 (PR B - RBAC): managerOverride normalization + verification
   // Legacy boolean → the session-role path (unchanged v2.12.0 behavior).
   // Credential object → verified ONCE, here, via the shared authorizeManager()
   // helper (same bcrypt/role/brute-force rules as /api/auth/manager-authorize).
-  // A verified object unlocks the 5–10% discount band and the high-risk debt
+  // A verified object unlocks the 5-10% discount band and the high-risk debt
   // gate for a cashier; it NEVER unlocks >10% discounts (owner-tier control).
   const overrideObject =
     managerOverride && typeof managerOverride === 'object' ? managerOverride : null;
@@ -420,7 +418,7 @@ async function createTransactionInner(
   }
 
   // SYS-2 (F5-1): the cashier identity ALWAYS comes from the authenticated
-  // session — the request body can no longer attribute a sale to another user.
+  // session - the request body can no longer attribute a sale to another user.
   const cashierId = session.userId;
 
   if (!Object.values(PaymentMethod).includes(paymentMethod)) {
@@ -459,7 +457,7 @@ async function createTransactionInner(
   }
 
   // F5-1 (store binding): non-admin users can only check out in their own
-  // store — a body-borne storeId for another store is rejected.
+  // store - a body-borne storeId for another store is rejected.
   if (session.role !== 'SUPER_ADMIN' && session.storeId && session.storeId !== storeId) {
     return Response.json(
       { success: false, error: 'You can only create transactions for your own store.' },
@@ -479,7 +477,7 @@ async function createTransactionInner(
     }
   }
 
-  // M-Pesa requires a destination phone — validate AFTER the customer lookup
+  // M-Pesa requires a destination phone - validate AFTER the customer lookup
   // (which may supply it via customer.phone) and BEFORE the transaction so a
   // missing number is a clean 400 instead of a throw inside the checkout
   // transaction (the sale would roll back and surface as a 500).
@@ -491,7 +489,7 @@ async function createTransactionInner(
   }
 
   // Verify all items and stock levels.
-  // NOTE: the existence check uses the DEDUPLICATED id list — a cart may
+  // NOTE: the existence check uses the DEDUPLICATED id list - a cart may
   // legitimately contain the same product on two lines (e.g. two serial
   // ranges of one SKU). Comparing against the raw list rejected every such
   // checkout with a false "Products not found or inactive" 400.
@@ -522,8 +520,8 @@ async function createTransactionInner(
   // Build stock deduction map: productId -> total quantity to deduct
   //
   // v2.6.0 UoM CONVERSION: quantityInStock is ALWAYS held in the product's
-  // BASE unit (unitType — e.g. METER of PVC pipe, TON of cement). A cart
-  // line's `quantity` is in the SELLING unit (product.sellingUnit — e.g.
+  // BASE unit (unitType - e.g. METER of PVC pipe, TON of cement). A cart
+  // line's `quantity` is in the SELLING unit (product.sellingUnit - e.g.
   // FOOT, BAG): baseQty = quantity × conversionFactor, HALF_UP 4dp. Bundle
   // children are converted by the CHILD's own factor (default 1). The
   // map also accumulates SELLING-unit totals so the StockMovement notes can
@@ -534,7 +532,7 @@ async function createTransactionInner(
       /** Total to deduct in BASE units (what quantityInStock counts). */
       quantity: number;
       product: typeof products[0];
-      /** Total in SELLING units — movement-note audit context. */
+      /** Total in SELLING units - movement-note audit context. */
       soldUnits: number;
     }
   >();
@@ -546,7 +544,7 @@ async function createTransactionInner(
     const quantity = parseFloat(String(item.quantity));
 
     // Resolve the selling→base conversion factor. A missing/zero/garbage
-    // factor falls back to 1 (1 selling unit = 1 base unit) — a zero factor
+    // factor falls back to 1 (1 selling unit = 1 base unit) - a zero factor
     // would otherwise silently deduct nothing.
     const conversionFactor = (() => {
       const f = toNum(product.conversionFactor);
@@ -600,7 +598,7 @@ async function createTransactionInner(
         // minimum stock level cannot be sold until restocked. Default
         // minimumStockLevel is 0, so only genuinely empty stock is blocked
         // unless the store raises the floor.
-        // v2.6.0: unchanged semantics — both sides are BASE units
+        // v2.6.0: unchanged semantics - both sides are BASE units
         // (quantityInStock and minimumStockLevel were always base).
         if (Number(product.quantityInStock) <= Number(product.minimumStockLevel ?? 0)) {
           return Response.json(
@@ -636,21 +634,21 @@ async function createTransactionInner(
     }
   }
 
-  // ── F5-1: server-authoritative pricing ──────────────────────────────────
+  // F5-1: server-authoritative pricing
   // The checkout previously trusted client-supplied pricePerUnit, costPrice
-  // and taxRate — a compromised/misbehaving client could sell KES 10,000 of
+  // and taxRate - a compromised/misbehaving client could sell KES 10,000 of
   // stock for KES 1 or poison COGS. Prices, cost and tax now come from the
   // Product row loaded above; client values are ignored.
   //
-  // FINANCIAL MATH AUDIT — VAT-INCLUSIVE RETAIL PRICING:
+  // FINANCIAL MATH AUDIT - VAT-INCLUSIVE RETAIL PRICING:
   // product.pricePerUnit is the VAT-INCLUSIVE shelf price (Kenya retail
   // standard). calculateLineTotal (→ financialMath.calculateLineItem)
   // extracts each line's VAT component (net = gross / 1.16 for standard
   // lines; 0 for exempt) and `lineTotal` is the gross the customer pays.
-  // All accumulators run in Decimal — float `+=` on money is banned.
+  // All accumulators run in Decimal - float `+=` on money is banned.
   //
   // v2.8.0: VAT is fully controlled by the ADMIN SETTING (SystemConfig
-  // `vat_rate_percent`). The admin rate is AUTHORITATIVE — it overrides any
+  // `vat_rate_percent`). The admin rate is AUTHORITATIVE - it overrides any
   // per-product/per-line rate so that setting 0% makes every VAT field on
   // every new sale 0. Historical documents keep their stored amounts.
   const adminVatRate = await getVatRatePercent();
@@ -660,7 +658,7 @@ async function createTransactionInner(
   const saleItemsData = items.map((item: { productId: string; productName: string; sku: string; quantity: number; unitType: string; pricePerUnit: number; costPrice: number; discountPercent: number; taxRate: number; isRentalItem?: boolean; isBundle?: boolean }, index: number) => {
     const product = productMap.get(item.productId);
 
-    // Safe numeric coercion with NaN guard — prevents silent NaN propagation
+    // Safe numeric coercion with NaN guard - prevents silent NaN propagation
     // into the database. If any numeric field cannot be parsed, we reject the
     // entire checkout with a clear 400 error.
     const safePrice = product ? Number(product.pricePerUnit) : parseFloat(String(item.pricePerUnit));
@@ -686,7 +684,7 @@ async function createTransactionInner(
     const calc = calculateLineTotal(safePrice, safeQty, safeDisc, safeTax);
     subtotalAcc = subtotalAcc.plus(toDec(calc.subtotal));
     // v2.13.1: per-line calc.tax is no longer summed into the header
-    // taxAmount — the header VAT is derived once from finalTotal below so
+    // taxAmount - the header VAT is derived once from finalTotal below so
     // that cart-level discounts reduce the taxable value (Kenya VAT Act).
     discountAcc = discountAcc.plus(toDec(calc.discount));
 
@@ -700,7 +698,7 @@ async function createTransactionInner(
       unitType: product ? (product.sellingUnit || product.unitType) : (item.unitType || 'PIECE'),
       // NOTE: pricePerUnit is the price per SELLING unit (the shelf price).
       // Server-authoritative pricing above already sourced it from
-      // product.pricePerUnit — do NOT divide by conversionFactor here.
+      // product.pricePerUnit - do NOT divide by conversionFactor here.
       pricePerUnit: safePrice,
       costPrice: safeCost,
       discountPercent: safeDisc,
@@ -720,47 +718,47 @@ async function createTransactionInner(
   //   totalAmount = Σ lineTotal − Σ lineDiscounts
   //   taxAmount   = VAT component of the POST-DISCOUNT total (v2.13.1)
   const totalAmount = KES(subtotal - totalDiscount).round().toNumber();
-  // F5-1: discount cap — a discount larger than the line-discounted total
+  // F5-1: discount cap - a discount larger than the line-discounted total
   // used to produce a NEGATIVE finalTotal (negative Payment, negative debt).
   const appliedDiscount = Math.max(0, Math.min(round2(toDec(discountAmount as number | undefined)), totalAmount));
   const finalTotal = KES(totalAmount - appliedDiscount).round().toNumber();
 
-  // ── v2.13.1 VAT LEDGER ALIGNMENT (spec formula) ────────────────────────
+  // v2.13.1 VAT LEDGER ALIGNMENT (spec formula)
   // The stored taxAmount / eTIMS vatTotal / receipt VAT figure is now the
   // VAT component INSIDE the consideration the customer ACTUALLY pays:
   //
   //     taxAmount = finalTotal × rate / (100 + rate)
   //
   // Kenya VAT Act: a discount given at the time of supply reduces the
-  // taxable value, so VAT must be derived from the discounted total — the
+  // taxable value, so VAT must be derived from the discounted total - the
   // previous Σ per-line pre-cart-discount extraction overstated VAT (and
   // understated net revenue) on every discounted sale. History is kept:
   // transactions created before v2.13.1 retain their stored figures.
-  // v2.13.2 HOTFIX: uses Money.taxComponent (the vetted helper) — the
+  // v2.13.2 HOTFIX: uses Money.taxComponent (the vetted helper) - the
   // original draft chained .mul() on the Money wrapper, which has no such
   // method, and 500'd EVERY checkout in production.
   const taxAmount = finalTotal > 0 && adminVatRate > 0
     ? KES(finalTotal).taxComponent(adminVatRate).toNumber()
     : 0;
 
-  // ── v2.12.2 (PR B — RBAC): DISCOUNT PERMISSION GATE ───────────────────
+  // v2.12.2 (PR B - RBAC): DISCOUNT PERMISSION GATE
   // Effective discount % = the LARGER of the largest per-line
   // discountPercent and the cart-level discount expressed as a percentage
-  // of the post-line-discount subtotal — so neither lever can be used to
+  // of the post-line-discount subtotal - so neither lever can be used to
   // smuggle a discount past the gate.
   //
-  //   effective ≤ 5%   — any selling role (no gate)
-  //   effective 5–10%  — roles holding 'pos.discount.gt5' (manager tier),
+  //   effective ≤ 5% - any selling role (no gate)
+  //   effective 5-10% - roles holding 'pos.discount.gt5' (manager tier),
   //                      OR a CASHIER carrying a VERIFIED managerOverride
   //                      credential object (MANAGER_OVERRIDE audit row).
-  //   effective > 10%  — roles holding 'pos.discount.gt10' (STORE_OWNER /
+  //   effective > 10% - roles holding 'pos.discount.gt10' (STORE_OWNER /
   //                      SUPER_ADMIN) ONLY. A cashier can NEVER bypass this,
-  //                      even with a manager override — the override only
-  //                      authorizes the 5–10% band.
+  //                      even with a manager override - the override only
+  //                      authorizes the 5-10% band.
   //
   // Every cashier denial → durable SecurityEvent + AuditLog row
   // (recordPermissionDenied) and feeds the privilege-abuse lockout engine
-  // (noteDeniedAndMaybeLock — 5 denials / 10 min → 15-min lock).
+  // (noteDeniedAndMaybeLock - 5 denials / 10 min → 15-min lock).
   {
     const maxLineDiscountPercent = items.reduce(
       (max: number, item: { discountPercent: number }) =>
@@ -805,7 +803,7 @@ async function createTransactionInner(
             { status: 403 }
           );
         }
-        // Verified manager credentials authorize the 5–10% band.
+        // Verified manager credentials authorize the 5-10% band.
         await writeManagerOverrideAudit('DISCOUNT_5_10', {
           effectiveDiscountPercent: round2(effectiveDiscountPercent),
           saleTotal: finalTotal,
@@ -814,7 +812,7 @@ async function createTransactionInner(
     }
   }
 
-  // ── FINANCIAL MATH AUDIT — CASH TENDERED & CHANGE DUE (spec §4) ──────
+  // FINANCIAL MATH AUDIT - CASH TENDERED & CHANGE DUE (spec §4)
   // Change Due = max(0, Cash Rendered − Final Total). The tendered cash
   // and the change handed back are now PERSISTED on the transaction so
   // receipts, X/Z-reads and the audit trail see the real till movement
@@ -849,7 +847,7 @@ async function createTransactionInner(
   }
 
   // AUDIT FIX (3): explicit split-tender total validation. Σ(split legs)
-  // must equal the server-computed finalTotal within 0.005 — the route
+  // must equal the server-computed finalTotal within 0.005 - the route
   // returns a clear 400 instead of relying on the deep ±0.01 journal-entry
   // balance throw in recordSaleJournalEntry to catch a mismatched tender.
   if (paymentMethod === PaymentMethod.SPLIT && paymentDetails?.splits) {
@@ -880,7 +878,7 @@ async function createTransactionInner(
   // F5-1: credit-limit check now uses SERVER-computed totals (it previously
   // re-derived totals from client prices and could be bypassed).
   // AUDIT FIX (2): the check now also covers SPLIT tenders containing DEBT
-  // legs — those charge the customer's credit account exactly like a
+  // legs - those charge the customer's credit account exactly like a
   // pure-DEBT sale. This pre-check is the friendly early 400; the
   // authoritative guard is the conditional write inside the transaction
   // below (TOCTOU-proof against concurrent sales to the same customer).
@@ -916,14 +914,14 @@ async function createTransactionInner(
     if (debtCharge > 0) {
       const roundedCharge = KES(debtCharge).round().toNumber();
 
-      // ── v2.12.2 (PR B — RBAC): HIGH-RISK DEBT GATE ────────────────────
+      // v2.12.2 (PR B - RBAC): HIGH-RISK DEBT GATE
       // A customer already owing more than KES 150,000 is a high-risk
       // credit exposure. A CASHIER may not add more debt without a VERIFIED
       // managerOverride credential object; roles holding
       // 'debt.approve.high_risk' (BRANCH_MANAGER / STORE_OWNER /
       // SUPER_ADMIN) pass natively. Covers pure-DEBT sales AND DEBT split
       // legs (a split must not be a loophole around the gate). The 90+ day
-      // overdue credit-hold below still applies ON TOP — the two blocks are
+      // overdue credit-hold below still applies ON TOP - the two blocks are
       // orthogonal controls.
       const HIGH_RISK_DEBT_THRESHOLD_KES = 150000;
       const customerOutstanding = KES(customer.currentDebtBalance).round().toNumber();
@@ -959,13 +957,13 @@ async function createTransactionInner(
         }
       }
 
-      // ── v2.12.0 DEBT-SALE BLOCKING (Task DASH-BE) ────────────────────
+      // v2.12.0 DEBT-SALE BLOCKING (Task DASH-BE)
       // A customer with debt 90+ days overdue is on CREDIT HOLD: any new
       // DEBT (or DEBT-leg split) sale is rejected with 403
       // DEBT_BLOCKED_OVERDUE until the request carries managerOverride: true
       // AND the authenticated session role is manager-level
-      // (SUPER_ADMIN / STORE_OWNER / BRANCH_MANAGER). Every override — and
-      // every denied attempt — is audit-logged (SystemLog WARN).
+      // (SUPER_ADMIN / STORE_OWNER / BRANCH_MANAGER). Every override - and
+      // every denied attempt - is audit-logged (SystemLog WARN).
       const overdue90Cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
       const blockedByOverdue = await db.debtLedger.findFirst({
         where: {
@@ -1050,7 +1048,7 @@ async function createTransactionInner(
         }
 
         if (managerApproval) {
-          // ── Verify the approving manager. ONE generic 403 for EVERY failure
+          // Verify the approving manager. ONE generic 403 for EVERY failure
           // mode (unknown email, bad password, inactive, wrong role, wrong
           // store) so the endpoint never reveals which check failed. Email
           // normalization matches the login route (trim + lowercase).
@@ -1095,7 +1093,7 @@ async function createTransactionInner(
             balanceBefore: Number(customer.currentDebtBalance),
           };
         } else {
-          // ── v2.12.0 (Task DASH-BE): session-role override path ───────────
+          // v2.12.0 (Task DASH-BE): session-role override path
           // Alternative to the credential step-up: the request carries
           // managerOverride: true AND the AUTHENTICATED session itself is a
           // manager-level user. Same creditOverride audit chain (in-tx
@@ -1136,7 +1134,7 @@ async function createTransactionInner(
     }
   }
 
-  // ── Pre-validate gift card payments (fail fast with 400) ──────────────
+  // Pre-validate gift card payments (fail fast with 400)
   // We validate existence / status / expiry / balance BEFORE opening the
   // transaction so the cashier gets a clean 400 rather than a 500 from a
   // thrown tx error. A second in-tx re-check guards against race conditions.
@@ -1172,16 +1170,16 @@ async function createTransactionInner(
   }
 
   // SYS-7/F5-6: receipt numbers are crypto-random (see helpers.ts) and the
-  // whole checkout is retried on the rare P2002 unique-number collision —
+  // whole checkout is retried on the rare P2002 unique-number collision -
   // the old Math.random suffix could abort a live checkout with a 500.
   const orgId = session.organizationId || 'org_mbumah';
 
-  // ── v2.6.0: eTIMS async invoicing gate ──────────────────────────────
+  // v2.6.0: eTIMS async invoicing gate
   // Sales must NEVER block on KRA. When the store has an active KRA business
   // profile the sale is created with etimsStatus='PENDING' and an
   // ETIMS_INVOICE outbox event is enqueued after commit (the opportunistic
   // pump + /api/cron/etims-retry issue the invoice asynchronously). Without
-  // a profile, etimsStatus stays unset — identical to pre-v2.6 behaviour.
+  // a profile, etimsStatus stays unset - identical to pre-v2.6 behaviour.
   const kraProfile = await db.kraBusinessProfile
     .findFirst({ where: { storeId, isActive: true }, select: { id: true } })
     .catch(() => null);
@@ -1189,7 +1187,7 @@ async function createTransactionInner(
 
   // Pre-fetch (and auto-create if missing) ALL accounting chart-of-account
   // IDs BEFORE opening the transaction. `recordSaleJournalEntry` calls
-  // `getAccountIds` internally — if that runs inside the $transaction and a
+  // `getAccountIds` internally - if that runs inside the $transaction and a
   // missing account (e.g. SALES_DISCOUNTS 4300) triggers an auto-create on
   // the DEFAULT client, the extra DB round-trips can push past Prisma's 5s
   // interactive-transaction timeout. Pre-warming the in-memory cache here
@@ -1206,12 +1204,10 @@ async function createTransactionInner(
     ACCOUNT_CODES.INVENTORY,
   ]);
 
-  // ═══════════════════════════════════════════════════════════════════════
   //  ATOMIC CHECKOUT TRANSACTION
   //  Every side effect below either commits together or rolls back together.
   //  Timeout raised to 15s (default 5s) to accommodate Daraja STK push prep
   //  and journal-entry line creation on slow connections.
-  // ═══════════════════════════════════════════════════════════════════════
   // Wrapped in withSequenceRetry: on a receipt-number P2002 the retry
   // regenerates the number and re-runs (SYS-7). On an idempotency-key
   // P2002 (concurrent same-key replay) the committed original is returned.
@@ -1222,7 +1218,7 @@ async function createTransactionInner(
       return { transaction: txResult, receiptNumber };
     } catch (err) {
       // Concurrent same-idempotency-key checkout: the other request committed
-      // first — return ITS transaction instead of failing the client.
+      // first - return ITS transaction instead of failing the client.
       if (idempotencyKey && isP2002(err)) {
         const existing = await db.salesTransaction.findUnique({
           where: { idempotencyKey },
@@ -1275,8 +1271,8 @@ async function createTransactionInner(
 
   const { transaction: result, receiptNumber } = checkoutAttempt;
 
-  // ══ The transaction body is factored into runCheckoutTransaction so the
-  // ══ retry wrapper can regenerate the receipt number per attempt.
+  // The transaction body is factored into runCheckoutTransaction so the
+  // retry wrapper can regenerate the receipt number per attempt.
   async function runCheckoutTransaction(receiptNumber: string) {
     return db.$transaction(
     async (tx) => {
@@ -1288,7 +1284,7 @@ async function createTransactionInner(
       paymentStatusValue = PaymentStatus.COMPLETED;
     }
 
-    // 1 ── Create the sales transaction + line items ──
+    // 1 Create the sales transaction + line items
     const transaction = await tx.salesTransaction.create({
       data: {
         storeId,
@@ -1306,11 +1302,11 @@ async function createTransactionInner(
         // SYS-10: stores the client idempotency key (unique) so replayed
         // checkouts are detectable at the database level.
         idempotencyKey: idempotencyKey || null,
-        // v2.6.0: async eTIMS invoicing — the KRA invoice is issued AFTER
+        // v2.6.0: async eTIMS invoicing - the KRA invoice is issued AFTER
         // commit (outbox queue); the row starts PENDING when the store has
         // an active KRA profile, otherwise unset (legacy behaviour).
         etimsStatus: kraConfigured ? 'PENDING' : null,
-        // FINANCIAL MATH AUDIT: real till movement — cash rendered and the
+        // FINANCIAL MATH AUDIT: real till movement - cash rendered and the
         // change handed back (spec §4). Null for non-cash tenders.
         cashTendered: cashTendered ?? null,
         changeDue: changeDueAmount ?? null,
@@ -1323,9 +1319,9 @@ async function createTransactionInner(
       },
     });
 
-    // 2 ── Record payment row(s) ──
+    // 2 Record payment row(s)
     // AUDIT FIX (1): a SPLIT may now include DEBT legs. The Payment row for
-    // EVERY leg (including DEBT, COMPLETED — same as the pure-DEBT path) is
+    // EVERY leg (including DEBT, COMPLETED - same as the pure-DEBT path) is
     // created here; the DEBT leg's DebtLedger charge + customer balance
     // increment + A/R journal treatment are applied further below, inside
     // this SAME interactive transaction.
@@ -1357,7 +1353,7 @@ async function createTransactionInner(
       });
     }
 
-    // 3 ── Deduct stock + write stock movements ──
+    // 3 Deduct stock + write stock movements
     // v2.6.0 UoM: `deduction.quantity` is in BASE units (quantity ×
     // conversionFactor, HALF_UP 4dp); the atomic conditional decrement and
     // the StockMovement.quantity both operate in base units so the movement
@@ -1368,7 +1364,7 @@ async function createTransactionInner(
 
       // R1 remediation: ATOMIC conditional decrement. The previous
       // read-then-check (`findUnique` → compare → `decrement`) was a TOCTOU
-      // race — two concurrent checkouts of the last unit could both pass and
+      // race - two concurrent checkouts of the last unit could both pass and
       // drive stock negative. `updateMany` with a `gte` predicate takes the
       // row lock and re-evaluates the predicate atomically: only ONE of the
       // concurrent checkouts can succeed; the loser aborts the whole sale.
@@ -1399,7 +1395,7 @@ async function createTransactionInner(
           storeId,
           productId,
           movementType: product.isRental ? 'RENTAL_OUT' : 'SALE',
-          // BASE units — always reconciles with quantityInStock.
+          // BASE units - always reconciles with quantityInStock.
           quantity: -quantity,
           referenceId: transaction.id,
           notes: movementNotes,
@@ -1408,14 +1404,14 @@ async function createTransactionInner(
       });
     }
 
-    // 4 ── Payment-method-specific side effects ──
+    // 4 Payment-method-specific side effects
 
     // CASH → cash drawer ledger entry.
     // AUDIT FIX (4): a SPLIT tender's CASH portion previously never reached
     // the drawer ledger, so the drawer balance drifted from reality whenever
     // a sale was split across cash + another tender. The full-CASH path and
     // the split's cash portion now share the SAME aggregate-then-insert
-    // pattern (running balance derived from Σ signed amounts — never
+    // pattern (running balance derived from Σ signed amounts - never
     // read-latest-row, which loses concurrent updates).
     const splitCashTotal =
       paymentMethod === PaymentMethod.SPLIT && paymentDetails?.splits
@@ -1430,7 +1426,7 @@ async function createTransactionInner(
 
     if (cashDrawerAmount > 0) {
       // R6 remediation: running balance derived from the SUM of signed
-      // amounts instead of read-latest-row + write — the old pattern lost
+      // amounts instead of read-latest-row + write - the old pattern lost
       // updates whenever two cash events ran concurrently.
       const agg = await tx.cashDrawerLog.aggregate({
         where: { storeId },
@@ -1474,7 +1470,7 @@ async function createTransactionInner(
       // fire-and-forget relative-URL fetch (which could never resolve and
       // silently stranded every M-Pesa sale in PENDING). The push request is
       // enqueued INSIDE this transaction and delivered right after commit by
-      // the outbox pump — atomically with the sale, retried on failure.
+      // the outbox pump - atomically with the sale, retried on failure.
       await enqueueOutbox(tx, {
         storeId,
         kind: 'MPESA_STK_PUSH',
@@ -1509,17 +1505,17 @@ async function createTransactionInner(
       });
 
       // AUDIT FIX (2) TOCTOU: the old code did a pre-check OUTSIDE the tx
-      // followed by an UNCONDITIONAL `increment` inside it — two concurrent
+      // followed by an UNCONDITIONAL `increment` inside it - two concurrent
       // DEBT sales could both pass the check and push the customer past
       // their limit. The `lte` predicate makes the limit check and the
       // increment ONE atomic operation under the row lock: only checkouts
       // that keep `balance + charge ≤ debtLimit` commit; a losing checkout
       // claims 0 rows and aborts the whole sale (typed error → 400).
       // Schema note: currentDebtBalance/debtLimit are Prisma `Decimal`
-      // (decimal.js) columns — headroom is computed via `KES` (HALF_EVEN,
+      // (decimal.js) columns - headroom is computed via `KES` (HALF_EVEN,
       // 2dp) so no float dust can skew the predicate.
       const chargeAmount = KES(finalTotal).round().toNumber();
-      // v2.6.0: a verified manager override bypasses the headroom predicate —
+      // v2.6.0: a verified manager override bypasses the headroom predicate -
       // the increment is still atomic (single-row update), just unconditional.
       // The override itself is audited post-commit (CREDIT_LIMIT_OVERRIDE).
       if (creditOverride) {
@@ -1566,7 +1562,7 @@ async function createTransactionInner(
       // R2 remediation: the previous read-balance-then-write-absolute-value
       // pattern allowed two concurrent redemptions to both drain the same
       // card (double-spend). The `gte` predicate makes the balance check and
-      // decrement one atomic operation — at most ONE concurrent checkout can
+      // decrement one atomic operation - at most ONE concurrent checkout can
       // claim the balance.
       const claimed = await tx.giftCard.updateMany({
         where: {
@@ -1610,7 +1606,7 @@ async function createTransactionInner(
 
     // F5-3 remediation: SPLIT payments that include a GIFT_CARD leg now
     // REDEEM the card. Previously the split only aggregated the amount into
-    // the journal's gift-card liability debit — the card balance was never
+    // the journal's gift-card liability debit - the card balance was never
     // touched, so the card remained fully spendable while the GL said the
     // liability was consumed (double-spend + misstated liability).
     if (paymentMethod === PaymentMethod.SPLIT && paymentDetails?.splits) {
@@ -1657,13 +1653,13 @@ async function createTransactionInner(
     }
 
     // AUDIT FIX (1): SPLIT tender with a DEBT leg previously recorded ONLY a
-    // COMPLETED Payment row — no DebtLedger charge row, no customer balance
+    // COMPLETED Payment row - no DebtLedger charge row, no customer balance
     // increment, and no A/R debit in the journal. The customer received
     // goods on credit that existed nowhere in the debt system, and the JE
     // was one-sided. Each DEBT leg now runs the EXACT same treatment as the
     // pure-DEBT path, inside this SAME interactive transaction:
     //   (a) credit-limit enforcement via the conditional optimistic write
-    //       (AUDIT FIX 2 pattern — TOCTOU-proof),
+    //       (AUDIT FIX 2 pattern - TOCTOU-proof),
     //   (b) a DebtLedger charge row,
     //   (c) a customer.currentDebtBalance increment,
     //   (d) the A/R debit is routed via paymentBreakdown.credit below
@@ -1673,7 +1669,7 @@ async function createTransactionInner(
       for (const split of paymentDetails.splits) {
         if (split.method !== PaymentMethod.DEBT) continue;
         if (!customer) {
-          // Defense in depth — the checkout schema refinement already
+          // Defense in depth - the checkout schema refinement already
           // requires customerId for DEBT split legs; the customer row is
           // re-checked here in case it was deleted after the pre-check.
           throw new Error('Customer is required for every DEBT split payment.');
@@ -1729,7 +1725,7 @@ async function createTransactionInner(
       }
     }
 
-    // ── F2-1: claim serialized assets (IN_STOCK → SOLD) ──
+    // F2-1: claim serialized assets (IN_STOCK → SOLD)
     // Conditional updateMany per serial = the double-sell lock: only ONE
     // concurrent checkout can flip a serial out of IN_STOCK; the loser
     // aborts the entire sale before the journal/receipt are written.
@@ -1750,8 +1746,8 @@ async function createTransactionInner(
       }
     }
 
-    // 5 ── Single balanced double-entry journal (all payment types) ──
-    // FINANCIAL MATH AUDIT — VAT-INCLUSIVE PRICING (v2.13.1):
+    // 5 Single balanced double-entry journal (all payment types)
+    // FINANCIAL MATH AUDIT - VAT-INCLUSIVE PRICING (v2.13.1):
     //   grossRevenue = finalTotal − taxAmount = NET revenue (excl. VAT).
     //   Revenue is recognized at the TRANSACTION PRICE (IFRS 15): the cart
     //   discount is already netted inside finalTotal, so it is NOT booked
@@ -1794,7 +1790,7 @@ async function createTransactionInner(
         } else if (split.method === PaymentMethod.GIFT_CARD) {
           paymentBreakdown.giftCard = round2(toDec(paymentBreakdown.giftCard ?? 0).plus(splitAmount));
         } else if (split.method === PaymentMethod.DEBT) {
-          // AUDIT FIX (1d): a DEBT split leg debits Accounts Receivable —
+          // AUDIT FIX (1d): a DEBT split leg debits Accounts Receivable -
           // the exact journal treatment the pure-DEBT path gets via
           // `paymentBreakdown.credit = finalTotal`. Without this line the
           // JE was unbalanced by the DEBT leg's amount and the ±0.01
@@ -1813,7 +1809,7 @@ async function createTransactionInner(
       grossRevenue,
       taxAmount,
       // v2.13.1: revenue is booked at transaction price (net of the cart
-      // discount) — no SALES_DISCOUNTS debit, otherwise the entry would be
+      // discount) - no SALES_DISCOUNTS debit, otherwise the entry would be
       // unbalanced by exactly appliedDiscount.
       discountAmount: 0,
       paymentBreakdown,
@@ -1822,7 +1818,7 @@ async function createTransactionInner(
       postImmediately: paymentMethod !== PaymentMethod.MPESA,
     });
 
-    // 6 ── Receipt ──
+    // 6 Receipt
     await tx.receipt.create({
       data: {
         storeId,
@@ -1838,7 +1834,7 @@ async function createTransactionInner(
   );
   }
 
-  // ── Post-commit: opportunistic outbox pump ──
+  // Post-commit: opportunistic outbox pump
   // The MPESA_STK_PUSH event enqueued inside the transaction is delivered
   // here in-process (fast, best-effort) AND by the cron pump as the durable
   // fallback (F6-2/F8-4). Failures leave the event queued with backoff.
@@ -1848,7 +1844,7 @@ async function createTransactionInner(
     ensureOutboxHandlers();
     await pumpOutbox();
   } catch {
-    // Pump failure is non-fatal — the cron pump will retry with backoff.
+    // Pump failure is non-fatal - the cron pump will retry with backoff.
   }
 
   await systemLog({
@@ -1868,7 +1864,7 @@ async function createTransactionInner(
     },
   });
 
-  // F9-1: tamper-evident audit entry for every completed sale (best-effort —
+  // F9-1: tamper-evident audit entry for every completed sale (best-effort -
   // the sale is already committed; chain logging must never block the POS).
   try {
     const { auditTrail } = await import('@/lib/audit-trail');
@@ -1887,10 +1883,10 @@ async function createTransactionInner(
     /* audit chain must never block checkout */
   }
 
-  // ── v2.6.0: manager credit-limit override — tamper-evident audit entry ──
+  // v2.6.0: manager credit-limit override - tamper-evident audit entry
   // Written post-commit through the chained-HMAC auditTrail (best-effort,
   // same precedent as the sale audit above) so audit I/O can never fail a
-  // committed sale. oldValues/newValues are plain JSON numbers — never
+  // committed sale. oldValues/newValues are plain JSON numbers - never
   // Decimal. The approving manager is the AUDIT ACTOR, not the cashier.
   if (creditOverride) {
     try {
@@ -1922,7 +1918,7 @@ async function createTransactionInner(
     }
   }
 
-  // ── v2.6.0: enqueue the async eTIMS invoice (NON-BLOCKING) ──────────────
+  // v2.6.0: enqueue the async eTIMS invoice (NON-BLOCKING)
   // The sale is already committed; enqueueing is best-effort. If the insert
   // fails, etimsStatus stays 'PENDING' and staff can re-issue via
   // POST /api/etims/worker (or the retry cron re-runs on schedule).
@@ -1943,7 +1939,7 @@ async function createTransactionInner(
             })),
             totals: { subtotal, taxAmount, totalAmount: finalTotal },
             taxBreakdown: { vatTotal: taxAmount },
-            // Customer has no KRA PIN column yet — reserved for a future
+            // Customer has no KRA PIN column yet - reserved for a future
             // schema change; the queue core reads the relation defensively.
             customerPin: null,
           }),
@@ -1966,11 +1962,11 @@ async function createTransactionInner(
     }
   }
 
-  // ── Phase 3: Award loyalty points to the customer (non-blocking) ──
+  // Phase 3: Award loyalty points to the customer (non-blocking)
   //
   // Rule: 1 point per KES 100 spent (see src/lib/loyalty-utils.ts).
   // F5-5 remediation: points are awarded ONLY when payment is COMPLETED at
-  // checkout — M-Pesa sales start PENDING and earn points only if the
+  // checkout - M-Pesa sales start PENDING and earn points only if the
   // Daraja callback confirms (previously failed M-Pesa sales kept points).
   // R5 remediation: the balance update uses atomic `increment` operations
   // instead of read-then-write so concurrent sales to one customer cannot
@@ -2023,7 +2019,7 @@ async function createTransactionInner(
               data: {
                 storeId: fresh.storeId,
                 customerId,
-                // Legacy field — positive for earned
+                // Legacy field - positive for earned
                 points: earnedPoints,
                 transactionType: 'EARN',
                 // Phase-3 fields
@@ -2042,7 +2038,7 @@ async function createTransactionInner(
           { timeout: 8000, maxWait: 6000 },
         );
 
-        // Best-effort audit log — never block the response on logging.
+        // Best-effort audit log - never block the response on logging.
         void systemLog({
           action: 'LOYALTY_POINTS_EARNED',
           component: LogComponent.POS,
@@ -2062,7 +2058,7 @@ async function createTransactionInner(
         });
       }
     } catch (loyaltyErr) {
-      // Swallow — sale is already committed. Log for diagnostics.
+      // Swallow - sale is already committed. Log for diagnostics.
       void systemLog({
         action: 'LOYALTY_AWARD_FAILED',
         component: LogComponent.POS,

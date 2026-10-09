@@ -108,7 +108,7 @@ async function sendMessageHandler(...args: unknown[]): Promise<Response> {
   }
 
   // Create the Message record
-  // VF-1 (v2.8.0): a generated wa.me link is NOT a delivery — the user still
+  // VF-1 (v2.8.0): a generated wa.me link is NOT a delivery - the user still
   // has to open the link and press send in WhatsApp. Status is therefore
   // always PENDING (the messaging tab's STATUS_BADGE map renders it as an
   // amber "Pending"); sentAt stays null for the same honesty reason.
@@ -152,6 +152,6 @@ async function sendMessageHandler(...args: unknown[]): Promise<Response> {
 }
 
 // AUDIT FIX (Task 3-d): session-validated + storeId-param scoping
-// (requireStoreAccess). Any store role — customer messaging history/send.
+// (requireStoreAccess). Any store role - customer messaging history/send.
 export const GET = withErrorBoundary(requireStoreAccess(getMessagesHandler), 'MESSAGES_LIST');
 export const POST = withErrorBoundary(requireStoreAccess(sendMessageHandler), 'MESSAGES_SEND');

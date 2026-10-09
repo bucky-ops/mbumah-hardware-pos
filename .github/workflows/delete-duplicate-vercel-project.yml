@@ -1,14 +1,11 @@
-# ============================================================================
-# MBUMAH HARDWARE POS — Delete duplicate Vercel project (guarded)
-# ============================================================================
+# MBUMAH HARDWARE POS - Delete duplicate Vercel project (guarded)
 # The repo is linked to TWO Vercel projects, so every commit deploys twice.
 # This workflow deletes the DUPLICATE after verifying:
 #   1. Exactly 2 projects match mbumah-hardware-pos*
 #   2. The keeper is the project serving the live production domain
 #   3. The target has ZERO domains (nothing user-facing points at it)
 #   4. The operator typed the exact project name + DELETE
-# DELETION IS PERMANENT — this cannot be undone.
-# ============================================================================
+# DELETION IS PERMANENT - this cannot be undone.
 
 name: Delete Duplicate Vercel Project
 
@@ -36,7 +33,7 @@ jobs:
     name: Guarded duplicate deletion
     runs-on: ubuntu-latest
     steps:
-      - name: Guard — require confirmation
+      - name: Guard - require confirmation
         if: github.event.inputs.confirm != 'DELETE'
         run: |
           echo "::error::Input 'confirm' must be exactly DELETE. Aborting."
@@ -75,7 +72,7 @@ jobs:
           echo "TARGET=$TARGET" >> $GITHUB_ENV
           echo "TARGET_ID=$TARGET_ID" >> $GITHUB_ENV
 
-      - name: Guard — operator must name the resolved duplicate
+      - name: Guard - operator must name the resolved duplicate
         if: github.event.inputs.project_name != env.TARGET
         run: |
           echo "::error::Input project_name '${{ github.event.inputs.project_name }}' does not match resolved duplicate '$TARGET'. Aborting."

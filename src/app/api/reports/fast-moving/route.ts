@@ -4,7 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { withSessionAuth } from '@/lib/auth';
-// Task 12-b: Prisma Decimal valueOf() returns a STRING — `number + decimal`
+// Task 12-b: Prisma Decimal valueOf() returns a STRING - `number + decimal`
 // concatenates. Accumulation runs through toDec(); numbers emitted at the end.
 import { toDec, round2 } from '@/lib/utils/financialMath';
 
@@ -65,7 +65,7 @@ async function getFastMovingProductsHandler(...args: unknown[]): Promise<Respons
     },
   });
 
-  // Aggregate by product — Decimal accumulators (Task 12-b).
+  // Aggregate by product - Decimal accumulators (Task 12-b).
   const productMap = new Map<string, {
     productId: string;
     productName: string;
@@ -117,13 +117,13 @@ async function getFastMovingProductsHandler(...args: unknown[]): Promise<Respons
     fastMovingProducts = fastMovingProducts.filter((p) => categoryProductIds.has(p.productId));
   }
 
-  // Sort by total quantity sold descending — numeric comparison via Decimal.
+  // Sort by total quantity sold descending - numeric comparison via Decimal.
   fastMovingProducts.sort((a, b) => b.totalQuantitySold.comparedTo(a.totalQuantitySold));
 
   // Limit results
   fastMovingProducts = fastMovingProducts.slice(0, limit);
 
-  // Calculate summary stats — Decimal sums, plain numbers at the boundary.
+  // Calculate summary stats - Decimal sums, plain numbers at the boundary.
   const totalProductsAnalyzed = productMap.size;
   const totalUnitsSold = Array.from(productMap.values())
     .reduce((acc, p) => acc.plus(p.totalQuantitySold), toDec(0))
@@ -154,7 +154,7 @@ async function getFastMovingProductsHandler(...args: unknown[]): Promise<Respons
 }
 
 // AUDIT FIX (Task 3-d): session-validated (was Bearer-presence only).
-// Any store role — stock-turnover visibility is operational, not margin-bearing.
+// Any store role - stock-turnover visibility is operational, not margin-bearing.
 export const GET = withErrorBoundary(
   withSessionAuth(getFastMovingProductsHandler),
   'FAST_MOVING_REPORT',

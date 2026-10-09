@@ -1,16 +1,16 @@
 // GET/POST /api/debt-payment-plans
 //
-// Debt Payment Plans — installment-based repayment schedules for outstanding
+// Debt Payment Plans - installment-based repayment schedules for outstanding
 // customer debts. Mirrors the auth/tenancy pattern of /api/debt and the
 // financial routes: `withErrorBoundary(withFinancialAuth(...))`.
 //
 // Task 12-d (debt-plan audit) changes:
-//   GET  — pagination (page/pageSize), a store-wide stale-overdue sweep, live
+//   GET - pagination (page/pageSize), a store-wide stale-overdue sweep, live
 //          per-plan overdue counts, and a `nextInstallment` on every row so
 //          plan cards can render the next due date without loading details.
 //          The overdue filter now uses a live installment predicate instead
 //          of the previously-stale denormalized counter.
-//   POST — malformed-JSON guard, strict frequency validation, bounded
+//   POST - malformed-JSON guard, strict frequency validation, bounded
 //          interestRate/lateFee, a customer↔store consistency check (defense
 //          for the SUPER_ADMIN tenant bypass), a tighter ledger-balance
 //          epsilon, and `installmentAmount` derived from the actual schedule
@@ -38,7 +38,7 @@ const FINANCIAL_WRITE_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', '
 const VALID_FREQUENCIES: PlanFrequency[] = ['WEEKLY', 'BI_WEEKLY', 'MONTHLY'];
 
 // Policy bounds (Task 12-d): previously interestRate/lateFee were accepted
-// verbatim from the request body — a typo like 120 instead of 12 silently
+// verbatim from the request body - a typo like 120 instead of 12 silently
 // doubled the plan total, and there was nothing stopping a 1000000% rate.
 const MAX_INTEREST_RATE_PCT = 100; // annual %
 const MAX_LATE_FEE_KES = 100_000;
@@ -47,7 +47,7 @@ const MAX_INSTALLMENT_COUNT = 60;
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
 
-// ── GET: list plans (paginated) ──────────────────────────────────────────────
+// GET: list plans (paginated)
 
 async function listPlansHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
@@ -65,7 +65,7 @@ async function listPlansHandler(...args: unknown[]): Promise<Response> {
   const status = searchParams.get('status') || '';
   const overdueOnly = searchParams.get('overdue') === 'true';
 
-  // ── Pagination (Task 12-d): the list used to be an unbounded findMany. ──
+  // Pagination (Task 12-d): the list used to be an unbounded findMany.
   const pageParam = parseInt(searchParams.get('page') ?? '1', 10);
   const pageSizeParam = parseInt(searchParams.get('pageSize') ?? String(DEFAULT_PAGE_SIZE), 10);
   const pageSize = Math.min(
@@ -76,7 +76,7 @@ async function listPlansHandler(...args: unknown[]): Promise<Response> {
 
   const now = new Date();
 
-  // ── Stale-overdue sweep (Task 12-d) ─────────────────────────────────────
+  // Stale-overdue sweep (Task 12-d)
   // `installmentsOverdue` and installment OVERDUE statuses were only refreshed
   // when a plan's detail view / pay / waive ran, so the Overdue chip and
   // filter on this list silently under-reported. One idempotent conditional
@@ -147,7 +147,7 @@ async function listPlansHandler(...args: unknown[]): Promise<Response> {
     take: pageSize,
   });
 
-  // ── Live overdue counts for the page (single groupBy) ──────────────────
+  // Live overdue counts for the page (single groupBy)
   const pageIds = plans.map((p) => p.id);
   const overdueGroups = pageIds.length
     ? await db.debtPlanInstallment.groupBy({
@@ -188,13 +188,13 @@ async function listPlansHandler(...args: unknown[]): Promise<Response> {
   });
 }
 
-// ── POST: create a new plan + scheduled installments ────────────────────────
+// POST: create a new plan + scheduled installments
 
 async function createPlanHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
 
   // Task 12-d: malformed JSON previously escaped as a 500 via the error
-  // boundary — a client bug is a 400, not a server fault.
+  // boundary - a client bug is a 400, not a server fault.
   let body: Record<string, unknown>;
   try {
     body = await request.json();
@@ -219,7 +219,7 @@ async function createPlanHandler(...args: unknown[]): Promise<Response> {
     autoCharge,
   } = (body ?? {}) as Record<string, unknown>;
 
-  // ── Validate required fields ──────────────────────────────────────────────
+  // Validate required fields
   if (!storeId || !customerId || !debtLedgerId) {
     return Response.json(
       {
@@ -307,7 +307,7 @@ async function createPlanHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // ── Validate referenced entities ──────────────────────────────────────────
+  // Validate referenced entities
   const session = await getSessionFromRequest(request);
   const createdById = session?.userId;
   if (!createdById) {
@@ -342,7 +342,7 @@ async function createPlanHandler(...args: unknown[]): Promise<Response> {
   }
   // Task 12-d: the ledger was store-checked but the customer was not. For
   // regular users Layer-4 tenancy already narrows the customer lookup, but
-  // SUPER_ADMIN runs with tenant bypass — this explicit check closes that
+  // SUPER_ADMIN runs with tenant bypass - this explicit check closes that
   // gap so a plan can never couple a ledger in store A with a customer in
   // store B.
   if (customer.storeId !== storeId) {
@@ -353,7 +353,7 @@ async function createPlanHandler(...args: unknown[]): Promise<Response> {
   }
 
   // Don't allow a plan larger than the outstanding debt balance. Task 12-d:
-  // epsilon tightened from 0.5 to 0.01 — the old slack let a plan exceed the
+  // epsilon tightened from 0.5 to 0.01 - the old slack let a plan exceed the
   // debt by up to half a KES, which then made the ledger's final
   // reconciliation drift.
   const debtBalance = toNumber(debtLedger.balance);
@@ -385,7 +385,7 @@ async function createPlanHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // ── Calculate schedule ────────────────────────────────────────────────────
+  // Calculate schedule
   const schedule = calculateInstallmentSchedule(total, count, freq, start, rate);
   const endDate = calculateEndDate(start, count, freq);
   // Task 12-d: `installmentAmount` is now taken FROM the actual schedule
@@ -395,7 +395,7 @@ async function createPlanHandler(...args: unknown[]): Promise<Response> {
   // spanned less than a year.
   const installmentAmount = schedule[0]?.amountDue ?? 0;
 
-  // ── Persist plan + installments atomically ────────────────────────────────
+  // Persist plan + installments atomically
   const created = await db.$transaction(async (tx) => {
     const plan = await tx.debtPaymentPlan.create({
       data: {
