@@ -10,6 +10,22 @@ Mbumah Hardware POS processes real money. It handles M-Pesa (Safaricom Daraja) S
 
 ---
 
+## Credential handling advisory (September 2026 cleanup)
+
+A file named `.env.bak` containing live Neon PostgreSQL connection strings
+(pooled and direct URLs) was committed to this repository in the past and was
+removed from tracking in the repository hygiene pass. Secrets in file history
+must be considered compromised.
+
+If you cloned this repository before this cleanup:
+
+1. Rotate the Neon database credentials (the repository ships a
+   `rotate-neon-credentials.yml` workflow for this purpose).
+2. Rotate `NEXTAUTH_SECRET` and `JWT_SECRET` if they were ever present in a
+   committed file.
+3. Never commit `.env`, `.env.bak`, or any file containing connection strings.
+   `.gitignore` now blocks `.env.bak` and `.env.*.bak`.
+
 ## Reporting a vulnerability
 
 ### Preferred: GitHub Private Vulnerability Reporting (Security Advisories)
