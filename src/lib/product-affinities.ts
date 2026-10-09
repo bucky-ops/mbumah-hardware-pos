@@ -84,6 +84,23 @@ function norm(name: string): string {
 }
 
 /**
+ * Case-insensitive index over PRODUCT_AFFINITIES: normalized key -> original
+ * map key. PRODUCT_AFFINITIES keys are written in product-cased form (readable
+ * in code reviews), so every lookup MUST go through this index — indexing the
+ * map directly with a lowercased cart name never matches and silently yields
+ * zero suggestions.
+ */
+const AFFINITY_KEY_INDEX: Map<string, string> = new Map(
+  Object.keys(PRODUCT_AFFINITIES).map((k) => [norm(k), k]),
+);
+
+/** Resolve a (possibly any-cased) cart product name to its affinity list. */
+function affinitiesFor(name: string): string[] | undefined {
+  const key = AFFINITY_KEY_INDEX.get(norm(name));
+  return key ? PRODUCT_AFFINITIES[key] : undefined;
+}
+
+/**
  * Core Sell More algorithm (spec PART 3):
  *   1. Collect affinity lists for every product name in the cart
  *   2. Flatten + deduplicate, dropping items already in the cart
@@ -107,7 +124,7 @@ export function computeAffinitySuggestions(
   const scores = new Map<string, number>();
 
   for (const cartName of cartNames) {
-    const affinities = PRODUCT_AFFINITIES[cartName];
+    const affinities = affinitiesFor(cartName);
     if (!affinities) continue;
     for (const affinityName of affinities) {
       const key = norm(affinityName);
@@ -158,5 +175,5 @@ export function computeBestSellerSuggestions(
  * in the UI badge.
  */
 export function cartHasAffinities(cartProductNames: string[]): boolean {
-  return cartProductNames.some((n) => Array.isArray(PRODUCT_AFFINITIES[norm(n)]));
+  return cartProductNames.some((n) => Array.isArray(affinitiesFor(n)));
 }
