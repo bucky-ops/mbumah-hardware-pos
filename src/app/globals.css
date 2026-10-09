@@ -294,11 +294,166 @@
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
+  #print-root #receipt-content tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* v2.14.0 spec: paper output is BLACK ON WHITE - every color/background
+     is neutralized except elements marked [data-print-keep] (the Kenyan
+     flag accent bar and the QR verification block keep their ink). */
+  #print-root #receipt-content {
+    color: #000000 !important;
+    background: #ffffff !important;
+  }
+  #print-root #receipt-content *:not([data-print-keep]):not([data-print-keep] *) {
+    color: #000000 !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+  }
+  #print-root #receipt-content [data-print-keep],
+  #print-root #receipt-content [data-print-keep] * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Full unit words on paper ("2.5 kilogram", not "2.5 kg"). */
+  #print-root #receipt-content .receipt-unit-abbr {
+    display: none !important;
+  }
+  #print-root #receipt-content .receipt-unit-full {
+    display: inline !important;
+  }
+
+  /* The on-screen items scroll cap must never clip lines on paper. */
+  #print-root #receipt-content .receipt-items-scroll {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  #print-root #receipt-content .receipt-items-fade {
+    display: none !important;
+  }
+  /* Long full-word units may wrap inside the Qty cell - money cells stay
+     single-line via .receipt-money. */
+  #print-root #receipt-content .receipt-qty-cell {
+    white-space: normal !important;
+  }
 
   @page {
     size: 80mm auto;
     margin: 0;
   }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Receipt surface styling (v2.14.0 receipt-rendering spec)
+
+   Applies to the shared <ReceiptDocument /> and every receipt dialog:
+   money cells never wrap; units are abbreviated on screen / full words on
+   paper & PDF; action buttons use a 2-column grid (auto-fit >= 720px);
+   the items region scrolls with a bottom fade affordance.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* 1. MONEY NEVER WRAPS - right-aligned tabular numerals, single line. */
+.receipt-money {
+  white-space: nowrap !important;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  display: inline-block;
+  max-width: 100%;
+}
+
+/* 1b. Currency presentation: below 480px the per-line "Ksh" prefix is
+   dropped and the currency is stated ONCE in the column headers. The fixed
+   columns are also rebalanced (Item gives width to Price/Total) so the
+   widest tabular amounts ("8,500.00") can never spill their cell. */
+.receipt-currency-header {
+  display: none;
+}
+@media (max-width: 479.98px) {
+  #receipt-content .receipt-currency {
+    display: none;
+  }
+  #receipt-content .receipt-currency-header {
+    display: inline;
+  }
+  #receipt-content col:nth-of-type(1) {
+    width: 30% !important;
+  }
+  #receipt-content col:nth-of-type(2) {
+    width: 16% !important;
+  }
+  #receipt-content col:nth-of-type(3) {
+    width: 27% !important;
+  }
+  #receipt-content col:nth-of-type(4) {
+    width: 27% !important;
+  }
+  #receipt-content table td,
+  #receipt-content table th {
+    padding-inline: 2px;
+  }
+}
+
+/* 2. UNITS - abbreviated lowercase on screen; the .receipt-unit-full twin
+   is swapped in by @media print (paper) and .receipt-capture-mode (PDF). */
+.receipt-unit-full {
+  display: none;
+}
+
+/* 2b. PDF capture mode (toggled by generateReceiptPdf during html2canvas):
+   full unit words + the items table unclips from its on-screen scroll cap. */
+.receipt-capture-mode .receipt-unit-abbr {
+  display: none !important;
+}
+.receipt-capture-mode .receipt-unit-full {
+  display: inline !important;
+}
+.receipt-capture-mode .receipt-items-scroll {
+  max-height: none !important;
+  overflow: visible !important;
+}
+.receipt-capture-mode .receipt-items-fade {
+  display: none !important;
+}
+
+/* 3. ACTION BAR - 2 equal columns; auto-fit rows of >= 150px above 720px.
+   No fixed widths, no overflow:hidden on buttons, no truncated labels. */
+.receipt-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+.receipt-actions > * {
+  width: 100%;
+  min-width: 0;
+}
+@media (min-width: 720px) {
+  .receipt-actions {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+}
+/* 320px guard: the Button variant's has-[>svg]:px-3 out-specifies utility
+   overrides, so the compact padding is enforced here - labels must never
+   spill their button border at the smallest viewport. */
+@media (max-width: 479.98px) {
+  .receipt-actions button {
+    padding-left: 0.375rem !important;
+    padding-right: 0.375rem !important;
+    gap: 0.25rem !important;
+  }
+}
+
+/* 4. Bottom scroll-fade on the capped items region (more-content hint). */
+.receipt-items-fade {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 32px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgb(255 255 255 / 0), rgb(255 255 255 / 0.95));
+  transition: opacity 150ms ease;
 }
 
 /* Animated gradient shift for login background */

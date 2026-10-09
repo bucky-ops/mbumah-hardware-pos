@@ -7,11 +7,22 @@
  * now lives in ONE shared component - <ReceiptDocument /> (see
  * src/components/receipt-print.tsx) - used by the checkout receipt modal,
  * the transaction-history viewer and this enhanced dialog. The Download
- * button runs the real PDF pipeline (html2canvas-pro → jsPDF, see
+ * button runs the real PDF pipeline (html2canvas-pro -> jsPDF, see
  * src/lib/receipt-pdf.ts) instead of the old no-op window.print().
  *
+ * v2.14.0 receipt-rendering spec alignment:
+ *   - Action bar is a 2-column grid (auto-fit >= 720px), no fixed widths,
+ *     no truncated labels at 320px (see .receipt-actions in globals.css).
+ *   - Grand Total / Tendered / Change render in a PINNED strip outside the
+ *     scrollable body (visible without scrolling at every width).
+ *   - Share actions (Copy / WhatsApp / SMS) come from the shared
+ *     ReceiptShareButtons (phone prompt when the customer has no phone on
+ *     file, toast confirmations); the share text is the ONE shared builder
+ *     (src/lib/receipt-share-text.ts) - the old duplicate is gone.
+ *   - Primary CTA (New Sale) fill #C2410C with white text.
+ *
  * This file keeps its richer props (M-Pesa reference, gift card, voucher,
- * auto-print, thermal monospace) for callers that need them.
+ * auto-print) for callers that need them.
  */
 
 import React, { useCallback, useRef, useEffect, useState } from 'react';
@@ -21,20 +32,17 @@ import {
   Printer,
   Download,
   ShoppingCart,
-  Share2,
   PartyPopper,
-  Copy,
-  Check,
   Loader2,
-  MessageSquare,
   Usb,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatKES, formatDateTime, openSMS, type TransactionItem } from '@/lib/api';
-import { STORE_LIST, COMPANY, type StoreInfo } from '@/lib/store-info';
-import { toNum, changeDue as changeDueOf } from '@/lib/utils/financialMath';
+import { formatDateTime, type TransactionItem } from '@/lib/api';
+import { STORE_LIST, COMPANY } from '@/lib/store-info';
+import { toNum } from '@/lib/utils/financialMath';
 import { RECEIPT_CONTENT_ID, generateReceiptPdf, buildReceiptFileName, printReceiptElement } from '@/lib/receipt-pdf';
-import { ReceiptDocument, ReceiptPrintPreview } from '@/components/receipt-print';
+import { ReceiptDocument, ReceiptTotalsStrip } from '@/components/receipt-print';
+import { ReceiptShareButtons } from '@/components/receipt-share-buttons';
 import { buildReceiptQrPayload } from '@/lib/receipt-qr';
 import { buildReceiptEscpos, printReceiptViaUsb, hasUsbPrinting } from '@/lib/escpos';
 import type { ReceiptData } from '@/lib/types';
@@ -72,95 +80,6 @@ export interface EnhancedReceiptProps {
   thermalMode?: boolean;
 }
 
-// Helpers
-
-/** Build a plain-text version of the receipt for WhatsApp sharing / copying */
-function buildReceiptText(
-  tx: TransactionItem,
-  store: StoreInfo | undefined,
-  opts?: {
-    cashReceived?: number;
-    mpesaReference?: string;
-    giftCardCode?: string;
-    giftCardAmount?: number;
-    voucherCode?: string;
-    voucherAmount?: number;
-  },
-): string {
-  const lines: string[] = [];
-  const divider = '─'.repeat(32);
-
-  lines.push('        MBUMAH HARDWARE');
-  lines.push(`  ${store?.shortName || 'Juja Main Branch'}`);
-  lines.push(`  ${store?.location || ''}`);
-  lines.push(`  Tel: ${store?.phone || COMPANY.phone}`);
-  if (store?.email) lines.push(`  Email: ${store.email}`);
-  lines.push(divider);
-  lines.push(`Receipt #: ${tx.receiptNumber}`);
-  lines.push(`Date: ${formatDateTime(tx.createdAt)}`);
-  lines.push(`Cashier: ${tx.cashier?.name || 'N/A'}`);
-  lines.push(`Customer: ${tx.customer?.name || 'Walk-in'}`);
-  lines.push(divider);
-
-  if (tx.items?.length) {
-    lines.push('Item              Qty  Price   Total');
-    for (const item of tx.items) {
-      const name = item.productName.length > 16
-        ? item.productName.slice(0, 16) + '…'
-        : item.productName.padEnd(17);
-      const qty = String(item.quantity).padStart(3);
-      const price = formatKES(item.pricePerUnit ?? 0).padStart(7);
-      const total = formatKES(item.lineTotal).padStart(8);
-      lines.push(`${name}${qty}${price}${total}`);
-    }
-  }
-
-  lines.push(divider);
-  lines.push(`Subtotal:        ${formatKES(tx.subtotal).padStart(14)}`);
-  // v2.8.0: no hardcoded rate in the label - amount is the stored component.
-  lines.push(`VAT:             ${formatKES(tx.taxAmount).padStart(14)}`);
-  if (tx.discountAmount > 0) {
-    lines.push(`Discount:       -${formatKES(tx.discountAmount).padStart(14)}`);
-  }
-  if (opts?.voucherCode && opts.voucherAmount && opts.voucherAmount > 0) {
-    lines.push(`Voucher (${opts.voucherCode}): -${formatKES(opts.voucherAmount).padStart(10)}`);
-  }
-  lines.push(`TOTAL:           ${formatKES(tx.totalAmount).padStart(14)}`);
-  lines.push(divider);
-  lines.push(`Payment: ${tx.paymentMethod}`);
-
-  if (tx.paymentMethod === 'CASH') {
-    // FINANCIAL MATH AUDIT: server-persisted tender/change preferred (spec §4).
-    const tendered = tx.cashTendered != null ? toNum(tx.cashTendered) : opts?.cashReceived ?? 0;
-    const change = tx.changeDue != null
-      ? toNum(tx.changeDue)
-      : changeDueOf(tendered, toNum(tx.totalAmount));
-    if (tendered > 0) {
-      lines.push(`Cash Tendered:  ${formatKES(tendered).padStart(14)}`);
-    }
-    if (change > 0) {
-      lines.push(`Change:          ${formatKES(change).padStart(14)}`);
-    }
-  }
-
-  if (tx.paymentMethod === 'MPESA' && opts?.mpesaReference) {
-    lines.push(`M-Pesa Ref: ${opts.mpesaReference}`);
-  }
-
-  if (opts?.giftCardCode && opts?.giftCardAmount && opts.giftCardAmount > 0) {
-    lines.push(`Gift Card: ${opts.giftCardCode}`);
-    lines.push(`Redeemed:  ${formatKES(opts.giftCardAmount)}`);
-  }
-
-  lines.push('');
-  lines.push('Thank you for shopping at');
-  lines.push('MBUMAH HARDWARE!');
-  lines.push('Asante sana!');
-  lines.push('Goods sold are not refundable.');
-
-  return lines.join('\n');
-}
-
 // Component
 
 export function EnhancedReceiptPrint({
@@ -181,7 +100,6 @@ export function EnhancedReceiptPrint({
   const [isPrinting, setIsPrinting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isThermalPrinting, setIsThermalPrinting] = useState(false);
-  const [copied, setCopied] = useState(false);
   const autoPrintTriggered = useRef(false);
 
   // v2.6.0: WebUSB ESC/POS thermal printing is Chromium-only - gate the
@@ -206,6 +124,7 @@ export function EnhancedReceiptPrint({
     if (!open) {
       autoPrintTriggered.current = false;
     }
+    return undefined;
   }, [open, autoPrint, transaction]);
 
   // Handlers
@@ -240,7 +159,7 @@ export function EnhancedReceiptPrint({
     }
   }, [transaction]);
 
-  const receiptTextOpts = useCallback(
+  const shareTextOpts = useCallback(
     () => ({
       cashReceived,
       mpesaReference,
@@ -251,42 +170,6 @@ export function EnhancedReceiptPrint({
     }),
     [cashReceived, mpesaReference, giftCardCode, giftCardAmount, voucherCode, voucherAmount],
   );
-
-  const handleShareWhatsApp = useCallback(() => {
-    if (!transaction) return;
-    const text = buildReceiptText(transaction, store, receiptTextOpts());
-    const encoded = encodeURIComponent(text);
-    const url = `https://wa.me/?text=${encoded}`;
-    window.open(url, '_blank', 'noopener');
-  }, [transaction, store, receiptTextOpts]);
-
-  // SMS twin of handleShareWhatsApp - same richer receipt text opened as an
-  // sms: deep link; empty phone => `sms:?body=…` app chooser (same UX as the
-  // wa.me share).
-  const handleShareSms = useCallback(() => {
-    if (!transaction) return;
-    const text = buildReceiptText(transaction, store, receiptTextOpts());
-    openSMS('', text);
-  }, [transaction, store, receiptTextOpts]);
-
-  const handleCopyReceipt = useCallback(() => {
-    if (!transaction) return;
-    const text = buildReceiptText(transaction, store, receiptTextOpts());
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }).catch(() => {
-      // Fallback for older browsers
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  }, [transaction, store, receiptTextOpts]);
 
   const handleNewSale = useCallback(() => {
     onOpenChange(false);
@@ -331,7 +214,7 @@ export function EnhancedReceiptPrint({
       });
       const result = await printReceiptViaUsb(escposBytes);
       if (result.ok) {
-        toast.success(`Sent to thermal printer (no print dialog)${result.deviceName ? ` — ${result.deviceName}` : ''}.`);
+        toast.success(`Sent to thermal printer (no print dialog)${result.deviceName ? ` - ${result.deviceName}` : ''}.`);
       } else {
         toast.error(result.error || 'Could not send the receipt to the thermal printer.');
       }
@@ -357,29 +240,36 @@ export function EnhancedReceiptPrint({
       }
       description="Sale completed successfully. Download, print, share, or start a new sale."
       size="sm"
+      pinned={
+        <ReceiptTotalsStrip transaction={transaction} cashReceived={cashReceived} />
+      }
       footer={
-        <div className="flex flex-wrap gap-2 w-full no-print">
+        // v2.14.0 action bar: 2-col grid (auto-fit >= 720px), no fixed
+        // widths, labels never truncate at 320px.
+        <div className="receipt-actions no-print w-full">
           <Button
             variant="outline"
             onClick={handleDownloadPDF}
             disabled={isDownloading}
-            className="flex-1 min-w-[100px] border-primary/40 text-primary hover:bg-primary/10"
+            aria-label="Download receipt as PDF"
+            className="h-9 w-full px-2 text-xs sm:px-3 sm:text-sm border-primary/40 text-primary hover:bg-primary/10"
           >
             {isDownloading ? (
-              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
             ) : (
-              <Download className="mr-1.5 h-4 w-4" />
+              <Download className="h-4 w-4 shrink-0" />
             )}
-            {isDownloading ? 'Preparing…' : 'Download PDF'}
+            <span className="min-w-0">{isDownloading ? 'Preparing…' : 'Download PDF'}</span>
           </Button>
           <Button
             variant="outline"
             onClick={handlePrint}
             disabled={isPrinting}
-            className="flex-1 min-w-[90px]"
+            aria-label="Print receipt"
+            className="h-9 w-full px-2 text-xs sm:px-3 sm:text-sm"
           >
-            <Printer className="mr-1.5 h-4 w-4" />
-            {isPrinting ? 'Printing...' : 'Print'}
+            <Printer className="h-4 w-4 shrink-0" />
+            <span className="min-w-0">{isPrinting ? 'Printing…' : 'Print'}</span>
           </Button>
           {usbAvailable && (
             <Button
@@ -388,52 +278,36 @@ export function EnhancedReceiptPrint({
               disabled={isThermalPrinting}
               aria-label="Print receipt directly to a USB thermal printer without a print dialog"
               title="Send to USB thermal printer (ESC/POS, no print dialog)"
-              className="flex-1 min-w-[90px] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+              className="h-9 w-full px-2 text-xs sm:px-3 sm:text-sm text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
             >
               {isThermalPrinting ? (
-                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
               ) : (
-                <Usb className="mr-1.5 h-4 w-4" />
+                <Usb className="h-4 w-4 shrink-0" />
               )}
-              {isThermalPrinting ? 'Sending…' : 'Thermal Print (USB)'}
+              <span className="min-w-0">{isThermalPrinting ? 'Sending…' : 'Thermal USB'}</span>
             </Button>
           )}
-          <Button
-            variant="outline"
-            onClick={handleCopyReceipt}
-            className="flex-1 min-w-[90px]"
-          >
-            {copied ? <Check className="mr-1.5 h-4 w-4 text-green-500" /> : <Copy className="mr-1.5 h-4 w-4" />}
-            {copied ? 'Copied!' : 'Copy'}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleShareWhatsApp}
-            className="flex-1 min-w-[90px] text-green-700 dark:text-green-400 border-green-300 dark:border-green-800 hover:bg-green-50 dark:hover:bg-green-950/30"
-          >
-            <Share2 className="mr-1.5 h-4 w-4" />
-            WhatsApp
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleShareSms}
-            aria-label="Send receipt via SMS"
-            title="Send receipt via SMS"
-            className="flex-1 min-w-[90px] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-          >
-            <MessageSquare className="mr-1.5 h-4 w-4" />
-            SMS
-          </Button>
+          <ReceiptShareButtons
+            transaction={transaction}
+            store={store}
+            buildOpts={shareTextOpts}
+          />
           <Button
             onClick={handleNewSale}
-            className="flex-1 min-w-[90px] bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
+            aria-label="Start a new sale"
+            className="h-9 w-full px-2 text-xs sm:px-3 sm:text-sm bg-[#C2410C] text-white hover:bg-[#9A3412]"
           >
-            <ShoppingCart className="mr-1.5 h-4 w-4" />
-            New Sale
+            <ShoppingCart className="h-4 w-4 shrink-0" />
+            <span className="min-w-0">New Sale</span>
           </Button>
         </div>
       }
     >
+      {/* Screen-reader success announcement (visible header text stays). */}
+      <p role="status" className="sr-only">
+        Sale completed successfully. Receipt {transaction.receiptNumber}.
+      </p>
       <ReceiptDocument
         transaction={transaction}
         storeId={storeId}
@@ -480,4 +354,4 @@ export function ReceiptCard({
 }
 
 // Re-export the canonical receipt preview for backward compatibility
-export { ReceiptPrintPreview };
+export { ReceiptPrintPreview } from '@/components/receipt-print';

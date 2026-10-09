@@ -222,8 +222,10 @@ export function AppSidebar() {
         ref={sidebarRef}
         role="navigation"
         aria-label="Main navigation"
-        aria-expanded={!collapsed}
-        aria-collapsed={collapsed}
+        // `aria-collapsed` is not a valid ARIA attribute - the collapsible
+        // state is conveyed through data-sidebar-state (React logged a
+        // console error for the invalid prop).
+        data-collapsed={collapsed}
         data-sidebar-state={sidebarState}
         tabIndex={sidebarState === 'mobile-overlay' ? -1 : undefined}
         className={`fixed top-0 left-0 z-50 h-full bg-[#0f172a] text-slate-300 transform transition-all duration-300 ease-in-out lg:translate-x-0 lg:static lg:z-auto border-r border-white/10 shadow-lg lg:shadow-none ${
