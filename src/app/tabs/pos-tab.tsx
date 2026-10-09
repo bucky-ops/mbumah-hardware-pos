@@ -433,6 +433,19 @@ export default function POSTab() {
     },
   });
 
+  // v2.13.3 SMART RECOMMENDATIONS: full UNFILTERED branch catalog — the affinity
+  // engine must see every product the branch stocks regardless of what's typed
+  // in the search box (the filtered `products` query above only feeds the grid).
+  // Cached 5 min per store; one lightweight request.
+  const { data: catalogAllData } = useQuery({
+    queryKey: ['pos-catalog-all', currentStoreId],
+    queryFn: async () => {
+      const res = await productsApi.list({ storeId: currentStoreId, limit: 100 });
+      return Array.isArray(res.data) ? res : { ...res, data: [] };
+    },
+    staleTime: 300_000,
+  });
+
   const { data: customersData } = useQuery({
     queryKey: ['customers', currentStoreId],
     queryFn: async () => {
@@ -827,7 +840,7 @@ export default function POSTab() {
   // Ranked by frequency (how many cart lines suggest the same product),
   // cart items & out-of-stock lines dropped, top 6 shown.
   const visibleRecommendations = useMemo<AffinitySuggestion[]>(() => {
-    const catalog: AffinitySuggestion['product'][] = Array.isArray(productsData?.data) ? productsData.data : [];
+    const catalog: AffinitySuggestion['product'][] = Array.isArray(catalogAllData?.data) ? catalogAllData.data : [];
     const cartNames = cart.items.map((i) => i.productName);
     if (cartNames.length === 0) {
       return computeBestSellerSuggestions(catalog);
@@ -848,7 +861,7 @@ export default function POSTab() {
         const id = r.product?.id || r.productId!;
         // Prefer the catalog's full object (category/color for the chip dot);
         // fall back to the API's embedded product.
-        const full = (productsData?.data as AffinitySuggestion['product'][] | undefined)?.find?.((p) => p.id === id);
+        const full = (catalogAllData?.data as AffinitySuggestion['product'][] | undefined)?.find?.((p) => p.id === id);
         const product = full ?? r.product;
         if (!product) return null;
         return { product, score: (r.coOccurrence ?? r.count ?? 0), source: 'history' as const };
@@ -856,14 +869,14 @@ export default function POSTab() {
       .filter((s): s is AffinitySuggestion => s !== null)
       .sort((a, b) => b.score - a.score);
     return [...affinity, ...serverRecs].slice(0, MAX_RECOMMENDATION_CHIPS);
-  }, [recommendations, cartProductIds, cart.items, productsData]);
+  }, [recommendations, cartProductIds, cart.items, catalogAllData]);
 
   // Best sellers are ALWAYS available as fallback chips (spec: "still show
   // default best sellers chips below" the edge-case text).
   const bestSellerSuggestions = useMemo<AffinitySuggestion[]>(() => {
-    const catalog: AffinitySuggestion['product'][] = Array.isArray(productsData?.data) ? productsData.data : [];
+    const catalog: AffinitySuggestion['product'][] = Array.isArray(catalogAllData?.data) ? catalogAllData.data : [];
     return computeBestSellerSuggestions(catalog);
-  }, [productsData]);
+  }, [catalogAllData]);
 
   // True when the cart itself triggered at least one mapped affinity — used to
   // label the section count badge honestly (suggestions vs best sellers).

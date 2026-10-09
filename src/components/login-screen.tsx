@@ -155,7 +155,9 @@ export function LoginScreen() {
                 animate={{ scale: 1, rotate: 0 }}
                 transition={{ duration: 0.7, delay: 0.3, type: 'spring', stiffness: 200, damping: 15 }}
               >
-                <img src="/logo.png" alt="Mbumah Hardware" className="w-full h-full object-cover" />
+                {/* v2.13.3 brand refresh: 3D logo (gear crop) on a white tile so
+                    the navy/orange artwork pops inside the gradient ring */}
+                <img src="/logo3d-gear-256.png" alt="Mbumah Hardware" className="w-full h-full object-cover bg-white" />
               </motion.div>
               <CardTitle className="text-2xl font-bold tracking-tight">MBUMAH HARDWARE</CardTitle>
               <CardDescription className="text-base font-medium text-foreground/70">
