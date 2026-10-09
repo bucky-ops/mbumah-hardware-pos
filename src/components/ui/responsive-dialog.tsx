@@ -35,6 +35,12 @@ export interface ResponsiveDialogProps {
   description?: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  /**
+   * v2.14.0 PINNED content: rendered BETWEEN the scrollable body and the
+   * footer, never inside the scroll region, so critical summaries (receipt
+   * totals) stay visible without scrolling at every viewport width.
+   */
+  pinned?: React.ReactNode;
   size?: Size;
   /** Hide the default close (X) button. */
   hideClose?: boolean;
@@ -51,6 +57,7 @@ export function ResponsiveDialog({
   description,
   children,
   footer,
+  pinned,
   size = 'lg',
   hideClose = false,
   className,
@@ -97,7 +104,7 @@ export function ResponsiveDialog({
                 <DialogPrimitive.Close asChild>
                   <button
                     aria-label="Close"
-                    className="shrink-0 rounded-md p-1 text-muted-foreground opacity-70 ring-offset-background transition-opacity hover:opacity-100 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    className="shrink-0 rounded-md p-1 text-muted-foreground opacity-70 ring-offset-background transition-opacity hover:opacity-100 hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -116,6 +123,15 @@ export function ResponsiveDialog({
           >
             {children}
           </div>
+
+          {pinned != null && (
+            <div
+              data-slot="responsive-dialog-pinned"
+              className="shrink-0 border-t bg-muted/30 px-5 py-3 sm:px-6"
+            >
+              {pinned}
+            </div>
+          )}
 
           {footer && (
             <div className="flex flex-wrap items-center justify-end gap-2 border-t bg-muted/30 px-5 py-3 sm:px-6">

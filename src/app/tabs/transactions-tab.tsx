@@ -403,12 +403,14 @@ function ReceiptModal({
             </div>
           </div>
         ) : (
-          <DialogFooter className="gap-2 flex-wrap sm:flex-nowrap">
-            <Button variant="outline" size="sm" onClick={handleDownloadPdf} disabled={pdfBusy}>
+          <div className="receipt-actions">
+            {/* v2.14.0: plain div so the .receipt-actions grid (not the
+                DialogFooter flex) controls the action-bar layout. */}
+            <Button variant="outline" size="sm" onClick={handleDownloadPdf} disabled={pdfBusy} aria-label="Download receipt as PDF">
               {pdfBusy ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Download className="h-4 w-4 mr-1.5" />}
               {pdfBusy ? 'Preparing…' : 'Download PDF'}
             </Button>
-            <Button variant="outline" size="sm" onClick={handlePrint}>
+            <Button variant="outline" size="sm" onClick={handlePrint} aria-label="Print receipt">
               <Printer className="h-4 w-4 mr-1.5" /> Print
             </Button>
             <Button variant="outline" size="sm" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30" onClick={handleStartEmail} disabled={distributing !== null}>
@@ -421,7 +423,7 @@ function ReceiptModal({
               <MessageSquare className="h-4 w-4 mr-1.5" /> SMS
             </Button>
             <Button size="sm" onClick={() => onOpenChange(false)}>Close</Button>
-          </DialogFooter>
+          </div>
         )}
       </DialogContent>
     </Dialog>

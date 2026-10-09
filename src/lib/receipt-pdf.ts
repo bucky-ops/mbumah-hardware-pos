@@ -18,11 +18,16 @@
  * Pipeline (generateReceiptPdf):
  *   element → await fonts.ready → await <img> decode → html2canvas-pro
  *   (scale 2, white background) → jsPDF 80mm-wide page with dynamic height
- *   (thermal-receipt proportions) → pdf.save(`Receipt-<no>.pdf`).
+ *   (thermal-receipt proportions) → pdf.save(`<receipt-number>.pdf`).
  */
 
 import html2canvas from 'html2canvas-pro';
 import { jsPDF } from 'jspdf';
+import { buildReceiptFileName } from '@/lib/receipt-format';
+
+// Re-exported for the three receipt dialogs that import it from here - the
+// canonical implementation lives in the DOM-free receipt-format module.
+export { buildReceiptFileName };
 
 /** The printable receipt node carries this id (see ReceiptDocument). */
 export const RECEIPT_CONTENT_ID = 'receipt-content';
@@ -94,12 +99,23 @@ export async function generateReceiptPdf(
   await waitForFonts();
   await waitForImages(receiptElement);
 
-  const canvas = await html2canvas(receiptElement, {
-    scale,
-    useCORS: true,
-    logging: false,
-    backgroundColor: '#ffffff',
-  });
+  // v2.14.0 capture mode: while the canvas is being rendered the receipt
+  // shows FULL unit words (print/PDF contract), the items table unclips from
+  // its on-screen scroll cap and the scroll fade disappears. Removed in the
+  // finally block so the on-screen preview is untouched.
+  receiptElement.classList.add('receipt-capture-mode');
+
+  let canvas: HTMLCanvasElement;
+  try {
+    canvas = await html2canvas(receiptElement, {
+      scale,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+    });
+  } finally {
+    receiptElement.classList.remove('receipt-capture-mode');
+  }
 
   const imgData = canvas.toDataURL('image/png');
 
@@ -119,13 +135,12 @@ export async function generateReceiptPdf(
 
 /**
  * Build the canonical download filename for a receipt.
- * `Receipt-<receiptNumber || id>.pdf` - falls back defensively when the
- * transaction object is partially populated (offline sync edges).
+ *
+ * v2.14.0 spec: the PDF filename IS the receipt number
+ * ("MBM-20261007-9D042.pdf"), not "Receipt-MBM-...". Implementation moved to
+ * the DOM-free receipt-format module (unit-tested); this re-export keeps the
+ * historic import path stable for the receipt dialogs.
  */
-export function buildReceiptFileName(receiptNumber?: string | null, id?: string | null): string {
-  const base = receiptNumber || id || 'transaction';
-  return `Receipt-${base.replace(/[^a-zA-Z0-9._-]+/g, '-')}`;
-}
 
 /**
  * Print the receipt node via a print-root clone (see module docblock for why
