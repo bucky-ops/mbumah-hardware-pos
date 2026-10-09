@@ -1,6 +1,6 @@
 'use client';
 
-// PRODUCT IMAGE (v2.5.2) — one component, every product surface.
+// PRODUCT IMAGE (v2.5.2) - one component, every product surface.
 //
 // Requirement: "real or icon images of each product are visible … when a new
 // product is added, the corresponding image or a similar icon appears."
@@ -8,7 +8,7 @@
 // The chain is: photo (imageUrl or the name-matched studio shot in
 // public/products) → category icon (bundled PNG) → letter tile.
 // A broken/missing photo never renders as a broken-image glyph: onError walks
-// down the chain automatically. Rendering stays lightweight — plain <img>
+// down the chain automatically. Rendering stays lightweight - plain <img>
 // with lazy loading (no layout shift; grid slots reserve square boxes).
 
 import React, { useState } from 'react';
@@ -23,7 +23,7 @@ export interface ProductImageProps {
   categoryId?: string | null;
   /** Used for keyword icon matching on custom categories. */
   categoryName?: string | null;
-  /** Product name — alt text + the letter-tile fallback initial. */
+  /** Product name - alt text + the letter-tile fallback initial. */
   name: string;
   className?: string;
   /** Tailwind classes for the fallback wrapper (default fills the parent). */

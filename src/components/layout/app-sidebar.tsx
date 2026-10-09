@@ -5,7 +5,7 @@ import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 import { useAuthStore, useAppStore, type AppTab } from '@/lib/stores';
 import { STORE_LIST } from '@/lib/store-info';
-// v2.12.5 (RBAC): NAV_GROUPS × TAB_CONFIG — no-access tabs now render LOCKED
+// v2.12.5 (RBAC): NAV_GROUPS × TAB_CONFIG - no-access tabs now render LOCKED
 // (grayed row + lock icon + "Requires …" tooltip) instead of being silently
 // hidden, so staff can see what exists and ask for it via LockedCard flows.
 import { TAB_CONFIG, NAV_GROUPS, requiredRoleLabelFor } from '@/lib/app-config';
@@ -108,7 +108,7 @@ export function AppSidebar() {
     toast.success('Logged out successfully');
   };
 
-  // Role-based tab visibility — v2.12.5: inaccessible tabs are flagged LOCKED
+  // Role-based tab visibility - v2.12.5: inaccessible tabs are flagged LOCKED
   // (rendered grayed-out with a lock) rather than filtered out of the nav.
   const userRole = user?.role;
   const navGroups = NAV_GROUPS.map((g) => ({
@@ -168,7 +168,7 @@ export function AppSidebar() {
         onClick={() => handleNav(id)}
         // AUDIT FIX (Finding 2.2): prefetch the tab's chunk on hover/focus so
         // the first switch to a tab doesn't wait on a cold chunk fetch.
-        // Fire-and-forget (see preloadTab) — safe to call repeatedly.
+        // Fire-and-forget (see preloadTab) - safe to call repeatedly.
         onPointerEnter={() => preloadTab(id)}
         onFocus={() => preloadTab(id)}
         className={`w-full flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-300 ease-out relative group sidebar-nav-item ${

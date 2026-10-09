@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Toolbar — search + filter toolbar pattern.
+ * Toolbar - search + filter toolbar pattern.
  *
  * Renders a search input on the left and an optional slot for filter controls
  * on the right. Standardizes the look-and-feel of list-page toolbars across

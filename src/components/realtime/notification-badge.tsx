@@ -1,8 +1,6 @@
 'use client'
 
-// ════════════════════════════════════════════════════════════════════════════
 // src/components/realtime/notification-badge.tsx
-// ════════════════════════════════════════════════════════════════════════════
 //
 // Real-time notification badge with:
 // - Bounce animation on new items
@@ -19,7 +17,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { useRealtimeNotifications } from '@/hooks/use-realtime'
 import type { RealtimeNotification } from '@/lib/socket-client'
 
-// ── Notification icon by type ────────────────────────────────────────────────
+// Notification icon by type
 
 function getNotificationIcon(type: string) {
   switch (type) {
@@ -55,16 +53,16 @@ function getNotificationBg(type: string) {
   }
 }
 
-// ── Props ────────────────────────────────────────────────────────────────────
+// Props
 
 interface NotificationBadgeProps {
   storeId: string
   userId?: string
-  /** Optional callback when a notification is clicked — e.g., navigate to a tab */
+  /** Optional callback when a notification is clicked - e.g., navigate to a tab */
   onNotificationClick?: (notification: RealtimeNotification) => void
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
+// Component
 
 export function NotificationBadge({ storeId, userId, onNotificationClick }: NotificationBadgeProps) {
   const { notifications, connectionStatus, unreadCount, markAllRead } = useRealtimeNotifications(storeId, userId)
@@ -245,7 +243,7 @@ export function NotificationBadge({ storeId, userId, onNotificationClick }: Noti
   )
 }
 
-// ── Helper ───────────────────────────────────────────────────────────────────
+// Helper
 
 function formatRelativeTime(timestamp: string): string {
   const now = Date.now()

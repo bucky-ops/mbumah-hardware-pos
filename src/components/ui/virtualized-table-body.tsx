@@ -1,14 +1,12 @@
 'use client';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// VirtualizedTableBody — windowed <tbody> for shadcn/ui <Table>
-// ─────────────────────────────────────────────────────────────────────────────
+// VirtualizedTableBody - windowed <tbody> for shadcn/ui <Table>
 //
 // v2.6.0 PERF: the Inventory products table and the Transactions table can
 // render 200+ rows; browsers choke on the full DOM (layout + paint). This
 // generic wrapper uses @tanstack/react-virtual's useVirtualizer to render
 // ONLY the rows in (or near) the viewport while keeping normal shadcn
-// <TableRow>/<TableCell> markup — column alignment, zebra striping and row
+// <TableRow>/<TableCell> markup - column alignment, zebra striping and row
 // actions are pixel-identical to the plain map version.
 //
 // PATTERN (caller side):
@@ -29,14 +27,13 @@
 //   </div>
 //
 // NOTES:
-//   • Dynamic row measurement — every rendered row gets
+//   • Dynamic row measurement - every rendered row gets
 //     ref={virtualizer.measureElement} + data-index so heights are measured
 //     after mount (rows may wrap on mobile).
 //   • Spacers are real <tr> elements (leading = items[0].start, trailing =
 //     remaining body height) so <table> layout math stays native.
 //   • rows.length === 0 → renders NOTHING (keep the existing empty state in
 //     a separate branch OUTSIDE the virtualizer).
-// ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -64,7 +61,7 @@ export interface VirtualizedTableBodyProps<T> {
   /** Rows rendered above/below the viewport. Default 8. */
   overscan?: number;
   /**
-   * colSpan for the spacer cells — pass the table's total column count so
+   * colSpan for the spacer cells - pass the table's total column count so
    * the invisible spacer rows cannot distort auto column widths.
    */
   colSpan?: number;
@@ -115,7 +112,7 @@ export function VirtualizedTableBody<T>({
     getItemKey: (index) => index,
   });
 
-  // Empty tables render nothing — the caller keeps its existing empty state
+  // Empty tables render nothing - the caller keeps its existing empty state
   // (a normal <TableRow> with a colSpan cell) OUTSIDE the virtualizer.
   if (rowCount === 0) return null;
 
@@ -124,7 +121,7 @@ export function VirtualizedTableBody<T>({
   const last = items[items.length - 1];
   const paddingTop = first?.start ?? 0;
   // v2.8.0 FIX: on the very first render the scroll container still has size 0
-  // so getVirtualItems() returns [] — `last` is then undefined and reading
+  // so getVirtualItems() returns [] - `last` is then undefined and reading
   // `last.start` crashed the whole tab ("Unable to load Inventory"). Guard it.
   const paddingBottom =
     first && last

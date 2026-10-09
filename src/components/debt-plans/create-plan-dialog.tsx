@@ -78,7 +78,7 @@ export function CreatePlanDialog({
 }: CreatePlanDialogProps) {
   const queryClient = useQueryClient();
 
-  // ── Form state ───────────────────────────────────────────────────────────
+  // Form state
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerId, setCustomerId] = useState<string>('');
   const [debtLedgerId, setDebtLedgerId] = useState<string>('');
@@ -94,7 +94,7 @@ export function CreatePlanDialog({
   const [autoCharge, setAutoCharge] = useState<boolean>(false);
 
   // Task 12-d (debt-plan audit, MEDIUM): debounce the customer search. The
-  // old comment claimed "debounced via React-Query's staleTime" — staleTime
+  // old comment claimed "debounced via React-Query's staleTime" - staleTime
   // does not debounce, so every keystroke fired a GET /api/customers.
   const [debouncedSearch, setDebouncedSearch] = useState('');
   useEffect(() => {
@@ -102,7 +102,7 @@ export function CreatePlanDialog({
     return () => clearTimeout(timer);
   }, [customerSearch]);
 
-  // ── Customer search query ────────────────────────────────────────────────
+  // Customer search query
   const { data: customersData, isLoading: isLoadingCustomers } = useQuery({
     queryKey: ['customers-search', 'debt-plans', debouncedSearch, storeId],
     queryFn: async () => {
@@ -127,7 +127,7 @@ export function CreatePlanDialog({
     }));
   }, [customersData]);
 
-  // ── Selected customer's outstanding debts ──────────────────────────────
+  // Selected customer's outstanding debts
   const { data: customerDebts, isLoading: isLoadingDebts } = useQuery({
     queryKey: ['customer-outstanding-debts', customerId, storeId],
     queryFn: async () => {
@@ -161,7 +161,7 @@ export function CreatePlanDialog({
   };
 
   // Task 12-d (debt-plan audit, MEDIUM): the success path previously called
-  // the raw onOpenChange prop, bypassing the reset — reopening the dialog
+  // the raw onOpenChange prop, bypassing the reset - reopening the dialog
   // showed the previous customer/debt/amount still selected.
   const handleOpenChange = (next: boolean) => {
     if (!next) {
@@ -180,7 +180,7 @@ export function CreatePlanDialog({
     }
   };
 
-  // ── Live preview of installment amount + end date ──────────────────────
+  // Live preview of installment amount + end date
   // Task 12-d (debt-plan audit, HIGH): the preview now runs the EXACT server
   // schedule (calculateInstallmentSchedule, pro-rated simple interest with
   // the final-installment rounding absorber). It previously used a flat
@@ -208,7 +208,7 @@ export function CreatePlanDialog({
     };
   }, [totalAmount, installmentCount, interestRate, startDate, frequency]);
 
-  // ── Validation ──────────────────────────────────────────────────────────
+  // Validation
   const validationError = useMemo<string | null>(() => {
     if (!customerId) return 'Please select a customer.';
     if (!debtLedgerId) return 'Please select an outstanding debt to repay.';
@@ -237,7 +237,7 @@ export function CreatePlanDialog({
     return null;
   }, [customerId, debtLedgerId, totalAmount, installmentCount, startDate, interestRate, lateFee]);
 
-  // ── Create mutation ────────────────────────────────────────────────────
+  // Create mutation
   const createMutation = useMutation({
     mutationFn: async (payload: CreateDebtPaymentPlanPayload) =>
       debtPaymentPlansApi.create(payload),

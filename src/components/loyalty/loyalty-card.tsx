@@ -38,7 +38,7 @@ import {
 } from '@/lib/loyalty-utils';
 import { RedeemDialog } from '@/components/loyalty/redeem-dialog';
 
-// ─── Types matching the GET /api/customers/[id]/loyalty response ──────────────
+// Types matching the GET /api/customers/[id]/loyalty response
 
 export interface LoyaltyTransactionItem {
   id: string;
@@ -76,7 +76,7 @@ interface RedeemResponse {
   loyaltyTransactionId: string;
 }
 
-// ─── Tier icon helper ────────────────────────────────────────────────────────
+// Tier icon helper
 //
 // Returns the JSX for a tier icon directly (instead of a component type) so
 // we avoid the react/no-unstable-nested-components lint rule, which flags
@@ -101,7 +101,7 @@ function renderTierIcon(
   }
 }
 
-// ─── Transaction type config ─────────────────────────────────────────────────
+// Transaction type config
 
 const TX_TYPE_CONFIG: Record<
   LoyaltyTransactionType,
@@ -133,7 +133,7 @@ const TX_TYPE_CONFIG: Record<
   },
 };
 
-// ─── Animated counter hook ───────────────────────────────────────────────────
+// Animated counter hook
 
 function useAnimatedNumber(target: number, durationMs = 800): number {
   const [display, setDisplay] = useState(0);
@@ -166,7 +166,7 @@ function useAnimatedNumber(target: number, durationMs = 800): number {
   return display;
 }
 
-// ─── Component props ─────────────────────────────────────────────────────────
+// Component props
 
 export interface LoyaltyCardProps {
   customerId: string;
@@ -177,7 +177,7 @@ export interface LoyaltyCardProps {
   className?: string;
 }
 
-// ─── Main component ──────────────────────────────────────────────────────────
+// Main component
 
 export function LoyaltyCard({
   customerId,
@@ -194,7 +194,7 @@ export function LoyaltyCard({
     queryKey,
     queryFn: async () => {
       // QA FIX (Kenya Plumbing Co. incident): this app authenticates with a
-      // Bearer token (localStorage) — a bare same-origin fetch has no session
+      // Bearer token (localStorage) - a bare same-origin fetch has no session
       // cookie, so the loyalty card 401'd forever with "Authentication
       // required." and the redeem button always failed.
       const res = await authorizedFetchJson(`/api/customers/${customerId}/loyalty`);
@@ -233,16 +233,16 @@ export function LoyaltyCard({
     },
   });
 
-  // Hooks must run unconditionally — call the animated-number hook with 0
+  // Hooks must run unconditionally - call the animated-number hook with 0
   // until we have data so we don't violate rules-of-hooks.
   const animatedPoints = useAnimatedNumber(data?.points ?? 0);
 
-  // ─── Loading skeleton ──
+  // Loading skeleton
   if (isLoading) {
     return <LoyaltyCardSkeleton className={className} />;
   }
 
-  // ─── Error state ──
+  // Error state
   if (isError) {
     // R8 FIX (v2.5): branch-blocked lookups (record lives in another store)
     // used to render the raw API text ("Customer not found.") with a Retry
@@ -434,7 +434,7 @@ export function LoyaltyCard({
   );
 }
 
-// ─── Transaction row ─────────────────────────────────────────────────────────
+// Transaction row
 
 function LoyaltyTxRow({ tx }: { tx: LoyaltyTransactionItem }) {
   const cfg = TX_TYPE_CONFIG[tx.type] ?? TX_TYPE_CONFIG.EARNED;
@@ -473,7 +473,7 @@ function LoyaltyTxRow({ tx }: { tx: LoyaltyTransactionItem }) {
   );
 }
 
-// ─── Skeleton ────────────────────────────────────────────────────────────────
+// Skeleton
 
 function LoyaltyCardSkeleton({ className }: { className?: string }) {
   return (

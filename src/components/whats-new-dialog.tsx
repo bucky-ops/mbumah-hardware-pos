@@ -1,20 +1,20 @@
 'use client';
 
 /**
- * WhatsNewDialog (v2.13.0) — "Karibu! What's New in Mbumah POS".
+ * WhatsNewDialog (v2.13.0) - "Karibu! What's New in Mbumah POS".
  *
  * Shows ONCE per release: on app mount the component reads
  * localStorage 'mbt_seen_version' and, when it differs from APP_VERSION
- * (package.json via src/lib/version.ts — the single source of truth), opens
+ * (package.json via src/lib/version.ts - the single source of truth), opens
  * the dialog. Dismissing it ("Got it", Esc or overlay click) writes the
  * current APP_VERSION so the dialog stays quiet until the next release.
  *
  * SSR-SAFETY: localStorage only exists in the browser, so every storage
- * access happens inside useEffect after mount — the component renders null
+ * access happens inside useEffect after mount - the component renders null
  * until a mounted flag is set, which also guarantees zero hydration
  * mismatch (server HTML and the first client render are identical: nothing).
  *
- * Release content lives in src/lib/whats-new.ts (WHATS_NEW, newest first) —
+ * Release content lives in src/lib/whats-new.ts (WHATS_NEW, newest first) -
  * adding a release is a one-entry edit there.
  */
 
@@ -77,7 +77,7 @@ function EntryBlock({ entry, latest }: { entry: WhatsNewEntry; latest: boolean }
 
 export function WhatsNewDialog() {
   // SSR-SAFETY GATE: identical (null) output on server and hydration render.
-  // useSyncExternalStore flips to true only after hydration — the same
+  // useSyncExternalStore flips to true only after hydration - the same
   // hydration-safe pattern page.tsx uses for useHasMounted.
   const mounted = useSyncExternalStore(
     () => () => {},
@@ -97,7 +97,7 @@ export function WhatsNewDialog() {
           setOpen(true);
         }
       } catch {
-        // Storage unavailable (private mode, disabled storage) — stay quiet
+        // Storage unavailable (private mode, disabled storage) - stay quiet
         // rather than nag on every load.
       }
     }, 0);
@@ -109,7 +109,7 @@ export function WhatsNewDialog() {
     try {
       localStorage.setItem(SEEN_VERSION_KEY, APP_VERSION);
     } catch {
-      // Nothing to do — the dialog just re-shows on next launch.
+      // Nothing to do - the dialog just re-shows on next launch.
     }
   };
 

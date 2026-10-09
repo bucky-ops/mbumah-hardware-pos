@@ -65,11 +65,11 @@ export function RecordPaymentDialog({
   // installment's remaining balance. The old prefill lived in an onOpenChange
   // wrapper, but the parent opens this dialog programmatically
   // (`open={Boolean(payInstallment)}`) and Radix only fires onOpenChange for
-  // *user-initiated* transitions — so the prefill never ran, and after a
+  // *user-initiated* transitions - so the prefill never ran, and after a
   // payment the stale amount from the previous installment persisted into the
   // next open (it could even be silently submitted when ≤ the new remaining
   // balance). The parent now remounts this dialog per open via a `key`, so
-  // these initializers run fresh every time — no effects needed.
+  // these initializers run fresh every time - no effects needed.
   const [amount, setAmount] = useState<string>(() =>
     installment
       ? Math.max(0, (installment.amountDue ?? 0) - (installment.amountPaid ?? 0)).toFixed(2)

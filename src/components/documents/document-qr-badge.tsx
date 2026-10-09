@@ -1,21 +1,19 @@
 'use client';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DocumentQrBadge — on-screen scannable QR for business documents (v2.8.0,
+// DocumentQrBadge - on-screen scannable QR for business documents (v2.8.0,
 // upgraded v2.10.0)
-// ─────────────────────────────────────────────────────────────────────────────
 //
 // SCANNING FIX (v2.8.0, client request): the receipt modal has always shown a
 // LIVE scannable QR on screen, but the invoice / quotation / proforma / credit
 // note / delivery-note view dialogs only embedded a QR inside the PRINT
-// window — on screen there was "nothing displaying like the other one".
+// window - on screen there was "nothing displaying like the other one".
 // This badge renders the SAME payload as the printed document
 // (buildDocumentQrPayload) as a real, phone-scannable QR next to the doc
 // details, with a one-tap copy fallback.
 //
 // v2.10.0: the payload for the five business documents (+ receipts and
 // delivery notes) is now the URL of the public DIGITAL RECEIPT page
-// (/r/<docNumber>), and the QR itself is a BUTTON — tapping it (or the
+// (/r/<docNumber>), and the QR itself is a BUTTON - tapping it (or the
 // "View receipt" button next to it) opens the DigitalReceiptViewer with
 // scroll + autofit. The badge is shrink-0 so it can never be clipped or
 // squeezed out of its row, and the whole thing is a comfortable 44px+ touch
@@ -36,7 +34,7 @@ interface DocumentQrBadgeProps {
   /** Document date string for the verify payload. */
   date?: string;
   /**
-   * Called when the QR itself is tapped — opens the digital receipt viewer.
+   * Called when the QR itself is tapped - opens the digital receipt viewer.
    * When provided, a "Tap to view" hint appears under the QR.
    */
   onView?: () => void;
@@ -62,7 +60,7 @@ export function DocumentQrBadge({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      /* clipboard unavailable — non-fatal */
+      /* clipboard unavailable - non-fatal */
     }
   };
 

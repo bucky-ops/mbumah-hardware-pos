@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * LockedCard — v2.12.5 (PR B phase 2 — RBAC, Task REL-ROADMAP-B2)
+ * LockedCard - v2.12.5 (PR B phase 2 - RBAC, Task REL-ROADMAP-B2)
  *
  * The premium "you can't open this" card used on the cashier limited dashboard
  * and anywhere a feature is visible but not permitted. Matches the dashboard
@@ -48,7 +48,7 @@ function markRequestedThisSession(permission: FeaturePermissionKey): void {
       window.sessionStorage.setItem(`${REQUESTED_KEY_PREFIX}${permission}`, '1');
     }
   } catch {
-    /* storage unavailable — the in-memory state still debounces this mount */
+    /* storage unavailable - the in-memory state still debounces this mount */
   }
 }
 
@@ -76,7 +76,7 @@ export function LockedCard({ permission, title, description, className }: Locked
     description ?? PERMISSION_DENIED_MESSAGES[permission] ?? 'This section is locked for your role.';
 
   const handleRequestAccess = async () => {
-    if (sending || sent) return; // debounce — one in-flight request at a time
+    if (sending || sent) return; // debounce - one in-flight request at a time
     setSending(true);
     try {
       const res = await fetch('/api/access-requests', {

@@ -1,8 +1,6 @@
 'use client';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — CurrencySwitcher
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - CurrencySwitcher
 //
 // A dropdown button that lets the cashier switch the POS display currency
 // between KES, USD, UGX, and TZS for cross-border East African trade.
@@ -10,12 +8,11 @@
 // • Trigger button shows the active currency's flag + code.
 // • Each menu item shows flag, code, name, and the static KES exchange rate.
 // • Selecting an item calls `switchCurrency()` from `useCurrency()`, which
-//   updates the persisted `activeCurrency` in `useAppStore` — every
+//   updates the persisted `activeCurrency` in `useAppStore` - every
 //   component that calls `useCurrency().format()` re-renders automatically.
 //
 // This is a DISPLAY-ONLY conversion. The canonical accounting currency
 // remains KES; only the rendered strings change.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { Check, ChevronDown, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -37,7 +34,7 @@ import type { CurrencyCode } from '@/lib/money';
 import { cn } from '@/lib/utils';
 
 export interface CurrencySwitcherProps {
-  /** Optional compact variant — shows only flag + code, no "Currency" label. */
+  /** Optional compact variant - shows only flag + code, no "Currency" label. */
   compact?: boolean;
   /** Additional Tailwind classes for the trigger button. */
   className?: string;
@@ -66,10 +63,10 @@ function CurrencyRow({
 
   return (
     <DropdownMenuItem
-      // `onSelect` fires on click/Enter/Space — Radix handles a11y.
+      // `onSelect` fires on click/Enter/Space - Radix handles a11y.
       onSelect={(e) => {
         // Prevent the dropdown from closing before our handler runs in
-        // some edge cases (defensive — Radix usually handles this).
+        // some edge cases (defensive - Radix usually handles this).
         e.preventDefault();
         onSelect(meta.code);
       }}

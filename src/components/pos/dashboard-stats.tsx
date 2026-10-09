@@ -51,7 +51,7 @@ export function DashboardStats({ storeId, onLowStockClick }: { storeId: string; 
   const avgOrder = todaySales && todayTxns ? todaySales / todayTxns : 0;
   const animatedAvgOrder = useAnimatedCounter(avgOrder);
 
-  // Live "last updated" timestamp — ticks every minute to refresh relative time
+  // Live "last updated" timestamp - ticks every minute to refresh relative time
   // (lazy initializer so Date.now() is not called during render)
   const [nowTick, setNowTick] = useState<number>(() => Date.now());
   useEffect(() => {
@@ -59,7 +59,7 @@ export function DashboardStats({ storeId, onLowStockClick }: { storeId: string; 
     return () => clearInterval(id);
   }, []);
 
-  // Compute average order sparkline data — derived from salesByHour relative to txns (heuristic)
+  // Compute average order sparkline data - derived from salesByHour relative to txns (heuristic)
   const avgSparkData = useMemo(() => {
     if (data && Array.isArray(data.salesByHour) && data.salesByHour.length > 1) {
       const n = data.salesByHour.length;
@@ -79,7 +79,7 @@ export function DashboardStats({ storeId, onLowStockClick }: { storeId: string; 
       format: 'kes' as const,
       icon: TrendingUp,
       color: 'text-green-600 dark:text-green-400',
-      // Gradient icon circle — emerald (positive sales)
+      // Gradient icon circle - emerald (positive sales)
       iconCircle: 'bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-emerald-500/30',
       bg: 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/40 dark:to-emerald-950/30',
       borderColor: 'border-l-green-500',
@@ -98,7 +98,7 @@ export function DashboardStats({ storeId, onLowStockClick }: { storeId: string; 
       format: 'number' as const,
       icon: ShoppingCart,
       color: 'text-sky-600 dark:text-sky-400',
-      // Gradient icon circle — sky blue (informational)
+      // Gradient icon circle - sky blue (informational)
       iconCircle: 'bg-gradient-to-br from-sky-400 to-blue-600 text-white shadow-blue-500/30',
       bg: 'bg-gradient-to-br from-sky-50 to-blue-50 dark:from-sky-950/40 dark:to-blue-950/30',
       borderColor: 'border-l-sky-500',
@@ -117,7 +117,7 @@ export function DashboardStats({ storeId, onLowStockClick }: { storeId: string; 
       format: 'kes' as const,
       icon: DollarSign,
       color: 'text-amber-600 dark:text-amber-400',
-      // Gradient icon circle — amber (value/money)
+      // Gradient icon circle - amber (value/money)
       iconCircle: 'bg-gradient-to-br from-amber-400 to-orange-600 text-white shadow-amber-500/30',
       bg: 'bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/30',
       borderColor: 'border-l-amber-500',
@@ -136,7 +136,7 @@ export function DashboardStats({ storeId, onLowStockClick }: { storeId: string; 
       format: 'number' as const,
       icon: AlertTriangle,
       color: 'text-rose-600 dark:text-rose-400',
-      // Gradient icon circle — rose (attention/warning)
+      // Gradient icon circle - rose (attention/warning)
       iconCircle: 'bg-gradient-to-br from-rose-400 to-red-600 text-white shadow-rose-500/30',
       bg: 'bg-gradient-to-br from-rose-50 to-red-50 dark:from-rose-950/40 dark:to-red-950/30',
       borderColor: 'border-l-rose-500',

@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Held-carts picker — AUDIT FIX (Task 3-e).
+ * Held-carts picker - AUDIT FIX (Task 3-e).
  * Replaces the blind `heldCarts.pop()` LIFO recall: the cashier can now see
  * every parked cart (held-at, item count, total, customer) and resume ANY of
  * them out of order, or delete one. Held carts are localStorage-only and never
@@ -69,7 +69,7 @@ export function HeldCartsDialog({
     return customers.find((c) => c.id === record.customer)?.name || record.customer;
   };
 
-  // Newest first — the cart just parked is the one most likely to be resumed.
+  // Newest first - the cart just parked is the one most likely to be resumed.
   const sorted = [...heldCarts].sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
 
   return (

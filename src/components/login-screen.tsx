@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * LOGIN POPUP FIX (v2.5.2 — "remove the pops from login"):
+ * LOGIN POPUP FIX (v2.5.2 - "remove the pops from login"):
  *
  * The login screen used sonner TOASTS for three things:
  *   1. `toast.success('Welcome…')` after sign-in
@@ -13,14 +13,14 @@
  * loop, so the screen kept "flashing and popping" and users could not reach
  * the form. UX best practice for authentication surfaces:
  *   • feedback lives INLINE next to the form (never an overlay),
- *   • a successful login needs NO confirmation pop — the dashboard appearing
+ *   • a successful login needs NO confirmation pop - the dashboard appearing
  *     IS the confirmation,
  *   • help content (forgot password) opens in place, not as a popup.
  *
  * All three toasts were therefore removed and replaced by the inline error
  * banner (role=alert, aria-live) and the inline forgot-password panel below.
  * Popups remain exclusively for PRODUCT interactions (select / hover / cart)
- * in the Point-of-Sale surface — see LOGIN_POPUP_FIX_GUIDE.md.
+ * in the Point-of-Sale surface - see LOGIN_POPUP_FIX_GUIDE.md.
  */
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -83,7 +83,7 @@ export function LoginScreen() {
     e.preventDefault();
     setErrorMessage(null);
     try {
-      // No success toast — the dashboard rendering is the confirmation.
+      // No success toast - the dashboard rendering is the confirmation.
       await login(email, password);
     } catch (err: unknown) {
       // INLINE feedback instead of a popup toast: the error appears inside

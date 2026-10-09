@@ -1,22 +1,22 @@
 'use client';
 
 /**
- * ─────────────────────────────────────────────────────────────────────────────
- * MBUMAH HARDWARE POS — Admin Audit Trail section (v2.12.8, PR C)
- * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * MBUMAH HARDWARE POS - Admin Audit Trail section (v2.12.8, PR C)
+ *
  *
  * Consolidated denial/override/authorization trail rendered inside the
  * Security tab (second view next to the Security Dashboard). Backed by
  * GET /api/admin/audit-trail, which merges hash-chained AuditLog rows
  * (PERMISSION_DENIED / MANAGER_OVERRIDE / MANAGER_AUTHORIZED) with any
- * SecurityEvent denial rows that lack an AuditLog twin — every denial shows
+ * SecurityEvent denial rows that lack an AuditLog twin - every denial shows
  * exactly once.
  *
  * Features: role select, user search, date range, denied-only switch, free
  * search, CSV export (mbumah-audit-trail-YYYYMMDD.csv), Prev/Next pagination,
  * skeleton loading, empty state, scroll-confined long table (scrollbar-thin),
  * truncating cells for long emails.
- * ─────────────────────────────────────────────────────────────────────────────
+ *
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -41,7 +41,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { formatDateTime, formatRelativeTime } from '@/lib/api';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 interface AuditTrailRow {
   id: string;
@@ -90,7 +90,7 @@ function actionBadgeClass(action: string): string {
   }
 }
 
-// ── Data fetch ───────────────────────────────────────────────────────────────
+// Data fetch
 
 async function fetchAuditTrail(params: Record<string, string>): Promise<AuditTrailResponse> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null;
@@ -129,7 +129,7 @@ async function downloadAuditTrailCsv(params: Record<string, string>): Promise<vo
   URL.revokeObjectURL(url);
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
+// Component
 
 export function AuditTrailSection() {
   // Raw input state (debounced into the query params)

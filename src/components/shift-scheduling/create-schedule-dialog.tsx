@@ -80,7 +80,7 @@ export function CreateScheduleDialog({
 }: CreateScheduleDialogProps) {
   const queryClient = useQueryClient();
 
-  // ── Form state ───────────────────────────────────────────────────────────
+  // Form state
   const [staffSearch, setStaffSearch] = useState('');
   const [userId, setUserId] = useState<string>('');
   const [title, setTitle] = useState<string>('');
@@ -93,7 +93,7 @@ export function CreateScheduleDialog({
   const [color, setColor] = useState<ShiftScheduleColor>('emerald');
   const [notes, setNotes] = useState<string>('');
 
-  // ── Staff search query ─────────────────────────────────────────────────
+  // Staff search query
   const { data: staffData, isLoading: isLoadingStaff } = useQuery({
     queryKey: ['users-search', 'shift-schedules', staffSearch, storeId],
     queryFn: async () => {
@@ -114,7 +114,7 @@ export function CreateScheduleDialog({
     return staffData;
   }, [staffData]);
 
-  // ── Reset form on close, pre-fill on open (event-driven, not effect-driven)
+  // Reset form on close, pre-fill on open (event-driven, not effect-driven)
   const handleOpenChange = (next: boolean) => {
     if (!next) {
       setStaffSearch('');
@@ -141,7 +141,7 @@ export function CreateScheduleDialog({
     onOpenChange(next);
   };
 
-  // ── Live preview ─────────────────────────────────────────────────────────
+  // Live preview
   const preview = useMemo(() => {
     const timeRange = formatTimeRange(
       combineDateAndTime('1970-01-01', startTime),
@@ -173,7 +173,7 @@ export function CreateScheduleDialog({
     return { timeRange, hours, when };
   }, [startTime, endTime, scheduleType, dayOfWeek, specificDate]);
 
-  // ── Validation ──────────────────────────────────────────────────────────
+  // Validation
   const validationError = useMemo<string | null>(() => {
     if (!userId) return 'Please select a staff member.';
     if (!title.trim()) return 'Title is required (e.g. "Morning").';
@@ -202,7 +202,7 @@ export function CreateScheduleDialog({
     return null;
   }, [userId, title, startTime, endTime, scheduleType, specificDate, recurrenceEndDate]);
 
-  // ── Create mutation ────────────────────────────────────────────────────
+  // Create mutation
   const createMutation = useMutation({
     mutationFn: async (payload: CreateShiftSchedulePayload) =>
       shiftSchedulesApi.create(payload),

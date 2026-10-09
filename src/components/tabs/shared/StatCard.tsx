@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * StatCard — reusable metric / KPI card.
+ * StatCard - reusable metric / KPI card.
  *
  * Renders an icon + label + value + optional trend indicator. This pattern is
  * duplicated across dashboard, financial, reports, and other tabs, so we
@@ -30,7 +30,7 @@ export interface StatCardProps {
   iconColor?: string;
   /** Tailwind border-left color class, e.g. "border-l-green-500" */
   borderLeftColor?: string;
-  /** Optional click handler — when present the card becomes interactive */
+  /** Optional click handler - when present the card becomes interactive */
   onClick?: () => void;
   /** Optional extra classes for the root Card */
   className?: string;

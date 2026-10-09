@@ -42,11 +42,11 @@ export function WaiveInstallmentDialog({
   // an onOpenChange wrapper never ran because the parent opens this dialog
   // programmatically, so the previous waiver's reason text persisted into the
   // next open. The parent remounts this dialog per open via a `key`, so the
-  // initializer below runs fresh every time — no effects needed.
+  // initializer below runs fresh every time - no effects needed.
   const [waiverReason, setWaiverReason] = useState<string>('');
 
   // Remaining (unpaid) balance on the installment. Task 12-d (debt-plan
-  // audit, HIGH): only this remainder is actually forgiven — the server
+  // audit, HIGH): only this remainder is actually forgiven - the server
   // waives `amountDue − amountPaid` and leaves the already-collected portion
   // untouched. The dialog previously displayed the full `amountDue`, which
   // misrepresented partial installments.
@@ -59,7 +59,7 @@ export function WaiveInstallmentDialog({
     installment && (installment.amountPaid ?? 0) > 0.001 && installment.status !== 'PAID',
   );
 
-  // Reset the reason on each open — handled by the parent's per-open
+  // Reset the reason on each open - handled by the parent's per-open
   // remount (`key`), no effects needed.
   const waiveMutation = useMutation({
     mutationFn: async () => {

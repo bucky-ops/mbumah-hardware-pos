@@ -1,6 +1,6 @@
 'use client';
 
-// LowStockAlertPanel — inventory restock watchlist.
+// LowStockAlertPanel - inventory restock watchlist.
 //
 // Pulls products where `quantityInStock <= reorderLevel` (with an optional
 // "near reorder" yellow band when `includeNear=true`). Each row shows:
@@ -32,7 +32,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-// ── Types ───────────────────────────────────────────────────────────────────
+// Types
 
 interface LowStockCategory {
   id: string;
@@ -84,7 +84,7 @@ interface LowStockResponse {
   };
 }
 
-// ── Urgency config ─────────────────────────────────────────────────────────
+// Urgency config
 
 type UrgencyKey = 'OUT_OF_STOCK' | 'BELOW_REORDER' | 'NEAR_REORDER';
 
@@ -123,7 +123,7 @@ const URGENCY_CONFIG: Record<UrgencyKey, UrgencyConfig> = {
   },
 };
 
-// ── Component ───────────────────────────────────────────────────────────────
+// Component
 
 export function LowStockAlertPanel({
   storeId,
@@ -134,7 +134,7 @@ export function LowStockAlertPanel({
   storeId: string;
   /** When true, also surface products between reorderLevel and 1.5× reorderLevel. */
   includeNear?: boolean;
-  /** Optional callback — receives the low-stock product so the parent can open
+  /** Optional callback - receives the low-stock product so the parent can open
    *  a PO dialog pre-filled with the suggested reorder quantity + supplier. */
   onCreatePurchaseOrder?: (product: LowStockProduct) => void;
   className?: string;
@@ -164,7 +164,7 @@ export function LowStockAlertPanel({
       return (await res.json()) as LowStockResponse;
     },
     enabled: !!storeId,
-    staleTime: 60_000, // 1 min — stock levels change frequently during the day
+    staleTime: 60_000, // 1 min - stock levels change frequently during the day
   });
 
   const products = useMemo(() => {

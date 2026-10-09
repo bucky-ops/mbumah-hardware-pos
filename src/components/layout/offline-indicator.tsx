@@ -1,25 +1,19 @@
 'use client';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — OfflineIndicator (sticky banner)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - OfflineIndicator (sticky banner)
 //
 // A small, non-intrusive banner that sits at the very top of the POS screen
 // and tells the cashier the current network status + pending-sync count.
 //
 // Behaviour:
-//   ┌────────────────────────────────────────────────────────────────────┐
-//   │  OFFLINE                                                           │
-//   │  📶 Offline Mode: Sales will sync when connected.                 │
-//   │  [3 sale(s) queued — will sync automatically when back online]    │
-//   └────────────────────────────────────────────────────────────────────┘
+//   OFFLINE:
+//     Offline Mode: Sales will sync when connected.
+//     [3 sale(s) queued - will sync automatically when back online]
 //   (red / rose background, full-width, sticky at the top of <main>)
 //
-//   ┌────────────────────────────────────────────────────────────────────┐
-//   │  ONLINE + QUEUE                                                    │
-//   │  🔄 3 sale(s) syncing...  [Sync now]                              │
-//   └────────────────────────────────────────────────────────────────────┘
-//   (amber background — only shown when the queue is non-empty)
+//   ONLINE + QUEUE:
+//     3 sale(s) syncing...  [Sync now]
+//   (amber background - only shown when the queue is non-empty)
 //
 //   ONLINE + EMPTY QUEUE → banner is hidden (a tiny green dot lives in
 //   the TopBar instead, so the cashier always knows the connection is live).
@@ -28,12 +22,11 @@
 //   • Uses Framer Motion for a smooth slide-down when the banner appears
 //     (so it doesn't jarringly shove the POS content).
 //   • "Sync now" button calls syncQueue() directly and shows a toast with
-//     the result — useful when the cashier knows the network is back but
+//     the result - useful when the cashier knows the network is back but
 //     the auto-sync hasn't fired yet.
 //   • The pending-sync count comes from the reactive external store in
 //     offline-sync.ts (subscribeOfflineCount / getOfflineCountSnapshot),
 //     so it updates in real time as sales are queued and synced.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useSyncExternalStore } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -61,7 +54,7 @@ export function OfflineIndicator() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null);
 
-  // ── Manual "Sync now" handler ──
+  // Manual "Sync now" handler
   const handleSyncNow = useCallback(async () => {
     if (isSyncing) return;
     setIsSyncing(true);
@@ -93,7 +86,7 @@ export function OfflineIndicator() {
     }
   }, [isSyncing]);
 
-  // ── Listen for background syncs (fired by the `online` event) ──
+  // Listen for background syncs (fired by the `online` event)
   // so the banner updates its "last result" message even when the cashier
   // didn't click "Sync now" manually.
   useEffect(() => {
@@ -106,7 +99,7 @@ export function OfflineIndicator() {
     return unsub;
   }, []);
 
-  // ── Decide what to render ──
+  // Decide what to render
   //
   // Priority:
   //   1. OFFLINE → always show the red banner (even if queue is empty, so the
@@ -244,9 +237,9 @@ export function OfflineIndicator() {
   );
 }
 
-// ── Compact OnlineBadge for the TopBar ───────────────────────────────────────
+// Compact OnlineBadge for the TopBar
 //
-// A tiny green dot (online) or red dot (offline) for the TopBar — so the
+// A tiny green dot (online) or red dot (offline) for the TopBar - so the
 // cashier always has a peripheral-vision indicator even when the full
 // banner is hidden.
 

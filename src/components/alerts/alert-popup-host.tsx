@@ -1,21 +1,21 @@
 'use client';
 
 /**
- * AlertPopupHost — renders the app's ALERT POPUPS (v2.5.0).
+ * AlertPopupHost - renders the app's ALERT POPUPS (v2.5.0).
  *
  * Behaviour (per the product requirement):
  *   • every popup stays on screen for 45 SECONDS (ALERT_POPUP_DURATION_MS)
  *   • a countdown bar drains while the popup is visible
  *   • hovering a popup PAUSES its countdown (so staff can read calmly)
- *   • every popup has a Close (✕) button for instant dismissal
+ *   • every popup has a Close ( ) button for instant dismissal
  *   • popups stack bottom-left and never exceed 4 on screen
  *
  * Sources of popups:
  *   1. any client module calling showAlert() from '@/lib/alert-bus'
  *   2. automatic: this host polls the notifications API every 60s and pops
  *      NEW critical/warning notifications exactly once (ids already alerted
- *      are remembered in localStorage), so urgent store events — out-of-stock
- *      items, overdue rentals, large debts — surface without anyone watching
+ *      are remembered in localStorage), so urgent store events - out-of-stock
+ *      items, overdue rentals, large debts - surface without anyone watching
  *      the bell menu.
  */
 
@@ -152,14 +152,14 @@ function AlertPopup({ alert }: { alert: AlertInstance }) {
 export function AlertPopupHost() {
   const alerts = useAlertStore((s) => s.alerts);
   const alertedIdsRef = useRef<Set<string> | null>(null);
-  // Live branch from the app store — re-renders on branch switch / hydration,
+  // Live branch from the app store - re-renders on branch switch / hydration,
   // no setState-in-effect needed (react-hooks lint).
   const currentStoreId = useAppStore((s) => s.currentStoreId);
-  // R10 FIX (v2.5.1 — login flash loop): the notification poll fires Bearer-
+  // R10 FIX (v2.5.1 - login flash loop): the notification poll fires Bearer-
   // authenticated requests. Before login there IS no token, so the poll got a
   // 401 on every cycle and (with the old reload-on-401 handler) reloaded the
   // page in an infinite loop. The host now only polls and renders once the
-  // user is AUTHENTICATED — the login screen is completely silent.
+  // user is AUTHENTICATED - the login screen is completely silent.
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   // Drop any popups left over from the previous session on logout/expiry.
@@ -169,7 +169,7 @@ export function AlertPopupHost() {
     }
   }, [isAuthenticated]);
 
-  // ── Load the "already alerted" memory before the first poll ──
+  // Load the "already alerted" memory before the first poll
   useEffect(() => {
     try {
       const stored = localStorage.getItem('mbt_alerted_notification_ids');
@@ -179,7 +179,7 @@ export function AlertPopupHost() {
     }
   }, []);
 
-  // ── Poll store notifications; pop NEW critical/warning ones for 45s ──
+  // Poll store notifications; pop NEW critical/warning ones for 45s
   useQuery({
     queryKey: ['alert-popup-notifications', currentStoreId],
     queryFn: async () => {
@@ -205,7 +205,7 @@ export function AlertPopupHost() {
             JSON.stringify([...seen].slice(-200))
           );
         } catch {
-          /* storage full — alerts will simply re-fire next session */
+          /* storage full - alerts will simply re-fire next session */
         }
       }
       return res?.data ?? null;

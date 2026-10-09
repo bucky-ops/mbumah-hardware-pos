@@ -95,7 +95,7 @@ export function EditScheduleDialog({
   const queryClient = useQueryClient();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
-  // ── Form state ───────────────────────────────────────────────────────────
+  // Form state
   const [title, setTitle] = useState('');
   const [scheduleType, setScheduleType] = useState<ScheduleType>('recurring');
   const [dayOfWeek, setDayOfWeek] = useState<number>(1);
@@ -107,7 +107,7 @@ export function EditScheduleDialog({
   const [notes, setNotes] = useState('');
   const [userId, setUserId] = useState<string>('');
 
-  // ── Pre-fill form on open (event-driven via handleOpenChange so we don't
+  // Pre-fill form on open (event-driven via handleOpenChange so we don't
   // trigger the react-hooks/set-state-in-effect rule).
   const handleOpenChange = (next: boolean) => {
     if (next && schedule) {
@@ -128,7 +128,7 @@ export function EditScheduleDialog({
     onOpenChange(next);
   };
 
-  // ── Staff search (used to display the assigned user's name + allow
+  // Staff search (used to display the assigned user's name + allow
   // reassignment). The currently-assigned user is always shown.
   const { data: staffData } = useQuery({
     queryKey: ['users-search', 'shift-schedules-edit', schedule?.storeId],
@@ -149,7 +149,7 @@ export function EditScheduleDialog({
     return staffData;
   }, [staffData]);
 
-  // ── Live preview ─────────────────────────────────────────────────────────
+  // Live preview
   const preview = useMemo(() => {
     const timeRange = formatTimeRange(
       combineDateAndTime('1970-01-01', startTime),
@@ -179,7 +179,7 @@ export function EditScheduleDialog({
     return { timeRange, hours, when };
   }, [startTime, endTime, scheduleType, dayOfWeek, specificDate]);
 
-  // ── Validation ──────────────────────────────────────────────────────────
+  // Validation
   const isCompleted = schedule?.status === 'COMPLETED';
   const validationError = useMemo<string | null>(() => {
     if (!title.trim()) return 'Title is required.';
@@ -196,7 +196,7 @@ export function EditScheduleDialog({
     return null;
   }, [title, startTime, endTime, scheduleType, specificDate]);
 
-  // ── Update mutation ─────────────────────────────────────────────────────
+  // Update mutation
   const updateMutation = useMutation({
     mutationFn: async (payload: UpdateShiftSchedulePayload) => {
       if (!schedule) throw new Error('No schedule selected');
@@ -216,7 +216,7 @@ export function EditScheduleDialog({
     },
   });
 
-  // ── Status change mutation ──────────────────────────────────────────────
+  // Status change mutation
   const statusMutation = useMutation({
     mutationFn: async (status: 'ACTIVE' | 'PAUSED' | 'COMPLETED') => {
       if (!schedule) throw new Error('No schedule selected');
@@ -238,7 +238,7 @@ export function EditScheduleDialog({
     },
   });
 
-  // ── Delete mutation ─────────────────────────────────────────────────────
+  // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async () => {
       if (!schedule) throw new Error('No schedule selected');

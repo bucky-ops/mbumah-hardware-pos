@@ -1,13 +1,13 @@
 'use client';
 
 /**
- * ProductImageUpload — file picker + preview + drag-drop for product photos.
+ * ProductImageUpload - file picker + preview + drag-drop for product photos.
  *
  * Converts the selected image to a base64 data URL (resized to max 600x600 to
  * keep payload small) and stores it in the parent form's `imageUrl` field.
  * Also allows manual URL entry as a fallback.
  *
- * No external storage (S3/Vercel Blob) required — the data URL is stored
+ * No external storage (S3/Vercel Blob) required - the data URL is stored
  * directly in the Product.imageUrl column.
  */
 

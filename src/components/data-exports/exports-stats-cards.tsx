@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * ExportsStatsCards — 4 glass-card stat cards for the Data Export Dashboard
+ * ExportsStatsCards - 4 glass-card stat cards for the Data Export Dashboard
  * header: Total Exports, Total Records, Storage Used, Success Rate.
  *
  * Mirrors the styling of `PlansStatsCards` (debt-plans) so the dashboards

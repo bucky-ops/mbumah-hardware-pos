@@ -24,8 +24,8 @@ import { TopProductsChart, type TopProductsData } from './top-products-chart';
 import { PaymentDonut, type PaymentBreakdownData } from './payment-donut';
 import { HourlyHeatmap, type HourlyHeatmapData } from './hourly-heatmap';
 
-// ── Authenticated fetch helper ───────────────────────────────────────────────
-// Same pattern as dashboard-tab.tsx — pulls the JWT from localStorage and
+// Authenticated fetch helper
+// Same pattern as dashboard-tab.tsx - pulls the JWT from localStorage and
 // sends it as a Bearer token. Without this, the protected analytics endpoints
 // would 401 and the dashboard would silently fall back to empty states.
 async function authedFetch<T>(
@@ -54,7 +54,7 @@ async function authedFetch<T>(
   return (json.data ?? null) as T | null;
 }
 
-// ── KPI response shape ───────────────────────────────────────────────────────
+// KPI response shape
 interface KPIResponse {
   todayRevenue: { current: number; previous: number; changePercent: number | null; direction: 'up' | 'down' | 'neutral' };
   transactions: { current: number; previous: number; changePercent: number | null; direction: 'up' | 'down' | 'neutral' };
@@ -65,7 +65,7 @@ interface KPIResponse {
   generatedAt: string;
 }
 
-// ── Auto-refresh countdown hook ──────────────────────────────────────────────
+// Auto-refresh countdown hook
 const REFRESH_INTERVAL_MS = 60_000;
 
 function useCountdown(active: boolean) {
@@ -167,7 +167,7 @@ export function AnalyticsDashboard({ storeId, className }: AnalyticsDashboardPro
     const revenue = last7.map((b) => b.revenue);
     const transactions = last7.map((b) => b.transactions);
     const aov = last7.map((b) => b.avgOrderValue);
-    // Synthesise sparklines for KPIs not directly in trend data — use the
+    // Synthesise sparklines for KPIs not directly in trend data - use the
     // buckets' transaction counts as a proxy for customers/orders.
     return {
       todayRevenue: revenue,

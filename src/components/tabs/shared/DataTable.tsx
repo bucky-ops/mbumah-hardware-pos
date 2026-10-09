@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * DataTable — generic table wrapper with loading and empty states.
+ * DataTable - generic table wrapper with loading and empty states.
  *
  * Reduces the boilerplate of `isLoading ? <Skeleton /> : data.length === 0 ?
  * <Empty /> : <Table>...</Table>` that is repeated across every list view

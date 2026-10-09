@@ -1,14 +1,14 @@
 'use client';
 
-// ReportGenerator — interactive report builder + CSV downloader.
+// ReportGenerator - interactive report builder + CSV downloader.
 //
 // Features:
 //   • Report type selector: Daily / Weekly / Monthly / Custom Range.
 //   • Date range picker (single date for Daily; start + end for others).
 //   • Store selector (defaults to the active store; SUPER_ADMIN can pick any).
-//   • Generate button — fetches JSON from the API and shows a preview panel
+//   • Generate button - fetches JSON from the API and shows a preview panel
 //     with the summary metrics.
-//   • Download CSV button — fetches the same report with format=csv and
+//   • Download CSV button - fetches the same report with format=csv and
 //     triggers a browser download via `downloadCSV()` from lib/report-utils.
 //   • Print-friendly layout (hidden toolbar when printing, summary cards
 //     with clear borders, etc.).
@@ -43,7 +43,7 @@ import {
   Tabs, TabsList, TabsTrigger,
 } from '@/components/ui/tabs';
 
-// ── Types ───────────────────────────────────────────────────────────────────
+// Types
 
 type ReportType = 'daily' | 'weekly' | 'monthly' | 'custom';
 
@@ -54,7 +54,7 @@ interface StoreOption {
 }
 
 interface ReportGeneratorProps {
-  /** Active store — the default selection in the store dropdown. */
+  /** Active store - the default selection in the store dropdown. */
   storeId: string;
   /** Optional list of stores the user can switch between. When omitted or
    *  length <= 1, the store selector is hidden (single-store user). */
@@ -64,7 +64,7 @@ interface ReportGeneratorProps {
   className?: string;
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// Helpers
 
 function isoToday(): string {
   return formatISODate(new Date());
@@ -83,7 +83,7 @@ function startOfWeek(): string {
   return formatISODate(d);
 }
 
-// ── Component ───────────────────────────────────────────────────────────────
+// Component
 
 export function ReportGenerator({
   storeId: initialStoreId,
@@ -104,7 +104,7 @@ export function ReportGenerator({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  // Stores query — used for the store selector.
+  // Stores query - used for the store selector.
   const { data: storesData } = useQuery({
     queryKey: ['stores-for-reports'],
     queryFn: async (): Promise<StoreOption[]> => {
@@ -138,7 +138,7 @@ export function ReportGenerator({
       setStartDate(firstOfMonth());
       setEndDate(isoToday());
     } else {
-      // custom — leave whatever the user already had
+      // custom - leave whatever the user already had
     }
   };
 
@@ -181,7 +181,7 @@ export function ReportGenerator({
 
   const endpointPath = reportType === 'daily' ? '/reports/daily' : '/reports/sales-summary';
 
-  // ── Generate (preview JSON) ──
+  // Generate (preview JSON)
   const handleGenerate = useCallback(async () => {
     if (!isRangeValid) {
       toast.error('Please pick a valid date range.');
@@ -210,7 +210,7 @@ export function ReportGenerator({
     }
   }, [buildQuery, endpointPath, isRangeValid]);
 
-  // ── Download CSV ──
+  // Download CSV
   const handleDownloadCSV = useCallback(async () => {
     if (!isRangeValid) {
       toast.error('Please pick a valid date range.');
@@ -241,12 +241,12 @@ export function ReportGenerator({
     }
   }, [buildQuery, endpointPath, isRangeValid, reportType, resolvedStart, resolvedEnd, resolvedSingle]);
 
-  // ── Print ──
+  // Print
   const handlePrint = useCallback(() => {
     if (typeof window !== 'undefined') window.print();
   }, []);
 
-  // ── Render ──────────────────────────────────────────────────────────────
+  // Render
 
   return (
     <Card className={className}>
@@ -443,7 +443,7 @@ export function ReportGenerator({
   );
 }
 
-// ── Preview sub-component ───────────────────────────────────────────────────
+// Preview sub-component
 
 function ReportPreview({
   data,
@@ -718,7 +718,7 @@ function SalesSummaryPreview({ data }: { data: SalesSummaryData }) {
   );
 }
 
-// ── Small building blocks ───────────────────────────────────────────────────
+// Small building blocks
 
 const ACCENT_CLASSES: Record<string, { border: string; icon: string }> = {
   emerald: {

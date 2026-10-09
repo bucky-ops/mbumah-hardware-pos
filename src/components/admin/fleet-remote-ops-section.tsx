@@ -1,19 +1,16 @@
 'use client';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Fleet & Remote Ops (RAK admin console, v2.11.0)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Fleet & Remote Ops (RAK admin console, v2.11.0)
 // Remote Access Kit control surface (docs/REMOTE_ACCESS_KIT_PLAN.md §8):
-//   • Fleet table — every store agent (version/health/heartbeat/frozen/pending)
+//   • Fleet table - every store agent (version/health/heartbeat/frozen/pending)
 //     plus the cloud row, with drift badges vs the latest GitHub release.
-//   • Issue command — signed update / rollback / freeze / unfreeze / remote-view
+//   • Issue command - signed update / rollback / freeze / unfreeze / remote-view
 //     commands to one or more stores; every issue lands as a GitHub commit and
 //     the dialog shows the commit links ("every action is recorded").
-//   • Activity log — the merged per-store ledgers, newest first, with GitHub
+//   • Activity log - the merged per-store ledgers, newest first, with GitHub
 //     commit links where the agent reported them.
 // Everything degrades honestly when OPS_GITHUB_TOKEN / OPS_SIGNING_KEY are not
-// configured on the server — the panel explains exactly what to set.
-// ─────────────────────────────────────────────────────────────────────────────
+// configured on the server - the panel explains exactly what to set.
 
 import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -137,7 +134,7 @@ function outcomeBadge(event: string, outcome?: unknown) {
 export function FleetRemoteOpsSection() {
   const queryClient = useQueryClient();
 
-  // ── Fleet snapshot ──
+  // Fleet snapshot
   const fleetQuery = useQuery({
     queryKey: FLEET_QUERY_KEY,
     queryFn: () => fleetApi.getStatus(),
@@ -145,14 +142,14 @@ export function FleetRemoteOpsSection() {
   });
   const fleet = fleetQuery.data;
 
-  // ── Latest release tag (prefills the composer) ──
+  // Latest release tag (prefills the composer)
   const updatesQuery = useQuery({
     queryKey: ['admin-updates'],
     queryFn: () => updatesApi.getStatus(),
     staleTime: 5 * 60_000,
   });
 
-  // ── Composer state ──
+  // Composer state
   const [composerOpen, setComposerOpen] = useState(false);
   const [commandType, setCommandType] = useState<CommandType>('update');
   const [targets, setTargets] = useState<string[]>([]);
@@ -164,7 +161,7 @@ export function FleetRemoteOpsSection() {
 
   const latestTag = fleet?.cloud.latestRelease ?? updatesQuery.data?.latestRelease?.tag ?? '';
 
-  // ── Activity log (lazy — only when the drawer opens) ──
+  // Activity log (lazy - only when the drawer opens)
   const logQuery = useQuery({
     queryKey: [...FLEET_LOG_QUERY_KEY, logOpen],
     queryFn: () => fleetApi.getLog({ limit: 40 }),

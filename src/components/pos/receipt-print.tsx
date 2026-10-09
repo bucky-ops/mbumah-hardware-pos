@@ -1,11 +1,11 @@
 'use client';
 
 /**
- * EnhancedReceiptPrint — enhanced receipt dialog for MBUMAH HARDWARE POS.
+ * EnhancedReceiptPrint - enhanced receipt dialog for MBUMAH HARDWARE POS.
  *
  * 2026-09 RECEIPT OVERHAUL: the branded, colored, QR-coded receipt markup
- * now lives in ONE shared component — <ReceiptDocument /> (see
- * src/components/receipt-print.tsx) — used by the checkout receipt modal,
+ * now lives in ONE shared component - <ReceiptDocument /> (see
+ * src/components/receipt-print.tsx) - used by the checkout receipt modal,
  * the transaction-history viewer and this enhanced dialog. The Download
  * button runs the real PDF pipeline (html2canvas-pro → jsPDF, see
  * src/lib/receipt-pdf.ts) instead of the old no-op window.print().
@@ -39,7 +39,7 @@ import { buildReceiptQrPayload } from '@/lib/receipt-qr';
 import { buildReceiptEscpos, printReceiptViaUsb, hasUsbPrinting } from '@/lib/escpos';
 import type { ReceiptData } from '@/lib/types';
 
-// ─── Props ──────────────────────────────────────────────────────────────────
+// Props
 
 export interface EnhancedReceiptProps {
   /** Whether the dialog is open */
@@ -48,7 +48,7 @@ export interface EnhancedReceiptProps {
   onOpenChange: (open: boolean) => void;
   /** The completed transaction data */
   transaction: TransactionItem | null;
-  /** Cash amount received (for CASH payments — to show change) */
+  /** Cash amount received (for CASH payments - to show change) */
   cashReceived?: number;
   /** M-Pesa phone used (for MPESA payments) */
   mpesaPhone?: string;
@@ -62,7 +62,7 @@ export interface EnhancedReceiptProps {
   voucherCode?: string;
   /** Voucher discount amount */
   voucherAmount?: number;
-  /** Current store ID — to look up branch info */
+  /** Current store ID - to look up branch info */
   storeId: string;
   /** Called when user clicks "New Sale" */
   onNewSale: () => void;
@@ -72,7 +72,7 @@ export interface EnhancedReceiptProps {
   thermalMode?: boolean;
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// Helpers
 
 /** Build a plain-text version of the receipt for WhatsApp sharing / copying */
 function buildReceiptText(
@@ -117,7 +117,7 @@ function buildReceiptText(
 
   lines.push(divider);
   lines.push(`Subtotal:        ${formatKES(tx.subtotal).padStart(14)}`);
-  // v2.8.0: no hardcoded rate in the label — amount is the stored component.
+  // v2.8.0: no hardcoded rate in the label - amount is the stored component.
   lines.push(`VAT:             ${formatKES(tx.taxAmount).padStart(14)}`);
   if (tx.discountAmount > 0) {
     lines.push(`Discount:       -${formatKES(tx.discountAmount).padStart(14)}`);
@@ -161,7 +161,7 @@ function buildReceiptText(
   return lines.join('\n');
 }
 
-// ─── Component ──────────────────────────────────────────────────────────────
+// Component
 
 export function EnhancedReceiptPrint({
   open,
@@ -184,13 +184,13 @@ export function EnhancedReceiptPrint({
   const [copied, setCopied] = useState(false);
   const autoPrintTriggered = useRef(false);
 
-  // v2.6.0: WebUSB ESC/POS thermal printing is Chromium-only — gate the
+  // v2.6.0: WebUSB ESC/POS thermal printing is Chromium-only - gate the
   // button so Firefox/Safari users never see a dead control.
   const [usbAvailable] = useState(() => hasUsbPrinting());
 
   const store = STORE_LIST.find((s) => s.id === storeId);
 
-  // ── Auto-print on dialog open ──
+  // Auto-print on dialog open
   useEffect(() => {
     if (open && autoPrint && !autoPrintTriggered.current && transaction) {
       autoPrintTriggered.current = true;
@@ -208,7 +208,7 @@ export function EnhancedReceiptPrint({
     }
   }, [open, autoPrint, transaction]);
 
-  // ── Handlers ──
+  // Handlers
 
   const handlePrint = useCallback(() => {
     if (!transaction) return;
@@ -260,7 +260,7 @@ export function EnhancedReceiptPrint({
     window.open(url, '_blank', 'noopener');
   }, [transaction, store, receiptTextOpts]);
 
-  // SMS twin of handleShareWhatsApp — same richer receipt text opened as an
+  // SMS twin of handleShareWhatsApp - same richer receipt text opened as an
   // sms: deep link; empty phone => `sms:?body=…` app chooser (same UX as the
   // wa.me share).
   const handleShareSms = useCallback(() => {
@@ -295,7 +295,7 @@ export function EnhancedReceiptPrint({
 
   /**
    * v2.6.0 THERMAL PRINT (USB): serialise the receipt to raw ESC/POS bytes
-   * and send them straight to a USB printer — NO print dialog, NO paper-size
+   * and send them straight to a USB printer - NO print dialog, NO paper-size
    * fight with the OS. Complements (never replaces) the window.print and PDF
    * flows, which remain the fallback for A4/email-cabin printers.
    */
@@ -449,7 +449,7 @@ export function EnhancedReceiptPrint({
   );
 }
 
-// ─── Standalone Receipt Card (for embedding in other views) ─────────────────
+// Standalone Receipt Card (for embedding in other views)
 
 export interface ReceiptCardProps {
   transaction: TransactionItem;

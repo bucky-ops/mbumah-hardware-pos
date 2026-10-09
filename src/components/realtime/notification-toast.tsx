@@ -1,8 +1,6 @@
 'use client'
 
-// ════════════════════════════════════════════════════════════════════════════
 // src/components/realtime/notification-toast.tsx
-// ════════════════════════════════════════════════════════════════════════════
 //
 // Toast notifications for real-time events. Different styles per type:
 //   - Low stock:        amber warning
@@ -28,7 +26,7 @@ import {
   type RealtimeNotification,
 } from '@/lib/socket-client'
 
-// ── Toast style configuration per type ───────────────────────────────────────
+// Toast style configuration per type
 
 interface ToastStyle {
   icon: React.ReactNode
@@ -76,7 +74,7 @@ const DEFAULT_STYLE: ToastStyle = {
   label: 'Notification',
 }
 
-// ── Tab navigation helper ────────────────────────────────────────────────────
+// Tab navigation helper
 
 // Import the store setter lazily to avoid circular deps
 let tabNavigateFn: ((tab: string) => void) | null = null
@@ -89,7 +87,7 @@ export function registerTabNavigator(fn: (tab: string) => void) {
   tabNavigateFn = fn
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
+// Component
 
 interface NotificationToastProps {
   storeId: string
@@ -157,6 +155,6 @@ export function NotificationToast({ storeId, userId }: NotificationToastProps) {
     }
   }, [storeId, userId, showToast])
 
-  // This component doesn't render anything — it only shows toasts
+  // This component doesn't render anything - it only shows toasts
   return null
 }

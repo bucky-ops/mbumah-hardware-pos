@@ -35,7 +35,7 @@ import {
 } from '@/lib/loyalty-utils';
 import { formatKES } from '@/lib/api';
 
-// ─── Props ───────────────────────────────────────────────────────────────────
+// Props
 
 export interface RedeemDialogProps {
   open: boolean;
@@ -47,7 +47,7 @@ export interface RedeemDialogProps {
   onConfirm: (points: number) => Promise<void>;
 }
 
-// ─── Component ───────────────────────────────────────────────────────────────
+// Component
 
 export function RedeemDialog({
   open,
@@ -58,7 +58,7 @@ export function RedeemDialog({
   isRedeeming = false,
   onConfirm,
 }: RedeemDialogProps) {
-  // Round the user's balance down to the nearest 100 — they can only redeem
+  // Round the user's balance down to the nearest 100 - they can only redeem
   // in multiples of 100 points (the redemption unit).
   const maxRedeemable = Math.max(0, Math.floor(currentPoints / 100) * 100);
   const canRedeem = maxRedeemable >= MIN_REDEMPTION_POINTS;
@@ -133,7 +133,7 @@ export function RedeemDialog({
         </DialogHeader>
 
         {successResult ? (
-          // ── Success state ──
+          // Success state
           <div className="space-y-4 py-2">
             <div className="flex flex-col items-center text-center gap-2 py-4">
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
@@ -170,7 +170,7 @@ export function RedeemDialog({
             </div>
           </div>
         ) : (
-          // ── Redemption form ──
+          // Redemption form
           <div className="space-y-5 py-1">
             {/* ── Available points banner ── */}
             <div className={`rounded-lg bg-gradient-to-br ${tierCfg.gradient} p-4 text-white`}>
