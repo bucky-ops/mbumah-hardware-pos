@@ -160,6 +160,8 @@ async function main() {
             movementType: delta > 0 ? 'PURCHASE' : 'ADJUSTMENT',
             quantity: delta,
             notes: 'v2.13.3 Thika catalog seed — stock alignment',
+            // PURCHASE movements require a non-negative unitCost (WAC recompute)
+            ...(delta > 0 ? { unitCost: Math.round(item.price * COST_RATIO * 100) / 100 } : {}),
           },
         }),
         prisma.product.update({ where: { id: match.id }, data: { quantityInStock: item.stock } }),
