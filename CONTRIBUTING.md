@@ -1,8 +1,7 @@
 # Contributing to Mbumah Hardware POS
 
 Thank you for contributing to **Mbumah Hardware POS & ERP**! This document
-defines the workflow, code style, and review process for all changes —
-especially for the **v2.0.0** development cycle.
+defines the workflow, code style, and review process for all changes.
 
 ---
 
@@ -22,8 +21,8 @@ main              ← production-ready, protected
 
 | Branch           | Purpose                                                | Can push directly? |
 | ---------------- | ------------------------------------------------------ | ------------------ |
-| `main`           | Production release branch                               | **No** — PR only   |
-| `develop`        | Integration / staging                                   | **No** — PR only   |
+| `main`           | Production release branch                               | **No** (PR only)   |
+| `develop`        | Integration / staging                                   | **No** (PR only)   |
 | `feat/*`         | New features                                            | Yes (your own)     |
 | `fix/*`          | Bug fixes                                               | Yes (your own)     |
 | `hotfix/*`       | Urgent production fixes (branched from main)            | Yes (your own)     |
@@ -33,18 +32,18 @@ main              ← production-ready, protected
 ### Branch Protection Rules (configured on GitHub)
 
 **`main`:**
-- ✅ Require a pull request before merging
-- ✅ Require at least **1 approving review**
-- ✅ Require status checks to pass before merging (CI lint + build)
-- ✅ Require branches to be up to date before merging
-- ✅ Restrict direct pushes that bypass a pull request
-- ✅ Restrict force pushes
+- Require a pull request before merging
+- Require at least **1 approving review**
+- Require status checks to pass before merging (CI lint + build)
+- Require branches to be up to date before merging
+- Restrict direct pushes that bypass a pull request
+- Restrict force pushes
 
 **`develop`:**
-- ✅ Require a pull request before merging
-- ✅ Require at least **1 approving review**
-- ✅ Require status checks to pass (CI lint)
-- ⚠️ Force pushes allowed (for rebasing feature branches)
+- Require a pull request before merging
+- Require at least **1 approving review**
+- Require status checks to pass (CI lint)
+- Force pushes allowed (for rebasing feature branches)
 
 ### Hotfix Workflow
 
@@ -57,7 +56,7 @@ Hotfix branches address urgent production bugs:
    git checkout -b hotfix/critical-payment-bug
    ```
 2. **Apply the fix** and commit using `fix(scope): ...` convention.
-3. **Open PRs to BOTH `main` and `develop`** — the fix must reach
+3. **Open PRs to BOTH `main` and `develop`**: the fix must reach
    production and the integration branch:
    ```bash
    git push -u origin hotfix/critical-payment-bug
@@ -77,7 +76,7 @@ Hotfix branches address urgent production bugs:
 
 2. **Develop & commit** using [Conventional Commits](#3-commit-messages).
 
-3. **Self-review** — run `bun run lint` locally; ensure zero warnings.
+3. **Self-review**: run `bun run lint` locally; ensure zero warnings.
 
 4. **Open a PR** against `develop` (not `main`):
    ```bash
@@ -85,22 +84,22 @@ Hotfix branches address urgent production bugs:
    # Open PR on GitHub: base = develop
    ```
 
-5. **PR template** — fill in:
+5. **PR template**; fill in:
    - **Summary** of changes
    - **Related issue** (e.g., `Closes #42`)
    - **Screenshots** (for UI changes)
-   - **Testing** — how you verified (agent-browser steps, manual flows)
-   - **Checklist** — lint passes, no console errors, docs updated
+   - **Testing**: how you verified (agent-browser steps, manual flows)
+   - **Checklist**: lint passes, no console errors, docs updated
 
-6. **Review** — at least 1 approval required. Reviewers check:
+6. **Review**: at least 1 approval required. Reviewers check:
    - Code quality & adherence to stack (Next.js 16, TypeScript, shadcn/ui)
    - RBAC correctness (if touching auth/API routes)
    - Database changes (Prisma schema + `bun run db:push`)
    - No secrets / hardcoded credentials
 
-7. **Merge** — squash-and-merge into `develop`.
+7. **Merge**: squash-and-merge into `develop`.
 
-8. **Release to `main`** — when `develop` is stable and all milestones are
+8. **Release to `main`**: when `develop` is stable and all milestones are
    met, open a final PR: `develop` → `main`. This triggers the Vercel
    production deployment.
 
@@ -115,27 +114,27 @@ Hotfix branches address urgent production bugs:
 | Framework     | Next.js 16 (App Router)                         |
 | Language      | TypeScript 5 (strict)                           |
 | Styling       | Tailwind CSS 4 + shadcn/ui (New York)           |
-| Database      | Prisma ORM (SQLite dev / Neon Postgres prod)    |
+| Database      | Prisma ORM (SQLite for development, Neon PostgreSQL for production) |
 | State         | Zustand (client) + TanStack Query (server)      |
 | Icons         | lucide-react                                    |
 | Auth          | JWT in `localStorage.mbt_token` + CSRF cookie   |
 
 ### Rules
 
-- **TypeScript everywhere** — no `any` without a justification comment.
+- **TypeScript everywhere**: no `any` without a justification comment.
 - **`'use client'` / `'use server'`** directives on every component/route.
 - **shadcn/ui components preferred** over custom implementations. Check
   `src/components/ui/` before building new primitives.
-- **API routes** — every protected route uses `requireAuth()` (or relies on
+- **API routes**: every protected route uses `requireAuth()` (or relies on
   `src/middleware.ts` global Bearer-token enforcement). Never write a raw
-  `fetch()` to a protected endpoint without the `Authorization` header — use
+  `fetch()` to a protected endpoint without the `Authorization` header; use
   the `api.ts` client or an `authedFetch` helper.
-- **Prisma** — schema in `prisma/schema.prisma`; access via
+- **Prisma**: schema in `prisma/schema.prisma`; access via
   `import { db } from '@/lib/db'`. After schema changes, run
   `bun run db:push`.
 - **No indigo/blue colors** unless explicitly requested.
-- **Responsive** — mobile-first; test at 375px, 768px, 1280px.
-- **Sticky footer** — if a `footer` exists, use
+- **Responsive**: mobile-first; test at 375px, 768px, 1280px.
+- **Sticky footer**: if a `footer` exists, use
   `min-h-screen flex flex-col` + `mt-auto` on the footer.
 
 ### ESLint & Formatting
@@ -212,7 +211,7 @@ chore(deps): bump prisma to 6.4.1
 3. Update `prisma/seed.ts` if new seed data is needed.
 4. Document any migration notes in the PR description.
 5. For production (Neon Postgres), the deploy script handles `db:push`
-   automatically — but call it out in the PR if schema changed.
+   automatically, but call it out in the PR if schema changed.
 
 ---
 
@@ -257,10 +256,8 @@ bun run lint || exit 1
 
 ## 7. Questions?
 
-- **Architecture decisions** — see `PROJECT_PLAN_V2.md`.
-- **Audit status** — see the Phase 2 checklist in `PROJECT_PLAN_V2.md`.
-- **Worklog** — `/home/z/my-project/worklog.md` contains the full development
-  history and handover notes.
+- **Architecture decisions**: see `docs/archive/PROJECT_PLAN_V2.md` (historical plan, archived).
+- **Release process**: see `docs/release-process.md`.
 
 ---
 
@@ -270,22 +267,22 @@ bun run lint || exit 1
 
 If the Vercel deployment shows a permanent "Loading..." screen:
 
-1. **Check browser console** for `X.map is not a function` errors — this means
+1. **Check browser console** for `X.map is not a function` errors; this means
    an API response field expected to be an array is `undefined`/`null`.
 2. **Ensure `Array.isArray()` guards** are in every `useQuery` `queryFn` that
    receives array data from the dashboard API.
-3. **Check ErrorBoundary behavior** — if the error overlay is dismissed and
+3. **Check ErrorBoundary behavior**: if the error overlay is dismissed and
    children re-render, the same crash recurs, React unmounts the tree, and
    the server-rendered "Loading..." HTML persists. The ErrorBoundary must
    render a safe fallback when `dismissed=true`.
 4. **Verify environment variables** in Vercel Dashboard → Settings →
    Environment Variables: `DATABASE_URL` (Neon pooled connection string),
    `JWT_SECRET`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`.
-5. **Check Prisma provider** — the `scripts/setup-prisma-provider.mjs` script
+5. **Check Prisma provider**: the `scripts/setup-prisma-provider.mjs` script
    must detect `postgresql://` in `DATABASE_URL` and set the schema provider
    to `postgresql` (not `sqlite`). The `vercel-build` script in `package.json`
    runs this automatically.
-6. **Force-dynamic API routes** — every `src/app/api/**/route.ts` must export
+6. **Force-dynamic API routes**: every `src/app/api/**/route.ts` must export
    `dynamic = 'force-dynamic'` to prevent static pre-rendering during build.
 
 ### Vercel Build Failures
@@ -298,7 +295,7 @@ If the Vercel deployment shows a permanent "Loading..." screen:
 
 ### Database Connection Pooling
 
-Serverless functions (Vercel) open a new connection per invocation. You MUST use
+Serverless functions (Vercel) open a new connection per invocation. You must use
 the **pooled** PgBouncer connection string from Neon/Supabase:
 
 - Neon: append `-pooler` to hostname + `?pgbouncer=true&connection_limit=1`
