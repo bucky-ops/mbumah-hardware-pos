@@ -17,7 +17,7 @@ the entire system means copying that one file to a USB stick.
 
 ## One-click installer (recommended: the "game installer" experience)
 
-On Windows, open the repo folder and **double-click `Install-Mbumah-POS.bat`**.
+On Windows, open the repo folder and **double-click `deploy/windows/Install-Mbumah-POS.bat`**.
 It behaves like a game installer:
 
 1. Finds the app source (this folder, or downloads the latest `main` from GitHub)
@@ -29,9 +29,9 @@ It behaves like a game installer:
 
 For shop-LAN access run it once from a terminal so the LAN IP is baked in:
 ```bat
-Install-Mbumah-POS.bat -UseLan
+deploy/windows/Install-Mbumah-POS.bat -UseLan
 :: or pin the IP:
-Install-Mbumah-POS.bat -LanIp 192.168.1.50
+deploy/windows/Install-Mbumah-POS.bat -LanIp 192.168.1.50
 ```
 
 Daily use afterwards = double-click **Mbumah POS** on the Desktop. Close the
@@ -66,7 +66,7 @@ The wipe runs in a **single atomic transaction**; if anything fails, nothing
 is changed. It verifies `0 sales transactions` remain before reporting success.
 
 Recommended sequence: install → staff trains on demo data → double-click
-**Wipe-Demo-Data.bat** → set `SEED_DATABASE=false` in `.env` → start selling.
+**deploy/windows/Wipe-Demo-Data.bat** → set `SEED_DATABASE=false` in `.env` → start selling.
 
 ---
 
@@ -160,7 +160,7 @@ schtasks /create /tn "Mbumah POS" /sc onlogon /tr ^
 1. Open the POS → log in as `admin@mbumahhardware.co.ke` / `password123`.
 2. **Change the admin password immediately** (Profile → Security).
 3. Let staff train on the demo data as long as needed.
-4. Before the first real sale: double-click **Wipe-Demo-Data.bat** (see the
+4. Before the first real sale: double-click **deploy/windows/Wipe-Demo-Data.bat** (see the
    Go-Live Reset section above).
 5. Set `SEED_DATABASE=false` in `.env`.
 6. M-Pesa: fill Daraja credentials in `.env`, restart. Production callbacks
@@ -218,16 +218,16 @@ Safety rails:
   nightly tasks (Windows scheduled tasks / Linux crontab lines) whenever it
   runs and they are absent, including on installs that predate v2.9.0 and
   just received their first update via the startup check.
-- The ledger is what powers **Rollback-Mbumah-POS.bat**: it lists the
+- The ledger is what powers **deploy/windows/Rollback-Mbumah-POS.bat**: it lists the
   versions the POS has actually been on and reinstates the one you pick.
 
 Run by hand instead of waiting for the schedule (repo root):
 
 ```bat
-Update-Mbumah-POS.bat          REM the same check the nightly task runs, right now
-Update-Mbumah-POS.bat -Force   REM update even outside the dormant window
-Rollback-Mbumah-POS.bat        REM pick a previous version from the ledger
-Rollback-Mbumah-POS.bat -ToVersion v2.8.0
+deploy/windows/Update-Mbumah-POS.bat          REM the same check the nightly task runs, right now
+deploy/windows/Update-Mbumah-POS.bat -Force   REM update even outside the dormant window
+deploy/windows/Rollback-Mbumah-POS.bat        REM pick a previous version from the ledger
+deploy/windows/Rollback-Mbumah-POS.bat -ToVersion v2.8.0
 ```
 
 Manage the scheduled tasks:
@@ -274,7 +274,7 @@ npm run build         # rebuild (SKIP_ENV_VALIDATION=1 is set by the installer; 
 | Store-isolation RLS script | Not applied (Postgres-only feature; irrelevant on a single-device install) |
 | Background jobs | `deploy/nodocker/cron-local.mjs` console window (vs Vercel Cron / compose cron container) |
 | Backups | Copy one file (vs pg_dump) |
-| Demo-data wipe | `Wipe-Demo-Data.bat`, provider-agnostic, works on SQLite and PostgreSQL alike |
+| Demo-data wipe | `deploy/windows/Wipe-Demo-Data.bat`, provider-agnostic, works on SQLite and PostgreSQL alike |
 | Scaling | Single store/terminal set on one laptop; suited to one shop; move to Docker/Postgres when multi-server is needed |
 
 Offline capability is unchanged: selling, inventory, printing, shifts and
