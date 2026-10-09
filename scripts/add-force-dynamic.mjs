@@ -11,7 +11,7 @@
  * Why force-dynamic?
  *   Next.js 16 App Router statically analyzes API routes during `next build`.
  *   If a route doesn't opt out, the build tries to evaluate the route module
- *   to collect page data — which imports `@/lib/db` → `@prisma/client` →
+ *   to collect page data - which imports `@/lib/db` → `@prisma/client` →
  *   tries to read `DATABASE_URL` at build time. With the SKIP_ENV_VALIDATION
  *   flag this no longer crashes, but the route still gets prerendered as a
  *   static artifact (wrong for an API that returns live data). Forcing
@@ -56,7 +56,7 @@ function injectForceDynamic(source) {
     }
   }
   if (lastImportIdx === -1) {
-    // No imports — prepend at the very top.
+    // No imports - prepend at the very top.
     return `${FORCE_DYNAMIC}\n\n${source}`;
   }
   // Insert after the last import, with a blank line before and after.

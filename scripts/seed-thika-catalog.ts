@@ -1,19 +1,17 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — v2.13.3 THIKA BRANCH CATALOG SEED (idempotent)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - v2.13.3 THIKA BRANCH CATALOG SEED (idempotent)
 //
 // Ensures the Thika (THI) branch carries the v2.13.3 spec grid: 11 products
 // with EXACT names / prices / stock, plus the rental Concrete Mixer and the
 // Chain Link roll used by the demo cart.
 //
-// SAFE TO RE-RUN: matches by product NAME inside the branch — existing items
+// SAFE TO RE-RUN: matches by product NAME inside the branch - existing items
 // are corrected (price/stock/category/unit), missing items are created.
 // Stock deltas go through StockMovement (full audit trail), never raw writes.
 //
 // OWNER RUN (laptop kit / sandbox):
 //   DATABASE_URL="postgres://…" bun run scripts/seed-thika-catalog.ts
 //
-// Env: DATABASE_URL (Neon pooled URL) — same one Vercel uses.
+// Env: DATABASE_URL (Neon pooled URL) - same one Vercel uses.
 
 import { PrismaClient } from '@prisma/client';
 

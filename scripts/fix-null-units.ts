@@ -1,13 +1,13 @@
 import { PrismaClient } from '@prisma/client';
 
-// ── v2.12.1 HOTFIX — owner-run data fix: NULL unitType backfill ─────────────
+// v2.12.1 HOTFIX - owner-run data fix: NULL unitType backfill
 // Bug: a batch of products (e.g. Bamburi Cement) was saved with a NULL
 // `unitType`, so the POS rendered a dangling "per " on the product card and
 // empty/"null" unit badges in the cart, catalog and inventory. The UI now
 // falls back safely (src/lib/units.ts), but the data should be corrected at
 // the source too.
 //
-// What it does (idempotent — only touches rows WHERE unitType IS NULL):
+// What it does (idempotent - only touches rows WHERE unitType IS NULL):
 //   • name contains "bamburi" OR the product sits in a cement/concrete
 //     category                        → unitType = 'BAG'
 //   • every other NULL-unit product    → unitType = 'PIECE'
@@ -16,7 +16,7 @@ import { PrismaClient } from '@prisma/client';
 //   DATABASE_URL="postgres://…" npx tsx scripts/fix-null-units.ts
 //   (add --dry-run to preview without writing)
 
-// AUDIT FIX (Finding 1.2 — no hardcoded developer path):
+// AUDIT FIX (Finding 1.2 - no hardcoded developer path):
 // The datasource URL resolves from the environment (DATABASE_URL), with a
 // portable repo-relative fallback for local SQLite use.
 const prisma = new PrismaClient({
@@ -29,7 +29,7 @@ async function main() {
   console.log(`Scanning for products with NULL unitType${DRY_RUN ? ' (DRY RUN — nothing will be written)' : ''}…`);
 
   // `unitType` is schema-required, so NULL rows (legacy/raw inserts) are found
-  // via raw SQL — works identically on Postgres (prod) and SQLite (local).
+  // via raw SQL - works identically on Postgres (prod) and SQLite (local).
   const nullUnitProducts = await prisma.$queryRaw<Array<{ id: string; name: string; sku: string; categoryId: string | null }>>`
     SELECT id, name, sku, "categoryId"
     FROM "Product"
@@ -42,7 +42,7 @@ async function main() {
   console.log(`Found ${nullUnitProducts.length} product(s) with NULL unitType.`);
 
   // Cement/concrete category ids (matched case-insensitively in JS so this
-  // stays provider-agnostic — Postgres `contains` is case-sensitive).
+  // stays provider-agnostic - Postgres `contains` is case-sensitive).
   const categories = await prisma.productCategory.findMany({ select: { id: true, name: true } });
   const cementCategoryIds = new Set(
     categories.filter((c) => /cement|concrete/i.test(c.name)).map((c) => c.id),

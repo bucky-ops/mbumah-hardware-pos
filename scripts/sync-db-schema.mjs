@@ -1,7 +1,5 @@
 #!/usr/bin/env node
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Build-time database schema sync
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Build-time database schema sync
 //
 // ROOT-CAUSE FIX for the production HTTP 500 on POST /api/transactions.
 //
@@ -9,10 +7,10 @@
 //   Every POS checkout returned `500 {"success":false,"error":"An unexpected
 //   error occurred. Please try again."}`. Reproduced locally with a drifted
 //   database: the deployed code writes `SalesTransaction.idempotencyKey`
-//   (and M-Pesa checkouts write `OutboxEvent` rows) — columns/tables added by
+//   (and M-Pesa checkouts write `OutboxEvent` rows) - columns/tables added by
 //   the financial-audit remediation (PRs #12/#14). The Vercel build command
 //   only ran `prisma generate && next build`, so the production Neon database
-//   — originally created with `prisma db push` — never received the new
+//   originally created with `prisma db push` - never received the new
 //   schema objects. First checkout query → Prisma P2022
 //   "The column `idempotencyKey` does not exist in the current database".
 //
@@ -22,15 +20,15 @@
 //   `idempotencyKey @unique` index addition triggers exactly that refusal).
 //
 // THIS SCRIPT (runs in `npm run vercel-build` BEFORE `next build`):
-//   1. `prisma migrate deploy`            — the correct, data-loss-safe path.
+//   1. `prisma migrate deploy` - the correct, data-loss-safe path.
 //      Works on any database with a migration history (fresh Neon branches).
-//   2. FALLBACK `prisma db push`          — one-time drift recovery for
+//   2. FALLBACK `prisma db push` - one-time drift recovery for
 //      databases created via `db push` (no `_prisma_migrations` history).
 //      The fallback NEEDS `--accept-data-loss` because of the unique-index
 //      warning above. This is safe ONLY because the verified prod drift is
 //      purely additive (new nullable column + new table + indexes). The build
 //      fails loudly if even this cannot converge.
-//   3. `prisma migrate resolve --applied` — best-effort: records the baseline
+//   3. `prisma migrate resolve --applied` - best-effort: records the baseline
 //      migration as applied so FUTURE deploys take the clean `migrate deploy`
 //      path (step 1) and the `--accept-data-loss` fallback never runs again.
 //
@@ -39,11 +37,10 @@
 // Actions "Build" check which exports a dummy
 // `postgresql://…@localhost:5432/…` DATABASE_URL purely so the
 // provider auto-detection in setup-prisma-provider.mjs generates the
-// postgresql client — there is no database server in CI, nothing to sync,
+// postgresql client - there is no database server in CI, nothing to sync,
 // and `next build` does not need one). Hard-fail (exit 1) is reserved for
-// the case where the database IS reachable but cannot be converged — that
+// the case where the database IS reachable but cannot be converged - that
 // is the genuine "do not deploy a build that will 500" signal.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { spawnSync } from 'node:child_process';
 import net from 'node:net';
@@ -61,7 +58,7 @@ function run(cmd, args) {
   return result.status === 0;
 }
 
-// ── Reachability gate ────────────────────────────────────────────────────────
+// Reachability gate
 // Probes host:port from DATABASE_URL with a short TCP connect. Unreachable
 // (connection refused / timeout / DNS failure) ⇒ there is no database to
 // sync in this environment: warn loudly and skip (exit 0) so DB-less build
@@ -116,10 +113,10 @@ if (dbUrl && dbUrl.protocol.startsWith('postgres') && dbUrl.hostname) {
   process.exit(0);
 }
 
-// ── DIRECT_URL fallback (CLI schema operations) ──────────────────────────────
+// DIRECT_URL fallback (CLI schema operations)
 // schema.prisma declares `directUrl = env("DIRECT_URL")`. The Prisma CLI
 // (migrate deploy / db push / migrate resolve) resolves it and FAILS with
-// P1012 "Environment variable not found: DIRECT_URL" when absent — which
+// P1012 "Environment variable not found: DIRECT_URL" when absent - which
 // would kill every build in environments that only configure DATABASE_URL.
 // Schema surgery wants a DIRECT (non-pooled) connection, but falling back to
 // DATABASE_URL is strictly better than failing the build: the pre-#15
