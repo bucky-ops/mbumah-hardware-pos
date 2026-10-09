@@ -3,7 +3,7 @@ import { getEtimsConfig, initializeEtimsClient } from '@/lib/etims-service';
 
 export const dynamic = 'force-dynamic';
 
-// POST /api/etims/test-connection — Test eTIMS API connection
+// POST /api/etims/test-connection - Test eTIMS API connection
 export async function POST() {
   try {
     const config = getEtimsConfig();

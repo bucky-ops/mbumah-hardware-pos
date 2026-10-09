@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * JournalEntriesTable — list of journal entries with expandable line items.
+ * JournalEntriesTable - list of journal entries with expandable line items.
  *
  * Extracted from `financial-tab.tsx` to slim down the orchestrator. Renders
  * the journal entries table with status badges, an inline expandable row for

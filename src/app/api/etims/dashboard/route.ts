@@ -4,7 +4,7 @@ import { getEtimsConfig } from '@/lib/etims-service';
 
 export const dynamic = 'force-dynamic';
 
-// GET /api/etims/dashboard — eTIMS summary stats
+// GET /api/etims/dashboard - eTIMS summary stats
 export async function GET() {
   try {
     const [registeredProducts, issuedInvoices, pendingProducts, pendingInvoices] = await Promise.all([

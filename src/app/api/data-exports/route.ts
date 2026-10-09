@@ -1,6 +1,6 @@
 // GET/POST /api/data-exports
 //
-// Data Export Dashboard — list past exports and create new ones.
+// Data Export Dashboard - list past exports and create new ones.
 //
 // Auth pattern mirrors /api/debt-payment-plans:
 //   `withErrorBoundary(withFinancialAuth(handler, ROLES), COMPONENT)`
@@ -37,7 +37,7 @@ const FINANCIAL_READ_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'A
 const FINANCIAL_WRITE_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'] as const;
 
 // AUDIT FIX (Finding 1.2): was the hardcoded '/home/z/my-project/download/
-// exports' — see src/lib/export-paths.ts for why that broke production.
+// exports' - see src/lib/export-paths.ts for why that broke production.
 const EXPORTS_DIR = resolveExportsDir();
 const EXPIRY_DAYS = 7;
 
@@ -56,7 +56,7 @@ const VALID_EXPORT_TYPES: ExportType[] = [
 
 const VALID_FORMATS: ExportFormat[] = ['CSV', 'JSON'];
 
-// ── GET: list exports ────────────────────────────────────────────────────────
+// GET: list exports
 
 async function listExportsHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
@@ -79,7 +79,7 @@ async function listExportsHandler(...args: unknown[]): Promise<Response> {
     try {
       await dataRetention.purgeCategory(exportRetention);
     } catch {
-      // cleanup is best-effort — listing proceeds regardless
+      // cleanup is best-effort - listing proceeds regardless
     }
   }
 
@@ -103,7 +103,7 @@ async function listExportsHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: exports });
 }
 
-// ── POST: create + synchronously process an export ─────────────────────────
+// POST: create + synchronously process an export
 
 async function createExportHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
@@ -154,7 +154,7 @@ async function createExportHandler(...args: unknown[]): Promise<Response> {
     }
   }
   if (dateTo) {
-    // Include the entire end day — set to end of day.
+    // Include the entire end day - set to end of day.
     parsedDateTo = new Date(dateTo);
     if (Number.isNaN(parsedDateTo.getTime())) {
       return Response.json(
@@ -165,7 +165,7 @@ async function createExportHandler(...args: unknown[]): Promise<Response> {
     parsedDateTo.setUTCHours(23, 59, 59, 999);
   }
 
-  // Filters can be an object or a JSON string — normalise to a JSON string for
+  // Filters can be an object or a JSON string - normalise to a JSON string for
   // storage, and to a typed object for the generators.
   let filtersObj: Record<string, unknown> = {};
   if (filters) {
@@ -237,7 +237,7 @@ async function createExportHandler(...args: unknown[]): Promise<Response> {
 
     // DOWNLOAD FIX (v2.5.5): the download endpoint previously did not exist,
     // so every click produced `Download failed (HTTP 404)`. Beyond adding the
-    // route, the payload itself must survive Vercel serverless — the tmp
+    // route, the payload itself must survive Vercel serverless - the tmp
     // filesystem is ephemeral per Lambda instance, so a file written during
     // POST is usually gone (or on another instance) by download time. The
     // generated CSV/JSON text is therefore also stored inline in the DB

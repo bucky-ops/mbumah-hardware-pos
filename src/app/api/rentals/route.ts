@@ -8,7 +8,7 @@ import { getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { LogSeverity, LogComponent, RentalStatus, StockMovementType } from '@/lib/types';
 import { withSessionAuth, getSessionFromRequest } from '@/lib/auth';
 // Task 12-c: canonical financial math. Prisma Decimal `valueOf()` returns a
-// STRING — `currentBalance + deposit` used to STRING-CONCATENATE, and
+// STRING - `currentBalance + deposit` used to STRING-CONCATENATE, and
 // parseFloat() let IEEE-754 dust into the Decimal rate/deposit columns.
 import { toDec, round2 } from '@/lib/utils/financialMath';
 
@@ -78,7 +78,7 @@ async function getRentalsHandler(...args: unknown[]): Promise<Response> {
 
   // Non-blocking status sync: update overdue rentals in the background.
   // Wrapped in try/catch so a write failure (concurrent update, constraint)
-  // never breaks the list read — the response still returns the rentals
+  // never breaks the list read - the response still returns the rentals
   // with corrected in-memory status below.
   if (overdueRentals.length > 0) {
     Promise.all(
@@ -89,11 +89,11 @@ async function getRentalsHandler(...args: unknown[]): Promise<Response> {
             data: { status: RentalStatus.OVERDUE },
           })
           .catch(() => {
-            /* ignore — best-effort status sync */
+            /* ignore - best-effort status sync */
           })
       )
     ).catch(() => {
-      /* ignore — best-effort status sync */
+      /* ignore - best-effort status sync */
     });
   }
 
@@ -150,12 +150,12 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
   } = body;
 
   // AUDIT FIX (governance): the actor identity previously came from the request
-  // body (`createdBy`) — any caller could impersonate another user. Identity is
+  // body (`createdBy`) - any caller could impersonate another user. Identity is
   // now derived from the authenticated session (withSessionAuth above has
   // already validated it; same in-handler pattern as gift-cards/debt routes).
   const session = await getSessionFromRequest(request);
   if (!session) {
-    // Defensive — withSessionAuth already returned 401 for unauthenticated calls.
+    // Defensive - withSessionAuth already returned 401 for unauthenticated calls.
     return Response.json(
       { success: false, error: 'Authentication required.' },
       { status: 401 }
@@ -185,7 +185,7 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Advisory fast-fail only — the AUTHORITATIVE guard is the conditional
+  // Advisory fast-fail only - the AUTHORITATIVE guard is the conditional
   // updateMany inside the transaction below (AUDIT FIX: the old outside-tx
   // check was a read-then-act race that concurrent rentals/checkouts could beat).
   if (Number(product.quantityInStock) < 1) {
@@ -209,7 +209,7 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
 
   const result = await db.$transaction(async (tx) => {
     // AUDIT FIX (oversell): this was a blind `product.update` decrement AFTER
-    // creating the rental, preceded by an outside-the-tx stock check — a
+    // creating the rental, preceded by an outside-the-tx stock check - a
     // concurrent rental/checkout of the last unit could drive stock negative
     // and strand a phantom rental. The claim is now a conditional updateMany
     // (row lock + atomic `gte 1` predicate re-check) that runs FIRST so a
@@ -259,7 +259,7 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
     });
 
         if (deposit > 0) {
-      // AUDIT FIX (integration): read-latest-row lost-update race — derive the
+      // AUDIT FIX (integration): read-latest-row lost-update race - derive the
       // running balance from the SUM of signed drawer amounts (same aggregate
       // pattern as cash-drawer/route.ts and the R6 remediation), never the
       // latest row's possibly-stale balance snapshot.
@@ -270,7 +270,7 @@ async function createRentalHandler(...args: unknown[]): Promise<Response> {
       // Task 12-c: Decimal running balance (was `currentBalance + deposit`, a
       // number + Prisma-Decimal STRING concat). NOTE: CashDrawerLog is an
       // APPEND-ONLY ledger (no mutable balance row), so Prisma's atomic
-      // increment/decrement does not apply — the SUM-derived derivation below
+      // increment/decrement does not apply - the SUM-derived derivation below
       // is the concurrency-safe equivalent (R6 pattern).
       const currentBalanceDec = toDec(balanceAgg._sum.amount ?? 0);
 

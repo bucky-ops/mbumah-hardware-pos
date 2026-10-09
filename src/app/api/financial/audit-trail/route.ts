@@ -1,4 +1,4 @@
-// GET /api/financial/audit-trail — query the immutable audit trail.
+// GET /api/financial/audit-trail - query the immutable audit trail.
 //
 // Query params (all optional): storeId, entityType, entityId, action, userId,
 // dateFrom, dateTo, page, limit. Default: newest 50 entries (capped at 200).

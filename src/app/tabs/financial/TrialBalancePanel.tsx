@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * TrialBalancePanel — Phase 3 sub-tab.
+ * TrialBalancePanel - Phase 3 sub-tab.
  *
  * Provides:
  *   • Generate Trial Balance button → GET /api/financial/trial-balance with
@@ -100,7 +100,7 @@ export default function TrialBalancePanel() {
       params.set('storeId', currentStoreId);
       params.set('asOfDate', asOfDate);
       // AUTH FIX (financial audit): attach the Bearer session token (see
-      // src/lib/api.ts request()) — a bare fetch 401s on this endpoint and
+      // src/lib/api.ts request()) - a bare fetch 401s on this endpoint and
       // the Trial Balance panel never rendered data.
       const tbToken = typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null;
       const res = await fetch(`/api/financial/trial-balance?${params.toString()}`, {

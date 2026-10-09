@@ -1,23 +1,23 @@
 // GET  /api/health/dlq
 // POST /api/health/dlq
 //
-// Phase 6 — Dead Letter Queue observability + admin endpoint.
+// Phase 6 - Dead Letter Queue observability + admin endpoint.
 //
 // GET (any authenticated user):
 //   Returns the current list of DLQ items (with filtering + pagination) AND
-//   a metrics summary. This is the "operations dashboard" view — it shows
+//   a metrics summary. This is the "operations dashboard" view - it shows
 //   which external service calls (SMS, Email, M-Pesa, Webhooks) are stuck
 //   in the dead letter queue, what their status is, and how many retries
 //   they've consumed.
 //
 //   Query params:
-//     ?status=DEAD          — filter by item status (PENDING, RETRYING,
+//     ?status=DEAD - filter by item status (PENDING, RETRYING,
 //                             COMPLETED, DEAD, CANCELLED)
-//     ?targetService=twilio-sms  — filter by target service
-//     ?operationType=SEND_SMS    — filter by operation type
-//     ?storeId=xxx               — filter by store (multi-tenant)
-//     ?limit=50                  — page size (default 50, max 200)
-//     ?offset=0                  — page offset (default 0)
+//     ?targetService=twilio-sms - filter by target service
+//     ?operationType=SEND_SMS - filter by operation type
+//     ?storeId=xxx - filter by store (multi-tenant)
+//     ?limit=50 - page size (default 50, max 200)
+//     ?offset=0 - page offset (default 0)
 //
 //   Response 200:
 //     {
@@ -75,7 +75,7 @@ import { dlq } from '@/lib/dead-letter-queue';
 
 export const dynamic = 'force-dynamic';
 
-// ── GET: list DLQ items + metrics ─────────────────────────────────────────────
+// GET: list DLQ items + metrics
 
 export const GET = requireAuth(async (request: NextRequest, _session) => {
   try {
@@ -85,7 +85,7 @@ export const GET = requireAuth(async (request: NextRequest, _session) => {
     const operationType = url.searchParams.get('operationType') || undefined;
     const storeId = url.searchParams.get('storeId') || undefined;
 
-    // Parse pagination params — clamp to sane bounds
+    // Parse pagination params - clamp to sane bounds
     const limit = Math.min(
       Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10)),
       200,
@@ -118,7 +118,7 @@ export const GET = requireAuth(async (request: NextRequest, _session) => {
   }
 });
 
-// ── POST: admin actions ───────────────────────────────────────────────────────
+// POST: admin actions
 
 type AdminAction = 'retry' | 'retryAll' | 'cancel' | 'purge';
 
@@ -136,7 +136,7 @@ export const POST = requireAuth(
     try {
       const body = (await request.json()) as AdminBody;
 
-      // ── Validate action ─────────────────────────────────────────────────
+      // Validate action
       if (!body.action || !VALID_ACTIONS.has(body.action)) {
         return Response.json(
           {
@@ -149,7 +149,7 @@ export const POST = requireAuth(
 
       const action = body.action;
 
-      // ── retry: retry a single DLQ item by id ────────────────────────────
+      // retry: retry a single DLQ item by id
       // Resets the retry count + status so it gets picked up by the next
       // processor cycle. Useful when an admin knows a specific item can
       // succeed now (e.g. the downstream service was temporarily down).
@@ -188,7 +188,7 @@ export const POST = requireAuth(
         });
       }
 
-      // ── retryAll: re-queue all items (optionally filtered) ──────────────
+      // retryAll: re-queue all items (optionally filtered)
       // Useful when the admin knows a service has recovered and wants to
       // flush the queue immediately. Both PENDING and DEAD items are
       // re-queued (DEAD items get a second chance).
@@ -207,7 +207,7 @@ export const POST = requireAuth(
         });
       }
 
-      // ── cancel: cancel a single DLQ item ────────────────────────────────
+      // cancel: cancel a single DLQ item
       // The item will not be retried. Useful for removing items that should
       // never have been enqueued (e.g. test data, duplicate notifications).
       if (action === 'cancel') {
@@ -245,7 +245,7 @@ export const POST = requireAuth(
         });
       }
 
-      // ── purge: remove old completed/dead/cancelled items ────────────────
+      // purge: remove old completed/dead/cancelled items
       // Keeps the dead_letter_queue table from growing unboundedly.
       // Only items with a `resolvedAt` older than `olderThanDays` are purged.
       if (action === 'purge') {
@@ -283,13 +283,13 @@ export const POST = requireAuth(
   { roles: ['SUPER_ADMIN'] },
 );
 
-// ── Audit log helper ──────────────────────────────────────────────────────────
+// Audit log helper
 //
 // Every admin action on the DLQ is audit-logged. This creates a traceable
-// record of WHO did WHAT and WHEN — required for ISO 27001 A.12.4.1
+// record of WHO did WHAT and WHEN - required for ISO 27001 A.12.4.1
 // (event logging) and for post-incident investigation.
 //
-// Audit logging is best-effort — a logging failure never blocks the admin
+// Audit logging is best-effort - a logging failure never blocks the admin
 // action (the DLQ mutation has already been committed at this point).
 
 async function logAdminAction(
@@ -317,6 +317,6 @@ async function logAdminAction(
       },
     });
   } catch {
-    // Audit logging is best-effort — never block the admin action.
+    // Audit logging is best-effort - never block the admin action.
   }
 }

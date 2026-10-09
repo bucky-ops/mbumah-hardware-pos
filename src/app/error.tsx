@@ -1,6 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Root Error Boundary (App Router)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Root Error Boundary (App Router)
 //
 // This file is the Next.js App Router error boundary for the root segment.
 // When a React component in ANY route throws during render, Next.js unmounts
@@ -13,8 +11,7 @@
 //   3. Report the error to Sentry (when configured) so crashes are aggregated.
 //   4. Log the error to the backend system log for the audit trail.
 //
-// This is a CLIENT component ('use client') — error boundaries must be.
-// ─────────────────────────────────────────────────────────────────────────────
+// This is a CLIENT component ('use client') - error boundaries must be.
 
 'use client';
 
@@ -48,7 +45,7 @@ export default function ErrorBoundary({ error, reset }: ErrorBoundaryProps) {
       }),
       keepalive: true,
     }).catch(() => {
-      // Logging is best-effort — never block the error UI on it.
+      // Logging is best-effort - never block the error UI on it.
     });
 
     // Also attempt a Sentry breadcrumb (client-side SDK, if loaded).

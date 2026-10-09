@@ -1,8 +1,8 @@
 // GET/POST /api/employees
 //
 // Employee management for payroll & HR.
-//   GET  — list employees for a store (filter by status, employmentType)
-//   POST — create a new employee record
+//   GET - list employees for a store (filter by status, employmentType)
+//   POST - create a new employee record
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -13,7 +13,7 @@ import { formatEmployeeCode } from '@/lib/helpers';
 
 export const dynamic = 'force-dynamic';
 
-// ── GET: List employees ──────────────────────────────────────────────────────
+// GET: List employees
 async function listEmployeesHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null }
@@ -118,7 +118,7 @@ export const GET = withErrorBoundary(
   'EMPLOYEES_LIST'
 );
 
-// ── POST: Create a new employee ──────────────────────────────────────────────
+// POST: Create a new employee
 async function createEmployeeHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null; email: string }
@@ -143,12 +143,12 @@ async function createEmployeeHandler(
     );
   }
 
-  // ── Employee staff number (branch-coded) ─────────────────────────
+  // Employee staff number (branch-coded)
   // Format MBM-<branchCode>-E<NNN> so every payslip/leave form traces to
   // its branch. When the caller supplies one it is normalized + checked
   // for uniqueness; otherwise the next per-branch sequence is allocated
   // from the highest existing suffix (e.g. JUJ E007 → E008). The store's
-  // branch code must exist — uncoded stores cannot mint staff numbers.
+  // branch code must exist - uncoded stores cannot mint staff numbers.
   let employeeCode: string | null = null;
   const store = await db.store.findUnique({
     where: { id: storeId },

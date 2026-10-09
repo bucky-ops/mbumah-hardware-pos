@@ -1,10 +1,10 @@
 // GET /api/shifts/[id]/xread
 //
 // X-READ vs Z-READ:
-//   X = NON-RESETTING inquiry — this endpoint is a read-only snapshot of a
+//   X = NON-RESETTING inquiry - this endpoint is a read-only snapshot of a
 //       shift's cash position. It NEVER mutates the shift, the drawer ledger,
 //       or anything else.
-//   Z = close + snapshot — POST /api/shifts/[id]/end closes the shift,
+//   Z = close + snapshot - POST /api/shifts/[id]/end closes the shift,
 //       persists counted vs expected cash, and freezes the final numbers.
 //
 // Response breakdown: startingCash, salesCash, cashIn, cashOut, expectedCash
@@ -14,12 +14,12 @@
 // cashier would use to tune their count, so it is hidden from anyone below
 // owner level:
 //   • role ∉ OWNER_ROLES (SUPER_ADMIN, STORE_OWNER) → expectedCash and
-//     difference are ALWAYS null (default-blind; ?blind=0 cannot widen —
+//     difference are ALWAYS null (default-blind; ?blind=0 cannot widen -
 //     only a super-owner may un-blind).
 //   • Owners see the numbers by default; ?blind=1 forces a blind read for
 //     everyone; ?blind=0 explicitly un-blinds for owners.
 // countedCash/difference: `difference` reveals the variance and is stripped
-// blind; `countedCash` (only present after a Z-read) stays visible — the
+// blind; `countedCash` (only present after a Z-read) stays visible - the
 // cashier entered it themselves.
 
 import { type NextRequest } from 'next/server';
@@ -37,7 +37,7 @@ import { toDec, round2 } from '@/lib/utils/financialMath';
 export const dynamic = 'force-dynamic';
 
 // AUDIT FIX (companion to the shifts auth fix): any store role from
-// PERMISSION_MATRIX may view an X-read — it is a non-destructive inquiry.
+// PERMISSION_MATRIX may view an X-read - it is a non-destructive inquiry.
 const STORE_ROLES: string[] = Object.values(UserRole);
 
 interface RouteContext {
@@ -56,7 +56,7 @@ async function xreadShiftHandler(...args: unknown[]): Promise<Response> {
   const context = args[1] as RouteContext;
   const { id: shiftId } = await context.params;
 
-  // ── v2.6.0 blind-closeout resolution ──
+  // v2.6.0 blind-closeout resolution
   // The wrapper already validated the session; re-derive it for the role
   // check (withSessionAuth does not forward the session to the handler).
   // No session ⇒ fail closed (blind).
@@ -134,7 +134,7 @@ async function xreadShiftHandler(...args: unknown[]): Promise<Response> {
       salesCash,
       cashIn,
       cashOut,
-      // Blind closeout: hidden (null) for non-owner roles — a cashier must
+      // Blind closeout: hidden (null) for non-owner roles - a cashier must
       // count the drawer without knowing the expected figure.
       expectedCash: blind ? null : expectedCash,
       // Only present once the Z-read (shift end) has been performed.

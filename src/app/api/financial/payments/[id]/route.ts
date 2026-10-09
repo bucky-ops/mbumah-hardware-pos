@@ -42,7 +42,7 @@ async function voidPaymentHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // F7-5 remediation: voiding a payment used to flip ONLY the status row —
+  // F7-5 remediation: voiding a payment used to flip ONLY the status row -
   // the original posted journal (Dr Cash/M-Pesa, Cr Revenue) stayed posted, so
   // cash and revenue remained overstated. Classic refund-fraud vector: refund
   // the cash, keep the revenue entry. Now a balanced REVERSING journal entry
@@ -56,7 +56,7 @@ async function voidPaymentHandler(...args: unknown[]): Promise<Response> {
       data: { status: 'REFUNDED' },
     });
 
-    // Post the reversing journal — only when the sale's journal exists and
+    // Post the reversing journal - only when the sale's journal exists and
     // this payment was part of a posted sale (cash/mpesa/debt tenders).
     if (existing.transactionId) {
       const sale = await tx.salesTransaction.findUnique({

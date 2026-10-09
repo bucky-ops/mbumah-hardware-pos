@@ -4,8 +4,8 @@
 //
 // Body:
 //   {
-//     transactionId: string,   // required — the SalesTransaction to submit
-//     dryRun?: boolean,        // optional — if true, returns the mapped payload
+//     transactionId: string,   // required - the SalesTransaction to submit
+//     dryRun?: boolean,        // optional - if true, returns the mapped payload
 //                              //   WITHOUT calling KRA (useful for preview/UI)
 //   }
 //
@@ -43,7 +43,7 @@ import { validateKraPin } from '@/lib/etims-utils';
 export const dynamic = 'force-dynamic';
 
 // AUDIT REMEDIATION (F9-4): the role name 'STORE_MANAGER' does not exist in
-// src/lib/types.ts (actual: BRANCH_MANAGER) — the stale name silently excluded
+// src/lib/types.ts (actual: BRANCH_MANAGER) - the stale name silently excluded
 // branch managers from KRA submission.
 const ALLOWED_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'CASHIER'];
 
@@ -51,7 +51,7 @@ const ALLOWED_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'CASHIER'
  * Map a SalesTransaction + its items to the KRA invoice payload.
  * This is the corrected version of mapTransactionToKraInvoice in
  * kra-helpers.ts (which referenced item.unitPrice / item.discountAmount
- * that don't exist on SaleItem — SaleItem uses pricePerUnit / discountPercent).
+ * that don't exist on SaleItem - SaleItem uses pricePerUnit / discountPercent).
  *
  * We keep this local to the route so the helper module can stay stable
  * (Phase 3 code is already committed); the route is the source of truth for
@@ -73,7 +73,7 @@ async function buildKraInvoicePayload(
   if (!tx) return null;
 
   // AUDIT REMEDIATION (F9-3): Customer.idNumber may hold a National ID
-  // (8-digit) — sending that as the KRA customer PIN produces invalid eTIMS
+  // (8-digit) - sending that as the KRA customer PIN produces invalid eTIMS
   // invoices. Only pass the value through when it matches the KRA PIN format
   // (letter + 9 digits + letter); otherwise send undefined.
   const rawCustomerPin = tx.customer?.idNumber;
@@ -113,7 +113,7 @@ async function buildKraInvoicePayload(
       kraInvoiceNumber: invoiceNumber,
       businessPin,
       issueDate: tx.createdAt.toISOString(),
-      // AUDIT REMEDIATION (F9-3): guarded — National IDs must NOT be sent as PINs.
+      // AUDIT REMEDIATION (F9-3): guarded - National IDs must NOT be sent as PINs.
       customerPin: validCustomerPin,
       customerName: tx.customer?.name || 'Walk-in Customer',
       items,
@@ -152,7 +152,7 @@ async function submitHandler(
     dryRun?: boolean;
   };
 
-  // Resolve the store — prefer the request body, then the session.
+  // Resolve the store - prefer the request body, then the session.
   const url = new URL(request.url);
   const storeId = (body.storeId as string) || url.searchParams.get('storeId') || session.storeId;
   if (!storeId) {
@@ -162,7 +162,7 @@ async function submitHandler(
     );
   }
 
-  // ── 1. Validate transaction ──────────────────────────────────────────────
+  // 1. Validate transaction
   const tx = await db.salesTransaction.findUnique({
     where: { id: transactionId },
     select: { id: true, storeId: true, receiptNumber: true, createdAt: true },
@@ -175,7 +175,7 @@ async function submitHandler(
     );
   }
 
-  // ── 2. Load the store's active KraBusinessProfile ─────────────────────────
+  // 2. Load the store's active KraBusinessProfile
   const profile = await db.kraBusinessProfile.findFirst({
     where: { storeId, isActive: true },
   });
@@ -191,7 +191,7 @@ async function submitHandler(
     );
   }
 
-  // ── 3. Check for an existing InvoiceForKRA row (idempotency) ───────────────
+  // 3. Check for an existing InvoiceForKRA row (idempotency)
   const existing = await db.invoiceForKRA.findUnique({
     where: { transactionId },
   });
@@ -212,10 +212,10 @@ async function submitHandler(
           'Invoice is already in SUBMITTED state. Use GET /api/kra/status?invoiceForKraId= to poll for an update.',
       });
     }
-    // PENDING / FAILED / REJECTED — fall through and retry.
+    // PENDING / FAILED / REJECTED - fall through and retry.
   }
 
-  // ── 4. Compute sequence (per-store daily invoice count + 1) ────────────────
+  // 4. Compute sequence (per-store daily invoice count + 1)
   // KRA requires a unique sequence per business day per PIN. We derive it from
   // the count of invoices already created today for this profile.
   const dayStart = new Date(tx.createdAt);
@@ -231,7 +231,7 @@ async function submitHandler(
   });
   const sequence = todayCount + 1;
 
-  // ── 5. Build the payload ──────────────────────────────────────────────────
+  // 5. Build the payload
   const mapped = await buildKraInvoicePayload(transactionId, profile.businessPin, sequence);
   if (!mapped) {
     return Response.json(
@@ -240,7 +240,7 @@ async function submitHandler(
     );
   }
 
-  // ── 6. Upsert the InvoiceForKRA row ───────────────────────────────────────
+  // 6. Upsert the InvoiceForKRA row
   const kraTaxBreakdown = JSON.stringify({
     items: mapped.payload.items,
     subtotal: mapped.payload.subtotal,
@@ -272,7 +272,7 @@ async function submitHandler(
     });
   }
 
-  // ── 7. Dry-run short-circuit ───────────────────────────────────────────────
+  // 7. Dry-run short-circuit
   if (dryRun) {
     return Response.json({
       success: true,
@@ -285,10 +285,10 @@ async function submitHandler(
     });
   }
 
-  // ── 8. Submit to KRA ───────────────────────────────────────────────────────
+  // 8. Submit to KRA
   const result = await kraApiService.submitInvoice(mapped.payload, profile.id);
 
-  // ── 9. Create the audit KraSubmission row ──────────────────────────────────
+  // 9. Create the audit KraSubmission row
   await db.kraSubmission.create({
     data: {
       storeId,
@@ -303,7 +303,7 @@ async function submitHandler(
     },
   });
 
-  // ── 10. Update the InvoiceForKRA row with the result ───────────────────────
+  // 10. Update the InvoiceForKRA row with the result
   const updatedInvoice = await db.invoiceForKRA.update({
     where: { id: invoiceForKra.id },
     data: {

@@ -4,7 +4,7 @@ import { getEtimsConfig, initializeEtimsClient } from '@/lib/etims-service';
 
 export const dynamic = 'force-dynamic';
 
-// POST /api/etims/register-product — Register a product with KRA eTIMS
+// POST /api/etims/register-product - Register a product with KRA eTIMS
 export async function POST(request: Request) {
   try {
     const body = await request.json();

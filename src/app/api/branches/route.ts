@@ -1,7 +1,7 @@
 // GET/POST /api/branches
 //
 // BRANCH CODES (v2.3.0): every branch carries a short unique code (2-6
-// uppercase letters, derived from the town/county name — e.g. JUJ, THI, RUI,
+// uppercase letters, derived from the town/county name - e.g. JUJ, THI, RUI,
 // NAI, NAK). The code is used in product SKUs, employee staff numbers and
 // stock-movement references so every record traces back to its branch.
 
@@ -53,7 +53,7 @@ async function getBranchesHandler(...args: unknown[]): Promise<Response> {
 async function createBranchHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
 
-  // ── 1. Authenticate the requesting user ──────────────────────────
+  // 1. Authenticate the requesting user
   const authHeader = request.headers.get('authorization');
   const token = authHeader?.replace('Bearer ', '');
 
@@ -93,7 +93,7 @@ async function createBranchHandler(...args: unknown[]): Promise<Response> {
 
   const requestingUser = session.user;
 
-  // ── 2. Authorise: only admin roles may create branches ───────────
+  // 2. Authorise: only admin roles may create branches
   const allowedRoles = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'];
 
   if (!allowedRoles.includes(requestingUser.role)) {
@@ -113,7 +113,7 @@ async function createBranchHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // ── 3. Parse & validate request body ─────────────────────────────
+  // 3. Parse & validate request body
   const body = await request.json();
   const { organizationId, name, location, address, phone, email, taxPin, status } = body;
 
@@ -124,7 +124,7 @@ async function createBranchHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // ── 3b. Branch code: normalize, auto-derive from the branch name when
+  // 3b. Branch code: normalize, auto-derive from the branch name when
   // omitted (first 3 letters, disambiguated with a digit if taken) and
   // guarantee uniqueness inside the organization.
   let code = normalizeBranchCode(body.code);
@@ -152,7 +152,7 @@ async function createBranchHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // ── 4. Check for duplicate branch name in organization ───────────
+  // 4. Check for duplicate branch name in organization
   const existing = await db.store.findFirst({
     where: { organizationId, name },
   });
@@ -164,7 +164,7 @@ async function createBranchHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // ── 5. Create the branch ─────────────────────────────────────────
+  // 5. Create the branch
   const branch = await db.store.create({
     data: {
       organizationId,

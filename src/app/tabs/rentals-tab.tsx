@@ -858,15 +858,15 @@ export default function RentalsTab() {
     total: rentals.length,
   }), [rentals]);
 
-  // Revenue summary — R13 FIX (v2.5.1, decimal-string concat audit):
+  // Revenue summary - R13 FIX (v2.5.1, decimal-string concat audit):
   // every sum now runs through Decimal (toDec) so a string money value can
   // never CONCATENATE again (the old `s + r.securityDeposit` produced
-  // "066701334…"-style garbage the moment any Decimal arrived unserialized —
+  // "066701334…"-style garbage the moment any Decimal arrived unserialized -
   // the exact "Total Deposits Decimal Concatenation" defect reported on
   // Caroline Ochieng's account). Deposit semantics are also corrected:
-  //   • depositsHeld    — deposits on ACTIVE/OVERDUE rentals (real liability)
-  //   • depositsCollected — deposits on every listed rental (all-time)
-  // Returned rentals no longer inflate "Total Deposits" — their deposits
+  //   • depositsHeld - deposits on ACTIVE/OVERDUE rentals (real liability)
+  //   • depositsCollected - deposits on every listed rental (all-time)
+  // Returned rentals no longer inflate "Total Deposits" - their deposits
   // were already released/refunded at return time.
   const revenueSummary = useMemo(() => {
     const zero = toDec(0);
@@ -962,7 +962,7 @@ export default function RentalsTab() {
     openWhatsApp(phone, buildRentalReceiptText(rental));
   };
 
-  // SMS twin of handleSendReceipt — same receipt text opened as an sms:
+  // SMS twin of handleSendReceipt - same receipt text opened as an sms:
   // deep link (openSMS normalizes 07xx → 2547xx).
   const handleSendReceiptSms = (rental: RentalItem) => {
     const phone = rental.customer?.phone || '';

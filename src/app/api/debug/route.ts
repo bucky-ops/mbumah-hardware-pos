@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 // GET /api/debug - Debug endpoint for diagnosing deployment issues
-// DISABLED in production — returns 404
+// DISABLED in production - returns 404
 
 export async function GET() {
   // Block this endpoint entirely in production

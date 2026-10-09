@@ -1,14 +1,14 @@
 // GET /api/health/dlq-demo
 //
-// Phase 6 — Demonstrates the Dead Letter Queue lifecycle.
+// Phase 6 - Demonstrates the Dead Letter Queue lifecycle.
 //
 // This is a PUBLIC health endpoint (no auth required) that creates
 // synthetic DLQ items and returns their state for observability.
 //
 // Query params:
-//   ?failCount=3        — number of DLQ items to create (default 3, max 10)
-//   ?operationType=SEND_SMS — operation type for the items
-//   ?processNow=0       — if 1, also run one processor cycle (default 0)
+//   ?failCount=3 - number of DLQ items to create (default 3, max 10)
+//   ?operationType=SEND_SMS - operation type for the items
+//   ?processNow=0 - if 1, also run one processor cycle (default 0)
 //
 // Example:
 //   curl /api/health/dlq-demo?failCount=3&operationType=SEND_SMS
@@ -32,7 +32,7 @@ import { db } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-// ── Valid operation types ─────────────────────────────────────────────────────
+// Valid operation types
 const VALID_OPERATION_TYPES = new Set<string>(Object.values(DLQOperationType));
 
 /** Map operation type to a plausible target service name. */
@@ -68,7 +68,7 @@ function makePayload(type: string, index: number): string {
 export async function GET(request: NextRequest) {
   const url = request.nextUrl;
 
-  // ── Parse + validate query params ───────────────────────────────────────
+  // Parse + validate query params
   let operationType = url.searchParams.get('operationType') || DLQOperationType.SEND_SMS;
   if (!VALID_OPERATION_TYPES.has(operationType)) {
     operationType = DLQOperationType.SEND_SMS;
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
   );
   const processNow = url.searchParams.get('processNow') === '1';
 
-  // ── Phase A: Create synthetic DLQ items ──────────────────────────────────
+  // Phase A: Create synthetic DLQ items
   const targetService = targetServiceForType(operationType);
   const createdItems: Array<{ id: string; operationType: string; targetService: string; status: string }> = [];
 
@@ -104,7 +104,7 @@ export async function GET(request: NextRequest) {
     createdItems.push({ id, operationType, targetService, status: 'PENDING' });
   }
 
-  // ── Phase B: Optionally run one processor cycle ──────────────────────────
+  // Phase B: Optionally run one processor cycle
   // When processNow=1, we force items to be immediately processable and
   // run one processor cycle. Without registered handlers, items with
   // unknown operation types will be marked DEAD. This demonstrates the
@@ -134,7 +134,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // ── Phase C: Get current metrics ────────────────────────────────────────
+  // Phase C: Get current metrics
   const metrics = await dlq.getMetrics();
 
   return successResponse({

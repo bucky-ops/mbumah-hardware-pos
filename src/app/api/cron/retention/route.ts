@@ -1,20 +1,20 @@
-// GET /api/cron/retention — scheduled execution of the data retention purge.
+// GET /api/cron/retention - scheduled execution of the data retention purge.
 //
-// AUDIT REFERENCE — FINANCIAL_MODULE_AUDIT_REPORT.md (SYS cross-cutting) and
+// AUDIT REFERENCE - FINANCIAL_MODULE_AUDIT_REPORT.md (SYS cross-cutting) and
 // the ISO 27001 A.8.3.2 / ISO 9001 7.5.3 controls implemented in
 // src/lib/data-retention.ts: expired records (past retention + grace period)
 // are purged on a schedule instead of being left to a manual admin POST.
 //
 // DEVIATION NOTE: the audit spec called for `runRetentionPolicies()`, but
 // data-retention.ts exports the `dataRetention` singleton whose
-// `executeAll()` IS the policy runner — it iterates every policy, catches
+// `executeAll()` IS the policy runner - it iterates every policy, catches
 // failures PER CATEGORY (including IMMUTABILITY_VIOLATION errors from the
 // db.ts immutability guard on append-only models) and records each failure
 // in the returned `{ category, purged, success, error }` results, so nothing
 // is double-handled here. executeAll() also emits its own
 // DATA_RETENTION_EXECUTION systemLog summary.
 //
-// SCHEDULE NOTE (Vercel Hobby plan): Hobby clamps crons to a daily minimum —
+// SCHEDULE NOTE (Vercel Hobby plan): Hobby clamps crons to a daily minimum -
 // the nightly "0 3 * * *" expression is fine on every plan.
 //
 // AUTH: same CRON_SECRET gate as /api/cron/outbox (see that file for the
@@ -64,7 +64,7 @@ async function retentionCronHandler(...args: unknown[]): Promise<Response> {
 
   // Cross-tenant by design: retention policies apply org-wide.
   const result = await runWithoutTenant(async () => {
-    // executeAll() try/catches each category internally — a thrown
+    // executeAll() try/catches each category internally - a thrown
     // IMMUTABILITY_VIOLATION (purge attempted on an append-only model)
     // is recorded as { success: false, error } for that category and does
     // not abort the remaining categories.

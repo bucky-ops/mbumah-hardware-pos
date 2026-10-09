@@ -1,5 +1,5 @@
-// PUT  /api/financial/accounts/[id] — update an account's mutable metadata.
-// DELETE /api/financial/accounts/[id] — deactivate an account (never hard delete).
+// PUT  /api/financial/accounts/[id] - update an account's mutable metadata.
+// DELETE /api/financial/accounts/[id] - deactivate an account (never hard delete).
 
 import { type NextRequest } from 'next/server';
 import { withErrorBoundary } from '@/lib/logger';

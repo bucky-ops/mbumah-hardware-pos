@@ -14,7 +14,7 @@ import { toDec, round2 } from '@/lib/utils/financialMath';
 
 export const dynamic = 'force-dynamic';
 
-// AUDIT FIX: shift end (Z-read) is a destructive/close operation — restricted
+// AUDIT FIX: shift end (Z-read) is a destructive/close operation - restricted
 // to manager-or-above per PERMISSION_MATRIX (SUPER_ADMIN, STORE_OWNER,
 // BRANCH_MANAGER). Viewing remains open to any store role (see xread route).
 const MANAGER_UP_ROLES: string[] = [
@@ -41,7 +41,7 @@ interface ShiftCashBreakdown {
 /**
  * AUDIT FIX: shift.totalSales was never written anywhere, so the old
  * `expected = startingCash + totalSales (= 0)` made cashDifference fiction.
- * CashDrawerLog has no shiftId (schema ~803-809) — the drawer contribution of
+ * CashDrawerLog has no shiftId (schema ~803-809) - the drawer contribution of
  * a shift is derived by windowing on storeId + createdAt within
  * [shift.startedAt, now], using the audit-approved formula:
  *   expectedCash = startingCash + SUM(SALE) + SUM(CASH_IN) - SUM(CASH_OUT)
@@ -150,7 +150,7 @@ async function endShiftHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // ── Z-READ computation (close + snapshot; X-read counterpart never mutates) ──
+  // Z-READ computation (close + snapshot; X-read counterpart never mutates)
   // AUDIT FIX: real expected cash from the drawer ledger instead of the
   // never-written shift.totalSales (was always 0).
   const endedAt = new Date();
@@ -215,7 +215,7 @@ async function endShiftHandler(...args: unknown[]): Promise<Response> {
   });
 
   // v2.6.0: tamper-evident CLOSE audit entry for the shift closeout (Z-read).
-  // Best-effort — the shift is already persisted; a chained-HMAC audit row
+  // Best-effort - the shift is already persisted; a chained-HMAC audit row
   // records WHO closed the shift and the revealed variance. oldValues/
   // newValues are plain JSON numbers (never Decimal).
   try {

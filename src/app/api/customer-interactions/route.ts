@@ -216,7 +216,7 @@ async function createCustomerInteractionHandler(...args: unknown[]): Promise<Res
 }
 
 // AUDIT FIX (Task 3-d): session-validated (was Bearer-presence only).
-// Any store role — CRM interaction logging is part of the POS flow.
+// Any store role - CRM interaction logging is part of the POS flow.
 export const GET = withErrorBoundary(
   withSessionAuth(getCustomerInteractionsHandler),
   'CUSTOMER_INTERACTIONS_LIST',

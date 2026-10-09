@@ -33,7 +33,7 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 
-// ─── Helpers ────────────────────────────────────────────────
+// Helpers
 
 function filingStatusBadge(status: TaxFilingItem['status']) {
   const map: Record<string, { label: string; className: string }> = {
@@ -54,7 +54,7 @@ function taxTypeName(type: string) {
   return map[type] || type;
 }
 
-// ─── Create / Edit Tax Category Dialog ──────────────────────
+// Create / Edit Tax Category Dialog
 
 function TaxCategoryDialog({
   open,
@@ -152,7 +152,7 @@ function TaxCategoryDialog({
   );
 }
 
-// ─── Create Tax Filing Dialog ───────────────────────────────
+// Create Tax Filing Dialog
 
 function TaxFilingDialog({
   open,
@@ -273,7 +273,7 @@ function TaxFilingDialog({
   );
 }
 
-// ─── Filing Detail Dialog ───────────────────────────────────
+// Filing Detail Dialog
 
 function FilingDetailDialog({
   filing,
@@ -343,7 +343,7 @@ function FilingDetailDialog({
   );
 }
 
-// ─── Main Component ─────────────────────────────────────────
+// Main Component
 
 export default function TaxTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);

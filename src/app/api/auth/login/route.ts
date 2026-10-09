@@ -13,7 +13,7 @@
 //   2. Inner try/catch (DB query): wraps the first `db.user.findUnique` call
 //      so DB-level failures (missing table, connection timeout, wrong
 //      provider, exhausted pool) return a CLEAR JSON error with the Prisma
-//      error code + a remediation hint — visible in the browser Network tab
+//      error code + a remediation hint - visible in the browser Network tab
 //      when EXPOSE_ERRORS=true.
 //
 //   3. Outer try/catch (withErrorBoundary): wraps the ENTIRE handler so any
@@ -28,7 +28,7 @@
 import { type NextRequest } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
-import { env } from '@/lib/env'; // Lazy env validation — fails at call site, not import
+import { env } from '@/lib/env'; // Lazy env validation - fails at call site, not import
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { isRateLimited } from '@/lib/rate-limit';
@@ -44,7 +44,7 @@ import { sanitizeInput, getClientIp } from '@/lib/security';
 export const dynamic = 'force-dynamic';
 
 // Reference `env` so the import isn't tree-shaken. The env module uses LAZY
-// validation (Proxy), so this import NEVER throws — validation runs on first
+// validation (Proxy), so this import NEVER throws - validation runs on first
 // `env.X` property access inside the handler, where withErrorBoundary catches it.
 void env;
 
@@ -77,13 +77,13 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const requestStartTime = Date.now();
 
-  // ── OUTER try/catch: catches ALL errors (env validation, DB, bcrypt, etc.) ──
+  // OUTER try/catch: catches ALL errors (env validation, DB, bcrypt, etc.)
   // The withErrorBoundary wrapper provides this, but we ALSO add an explicit
   // console.error here so the FULL error object (name, message, stack, code)
-  // is guaranteed to appear in Vercel function logs — even if the withErrorBoundary's
+  // is guaranteed to appear in Vercel function logs - even if the withErrorBoundary's
   // systemLog() call fails (e.g. DB is down).
   try {
-    // ── Touch env to trigger lazy validation EARLY ──
+    // Touch env to trigger lazy validation EARLY
     // This ensures any EnvValidationError is thrown HERE (inside the try/catch),
     // not deeper in the handler where it might be harder to diagnose.
     // We access DATABASE_URL because it's the only REQUIRED var.
@@ -146,7 +146,7 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
     // When EXPOSE_ERRORS=true is set in the environment, the full Prisma error
     // message + code (e.g. P1003 "table does not exist", P1001 "connection
     // lost", P1009 "database does not exist") is included in the response body
-    // so you can see EXACTLY what's wrong from the browser Network tab — no
+    // so you can see EXACTLY what's wrong from the browser Network tab - no
     // need to dig through Vercel logs.
     let user;
     try {
@@ -158,7 +158,7 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
         },
       });
     } catch (dbError) {
-      // Log the FULL DB error to Vercel function logs — this is critical for
+      // Log the FULL DB error to Vercel function logs - this is critical for
       // diagnosing production DB issues that don't surface in the HTTP response.
       console.error('[AUTH_LOGIN_DB_ERROR]', {
         name: dbError instanceof Error ? dbError.name : typeof dbError,
@@ -342,7 +342,7 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
       },
     });
   } catch (error) {
-    // ── CATCH-ALL: log the FULL error object to Vercel function logs ──
+    // CATCH-ALL: log the FULL error object to Vercel function logs
     //
     // This catches:
     //   • EnvValidationError (from the `void env.DATABASE_URL` touch above)

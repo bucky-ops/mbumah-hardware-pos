@@ -38,7 +38,7 @@ async function voidJournalEntryHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // F7-3 remediation: the API void now DELEGATES to voidJournalEntry() —
+  // F7-3 remediation: the API void now DELEGATES to voidJournalEntry() -
   // the audited helper that posts a balanced REVERSING entry, requires a
   // meaningful reason, and writes an AuditLog row inside the same
   // transaction. The previous inline UPDATE-void had no reversal, no reason,

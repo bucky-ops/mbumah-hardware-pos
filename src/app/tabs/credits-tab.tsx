@@ -163,7 +163,7 @@ export default function CreditsTab() {
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
-  // Debounce search (300ms) — search is client-side; this prevents the filter
+  // Debounce search (300ms) - search is client-side; this prevents the filter
   // from running on every keystroke for large ledgers.
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -450,7 +450,7 @@ export default function CreditsTab() {
     }
   }
 
-  // SMS twin of handleSendCreditWhatsApp — compact (~<=320 chars) sms: deep
+  // SMS twin of handleSendCreditWhatsApp - compact (~<=320 chars) sms: deep
   // link built client-side; openSMS normalizes 07xx → 2547xx.
   async function handleSendCreditSms(entry: CustomerCreditItem) {
     try {
@@ -485,7 +485,7 @@ export default function CreditsTab() {
       const docNo = entry.reference || entry.id.slice(0, 8).toUpperCase();
       const store = resolveDocumentStore(currentStoreId);
       const qrDataUrl = await buildDocumentQrDataUrl(
-        // v2.10.0: KEEP the self-contained verify string — this docNo is a
+        // v2.10.0: KEEP the self-contained verify string - this docNo is a
         // customer-credit LEDGER reference (not an invoice document number),
         // so a /r/<docNo> link would 404 when scanned.
         buildDocumentQrPayload('CREDIT_NOTE', docNo, {

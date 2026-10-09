@@ -39,7 +39,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-// ── Badge Configs ──────────────────────────────────────────
+// Badge Configs
 
 const CHANNEL_BADGE: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   WHATSAPP: {
@@ -110,7 +110,7 @@ const STATUS_BADGE: Record<string, { label: string; color: string; icon: React.E
   },
 };
 
-// ── Message Templates ──────────────────────────────────────
+// Message Templates
 
 const MESSAGE_TEMPLATES = [
   {
@@ -178,7 +178,7 @@ const MESSAGE_TEMPLATES = [
   },
 ];
 
-// ── Kenyan Holiday / Bulk Broadcast templates ──────────────────────────────
+// Kenyan Holiday / Bulk Broadcast templates
 // One-click fill buttons in the Bulk Broadcast tab. Each `content` is sent
 // verbatim to every recipient in the chosen audience.
 
@@ -231,7 +231,7 @@ const AUDIENCE_LABELS: Record<BulkAudience, string> = {
   LOYALTY_MEMBERS: 'Loyalty members',
 };
 
-// ── Main Component ─────────────────────────────────────────
+// Main Component
 
 export default function MessagingTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
@@ -239,17 +239,17 @@ export default function MessagingTab() {
   const queryClient = useQueryClient();
   const [activeSubTab, setActiveSubTab] = useState('dashboard');
 
-  // ── Pagination State ────────────────────────────────────
+  // Pagination State
   const [historyPage, setHistoryPage] = useState(1);
   const historyPageSize = 10;
 
-  // ── Filter State ────────────────────────────────────────
+  // Filter State
   const [filterChannel, setFilterChannel] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // ── Send Message Dialog State ───────────────────────────
+  // Send Message Dialog State
   const [showSendDialog, setShowSendDialog] = useState(false);
   const [sendForm, setSendForm] = useState({
     customerId: '',
@@ -261,15 +261,15 @@ export default function MessagingTab() {
   });
   const [lastWaLink, setLastWaLink] = useState<string | null>(null);
 
-  // ── Debt Reminder Dialog State ──────────────────────────
+  // Debt Reminder Dialog State
   const [showDebtReminderDialog, setShowDebtReminderDialog] = useState(false);
   const [selectedDebtCustomerIds, setSelectedDebtCustomerIds] = useState<Set<string>>(new Set());
 
-  // ── Balance Update Dialog State ─────────────────────────
+  // Balance Update Dialog State
   const [showBalanceDialog, setShowBalanceDialog] = useState(false);
   const [selectedBalanceCustomerIds, setSelectedBalanceCustomerIds] = useState<Set<string>>(new Set());
 
-  // ── Bulk / Holiday Broadcast State ──────────────────────
+  // Bulk / Holiday Broadcast State
   const [bulkMessage, setBulkMessage] = useState('');
   const [bulkSubject, setBulkSubject] = useState('');
   const [bulkAudience, setBulkAudience] = useState<BulkAudience>('CUSTOMERS_WITH_PHONES');
@@ -277,7 +277,7 @@ export default function MessagingTab() {
   const [bulkScheduledAt, setBulkScheduledAt] = useState('');
   const [bulkResult, setBulkResult] = useState<BulkMessageResult | null>(null);
 
-  // ── Queries ─────────────────────────────────────────────
+  // Queries
 
   const messagesQuery = useQuery({
     queryKey: ['messages', currentStoreId, filterChannel, filterStatus, filterType],
@@ -310,7 +310,7 @@ export default function MessagingTab() {
     enabled: !!currentStoreId,
   });
 
-  // ── Computed Data ───────────────────────────────────────
+  // Computed Data
 
   const messages = Array.isArray(messagesQuery.data?.data) ? messagesQuery.data.data : [];
   const customers = Array.isArray(customersQuery.data?.data) ? customersQuery.data.data : [];
@@ -396,14 +396,14 @@ export default function MessagingTab() {
     return Array.from(map.values());
   }, [outstandingDebts, overdueDebts]);
 
-  // ── Customer lookup ─────────────────────────────────────
+  // Customer lookup
 
   const selectedCustomer = useMemo(() => {
     if (!sendForm.customerId) return null;
     return customers.find((c) => c.id === sendForm.customerId) ?? null;
   }, [customers, sendForm.customerId]);
 
-  // ── Mutations ───────────────────────────────────────────
+  // Mutations
 
   const sendMessageMutation = useMutation({
     mutationFn: (data: { customerId?: string; phone: string; channel: 'SMS' | 'WHATSAPP' | 'BOTH'; messageType: 'DEBT_REMINDER' | 'PAYMENT_CONFIRMATION' | 'BALANCE_UPDATE' | 'PROMOTION' | 'CUSTOM'; subject?: string; content: string; storeId?: string }) =>
@@ -450,7 +450,7 @@ export default function MessagingTab() {
     },
   });
 
-  // ── Bulk Broadcast Mutation ─────────────────────────────
+  // Bulk Broadcast Mutation
   // Calls messagingApi.bulk({ storeId, message, channel, audience, subject,
   // scheduledAt }) and surfaces a per-recipient results panel.
   const sendBulkBroadcastMutation = useMutation({
@@ -496,7 +496,7 @@ export default function MessagingTab() {
     },
   });
 
-  // ── Handlers ────────────────────────────────────────────
+  // Handlers
 
   function resetSendForm() {
     setSendForm({
@@ -636,7 +636,7 @@ export default function MessagingTab() {
     });
   }
 
-  // ── Render ──────────────────────────────────────────────
+  // Render
 
   return (
     <div className="space-y-6">
@@ -1594,7 +1594,7 @@ export default function MessagingTab() {
                                   </a>
                                 </Button>
                               ) : bulkChannel === 'SMS' && r.phone ? (
-                                // SMS broadcasts return no server waLink — open an
+                                // SMS broadcasts return no server waLink - open an
                                 // sms: deep link for this recipient client-side
                                 // (openSMS normalizes 07xx → 2547xx).
                                 <Button

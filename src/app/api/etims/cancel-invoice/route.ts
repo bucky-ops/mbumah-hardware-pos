@@ -7,7 +7,7 @@
 // Body:
 //   { invoiceNumber: string, reason: string }
 //
-// Auth: SUPER_ADMIN, STORE_OWNER (managers only — cancellation is a financial
+// Auth: SUPER_ADMIN, STORE_OWNER (managers only - cancellation is a financial
 // event that requires approval).
 //
 // Flow:
@@ -63,7 +63,7 @@ async function cancelInvoiceHandler(
     return Response.json({ success: false, error: 'storeId is required.' }, { status: 400 });
   }
 
-  // ── 1. Find the SalesTransaction ──────────────────────────────────────────
+  // 1. Find the SalesTransaction
   const tx = await db.salesTransaction.findFirst({
     where: { etimsInvoiceNumber: invoiceNumber, storeId },
     select: { id: true, receiptNumber: true, etimsStatus: true },
@@ -76,7 +76,7 @@ async function cancelInvoiceHandler(
     );
   }
 
-  // ── 2. Status guard ────────────────────────────────────────────────────────
+  // 2. Status guard
   if (tx.etimsStatus !== EtimsInvoiceStatus.ISSUED) {
     return Response.json(
       {
@@ -87,7 +87,7 @@ async function cancelInvoiceHandler(
     );
   }
 
-  // ── 3. Load eTIMS client ──────────────────────────────────────────────────
+  // 3. Load eTIMS client
   const client = await initializeEtimsClientFromStore(storeId);
   if (!client) {
     return Response.json(
@@ -96,10 +96,10 @@ async function cancelInvoiceHandler(
     );
   }
 
-  // ── 4. Cancel via KRA ─────────────────────────────────────────────────────
+  // 4. Cancel via KRA
   const result = await client.cancelInvoice(invoiceNumber, reason);
 
-  // ── 5. Persist status ─────────────────────────────────────────────────────
+  // 5. Persist status
   if (result.success) {
     await db.salesTransaction.update({
       where: { id: tx.id },
@@ -107,7 +107,7 @@ async function cancelInvoiceHandler(
     });
   }
 
-  // ── 6. Audit log ──────────────────────────────────────────────────────────
+  // 6. Audit log
   await systemLog({
     action: result.success ? 'ETIMS_INVOICE_CANCELLED' : 'ETIMS_INVOICE_CANCEL_FAILED',
     component: LogComponent.PAYMENT,

@@ -63,7 +63,7 @@ async function getBankReconciliationsHandler(...args: unknown[]): Promise<Respon
         bankAccount: {
           select: { id: true, bankName: true, accountName: true, accountNumber: true, storeId: true, currentBalance: true },
         },
-        // AUDIT REMEDIATION (F7-8): removed the `transactions` include —
+        // AUDIT REMEDIATION (F7-8): removed the `transactions` include -
         // BankReconciliation has no such relation in prisma/schema.prisma, so
         // PrismaClientValidationError 500'd every GET. Linked SalesTransactions
         // are reachable via bankAccount (BankAccount→SalesTransaction), not

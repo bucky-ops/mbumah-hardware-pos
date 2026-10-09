@@ -1357,11 +1357,11 @@ function POActions({ po, storeId: _storeId }: { po: PurchaseOrderListItem; store
   );
 }
 
-// ─── Send Order Dialog ─────────────────────────────────────────────────────
+// Send Order Dialog
 //
 // Send a purchase order (or a custom message) to a supplier via WhatsApp or
 // Email. Calls suppliersApi.sendOrder(id, { channel, purchaseOrderId, message })
-// which returns { waLink, channel, recipient, message, subject } — opens the
+// which returns { waLink, channel, recipient, message, subject } - opens the
 // waLink in a new tab on success.
 
 function SendOrderDialog({
@@ -1376,7 +1376,7 @@ function SendOrderDialog({
   storeId: string;
 }) {
   const queryClient = useQueryClient();
-  // Lazy initialisers — when the parent remounts this dialog with a new `key`
+  // Lazy initialisers - when the parent remounts this dialog with a new `key`
   // (per supplier.id), these run once with the new supplier so the form
   // pre-fills correctly. Avoids setState-in-effect.
   const [channel, setChannel] = useState<'WHATSAPP' | 'EMAIL'>('WHATSAPP');
@@ -1437,7 +1437,7 @@ function SendOrderDialog({
         try {
           window.open(result.waLink, '_blank');
         } catch {
-          /* pop-up blocked — link is also visible in the success toast */
+          /* pop-up blocked - link is also visible in the success toast */
         }
       }
       queryClient.invalidateQueries({ queryKey: ['messages', storeId] });

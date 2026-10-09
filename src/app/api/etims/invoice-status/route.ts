@@ -5,7 +5,7 @@
 // row's error message.
 //
 // Query params:
-//   invoiceNumber — required (KRA invoice number, not the internal tx id)
+//   invoiceNumber - required (KRA invoice number, not the internal tx id)
 //
 // Auth: any authenticated user (cashiers may poll status during a shift).
 //
@@ -43,7 +43,7 @@ async function invoiceStatusHandler(
     return Response.json({ success: false, error: 'storeId is required.' }, { status: 400 });
   }
 
-  // ── 1. Find the SalesTransaction ──────────────────────────────────────────
+  // 1. Find the SalesTransaction
   const tx = await db.salesTransaction.findFirst({
     where: { etimsInvoiceNumber: invoiceNumber, storeId },
     select: { id: true, receiptNumber: true, etimsStatus: true, etimsInvoiceNumber: true },
@@ -56,7 +56,7 @@ async function invoiceStatusHandler(
     );
   }
 
-  // ── 2. Load eTIMS client ──────────────────────────────────────────────────
+  // 2. Load eTIMS client
   const client = await initializeEtimsClientFromStore(storeId);
   if (!client) {
     return Response.json(
@@ -65,10 +65,10 @@ async function invoiceStatusHandler(
     );
   }
 
-  // ── 3. Query KRA ──────────────────────────────────────────────────────────
+  // 3. Query KRA
   const result = await client.getInvoiceStatus(invoiceNumber);
 
-  // ── 4. Persist status update ──────────────────────────────────────────────
+  // 4. Persist status update
   if (result.success) {
     await db.salesTransaction.update({
       where: { id: tx.id },
@@ -76,7 +76,7 @@ async function invoiceStatusHandler(
     });
   }
 
-  // ── 5. Audit log ──────────────────────────────────────────────────────────
+  // 5. Audit log
   await systemLog({
     action: 'ETIMS_INVOICE_STATUS_QUERIED',
     component: LogComponent.PAYMENT,

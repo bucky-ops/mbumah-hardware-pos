@@ -1,14 +1,14 @@
 'use client';
 
 /**
- * MBUMAH HARDWARE POS — Payroll & HR Tab
+ * MBUMAH HARDWARE POS - Payroll & HR Tab
  *
  * Sub-tabs:
- *   1. Employees   — HR directory with full CRUD + Kenyan statutory fields (KRA/NSSF/NHIF)
- *   2. Leave       — Leave requests with approval workflow + leave-type catalog
- *   3. Pay Periods — Payroll cycle management (MONTHLY/WEEKLY/BI_WEEKLY)
- *   4. Pay Runs    — Payroll execution with gross/deductions/net breakdown
- *   5. Attendance  — Time tracking (clock in/out, hours, status)
+ *   1. Employees - HR directory with full CRUD + Kenyan statutory fields (KRA/NSSF/NHIF)
+ *   2. Leave - Leave requests with approval workflow + leave-type catalog
+ *   3. Pay Periods - Payroll cycle management (MONTHLY/WEEKLY/BI_WEEKLY)
+ *   4. Pay Runs - Payroll execution with gross/deductions/net breakdown
+ *   5. Attendance - Time tracking (clock in/out, hours, status)
  *
  * Backend APIs (all require Bearer + CSRF headers, return { success, data }):
  *   /api/employees, /api/leave-types, /api/leaves,
@@ -58,7 +58,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 type SubTab = 'employees' | 'leave' | 'periods' | 'runs' | 'attendance';
 
@@ -183,7 +183,7 @@ interface AttendanceRecord {
   notes: string | null;
 }
 
-// ── API helper ───────────────────────────────────────────────────────────────
+// API helper
 
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null;
@@ -205,7 +205,7 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   return json.data as T;
 }
 
-// ── Status badge helpers ─────────────────────────────────────────────────────
+// Status badge helpers
 
 const STATUS_STYLES: Record<string, string> = {
   ACTIVE: 'bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-900',
@@ -252,7 +252,7 @@ function EmploymentTypeBadge({ type }: { type: string }) {
   );
 }
 
-// ── Empty / Loading / Error states ───────────────────────────────────────────
+// Empty / Loading / Error states
 
 function EmptyState({ icon: Icon, title, description, action }: {
   icon: React.ElementType;
@@ -292,7 +292,7 @@ function TableSkeleton({ rows = 5 }: { rows?: number }) {
   );
 }
 
-// ── Stat Card ────────────────────────────────────────────────────────────────
+// Stat Card
 
 function StatCard({ icon: Icon, label, value, accent }: {
   icon: React.ElementType;
@@ -319,9 +319,7 @@ function StatCard({ icon: Icon, label, value, accent }: {
   );
 }
 
-// ════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
-// ════════════════════════════════════════════════════════════════════════════
 
 export default function PayrollTab() {
   const [subTab, setSubTab] = useState<SubTab>('employees');
@@ -372,9 +370,7 @@ export default function PayrollTab() {
   );
 }
 
-// ════════════════════════════════════════════════════════════════════════════
 // 1. EMPLOYEES SUB-TAB
-// ════════════════════════════════════════════════════════════════════════════
 
 interface EmployeeFormState {
   firstName: string; lastName: string; email: string; phone: string;
@@ -428,7 +424,7 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  // EMPLOYEE-CRUD FIX (2026-09-10): editing previously re-POSTed the form —
+  // EMPLOYEE-CRUD FIX (2026-09-10): editing previously re-POSTed the form -
   // creating a DUPLICATE employee instead of updating the record (the old
   // comment admitted "editing would use PUT /api/employees/[id]", which did
   // not exist). Edits now PATCH /api/employees/[id]; termination (delete)
@@ -531,7 +527,7 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
     };
     if (editingId) {
       // EMPLOYEE-CRUD FIX: real update via PATCH /api/employees/[id]
-      // (storeId is immutable on the detail route — strip it from the payload).
+      // (storeId is immutable on the detail route - strip it from the payload).
       const patchBody: Record<string, unknown> = { ...payload };
       delete patchBody.storeId;
       updateMutation.mutate({ id: editingId, payload: patchBody });
@@ -714,7 +710,7 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
   );
 }
 
-// ── Employee Form Dialog ─────────────────────────────────────────────────────
+// Employee Form Dialog
 
 function EmployeeFormDialog({ open, onOpenChange, form, setForm, editingId, onSubmit, saving }: {
   open: boolean;
@@ -863,7 +859,7 @@ function EmployeeFormDialog({ open, onOpenChange, form, setForm, editingId, onSu
   );
 }
 
-// ── Employee Detail Dialog ───────────────────────────────────────────────────
+// Employee Detail Dialog
 
 function EmployeeDetailDialog({ employee, onClose }: { employee: Employee | null; onClose: () => void }) {
   if (!employee) return null;
@@ -950,9 +946,7 @@ function DetailItem({ icon: Icon, label, value, highlight }: {
   );
 }
 
-// ════════════════════════════════════════════════════════════════════════════
 // 2. LEAVE SUB-TAB
-// ════════════════════════════════════════════════════════════════════════════
 
 function LeaveSubTab({ storeId }: { storeId: string }) {
   const qc = useQueryClient();
@@ -1109,9 +1103,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
   );
 }
 
-// ════════════════════════════════════════════════════════════════════════════
 // 3. PAY PERIODS SUB-TAB
-// ════════════════════════════════════════════════════════════════════════════
 
 interface PeriodForm {
   name: string; startDate: string; endDate: string; payDate: string; periodType: string; notes: string;
@@ -1273,9 +1265,7 @@ function PeriodsSubTab({ storeId }: { storeId: string }) {
   );
 }
 
-// ════════════════════════════════════════════════════════════════════════════
 // 4. PAY RUNS SUB-TAB
-// ════════════════════════════════════════════════════════════════════════════
 
 interface RunForm {
   payrollPeriodId: string; runType: string; processImmediately: boolean;
@@ -1490,9 +1480,7 @@ function RunsSubTab({ storeId }: { storeId: string }) {
   );
 }
 
-// ════════════════════════════════════════════════════════════════════════════
 // 5. ATTENDANCE SUB-TAB
-// ════════════════════════════════════════════════════════════════════════════
 
 function AttendanceSubTab({ storeId }: { storeId: string }) {
   const qc = useQueryClient();

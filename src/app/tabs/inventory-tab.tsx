@@ -189,9 +189,9 @@ export default function InventoryTab() {
   const [stockAdjustReason, setStockAdjustReason] = useState('');
   const currentStoreId = useAppStore((s) => s.currentStoreId);
   const queryClient = useQueryClient();
-  // ── v2.12.5 RBAC: cost/margin visibility ──
+  // v2.12.5 RBAC: cost/margin visibility
   // The products API strips costPrice to null for roles without
-  // inventory.view.cost (CASHIER / ACCOUNTANT). Render "•••" for those —
+  // inventory.view.cost (CASHIER / ACCOUNTANT). Render "•••" for those -
   // never 0 or a misleading margin.
   const authUser = useAuthStore((s) => s.user);
   const canViewCost = canFeature(authUser?.role, 'inventory.view.cost');
@@ -236,10 +236,10 @@ export default function InventoryTab() {
     isRental: false, isBundle: false,
   });
 
-  // ── SKU/BARCODE AUTOGENERATION (v2.5.2) ─────────────────────────────────
+  // SKU/BARCODE AUTOGENERATION (v2.5.2)
   // Tracks whether the current SKU / barcode value came from the generator:
   // re-selecting a category refreshes generated values but NEVER clobbers
-  // something the user typed by hand (user edit wins — standard form UX).
+  // something the user typed by hand (user edit wins - standard form UX).
   const skuGeneratedRef = useRef(false);
   const barcodeGeneratedRef = useRef(false);
   // Store codes for branch-coded SKU drafts (MBM-JUJ-CEM-0042). Fetched once
@@ -282,7 +282,7 @@ export default function InventoryTab() {
     setNewProduct((prev) => ({ ...prev, barcode: generateEan13Barcode() }));
   };
 
-  /** Category select handler — auto-generates codes that are still empty. */
+  /** Category select handler - auto-generates codes that are still empty. */
   const handleNewProductCategoryChange = (v: string) => {
     setNewProduct((prev) => {
       const next = { ...prev, categoryId: v };
@@ -298,7 +298,6 @@ export default function InventoryTab() {
       return next;
     });
   };
-  // ────────────────────────────────────────────────────────────────────────
 
   // Debounce search input (300ms)
   useEffect(() => {
@@ -537,7 +536,7 @@ export default function InventoryTab() {
         case 'name': aVal = a.name.toLowerCase(); bVal = b.name.toLowerCase(); break;
         case 'sku': aVal = a.sku.toLowerCase(); bVal = b.sku.toLowerCase(); break;
         case 'pricePerUnit': aVal = a.pricePerUnit; bVal = b.pricePerUnit; break;
-        // v2.12.5 RBAC: costPrice is null on the wire for cost-hidden roles —
+        // v2.12.5 RBAC: costPrice is null on the wire for cost-hidden roles -
         // coalesce so comparisons never hit NaN.
         case 'costPrice': aVal = a.costPrice ?? 0; bVal = b.costPrice ?? 0; break;
         case 'quantityInStock': aVal = a.quantityInStock; bVal = b.quantityInStock; break;
@@ -588,7 +587,7 @@ export default function InventoryTab() {
   const lowStockCount = allProducts.filter(p => p.quantityInStock <= p.reorderLevel && p.quantityInStock > 0).length;
   const outOfStockCount = allProducts.filter(p => p.quantityInStock <= 0).length;
   // v2.12.5 RBAC: with cost prices stripped (null), the stock value is
-  // meaningless — hide it behind "•••" instead of showing a fake 0.
+  // meaningless - hide it behind "•••" instead of showing a fake 0.
   const totalInventoryValue = canViewCost
     ? allProducts.reduce((sum, p) => sum + ((p.costPrice ?? 0) * p.quantityInStock), 0)
     : null;

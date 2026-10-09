@@ -1,19 +1,19 @@
-// GET /api/messages/participants — active staff list for the chat participant picker.
+// GET /api/messages/participants - active staff list for the chat participant picker.
 //
 // CHAT PRESENCE FIX (v2.5.6): the New Conversation and Add Participant dialogs
 // previously called `GET /api/users`, which is gated to SUPER_ADMIN and
 // STORE_OWNER only. A shift manager (BRANCH_MANAGER) or cashier therefore got
 // "403 Insufficient permissions" and the dialog rendered
-// "No other active users in this store." — even though every teammate was
+// "No other active users in this store." - even though every teammate was
 // active. This endpoint exposes the MINIMAL directory chat needs to ANY
 // authenticated staff member:
 //
-//   • Only ACTIVE users (isActive: true) — deactivated staff never appear.
+//   • Only ACTIVE users (isActive: true) - deactivated staff never appear.
 //   • Only the caller's own store (non-SUPER_ADMIN callers cannot browse
 //     other stores; a passed storeId is ignored/overridden by the session).
 //   • The caller is excluded from the list (the conversation creator is
 //     auto-added as a participant server-side, so self-selection is noise).
-//   • Minimal fields only (id/name/email/role/avatar/lastLoginAt) — no
+//   • Minimal fields only (id/name/email/role/avatar/lastLoginAt) - no
 //     password hashes, counters, store reassignments or other admin fields.
 //
 // `lastLoginAt` lets the UI show a "last active" hint without pretending to

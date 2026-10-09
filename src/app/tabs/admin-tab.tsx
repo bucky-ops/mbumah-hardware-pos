@@ -136,9 +136,9 @@ function MiniSparkline({ data, color = 'text-primary', height = 24 }: {
   );
 }
 
-// Animated Counter Component — REMOVED (dead code: defined but never used).
+// Animated Counter Component - REMOVED (dead code: defined but never used).
 // If a counting animation is needed again, re-introduce as `AnimatedCounter`
-// (no leading underscore — React component names must start with uppercase so
+// (no leading underscore - React component names must start with uppercase so
 // the react-hooks/rules-of-hooks rule recognises them).
 
 // Stock Adjustment Dialog
@@ -863,7 +863,7 @@ function ConfigEditor({ storeId: _storeId }: { storeId: string }) {
     taxRate: '16',
   });
 
-  // ── v2.8.0: Admin-controlled VAT rate (persisted via PATCH /api/settings/vat)
+  // v2.8.0: Admin-controlled VAT rate (persisted via PATCH /api/settings/vat)
   const { data: vatRateData, isLoading: vatRateLoading } = useQuery({
     queryKey: VAT_RATE_QUERY_KEY,
     queryFn: settingsApi.getVatRate,
@@ -1310,7 +1310,7 @@ function UserManagement({ storeId }: { storeId: string }) {
   };
 
   // EMPLOYEE-CRUD FIX (2026-09-10): these handlers previously showed success
-  // toasts WITHOUT calling the server — edits and deactivations were silently
+  // toasts WITHOUT calling the server - edits and deactivations were silently
   // lost. They now hit the real PATCH/DELETE /api/users/[id] endpoints.
   const updateUserMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: { name?: string; phone?: string; role?: string; isActive?: boolean } }) =>

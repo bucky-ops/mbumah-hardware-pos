@@ -2,11 +2,11 @@
 //
 // Checks the status of an M-Pesa STK push. Two modes:
 //
-//   1. REAL Daraja — when MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET,
+//   1. REAL Daraja - when MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET,
 //      MPESA_SHORTCODE and MPESA_PASSKEY env vars are set, the route
 //      queries the Daraja STK push query endpoint to get the live status.
 //
-//   2. FALLBACK — returns the status stored on the MpesaTransaction row
+//   2. FALLBACK - returns the status stored on the MpesaTransaction row
 //      (which is updated by the callback handler when a real callback
 //      arrives, or remains at PROCESSING / PENDING otherwise).
 
@@ -203,7 +203,7 @@ async function statusHandler(...args: unknown[]): Promise<Response> {
     }
   }
 
-  // Local fallback — return whatever we have stored.
+  // Local fallback - return whatever we have stored.
   return Response.json({
     success: true,
     data: {

@@ -1,7 +1,7 @@
 // POST /api/messaging/bulk
 //
 // Bulk / holiday messaging. Generates wa.me deep links for each recipient
-// (we do NOT actually call any 3rd-party WhatsApp gateway — the cashier
+// (we do NOT actually call any 3rd-party WhatsApp gateway - the cashier
 // opens each link in WhatsApp). Logs every recipient to the Message table
 // for audit purposes. RBAC: SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER only.
 //
@@ -97,7 +97,7 @@ async function bulkMessagingHandler(
   };
 
   if (resolvedAudience === 'DEBTORS') {
-    // Customers with outstanding debt — DebtLedger balance > 0
+    // Customers with outstanding debt - DebtLedger balance > 0
     where.currentDebtBalance = { gt: 0 };
   } else if (resolvedAudience === 'LOYALTY_MEMBERS') {
     where.loyaltyPoints = { gt: 0 };
@@ -160,7 +160,7 @@ async function bulkMessagingHandler(
         },
       });
     } catch {
-      // Non-blocking — we still surface the wa.me link to the cashier even
+      // Non-blocking - we still surface the wa.me link to the cashier even
       // if audit logging fails for a single recipient.
     }
 

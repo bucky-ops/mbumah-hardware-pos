@@ -5,7 +5,7 @@ import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-// GET /api/etims/settings — Get eTIMS configuration (masked).
+// GET /api/etims/settings - Get eTIMS configuration (masked).
 async function getEtimsSettingsHandler(..._args: unknown[]): Promise<Response> {
   const config = getEtimsConfig();
   // Mask sensitive fields
@@ -23,7 +23,7 @@ async function getEtimsSettingsHandler(..._args: unknown[]): Promise<Response> {
   });
 }
 
-// PUT /api/etims/settings — Update eTIMS configuration.
+// PUT /api/etims/settings - Update eTIMS configuration.
 async function putEtimsSettingsHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as Request;
   try {

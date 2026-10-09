@@ -5,9 +5,9 @@
 // lightweight projection suitable for the eTIMS invoice-history table.
 //
 // Query params:
-//   storeId — required
-//   status  — optional filter: PENDING | ISSUED | CANCELLED | FAILED
-//   limit   — default 50, max 200
+//   storeId - required
+//   status - optional filter: PENDING | ISSUED | CANCELLED | FAILED
+//   limit - default 50, max 200
 //
 // Auth: any authenticated user with store access.
 

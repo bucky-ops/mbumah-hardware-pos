@@ -1,6 +1,6 @@
 // GET /api/health/circuit-demo
 //
-// Phase 5 — Demonstrates the circuit breaker state machine in action.
+// Phase 5 - Demonstrates the circuit breaker state machine in action.
 //
 // This is a PUBLIC health endpoint (no auth required) that drives a dedicated
 // "demo" circuit breaker through the CLOSED → OPEN → HALF_OPEN → CLOSED
@@ -11,21 +11,21 @@
 //   • failureThreshold: 0.5   (50% of recent calls fail)
 //   • minCalls: 4              (need at least 4 calls before evaluating)
 //   • slidingWindowSize: 8     (track the last 8 calls)
-//   • cooldownMs: 2_000        (2s cooldown — short for demo)
+//   • cooldownMs: 2_000        (2s cooldown - short for demo)
 //   • halfOpenMaxCalls: 2      (allow 2 probe calls in HALF_OPEN)
 //
 // Query params:
-//   ?failCalls=4   — number of calls that should fail (default 4). Each failed
+//   ?failCalls=4 - number of calls that should fail (default 4). Each failed
 //                    call drives the breaker toward OPEN.
-//   ?recoverCalls=3 — number of successful calls to make AFTER the breaker
+//   ?recoverCalls=3 - number of successful calls to make AFTER the breaker
 //                    trips, to demonstrate the recovery path. Default 3.
 //                    (1st triggers HALF_OPEN probe; on success the breaker
 //                    closes; subsequent calls confirm CLOSED state.)
-//   ?errorType=503 — type of error to throw: '503', '429', 'network',
+//   ?errorType=503 - type of error to throw: '503', '429', 'network',
 //                    'timeout', '400' (non-retryable, also non-failure for
-//                    the breaker — useful to show the `isFailure` filter).
+//                    the breaker - useful to show the `isFailure` filter).
 //                    Default '503'.
-//   ?reset=1       — if present, reset the demo breaker before running
+//   ?reset=1 - if present, reset the demo breaker before running
 //                    (useful for repeatable tests).
 //
 // Example:
@@ -46,7 +46,7 @@
 //         ...
 //         { "call": 5, "ok": false, "stateBefore": "CLOSED", "stateAfter": "OPEN", "error": "..." },
 //         { "call": 6, "ok": false, "stateBefore": "OPEN", "stateAfter": "OPEN",
-//           "error": "Circuit \"demo\" is OPEN — requests are failing fast. ..." },
+//           "error": "Circuit \"demo\" is OPEN - requests are failing fast. ..." },
 //         { "call": 7, "ok": true, "stateBefore": "HALF_OPEN", "stateAfter": "CLOSED", "value": "demo-success" },
 //         ...
 //       ],
@@ -66,14 +66,14 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-// ── Demo breaker ─────────────────────────────────────────────────────────────
+// Demo breaker
 //
 // Created once per process and registered in the global registry (so the
 // `/api/health/circuit-breaker` endpoint also reports its state). We use
 // small thresholds so the demo trips quickly without waiting for many calls.
 //
 // `isFailure` excludes 4xx (non-429) so the `?errorType=400` scenario shows
-// that client errors do NOT trip the breaker — only server/network errors do.
+// that client errors do NOT trip the breaker - only server/network errors do.
 const demoBreaker: CircuitBreaker = circuitBreakerRegistry.getOrCreate({
   name: 'demo',
   failureThreshold: 0.5,
@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
     | '400';
   const shouldReset = url.searchParams.has('reset');
 
-  // ── Optional reset (for repeatable tests) ──────────────────────────────
+  // Optional reset (for repeatable tests)
   if (shouldReset) {
     demoBreaker.reset();
   }
@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
   const initialState = demoBreaker.getState();
   const trace: DemoCallTrace[] = [];
 
-  // ── Helper: build the synthetic error for each failure type ────────────
+  // Helper: build the synthetic error for each failure type
   function makeError(): Error {
     switch (errorType) {
       case '503': {
@@ -166,7 +166,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // ── Phase A: drive the breaker toward OPEN with `failCalls` failures ───
+  // Phase A: drive the breaker toward OPEN with `failCalls` failures
   // Each call is wrapped in the breaker. When the breaker trips (→ OPEN),
   // subsequent calls short-circuit with CircuitOpenError (no fn invocation).
   for (let i = 1; i <= failCalls; i++) {
@@ -201,7 +201,7 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // ── Phase B: if the breaker is OPEN, wait for the cooldown to elapse ───
+  // Phase B: if the breaker is OPEN, wait for the cooldown to elapse
   // so the next call lands in HALF_OPEN. If `failCalls` was insufficient to
   // trip the breaker, this is a no-op (the breaker is still CLOSED).
   let waitedForCooldownMs = 0;
@@ -214,7 +214,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // ── Phase C: drive the recovery with `recoverCalls` successes ──────────
+  // Phase C: drive the recovery with `recoverCalls` successes
   // The first call after cooldown enters HALF_OPEN. If it succeeds, the
   // breaker transitions back to CLOSED. Subsequent calls confirm CLOSED.
   for (let i = 1; i <= recoverCalls; i++) {

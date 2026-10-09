@@ -1,5 +1,5 @@
-// GET  /api/financial/budgets — list budgets for a store (+optional period).
-// POST /api/financial/budgets — upsert a budget for an account within a period.
+// GET  /api/financial/budgets - list budgets for a store (+optional period).
+// POST /api/financial/budgets - upsert a budget for an account within a period.
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';

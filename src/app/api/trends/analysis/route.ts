@@ -7,14 +7,14 @@
 // category-level aggregates.
 //
 // Query params:
-//   - storeId : REQUIRED — scope to a store
+//   - storeId : REQUIRED - scope to a store
 //   - range   : 7d | 30d | 90d (default 30d)
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { requireAuth, type AuthSession } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
-// Task 12-b: Prisma Decimal valueOf() returns a STRING — `number + decimal`
+// Task 12-b: Prisma Decimal valueOf() returns a STRING - `number + decimal`
 // concatenates. All qty/revenue accumulation runs through toDec(); numbers are
 // emitted only at the JSON boundary; growth % guards emit null (never NaN).
 import { toDec, round2 } from '@/lib/utils/financialMath';
@@ -138,7 +138,7 @@ async function trendsAnalysisHandler(
     take: 50000,
   });
 
-  // Build per-product aggregates for the two periods — Decimal accumulators.
+  // Build per-product aggregates for the two periods - Decimal accumulators.
   interface ProductAgg {
     productId: string;
     productName: string;
@@ -293,7 +293,7 @@ async function trendsAnalysisHandler(
   );
   categoryTrends.sort((a, b) => b.recentRevenue - a.recentRevenue);
 
-  // Overall projection for next 7 days across the whole store — Decimal sum.
+  // Overall projection for next 7 days across the whole store - Decimal sum.
   const totalRecentQtyDec = productTrends.reduce(
     (acc, t) => acc.plus(toDec(t.recentQty)),
     toDec(0),
@@ -347,7 +347,7 @@ async function trendsAnalysisHandler(
     const denom = n * sumXX - sumX * sumX;
     const rawB = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0; // slope
     const rawA = sumY / n - rawB * (sumX / n); // intercept
-    // Task 12-b NaN guard: a non-finite fit degrades to a flat mean forecast —
+    // Task 12-b NaN guard: a non-finite fit degrades to a flat mean forecast -
     // the series (and every emitted number) stays finite.
     const b = Number.isFinite(rawB) ? rawB : 0;
     const a = Number.isFinite(rawA) ? rawA : sumY / n;

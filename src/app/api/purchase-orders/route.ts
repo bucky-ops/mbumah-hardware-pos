@@ -6,7 +6,7 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { requireStoreAccess, type AuthSession } from '@/lib/auth';
 import { withSequenceRetry } from '@/lib/sequence';
-// Task 12-c: canonical financial math — line totalCost = round2(qty × unitCost)
+// Task 12-c: canonical financial math - line totalCost = round2(qty × unitCost)
 // computed in Decimal (HALF_UP). The old `Math.round(qty × unitCost × 100)/100`
 // was a float hack that biased half-cent lines DOWN (x.xx5 → x.xx) and let
 // IEEE-754 dust into the Decimal header totals.
@@ -169,8 +169,8 @@ async function createPurchaseOrderHandler(
 
   // F1-6 remediation: PO creation is retried on P2002 (concurrent double-
   // submit) with a re-allocated per-store sequence number. The schema's
-  // uniqueness is now @@unique([storeId, poNumber]) — matching the per-store
-  // counter — so store B no longer collides with store A's numbers.
+  // uniqueness is now @@unique([storeId, poNumber]) - matching the per-store
+  // counter - so store B no longer collides with store A's numbers.
   // F1-5 remediation: money rounded 2dp per line BEFORE header summation
   // (the old path summed raw IEEE-754 products into Decimal columns).
   const { created: purchaseOrder, poNumber, subTotal, taxAmount, totalAmount } = await withSequenceRetry(async () => {
@@ -181,7 +181,7 @@ async function createPurchaseOrderHandler(
     });
     const poNumber = `PO-${dateStr}-${String(existingCount + 1).padStart(4, '0')}`;
 
-    // Task 12-c: POs are VAT-EXCLUSIVE B2B documents — VAT is added ON TOP of
+    // Task 12-c: POs are VAT-EXCLUSIVE B2B documents - VAT is added ON TOP of
     // the net subtotal (unchanged policy). All sums now run in Decimal:
     //   line totalCost = round2(qty × unitCost)          (HALF_UP, 2dp)
     //   subTotal       = Σ(rounded line totalCost)       (exact)

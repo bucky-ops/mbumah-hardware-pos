@@ -46,7 +46,7 @@ async function redeemLoyaltyHandler(
   const context = rest[0] as RouteContext;
   const customerId = (await context.params).id;
 
-  // ── Parse + validate body ──
+  // Parse + validate body
   let body: RedeemRequestBody;
   try {
     body = (await request.json()) as RedeemRequestBody;
@@ -73,7 +73,7 @@ async function redeemLoyaltyHandler(
       ? body.transactionId.trim()
       : null;
 
-  // ── Atomic redemption ──
+  // Atomic redemption
   // We run the whole flow inside a transaction and re-read the customer with
   // the live balance so concurrent redemptions cannot overspend.
   const result = await db
@@ -132,7 +132,7 @@ async function redeemLoyaltyHandler(
           data: {
             storeId: customer.storeId,
             customerId,
-            // Legacy field — points stored as negative for redemptions.
+            // Legacy field - points stored as negative for redemptions.
             points: -validation.points,
             transactionType: 'REDEEM',
             // New Phase-3 fields.
@@ -173,7 +173,7 @@ async function redeemLoyaltyHandler(
     );
   }
 
-  // ── Audit log (best-effort, non-blocking) ──
+  // Audit log (best-effort, non-blocking)
   void systemLog({
     action: 'LOYALTY_POINTS_REDEEMED',
     component: LogComponent.POS,
@@ -206,7 +206,7 @@ async function redeemLoyaltyHandler(
   });
 }
 
-// ── Helper: typed error thrown inside the tx that should NOT be treated as 500s
+// Helper: typed error thrown inside the tx that should NOT be treated as 500s
 class RedemptionError extends Error {
   status: number;
   constructor(message: string, status: number) {

@@ -4,7 +4,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
-// FINANCIAL MATH AUDIT (Task 12-b): Prisma Decimal valueOf() returns a STRING —
+// FINANCIAL MATH AUDIT (Task 12-b): Prisma Decimal valueOf() returns a STRING -
 // `number + decimal` concatenates. All accumulation runs through toDec();
 // plain numbers are emitted only at the JSON boundary. Profit basis:
 // netRevenue = Σ(totalAmount − taxAmount) (VAT-exclusive) − COGS.
@@ -142,7 +142,7 @@ async function getSalesReportHandler(...args: unknown[]): Promise<Response> {
     _avg: { totalAmount: true },
   });
 
-  // Group data by specified dimension — Decimal accumulators (Task 12-b:
+  // Group data by specified dimension - Decimal accumulators (Task 12-b:
   // was `grouped[key].subtotal += tx.subtotal` which STRING-CONCATENATED).
   // `total` remains the tax-inclusive tender per group (stored field basis);
   // the VAT-exclusive net is derived in the summary profit block below.
@@ -206,7 +206,7 @@ async function getSalesReportHandler(...args: unknown[]): Promise<Response> {
     }
     // Task 12-b: Decimal-safe accumulation. Per-product revenue is the
     // VAT-exclusive net of the line; cost = costPrice × quantity. Discounts are
-    // already embedded in lineTotal — never subtracted twice.
+    // already embedded in lineTotal - never subtracted twice.
     const net = lineNetRevenue(item.lineTotal, item.taxRate);
     const cost = toDec(item.costPrice).mul(toDec(item.quantity));
     productSales[key].quantity = productSales[key].quantity.plus(toDec(item.quantity));
@@ -234,7 +234,7 @@ async function getSalesReportHandler(...args: unknown[]): Promise<Response> {
     toDec(0),
   );
   // Net (VAT-exclusive) revenue over the FULL summary scope:
-  // netRevenue = Σ(totalAmount) − Σ(taxAmount) — identical to Σ(tx.totalAmount −
+  // netRevenue = Σ(totalAmount) − Σ(taxAmount) - identical to Σ(tx.totalAmount −
   // tx.taxAmount) and computed over every matching transaction, not just the page.
   const netRevenue = toDec(summary._sum.totalAmount).minus(toDec(summary._sum.taxAmount));
 
@@ -245,7 +245,7 @@ async function getSalesReportHandler(...args: unknown[]): Promise<Response> {
       paymentMethodMap[method] = { method, count: 0, amount: toDec(0) };
     }
     paymentMethodMap[method].count += 1;
-    // TENDER per method (tax-inclusive) by design — money collected, not revenue.
+    // TENDER per method (tax-inclusive) by design - money collected, not revenue.
     paymentMethodMap[method].amount = paymentMethodMap[method].amount.plus(toDec(tx.totalAmount));
   }
   const byPaymentMethod = Object.values(paymentMethodMap).map((row) => ({
@@ -277,7 +277,7 @@ async function getSalesReportHandler(...args: unknown[]): Promise<Response> {
         // Σ(cost×qty), overstating profit by the whole VAT component. Now:
         //   netRevenue = Σ(totalAmount − taxAmount)   (VAT owed to KRA, not revenue)
         //   cogs       = Σ(costPrice × quantity)      (discounts already embedded
-        //               in totalAmount — never subtracted twice)
+        //               in totalAmount - never subtracted twice)
         //   profit     = netRevenue − cogs; margin = profit / netRevenue × 100
         //               (0 when netRevenue ≤ 0; negative profit stays visible).
         grossProfit: round2(netRevenue.minus(totalCostDec)),

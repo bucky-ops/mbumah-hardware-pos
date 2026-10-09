@@ -1,16 +1,16 @@
 'use client';
 
 /**
- * ReportsPanel — Phase 3 sub-tab.
+ * ReportsPanel - Phase 3 sub-tab.
  *
  * Three financial reports, each generated client-side from the existing
  * /api/financial/trial-balance endpoint (computed server-side) plus the
  * /api/financial/audit-trail endpoint for the audit log:
  *
- *   1. Profit & Loss Statement — Revenue (credit-normal accounts) minus
+ *   1. Profit & Loss Statement - Revenue (credit-normal accounts) minus
  *      Expenses (debit-normal accounts) for a date range.
- *   2. Balance Sheet — Assets = Liabilities + Equity as of a date.
- *   3. Audit Trail — paginated AuditLog table with filters (entityType,
+ *   2. Balance Sheet - Assets = Liabilities + Equity as of a date.
+ *   3. Audit Trail - paginated AuditLog table with filters (entityType,
  *      action, date range). Expandable rows show old/new JSON values.
  *
  * Each report has a CSV export button.
@@ -72,7 +72,7 @@ function useTrialBalance(storeId: string, asOfDate: string) {
       params.set('storeId', storeId);
       params.set('asOfDate', asOfDate);
       // AUTH FIX (financial audit): this call used a bare fetch with no
-      // Authorization header, but the API requires a Bearer session token —
+      // Authorization header, but the API requires a Bearer session token -
       // every request 401'd and P&L / Balance Sheet always rendered
       // "No revenue or expense activity". Mirror src/lib/api.ts request():
       // attach the Bearer token from localStorage (GET needs no CSRF).
@@ -92,7 +92,7 @@ function useTrialBalance(storeId: string, asOfDate: string) {
   });
 }
 
-// ── Profit & Loss ────────────────────────────────────────────────────────────
+// Profit & Loss
 
 function ProfitAndLossReport({ storeId }: { storeId: string }) {
   const today = new Date().toISOString().split('T')[0];
@@ -110,7 +110,7 @@ function ProfitAndLossReport({ storeId }: { storeId: string }) {
 
   // SIGN CONVENTION (financial audit): the trial balance reports every
   // account's netBalance as debits − credits. Revenue accounts are
-  // credit-normal, so a healthy revenue balance arrives NEGATIVE here — flip
+  // credit-normal, so a healthy revenue balance arrives NEGATIVE here - flip
   // the sign for display, otherwise Total Revenue is negative and
   // Net Profit = revenue − expenses is ALWAYS a loss. Expense accounts are
   // debit-normal (netBalance already positive) and display as-is.
@@ -223,7 +223,7 @@ function ProfitAndLossReport({ storeId }: { storeId: string }) {
   );
 }
 
-// ── Balance Sheet ────────────────────────────────────────────────────────────
+// Balance Sheet
 
 function BalanceSheetReport({ storeId }: { storeId: string }) {
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().split('T')[0]);
@@ -235,7 +235,7 @@ function BalanceSheetReport({ storeId }: { storeId: string }) {
 
   const totalAssets = assets.reduce((s, a) => s + a.netBalance, 0);
   // Credit-normal accounts (liabilities, equity) carry NEGATIVE netBalance in
-  // the trial balance (debits − credits) — flip for display so they read as
+  // the trial balance (debits − credits) - flip for display so they read as
   // positive balances and the accounting equation (A = L + E) holds.
   const creditNormalAmount = (a: { netBalance: number }) => -a.netBalance;
   const totalLiabilities = liabilities.reduce((s, a) => s + creditNormalAmount(a), 0);
@@ -359,7 +359,7 @@ function BalanceSheetReport({ storeId }: { storeId: string }) {
   );
 }
 
-// ── Audit Trail ──────────────────────────────────────────────────────────────
+// Audit Trail
 
 const ENTITY_TYPES = ['JournalEntry', 'JournalEntryLine', 'Account', 'FinancialPeriod', 'TrialBalanceSnapshot', 'Budget', 'Customer', 'Supplier', 'Expense'];
 const ACTIONS = ['CREATE', 'UPDATE', 'DELETE', 'POST', 'VOID', 'APPROVE', 'CLOSE', 'LOCK', 'REOPEN', 'RECONCILE', 'BUDGET_SET', 'SNAPSHOT'];
@@ -542,7 +542,7 @@ function AuditTrailReport({ storeId }: { storeId: string }) {
   );
 }
 
-// ── Main ReportsPanel ────────────────────────────────────────────────────────
+// Main ReportsPanel
 
 export default function ReportsPanel() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);

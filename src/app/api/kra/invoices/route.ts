@@ -3,14 +3,14 @@
 // List InvoiceForKRA rows for a store, with filters + pagination.
 //
 // Query params:
-//   storeId       — required (enforced by requireStoreAccess)
-//   status        — PENDING | SUBMITTED | ACCEPTED | REJECTED | FAILED
-//   transactionId — filter by originating transaction
-//   search        — match on kraInvoiceNumber or receiptNumber
-//   page          — 1-based (default 1)
-//   limit         — default 25, max 100
-//   sortBy        — createdAt | submittedAt | acceptedAt | submissionStatus (default createdAt)
-//   sortOrder     — asc | desc (default desc)
+//   storeId - required (enforced by requireStoreAccess)
+//   status - PENDING | SUBMITTED | ACCEPTED | REJECTED | FAILED
+//   transactionId - filter by originating transaction
+//   search - match on kraInvoiceNumber or receiptNumber
+//   page - 1-based (default 1)
+//   limit - default 25, max 100
+//   sortBy - createdAt | submittedAt | acceptedAt | submissionStatus (default createdAt)
+//   sortOrder - asc | desc (default desc)
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';

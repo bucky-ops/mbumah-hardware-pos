@@ -1,18 +1,18 @@
 // GET /api/reminders/debt
 //
-// List DebtReminder rows for a store — the audit trail of every reminder sent
+// List DebtReminder rows for a store - the audit trail of every reminder sent
 // (or scheduled / failed) for overdue customer balances.
 //
 // Query params:
-//   storeId      — required (enforced by requireStoreAccess)
-//   status       — PENDING | SENT | FAILED | DELIVERED
-//   reminderType — EMAIL | SMS | WHATSAPP | IN_APP
-//   customerId   — filter to a specific customer's reminders
-//   debtLedgerId — filter to a specific debt ledger's reminders
-//   page         — 1-based (default 1)
-//   limit        — default 25, max 100
-//   sortBy       — sentAt | status | reminderType (default sentAt)
-//   sortOrder    — asc | desc (default desc)
+//   storeId - required (enforced by requireStoreAccess)
+//   status - PENDING | SENT | FAILED | DELIVERED
+//   reminderType - EMAIL | SMS | WHATSAPP | IN_APP
+//   customerId - filter to a specific customer's reminders
+//   debtLedgerId - filter to a specific debt ledger's reminders
+//   page - 1-based (default 1)
+//   limit - default 25, max 100
+//   sortBy - sentAt | status | reminderType (default sentAt)
+//   sortOrder - asc | desc (default desc)
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';

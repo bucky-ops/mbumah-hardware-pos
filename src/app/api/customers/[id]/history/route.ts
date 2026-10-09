@@ -13,7 +13,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { requireAuth, type AuthSession } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
-// Task 12-b: Prisma Decimal valueOf() returns a STRING — `number + decimal`
+// Task 12-b: Prisma Decimal valueOf() returns a STRING - `number + decimal`
 // concatenates. Sums/amounts run through toDec(); numbers emitted at the boundary.
 import { toDec } from '@/lib/utils/financialMath';
 
@@ -324,7 +324,7 @@ async function customerHistoryHandler(
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
   );
 
-  // Compute summary stats — Task 12-b: Decimal-safe sums (was `0 + Decimal`
+  // Compute summary stats - Task 12-b: Decimal-safe sums (was `0 + Decimal`
   // string-concat). totalSpent is the gross tender across the customer's
   // non-failed transactions.
   const completedTxns = transactions.filter(

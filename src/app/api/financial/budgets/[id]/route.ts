@@ -1,5 +1,5 @@
-// PUT    /api/financial/budgets/[id] — update budgetedAmount / notes via setBudget() upsert.
-// DELETE /api/financial/budgets/[id] — hard-delete a budget row (budgets are NOT immutable).
+// PUT    /api/financial/budgets/[id] - update budgetedAmount / notes via setBudget() upsert.
+// DELETE /api/financial/budgets/[id] - hard-delete a budget row (budgets are NOT immutable).
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -70,7 +70,7 @@ async function updateBudgetHandler(...args: unknown[]): Promise<Response> {
     });
 
     // If only notes were provided, we need to honour the prior budgetedAmount.
-    // setBudget() above will have set it to 0 if undefined — so re-apply the
+    // setBudget() above will have set it to 0 if undefined - so re-apply the
     // original when the caller did not specify a new amount.
     if (budgetedAmount === undefined) {
       const prior = await db.budget.findUnique({

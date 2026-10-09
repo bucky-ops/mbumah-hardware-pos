@@ -1,6 +1,6 @@
 // GET /api/health/system-status
 //
-// Phase 8 — Aggregated System Status endpoint.
+// Phase 8 - Aggregated System Status endpoint.
 //
 // Returns a single JSON object combining health check, circuit breaker
 // states, DLQ metrics, compliance scores, and retention stats.
@@ -22,7 +22,7 @@ export const GET = requireAuth(async (_request, session) => {
   try {
     const isPrivileged = ['SUPER_ADMIN', 'STORE_OWNER'].includes(session.role);
 
-    // ── 1. Database health ────────────────────────────────────────────
+    // 1. Database health
     const dbStart = Date.now();
     let dbStatus: 'ok' | 'error' | 'warning' = 'ok';
     let dbResponseTime = 0;
@@ -47,7 +47,7 @@ export const GET = requireAuth(async (_request, session) => {
       dbDetail = err instanceof Error ? err.message : 'Connection failed';
     }
 
-    // ── 2. Circuit breaker status ─────────────────────────────────────
+    // 2. Circuit breaker status
     const allBreakers = circuitBreakerRegistry.getAllMetrics();
     const openBreakers = allBreakers.filter((b) => b.state === 'OPEN');
     const halfOpenBreakers = allBreakers.filter((b) => b.state === 'HALF_OPEN');
@@ -57,7 +57,7 @@ export const GET = requireAuth(async (_request, session) => {
       openBreakers.length > 0 ? 'error' :
       halfOpenBreakers.length > 0 ? 'warning' : 'ok';
 
-    // ── 3. DLQ status ─────────────────────────────────────────────────
+    // 3. DLQ status
     let dlqMetrics;
     let dlqStatus: 'ok' | 'warning' | 'error' = 'ok';
 
@@ -70,7 +70,7 @@ export const GET = requireAuth(async (_request, session) => {
       dlqStatus = 'warning';
     }
 
-    // ── 4. Security events (last hour) ────────────────────────────────
+    // 4. Security events (last hour)
     let securityStatus: 'ok' | 'warning' | 'error' = 'ok';
     let criticalEvents = 0;
     let lockedAccounts = 0;
@@ -93,7 +93,7 @@ export const GET = requireAuth(async (_request, session) => {
       // Tables may not be initialised
     }
 
-    // ── 5. Financial integrity (quick check) ──────────────────────────
+    // 5. Financial integrity (quick check)
     let financialStatus: 'ok' | 'warning' | 'error' = 'ok';
     let financialDetail = 'Ledger balanced';
 
@@ -109,7 +109,7 @@ export const GET = requireAuth(async (_request, session) => {
       financialDetail = 'Check unavailable';
     }
 
-    // ── 6. Compliance (quick score) ───────────────────────────────────
+    // 6. Compliance (quick score)
     let complianceScore = 100;
     let iso27001Score = 100;
     let iso9001Score = 100;
@@ -126,7 +126,7 @@ export const GET = requireAuth(async (_request, session) => {
       // Compliance module may not be fully initialised
     }
 
-    // ── 7. Retention summary ──────────────────────────────────────────
+    // 7. Retention summary
     let retentionSummary: Array<{ name: string; retentionDays: number; isoRef: string; purgeableCount: number }> = [];
 
     try {
@@ -142,7 +142,7 @@ export const GET = requireAuth(async (_request, session) => {
       // Retention module may not be available
     }
 
-    // ── 8. Access control metrics ─────────────────────────────────────
+    // 8. Access control metrics
     let accessMetrics: Record<string, unknown> = {};
 
     if (isPrivileged) {
@@ -154,7 +154,7 @@ export const GET = requireAuth(async (_request, session) => {
       }
     }
 
-    // ── 9. Audit trail stats ──────────────────────────────────────────
+    // 9. Audit trail stats
     let auditStats: Record<string, unknown> = {};
 
     if (isPrivileged) {
@@ -166,7 +166,7 @@ export const GET = requireAuth(async (_request, session) => {
       }
     }
 
-    // ── Compute overall status ────────────────────────────────────────
+    // Compute overall status
     const overallStatus =
       [dbStatus, circuitStatus, dlqStatus, securityStatus, financialStatus].includes('error')
         ? 'unhealthy'
@@ -174,7 +174,7 @@ export const GET = requireAuth(async (_request, session) => {
           ? 'degraded'
           : 'healthy';
 
-    // ── Build response ────────────────────────────────────────────────
+    // Build response
     const response: Record<string, unknown> = {
       overallStatus,
       timestamp: new Date().toISOString(),

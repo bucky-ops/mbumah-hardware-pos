@@ -12,24 +12,24 @@ import {
 } from '@/components/documents/digital-document-view';
 
 /**
- * PUBLIC DIGITAL RECEIPT (v2.5.0) — /r/<receiptNumber>
+ * PUBLIC DIGITAL RECEIPT (v2.5.0) - /r/<receiptNumber>
  *
  * The QR code printed on every POS receipt now encodes the URL of THIS page,
  * so a customer who scans it gets a colored, digital, mobile-friendly copy
- * of their receipt — no app, no login, no paper.
+ * of their receipt - no app, no login, no paper.
  *
- * v2.10.0 — the SAME URL shape now also resolves BUSINESS DOCUMENTS:
+ * v2.10.0 - the SAME URL shape now also resolves BUSINESS DOCUMENTS:
  *   1. SalesTransaction.receiptNumber  → colored sales receipt (below)
  *   2. Invoice.invoiceNumber           → digital INVOICE / QUOTATION /
  *      PROFORMA / CREDIT NOTE / DEBIT NOTE (DigitalDocumentView)
  *   3. DeliveryNote.deliveryNumber     → digital delivery note
  *      (DigitalDeliveryView)
- * so the QR printed on every branded document opens its digital copy —
+ * so the QR printed on every branded document opens its digital copy -
  * the same behaviour customers already knew from POS receipts.
  *
  * Security / privacy:
  *   • The document number is the capability token (unique per document).
- *     Invoice numbers are sequential — the page therefore renders
+ *     Invoice numbers are sequential - the page therefore renders
  *     CUSTOMER-SAFE FIELDS ONLY (customer name, items, totals). It NEVER
  *     renders phone / e-mail / address, cost prices, profit margins,
  *     supplier data or internal data.
@@ -85,7 +85,7 @@ export default async function DigitalReceiptPage({
       cashier: { select: { name: true } },
       items: {
         select: {
-          // PUBLIC-SAFE FIELDS ONLY — costPrice is deliberately NOT selected.
+          // PUBLIC-SAFE FIELDS ONLY - costPrice is deliberately NOT selected.
           productName: true,
           quantity: true,
           unitType: true,
@@ -295,12 +295,10 @@ export default async function DigitalReceiptPage({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// v2.10.0 — business-document resolver (invoices, quotations, proformas,
+// v2.10.0 - business-document resolver (invoices, quotations, proformas,
 // credit notes, debit notes and delivery notes share the /r/<number> space).
 // Rendered when the number is NOT a sales receipt. The lookups run in order
 // and stop at the first match; an unknown number falls through to 404.
-// ─────────────────────────────────────────────────────────────────────────────
 
 const DOC_ACCENTS: Record<string, string> = {
   INVOICE: '#ea580c',
@@ -323,7 +321,7 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 async function DocumentResolver({ docNumber }: { docNumber: string }) {
   // 1) Invoice-family documents (the five types). Privacy: customerPhone /
   //    Email / Address and any cost/margin fields are deliberately NOT
-  //    selected — sequential invoice numbers make this page guessable.
+  //    selected - sequential invoice numbers make this page guessable.
   const invoice = await db.invoice.findUnique({
     where: { invoiceNumber: docNumber },
     select: {

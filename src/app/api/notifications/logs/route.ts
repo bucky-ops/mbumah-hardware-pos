@@ -1,16 +1,16 @@
 // GET /api/notifications/logs
 //
-// Returns a paginated, filterable list of NotificationLog rows — every
+// Returns a paginated, filterable list of NotificationLog rows - every
 // outbound email (sent or attempted) is recorded here by the email service.
 //
 // Query params:
 //   • limit  (default 20, max 100)
 //   • offset (default 0)
-//   • type   — filter by notification type (RECEIPT, LOW_STOCK, etc.)
-//   • status — filter by delivery status (PENDING, SENT, FAILED)
+//   • type - filter by notification type (RECEIPT, LOW_STOCK, etc.)
+//   • status - filter by delivery status (PENDING, SENT, FAILED)
 //
 // Auth: SUPER_ADMIN, STORE_OWNER. Both can view all notification logs in
-// their purview — SUPER_ADMIN sees org-wide, STORE_OWNER sees everything
+// their purview - SUPER_ADMIN sees org-wide, STORE_OWNER sees everything
 // for their store (NotificationLog isn't store-scoped at the schema level,
 // so we filter by the userId's store membership indirectly through the
 // metadata field when needed; for simplicity we return all logs and let
@@ -32,7 +32,7 @@ export const dynamic = 'force-dynamic';
 
 const ALLOWED_ROLES = ['SUPER_ADMIN', 'STORE_OWNER'];
 
-// Whitelist of valid type values — anything else is ignored.
+// Whitelist of valid type values - anything else is ignored.
 const VALID_TYPES = new Set([
   'RECEIPT',
   'LOW_STOCK',

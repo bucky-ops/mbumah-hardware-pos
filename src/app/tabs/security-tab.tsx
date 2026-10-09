@@ -24,10 +24,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-// v2.12.8 (PR C): Audit Trail — second view inside the Security tab.
+// v2.12.8 (PR C): Audit Trail - second view inside the Security tab.
 import { AuditTrailSection } from '@/components/admin/audit-trail-section';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 interface SecurityDashboardData {
   securityScore: number;
@@ -52,7 +52,7 @@ interface SecurityDashboardData {
   timeline: { hour: string; count: number }[];
 }
 
-// ── Color mappings ───────────────────────────────────────────────────────────
+// Color mappings
 
 const SEVERITY_COLORS: Record<string, string> = {
   CRITICAL: '#ef4444',
@@ -97,7 +97,7 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
   UNAUTHORIZED_ACCESS: '#c2410c',
 };
 
-// ── API helpers ──────────────────────────────────────────────────────────────
+// API helpers
 
 async function fetchDashboard(): Promise<SecurityDashboardData> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null;
@@ -145,7 +145,7 @@ async function fetchEvents(params: Record<string, string>): Promise<unknown> {
   return res.json();
 }
 
-// ── Security Score Gauge ─────────────────────────────────────────────────────
+// Security Score Gauge
 
 function SecurityScoreGauge({ score }: { score: number }) {
   const radius = 70;
@@ -197,7 +197,7 @@ function SecurityScoreGauge({ score }: { score: number }) {
   );
 }
 
-// ── Overview Card ────────────────────────────────────────────────────────────
+// Overview Card
 
 function OverviewCard({
   icon: Icon,
@@ -227,7 +227,7 @@ function OverviewCard({
   );
 }
 
-// ── Severity Badge ───────────────────────────────────────────────────────────
+// Severity Badge
 
 function SeverityBadge({ severity }: { severity: string }) {
   return (
@@ -237,12 +237,12 @@ function SeverityBadge({ severity }: { severity: string }) {
   );
 }
 
-// ── Main Security Tab ────────────────────────────────────────────────────────
+// Main Security Tab
 
 export default function SecurityTab() {
-  // ── v2.12.8 (PR C): local view toggle ───────────────────────────────────
+  // v2.12.8 (PR C): local view toggle
   // The Security tab now hosts TWO views: the existing Security Dashboard
-  // (default) and the new Audit Trail. Local state — the sidebar/tab config
+  // (default) and the new Audit Trail. Local state - the sidebar/tab config
   // stays untouched.
   const [view, setView] = useState<'dashboard' | 'audit'>('dashboard');
 
@@ -348,7 +348,7 @@ export default function SecurityTab() {
     }));
   }, [dashboard]);
 
-  // View toggle (v2.12.8): Security Dashboard | Audit Trail — rendered in the
+  // View toggle (v2.12.8): Security Dashboard | Audit Trail - rendered in the
   // header of BOTH views so the user can always switch back.
   const viewToggle = (
     <div
@@ -387,7 +387,7 @@ export default function SecurityTab() {
     </div>
   );
 
-  // ── Audit Trail view (v2.12.8) ──────────────────────────────────────────
+  // Audit Trail view (v2.12.8)
   if (view === 'audit') {
     return (
       <div className="space-y-6 p-4 md:p-6 max-w-7xl mx-auto">

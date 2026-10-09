@@ -1,19 +1,17 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Admin Manual Backup API (SRV-2, v2.9.0)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Admin Manual Backup API (SRV-2, v2.9.0)
 //
-// GET /api/admin/backup — build a business-critical JSON snapshot of the
+// GET /api/admin/backup - build a business-critical JSON snapshot of the
 // database and return it as a browser download (Content-Disposition:
 // attachment), mirroring the /api/data-exports/[id]/download pattern.
 //
 // Snapshot design:
-//   • Business-critical models ONLY — the noisy/ephemeral tables (systemLog,
+//   • Business-critical models ONLY - the noisy/ephemeral tables (systemLog,
 //     auditLog, securityEvent, session, message, outbox, dataExport, …) are
 //     deliberately SKIPPED so a restore is clean and the file stays small.
-//   • EVERY model is fetched in its OWN try/catch — one failing table
+//   • EVERY model is fetched in its OWN try/catch - one failing table
 //     becomes an `{ error: message }` placeholder in `tables` instead of
 //     killing the whole backup. Partial + honest beats total + absent.
-//   • User rows are returned WITHOUT `passwordHash` — credential hashes
+//   • User rows are returned WITHOUT `passwordHash` - credential hashes
 //     must never leave the server, not even inside a backup file.
 //   • When the caller has a `storeId` (STORE_OWNER), store-scoped models are
 //     filtered to their store; SUPER_ADMIN snapshots the whole organisation.
@@ -22,10 +20,9 @@
 //   • The same JSON is ALSO written to the backup directory (BACKUP_DIR →
 //     Windows Desktop\MbumahBackups\app → <tmpdir>/mbumah-backups/app) as
 //     `mbumah-snapshot-<stamp>.json`. On a read-only cloud filesystem the
-//     write failure is logged and ignored — the download is the deliverable.
+//     write failure is logged and ignored - the download is the deliverable.
 //
 // Auth: SUPER_ADMIN or STORE_OWNER only.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { type NextRequest } from 'next/server';
 import * as fs from 'fs';
@@ -39,7 +36,7 @@ import { APP_VERSION } from '@/lib/version';
 
 export const dynamic = 'force-dynamic';
 
-// ── Backup directory (app snapshots, separate from crash backups) ────────────
+// Backup directory (app snapshots, separate from crash backups)
 
 /** BACKUP_DIR → Windows `<Desktop>/MbumahBackups/app` → `<tmpdir>/mbumah-backups/app`. */
 function resolveAppBackupDir(): string {
@@ -60,7 +57,7 @@ function formatStamp(date: Date): string {
   );
 }
 
-/** Best-effort local copy of the snapshot — failures are logged, never fatal. */
+/** Best-effort local copy of the snapshot - failures are logged, never fatal. */
 function writeSnapshotToDisk(fileName: string, json: string): void {
   try {
     const dir = resolveAppBackupDir();
@@ -75,13 +72,13 @@ function writeSnapshotToDisk(fileName: string, json: string): void {
   }
 }
 
-// ── Handler ──────────────────────────────────────────────────────────────────
+// Handler
 async function getHandler(
   _request: NextRequest,
   session: AuthSession,
 ): Promise<Response> {
   // The whole snapshot runs WITHOUT ORM tenant enforcement and applies
-  // explicit storeId filters instead — deterministic for both roles.
+  // explicit storeId filters instead - deterministic for both roles.
   const payload = await runWithoutTenant(async () => {
     const storeId = session.storeId; // null for SUPER_ADMIN / unassigned owner
     const tables: Record<string, unknown> = {};
@@ -104,7 +101,7 @@ async function getHandler(
       }
     }
 
-    // ── Users (credential hash STRIPPED) ─────────────────────────────────────
+    // Users (credential hash STRIPPED)
     await snapshot('user', async () => {
       const rows = await db.user.findMany({
         where: storeId ? { storeId } : undefined,
@@ -114,7 +111,7 @@ async function getHandler(
       return rows.map(({ passwordHash: _passwordHash, ...safeUser }) => safeUser);
     });
 
-    // ── Org structure & catalog ───────────────────────────────────────────────
+    // Org structure & catalog
     await snapshot('store', () =>
       db.store.findMany({
         where: storeId ? { id: storeId } : undefined,
@@ -136,7 +133,7 @@ async function getHandler(
       }),
     );
 
-    // ── Sales pipeline ────────────────────────────────────────────────────────
+    // Sales pipeline
     await snapshot('salesTransaction', () =>
       db.salesTransaction.findMany({
         where: storeId ? { storeId } : undefined,
@@ -144,7 +141,7 @@ async function getHandler(
       }),
     );
 
-    // Line items have no storeId column — filter through the parent relation.
+    // Line items have no storeId column - filter through the parent relation.
     await snapshot('saleItem', () =>
       db.saleItem.findMany({
         where: storeId ? { transaction: { storeId } } : undefined,
@@ -158,7 +155,7 @@ async function getHandler(
       }),
     );
 
-    // ── Purchasing ────────────────────────────────────────────────────────────
+    // Purchasing
     await snapshot('purchaseOrder', () =>
       db.purchaseOrder.findMany({
         where: storeId ? { storeId } : undefined,
@@ -172,7 +169,7 @@ async function getHandler(
       }),
     );
 
-    // ── Stock ledger ──────────────────────────────────────────────────────────
+    // Stock ledger
     await snapshot('stockMovement', () =>
       db.stockMovement.findMany({
         where: storeId ? { storeId } : undefined,
@@ -180,7 +177,7 @@ async function getHandler(
       }),
     );
 
-    // ── Invoices (+ items) ────────────────────────────────────────────────────
+    // Invoices (+ items)
     await snapshot('invoice', () =>
       db.invoice.findMany({
         where: storeId ? { storeId } : undefined,
@@ -194,7 +191,7 @@ async function getHandler(
       }),
     );
 
-    // ── Promotions ────────────────────────────────────────────────────────────
+    // Promotions
     await snapshot('voucher', () =>
       db.voucher.findMany({
         where: storeId ? { storeId } : undefined,
@@ -209,7 +206,7 @@ async function getHandler(
       }),
     );
 
-    // ── Global config (never store-scoped) ────────────────────────────────────
+    // Global config (never store-scoped)
     await snapshot('systemConfig', () => db.systemConfig.findMany());
 
     return {
@@ -226,10 +223,10 @@ async function getHandler(
   const stamp = formatStamp(new Date());
   const fileName = `mbumah-snapshot-${stamp}.json`;
 
-  // Local copy for the Windows backup folder — never blocks the download.
+  // Local copy for the Windows backup folder - never blocks the download.
   writeSnapshotToDisk(fileName, json);
 
-  // Audit trail — never blocks the response.
+  // Audit trail - never blocks the response.
   await systemLog({
     action: 'MANUAL_BACKUP',
     component: 'SYSTEM',
@@ -252,7 +249,7 @@ async function getHandler(
 
 // GET: SUPER_ADMIN or STORE_OWNER only. GET (not POST) on purpose: a
 // snapshot is a read, and GET skips the proxy's JSON-content-type/CSRF
-// layers — mirrors the data-exports download route.
+// layers - mirrors the data-exports download route.
 export const GET = withErrorBoundary(
   requireAuth(getHandler, { roles: ['SUPER_ADMIN', 'STORE_OWNER'] }),
   'ADMIN_BACKUP',

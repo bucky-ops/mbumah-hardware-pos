@@ -1,4 +1,4 @@
-// POST /api/financial/budgets/recalculate — recalculate actuals for a period.
+// POST /api/financial/budgets/recalculate - recalculate actuals for a period.
 //
 // For every budget row in the period, sums posted, non-voided journal-entry
 // lines for the budgeted account (respecting normalBalance) and updates the

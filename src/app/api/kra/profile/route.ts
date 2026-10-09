@@ -1,15 +1,15 @@
 // GET/PUT /api/kra/profile
 //
 // Manage a store's KRA eTIMS business profile (credentials + environment).
-//   GET  — return the active profile for the store (or null if none configured)
-//   PUT  — create or update the active profile (idempotent upsert on businessPin)
+//   GET - return the active profile for the store (or null if none configured)
+//   PUT - create or update the active profile (idempotent upsert on businessPin)
 //
 // SECURITY:
 //   • Only SUPER_ADMIN, STORE_OWNER, and STORE_MANAGER roles may edit credentials.
 //   • The kraPasswordEncrypted field is base64-encoded in transit (over HTTPS)
 //     and stored as-is (kra-helpers.ts decryptPassword reverses it). For real
 //     production use, swap to AES-256-GCM via src/lib/crypto-helpers.ts.
-//   • The password is NEVER returned in GET responses — only a "configured" boolean.
+//   • The password is NEVER returned in GET responses - only a "configured" boolean.
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -22,7 +22,7 @@ export const dynamic = 'force-dynamic';
 
 const ALLOWED_EDIT_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'STORE_MANAGER'];
 
-// ── GET: retrieve the active KRA business profile ────────────────────────────
+// GET: retrieve the active KRA business profile
 async function getProfileHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null },
@@ -70,12 +70,12 @@ async function getProfileHandler(
   return Response.json({ success: true, data: safe });
 }
 
-// ── PUT: create or update the KRA business profile ───────────────────────────
+// PUT: create or update the KRA business profile
 async function upsertProfileHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null; email?: string },
 ): Promise<Response> {
-  // Role guard — only managers+ may touch KRA credentials.
+  // Role guard - only managers+ may touch KRA credentials.
   if (!ALLOWED_EDIT_ROLES.includes(session.role)) {
     return Response.json(
       {
@@ -142,7 +142,7 @@ async function upsertProfileHandler(
 
   // SYS-9/F9-3 remediation: the KRA portal password is now stored with real
   // authenticated encryption (AES-256-GCM, key from CREDENTIAL_ENCRYPTION_KEY
-  // or derived from NEXTAUTH_SECRET) — NOT base64, which is mere encoding and
+  // or derived from NEXTAUTH_SECRET) - NOT base64, which is mere encoding and
   // reversible by anyone with DB read access. Legacy base64 rows are decoded
   // transparently on read (decryptSecretLegacyAware) and re-encrypted on the
   // next save of this profile.
@@ -224,7 +224,7 @@ async function upsertProfileHandler(
   );
 }
 
-// ── Export wrapped handlers ─────────────────────────────────────────────────
+// Export wrapped handlers
 export const GET = withErrorBoundary(
   requireStoreAccess(getProfileHandler),
   'KRA_PROFILE_GET',

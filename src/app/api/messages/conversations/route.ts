@@ -4,18 +4,18 @@
 // customer-support chat). Each conversation is a thread of ConversationMessage
 // rows, separate from the outbound customer Message model.
 //
-// GET  — list conversations for the caller's store. The caller is automatically
+// GET - list conversations for the caller's store. The caller is automatically
 //        included in the participantIds filter (they only see threads they're
 //        part of), unless they're SUPER_ADMIN (sees all store conversations).
-// POST — create a new conversation. The caller is auto-added as a participant.
+// POST - create a new conversation. The caller is auto-added as a participant.
 //
 // Query params (GET):
-//   storeId — required (enforced by requireAuth; SUPER_ADMIN may pass any)
-//   type    — INTERNAL | CUSTOMER_SUPPORT (optional filter)
-//   limit   — default 50, max 200
-//   scope   — "store" returns ALL threads in the store (including ones the
+//   storeId - required (enforced by requireAuth; SUPER_ADMIN may pass any)
+//   type - INTERNAL | CUSTOMER_SUPPORT (optional filter)
+//   limit - default 50, max 200
+//   scope - "store" returns ALL threads in the store (including ones the
 //             caller has not joined), each flagged with isParticipant. Only
-//             honoured for SUPER_ADMIN / STORE_OWNER / BRANCH_MANAGER —
+//             honoured for SUPER_ADMIN / STORE_OWNER / BRANCH_MANAGER -
 //             OWNER-VISIBILITY TOGGLE (v2.5.6): by design staff only see
 //             threads they joined; owners/managers can now browse and then
 //             join any store thread from the UI toggle.
@@ -30,7 +30,7 @@ export const dynamic = 'force-dynamic';
 
 const VALID_TYPES = ['INTERNAL', 'CUSTOMER_SUPPORT'];
 
-// ── GET: list conversations ──────────────────────────────────────────────────
+// GET: list conversations
 async function listConversationsHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null },
@@ -52,7 +52,7 @@ async function listConversationsHandler(
   // OWNER-VISIBILITY (v2.5.6): privileged roles may browse every thread in
   // the store via ?scope=store. Everyone else only ever sees threads they
   // participate in. SUPER_ADMIN already saw all threads (participant filter
-  // skipped) — for consistency we now compute isParticipant for them too.
+  // skipped) - for consistency we now compute isParticipant for them too.
   const canSeeStoreThreads = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'].includes(
     session.role,
   );
@@ -84,7 +84,7 @@ async function listConversationsHandler(
       const ids = JSON.parse(c.participantIds) as string[];
       ids.forEach((id) => allParticipantIds.add(id));
     } catch {
-      // ignore parse errors — defensive
+      // ignore parse errors - defensive
     }
   }
 
@@ -127,7 +127,7 @@ async function listConversationsHandler(
   return Response.json({ success: true, data });
 }
 
-// ── POST: create a conversation ──────────────────────────────────────────────
+// POST: create a conversation
 async function createConversationHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null; email: string },

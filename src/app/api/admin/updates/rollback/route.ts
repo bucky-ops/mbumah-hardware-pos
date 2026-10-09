@@ -1,23 +1,20 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Admin Update Rollback API (SRV-2, v2.9.0)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Admin Update Rollback API (SRV-2, v2.9.0)
 //
-// POST /api/admin/updates/rollback — re-point production at a previous Vercel
+// POST /api/admin/updates/rollback - re-point production at a previous Vercel
 // deployment (the "Rollback" button in the admin Updates panel).
 //
 //   Body: { deploymentId: string }   (a Vercel deployment uid, e.g. dpl_XXXX)
 //
 // Cloud (Vercel): POSTs to the Vercel v13 rollback endpoint using
 // VERCEL_TOKEN + VERCEL_PROJECT_ID (optional VERCEL_TEAM_ID for team scopes).
-// Laptop kits have no Vercel project — the response tells the operator to run
+// Laptop kits have no Vercel project - the response tells the operator to run
 // Rollback-Mbumah-POS.bat (deploy-kit) instead, and the panel hides the
 // button when vercelConfigured=false (see GET /api/admin/updates).
 //
 // Non-2xx from Vercel → HTTP 502 with Vercel's own error message surfaced so
 // the operator sees WHY (expired build cache, deployment not promotable, …).
 //
-// Auth: SUPER_ADMIN only — rollback is a destructive, org-wide action.
-// ─────────────────────────────────────────────────────────────────────────────
+// Auth: SUPER_ADMIN only - rollback is a destructive, org-wide action.
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -35,12 +32,12 @@ const rollbackBodySchema = z.object({
     .min(1, 'deploymentId is required (a Vercel deployment uid, e.g. dpl_XXXX).'),
 });
 
-// ── Handler ──────────────────────────────────────────────────────────────────
+// Handler
 async function postHandler(
   request: NextRequest,
   session: AuthSession,
 ): Promise<Response> {
-  // ── Body validation ────────────────────────────────────────────────────────
+  // Body validation
   let body: unknown;
   try {
     body = await request.json();
@@ -61,7 +58,7 @@ async function postHandler(
 
   const { deploymentId } = parsed.data;
 
-  // ── Configuration gate ─────────────────────────────────────────────────────
+  // Configuration gate
   const token = process.env.VERCEL_TOKEN;
   const projectId = process.env.VERCEL_PROJECT_ID;
   const teamId = process.env.VERCEL_TEAM_ID;
@@ -77,7 +74,7 @@ async function postHandler(
     );
   }
 
-  // ── Call Vercel ────────────────────────────────────────────────────────────
+  // Call Vercel
   let response: Response;
   try {
     const url = new URL(
@@ -89,7 +86,7 @@ async function postHandler(
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
-        // No request body — the v13 rollback endpoint's contract is fully
+        // No request body - the v13 rollback endpoint's contract is fully
         // expressed by the deployment id in the path (the target project is
         // implied by the deployment itself).
       },
@@ -123,7 +120,7 @@ async function postHandler(
   }
 
   if (!response.ok) {
-    // Surface Vercel's own error message — the operator needs to know WHY.
+    // Surface Vercel's own error message - the operator needs to know WHY.
     let vercelMessage = `Vercel returned HTTP ${response.status}.`;
     try {
       const payload = (await response.json()) as {
@@ -136,7 +133,7 @@ async function postHandler(
         '';
       if (message) vercelMessage = `Vercel rollback failed: ${message}`;
     } catch {
-      /* non-JSON error body — keep the HTTP-status message */
+      /* non-JSON error body - keep the HTTP-status message */
     }
 
     await systemLog({
@@ -159,7 +156,7 @@ async function postHandler(
     );
   }
 
-  // ── Success: audit + confirm ───────────────────────────────────────────────
+  // Success: audit + confirm
   await systemLog({
     action: 'VERCEL_ROLLBACK',
     component: 'SYSTEM',
@@ -180,7 +177,7 @@ async function postHandler(
   });
 }
 
-// POST: SUPER_ADMIN only — rollback is a destructive, org-wide action.
+// POST: SUPER_ADMIN only - rollback is a destructive, org-wide action.
 export const POST = withErrorBoundary(
   requireAuth(postHandler, { roles: ['SUPER_ADMIN'] }),
   'ADMIN_UPDATES_ROLLBACK',

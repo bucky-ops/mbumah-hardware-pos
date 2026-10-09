@@ -53,7 +53,7 @@ import {
   DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// Types
 
 type VoucherType = VoucherItem['voucherType'];
 type VoucherStatus = VoucherItem['status'];
@@ -65,7 +65,7 @@ type InnerTab = 'vouchers' | 'campaigns' | 'redemptions';
 type SendChannel = 'WHATSAPP' | 'SMS' | 'EMAIL';
 type DeliveryBadgeStatus = VoucherSendResult['status'];
 
-// ─── Badge Helpers ───────────────────────────────────────────────────────────
+// Badge Helpers
 
 function getVoucherStatusBadge(status: VoucherStatus) {
   switch (status) {
@@ -217,13 +217,13 @@ function getDeliveryBadge(ds: { status: DeliveryBadgeStatus } | undefined) {
   }
 }
 
-// ─── Component ───────────────────────────────────────────────────────────────
+// Component
 
 export default function VouchersTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
   const queryClient = useQueryClient();
 
-  // ─── Local State ──────────────────────────────────────────────────────────
+  // Local State
 
   const [innerTab, setInnerTab] = useState<InnerTab>('vouchers');
 
@@ -298,7 +298,7 @@ export default function VouchersTab() {
   const [cFormEndDate, setCFormEndDate] = useState('');
   const [cFormTargetAudience, setCFormTargetAudience] = useState('');
 
-  // ── VF-1 (v2.8.0): REAL voucher sending (Email / SMS / WhatsApp) ──────────
+  // VF-1 (v2.8.0): REAL voucher sending (Email / SMS / WhatsApp)
   // Send-voucher dialog (replaces the old prompt()+deep-link flow that never
   // actually sent anything). Email shows a simple result panel; WhatsApp/SMS
   // results render through the shared MessagePreviewDialog with the honest
@@ -328,7 +328,7 @@ export default function VouchersTab() {
   // send (session values win over hydration).
   const [sendStatuses, setSendStatuses] = useState<Record<string, { status: DeliveryBadgeStatus; channel?: string }>>({});
 
-  // ─── Queries ──────────────────────────────────────────────────────────────
+  // Queries
 
   const { data: vouchersData, isLoading: vouchersLoading } = useQuery({
     queryKey: ['vouchers', currentStoreId, statusFilter, typeFilter, debouncedSearch],
@@ -367,7 +367,7 @@ export default function VouchersTab() {
     enabled: !!currentStoreId,
   });
 
-  // ─── Mutations ────────────────────────────────────────────────────────────
+  // Mutations
 
   const createVoucherMutation = useMutation({
     mutationFn: vouchersApi.create,
@@ -430,7 +430,7 @@ export default function VouchersTab() {
     },
   });
 
-  // Redeem voucher code — uses the typed API client if present, falls back to fetch.
+  // Redeem voucher code - uses the typed API client if present, falls back to fetch.
   const redeemByCodeMutation = useMutation({
     mutationFn: async (payload: { code: string; storeId: string; customerId?: string; amount?: number }) => {
       try {
@@ -478,7 +478,7 @@ export default function VouchersTab() {
     },
   });
 
-  // ─── VF-1: REAL voucher send mutation ─────────────────────────────────────
+  // VF-1: REAL voucher send mutation
   const sendVoucherMutation = useMutation({
     mutationFn: vouchersApi.send,
     onSuccess: (res) => {
@@ -497,7 +497,7 @@ export default function VouchersTab() {
       }
       queryClient.invalidateQueries({ queryKey: ['voucher-delivery-log', currentStoreId] });
 
-      // HONEST feedback — a failed/simulated attempt NEVER toasts "sent".
+      // HONEST feedback - a failed/simulated attempt NEVER toasts "sent".
       if (result.status === 'SENT') {
         const channelLabel = result.channel === 'SMS' ? 'SMS' : result.channel === 'EMAIL' ? 'email' : 'WhatsApp';
         toast.success(`Voucher ${sendVoucher?.code || ''} sent via ${channelLabel} to ${result.recipient}`);
@@ -511,7 +511,7 @@ export default function VouchersTab() {
       }
 
       if (result.channel === 'EMAIL') {
-        // Email has no preview component — show the simple result panel in-place.
+        // Email has no preview component - show the simple result panel in-place.
         setEmailResult(result);
       } else {
         // WhatsApp/SMS → the shared preview dialog (enlarged scrollable text,
@@ -535,7 +535,7 @@ export default function VouchersTab() {
     },
   });
 
-  // ─── Derived Data ────────────────────────────────────────────────────────
+  // Derived Data
 
   const vouchers: VoucherItem[] = Array.isArray(vouchersData?.data) ? vouchersData.data : [];
   const campaigns: VoucherCampaignItem[] = Array.isArray(campaignsData?.data) ? campaignsData.data : [];
@@ -560,7 +560,7 @@ export default function VouchersTab() {
   }, [vouchers, debouncedSearch]);
 
   // VF-1: hydrated delivery badges from the Message log (persisted across
-  // reloads). Derived via useMemo — NOT an effect with setState — so a fresh
+  // reloads). Derived via useMemo - NOT an effect with setState - so a fresh
   // log never triggers cascading renders. In-session send results live in the
   // sendStatuses state and take precedence via `??` at the render site.
   const hydratedSendStatuses = useMemo(() => {
@@ -570,7 +570,7 @@ export default function VouchersTab() {
     if (rows.length === 0 || list.length === 0) return map;
     const idByCode = new Map(list.map((v) => [v.code, v.id]));
     for (const row of rows) {
-      // Rows arrive newest-first — the FIRST match per voucher is its latest
+      // Rows arrive newest-first - the FIRST match per voucher is its latest
       // attempt; later (older) rows must never override it.
       const match = /^Voucher\s+(.+)$/.exec(row.subject || '');
       if (!match) continue;
@@ -621,7 +621,7 @@ export default function VouchersTab() {
     };
   }, [vouchers, campaigns, allRedemptions]);
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
+  // Helpers
 
   function resetVoucherForm() {
     setVFormName('');
@@ -766,7 +766,7 @@ export default function VouchersTab() {
     });
   }
 
-  // ─── Send Voucher Helpers (VF-1 — real gateway dispatch) ─────────────────
+  // Send Voucher Helpers (VF-1 - real gateway dispatch)
 
   function openSendDialog(voucher: VoucherItem, channel: SendChannel = 'WHATSAPP') {
     setSendVoucher(voucher);
@@ -834,7 +834,7 @@ export default function VouchersTab() {
     toast.success('Email opened with campaign details');
   }
 
-  // ─── Loading State ───────────────────────────────────────────────────────
+  // Loading State
 
   if (vouchersLoading || campaignsLoading) {
     return (
@@ -859,7 +859,7 @@ export default function VouchersTab() {
     );
   }
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // Render
 
   return (
     <TooltipProvider>

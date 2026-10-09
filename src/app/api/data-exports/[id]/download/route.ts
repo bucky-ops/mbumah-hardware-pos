@@ -1,7 +1,7 @@
 // GET /api/data-exports/[id]/download
 //
 // Streams a completed data export (CSV/JSON) back to the browser as an
-// attachment. This route is the missing half of the Data Export module —
+// attachment. This route is the missing half of the Data Export module -
 // the frontend (`dataExportsApi.download` in src/lib/api.ts) has always
 // called `/api/data-exports/<id>/download`, but no route handled it, so
 // every download click produced the console error
@@ -9,10 +9,10 @@
 // client error normaliser).
 //
 // Payload resolution order (DOWNLOAD FIX v2.5.5):
-//   1. `DataExport.content` — inline copy of the generated file stored in
+//   1. `DataExport.content` - inline copy of the generated file stored in
 //      the DB at creation time. This is the reliable source on Vercel
 //      serverless, where the tmp filesystem is ephemeral per instance.
-//   2. On-disk file under resolveExportsDir() — fast path for self-hosted
+//   2. On-disk file under resolveExportsDir() - fast path for self-hosted
 //      deployments that pin EXPORTS_DIR to a persistent volume.
 //   If neither exists (expired instance, 10 MB+ export on serverless),
 //   responds 410 Gone with a clear, actionable message.
@@ -127,11 +127,11 @@ async function downloadExportHandler(...args: unknown[]): Promise<Response> {
   const ext = isJson ? 'json' : 'csv';
   const contentType = isJson ? 'application/json' : 'text/csv';
 
-  // 1. Preferred source — inline DB content (serverless-safe).
+  // 1. Preferred source - inline DB content (serverless-safe).
   let fileContent: string | null = exportRow.content ?? null;
   let source: 'DB' | 'FILE' = 'DB';
 
-  // 2. Fallback — on-disk file (self-hosted persistent volume).
+  // 2. Fallback - on-disk file (self-hosted persistent volume).
   if (fileContent === null && exportRow.filePath) {
     try {
       fileContent = await fs.readFile(path.join(EXPORTS_DIR, exportRow.filePath), 'utf8');
@@ -157,7 +157,7 @@ async function downloadExportHandler(...args: unknown[]): Promise<Response> {
     .replace(/-/g, '');
   const fileName = `mbumah-${filenameFragment(exportRow.exportType)}-${datePart}-${id.slice(0, 8)}.${ext}`;
 
-  // Audit trail — never blocks the response.
+  // Audit trail - never blocks the response.
   await systemLog({
     action: 'DATA_EXPORT_DOWNLOADED',
     component: LogComponent.FINANCIAL,

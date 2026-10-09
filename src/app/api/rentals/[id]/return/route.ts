@@ -9,7 +9,7 @@ import { LogSeverity, LogComponent, RentalStatus, StockMovementType } from '@/li
 import { withSessionAuth } from '@/lib/auth';
 import { getSessionFromRequest } from '@/lib/auth';
 // Task 12-c: canonical financial math (HALF_UP 2dp). Prisma Decimal
-// `valueOf()` returns a STRING — `rentalDays * rental.ratePerDay` and
+// `valueOf()` returns a STRING - `rentalDays * rental.ratePerDay` and
 // `rental.securityDeposit - totalCharges` coerced through float (and the
 // charge line fed a Decimal into a number-typed helper).
 import { toDec, round2 } from '@/lib/utils/financialMath';
@@ -71,11 +71,11 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
   const rentalDays = Math.max(1, Math.ceil(rentalDurationMs / (1000 * 60 * 60 * 24)));
 
     // Task 12-c: Decimal money math.
-  // totalRentalCharge = round2(days × ratePerDay) — was float coercion of the
+  // totalRentalCharge = round2(days × ratePerDay) - was float coercion of the
   // Prisma Decimal rate.
   const totalRentalCharge = round2(toDec(rentalDays).mul(toDec(rental.ratePerDay)));
 
-  // lateFee = round2(daysLate × lateFeeRate) — inline Decimal re-derivation of
+  // lateFee = round2(daysLate × lateFeeRate) - inline Decimal re-derivation of
   // helpers.calculateLateFee's formula (floor of full late days, floored at 0),
   // which also removes the old Decimal-into-number-arg type error.
   const daysLate = Math.max(0, Math.floor(
@@ -92,7 +92,7 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
   }
 
   // Task 12-c: charges and settlement in exact Decimal. NO max0 clamp is
-  // applied to the settlement — the existing logic intentionally branches on
+  // applied to the settlement - the existing logic intentionally branches on
   // the sign (negative ⇒ CUSTOMER_OWES, positive ⇒ REFUND_DUE).
   const totalChargesDec = toDec(totalRentalCharge).plus(lateFee).plus(assessedDamageCharge);
   const totalCharges = round2(totalChargesDec);
@@ -108,7 +108,7 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
   ]);
 
   const result = await db.$transaction(async (tx) => {
-    // R8 remediation: ATOMIC status claim — the old code checked status
+    // R8 remediation: ATOMIC status claim - the old code checked status
     // BEFORE the transaction and then updated unconditionally, so two
     // concurrent returns both passed and double-credited stock.
     const claimed = await tx.equipmentRental.updateMany({
@@ -137,7 +137,7 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
     });
 
         // R8/F3-7 remediation: a LOST (destroyed) rental must NOT return to
-    // sellable stock — previously SEVERE damage outcomes restocked the unit.
+    // sellable stock - previously SEVERE damage outcomes restocked the unit.
     if (returnStatus !== RentalStatus.LOST) {
       await tx.product.update({
         where: { id: rental.productId },
@@ -190,7 +190,7 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
           referenceType: 'RENTAL',
           referenceId: rental.id,
           // F3-7 remediation: the damage charge is now INCLUDED on the
-          // credit side — previously debits exceeded credits by exactly the
+          // credit side - previously debits exceeded credits by exactly the
           // damage amount, corrupting the GL on every damaged return.
           // Task 12-c: exact Decimal sums for the JE headers (were float
           // `amountOwed + Number(rental.securityDeposit)`).
@@ -267,10 +267,10 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
           // F3-7: damage charge included in the credit side.
           // Task 12-c: exact Decimal JE header (was
           // `settlement + totalRentalCharge + lateFee + assessedDamageCharge`).
-          // R12 FIX (v2.5.1 — GL corruption): the credit side of a REFUND
+          // R12 FIX (v2.5.1 - GL corruption): the credit side of a REFUND
           // settlement is `refund + charges` = the FULL DEPOSIT (Dr Deposits
           // Held deposit / Cr Cash refund + Cr Revenue charges). It previously
-          // stored `totalCharges` (charges only) — an unbalanced header that
+          // stored `totalCharges` (charges only) - an unbalanced header that
           // understated credits by the refund amount on EVERY refund-type
           // return (8 unbalanced JEs found on production, e.g. Caroline
           // Ochieng JE-20260912-70F63: D 6,670 / C 1,334). Header totals are
@@ -385,7 +385,7 @@ async function processRentalReturnHandler(...args: unknown[]): Promise<Response>
     },
   });
 
-  // R12 FIX (v2.5.1): reconcile the deposit release — for a returned rental
+  // R12 FIX (v2.5.1): reconcile the deposit release - for a returned rental
   // the deposit is split into (charges recognized) + (cash refunded) when the
   // customer gets money back, or (charges) + (balance still owed) when they
   // owe. Surfaces in the API response so the UI/statement can reconcile the

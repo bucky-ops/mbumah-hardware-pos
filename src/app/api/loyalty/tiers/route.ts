@@ -12,8 +12,8 @@
 // GET; SUPER_ADMIN or STORE_OWNER for POST).
 //
 // RBAC:
-//   GET  — any authenticated user (read-only tier config)
-//   POST — SUPER_ADMIN, STORE_OWNER
+//   GET - any authenticated user (read-only tier config)
+//   POST - SUPER_ADMIN, STORE_OWNER
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -24,7 +24,7 @@ import { getTierConfigList } from '@/lib/loyalty-utils';
 
 export const dynamic = 'force-dynamic';
 
-// ─── GET ─────────────────────────────────────────────────────────────────────
+// GET
 
 async function getLoyaltyTiersHandler(
   request: NextRequest,
@@ -33,7 +33,7 @@ async function getLoyaltyTiersHandler(
   const { searchParams } = new URL(request.url);
   const storeId = searchParams.get('storeId');
 
-  // ── Standard tier config (no storeId required) ──
+  // Standard tier config (no storeId required)
   // Returns the canonical BRONZE/SILVER/GOLD/PLATINUM tiers used by the
   // Phase-3 loyalty system. This is the response shape the loyalty card
   // widget consumes.
@@ -46,7 +46,7 @@ async function getLoyaltyTiersHandler(
     });
   }
 
-  // ── DB-configured tiers (storeId provided) ──
+  // DB-configured tiers (storeId provided)
   // Legacy path: return store-specific LoyaltyTier rows.
   const isActive = searchParams.get('isActive');
   const search = searchParams.get('search') || '';
@@ -95,7 +95,7 @@ async function getLoyaltyTiersHandler(
   });
 }
 
-// ─── POST ────────────────────────────────────────────────────────────────────
+// POST
 
 async function createLoyaltyTierHandler(
   request: NextRequest,
@@ -173,7 +173,7 @@ async function createLoyaltyTierHandler(
   return Response.json({ success: true, data: tier }, { status: 201 });
 }
 
-// ─── Exports ─────────────────────────────────────────────────────────────────
+// Exports
 //
 // The legacy GET handler signature was `(...args: unknown[])` so we keep
 // compatibility by accepting the variadic args and forwarding to the typed

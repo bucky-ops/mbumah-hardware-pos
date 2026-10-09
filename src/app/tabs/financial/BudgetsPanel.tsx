@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * BudgetsPanel — Phase 3 sub-tab.
+ * BudgetsPanel - Phase 3 sub-tab.
  *
  * Provides:
  *   • Period selector (dropdown of OPEN/CLOSED periods for the current store).

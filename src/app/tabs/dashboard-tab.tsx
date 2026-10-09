@@ -1,34 +1,34 @@
 'use client';
 
 /**
- * MBUMAH HARDWARE POS — Dashboard (v2.12.0 premium rebuild, Task DASH-UI)
+ * MBUMAH HARDWARE POS - Dashboard (v2.12.0 premium rebuild, Task DASH-UI)
  *
  * Single data source: GET /api/dashboard via dashboardApi.getStats() and
- * TanStack Query (queryKey ['dashboard', storeId], 30s refetch) — the
+ * TanStack Query (queryKey ['dashboard', storeId], 30s refetch) - the
  * response shape is documented by Task DASH-BE in worklog.md. Every figure
  * on this page is LIVE data; nothing is hardcoded and no chart library is
  * used (pure CSS/SVG only).
  *
  * Section → data map:
- *   1. Hero            — useAuthStore user + STORE_LIST + live clock
- *   2. Debt banner     — data.debtCrisis.warning / banner / debtRatioPercent
- *   3. Active shift    — data.shift (snapshot + live elapsed + End-Shift
+ *   1. Hero - useAuthStore user + STORE_LIST + live clock
+ *   2. Debt banner - data.debtCrisis.warning / banner / debtRatioPercent
+ *   3. Active shift - data.shift (snapshot + live elapsed + End-Shift
  *                        dialog reusing the existing shiftsApi.end flow)
- *   4. KPI row         — todayRevenue / todayTransactions /
+ *   4. KPI row - todayRevenue / todayTransactions /
  *                        averageTransactionValue / outOfStockCount +
  *                        lowStockCount / debtCrisis.outstandingTotal
  *                        (sparklines from revenueTrend7d.days and the
- *                        hourly series — never fabricated)
- *   5. Middle row      — hourlySalesBreakdown (6 AM–9 PM bars) +
+ *                        hourly series - never fabricated)
+ *   5. Middle row - hourlySalesBreakdown (6 AM - 9 PM bars) +
  *                        paymentMethodBreakdown (conic-gradient donut)
- *   6. Quick actions   — tab navigation + existing /api/cash-drawer dialog
- *   7. Bottom grid     — recentTransactions + recentActivities (sanitized),
+ *   6. Quick actions - tab navigation + existing /api/cash-drawer dialog
+ *   7. Bottom grid - recentTransactions + recentActivities (sanitized),
  *                        storeHealth, hourlySalesBreakdown heatmap
- *   8. Top customers   — debtCrisis.customers sorted by lifetimeSpend
- *   9. Top products    — topProducts with revenue share bars
- *  10. Sales trend     — revenueTrend7d days + forecast + outlier note
- *  11. Debt aging      — debtCrisis.aging buckets (sum verified)
- *  12. Alerts          — data.alerts + alertsCount + severity actions
+ *   8. Top customers - debtCrisis.customers sorted by lifetimeSpend
+ *   9. Top products - topProducts with revenue share bars
+ *  10. Sales trend - revenueTrend7d days + forecast + outlier note
+ *  11. Debt aging - debtCrisis.aging buckets (sum verified)
+ *  12. Alerts - data.alerts + alertsCount + severity actions
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -67,11 +67,11 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 /**
  * The API serializes Prisma Decimals for the LEGACY list fields, so the UI
- * coerces with Number() at the boundary (DECIMAL-STRING AUDIT precedent —
+ * coerces with Number() at the boundary (DECIMAL-STRING AUDIT precedent -
  * same approach the extracted widgets already use).
  */
 interface RecentTxn {
@@ -108,16 +108,16 @@ type DashboardData = DashboardStats & {
   outstandingDebtCount?: number;
   recentTransactions?: RecentTxn[];
   hourlySalesBreakdown?: HourlyPoint[];
-  // ── v2.12.5 RBAC limited payload (roles without dashboard.view.revenue) ──
+  // v2.12.5 RBAC limited payload (roles without dashboard.view.revenue)
   limitedView?: boolean;
   transactions?: { count: number };
   lowStock?: { count: number; low: number; outOfStock: number };
   mySales?: MySaleRow[];
 };
 
-// ── Small helpers ────────────────────────────────────────────────────────────
+// Small helpers
 
-/** Decimal-string safe number coercion — never trust wire types for money. */
+/** Decimal-string safe number coercion - never trust wire types for money. */
 function num(v: number | string | null | undefined): number {
   const n = typeof v === 'number' ? v : parseFloat(String(v ?? 0));
   return Number.isFinite(n) ? n : 0;
@@ -148,7 +148,7 @@ function receiptTail(receipt: string | null | undefined): string {
 
 const MOTIVATIONAL_QUOTE = 'Consistency beats intensity. Show up and deliver.';
 
-// ── Sparkline (pure inline SVG — NO chart libraries) ────────────────────────
+// Sparkline (pure inline SVG - NO chart libraries)
 
 function Sparkline({ points, className }: { points: number[]; className?: string }) {
   const coords = useMemo(() => {
@@ -187,7 +187,7 @@ function Sparkline({ points, className }: { points: number[]; className?: string
   );
 }
 
-// ── Trend badge ──────────────────────────────────────────────────────────────
+// Trend badge
 
 function TrendBadge({ pct }: { pct: number }) {
   const up = pct > 0.05;
@@ -209,7 +209,7 @@ function TrendBadge({ pct }: { pct: number }) {
   );
 }
 
-// ── 1. HERO ──────────────────────────────────────────────────────────────────
+// 1. HERO
 
 function DashboardHero({ onTab, limited }: { onTab: (tab: AppTab) => void; limited?: boolean }) {
   const user = useAuthStore((s) => s.user);
@@ -307,7 +307,7 @@ function DashboardHero({ onTab, limited }: { onTab: (tab: AppTab) => void; limit
   );
 }
 
-// ── 2. DEBT CRISIS BANNER ────────────────────────────────────────────────────
+// 2. DEBT CRISIS BANNER
 
 function DebtCrisisBanner({ crisis, onTab }: { crisis: DebtCrisisSummary; onTab: (tab: AppTab) => void }) {
   return (
@@ -342,11 +342,11 @@ function DebtCrisisBanner({ crisis, onTab }: { crisis: DebtCrisisSummary; onTab:
   );
 }
 
-// ── 3. ACTIVE SHIFT CARD ─────────────────────────────────────────────────────
+// 3. ACTIVE SHIFT CARD
 
 /**
  * Shared 1-second tick for live clocks. Returns 0 until the client mounts
- * (the SSR/hydration render shows placeholders) — setState fires only inside
+ * (the SSR/hydration render shows placeholders) - setState fires only inside
  * the interval callback, never synchronously within the effect body.
  */
 function useNowMs(): number {
@@ -401,7 +401,7 @@ function ActiveShiftCard({ shift }: { shift: ShiftSnapshot }) {
   const user = useAuthStore((s) => s.user);
   const elapsed = useElapsedLabel(shift.startedAt);
 
-  // ── End-shift flow (existing client pattern: shiftsApi.end + blind xread) ──
+  // End-shift flow (existing client pattern: shiftsApi.end + blind xread)
   const role = user?.role;
   const isOwnerRole = role === 'SUPER_ADMIN' || role === 'STORE_OWNER';
   const blindCount = !isOwnerRole;
@@ -718,7 +718,7 @@ function ActiveShiftCard({ shift }: { shift: ShiftSnapshot }) {
   );
 }
 
-// ── 4. KPI ROW ───────────────────────────────────────────────────────────────
+// 4. KPI ROW
 
 function KpiCard({ label, value, icon: Icon, iconClass, sub, badge, onClick, sparkline, sparklineClass, valueClass }: {
   label: string;
@@ -778,10 +778,10 @@ function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppT
   const revenueChange = typeof changeRaw === 'number' && Number.isFinite(changeRaw) ? changeRaw : 0;
   const showTrendBadge = revenueChange !== 0 || todayRevenue > 0;
 
-  // v2.13.3 (spec PART 2 — KPI fixes for a NEW branch): with zero sales today
-  // the trend badge must read GRAY (never green/red — there is nothing to
+  // v2.13.3 (spec PART 2 - KPI fixes for a NEW branch): with zero sales today
+  // the trend badge must read GRAY (never green/red - there is nothing to
   // celebrate or alarm about at 0) and the card must coach the cashier with
-  // "No sales yet today — start selling!" instead of a bare 0.00.
+  // "No sales yet today - start selling!" instead of a bare 0.00.
   const noSalesToday = todayRevenue === 0 && txns === 0;
   const zeroSalesTrendBadge = noSalesToday ? (
     <span
@@ -794,14 +794,14 @@ function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppT
     </span>
   ) : null;
 
-  // Real series only — never fabricate a sparkline.
+  // Real series only - never fabricate a sparkline.
   const revenueSpark = (data.revenueTrend7d?.days ?? [])
     .map((day) => num(day?.revenue))
     .filter((v) => Number.isFinite(v));
   const hourly = Array.isArray(data.hourlySalesBreakdown) ? data.hourlySalesBreakdown : [];
   const txnSpark = hourly.map((h) => num(h?.transactionCount));
   // ATV sparkline only over hours that actually had sales (zero-sale hours
-  // have no average — plotting 0 would fabricate a dip).
+  // have no average - plotting 0 would fabricate a dip).
   const atvSpark = hourly
     .map((h) => {
       const c = num(h?.transactionCount);
@@ -878,7 +878,7 @@ function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppT
   );
 }
 
-// ── 4b. LIMITED DASHBOARD (v2.12.5 RBAC — cashier / revenue-denied roles) ────
+// 4b. LIMITED DASHBOARD (v2.12.5 RBAC - cashier / revenue-denied roles)
 // Rendered INSTEAD of the full 12-section dashboard when the API payload says
 // limitedView:true (server already refused to compute revenue/debt/analytics
 // for these roles). 4 KPIs + own sales + info banner + LockedCards.
@@ -1026,7 +1026,7 @@ function LimitedDashboard({ data }: { data: DashboardData | null }) {
   );
 }
 
-// ── 5a. REVENUE TREND BY HOUR (pure CSS bars) ────────────────────────────────
+// 5a. REVENUE TREND BY HOUR (pure CSS bars)
 
 function HourlyRevenueChart({ data }: { data: DashboardData | null }) {
   const hours = useMemo<HourlyPoint[]>(() => {
@@ -1037,7 +1037,7 @@ function HourlyRevenueChart({ data }: { data: DashboardData | null }) {
       if (Number.isNaN(k)) return;
       byHour.set(k, { hour: String(k), amount: num(h?.amount), transactionCount: num(h?.transactionCount) });
     });
-    // Business hours 6 AM – 9 PM only, for readability.
+    // Business hours 6 AM - 9 PM only, for readability.
     return Array.from({ length: 16 }, (_, i) => {
       const hour = i + 6;
       return byHour.get(hour) ?? { hour: String(hour), amount: 0, transactionCount: 0 };
@@ -1137,7 +1137,7 @@ function HourlyRevenueChart({ data }: { data: DashboardData | null }) {
   );
 }
 
-// ── 5b. PAYMENT METHODS (conic-gradient donut) ───────────────────────────────
+// 5b. PAYMENT METHODS (conic-gradient donut)
 
 const PAYMENT_META: Record<string, { label: string; color: string }> = {
   CASH: { label: 'Cash', color: '#10b981' },
@@ -1233,7 +1233,7 @@ function PaymentMethodsCard({ data }: { data: DashboardData | null }) {
   );
 }
 
-// ── 6. QUICK ACTIONS ─────────────────────────────────────────────────────────
+// 6. QUICK ACTIONS
 
 interface CashDrawerSummary {
   currentBalance: number;
@@ -1287,7 +1287,7 @@ function QuickActionsRow({ onTab }: { onTab: (tab: AppTab) => void }) {
       onClick: () => onTab('catalog'),
     },
     {
-      // No dedicated expenses tab — the Financial tab owns expense recording.
+      // No dedicated expenses tab - the Financial tab owns expense recording.
       label: 'Record Expense',
       icon: Receipt,
       className: 'bg-amber-50 text-amber-700 hover:bg-amber-100',
@@ -1368,7 +1368,7 @@ function QuickActionsRow({ onTab }: { onTab: (tab: AppTab) => void }) {
   );
 }
 
-// ── 7a. RECENT ACTIVITY (Recent Sales / System Activity) ─────────────────────
+// 7a. RECENT ACTIVITY (Recent Sales / System Activity)
 
 const PM_BADGE: Record<string, string> = {
   CASH: 'bg-emerald-100 text-emerald-700',
@@ -1472,7 +1472,7 @@ function RecentActivityCard({ data }: { data: DashboardData | null }) {
   );
 }
 
-// ── 7b. STORE HEALTH (SVG circular gauge) ────────────────────────────────────
+// 7b. STORE HEALTH (SVG circular gauge)
 
 function healthColor(score: number, key?: string): string {
   if (key === 'debt' && score < 30) return '#ef4444';
@@ -1574,7 +1574,7 @@ function StoreHealthCard({ data }: { data: DashboardData | null }) {
   );
 }
 
-// ── 7c. HOURLY SALES HEATMAP ─────────────────────────────────────────────────
+// 7c. HOURLY SALES HEATMAP
 
 function HourlyHeatmapCard({ data }: { data: DashboardData | null }) {
   const hours = useMemo(() => {
@@ -1584,7 +1584,7 @@ function HourlyHeatmapCard({ data }: { data: DashboardData | null }) {
       const k = parseInt(String(h?.hour ?? ''), 10);
       if (!Number.isNaN(k)) byHour.set(k, num(h?.amount));
     });
-    // 6 AM – 9 PM window, matching the bar chart above.
+    // 6 AM - 9 PM window, matching the bar chart above.
     return Array.from({ length: 16 }, (_, i) => {
       const hour = i + 6;
       return { hour, amount: byHour.get(hour) ?? 0 };
@@ -1660,7 +1660,7 @@ function HourlyHeatmapCard({ data }: { data: DashboardData | null }) {
   );
 }
 
-// ── 8. TOP CUSTOMERS (by lifetime spend) ─────────────────────────────────────
+// 8. TOP CUSTOMERS (by lifetime spend)
 
 function tierFor(spend: number): { label: 'GOLD' | 'SILVER' | 'BRONZE'; className: string } {
   if (spend >= 300_000) return { label: 'GOLD', className: 'bg-yellow-100 text-yellow-700' };
@@ -1772,7 +1772,7 @@ function TopCustomersCard({ data, onTab }: { data: DashboardData | null; onTab: 
   );
 }
 
-// ── 9. TOP SELLING PRODUCTS ──────────────────────────────────────────────────
+// 9. TOP SELLING PRODUCTS
 
 function TopProductsCard({ data }: { data: DashboardData | null }) {
   const products: TopProduct[] = useMemo(() => {
@@ -1829,7 +1829,7 @@ function TopProductsCard({ data }: { data: DashboardData | null }) {
   );
 }
 
-// ── 10. SALES TREND (7 DAYS) + FORECAST ──────────────────────────────────────
+// 10. SALES TREND (7 DAYS) + FORECAST
 
 function SalesTrendForecastCard({ data }: { data: DashboardData | null }) {
   const trend: RevenueTrend7d | null | undefined = data?.revenueTrend7d;
@@ -1952,7 +1952,7 @@ function SalesTrendForecastCard({ data }: { data: DashboardData | null }) {
   );
 }
 
-// ── 11. DEBT AGING SUMMARY ───────────────────────────────────────────────────
+// 11. DEBT AGING SUMMARY
 
 function DebtAgingCard({ data }: { data: DashboardData | null }) {
   const crisis: DebtCrisisSummary | null | undefined = data?.debtCrisis;
@@ -2042,7 +2042,7 @@ function DebtAgingCard({ data }: { data: DashboardData | null }) {
   );
 }
 
-// ── 12. ALERTS & NOTIFICATIONS ───────────────────────────────────────────────
+// 12. ALERTS & NOTIFICATIONS
 
 function alertSeverityStyle(severity: string): { icon: React.ElementType; circle: string; text: string } {
   if (severity === 'critical') return { icon: AlertTriangle, circle: 'bg-red-100 text-red-600', text: 'text-red-600' };
@@ -2157,7 +2157,7 @@ function AlertsCard({ data, onTab }: { data: DashboardData | null; onTab: (tab: 
   );
 }
 
-// ── Loading skeleton ─────────────────────────────────────────────────────────
+// Loading skeleton
 
 function DashboardSkeleton() {
   return (
@@ -2195,7 +2195,7 @@ function DashboardSkeleton() {
   );
 }
 
-// ── Orchestrator ─────────────────────────────────────────────────────────────
+// Orchestrator
 
 export default function DashboardTab() {
   const { currentStoreId, setActiveTab } = useAppStore();
@@ -2215,7 +2215,7 @@ export default function DashboardTab() {
       const raw = res.data as DashboardData | null;
       if (!raw || typeof raw !== 'object') return null;
       // Defensive: coerce every list the UI renders (Decimal-string audit
-      // precedent — never trust wire shapes).
+      // precedent - never trust wire shapes).
       return {
         ...raw,
         salesByHour: Array.isArray(raw.salesByHour) ? raw.salesByHour : [],
@@ -2265,7 +2265,7 @@ export default function DashboardTab() {
     );
   }
 
-  // ── v2.12.5 RBAC: LIMITED DASHBOARD (cashier / revenue-denied roles) ──
+  // v2.12.5 RBAC: LIMITED DASHBOARD (cashier / revenue-denied roles)
   // The API early-returns a minimal payload (limitedView:true) for roles
   // without 'dashboard.view.revenue'; render the dedicated compact layout
   // instead of the full 12-section dashboard.

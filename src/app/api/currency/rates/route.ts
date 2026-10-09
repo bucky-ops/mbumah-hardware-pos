@@ -1,20 +1,17 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Exchange Rate API
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Exchange Rate API
 //
-// GET  /api/currency/rates           — list all stored CurrencyRate rows
-// POST /api/currency/rates           — upsert one or more rates (SUPER_ADMIN only)
+// GET  /api/currency/rates - list all stored CurrencyRate rows
+// POST /api/currency/rates - upsert one or more rates (SUPER_ADMIN only)
 //
 // Rates are stored as (base, quote) pairs in the `CurrencyRate` table.
-// KES is the canonical pivot currency — typical rows are (KES, USD),
+// KES is the canonical pivot currency - typical rows are (KES, USD),
 // (KES, UGX), (KES, TZS). The GET response always includes the static
 // fallback rates from `currency-utils.ts` so the client can display
 // something even before any DB rows exist.
 //
 // Auth:
-//   • GET — any authenticated user can read rates (needed for the switcher).
-//   • POST — SUPER_ADMIN only (financial configuration).
-// ─────────────────────────────────────────────────────────────────────────────
+//   • GET - any authenticated user can read rates (needed for the switcher).
+//   • POST - SUPER_ADMIN only (financial configuration).
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { db, runWithoutTenant } from '@/lib/db';
@@ -26,7 +23,7 @@ import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
 
-// ── GET: list all stored rates + static fallback ────────────────────────────
+// GET: list all stored rates + static fallback
 async function getHandler(): Promise<Response> {
   return runWithoutTenant(async () => {
     let rows: { base: string; quote: string; rate: Decimal; source: string; updatedAt: Date }[] = [];
@@ -93,7 +90,7 @@ async function getHandler(): Promise<Response> {
   });
 }
 
-// ── POST: upsert rates (SUPER_ADMIN only) ───────────────────────────────────
+// POST: upsert rates (SUPER_ADMIN only)
 //
 // Request body:
 //   { rates: [{ base: "KES", quote: "USD", rate: "152.5", source?: "MANUAL" }] }

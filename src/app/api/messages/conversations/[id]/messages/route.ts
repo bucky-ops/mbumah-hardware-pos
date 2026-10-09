@@ -2,16 +2,16 @@
 //
 // List and post messages within a single conversation thread.
 //
-//   GET  — paginated list of ConversationMessage rows, oldest-first by default.
-//   POST — add a new message to the thread. The caller must be a participant.
+//   GET - paginated list of ConversationMessage rows, oldest-first by default.
+//   POST - add a new message to the thread. The caller must be a participant.
 //          On POST we also update the parent Conversation's lastMessageAt /
 //          lastMessagePreview (denormalized for the list UI).
 //
 // Query params (GET):
-//   limit    — default 50, max 200
-//   before   — ISO timestamp; return messages sent BEFORE this time (for
+//   limit - default 50, max 200
+//   before - ISO timestamp; return messages sent BEFORE this time (for
 //              paginating backward in time / infinite scroll)
-//   order    — asc | desc (default asc, oldest-first for chat UX)
+//   order - asc | desc (default asc, oldest-first for chat UX)
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -66,7 +66,7 @@ async function authorizeParticipant(
   return { ok: true, conversation };
 }
 
-// ── GET: list messages in a conversation ──────────────────────────────────────
+// GET: list messages in a conversation
 async function listMessagesHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null },
@@ -101,7 +101,7 @@ async function listMessagesHandler(
   });
 
   // Mark the caller's read timestamp on each message's readStatus.
-  // (We don't persist the read-mark here — that's a separate PATCH — but we
+  // (We don't persist the read-mark here - that's a separate PATCH - but we
   // return the parsed readStatus so the UI can show "unread" badges.)
   const data = messages.map((m) => {
     let readStatus: Record<string, string> = {};
@@ -128,7 +128,7 @@ async function listMessagesHandler(
   return Response.json({ success: true, data });
 }
 
-// ── POST: post a new message to a conversation ────────────────────────────────
+// POST: post a new message to a conversation
 async function postMessageHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null; email: string },
@@ -169,7 +169,7 @@ async function postMessageHandler(
     );
   }
 
-  // Length sanity check (defensive — UI may not enforce).
+  // Length sanity check (defensive - UI may not enforce).
   if (content.length > 10_000) {
     return Response.json(
       { success: false, error: 'content is too long (max 10,000 characters).' },

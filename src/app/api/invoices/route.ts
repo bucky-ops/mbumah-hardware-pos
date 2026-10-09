@@ -21,7 +21,7 @@ const INVOICE_PREFIXES: Record<string, string> = {
 
 // AUDIT FIX: quotes are Invoice rows with invoiceType QUOTATION/PROFORMA and
 // dueDate as the "Valid Until" date. Invoice.status is a plain String column
-// (schema.prisma ~1215 — NOT a Prisma enum), so both CONVERTED marking and
+// (schema.prisma ~1215 - NOT a Prisma enum), so both CONVERTED marking and
 // lazy auto-expiry below are allowed without schema changes.
 const QUOTE_TYPES = ['QUOTATION', 'PROFORMA'];
 // Statuses that mean a quote is no longer open for conversion/auto-expiry.
@@ -215,10 +215,10 @@ async function createInvoiceHandler(...args: unknown[]): Promise<Response> {
   // AUDIT FIX: lazily expire overdue quotes on POST too.
   await expireStaleQuotes(typeof storeId === 'string' ? storeId : undefined);
 
-  // ── Quote→Invoice conversion enforcement ─────────────────────────────────
+  // Quote→Invoice conversion enforcement
   // The client converts a quote by re-POSTing an INVOICE-type document whose
   // notes start with "Converted from <quoteNumber>" and that copy the quote's
-  // (possibly stale) dueDate — see src/app/tabs/invoices-tab.tsx:477-503.
+  // (possibly stale) dueDate - see src/app/tabs/invoices-tab.tsx:477-503.
   // Detection below mirrors that exact payload shape.
   let sourceQuote: {
     id: string;
@@ -243,7 +243,7 @@ async function createInvoiceHandler(...args: unknown[]): Promise<Response> {
   }
 
   if (sourceQuote) {
-    // (b) Double-conversion guard #1 — quotes converted after this fix are
+    // (b) Double-conversion guard #1 - quotes converted after this fix are
     // marked CONVERTED (Invoice.status is a plain String column).
     if (sourceQuote.status === 'CONVERTED') {
       return Response.json(
@@ -256,7 +256,7 @@ async function createInvoiceHandler(...args: unknown[]): Promise<Response> {
       );
     }
 
-    // (b) Double-conversion guard #2 (back-compat) — quotes converted before
+    // (b) Double-conversion guard #2 (back-compat) - quotes converted before
     // this fix carry no CONVERTED status; detect via the client's own
     // "Converted from <quoteNumber>" notes fingerprint.
     const existingConversion = await db.invoice.findFirst({
@@ -298,13 +298,13 @@ async function createInvoiceHandler(...args: unknown[]): Promise<Response> {
   }
 
   // Validate items and compute totals
-  // FINANCIAL MATH AUDIT — Decimal-exact line math (HALF_UP 2dp at the
+  // FINANCIAL MATH AUDIT - Decimal-exact line math (HALF_UP 2dp at the
   // line level). Invoices are B2B/wholesale documents → VAT-EXCLUSIVE
   // (tax added on top of the net line amount), per the audit spec §2.
   // Σ(lineTotal) − document discount === totalAmount EXACTLY (no drift).
   //
   // v2.8.0: VAT is fully controlled by the ADMIN SETTING (SystemConfig
-  // `vat_rate_percent`) — the admin rate overrides the per-line value so
+  // `vat_rate_percent`) - the admin rate overrides the per-line value so
   // that setting 0% makes every VAT field on every new invoice 0.
   const adminVatRate = await getVatRatePercent();
   let subtotalAcc = new Decimal(0);
@@ -330,7 +330,7 @@ async function createInvoiceHandler(...args: unknown[]): Promise<Response> {
     // v2.8.0: admin-controlled VAT rate is authoritative for new invoices.
     const taxRt = Math.min(100, Math.max(0, adminVatRate));
 
-    // Line math — every step HALF_UP-rounded to 2dp in Decimal.
+    // Line math - every step HALF_UP-rounded to 2dp in Decimal.
     const lineSubtotal = toDec(item.quantity).mul(toDec(item.pricePerUnit)).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
     const lineDiscount = lineSubtotal.mul(discountPct).div(100).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
     const lineAfterDiscount = lineSubtotal.minus(lineDiscount);
@@ -360,7 +360,7 @@ async function createInvoiceHandler(...args: unknown[]): Promise<Response> {
   const subtotal = subtotalAcc.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toNumber();
   const taxAmount = taxAmountAcc.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toNumber();
   // Document-level discount: validated (≥ 0, capped at the pre-tax gross
-  // subtotal) — a negative or oversized discount previously could push the
+  // subtotal) - a negative or oversized discount previously could push the
   // invoice total negative or inflate it via the update route.
   const totalDiscount = Math.min(
     max0(toDec(discountAmount as number | undefined)).toNumber(),
@@ -375,7 +375,7 @@ async function createInvoiceHandler(...args: unknown[]): Promise<Response> {
   // concurrent conversions cannot both pass the pre-checks above.
   const invoice = await db.$transaction(async (tx) => {
     if (sourceQuote) {
-      // (b) Atomic claim of the source quote — the updateMany predicate makes
+      // (b) Atomic claim of the source quote - the updateMany predicate makes
       // check-and-mark a single operation; a concurrent loser gets count 0.
       const claim = await tx.invoice.updateMany({
         where: { id: sourceQuote.id, status: { not: 'CONVERTED' } },
@@ -428,7 +428,7 @@ async function createInvoiceHandler(...args: unknown[]): Promise<Response> {
     throw error;
   });
 
-  // The transaction catch above can resolve to a 409 Response — short-circuit.
+  // The transaction catch above can resolve to a 409 Response - short-circuit.
   if (invoice instanceof Response) {
     return invoice;
   }
@@ -454,7 +454,7 @@ async function createInvoiceHandler(...args: unknown[]): Promise<Response> {
 }
 
 // AUDIT FIX: session auth verified present on both handlers (base wrapper,
-// no roles — mirrors the other money routes). Quote expiry enforcement from
+// no roles - mirrors the other money routes). Quote expiry enforcement from
 // fix 4 runs inside the handlers above.
 export const GET = withErrorBoundary(withSessionAuth(getInvoicesHandler), 'INVOICES_LIST');
 export const POST = withErrorBoundary(withSessionAuth(createInvoiceHandler), 'INVOICES_CREATE');

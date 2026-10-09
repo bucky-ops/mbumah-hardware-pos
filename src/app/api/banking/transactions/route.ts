@@ -12,7 +12,7 @@ import { withSessionAuth, FINANCIAL_ROLES } from '@/lib/auth';
 import { toDec, toNum, round2 } from '@/lib/utils/financialMath';
 
 // Typed in-transaction failure for the conditional WITHDRAWAL claim (count 0).
-// Caught in the handler and surfaced as the client-facing 400 — a failed
+// Caught in the handler and surfaced as the client-facing 400 - a failed
 // overdraw attempt is a normal user error, not a server fault (same pattern
 // as CreditLimitExceededError in src/app/api/transactions/route.ts).
 class InsufficientFundsError extends Error {
@@ -166,7 +166,7 @@ async function createBankTransactionHandler(...args: unknown[]): Promise<Respons
   // Money rounded HALF_UP to 2dp before it touches a Decimal column.
   const amountNum = round2(amtDec);
   // Compute direction ONCE: deposits/interest are inflows; everything else
-  // (WITHDRAWAL, TRANSFER, FEE) is an outflow — same split as before.
+  // (WITHDRAWAL, TRANSFER, FEE) is an outflow - same split as before.
   const isInflow = tType === 'DEPOSIT' || tType === 'INTEREST';
 
   // Get current balance and compute new balance
@@ -188,10 +188,10 @@ async function createBankTransactionHandler(...args: unknown[]): Promise<Respons
     );
   }
 
-  // ── Task 12-c: ATOMIC ledger write ──────────────────────────────────────
+  // Task 12-c: ATOMIC ledger write
   // The old flow read `account.currentBalance` OUTSIDE the transaction,
   // string-concatenated the amount onto the Prisma Decimal, then wrote the
-  // absolute value back — corrupting the ledger AND racing concurrent
+  // absolute value back - corrupting the ledger AND racing concurrent
   // transactions (lost update). Now the balance moves via Prisma's atomic
   // increment/decrement inside the transaction, and the WITHDRAWAL-style
   // outflow claims the funds with a `gte` predicate so an overdraw can

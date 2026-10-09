@@ -1,17 +1,17 @@
-// POST /api/etims/issue-invoice — Issue an electronic tax invoice (KRA eTIMS)
+// POST /api/etims/issue-invoice - Issue an electronic tax invoice (KRA eTIMS)
 // for a sales transaction.
 //
-// AUDIT REMEDIATION — FINANCIAL_MODULE_AUDIT_REPORT.md:
+// AUDIT REMEDIATION - FINANCIAL_MODULE_AUDIT_REPORT.md:
 //   • SYS-1: the endpoint was a bare `export async function POST` with no
-//     wrapper at all — now session-gated with FINANCIAL_ROLES.WRITE.
+//     wrapper at all - now session-gated with FINANCIAL_ROLES.WRITE.
 //   • F9-2 (P0): the etims-service is a MOCK that hardcodes
 //     `status: 'ISSUED'` and a fabricated QR. Issuing fake "compliant"
 //     tax invoices in production is a Tax Procedures Act violation. The
 //     route now HARD-FAILS (503) when the configured client is a mock and
-//     ETIMS_ALLOW_MOCK_ISSUANCE !== 'true' — ops must either integrate the
+//     ETIMS_ALLOW_MOCK_ISSUANCE !== 'true' - ops must either integrate the
 //     real KRA API or explicitly accept mock mode with this flag.
 //   • F9-2 payload fixes: per-line tax rate from the SaleItem (the mock sent
-//     a hardcoded 0.16 for every line — zero-rated items were over-declared),
+//     a hardcoded 0.16 for every line - zero-rated items were over-declared),
 //     per-line discount computed from discountPercent (the field read,
 //     `discountAmount`, does not exist on SaleItem so discounts were never
 //     reported), and the invoice number sequence is scoped per store instead

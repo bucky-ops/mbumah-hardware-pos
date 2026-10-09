@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * DashboardStats — top KPI cards row.
+ * DashboardStats - top KPI cards row.
  *
  * Extracted from `dashboard-tab.tsx` to slim down the orchestrator. Renders
  * five animated KPI cards (Revenue, Transactions, Avg Transaction Value, Low Stock,
@@ -23,7 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 import type { KpiDetail, KpiMetricKey } from './types';
 
-// --- Local helpers (kept here because only this component uses them) ---------
+// --- Local helpers (kept here because only this component uses them)
 
 function useAnimatedCounter(target: number, duration = 800) {
   const [count, setCount] = useState(0);
@@ -75,7 +75,7 @@ function MiniSparkline({ data, color, height = 28 }: { data: number[]; color: st
   );
 }
 
-// --- Detailed skeleton that matches KPI card layout ---------------------------
+// --- Detailed skeleton that matches KPI card layout
 
 function KpiCardSkeleton() {
   return (
@@ -101,7 +101,7 @@ function KpiCardSkeleton() {
   );
 }
 
-// --- Component ---------------------------------------------------------------
+// --- Component
 
 export interface DashboardStatsProps {
   storeId: string;

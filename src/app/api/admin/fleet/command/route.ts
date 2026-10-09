@@ -1,22 +1,19 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Fleet command API (RAK, v2.11.0)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Fleet command API (RAK, v2.11.0)
 //
-// POST /api/admin/fleet/command — issue a signed command to one or more store
+// POST /api/admin/fleet/command - issue a signed command to one or more store
 // agents. The command is committed to `commands/<store-id>.json` in the
 // private ops-log repo; the commit IS the audit record (docs/REMOTE_ACCESS_
 // KIT_PLAN.md §5.2). Agents pick it up on their next 15-minute poll, verify
 // the HMAC signature + freshness + replay window, then execute.
 //
 //   type      update | rollback | freeze | unfreeze | tunnel
-//   targets   1–10 store ids (as known from the fleet ledger)
+//   targets   1-10 store ids (as known from the fleet ledger)
 //   version   required for update/rollback (a published release tag)
-//   force     trading-hours override — the agent still reports, never fakes
+//   force     trading-hours override - the agent still reports, never fakes
 //   ttl-minutes  remote-view session length (tunnel)
 //   reason    free text; becomes part of the permanent ledger line
 //
 // Auth: SUPER_ADMIN only (destructive control surface).
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';

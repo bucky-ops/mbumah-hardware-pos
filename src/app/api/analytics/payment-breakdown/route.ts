@@ -3,7 +3,7 @@
 // Returns the distribution of payment methods (CASH, MPESA, CARD, DEBT, SPLIT)
 // for the selected period: count, total amount, and percentage of total.
 //
-// Uses Prisma groupBy on the paymentMethod field — this is supported on
+// Uses Prisma groupBy on the paymentMethod field - this is supported on
 // SQLite because it's a scalar column on SalesTransaction.
 //
 // Query params:
@@ -18,7 +18,7 @@ import { db } from '@/lib/db';
 import { requireAuth, type AuthSession } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
 import { getPeriodWindow, type AnalyticsPeriod } from '@/lib/analytics-utils';
-// Task 12-b: Decimal-safe conversion — Prisma Decimal valueOf() returns a
+// Task 12-b: Decimal-safe conversion - Prisma Decimal valueOf() returns a
 // STRING, so `number + decimal` concatenates; accumulate via toDec().
 import { toDec, round2 } from '@/lib/utils/financialMath';
 
@@ -67,7 +67,7 @@ async function getPaymentBreakdownHandler(
   });
 
   // Task 12-b: these are TENDER totals (money COLLECTED per payment method,
-  // tax-INCLUSIVE) by design — the chart is labelled by payment method, and
+  // tax-INCLUSIVE) by design - the chart is labelled by payment method, and
   // tender ≠ revenue (VAT is owed to KRA). Only the accumulation was made
   // Decimal-safe; the basis is intentionally unchanged.
   const totalRevenue = grouped.reduce(
@@ -78,7 +78,7 @@ async function getPaymentBreakdownHandler(
 
   // Ensure every known method appears in the response so the donut chart has
   // a stable set of slices even when there's no activity for that method.
-  // Includes GIFT_CARD — gift-card sales are recorded as SalesTransaction
+  // Includes GIFT_CARD - gift-card sales are recorded as SalesTransaction
   // rows with paymentMethod='GIFT_CARD' when redeemed at checkout.
   const knownMethods = ['CASH', 'MPESA', 'CARD', 'DEBT', 'SPLIT', 'GIFT_CARD'];
   const byMethodMap = new Map<string, PaymentBreakdownRow>();

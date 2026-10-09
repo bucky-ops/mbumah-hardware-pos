@@ -40,10 +40,10 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-// ─── Sub-tab type ────────────────────────────────────────────────────────────
+// Sub-tab type
 type LoyaltySubTab = 'tiers' | 'members' | 'transactions' | 'campaigns';
 
-// ─── Tier color presets ──────────────────────────────────────────────────────
+// Tier color presets
 const TIER_COLOR_PRESETS = [
   { label: 'Bronze', value: '#CD7F32', tw: 'bg-[#CD7F32]' },
   { label: 'Silver', value: '#C0C0C0', tw: 'bg-[#C0C0C0]' },
@@ -57,7 +57,7 @@ const TIER_COLOR_PRESETS = [
   { label: 'Obsidian', value: '#3D3D3D', tw: 'bg-[#3D3D3D]' },
 ];
 
-// ─── Transaction type config ─────────────────────────────────────────────────
+// Transaction type config
 const TX_TYPE_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
   EARN:    { label: 'Earn',    color: 'text-green-700 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-900/30', icon: TrendingUp },
   REDEEM:  { label: 'Redeem',  color: 'text-blue-700 dark:text-blue-400',   bg: 'bg-blue-100 dark:bg-blue-900/30',   icon: HandCoins },
@@ -66,7 +66,7 @@ const TX_TYPE_CONFIG: Record<string, { label: string; color: string; bg: string;
   ADJUST:  { label: 'Adjust',  color: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30', icon: Settings2 },
 };
 
-// ─── Campaign type config ────────────────────────────────────────────────────
+// Campaign type config
 const CAMPAIGN_TYPE_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
   BONUS_POINTS:   { label: 'Bonus Points',   color: 'text-purple-700 dark:text-purple-400', bg: 'bg-purple-100 dark:bg-purple-900/30', icon: Gift },
   DOUBLE_POINTS:  { label: 'Double Points',  color: 'text-amber-700 dark:text-amber-400',   bg: 'bg-amber-100 dark:bg-amber-900/30',   icon: Zap },
@@ -74,7 +74,7 @@ const CAMPAIGN_TYPE_CONFIG: Record<string, { label: string; color: string; bg: s
   SPECIAL_EVENT:  { label: 'Special Event',  color: 'text-rose-700 dark:text-rose-400',     bg: 'bg-rose-100 dark:bg-rose-900/30',     icon: Megaphone },
 };
 
-// ─── Campaign status config ──────────────────────────────────────────────────
+// Campaign status config
 const CAMPAIGN_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   DRAFT:     { label: 'Draft',     color: 'text-gray-600 dark:text-gray-400',   bg: 'bg-gray-100 dark:bg-gray-800/50' },
   ACTIVE:    { label: 'Active',    color: 'text-green-700 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-900/30' },
@@ -82,7 +82,7 @@ const CAMPAIGN_STATUS_CONFIG: Record<string, { label: string; color: string; bg:
   CANCELLED: { label: 'Cancelled', color: 'text-red-700 dark:text-red-400',     bg: 'bg-red-100 dark:bg-red-900/30' },
 };
 
-// ─── Helper: get tier icon component ─────────────────────────────────────────
+// Helper: get tier icon component
 function getTierIcon(name: string): React.ElementType {
   const lower = name.toLowerCase();
   if (lower.includes('platinum')) return Gem;
@@ -92,7 +92,7 @@ function getTierIcon(name: string): React.ElementType {
   return Trophy;
 }
 
-// ─── Main Component ──────────────────────────────────────────────────────────
+// Main Component
 export default function LoyaltyTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
   const queryClient = useQueryClient();
@@ -100,7 +100,7 @@ export default function LoyaltyTab() {
   // Sub-tab state
   const [activeSubTab, setActiveSubTab] = useState<LoyaltySubTab>('tiers');
 
-  // ─── Tier dialog state ───────────────────────────────────────────────────
+  // Tier dialog state
   const [tierDialogOpen, setTierDialogOpen] = useState(false);
   const [editingTier, setEditingTier] = useState<LoyaltyTierItem | null>(null);
   const [tierForm, setTierForm] = useState({
@@ -116,7 +116,7 @@ export default function LoyaltyTab() {
     isActive: true,
   });
 
-  // ─── Member state ────────────────────────────────────────────────────────
+  // Member state
   const [memberSearch, setMemberSearch] = useState('');
   const [memberTierFilter, setMemberTierFilter] = useState<string>('all');
   const [adjustPointsOpen, setAdjustPointsOpen] = useState(false);
@@ -125,7 +125,7 @@ export default function LoyaltyTab() {
   const [memberHistoryOpen, setMemberHistoryOpen] = useState(false);
   const [memberHistoryCustomerId, setMemberHistoryCustomerId] = useState<string>('');
 
-  // ─── Transaction state ───────────────────────────────────────────────────
+  // Transaction state
   const [txTypeFilter, setTxTypeFilter] = useState<string>('all');
   const [txDateFrom, setTxDateFrom] = useState('');
   const [txDateTo, setTxDateTo] = useState('');
@@ -139,7 +139,7 @@ export default function LoyaltyTab() {
     description: '',
   });
 
-  // ─── Campaign state ─────────────────────────────────────────────────────
+  // Campaign state
   const [campaignDialogOpen, setCampaignDialogOpen] = useState(false);
   const [campaignFilter, setCampaignFilter] = useState<string>('all');
   const [campaignForm, setCampaignForm] = useState({
@@ -153,7 +153,7 @@ export default function LoyaltyTab() {
     targetTierId: 'all',
   });
 
-  // ─── Queries ─────────────────────────────────────────────────────────────
+  // Queries
   const { data: tiersData, isLoading: tiersLoading } = useQuery({
     queryKey: ['loyalty-tiers', currentStoreId],
     queryFn: () => loyaltyApi.tiers.list({ storeId: currentStoreId, limit: 50 }),
@@ -184,7 +184,7 @@ export default function LoyaltyTab() {
     }),
   });
 
-  // ─── Member history query ────────────────────────────────────────────────
+  // Member history query
   const { data: memberHistoryData, isLoading: memberHistoryLoading } = useQuery({
     queryKey: ['loyalty-member-history', currentStoreId, memberHistoryCustomerId],
     queryFn: () => loyaltyApi.transactions.list({
@@ -195,7 +195,7 @@ export default function LoyaltyTab() {
     enabled: !!memberHistoryCustomerId,
   });
 
-  // ─── Mutations ───────────────────────────────────────────────────────────
+  // Mutations
   const createTierMutation = useMutation({
     mutationFn: (data: Parameters<typeof loyaltyApi.tiers.create>[0]) => loyaltyApi.tiers.create(data),
     onSuccess: () => {
@@ -232,7 +232,7 @@ export default function LoyaltyTab() {
     onError: (err: Error) => toast.error(err.message || 'Failed to create campaign'),
   });
 
-  // ─── Derived data ────────────────────────────────────────────────────────
+  // Derived data
   const tiers = Array.isArray((tiersData as any)?.data) ? (tiersData as any).data : [];
   const customers = Array.isArray((customersData as any)?.data) ? (customersData as any).data : [];
   const transactions = Array.isArray((txData as any)?.data) ? (txData as any).data : [];
@@ -270,7 +270,7 @@ export default function LoyaltyTab() {
     return result.sort((a, b) => (b.loyaltyPoints ?? 0) - (a.loyaltyPoints ?? 0));
   })();
 
-  // ─── Helpers ─────────────────────────────────────────────────────────────
+  // Helpers
   function resetTierForm() {
     setTierForm({
       name: '', minPoints: 0, maxPoints: '', discountPercent: 0,
@@ -345,7 +345,7 @@ export default function LoyaltyTab() {
     setTierDialogOpen(true);
   }
 
-  // ─── Render: Stats Cards ─────────────────────────────────────────────────
+  // Render: Stats Cards
   function renderStatsCards() {
     const stats = [
       { title: 'Total Members', value: totalMembers.toLocaleString(), icon: Users, color: 'text-emerald-600' },
@@ -372,7 +372,7 @@ export default function LoyaltyTab() {
     );
   }
 
-  // ─── Render: Tiers Sub-tab ───────────────────────────────────────────────
+  // Render: Tiers Sub-tab
   function renderTiers() {
     if (tiersLoading) {
       return (
@@ -481,7 +481,7 @@ export default function LoyaltyTab() {
     );
   }
 
-  // ─── Render: Members Sub-tab ─────────────────────────────────────────────
+  // Render: Members Sub-tab
   function renderMembers() {
     if (customersLoading) {
       return (
@@ -653,7 +653,7 @@ export default function LoyaltyTab() {
     );
   }
 
-  // ─── Render: Transactions Sub-tab ────────────────────────────────────────
+  // Render: Transactions Sub-tab
   function renderTransactions() {
     if (txLoading) {
       return (
@@ -769,7 +769,7 @@ export default function LoyaltyTab() {
     );
   }
 
-  // ─── Render: Campaigns Sub-tab ───────────────────────────────────────────
+  // Render: Campaigns Sub-tab
   function renderCampaigns() {
     if (campaignsLoading) {
       return (
@@ -881,7 +881,7 @@ export default function LoyaltyTab() {
     );
   }
 
-  // ─── Main Render ─────────────────────────────────────────────────────────
+  // Main Render
   return (
     <div className="space-y-4">
       {/* Header */}

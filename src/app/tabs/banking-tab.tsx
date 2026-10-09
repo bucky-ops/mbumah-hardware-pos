@@ -37,7 +37,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 
-// ── Helpers ──────────────────────────────────────────────────
+// Helpers
 
 const ACCOUNT_TYPE_BADGE: Record<string, { label: string; color: string }> = {
   CHECKING: { label: 'Checking', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
@@ -68,14 +68,14 @@ const MPESA_STATUS_BADGE: Record<string, { label: string; color: string }> = {
   DISPUTED: { label: 'Disputed', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
 };
 
-// ── Main Component ──────────────────────────────────────────
+// Main Component
 
 export default function BankingTab() {
   const storeId = useAppStore((s) => s.currentStoreId);
   const queryClient = useQueryClient();
   const [activeSubTab, setActiveSubTab] = useState('accounts');
 
-  // ── Queries ─────────────────────────────────────────────
+  // Queries
 
   const accountsQuery = useQuery({
     queryKey: ['banking-accounts', storeId],
@@ -95,14 +95,14 @@ export default function BankingTab() {
     enabled: !!storeId,
   });
 
-  // M-Pesa reconciliations — we use transactions filtered by MPESA accounts
+  // M-Pesa reconciliations - we use transactions filtered by MPESA accounts
   // since there is no dedicated mpesa reconciliation API endpoint
   const mpesaAccounts = useMemo(() => {
     const accounts = Array.isArray(accountsQuery.data?.data) ? accountsQuery.data.data : [];
     return accounts.filter((a) => a.accountType === 'MPESA');
   }, [accountsQuery.data]);
 
-  // ── Computed Stats ──────────────────────────────────────
+  // Computed Stats
 
   const accounts = Array.isArray(accountsQuery.data?.data) ? accountsQuery.data.data : [];
   const transactions = Array.isArray(transactionsQuery.data?.data) ? transactionsQuery.data.data : [];
@@ -126,7 +126,7 @@ export default function BankingTab() {
     ).length;
   }, [transactions, mpesaAccounts]);
 
-  // ── Balance Summary by Type ─────────────────────────────
+  // Balance Summary by Type
 
   const balanceByType = useMemo(() => {
     const map: Record<string, { count: number; balance: number }> = {};
@@ -138,7 +138,7 @@ export default function BankingTab() {
     return map;
   }, [accounts]);
 
-  // ── Dialog States ───────────────────────────────────────
+  // Dialog States
 
   // Create Account Dialog
   const [showCreateAccount, setShowCreateAccount] = useState(false);
@@ -182,7 +182,7 @@ export default function BankingTab() {
   const [showViewRecon, setShowViewRecon] = useState(false);
   const [reconToView, setReconToView] = useState<BankReconciliationItem | null>(null);
 
-  // ── Transaction Filters ─────────────────────────────────
+  // Transaction Filters
 
   const [txFilterAccount, setTxFilterAccount] = useState<string>('all');
   const [txFilterType, setTxFilterType] = useState<string>('all');
@@ -198,7 +198,7 @@ export default function BankingTab() {
   const [txPage, setTxPage] = useState(1);
   const TX_PAGE_SIZE = 15;
 
-  // ── Filtered Transactions ───────────────────────────────
+  // Filtered Transactions
 
   const filteredTransactions = useMemo(() => {
     let list = [...transactions];
@@ -226,7 +226,7 @@ export default function BankingTab() {
   const txTotalPages = Math.max(1, Math.ceil(filteredTransactions.length / TX_PAGE_SIZE));
   const pagedTransactions = filteredTransactions.slice((txPage - 1) * TX_PAGE_SIZE, txPage * TX_PAGE_SIZE);
 
-  // ── M-Pesa Data (simulated from transactions on M-Pesa accounts) ──
+  // M-Pesa Data (simulated from transactions on M-Pesa accounts)
 
   const mpesaTransactions = useMemo(() => {
     const mpesaAccIds = new Set(mpesaAccounts.map((a) => a.id));
@@ -246,7 +246,7 @@ export default function BankingTab() {
     return list;
   }, [mpesaTransactions, mpesaFilterStatus]);
 
-  // ── Running Balance Calculation for Transaction Dialog ──
+  // Running Balance Calculation for Transaction Dialog
 
   const selectedAccountForTx = useMemo(
     () => accounts.find((a) => a.id === newTx.bankAccountId),
@@ -262,7 +262,7 @@ export default function BankingTab() {
       : selectedAccountForTx.currentBalance - amt;
   }, [selectedAccountForTx, newTx.amount, newTx.transactionType]);
 
-  // ── Mutations ───────────────────────────────────────────
+  // Mutations
 
   const createAccountMut = useMutation({
     mutationFn: (data: Parameters<typeof bankingApi.accounts.create>[0]) =>
@@ -329,14 +329,14 @@ export default function BankingTab() {
     onError: (err: Error) => toast.error(err.message || 'Failed to approve reconciliation'),
   });
 
-  // ── Helper: get account name ────────────────────────────
+  // Helper: get account name
 
   const getAccountName = (accId: string) => {
     const acc = accounts.find((a) => a.id === accId);
     return acc ? `${acc.bankName} — ${acc.accountName}` : accId;
   };
 
-  // ── Render ──────────────────────────────────────────────
+  // Render
 
   return (
     <div className="space-y-4">

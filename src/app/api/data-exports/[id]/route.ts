@@ -1,7 +1,7 @@
 // GET/DELETE /api/data-exports/[id]
 //
 // Single-record operations on a DataExport row. DELETE also unlinks the file
-// from disk (best-effort — DB row is removed even if the file is missing).
+// from disk (best-effort - DB row is removed even if the file is missing).
 
 import { type NextRequest } from 'next/server';
 import { promises as fs } from 'fs';
@@ -18,14 +18,14 @@ const FINANCIAL_READ_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'A
 const FINANCIAL_WRITE_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'] as const;
 
 // AUDIT FIX (Finding 1.2): was the hardcoded '/home/z/my-project/download/
-// exports' — see src/lib/export-paths.ts for why that broke production.
+// exports' - see src/lib/export-paths.ts for why that broke production.
 const EXPORTS_DIR = resolveExportsDir();
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-// ── GET: single export record ───────────────────────────────────────────────
+// GET: single export record
 
 async function getExportHandler(...args: unknown[]): Promise<Response> {
   const context = args[1] as RouteContext;
@@ -48,7 +48,7 @@ async function getExportHandler(...args: unknown[]): Promise<Response> {
   return Response.json({ success: true, data: exportRow });
 }
 
-// ── DELETE: remove record + file ────────────────────────────────────────────
+// DELETE: remove record + file
 
 async function deleteExportHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
@@ -66,7 +66,7 @@ async function deleteExportHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
-  // Best-effort file deletion — the DB row is the source of truth.
+  // Best-effort file deletion - the DB row is the source of truth.
   if (existing.filePath) {
     const filePath = path.join(EXPORTS_DIR, existing.filePath);
     try {

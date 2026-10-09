@@ -1,13 +1,13 @@
 // GET /api/kra/submissions
 //
-// List KraSubmission audit rows — the full history of every KRA API call
+// List KraSubmission audit rows - the full history of every KRA API call
 // (submit attempts, status polls) for a given invoice or store.
 //
 // Query params:
-//   storeId          — required (enforced by requireStoreAccess)
-//   invoiceForKraId  — filter to a specific InvoiceForKRA
-//   status           — PENDING | SUBMITTED | ACCEPTED | REJECTED | FAILED
-//   limit            — default 50, max 200
+//   storeId - required (enforced by requireStoreAccess)
+//   invoiceForKraId - filter to a specific InvoiceForKRA
+//   status - PENDING | SUBMITTED | ACCEPTED | REJECTED | FAILED
+//   limit - default 50, max 200
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';

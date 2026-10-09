@@ -1,9 +1,7 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Admin-controlled VAT Settings API (v2.8.0)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Admin-controlled VAT Settings API (v2.8.0)
 //
-// GET   /api/settings/vat   — current admin-controlled VAT rate (percent).
-// PATCH /api/settings/vat   — set the VAT rate (0–100). 0 disables VAT on all
+// GET   /api/settings/vat - current admin-controlled VAT rate (percent).
+// PATCH /api/settings/vat - set the VAT rate (0-100). 0 disables VAT on all
 //                             NEW documents (sales/invoices/POs).
 //
 // The rate is persisted in the global SystemConfig store under the key
@@ -11,9 +9,8 @@
 // all document-creation paths. Historical documents keep their stored amounts.
 //
 // Auth:
-//   • GET   — any authenticated user (cashiers need the rate for labels).
-//   • PATCH — SUPER_ADMIN or STORE_OWNER only.
-// ─────────────────────────────────────────────────────────────────────────────
+//   • GET - any authenticated user (cashiers need the rate for labels).
+//   • PATCH - SUPER_ADMIN or STORE_OWNER only.
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -29,7 +26,7 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-// ── GET: current VAT rate ───────────────────────────────────────────────────
+// GET: current VAT rate
 async function getHandler(
   _request: NextRequest,
   _session: AuthSession,
@@ -51,7 +48,7 @@ async function getHandler(
   });
 }
 
-// ── PATCH: update VAT rate ──────────────────────────────────────────────────
+// PATCH: update VAT rate
 const patchBodySchema = z.object({
   vatRatePercent: z
     .number()

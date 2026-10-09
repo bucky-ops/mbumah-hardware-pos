@@ -24,7 +24,7 @@ export const dynamic = 'force-dynamic';
 const MAX_STRING_LENGTH = 4000;
 const MAX_STACK_LENGTH = 8000;
 
-// ── Zod Schema ────────────────────────────────────────────────────────────────
+// Zod Schema
 
 const clientErrorSchema = z.object({
   message: z
@@ -45,7 +45,7 @@ const clientErrorSchema = z.object({
 
 type ClientErrorPayload = z.infer<typeof clientErrorSchema>;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// Helpers
 
 function truncate(
   value: string | undefined,
@@ -57,7 +57,7 @@ function truncate(
   return trimmed.length > max ? trimmed.slice(0, max) + '…[truncated]' : trimmed;
 }
 
-// ── Handler ───────────────────────────────────────────────────────────────────
+// Handler
 
 async function handler(req: NextRequest): Promise<Response> {
   if (req.method !== 'POST') {
@@ -67,7 +67,7 @@ async function handler(req: NextRequest): Promise<Response> {
     );
   }
 
-  // ── Parse & Validate Body ──────────────────────────────────────
+  // Parse & Validate Body
   let payload: ClientErrorPayload;
   try {
     const raw = await req.json();
@@ -89,7 +89,7 @@ async function handler(req: NextRequest): Promise<Response> {
     );
   }
 
-  // ── Truncate fields (belt-and-suspenders — Zod already enforces max) ──
+  // Truncate fields (belt-and-suspenders - Zod already enforces max)
   const message = truncate(payload.message, MAX_STRING_LENGTH)!;
   const name = truncate(payload.name, MAX_STRING_LENGTH);
   const stack = truncate(payload.stack, MAX_STACK_LENGTH);
@@ -103,7 +103,7 @@ async function handler(req: NextRequest): Promise<Response> {
     req.headers.get('x-real-ip') ??
     undefined;
 
-  // ── Always log to server console (even if DB write fails) ──────
+  // Always log to server console (even if DB write fails)
   console.error('🚨 CLIENT ERROR:', JSON.stringify({
     name,
     message,
@@ -115,7 +115,7 @@ async function handler(req: NextRequest): Promise<Response> {
     source: 'client-error-boundary',
   }));
 
-  // ── Attempt DB write (best-effort, never block the response) ───
+  // Attempt DB write (best-effort, never block the response)
   try {
     await runWithoutTenant(async () => {
       await systemLog({
@@ -135,7 +135,7 @@ async function handler(req: NextRequest): Promise<Response> {
       });
     });
   } catch (dbError) {
-    // DB write failed (e.g. connection issue) — don't mask the original
+    // DB write failed (e.g. connection issue) - don't mask the original
     // client error. Log the DB failure to console and return success so
     // the client doesn't retry endlessly.
     console.error('❌ Failed to write client error to SystemLog:', dbError);

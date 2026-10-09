@@ -57,7 +57,7 @@ async function statusHandler(
     );
   }
 
-  // Short-circuit if already accepted — no need to query KRA.
+  // Short-circuit if already accepted - no need to query KRA.
   if (invoice.submissionStatus === SubmissionStatus.ACCEPTED) {
     return Response.json({
       success: true,

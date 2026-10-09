@@ -6,7 +6,7 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
 // Task 12-c: canonical financial math. Prisma Decimal `valueOf()` returns a
-// STRING — the replay loops' `runningBalance += entry.amount` used to
+// STRING - the replay loops' `runningBalance += entry.amount` used to
 // STRING-CONCATENATE (number += Decimal).
 import { toDec, round2 } from '@/lib/utils/financialMath';
 import type Decimal from 'decimal.js';
@@ -137,7 +137,7 @@ async function updateCustomerCreditHandler(...args: unknown[]): Promise<Response
     });
 
     // Recalculate running balance from the beginning (Task 12-c: Decimal
-    // accumulator — was a float `+=` over Prisma Decimals).
+    // accumulator - was a float `+=` over Prisma Decimals).
     let runningBalanceDec = toDec(0);
     for (const entry of allCredits) {
       if (entry.id === id) {

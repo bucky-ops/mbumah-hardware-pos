@@ -8,9 +8,9 @@
 //   • The period-close workflow
 //
 // Query params:
-//   storeId   — scope audit to a single store (SUPER_ADMIN only). Omit for org-wide.
-//   dateFrom  — ISO date, start of audit range (default: 30 days ago)
-//   dateTo    — ISO date, end of audit range (default: now)
+//   storeId - scope audit to a single store (SUPER_ADMIN only). Omit for org-wide.
+//   dateFrom - ISO date, start of audit range (default: 30 days ago)
+//   dateTo - ISO date, end of audit range (default: now)
 //
 // Returns an AuditResult with all issues found. CRITICAL issues are logged
 // to SystemLog automatically by the audit module.
@@ -57,7 +57,7 @@ async function handler(...args: unknown[]): Promise<Response> {
     ? await runWithTenant(storeId, auditFn)
     : await runWithoutTenant(auditFn);
 
-  // Return 200 even if issues are found — the audit itself succeeded; the
+  // Return 200 even if issues are found - the audit itself succeeded; the
   // issues are data, not an HTTP error. Callers check `result.passed`.
   const statusCode = result.passed ? 200 : 200; // Always 200; issues are in the body.
 

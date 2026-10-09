@@ -1,13 +1,13 @@
 'use client';
 
 /**
- * Conversations Tab — internal staff chat (threaded, real-time-ish).
+ * Conversations Tab - internal staff chat (threaded, real-time-ish).
  *
  * Two-pane layout (desktop):
  *   • Left:  conversation list (with search + "new conversation" button)
  *   • Right: selected conversation's message thread + composer
  *
- * On mobile: the panes toggle — selecting a conversation slides the thread
+ * On mobile: the panes toggle - selecting a conversation slides the thread
  * into view; a back button returns to the list.
  *
  * Backed by /api/messages/conversations routes (see Phase 4). Uses TanStack
@@ -54,7 +54,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// Helpers
 
 function formatTime(date: string | Date): string {
   const d = new Date(date);
@@ -101,7 +101,7 @@ function getAvatarColor(name: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-// ── Conversation List Pane ───────────────────────────────────────────────────
+// Conversation List Pane
 
 function ConversationList({
   storeId,
@@ -121,7 +121,7 @@ function ConversationList({
 
   // OWNER-VISIBILITY TOGGLE (v2.5.6): owners/managers/admins can browse ALL
   // store threads ("store" scope) and join the ones they care about. Staff
-  // (cashiers, accountants) always see "mine" — they keep the original
+  // (cashiers, accountants) always see "mine" - they keep the original
   // behaviour of only seeing threads they participate in.
   const canBrowseStore =
     authUser?.role === 'SUPER_ADMIN' ||
@@ -373,7 +373,7 @@ function ConversationListItem({
   );
 }
 
-// ── Conversation Thread Pane ─────────────────────────────────────────────────
+// Conversation Thread Pane
 
 function ConversationThread({
   storeId,
@@ -665,7 +665,7 @@ function MessageBubble({
   );
 }
 
-// ── Settings Dialog ──────────────────────────────────────────────────────────
+// Settings Dialog
 
 function ConversationSettingsDialog({
   conversation,
@@ -686,7 +686,7 @@ function ConversationSettingsDialog({
   // participant" selector via the dedicated chat endpoint. The old
   // usersApi.list() call was admin-only (403 for managers/cashiers) and was
   // also called with the wrong argument shape, which left this selector
-  // empty — "No other active users in this store." — even when teammates
+  // empty - "No other active users in this store." - even when teammates
   // were active. listParticipants() works for every staff role and returns
   // active users of the store only (caller excluded).
   const { data: usersData } = useQuery({
@@ -703,7 +703,7 @@ function ConversationSettingsDialog({
 
   // State is lazily initialized from `conversation` on mount. The parent
   // remounts this component (via `key`) whenever the dialog opens, so these
-  // initial values are always fresh — no effect-based reset needed.
+  // initial values are always fresh - no effect-based reset needed.
 
   const updateMutation = useMutation({
     mutationFn: (data: { title?: string; type?: 'INTERNAL' | 'CUSTOMER_SUPPORT'; addParticipantIds?: string[]; removeParticipantIds?: string[] }) =>
@@ -840,7 +840,7 @@ function ConversationSettingsDialog({
   );
 }
 
-// ── New Conversation Dialog ──────────────────────────────────────────────────
+// New Conversation Dialog
 
 function NewConversationDialog({
   storeId,
@@ -860,8 +860,8 @@ function NewConversationDialog({
 
   // CHAT PRESENCE FIX (v2.5.6): active teammates via the chat participants
   // endpoint (any staff role, own store, active only, caller excluded).
-  // Previously usersApi.list(storeId) — an admin-only route called with the
-  // wrong signature — so most staff saw an empty picker.
+  // Previously usersApi.list(storeId) - an admin-only route called with the
+  // wrong signature - so most staff saw an empty picker.
   const { data: usersData, isLoading } = useQuery({
     queryKey: ['chat-participants', storeId],
     queryFn: () => conversationsApi.listParticipants(storeId),
@@ -870,7 +870,7 @@ function NewConversationDialog({
   const storeUsers = Array.isArray(usersData?.data) ? usersData.data : [];
 
   // State defaults are already correct. The parent remounts this component
-  // (via `key`) whenever the dialog opens, so state is always fresh — no
+  // (via `key`) whenever the dialog opens, so state is always fresh - no
   // effect-based reset needed.
 
   const createMutation = useMutation({
@@ -1005,7 +1005,7 @@ function NewConversationDialog({
   );
 }
 
-// ── Main Component ───────────────────────────────────────────────────────────
+// Main Component
 
 export default function ConversationsTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);

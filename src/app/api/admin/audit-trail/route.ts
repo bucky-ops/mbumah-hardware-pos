@@ -1,24 +1,24 @@
-// GET /api/admin/audit-trail — consolidated audit trail for the Security tab
-// (v2.12.6, PR C — Audit Logging consolidation)
+// GET /api/admin/audit-trail - consolidated audit trail for the Security tab
+// (v2.12.6, PR C - Audit Logging consolidation)
 //
 // Merges TWO durable sources into ONE admin-facing feed:
 //
 //   1. AuditLog (hash-chained) rows with action IN
-//        • 'PERMISSION_DENIED'   — every RBAC denial fed through
+//        • 'PERMISSION_DENIED' - every RBAC denial fed through
 //                                  recordPermissionDenied() (discount gates,
 //                                  high-risk debt, price guard, role changes…)
-//        • 'MANAGER_OVERRIDE'    — a verified managerOverride credential
+//        • 'MANAGER_OVERRIDE' - a verified managerOverride credential
 //                                  consumed by a business gate
-//        • 'MANAGER_AUTHORIZED'  — POST /api/auth/manager-authorize step-ups
+//        • 'MANAGER_AUTHORIZED' - POST /api/auth/manager-authorize step-ups
 //
 //   2. SecurityEvent rows with eventType IN ('PERMISSION_DENIED',
-//      'HIGH_RISK_ATTEMPT') — mirror-reality check: recordPermissionDenied()
+//      'HIGH_RISK_ATTEMPT') - mirror-reality check: recordPermissionDenied()
 //      writes BOTH an AuditLog row AND a SecurityEvent row for every denial,
 //      so most SecurityEvent rows have a twin. Rows are deduplicated by
 //      nearest-timestamp matching (|Δt| ≤ DEDUP_WINDOW_MS) on the same user +
 //      permission so the table shows every denial EXACTLY once. SecurityEvent
 //      rows WITHOUT an AuditLog twin (e.g. written by a path that predates the
-//      hook, or a hook failure) still appear — the table must never hide a
+//      hook, or a hook failure) still appear - the table must never hide a
 //      denial.
 //
 // Roles: SUPER_ADMIN / STORE_OWNER / BRANCH_MANAGER. Store scoping:
@@ -108,7 +108,7 @@ async function getAuditTrailHandler(...args: unknown[]): Promise<Response> {
   const dateTo = searchParams.get('dateTo') || '';
   const deniedOnly = searchParams.get('deniedOnly') === 'true';
   const search = (searchParams.get('search') || '').trim();
-  // v2.12.6: user-scoped search (matches the actor's NAME/EMAIL only) — kept
+  // v2.12.6: user-scoped search (matches the actor's NAME/EMAIL only) - kept
   // separate from the generic `search` (permission/resource/reason) so the UI's
   // two boxes behave independently.
   const userFilter = (searchParams.get('user') || '').trim();
@@ -121,7 +121,7 @@ async function getAuditTrailHandler(...args: unknown[]): Promise<Response> {
 
   const rowCap = format === 'csv' ? SOURCE_ROW_CAP_CSV : SOURCE_ROW_CAP_JSON;
 
-  // ── Shared DB-level filters ─────────────────────────────────────────────────
+  // Shared DB-level filters
   const timestampRange: Record<string, Date> = {};
   if (dateFrom) timestampRange.gte = new Date(dateFrom);
   if (dateTo) {
@@ -142,7 +142,7 @@ async function getAuditTrailHandler(...args: unknown[]): Promise<Response> {
     eventType: { in: [...DENIAL_EVENT_TYPES] },
   };
   if (userId) seWhere.userId = userId;
-  // SecurityEvent is NOT in STORE_SCOPED_MODELS — manual branch scoping
+  // SecurityEvent is NOT in STORE_SCOPED_MODELS - manual branch scoping
   // (mirrors /api/security/events; a SUPER_ADMIN may pass ?storeId=).
   if (scopeStoreId) seWhere.storeId = scopeStoreId;
   if (hasRange) seWhere.createdAt = timestampRange;
@@ -160,7 +160,7 @@ async function getAuditTrailHandler(...args: unknown[]): Promise<Response> {
     }),
   ]);
 
-  // ── Actor + branch lookups (single round-trip per table) ───────────────────
+  // Actor + branch lookups (single round-trip per table)
   const userIds = new Set<string>();
   for (const row of auditRows) if (row.userId) userIds.add(row.userId);
   for (const row of seRows) if (row.userId) userIds.add(row.userId);
@@ -184,9 +184,9 @@ async function getAuditTrailHandler(...args: unknown[]): Promise<Response> {
   const userMap = new Map(users.map((u) => [u.id, u]));
   const storeMap = new Map(stores.map((s) => [s.id, s.name]));
 
-  // ── Map AuditLog rows → unified shape ───────────────────────────────────────
+  // Map AuditLog rows → unified shape
   // NOTE: the AuditLog table persists entityType/entityId/action/userId/reason/
-  // ipAddress — NOT the free-form metadata (that only reaches the SystemLog).
+  // ipAddress - NOT the free-form metadata (that only reaches the SystemLog).
   // Business context is therefore reconstructed from the persisted columns:
   //   • PERMISSION_DENIED → entityId IS the denied permission key
   //   • MANAGER_OVERRIDE / MANAGER_AUTHORIZED → entityId is the approver's User id
@@ -223,10 +223,10 @@ async function getAuditTrailHandler(...args: unknown[]): Promise<Response> {
     };
   });
 
-  // ── Dedup: SecurityEvent rows that already have an AuditLog PERMISSION_DENIED
+  // Dedup: SecurityEvent rows that already have an AuditLog PERMISSION_DENIED
   // twin are dropped (nearest |Δt| pairing on user + permission). When the twin
   // carries kind HIGH_RISK_ATTEMPT (the AuditLog row itself does not persist the
-  // kind), the paired row is upgraded so the trail distinguishes the two. ──────
+  // kind), the paired row is upgraded so the trail distinguishes the two.
   const denialAuditByUser = new Map<
     string,
     { row: AuditTrailRow; ts: number; permission: string; taken: boolean }[]
@@ -265,9 +265,9 @@ async function getAuditTrailHandler(...args: unknown[]): Promise<Response> {
       }
     }
     if (best) {
-      best.taken = true; // twin exists — this SecurityEvent adds no new row
+      best.taken = true; // twin exists - this SecurityEvent adds no new row
       // Carry the SecurityEvent's finer eventType (HIGH_RISK_ATTEMPT) onto the
-      // paired AuditLog row — the AuditLog table doesn't persist the kind.
+      // paired AuditLog row - the AuditLog table doesn't persist the kind.
       if (row.eventType === 'HIGH_RISK_ATTEMPT') {
         best.row.action = 'HIGH_RISK_ATTEMPT';
         best.row.actionLabel = AUDIT_ACTION_LABELS.HIGH_RISK_ATTEMPT;
@@ -300,7 +300,7 @@ async function getAuditTrailHandler(...args: unknown[]): Promise<Response> {
     });
   }
 
-  // ── In-memory post-filters (role / search / deniedOnly) ────────────────────
+  // In-memory post-filters (role / search / deniedOnly)
   let merged = [...mappedAudit, ...mappedSecurity];
 
   if (role) merged = merged.filter((row) => row.role === role);
@@ -323,7 +323,7 @@ async function getAuditTrailHandler(...args: unknown[]): Promise<Response> {
 
   merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-  // ── CSV export (all matching rows within the export window) ────────────────
+  // CSV export (all matching rows within the export window)
   if (format === 'csv') {
     const csv = buildCsv(
       merged.map((row) => ({ ...row })),
@@ -351,7 +351,7 @@ async function getAuditTrailHandler(...args: unknown[]): Promise<Response> {
     });
   }
 
-  // ── Pagination ──────────────────────────────────────────────────────────────
+  // Pagination
   const total = merged.length;
   const totalPages = Math.max(Math.ceil(total / limit), 1);
   const start = (page - 1) * limit;

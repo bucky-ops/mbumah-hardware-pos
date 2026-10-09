@@ -4,15 +4,15 @@
 // messages via the appropriate channel (SMS/WhatsApp via Twilio, Email via
 // Resend). This is the SECOND half of the two-phase reminder pipeline.
 //
-// Network-bound — each PENDING reminder results in 1 outbound HTTP call to a
+// Network-bound - each PENDING reminder results in 1 outbound HTTP call to a
 // provider. We process in batches of 100 to avoid timeouts. Failed sends are
 // recorded with the provider's error message and can be retried by re-running
 // this route (the row's status is FAILED, not PENDING, so re-running won't
-// auto-retry — use POST /api/reminders/debt/retry for that, or update the
+// auto-retry - use POST /api/reminders/debt/retry for that, or update the
 // row's status back to PENDING via a future admin route).
 //
 // Body:
-//   { storeId?: string }  — defaults to the caller's session storeId.
+//   { storeId?: string } - defaults to the caller's session storeId.
 //
 // Returns:
 //   { success: true, data: { sent, failed, total } }

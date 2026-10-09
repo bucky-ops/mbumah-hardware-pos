@@ -1,17 +1,17 @@
 // GET  /api/health/compliance
 //
-// Phase 7 — ISO 27001 + ISO 9001 Compliance Dashboard endpoint.
+// Phase 7 - ISO 27001 + ISO 9001 Compliance Dashboard endpoint.
 //
-// GET (public — no auth required for health monitoring):
+// GET (public - no auth required for health monitoring):
 //   Returns the full compliance dashboard for the MBUMAH HARDWARE POS system.
-//   This is the "compliance observability" view — it aggregates data from
+//   This is the "compliance observability" view - it aggregates data from
 //   all Phase 1-7 modules into a single snapshot for auditors, operators,
 //   and the health monitoring system.
 //
 //   The endpoint is intentionally UNAUTHENTICATED because it is used by
 //   external health-check probes (e.g. uptime monitoring, load balancer
 //   health checks) that cannot present a Bearer token. The response does
-//   NOT include any PII or sensitive business data — only aggregate
+//   NOT include any PII or sensitive business data - only aggregate
 //   compliance scores, checklist statuses, and resilience indicators.
 //
 //   Response 200:
@@ -50,7 +50,7 @@
 //       "timestamp": "..."
 //     }
 //
-// ── Why no auth? ──────────────────────────────────────────────────────────────
+// Why no auth?
 //
 // Health/compliance endpoints are standardised as public across the
 // /api/health/* family (see /api/health, /api/health/db, /api/health/env).
@@ -63,11 +63,11 @@ import { successResponse, errorFromThrown } from '@/lib/api-response';
 
 export const dynamic = 'force-dynamic';
 
-// ── GET: full compliance dashboard ──────────────────────────────────────────
+// GET: full compliance dashboard
 
 export async function GET() {
   try {
-    // ── Aggregate all compliance data ────────────────────────────────────
+    // Aggregate all compliance data
     // getComplianceDashboard() gathers metrics from every Phase 1-7
     // module in parallel (audit trail, data retention, access control,
     // circuit breakers, DLQ) and computes the ISO 27001 + ISO 9001

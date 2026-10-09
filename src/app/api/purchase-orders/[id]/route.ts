@@ -77,7 +77,7 @@ async function updatePurchaseOrderHandler(
     );
   }
 
-  // ── Status change (approve, send, confirm, cancel) ──────────────────────
+  // Status change (approve, send, confirm, cancel)
   if (body.status) {
     const validStatuses = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT', 'CONFIRMED', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CANCELLED'];
     if (!validStatuses.includes(body.status)) {
@@ -107,7 +107,7 @@ async function updatePurchaseOrderHandler(
       );
     }
 
-    // F1-4: RECEIVED / PARTIALLY_RECEIVED are DERIVED states — they may only
+    // F1-4: RECEIVED / PARTIALLY_RECEIVED are DERIVED states - they may only
     // be set by the goods-receipt flow (which records stock + journals). The
     // old plain status update allowed a phantom "RECEIVED" with zero goods.
     if (body.status === 'RECEIVED' || body.status === 'PARTIALLY_RECEIVED') {
@@ -117,7 +117,7 @@ async function updatePurchaseOrderHandler(
       );
     }
 
-    // F1-4: a PO with real receipts cannot be cancelled — stock already moved.
+    // F1-4: a PO with real receipts cannot be cancelled - stock already moved.
     if (body.status === 'CANCELLED' && existing.items.some((i) => Number(i.receivedQty) > 0)) {
       return Response.json(
         { success: false, error: 'Cannot cancel a purchase order with received items. Process a return-to-supplier instead.' },
@@ -125,7 +125,7 @@ async function updatePurchaseOrderHandler(
       );
     }
 
-    // F1-3 (SoD): approval and cancellation are management actions — clerks
+    // F1-3 (SoD): approval and cancellation are management actions - clerks
     // can create and receive, but approving/cancelling needs a manager role.
     const managerRoles = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'];
     if (['APPROVED', 'CANCELLED'].includes(body.status) && !managerRoles.includes(session.role)) {
@@ -141,7 +141,7 @@ async function updatePurchaseOrderHandler(
       notes: body.notes || existing.notes,
     };
 
-    // F1-3 (SYS-2): approval/cancellation identity from the SESSION — the
+    // F1-3 (SYS-2): approval/cancellation identity from the SESSION - the
     // body-supplied IDs allowed anyone to sign approvals as the owner.
     if (body.status === 'APPROVED') {
       updateData.approvedById = session.userId;
@@ -176,7 +176,7 @@ async function updatePurchaseOrderHandler(
     return Response.json({ success: true, data: purchaseOrder });
   }
 
-  // ── Receive items (Goods Receipt Note) ──────────────────────────────────
+  // Receive items (Goods Receipt Note)
   if (body.action === 'receive' && body.receivedItems) {
     if (existing.status === 'CANCELLED') {
       return Response.json(
@@ -207,7 +207,7 @@ async function updatePurchaseOrderHandler(
         if (recv.receivedQty <= 0) continue;
 
         // F1-2 remediation: OPTIMISTIC CAS on receivedQty. The old code read
-        // the item OUTSIDE the tx and wrote an absolute value inside — two
+        // the item OUTSIDE the tx and wrote an absolute value inside - two
         // concurrent GRNs both read receivedQty=0 and both wrote 5 while the
         // stock side (atomic increments) added 10. Now the update is guarded
         // by the pre-read value as an optimistic token; on contention we
@@ -240,12 +240,12 @@ async function updatePurchaseOrderHandler(
 
         receivedGrossValue += Number(recv.receivedQty) * Number(item.unitCost);
 
-        // ── F1-7 remediation: atomic WAC blend ──
+        // F1-7 remediation: atomic WAC blend
         // On PostgreSQL the quantity increment and the weighted-average-cost
         // recompute happen in ONE statement, so two concurrent receipts can
         // no longer blend from the same base and last-write-wins each other's
         // cost (systematic COGS corruption). SQLite (tests) keeps the
-        // find-then-update path — single-writer there.
+        // find-then-update path - single-writer there.
         if (isPostgres()) {
           await tx.$executeRaw`
             UPDATE "products" SET
@@ -324,8 +324,8 @@ async function updatePurchaseOrderHandler(
         });
       }
 
-      // ── F1-1 remediation: post the goods-receipt journal ──
-      // Dr Inventory (+ input VAT recovery) / Cr Accounts Payable — in the
+      // F1-1 remediation: post the goods-receipt journal
+      // Dr Inventory (+ input VAT recovery) / Cr Accounts Payable - in the
       // SAME transaction as the stock writes. Previously the buy side never
       // touched the GL: Accounts Payable was never used and the Inventory
       // account was only ever CREDITED by COGS, drifting it negative.
@@ -402,7 +402,7 @@ async function updatePurchaseOrderHandler(
     return Response.json({ success: true, data: result });
   }
 
-  // ── Delete (only DRAFT or CANCELLED) ────────────────────────────────────
+  // Delete (only DRAFT or CANCELLED)
   if (body.action === 'delete') {
     if (existing.status !== 'DRAFT' && existing.status !== 'CANCELLED') {
       return Response.json(
@@ -411,7 +411,7 @@ async function updatePurchaseOrderHandler(
       );
     }
 
-    // F1-4: a cancelled PO with receipts must NOT be deleted — the cascade
+    // F1-4: a cancelled PO with receipts must NOT be deleted - the cascade
     // would orphan the StockMovements (and, once posted, the GRN journals)
     // that reference it, destroying inventory traceability.
     if (existing.items.some((i) => Number(i.receivedQty) > 0)) {

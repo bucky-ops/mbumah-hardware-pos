@@ -19,7 +19,7 @@ import { requireAuth, type AuthSession } from '@/lib/auth';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 // Task 12-c: canonical financial math (HALF_UP 2dp). The percentage discount
-// was `(base * voucher.value) / 100` — a float mul/div against Prisma Decimal
+// was `(base * voucher.value) / 100` - a float mul/div against Prisma Decimal
 // fields (valueOf() returns a STRING) with a Math.max cap; now exact Decimal
 // with Decimal.min caps. Import order matters: financialMath owns the global
 // decimal.js config (HALF_UP) and must load before any Decimal arithmetic.
@@ -156,7 +156,7 @@ async function redeemVoucherByCodeHandler(
     discountDec = valueDec;
   } else if (voucher.voucherType === 'PERCENTAGE') {
     const baseDec = spendDec.gt(0) ? spendDec : toDec(0);
-    // discount = round2(spend × value / 100) — HALF_UP (was float mul/div).
+    // discount = round2(spend × value / 100) - HALF_UP (was float mul/div).
     let computedDec = toDec(round2(baseDec.mul(valueDec).div(100)));
     if (voucher.maxDiscount !== null && voucher.maxDiscount !== undefined) {
       // Cap at maxDiscount via Decimal min (was float `>` comparison).
@@ -164,11 +164,11 @@ async function redeemVoucherByCodeHandler(
     }
     discountDec = computedDec;
   } else if (voucher.voucherType === 'FREE_PRODUCT') {
-    // No monetary discount — the caller can choose to add the free product
+    // No monetary discount - the caller can choose to add the free product
     // to the cart. We return a 0 discount amount and the product id.
     discountDec = toDec(0);
   } else {
-    // BUNDLE / unknown — treat as FIXED for safety
+    // BUNDLE / unknown - treat as FIXED for safety
     discountDec = valueDec;
   }
 

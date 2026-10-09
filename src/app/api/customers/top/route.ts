@@ -36,7 +36,7 @@ async function getTopCustomersHandler(...args: unknown[]): Promise<Response> {
   }
 
   // QA FIX (Kenya Plumbing Co. incident audit): SalesTransaction has NO
-  // `status` column — the field is `paymentStatus` (PENDING, COMPLETED,
+  // `status` column - the field is `paymentStatus` (PENDING, COMPLETED,
   // FAILED, REFUNDED, PARTIAL). The invalid groupBy filter made this endpoint
   // 500 on every call ("Unknown argument `status`"), so the Top Customers
   // widget never loaded. Also restrict to SALE rows so REFUND/VOID entries
@@ -132,7 +132,7 @@ async function getTopCustomersHandler(...args: unknown[]): Promise<Response> {
 }
 
 // AUDIT FIX (Task 3-d): session-validated (was Bearer-presence only).
-// Any store role — read-only top-customers aggregation.
+// Any store role - read-only top-customers aggregation.
 export const GET = withErrorBoundary(
   withSessionAuth(getTopCustomersHandler),
   'CUSTOMERS_TOP',

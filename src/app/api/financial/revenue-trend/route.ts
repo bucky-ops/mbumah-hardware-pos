@@ -2,12 +2,12 @@
 //
 // AUDIT FIX (Task 3-f): the `revenue` series (and the summary built on it) is
 // now VAT-EXCLUSIVE via the canonical grossRevenue(totalAmount, taxAmount)
-// helper (src/lib/profit.ts) — previously it summed the tax-inclusive
+// helper (src/lib/profit.ts) - previously it summed the tax-inclusive
 // totalAmount. Chart series KEYS are unchanged (client-safe); only values
 // changed basis. `expenses` remain ALL EXPENSE-type journal debits (which
 // include account 5000 COGS), so the figure exposed under the legacy
-// `grossProfit` key is a net-profit-style number — see the summary block.
-// DIVERGENCE NOTE: `byMethod` stays TAX-INCLUSIVE — it is tender collected
+// `grossProfit` key is a net-profit-style number - see the summary block.
+// DIVERGENCE NOTE: `byMethod` stays TAX-INCLUSIVE - it is tender collected
 // per payment method, not revenue.
 
 import { type NextRequest } from 'next/server';
@@ -32,7 +32,7 @@ async function getRevenueTrendHandler(...args: unknown[]): Promise<Response> {
   }
 
   const days = parseInt(searchParams.get('days') || '30');
-  const includeDemo = searchParams.get('demo') === 'true'; // default false — demo data only on explicit request
+  const includeDemo = searchParams.get('demo') === 'true'; // default false - demo data only on explicit request
 
   const startDate = new Date();
   startDate.setHours(0, 0, 0, 0);
@@ -86,7 +86,7 @@ async function getRevenueTrendHandler(...args: unknown[]): Promise<Response> {
   }
 
   // AUDIT FIX (Task 3-f): the old accumulators did `number += tx.totalAmount`
-  // where totalAmount is a Prisma Decimal — Decimal.valueOf() returns a STRING,
+  // where totalAmount is a Prisma Decimal - Decimal.valueOf() returns a STRING,
   // so `0 + Decimal` string-concatenated ("0123.45", then "0123.45123.46"…).
   // Math.round downstream masked it for revenue/expenses, but `byMethod` leaked
   // the corrupted strings straight into the JSON. All accumulation is now
@@ -113,7 +113,7 @@ async function getRevenueTrendHandler(...args: unknown[]): Promise<Response> {
   }
 
   // If no real data and demo is allowed, generate realistic demo data
-  // (NOTE: the demo series is SYNTHETIC — it is not governed by the unified
+  // (NOTE: the demo series is SYNTHETIC - it is not governed by the unified
   // profit formulas and only appears when ?demo=true is explicitly passed).
   if (!hasRealData && includeDemo) {
     // Seed a deterministic but varied pattern based on storeId
@@ -156,7 +156,7 @@ async function getRevenueTrendHandler(...args: unknown[]): Promise<Response> {
       const d = new Date(date);
       const label = d.toLocaleDateString('en-KE', { month: 'short', day: 'numeric' });
       // Keys unchanged; revenue is now VAT-exclusive. `margin` remains
-      // (revenue − expenses) / revenue — a NET-margin style figure because
+      // (revenue − expenses) / revenue - a NET-margin style figure because
       // `expenses` includes COGS (see summary note below).
       const revenue = KES(data.revenue).round().toNumber();
       const expenses = KES(data.expenses).round().toNumber();
@@ -188,7 +188,7 @@ async function getRevenueTrendHandler(...args: unknown[]): Promise<Response> {
   // key is kept for client compatibility, but the value is now composed
   // through the canonical chain: because `expenses` already bundles COGS
   // (EXPENSE account 5000) with operating expenses, there is no separate COGS
-  // input — grossProfit(netRevenue, 0) is netRevenue, and
+  // input - grossProfit(netRevenue, 0) is netRevenue, and
   // netProfit(grossProfit, allExpenses) yields netRevenue − allExpenses
   // (net-profit-style) with version-tracked lineage and no double-counted COGS.
   const revenueGrossProfit = grossProfit(totalRevenue, 0);
@@ -201,7 +201,7 @@ async function getRevenueTrendHandler(...args: unknown[]): Promise<Response> {
       summary: {
         totalRevenue,
         totalExpenses,
-        // Legacy key — value is netRevenue − allExpenses (see composition note).
+        // Legacy key - value is netRevenue − allExpenses (see composition note).
         grossProfit: summaryNetProfit,
         profitMargin: totalRevenue > 0 ? (summaryNetProfit / totalRevenue) * 100 : 0,
         avgDailyRevenue: Math.round(avgRevenue),

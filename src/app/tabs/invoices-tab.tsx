@@ -64,7 +64,7 @@ import { generateDocumentPdf, buildDocumentFileName } from '@/lib/document-pdf';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// Types
 
 type InvoiceType = 'INVOICE' | 'QUOTATION' | 'PROFORMA' | 'CREDIT_NOTE' | 'DEBIT_NOTE';
 type InvoiceStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'INVOICED' | 'PAID' | 'CANCELLED' | 'EXPIRED';
@@ -82,7 +82,7 @@ interface LineItemDraft {
   taxRate: number;
 }
 
-// ─── Badge helpers ───────────────────────────────────────────────────────────
+// Badge helpers
 
 function getStatusBadge(status: InvoiceStatus) {
   const map: Record<InvoiceStatus, { label: string; className: string }> = {
@@ -125,7 +125,7 @@ function getTypeIcon(type: InvoiceType) {
   }
 }
 
-// ─── Line item calculator ────────────────────────────────────────────────────
+// Line item calculator
 
 function computeLineTotal(item: LineItemDraft): number {
   const base = item.quantity * item.pricePerUnit;
@@ -145,7 +145,7 @@ function computeLineTax(item: LineItemDraft): number {
   return (base - discount) * (item.taxRate / 100);
 }
 
-// ─── Branded print document mapping (Task 35-b) ────────────────────────────
+// Branded print document mapping (Task 35-b)
 // Per-document accent colors + print labels for every invoiceType.
 const PRINT_DOC_LABELS: Record<string, string> = {
   INVOICE: 'INVOICE',
@@ -183,12 +183,12 @@ function createEmptyLineItem(taxRate?: number): LineItemDraft {
   };
 }
 
-// ─── Main Component ──────────────────────────────────────────────────────────
+// Main Component
 
 export default function InvoicesTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
   const queryClient = useQueryClient();
-  // v2.8.0: admin-controlled VAT rate — new lines default to it and the
+  // v2.8.0: admin-controlled VAT rate - new lines default to it and the
   // server applies the same authoritative rate on create.
   const { vatRate } = useVatRate();
 
@@ -205,7 +205,7 @@ export default function InvoicesTab() {
   const [deleteTarget, setDeleteTarget] = useState<InvoiceItem | null>(null);
   const [pdfBusyId, setPdfBusyId] = useState<string | null>(null);
 
-  // ── State ──
+  // State
   const [typeFilter, setTypeFilter] = useState<TypeFilterTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -251,7 +251,7 @@ export default function InvoicesTab() {
   const [sortField, setSortField] = useState<'invoiceNumber' | 'totalAmount' | 'createdAt' | 'issueDate'>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
-  // ── Queries ──
+  // Queries
   const { data: invoicesData, isLoading } = useQuery({
     queryKey: ['invoices', currentStoreId, typeFilter, statusFilter],
     queryFn: () => invoicesApi.list({
@@ -277,7 +277,7 @@ export default function InvoicesTab() {
     queryFn: () => customersApi.list({ storeId: currentStoreId, limit: 200 }),
   });
 
-  // ── Mutations ──
+  // Mutations
   const createMutation = useMutation({
     mutationFn: invoicesApi.create,
     onSuccess: () => {
@@ -341,7 +341,7 @@ export default function InvoicesTab() {
     },
   });
 
-  // ── Derived data ──
+  // Derived data
   const rawInvoices: InvoiceItem[] = Array.isArray(invoicesData?.data) ? invoicesData.data : [];
   const customers: CustomerItem[] = Array.isArray(customersData?.data) ? customersData.data : [];
   const products: ProductListItem[] = Array.isArray(productsData?.data) ? productsData.data : [];
@@ -431,13 +431,13 @@ export default function InvoicesTab() {
     };
   }, [rawInvoices]);
 
-  // ── Calculations for create form ──
+  // Calculations for create form
   const subtotal = useMemo(() => lineItems.reduce((s, item) => s + computeLineSubtotal(item), 0), [lineItems]);
   const totalTax = useMemo(() => lineItems.reduce((s, item) => s + computeLineTax(item), 0), [lineItems]);
   const discountNum = parseFloat(discountAmount) || 0;
   const grandTotal = subtotal - discountNum + totalTax;
 
-  // ── Helpers ──
+  // Helpers
   const resetCreateForm = useCallback(() => {
     setCreateType('INVOICE');
     setSelectedCustomerId('');
@@ -557,7 +557,7 @@ export default function InvoicesTab() {
 
   const handleConvertToInvoice = (invoice: InvoiceItem) => {
     if (invoice.invoiceType !== 'QUOTATION') return;
-    // AUDIT FIX (Task 3-e): UX pre-check — block obviously expired or
+    // AUDIT FIX (Task 3-e): UX pre-check - block obviously expired or
     // already-converted quotes before posting. The server (409 QUOTE_EXPIRED /
     // QUOTE_ALREADY_CONVERTED in invoices/route.ts) remains authoritative; this
     // just avoids a doomed round-trip with clear feedback.
@@ -709,7 +709,7 @@ export default function InvoicesTab() {
     }
   }, [buildInvoiceDocHtml]);
 
-  // v2.8.0: Download PDF — client request for ALL invoice types + delivery
+  // v2.8.0: Download PDF - client request for ALL invoice types + delivery
   // notes. Renders the SAME branded document as Print into an A4 PDF.
   const handleDownloadPdf = useCallback(async (invoice: InvoiceItem) => {
     try {
@@ -740,7 +740,7 @@ export default function InvoicesTab() {
         phone,
       });
       // v2.8.0 VISIBILITY FIX: show the exact message in an enlarged,
-      // scrollable preview first — the old flow window.open'd the link
+      // scrollable preview first - the old flow window.open'd the link
       // directly (often popup-blocked, so the user never saw the output).
       setMsgPreview({
         open: true,
@@ -756,7 +756,7 @@ export default function InvoicesTab() {
     }
   };
 
-  // SMS twin of handleSendWhatsApp — v2.8.0: now shows the enlarged,
+  // SMS twin of handleSendWhatsApp - v2.8.0: now shows the enlarged,
   // scrollable output preview (same visibility fix as WhatsApp) before
   // opening the sms: deep link.
   const handleSendSms = async (invoice: InvoiceItem) => {
@@ -783,7 +783,7 @@ export default function InvoicesTab() {
     }
   };
 
-  // ── Product dropdown ref ──
+  // Product dropdown ref
   const productDropdownRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   // Close product dropdown on outside click
@@ -799,7 +799,7 @@ export default function InvoicesTab() {
     return () => document.removeEventListener('mousedown', handler);
   }, [showProductDropdown]);
 
-  // ─── Render ──────────────────────────────────────────────────────────────────
+  // Render
 
   return (
     <div className="space-y-6">

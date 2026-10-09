@@ -42,9 +42,7 @@ import {
   ResponsiveDialog,
 } from '@/components/ui/responsive-dialog';
 
-// ---------------------------------------------------------------------------
 // Types & constants
-// ---------------------------------------------------------------------------
 
 type SortKey = 'name' | 'price_asc' | 'price_desc' | 'stock';
 type StockFilter = 'all' | 'in_stock' | 'low_stock' | 'out_of_stock';
@@ -104,9 +102,7 @@ interface ProductFormState {
   isBundle: boolean;
 }
 
-// ---------------------------------------------------------------------------
 // Component
-// ---------------------------------------------------------------------------
 
 export default function CatalogTab() {
   const { currentStoreId } = useAppStore();
@@ -128,7 +124,7 @@ export default function CatalogTab() {
   // Quantity tracking per product for +/- buttons
   const [quantities, setQuantities] = useState<Record<string, number>>({});
 
-  // Product editor (Add / Edit) — uses ResponsiveDialog
+  // Product editor (Add / Edit) - uses ResponsiveDialog
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductListItem | null>(null);
   const [form, setForm] = useState<ProductFormState>(EMPTY_PRODUCT);
@@ -146,9 +142,7 @@ export default function CatalogTab() {
     setQuantities((prev) => ({ ...prev, [productId]: qty }));
   };
 
-  // ---------------------------------------------------------------------------
   // Debounce search input (300ms)
-  // ---------------------------------------------------------------------------
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -158,9 +152,7 @@ export default function CatalogTab() {
     };
   }, [search]);
 
-  // ---------------------------------------------------------------------------
   // Data fetching (stable queryKeys, auto-refetch via providers)
-  // ---------------------------------------------------------------------------
 
   const { data: categories = [], isLoading: categoriesLoading } = useQuery<CategoryItem[]>({
     queryKey: ['categories', currentStoreId],
@@ -172,9 +164,7 @@ export default function CatalogTab() {
     queryFn: () => productsApi.list({ storeId: currentStoreId, limit: 500 }).then((r) => Array.isArray(r.data) ? r.data : []),
   });
 
-  // ---------------------------------------------------------------------------
   // Mutations
-  // ---------------------------------------------------------------------------
 
   const createProductMutation = useMutation({
     mutationFn: productsApi.create,
@@ -227,14 +217,12 @@ export default function CatalogTab() {
     },
   });
 
-  // ---------------------------------------------------------------------------
   // Filtering & sorting
-  // ---------------------------------------------------------------------------
 
   const filteredProducts = useMemo(() => {
     let result = products.filter((p) => p.isActive);
 
-    // Debounced search — filters by name / SKU / description / category
+    // Debounced search - filters by name / SKU / description / category
     if (debouncedSearch) {
       const q = debouncedSearch.toLowerCase();
       result = result.filter(
@@ -280,13 +268,11 @@ export default function CatalogTab() {
     return result;
   }, [products, debouncedSearch, selectedCategory, stockFilter, priceMin, priceMax, sortKey]);
 
-  // Safe array guards — prevent .map() crashes when API returns unexpected shapes
+  // Safe array guards - prevent .map() crashes when API returns unexpected shapes
   const safeCategories = Array.isArray(categories) ? categories : [];
   const safeFilteredProducts = Array.isArray(filteredProducts) ? filteredProducts : [];
 
-  // ---------------------------------------------------------------------------
   // Handlers
-  // ---------------------------------------------------------------------------
 
   const handleAddToCart = (product: ProductListItem) => {
     const qty = getQty(product.id);
@@ -325,7 +311,7 @@ export default function CatalogTab() {
     priceMax && 1,
   ].filter(Boolean).length;
 
-  // ----- Product editor (Add / Edit) -----
+  // Product editor (Add / Edit)
 
   const openAddEditor = () => {
     setEditingProduct(null);
@@ -413,7 +399,7 @@ export default function CatalogTab() {
     deleteProductMutation.mutate(deleteTarget.id);
   };
 
-  // ----- WhatsApp catalog send -----
+  // WhatsApp catalog send
 
   const handleSendCatalogWhatsApp = async () => {
     const phone = waPhone.trim();
@@ -459,7 +445,7 @@ export default function CatalogTab() {
     }
   };
 
-  // SMS twin of handleSendCatalogWhatsApp — the backend has no SMS catalog
+  // SMS twin of handleSendCatalogWhatsApp - the backend has no SMS catalog
   // sender, so build the same locally-generated list client-side (capped to
   // 10 items to keep the multi-part SMS reasonable) and open it via openSMS
   // (normalizes 07xx → 2547xx).
@@ -493,9 +479,7 @@ export default function CatalogTab() {
     }
   };
 
-  // ---------------------------------------------------------------------------
   // Render helpers
-  // ---------------------------------------------------------------------------
 
   const renderProductCard = (product: ProductListItem) => {
     const stock = getStockStatus(product.quantityInStock, product.reorderLevel);
@@ -763,9 +747,7 @@ export default function CatalogTab() {
     );
   };
 
-  // ---------------------------------------------------------------------------
   // Loading skeleton
-  // ---------------------------------------------------------------------------
 
   const renderSkeletons = () =>
     Array.from({ length: 8 }).map((_, i) => (
@@ -779,9 +761,7 @@ export default function CatalogTab() {
       </Card>
     ));
 
-  // ---------------------------------------------------------------------------
   // Margin preview for editor
-  // ---------------------------------------------------------------------------
 
   const editorMargin = (() => {
     const p = Number(form.pricePerUnit) || 0;
@@ -790,9 +770,7 @@ export default function CatalogTab() {
     return ((p - c) / p) * 100;
   })();
 
-  // ---------------------------------------------------------------------------
   // Render
-  // ---------------------------------------------------------------------------
 
   return (
     <div className="flex flex-col h-full gap-4">

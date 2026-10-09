@@ -1,11 +1,11 @@
 // GET  /api/health/circuit-breaker
 // POST /api/health/circuit-breaker
 //
-// Phase 5 — External Service Circuit Breaker observability + admin endpoint.
+// Phase 5 - External Service Circuit Breaker observability + admin endpoint.
 //
 // GET (any authenticated user):
 //   Returns the current state + metrics for every registered circuit breaker
-//   in the process. This is the read-only "operations dashboard" view — it
+//   in the process. This is the read-only "operations dashboard" view - it
 //   shows which external services (Twilio, Resend, M-Pesa Daraja) are
 //   currently healthy, degraded, or known-down.
 //
@@ -81,7 +81,7 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-// ── GET: list all breakers ───────────────────────────────────────────────────
+// GET: list all breakers
 
 export const GET = requireAuth(async (_request, _session) => {
   try {
@@ -115,7 +115,7 @@ export const GET = requireAuth(async (_request, _session) => {
   }
 });
 
-// ── POST: admin actions ──────────────────────────────────────────────────────
+// POST: admin actions
 
 type AdminAction = 'reset' | 'resetAll' | 'forceOpen' | 'forceClose';
 
@@ -131,7 +131,7 @@ export const POST = requireAuth(
     try {
       const body = (await request.json()) as AdminBody;
 
-      // ── Validate action ─────────────────────────────────────────────────
+      // Validate action
       if (!body.action || !VALID_ACTIONS.has(body.action)) {
         return Response.json(
           {
@@ -144,7 +144,7 @@ export const POST = requireAuth(
 
       const action = body.action;
 
-      // ── resetAll: panic button ──────────────────────────────────────────
+      // resetAll: panic button
       if (action === 'resetAll') {
         const affected = circuitBreakerRegistry.resetAll();
         await logAdminAction(session.userId, action, undefined, affected);
@@ -155,7 +155,7 @@ export const POST = requireAuth(
         });
       }
 
-      // ── name required for the other actions ────────────────────────────
+      // name required for the other actions
       if (!body.name) {
         return Response.json(
           {
@@ -179,7 +179,7 @@ export const POST = requireAuth(
         );
       }
 
-      // ── Apply the action ───────────────────────────────────────────────
+      // Apply the action
       switch (action) {
         case 'reset':
           breaker.reset();
@@ -212,7 +212,7 @@ export const POST = requireAuth(
   { roles: ['SUPER_ADMIN'] },
 );
 
-// ── Audit log helper ─────────────────────────────────────────────────────────
+// Audit log helper
 
 async function logAdminAction(
   userId: string,
@@ -247,10 +247,10 @@ async function logAdminAction(
       },
     });
   } catch {
-    // Audit logging is best-effort — never block the admin action.
+    // Audit logging is best-effort - never block the admin action.
   }
 }
 
-// ── Re-export for downstream use (avoids circular import concerns) ───────────
+// Re-export for downstream use (avoids circular import concerns)
 
 export { normaliseError };

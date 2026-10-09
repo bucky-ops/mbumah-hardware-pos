@@ -1,8 +1,8 @@
 // GET/POST /api/payroll/runs
 //
 // Manage payroll runs.
-//   GET  — list runs for a store or period
-//   POST — initiate a new payroll run (DRAFT status) and optionally process it
+//   GET - list runs for a store or period
+//   POST - initiate a new payroll run (DRAFT status) and optionally process it
 //          immediately (when ?process=true is passed)
 
 import { type NextRequest } from 'next/server';
@@ -14,7 +14,7 @@ import { processPayrollRun } from '@/lib/payroll-helpers';
 
 export const dynamic = 'force-dynamic';
 
-// ── GET: List payroll runs ───────────────────────────────────────────────────
+// GET: List payroll runs
 async function listRunsHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null }
@@ -82,7 +82,7 @@ export const GET = withErrorBoundary(
   'PAYROLL_RUNS_LIST'
 );
 
-// ── POST: Initiate (and optionally process) a payroll run ────────────────────
+// POST: Initiate (and optionally process) a payroll run
 async function createRunHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null; email: string }
@@ -181,7 +181,7 @@ async function createRunHandler(
         },
       }, { status: 201 });
     } catch (err) {
-      // Processing failed — return the run ID so the user can retry
+      // Processing failed - return the run ID so the user can retry
       return Response.json({
         success: false,
         error: 'Payroll run created but processing failed.',

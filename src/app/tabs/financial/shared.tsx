@@ -12,7 +12,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { formatKES } from '@/lib/api';
 
-// --- Date helpers -----------------------------------------------------------
+// --- Date helpers
 
 export function getDatePreset(preset: string): { from: string; to: string } {
   const now = new Date();
@@ -52,7 +52,7 @@ export function formatRangeLabel(from: string, to: string): string {
   return `${f.toLocaleDateString('en-US', opts)} – ${t.toLocaleDateString('en-US', opts)}`;
 }
 
-// --- AnimatedCounter --------------------------------------------------------
+// --- AnimatedCounter
 
 export function AnimatedCounter({ value, prefix = '', suffix = '' }: { value: number; prefix?: string; suffix?: string }) {
   const [display, setDisplay] = useState(0);
@@ -89,7 +89,7 @@ export function AnimatedCounter({ value, prefix = '', suffix = '' }: { value: nu
   return <>{prefix}{formatKES(display)}{suffix}</>;
 }
 
-// --- Chart of Accounts visual config ---------------------------------------
+// --- Chart of Accounts visual config
 
 export const accountTypeColors: Record<string, { bg: string; text: string; dot: string; border: string; icon: string; gradient: string; headerBg: string }> = {
   ASSET: {
@@ -149,7 +149,7 @@ export const accountTypeLabels: Record<string, string> = {
 
 export const accountTypeOrder = ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'];
 
-// --- Export / print utilities ----------------------------------------------
+// --- Export / print utilities
 
 export function exportToCSV(data: Record<string, unknown>[], filename: string) {
   if (data.length === 0) {

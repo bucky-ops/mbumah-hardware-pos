@@ -1,6 +1,6 @@
 // GET /api/security/events - List security events for admin dashboard
 // Requires SUPER_ADMIN, STORE_OWNER or BRANCH_MANAGER role.
-// v2.12.7 (PR C): BRANCH_MANAGER added — the discount-spam / abuse alerts ship
+// v2.12.7 (PR C): BRANCH_MANAGER added - the discount-spam / abuse alerts ship
 // SECURITY notifications to branch managers, so their Alerts-panel Security
 // tab can merge the matching recent SecurityEvent rows for their own branch
 // (non-super-admin callers are always store-scoped below).

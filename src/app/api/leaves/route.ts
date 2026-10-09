@@ -1,10 +1,10 @@
 // GET/POST/PUT /api/leaves
 //
 // Leave management.
-//   GET  — list leave requests (filter by storeId, employeeId, status, leaveType)
+//   GET - list leave requests (filter by storeId, employeeId, status, leaveType)
 //          also returns leave balances when ?balances=true is passed
-//   POST — submit a new leave request (PENDING status)
-//   PUT  — approve / reject / cancel a leave request (managers only)
+//   POST - submit a new leave request (PENDING status)
+//   PUT - approve / reject / cancel a leave request (managers only)
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
@@ -19,7 +19,7 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-// ── GET: List leave requests + optionally balances ───────────────────────────
+// GET: List leave requests + optionally balances
 async function listLeavesHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null }
@@ -145,7 +145,7 @@ export const GET = withErrorBoundary(
   'LEAVES_LIST'
 );
 
-// ── POST: Submit a new leave request ─────────────────────────────────────────
+// POST: Submit a new leave request
 async function createLeaveHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null; email: string }
@@ -284,7 +284,7 @@ export const POST = withErrorBoundary(
   'LEAVES_CREATE'
 );
 
-// ── PUT: Approve / reject / cancel a leave request ───────────────────────────
+// PUT: Approve / reject / cancel a leave request
 async function updateLeaveHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null; email: string }

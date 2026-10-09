@@ -1,29 +1,26 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Admin Updates Status API (SRV-2, v2.9.0)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Admin Updates Status API (SRV-2, v2.9.0)
 //
-// GET /api/admin/updates — one honest snapshot of the deployment's update
+// GET /api/admin/updates - one honest snapshot of the deployment's update
 // posture, consumed by the admin Updates panel:
 //
-//   • current        — the running version/build (package.json is the source
+//   • current - the running version/build (package.json is the source
 //                      of truth; see src/lib/version.ts).
-//   • channel        — 'cloud' when DATABASE_URL points at postgres, else
+//   • channel - 'cloud' when DATABASE_URL points at postgres, else
 //                      'laptop' (SQLite kits updated by deploy-kit).
-//   • latestRelease  — latest GitHub Release of bucky-ops/mbumah-hardware-pos
+//   • latestRelease - latest GitHub Release of bucky-ops/mbumah-hardware-pos
 //                      (GITHUB_TOKEN raises the 60 req/h anonymous rate limit
 //                      when set). NEVER faked: a failed fetch yields `null`
 //                      plus a human-readable `releasesNote`.
-//   • vercelConfigured + deployments — the 6 most recent production
+//   • vercelConfigured + deployments - the 6 most recent production
 //                      deployments from the Vercel API when VERCEL_TOKEN +
 //                      VERCEL_PROJECT_ID exist; failures → [] + `vercelNote`.
-//   • lastBackup     — most recent CRASH_BACKUP / MANUAL_BACKUP SystemLog
+//   • lastBackup - most recent CRASH_BACKUP / MANUAL_BACKUP SystemLog
 //                      entry, so the panel can show data-protection health.
 //
-// Every external call is individually try/caught — this route must ALWAYS
+// Every external call is individually try/caught - this route must ALWAYS
 // answer with whatever it actually knows. It never throws "up".
 //
 // Auth: SUPER_ADMIN or STORE_OWNER only.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { db, runWithoutTenant } from '@/lib/db';
@@ -59,7 +56,7 @@ function stripLeadingV(tag: string): string {
   return tag.startsWith('v') ? tag.slice(1) : tag;
 }
 
-// ── GitHub latest release (individually fault-isolated) ──────────────────────
+// GitHub latest release (individually fault-isolated)
 async function fetchLatestRelease(): Promise<{
   release: ReleaseInfo | null;
   note?: string;
@@ -67,7 +64,7 @@ async function fetchLatestRelease(): Promise<{
   try {
     const headers: Record<string, string> = {
       Accept: 'application/vnd.github+json',
-      // Only send when configured — an empty Bearer header is worse than none.
+      // Only send when configured - an empty Bearer header is worse than none.
       ...(process.env.GITHUB_TOKEN
         ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
         : {}),
@@ -142,7 +139,7 @@ async function fetchLatestRelease(): Promise<{
   }
 }
 
-// ── Vercel production deployments (individually fault-isolated) ──────────────
+// Vercel production deployments (individually fault-isolated)
 async function fetchVercelDeployments(): Promise<{
   deployments: DeploymentInfo[];
   note?: string;
@@ -151,7 +148,7 @@ async function fetchVercelDeployments(): Promise<{
   const projectId = process.env.VERCEL_PROJECT_ID;
   const teamId = process.env.VERCEL_TEAM_ID;
 
-  if (!token || !projectId) return { deployments: [] }; // not configured — silently absent
+  if (!token || !projectId) return { deployments: [] }; // not configured - silently absent
 
   try {
     const url = new URL(VERCEL_DEPLOYMENTS_URL);
@@ -214,7 +211,7 @@ async function fetchVercelDeployments(): Promise<{
   }
 }
 
-// ── Last backup from SystemLog (individually fault-isolated) ─────────────────
+// Last backup from SystemLog (individually fault-isolated)
 async function fetchLastBackup(): Promise<{
   at: string;
   action: string;
@@ -222,7 +219,7 @@ async function fetchLastBackup(): Promise<{
   message: string;
 } | null> {
   try {
-    // runWithoutTenant: crash backups log with no storeId — a tenant-scoped
+    // runWithoutTenant: crash backups log with no storeId - a tenant-scoped
     // STORE_OWNER query must still see the global record.
     return await runWithoutTenant(async () => {
       const row = await db.systemLog.findFirst({
@@ -244,12 +241,12 @@ async function fetchLastBackup(): Promise<{
       };
     });
   } catch {
-    // The log table may not exist yet / DB briefly down — never block the panel.
+    // The log table may not exist yet / DB briefly down - never block the panel.
     return null;
   }
 }
 
-// ── Handler ──────────────────────────────────────────────────────────────────
+// Handler
 async function getHandler(
   _request: NextRequest,
   _session: AuthSession,
