@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { CurrencySwitcher } from '@/components/currency-switcher';
 import { AboutDialog } from '@/components/about-dialog';
+import { OfflineIndicator } from '@/components/offline-indicator';
 
 /**
  * v2.12.5 (RBAC): top-bar role badge labels. SUPER_ADMIN intentionally reads
@@ -141,6 +142,9 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
             <h2 className="truncate font-semibold text-base sm:text-lg text-slate-900 dark:text-slate-100">{currentTab?.label || 'Dashboard'}</h2>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            {/* v2.14.0: offline status dot + Offline Queue dialog (green = all
+                sales synced, amber = offline or sales pending sync) */}
+            <OfflineIndicator />
             {/* Quick Search Button */}
             <Button
               ref={searchBtnRef}
