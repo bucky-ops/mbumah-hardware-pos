@@ -1,47 +1,34 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Circuit Breaker (External Service Protection)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Circuit Breaker (External Service Protection)
 //
-// Phase 5 — Error Handling & Resilience Framework
+// Phase 5 - Error Handling & Resilience Framework
 //
 // A circuit breaker prevents cascading failures when an external service
 // (M-Pesa Daraja, Twilio, Resend) is down. Without it, every request that
 // hits the failing service consumes a connection, waits for a timeout, and
-// propagates the failure upstream — potentially taking down the whole app.
+// propagates the failure upstream - potentially taking down the whole app.
 //
-// ── The 3-state machine ──────────────────────────────────────────────────────
+// The 3-state machine
 //
-//   ┌─────────┐  failure rate ≥ threshold  ┌──────────┐
-//   │ CLOSED  │ ─────────────────────────▶ │   OPEN   │
-//   └─────────┘                             └──────────┘
-//         ▲                                       │
-//         │                                       │ cooldown elapsed
-//         │                                       ▼
-//         │   probe succeeds                ┌────────────┐
-//         └──────────────────────────────── │ HALF_OPEN  │
-//                                          └────────────┘
-//                                                  │
-//                                                  │ probe fails
-//                                                  ▼
-//                                          ┌──────────┐
-//                                          │   OPEN   │
-//                                          └──────────┘
+//   CLOSED    -> OPEN      (failure rate >= threshold)
+//   OPEN      -> HALF_OPEN (cooldown elapsed)
+//   HALF_OPEN -> CLOSED    (probe succeeds)
+//   HALF_OPEN -> OPEN      (probe fails)
 //
-//   • CLOSED    — Normal operation. All requests pass through. Failures are
+//   • CLOSED - Normal operation. All requests pass through. Failures are
 //                 counted in a sliding window. When the failure rate (or
 //                 count) exceeds the threshold, the breaker trips to OPEN.
 //
-//   • OPEN      — "Tripped". ALL requests fail IMMEDIATELY with a
-//                 `CircuitOpenError` — no network call is made. This is the
+//   • OPEN - "Tripped". ALL requests fail IMMEDIATELY with a
+//                 `CircuitOpenError` - no network call is made. This is the
 //                 key protective behaviour: it stops hammering the dead
 //                 service. After `cooldownMs`, the breaker transitions to
 //                 HALF_OPEN to test if the service has recovered.
 //
-//   • HALF_OPEN — "Probe mode". A LIMITED number of trial requests are
+//   • HALF_OPEN - "Probe mode". A LIMITED number of trial requests are
 //                 allowed through (`halfOpenMaxCalls`). If they succeed,
 //                 the breaker closes. If ANY fails, it re-opens.
 //
-// ── Failure counting: sliding window ────────────────────────────────────────
+// Failure counting: sliding window
 //
 // We use a sliding window of the last N requests (default 20). Each request
 // records SUCCESS or FAILURE. The failure rate is `failures / total` within
@@ -49,7 +36,7 @@
 // AND the minimum number of calls (`minCalls`) has been reached, the breaker
 // trips. This avoids tripping on the first failure of a brand-new service.
 //
-// ── Composing with retry (Phase 4) ──────────────────────────────────────────
+// Composing with retry (Phase 4)
 //
 // The circuit breaker wraps the OUTER boundary; retry wraps the INNER call:
 //
@@ -58,40 +45,39 @@
 //   )
 //
 // This means:
-//   • If the service is flaky (transient 503), RETRY handles it — the
+//   • If the service is flaky (transient 503), RETRY handles it - the
 //     breaker sees a SUCCESS (because the retry eventually succeeded).
 //   • If the service is DOWN (all retries exhausted), the breaker sees a
 //     FAILURE and counts it. After enough failures, it trips OPEN.
-//   • When OPEN, the breaker short-circuits BEFORE retry runs — saving the
+//   • When OPEN, the breaker short-circuits BEFORE retry runs - saving the
 //     retry budget and connection pool.
 //
-// ── Registry & observability ─────────────────────────────────────────────────
+// Registry & observability
 //
 // All breakers are registered in a global `CircuitBreakerRegistry` so the
 // `/api/health/circuit-breaker` endpoint can report their state and an admin
 // can manually reset them. Each breaker exposes:
-//   • getState()           — CLOSED | OPEN | HALF_OPEN
-//   • getMetrics()         — { failures, successes, trips, lastFailureAt, ... }
-//   • reset()              — force back to CLOSED (admin action)
-//   • forceOpen()          — force to OPEN (maintenance mode)
+//   • getState() - CLOSED | OPEN | HALF_OPEN
+//   • getMetrics() - { failures, successes, trips, lastFailureAt, ... }
+//   • reset() - force back to CLOSED (admin action)
+//   • forceOpen() - force to OPEN (maintenance mode)
 //
-// ── Thread safety ────────────────────────────────────────────────────────────
+// Thread safety
 //
 // Node.js is single-threaded, so there are no true data races. However,
 // concurrent async calls can interleave at `await` points. The HALF_OPEN
 // "max calls" gate uses an atomic counter (incremented synchronously before
 // the first `await`) to ensure only `halfOpenMaxCalls` probes run concurrently.
 //
-// ─────────────────────────────────────────────────────────────────────────────
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 /**
  * The three states of a circuit breaker.
  *
- *   CLOSED    — normal operation, requests flow through
- *   OPEN      — tripped, all requests fail fast with CircuitOpenError
- *   HALF_OPEN — probe mode, limited trial requests allowed
+ *   CLOSED - normal operation, requests flow through
+ *   OPEN - tripped, all requests fail fast with CircuitOpenError
+ *   HALF_OPEN - probe mode, limited trial requests allowed
  */
 export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
@@ -106,7 +92,7 @@ export interface CircuitBreakerOptions {
   name: string;
 
   /**
-   * Failure rate threshold (0–1) at which the breaker trips from CLOSED to
+   * Failure rate threshold (0-1) at which the breaker trips from CLOSED to
    * OPEN. Default: 0.5 (50% of requests in the window fail).
    *
    * Example: with a window of 20 and threshold 0.5, the breaker trips when
@@ -141,7 +127,7 @@ export interface CircuitBreakerOptions {
   /**
    * Predicate that decides whether a thrown error counts as a "failure"
    * for breaker purposes. Defaults to treating ALL errors as failures
-   * (the breaker doesn't know about HTTP semantics — that's retry's job).
+   * (the breaker doesn't know about HTTP semantics - that's retry's job).
    *
    * Override this to, e.g., NOT count 4xx as failures (client errors
    * don't indicate the service is down).
@@ -196,7 +182,7 @@ export interface CircuitBreakerMetrics {
   /** Number of failures in the current sliding window. */
   windowFailures: number;
 
-  /** Current failure rate in the window (0–1). */
+  /** Current failure rate in the window (0-1). */
   failureRate: number;
 
   /** ISO timestamp of the last failure, or null. */
@@ -215,7 +201,7 @@ export interface CircuitBreakerMetrics {
   halfOpenInFlight: number;
 }
 
-// ── Errors ───────────────────────────────────────────────────────────────────
+// Errors
 
 /**
  * Thrown when a request is rejected because the circuit is OPEN.
@@ -241,7 +227,7 @@ export class CircuitOpenError extends Error {
   }
 }
 
-// ── Default options ──────────────────────────────────────────────────────────
+// Default options
 
 const DEFAULT_CB_OPTIONS: Required<
   Omit<CircuitBreakerOptions, 'name' | 'onOpen' | 'onClose' | 'onHalfOpen' | 'isFailure'>
@@ -253,7 +239,7 @@ const DEFAULT_CB_OPTIONS: Required<
   halfOpenMaxCalls: 3,
 };
 
-// ── Sliding window ───────────────────────────────────────────────────────────
+// Sliding window
 
 /**
  * A fixed-size sliding window of boolean outcomes (true = success,
@@ -296,7 +282,7 @@ class SlidingWindow {
     return this.failures;
   }
 
-  /** Failure rate (0–1). Returns 0 if the window is empty. */
+  /** Failure rate (0-1). Returns 0 if the window is empty. */
   get failureRate(): number {
     return this.count === 0 ? 0 : this.failures / this.count;
   }
@@ -310,7 +296,7 @@ class SlidingWindow {
   }
 }
 
-// ── CircuitBreaker ───────────────────────────────────────────────────────────
+// CircuitBreaker
 
 /**
  * A single circuit breaker instance. Created via `new CircuitBreaker(opts)` or
@@ -327,19 +313,19 @@ export class CircuitBreaker {
     Omit<CircuitBreakerOptions, 'onOpen' | 'onClose' | 'onHalfOpen' | 'isFailure'>
   > & Pick<CircuitBreakerOptions, 'onOpen' | 'onClose' | 'onHalfOpen' | 'isFailure'>;
 
-  // ── Counters (since creation or last reset) ──────────────────────────────
+  // Counters (since creation or last reset)
   private totalCalls = 0;
   private totalSuccesses = 0;
   private totalFailures = 0;
   private totalTrips = 0;
 
-  // ── Timestamps ───────────────────────────────────────────────────────────
+  // Timestamps
   private lastFailureAt: number | null = null;
   private lastSuccessAt: number | null = null;
   private openedAt: number | null = null;
 
-  // ── HALF_OPEN probe gating ───────────────────────────────────────────────
-  // Synchronous counter — incremented BEFORE any await, so concurrent calls
+  // HALF_OPEN probe gating
+  // Synchronous counter - incremented BEFORE any await, so concurrent calls
   // can't both grab the last probe slot.
   private halfOpenInFlight = 0;
 
@@ -356,7 +342,7 @@ export class CircuitBreaker {
     circuitBreakerRegistry.register(this);
   }
 
-  // ── Public state accessors ───────────────────────────────────────────────
+  // Public state accessors
 
   /** Current state of the breaker. */
   getState(): CircuitState {
@@ -399,7 +385,7 @@ export class CircuitBreaker {
     };
   }
 
-  // ── Admin actions ────────────────────────────────────────────────────────
+  // Admin actions
 
   /** Force the breaker back to CLOSED and reset all counters. */
   reset(): void {
@@ -422,15 +408,15 @@ export class CircuitBreaker {
     }
   }
 
-  // ── Core execution ───────────────────────────────────────────────────────
+  // Core execution
 
   /**
    * Execute `fn` through the circuit breaker.
    *
    * Behaviour by state:
-   *   • CLOSED    — call fn. Record success/failure. Maybe trip to OPEN.
-   *   • OPEN      — throw CircuitOpenError IMMEDIATELY (no call to fn).
-   *   • HALF_OPEN — allow up to halfOpenMaxCalls concurrent probes.
+   *   • CLOSED - call fn. Record success/failure. Maybe trip to OPEN.
+   *   • OPEN - throw CircuitOpenError IMMEDIATELY (no call to fn).
+   *   • HALF_OPEN - allow up to halfOpenMaxCalls concurrent probes.
    *                 On success → close. On failure → re-open.
    *
    * @returns The return value of `fn`.
@@ -440,21 +426,21 @@ export class CircuitBreaker {
   async execute<T>(fn: () => Promise<T>): Promise<T> {
     const state = this.getState();
 
-    // ── OPEN: fail fast ──────────────────────────────────────────────────
+    // OPEN: fail fast
     if (state === 'OPEN') {
       throw new CircuitOpenError(this.name, this.getMetrics());
     }
 
-    // ── HALF_OPEN: gate concurrent probes ────────────────────────────────
+    // HALF_OPEN: gate concurrent probes
     if (state === 'HALF_OPEN') {
       if (this.halfOpenInFlight >= this.opts.halfOpenMaxCalls) {
-        // Too many probes already in flight — fail fast (treat like OPEN).
+        // Too many probes already in flight - fail fast (treat like OPEN).
         throw new CircuitOpenError(this.name, this.getMetrics());
       }
       this.halfOpenInFlight++;
       try {
         const result = await this.runAndRecord(fn);
-        // Probe succeeded — if all in-flight probes are done, close.
+        // Probe succeeded - if all in-flight probes are done, close.
         // We check by decrementing; if 0 after decrement, close.
         return result;
       } finally {
@@ -468,7 +454,7 @@ export class CircuitBreaker {
       }
     }
 
-    // ── CLOSED: normal execution ─────────────────────────────────────────
+    // CLOSED: normal execution
     return this.runAndRecord(fn);
   }
 
@@ -488,22 +474,22 @@ export class CircuitBreaker {
     }
   }
 
-  // ── Outcome handlers ─────────────────────────────────────────────────────
+  // Outcome handlers
 
   private onSuccess(): void {
     this.lastSuccessAt = Date.now();
     this.totalSuccesses++;
     this.window.push(true);
 
-    // ── In HALF_OPEN, a successful probe closes the breaker ──────────────
-    // (only if this was the LAST in-flight probe — others may still be running)
+    // In HALF_OPEN, a successful probe closes the breaker
+    // (only if this was the LAST in-flight probe - others may still be running)
     if (this.state === 'HALF_OPEN' && this.halfOpenInFlight <= 1) {
       this.transitionToClosed();
     }
   }
 
   private onFailure(err: unknown): void {
-    // ── Filter: some errors don't count as "service failures" ─────────────
+    // Filter: some errors don't count as "service failures"
     // E.g. a 400 Bad Request is the CLIENT's fault, not the service being
     // down. The isFailure predicate lets callers exclude these.
     //
@@ -513,7 +499,7 @@ export class CircuitBreaker {
     // totalFailures consistent: a call that returned 400 increments
     // totalCalls but leaves totalFailures unchanged.
     if (this.opts.isFailure && !this.opts.isFailure(err)) {
-      // totalCalls was already incremented in runAndRecord — keep it.
+      // totalCalls was already incremented in runAndRecord - keep it.
       // Do NOT increment totalFailures, do NOT push to the window.
       return;
     }
@@ -522,13 +508,13 @@ export class CircuitBreaker {
     this.totalFailures++;
     this.window.push(false);
 
-    // ── In HALF_OPEN, ANY failure re-opens the breaker ───────────────────
+    // In HALF_OPEN, ANY failure re-opens the breaker
     if (this.state === 'HALF_OPEN') {
       this.transitionToOpen();
       return;
     }
 
-    // ── In CLOSED, check if we should trip ───────────────────────────────
+    // In CLOSED, check if we should trip
     if (this.state === 'CLOSED' && this.shouldTrip()) {
       this.transitionToOpen();
     }
@@ -545,7 +531,7 @@ export class CircuitBreaker {
     return this.window.failureRate >= this.opts.failureThreshold;
   }
 
-  // ── State transitions ────────────────────────────────────────────────────
+  // State transitions
 
   private transitionToOpen(): void {
     const wasHalfOpen = this.state === 'HALF_OPEN';
@@ -576,7 +562,7 @@ export class CircuitBreaker {
   }
 }
 
-// ── Global registry ──────────────────────────────────────────────────────────
+// Global registry
 
 /**
  * A process-wide registry of all circuit breakers. This allows the
@@ -585,7 +571,7 @@ export class CircuitBreaker {
  *
  * In serverless environments (Vercel), each function invocation gets a fresh
  * process, so the registry is per-invocation. In `bun run dev` (long-running),
- * the registry persists across requests — which is what we want for observing
+ * the registry persists across requests - which is what we want for observing
  * breaker state over time.
  */
 class CircuitBreakerRegistry {
@@ -594,7 +580,7 @@ class CircuitBreakerRegistry {
   /** Register a breaker. Throws on duplicate name. */
   register(breaker: CircuitBreaker): void {
     if (this.breakers.has(breaker.name)) {
-      // Already registered — return the existing one silently in dev to
+      // Already registered - return the existing one silently in dev to
       // avoid hot-reload errors. In production, this would indicate a bug.
       return;
     }
@@ -608,7 +594,7 @@ class CircuitBreakerRegistry {
 
   /**
    * Get OR CREATE a breaker with the given options. If a breaker with the
-   * same name already exists, returns it (ignoring the new options — the
+   * same name already exists, returns it (ignoring the new options - the
    * first registration wins). This is the recommended way to obtain a
    * breaker in module code, because it's idempotent across hot reloads.
    */
@@ -650,7 +636,7 @@ class CircuitBreakerRegistry {
 /** The singleton registry. Import this to access breakers by name. */
 export const circuitBreakerRegistry = new CircuitBreakerRegistry();
 
-// ── Presets ──────────────────────────────────────────────────────────────────
+// Presets
 
 /**
  * Pre-configured circuit breaker options for common external services.
@@ -664,7 +650,7 @@ export const CIRCUIT_BREAKER_PRESETS: Record<string, Omit<CircuitBreakerOptions,
    *   • 30s cooldown before probing
    *   • 3 probe calls in HALF_OPEN
    *
-   * Daraja is critical for payments — we want to trip reasonably fast (so we
+   * Daraja is critical for payments - we want to trip reasonably fast (so we
    * don't hold up the checkout) but recover quickly (Safaricom outages are
    * usually brief).
    */
@@ -674,7 +660,7 @@ export const CIRCUIT_BREAKER_PRESETS: Record<string, Omit<CircuitBreakerOptions,
     slidingWindowSize: 20,
     cooldownMs: 30_000,
     halfOpenMaxCalls: 3,
-    // 4xx (except 429) are client errors — the service is UP, the request
+    // 4xx (except 429) are client errors - the service is UP, the request
     // was bad. Don't count these as failures.
     isFailure: (err) => {
       if (err && typeof err === 'object' && 'status' in err) {
@@ -694,7 +680,7 @@ export const CIRCUIT_BREAKER_PRESETS: Record<string, Omit<CircuitBreakerOptions,
    *   • 60s cooldown (Twilio outages tend to be longer)
    *   • 2 probe calls
    *
-   * When Twilio is down, notifications queue (the app continues working —
+   * When Twilio is down, notifications queue (the app continues working -
    * notifications are async). A longer cooldown avoids hammering Twilio
    * during an outage.
    */
@@ -715,7 +701,7 @@ export const CIRCUIT_BREAKER_PRESETS: Record<string, Omit<CircuitBreakerOptions,
 
   /**
    * Resend (Email).
-   *   • 60% failure rate over 15 calls → trip (slightly more lenient —
+   *   • 60% failure rate over 15 calls → trip (slightly more lenient -
    *     email is lower priority than payments)
    *   • 45s cooldown
    *   • 2 probe calls
@@ -748,7 +734,7 @@ export const CIRCUIT_BREAKER_PRESETS: Record<string, Omit<CircuitBreakerOptions,
   },
 
   /**
-   * Strict preset — trips fast, recovers slow. Use for services where calling
+   * Strict preset - trips fast, recovers slow. Use for services where calling
    * them when down is very expensive (e.g. a paid API that charges per
    * request even on errors).
    */

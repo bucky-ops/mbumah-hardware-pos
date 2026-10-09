@@ -1,12 +1,10 @@
 'use client';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — useNetworkStatus hook
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - useNetworkStatus hook
 //
 // A small, reusable React hook that exposes the browser's online/offline
 // status reactively. Built on `useSyncExternalStore` (React 18+) so it is
-// tear-free and concurrent-safe — no useState/useEffect flicker.
+// tear-free and concurrent-safe - no useState/useEffect flicker.
 //
 // Why a dedicated hook?
 //   The existing offline-sync infra (src/lib/offline-sync.ts) attaches its
@@ -16,7 +14,7 @@
 //     • disable the "M-Pesa STK Push" button when offline (no point trying)
 //     • show a "pending syncs" badge when online but the queue is non-empty
 //
-//   Reading `navigator.onLine` directly in render is NOT reactive — it won't
+//   Reading `navigator.onLine` directly in render is NOT reactive - it won't
 //   re-render when the status flips. This hook solves that.
 //
 // Browser support: `online` / `offline` events + `navigator.onLine` are
@@ -30,11 +28,10 @@
 //   if (isOffline) {
 //     return <OfflineBanner />;
 //   }
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { useSyncExternalStore, useCallback } from 'react';
 
-// ── External store (module-level singleton) ──────────────────────────────────
+// External store (module-level singleton)
 //
 // A tiny external store so every component using the hook shares ONE set of
 // window listeners (not one per component instance). This is the idiomatic
@@ -75,7 +72,7 @@ function getSnapshot(): NetworkState {
   return currentState;
 }
 
-// Server snapshot — always "online" so SSR HTML matches the first client render.
+// Server snapshot - always "online" so SSR HTML matches the first client render.
 function getServerSnapshot(): NetworkState {
   return {
     isOnline: true,
@@ -110,7 +107,7 @@ function subscribe(callback: () => void): () => void {
     window.addEventListener('offline', handleOffline);
 
     // Prime with the ACTUAL current status (navigator.onLine may already be
-    // false if the page loaded while offline — the events only fire on a
+    // false if the page loaded while offline - the events only fire on a
     // TRANSITION, not on initial load).
     if (typeof navigator !== 'undefined') {
       const realOnline = navigator.onLine;
@@ -143,7 +140,7 @@ function subscribe(callback: () => void): () => void {
   };
 }
 
-// ── Public hook ──────────────────────────────────────────────────────────────
+// Public hook
 
 export interface UseNetworkStatusResult {
   /** True when the browser reports an active network connection. */
@@ -182,7 +179,7 @@ export function useNetworkStatus(): UseNetworkStatusResult {
   };
 }
 
-// ── Optional: one-shot "is online?" check (non-reactive) ─────────────────────
+// Optional: one-shot "is online?" check (non-reactive)
 //
 // For code paths that just need the current value once (e.g. inside a
 // mutationFn that already has its own logic), this avoids subscribing.

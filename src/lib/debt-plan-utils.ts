@@ -1,17 +1,17 @@
 /**
- * Debt Payment Plan utilities — pure functions for schedule calculation,
+ * Debt Payment Plan utilities - pure functions for schedule calculation,
  * status derivation, and totals recalculation.
  *
  * All math is Decimal-safe: callers pass Prisma `Decimal`-shaped values and
  * receive plain `number`s back (suitable for JSON responses and UI display).
  *
  * Task 12-c: `round2` is now the CANONICAL implementation re-exported from
- * `@/lib/utils/financialMath` (decimal.js HALF_UP, 2dp — the global rounding
+ * `@/lib/utils/financialMath` (decimal.js HALF_UP, 2dp - the global rounding
  * policy owner). The previous local implementation was a float
  * `Math.round((n + Number.EPSILON) * 100) / 100` hack; schedules produced
  * with the old helper remain numerically identical (the old hack agreed with
  * HALF_UP on every positive half-cent case; the only divergence is negative
- * half-cent inputs, which never occur in schedule math — balances are
+ * half-cent inputs, which never occur in schedule math - balances are
  * clamped ≥ 0). Money arithmetic in this module now flows through `toDec`.
  *
  * Task 12-d (debt-plan audit): added `calculateTotalWithInterest` as the
@@ -32,7 +32,7 @@ type NumericLike = number | string | Decimal | null | undefined;
 // call site (routes + tests) keeps working against the canonical helper.
 export { round2 };
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 export type PlanFrequency = 'WEEKLY' | 'BI_WEEKLY' | 'MONTHLY';
 
@@ -64,7 +64,7 @@ export interface PlanLike {
   installmentCount: number;
   installmentsPaid: number;
   installmentsOverdue: number;
-  amountPaid: unknown; // Prisma Decimal or number — coerced internally
+  amountPaid: unknown; // Prisma Decimal or number - coerced internally
   balance: unknown;
   totalAmount: unknown;
   endDate?: unknown;
@@ -85,7 +85,7 @@ export interface PlanTotals {
   installmentsOverdue: number;
 }
 
-// ── Decimal coercion helpers ─────────────────────────────────────────────────
+// Decimal coercion helpers
 
 /**
  * Convert a Prisma `Decimal`, a string, or a number into a plain JS number.
@@ -110,7 +110,7 @@ export function toNumber(value: unknown): number {
 
 // `round2` (canonical HALF_UP 2dp) is re-exported from financialMath above.
 
-// ── Schedule calculation ────────────────────────────────────────────────────
+// Schedule calculation
 
 /**
  * Add `n` units of the given frequency to a starting date.
@@ -128,7 +128,7 @@ function addInterval(date: Date, frequency: PlanFrequency, units: number): Date 
       result.setMonth(result.getMonth() + units);
       break;
     default:
-      // Unknown frequency — fall back to monthly so the plan is still usable.
+      // Unknown frequency - fall back to monthly so the plan is still usable.
       result.setMonth(result.getMonth() + units);
   }
   return result;
@@ -193,10 +193,10 @@ export function calculateEndDate(
  * Task 12-d (audit fix): this is now the SINGLE source of truth for the
  * interest model. Previously `calculateInstallmentSchedule` pro-rated the
  * rate by duration while `calculateInstallmentAmount` applied the rate as a
- * flat one-off multiplier — so a plan's `installmentAmount` column (computed
+ * flat one-off multiplier - so a plan's `installmentAmount` column (computed
  * via the latter) disagreed with the actual per-installment schedule amounts
  * (computed via the former) whenever `rate > 0` and the plan spanned less
- * than one year. Example: 12% on 6 monthly installments — the schedule
+ * than one year. Example: 12% on 6 monthly installments - the schedule
  * charged 1.06× total, the flat helper said 1.12×. Every caller now flows
  * through this function so previews, the schedule, and the stored column
  * agree.
@@ -239,7 +239,7 @@ export function calculateInstallmentAmount(
   return round2(totalWithInterest.div(safeCount));
 }
 
-// ── Status helpers ──────────────────────────────────────────────────────────
+// Status helpers
 
 /**
  * Derive the operational plan status from the current totals + installments.
@@ -276,13 +276,13 @@ export function getPlanStatus(plan: PlanLike): PlanStatus {
   return 'ACTIVE';
 }
 
-// ── Overdue marking ──────────────────────────────────────────────────────────
+// Overdue marking
 
 /**
  * Return a NEW array of installments with `status` set to `OVERDUE` for any
  * installment that is past its due date and not yet paid/waived.
  *
- * Pure function — does NOT mutate the input. The caller is responsible for
+ * Pure function - does NOT mutate the input. The caller is responsible for
  * persisting the changes.
  */
 export function markOverdueInstallments<T extends InstallmentLike>(
@@ -301,7 +301,7 @@ export function markOverdueInstallments<T extends InstallmentLike>(
   });
 }
 
-// ── Totals recalculation ────────────────────────────────────────────────────
+// Totals recalculation
 
 /**
  * Recompute the denormalized plan totals from the underlying installments.
@@ -319,7 +319,7 @@ export function recalculatePlanTotals(
   installments: InstallmentLike[],
 ): PlanTotals {
   // Task 12-c: Decimal accumulators (was a float `sum + toNumber(...)`
-  // reduce — number+number, so no concat risk, but exact Decimal removes the
+  // reduce - number+number, so no concat risk, but exact Decimal removes the
   // float dust before rounding).
   const totalAmountDec = toDec(plan.totalAmount as NumericLike);
   const amountPaidDec = installments.reduce(
@@ -341,7 +341,7 @@ export function recalculatePlanTotals(
   };
 }
 
-// ── Display helpers (shared with UI) ────────────────────────────────────────
+// Display helpers (shared with UI)
 
 export const FREQUENCY_LABELS: Record<PlanFrequency, string> = {
   WEEKLY: 'Weekly',
@@ -367,7 +367,7 @@ export const INSTALLMENT_STATUS_LABELS: Record<InstallmentStatus, string> = {
   WAIVED: 'Waived',
 };
 
-// ── Response serialization (shared) ─────────────────────────────────────────
+// Response serialization (shared)
 
 /**
  * Serialize a DebtPlanInstallment row for a JSON response.

@@ -1,17 +1,17 @@
 'use client';
 
 /**
- * receipt-pdf — robust client-side receipt PDF generation & printing.
+ * receipt-pdf - robust client-side receipt PDF generation & printing.
  *
  * WHY THIS EXISTS (incident: "Download Receipt" button did nothing / blank PDF):
  *   1. The old Download handler just called window.print() (or was disabled
- *      outright) — no PDF was ever produced.
+ *      outright) - no PDF was ever produced.
  *   2. html2canvas (classic) cannot parse Tailwind v4's oklch() colors and
  *      throws "unsupported color function", producing a blank/broken canvas.
  *      We use html2canvas-pro, an API-compatible fork with oklch/lab support.
  *   3. Print isolation relied on a `.receipt-printable-wrapper` class that
  *      never existed in the dialog DOM, so @media print rules hid the entire
- *      dialog — the printed page came out blank. Printing now clones the
+ *      dialog - the printed page came out blank. Printing now clones the
  *      receipt node into a dedicated #print-root container, and the print CSS
  *      shows ONLY that container (see globals.css).
  *
@@ -69,13 +69,13 @@ async function waitForFonts(timeoutMs = 3000): Promise<void> {
       new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
     ]);
   } catch {
-    // Fonts are best-effort — capture proceeds with whatever is loaded.
+    // Fonts are best-effort - capture proceeds with whatever is loaded.
   }
 }
 
 /**
  * Generate and download a PDF of the receipt element.
- * Throws on any failure — callers own the user-facing error UX
+ * Throws on any failure - callers own the user-facing error UX
  * (console.error('[RECEIPT_DOWNLOAD_ERROR]') + toast/alert).
  */
 export async function generateReceiptPdf(
@@ -90,7 +90,7 @@ export async function generateReceiptPdf(
     );
   }
 
-  // Phase 1.3 — async fonts & images must be settled BEFORE capture.
+  // Phase 1.3 - async fonts & images must be settled BEFORE capture.
   await waitForFonts();
   await waitForImages(receiptElement);
 
@@ -119,7 +119,7 @@ export async function generateReceiptPdf(
 
 /**
  * Build the canonical download filename for a receipt.
- * `Receipt-<receiptNumber || id>.pdf` — falls back defensively when the
+ * `Receipt-<receiptNumber || id>.pdf` - falls back defensively when the
  * transaction object is partially populated (offline sync edges).
  */
 export function buildReceiptFileName(receiptNumber?: string | null, id?: string | null): string {
@@ -130,7 +130,7 @@ export function buildReceiptFileName(receiptNumber?: string | null, id?: string 
 /**
  * Print the receipt node via a print-root clone (see module docblock for why
  * the old pure-CSS approach printed blank pages). Canvases (the QR code)
- * cannot be cloneNode'd with their pixels — each is serialised to a
+ * cannot be cloneNode'd with their pixels - each is serialised to a
  * same-size <img> in the clone.
  */
 export function printReceiptElement(elementId = RECEIPT_CONTENT_ID): void {
@@ -149,7 +149,7 @@ export function printReceiptElement(elementId = RECEIPT_CONTENT_ID): void {
 
   const clone = source.cloneNode(true) as HTMLElement;
 
-  // Replace <canvas> nodes (QR code) with pixel-identical <img> — cloneNode
+  // Replace <canvas> nodes (QR code) with pixel-identical <img> - cloneNode
   // does NOT copy canvas bitmaps.
   const srcCanvases = source.querySelectorAll('canvas');
   const dstCanvases = clone.querySelectorAll('canvas');
@@ -160,7 +160,7 @@ export function printReceiptElement(elementId = RECEIPT_CONTENT_ID): void {
     try {
       img.src = canvas.toDataURL('image/png');
     } catch {
-      // Tainted canvas (shouldn't happen — QR is local): leave blank.
+      // Tainted canvas (shouldn't happen - QR is local): leave blank.
     }
     img.width = canvas.width;
     img.height = canvas.height;
@@ -178,7 +178,7 @@ export function printReceiptElement(elementId = RECEIPT_CONTENT_ID): void {
   };
   window.addEventListener('afterprint', cleanup);
   // Safety valve: some engines fire afterprint unreliably for user-cancelled
-  // dialogs — never leave the clone mounted for long.
+  // dialogs - never leave the clone mounted for long.
   setTimeout(cleanup, 60_000);
 
   window.print();

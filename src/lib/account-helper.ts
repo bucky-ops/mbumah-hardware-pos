@@ -2,10 +2,9 @@
 
 import { db } from '@/lib/db';
 // FINANCIAL MATH AUDIT: all money math flows through the central Decimal
-// utilities — no raw float arithmetic, HALF_UP 2dp/4dp per the audit policy.
+// utilities - no raw float arithmetic, HALF_UP 2dp/4dp per the audit policy.
 import Decimal from 'decimal.js';
 import { toDec, round2, weightedAverageCost as macWeightedAverageCost } from '@/lib/utils/financialMath';
-// ────────────────────────────────────────────────────────────────────────
 
 const ACCOUNT_CODES = {
   CASH_ON_HAND: '1000',
@@ -16,13 +15,13 @@ const ACCOUNT_CODES = {
   ACCOUNTS_PAYABLE: '2000',
   VAT_PAYABLE: '2100',
   CUSTOMER_DEPOSITS: '2200',
-  GIFT_CARD_LIABILITY: '2300', // Unearned revenue — credited when a gift card is sold, debited when redeemed.
+  GIFT_CARD_LIABILITY: '2300', // Unearned revenue - credited when a gift card is sold, debited when redeemed.
   OWNER_EQUITY: '3000',
   RETAINED_EARNINGS: '3100',
   SALES_REVENUE: '4000',
   RENTAL_REVENUE: '4100',
   LATE_FEE_REVENUE: '4200',
-  SALES_DISCOUNTS: '4300', // Contra-revenue — debited when a discount is granted at checkout.
+  SALES_DISCOUNTS: '4300', // Contra-revenue - debited when a discount is granted at checkout.
   COST_OF_GOODS_SOLD: '5000',
   RENT_EXPENSE: '5100',
   SALARIES_EXPENSE: '5200',
@@ -35,7 +34,7 @@ export type AccountCode = (typeof ACCOUNT_CODES)[keyof typeof ACCOUNT_CODES];
 const accountCache = new Map<string, string>();
 
 // Default account definitions for auto-creation.
-// The Account model has: name, type, subType, normalBalance, isActive —
+// The Account model has: name, type, subType, normalBalance, isActive -
 // it does NOT have a `description` column, so we map the old description
 // intent into subType + normalBalance (proper chart-of-accounts metadata).
 const ACCOUNT_DEFAULTS: Record<string, {
@@ -164,7 +163,7 @@ export async function getAccountIds(
           const key = codeToKey.get(code) || code;
           result[key] = newAccount.id;
         } catch {
-          // Account may have been created by another request — try to find it
+          // Account may have been created by another request - try to find it
           const existing = await db.account.findFirst({
             where: { organizationId, code },
             select: { id: true },
@@ -185,9 +184,7 @@ export async function getAccountIds(
 
 export { ACCOUNT_CODES };
 
-// ─────────────────────────────────────────────────────────────────────────
 // Weighted Average Cost (WAC) inventory valuation
-// ─────────────────────────────────────────────────────────────────────────
 //
 // When new stock arrives (purchase order GRN, stock-movement PURCHASE
 // adjustment, supplier return), the per-unit cost of the EXISTING inventory
@@ -206,7 +203,6 @@ export { ACCOUNT_CODES };
 // Formula:
 //   newQty = currentQty + incomingQty
 //   newWac = (currentQty × currentWac) + (incomingQty × incomingUnitCost)
-//            ─────────────────────────────────────────────────────────────
 //                                  newQty
 //
 // Edge cases handled:
@@ -217,7 +213,6 @@ export { ACCOUNT_CODES };
 //   • Floating-point precision: rounded to 4 decimal places (1/100 of a
 //     cent) to avoid binary-float drift accumulating over thousands of
 //     receptions. The 4-DP ceiling matches KRA eTIMS requirements.
-// ─────────────────────────────────────────────────────────────────────────
 
 export interface WacInputs {
   /** Current quantity on hand (must be ≥ 0). */
@@ -242,7 +237,7 @@ export interface WacResult {
 /**
  * Compute the new Weighted Average Cost after a stock reception (or issue).
  *
- * Pure function — no side effects, no DB calls — so it is trivially unit-
+ * Pure function - no side effects, no DB calls - so it is trivially unit-
  * testable. Callers are responsible for persisting `newWac` back onto the
  * `Product.costPrice` (or a dedicated `weightedAverageCost` column) inside
  * the same transaction that increments `quantityInStock`.
@@ -250,7 +245,7 @@ export interface WacResult {
 export function calculateWeightedAverageCost(inputs: WacInputs): WacResult {
   const { currentStock, currentWac, incomingStock, incomingUnitCost } = inputs;
 
-  // ── Guardrails ──
+  // Guardrails
   if (currentStock < 0) {
     throw new Error(
       `WAC: currentStock must be ≥ 0 (received ${currentStock}). Negative on-hand indicates a prior stockout that must be corrected before costing.`,
@@ -269,7 +264,7 @@ export function calculateWeightedAverageCost(inputs: WacInputs): WacResult {
 
   const newStock = currentStock + incomingStock;
 
-  // ── Edge case: incoming stock is zero → WAC unchanged, no division ──
+  // Edge case: incoming stock is zero → WAC unchanged, no division
   if (incomingStock === 0) {
     return {
       newStock,
@@ -278,12 +273,12 @@ export function calculateWeightedAverageCost(inputs: WacInputs): WacResult {
     };
   }
 
-  // ── Edge case: zero current stock → WAC becomes the incoming unit cost ──
+  // Edge case: zero current stock → WAC becomes the incoming unit cost
   // This also covers the "first ever reception" case (currentStock === 0,
   // currentWac === 0). And it covers a negative currentStock guard (already
   // thrown above) so we don't divide by a zero-stock × zero-wac product.
   if (currentStock === 0) {
-    // If incoming is negative here, that's a stock-out of an empty shelf —
+    // If incoming is negative here, that's a stock-out of an empty shelf -
     // reject it so the books don't go negative.
     if (incomingStock < 0) {
       throw new Error(
@@ -297,8 +292,8 @@ export function calculateWeightedAverageCost(inputs: WacInputs): WacResult {
     };
   }
 
-  // ── Edge case: negative incoming (issuance / correction) ──
-  // Issuing stock at the current WAC doesn't change the per-unit cost —
+  // Edge case: negative incoming (issuance / correction)
+  // Issuing stock at the current WAC doesn't change the per-unit cost -
   // we're just reducing the quantity. The total value shrinks proportionally.
   // We DO guard against driving total stock below zero.
   if (incomingStock < 0) {
@@ -307,7 +302,7 @@ export function calculateWeightedAverageCost(inputs: WacInputs): WacResult {
         `WAC: issuance of ${Math.abs(incomingStock)} units would drive on-hand stock negative (current=${currentStock}, new=${newStock}).`,
       );
     }
-    // Issuance at WAC — cost per unit unchanged.
+    // Issuance at WAC - cost per unit unchanged.
     return {
       newStock,
       newWac: round4(currentWac),
@@ -315,9 +310,9 @@ export function calculateWeightedAverageCost(inputs: WacInputs): WacResult {
     };
   }
 
-  // ── Standard weighted-average blend ──
+  // Standard weighted-average blend
   // FINANCIAL MATH AUDIT: the blend runs in Decimal (never float) via the
-  // central utility — (oldQty×oldCost + recvQty×newCost) / newQty, 4dp HALF_UP.
+  // central utility - (oldQty×oldCost + recvQty×newCost) / newQty, 4dp HALF_UP.
   const blended = macWeightedAverageCost(currentStock, currentWac, incomingStock, incomingUnitCost);
   const currentValue = toDec(currentStock).mul(toDec(currentWac));
   const incomingValue = toDec(incomingStock).mul(toDec(incomingUnitCost));
@@ -329,14 +324,12 @@ export function calculateWeightedAverageCost(inputs: WacInputs): WacResult {
   };
 }
 
-/** Round to 4 decimal places (1/100 of a cent) — KRA eTIMS precision, HALF_UP. */
+/** Round to 4 decimal places (1/100 of a cent) - KRA eTIMS precision, HALF_UP. */
 function round4(n: number | Decimal): number {
   return toDec(n).toDecimalPlaces(4, Decimal.ROUND_HALF_UP).toNumber();
 }
 
-// ─────────────────────────────────────────────────────────────────────────
 // Double-entry journal helpers (Task 4)
-// ─────────────────────────────────────────────────────────────────────────
 
 import type { Prisma } from '@prisma/client';
 import { generateJournalEntryNumber } from '@/lib/helpers';
@@ -364,7 +357,7 @@ export interface SaleAccountingParams {
  * Records the double-entry journal lines for a POS sale.
  * Credits Sales Revenue (4000) + VAT Payable (2100).
  * Debits Cash (1000), M-Pesa (1100), A/R (1200), Gift Card Liability (2300),
- * and Sales Discounts (4300 — contra-revenue).
+ * and Sales Discounts (4300 - contra-revenue).
  * COGS: Debit COGS (5000), Credit Inventory (1300).
  * Throws if total debits ≠ total credits (golden rule).
  */
@@ -402,7 +395,7 @@ export async function recordSaleJournalEntry(
   const jeNumber = generateJournalEntryNumber();
   const lines: Prisma.JournalEntryLineCreateManyJournalEntryInput[] = [];
 
-  // ── Credits: revenue + tax ──
+  // Credits: revenue + tax
   // F1 dust remediation: VAT extraction (total ÷ 1.16) yields repeating
   // decimals. Lines are stored at 30-dp column scale, so unrounded splits
   // leave sub-cent dust that the integrity auditor reports as an
@@ -427,7 +420,7 @@ export async function recordSaleJournalEntry(
     });
   }
 
-  // ── Debits: payments received + receivables + discounts ──
+  // Debits: payments received + receivables + discounts
   if (paymentBreakdown.cash && paymentBreakdown.cash > 0) {
     lines.push({
       accountId: accounts.CASH_ON_HAND,
@@ -469,7 +462,7 @@ export async function recordSaleJournalEntry(
     });
   }
 
-  // ── COGS ──
+  // COGS
   if (cogsAmount > 0) {
     const cogs2 = roundMoney(cogsAmount);
     lines.push({
@@ -490,7 +483,7 @@ export async function recordSaleJournalEntry(
   // rounding residue between the credit and debit sides. Absorb it into the
   // first tender leg ONLY at rounding scale (≤ 2 cents) so the posted entry
   // balances exactly at 2dp. A caller bug producing a real imbalance is NOT
-  // masked — anything larger falls through to the golden-rule backstop below,
+  // masked - anything larger falls through to the golden-rule backstop below,
   // which still throws (guarded by account-helper.test.ts).
   const preDebits = lines.reduce<Decimal>((s, l) => s.plus(Number(l.debit ?? 0)), new Decimal(0));
   const preCredits = lines.reduce<Decimal>((s, l) => s.plus(Number(l.credit ?? 0)), new Decimal(0));
@@ -503,7 +496,7 @@ export async function recordSaleJournalEntry(
   }
 
   // FINANCIAL MATH AUDIT: balance check runs in Decimal (float `+` on
-  // journal line amounts is banned — Prisma line columns are Decimal).
+  // journal line amounts is banned - Prisma line columns are Decimal).
   const totalDebits = lines
     .reduce<Decimal>((s, l) => s.plus(toDec(l.debit ?? 0)), new Decimal(0))
     .toNumber();
@@ -592,16 +585,15 @@ export async function recordGiftCardIssuance(
   });
 }
 
-// ══════════════════════════════════════════════════════════════════════════
 // F1-1 remediation (FINANCIAL_MODULE_AUDIT_REPORT.md): Goods-Receipt posting.
 //
-// The buy side previously NEVER hit the general ledger — Accounts Payable
+// The buy side previously NEVER hit the general ledger - Accounts Payable
 // (2000) was defined but unused and the Inventory GL account was only ever
 // CREDITED by COGS at sale time, drifting it negative for every purchased
 // item. This helper posts, inside the SAME transaction as the stock
 // movement:
-//   Dr  Inventory (1300)          — gross receipt value
-//   Cr  Accounts Payable (2000)   — supplier liability
+//   Dr  Inventory (1300) - gross receipt value
+//   Cr  Accounts Payable (2000) - supplier liability
 //
 // VAT treatment: unitCost is treated as the supplier's VAT-INCLUSIVE price
 // (the default for Kenyan hardware-supplier quotes). For VAT-registered
@@ -609,8 +601,7 @@ export async function recordGiftCardIssuance(
 //   Dr Inventory (net) + Dr VAT Payable (2100, debited = input-VAT recovery)
 //   Cr Accounts Payable (gross)
 // When the store/org is not VAT-configured the full gross is capitalised to
-// Inventory — conservative and reversible via a future adjusting entry.
-// ══════════════════════════════════════════════════════════════════════════
+// Inventory - conservative and reversible via a future adjusting entry.
 
 export interface GoodsReceiptAccountingParams {
   organizationId: string;
@@ -619,7 +610,7 @@ export interface GoodsReceiptAccountingParams {
   poNumber: string;
   /** GROSS received value for this receipt batch (Σ receivedQty × unitCost). */
   grossAmount: number;
-  /** VAT rate embedded in the supplier price, 0–100 (default Kenya 16). */
+  /** VAT rate embedded in the supplier price, 0-100 (default Kenya 16). */
   vatRate?: number;
   receivedById?: string | null;
 }
@@ -628,7 +619,7 @@ export interface GoodsReceiptAccountingParams {
  * Posts the balanced double-entry journal for a goods receipt (GRN).
  * MUST be called with the interactive transaction client so the journal
  * commits atomically with the stock/WAC updates it corresponds to.
- * Throws if debits ≠ credits (golden rule — same tolerance as sales).
+ * Throws if debits ≠ credits (golden rule - same tolerance as sales).
  */
 export async function recordGoodsReceiptEntry(
   tx: Prisma.TransactionClient,
@@ -645,11 +636,11 @@ export async function recordGoodsReceiptEntry(
     ACCOUNT_CODES.VAT_PAYABLE,
   ]);
 
-  // VAT-EXCLUSIVE B2B treatment (FINANCIAL MATH AUDIT §2 — aligned with
+  // VAT-EXCLUSIVE B2B treatment (FINANCIAL MATH AUDIT §2 - aligned with
   // the PO module, which adds VAT on top of net unit costs): the passed
   // amount is the NET receipt value; recoverable input VAT is computed
   // ON TOP. (Previously this journal extracted VAT as if the supplier
-  // price were VAT-INCLUSIVE while the PO route added VAT on top — the
+  // price were VAT-INCLUSIVE while the PO route added VAT on top - the
   // two sides of the same purchase disagreed, overstating inventory cost
   // by the VAT component and understating input-VAT recovery.)
   const netAmount = roundMoney(grossAmount);

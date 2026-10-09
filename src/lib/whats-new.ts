@@ -1,22 +1,22 @@
 /**
- * WHAT'S NEW — release notes shown in the WhatsNewDialog (v2.13.0).
+ * WHAT'S NEW - release notes shown in the WhatsNewDialog (v2.13.0).
  *
  * The dialog (src/components/whats-new-dialog.tsx) renders on app mount when
  * localStorage 'mbt_seen_version' !== APP_VERSION, newest entry first. Each
- * entry is user-facing shop-floor copy — keep bullets short and benefit-led,
+ * entry is user-facing shop-floor copy - keep bullets short and benefit-led,
  * not commit-log style. Adding a new release = prepend one entry here; the
  * dialog picks it up automatically (no other edit needed).
  *
- * PURE module — imported by client components, so it must stay free of any
+ * PURE module - imported by client components, so it must stay free of any
  * server-only imports (same constraint as src/lib/permissions.ts).
  */
 
 export interface WhatsNewEntry {
-  /** Semver string WITHOUT the leading 'v' — matches package.json. */
+  /** Semver string WITHOUT the leading 'v' - matches package.json. */
   version: string;
   /** One-line headline for the release. */
   title: string;
-  /** Shop-floor bullet list (3–6 items). */
+  /** Shop-floor bullet list (3-6 items). */
   bullets: string[];
 }
 

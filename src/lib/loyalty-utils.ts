@@ -9,7 +9,7 @@
 // These helpers are pure (no DB access) so they can be used by both the API
 // route handlers and the React client components (via re-export).
 
-// ─── Tier constants ──────────────────────────────────────────────────────────
+// Tier constants
 
 export const LOYALTY_TIERS = ['BRONZE', 'SILVER', 'GOLD', 'PLATINUM'] as const;
 export type LoyaltyTierName = (typeof LOYALTY_TIERS)[number];
@@ -35,7 +35,7 @@ export function normalizeLegacyType(legacyType: string): LoyaltyTransactionType 
   return LEGACY_TYPE_MAP[legacyType] ?? 'EARNED';
 }
 
-// ─── Tier configuration ──────────────────────────────────────────────────────
+// Tier configuration
 
 export interface TierConfig {
   name: LoyaltyTierName;
@@ -105,7 +105,7 @@ export const TIER_CONFIG: Record<LoyaltyTierName, TierConfig> = {
 
 export const TIER_ORDER: LoyaltyTierName[] = ['BRONZE', 'SILVER', 'GOLD', 'PLATINUM'];
 
-// ─── Pure calculation helpers ────────────────────────────────────────────────
+// Pure calculation helpers
 
 /**
  * Calculate loyalty points earned for a given amount spent.
@@ -172,7 +172,7 @@ export function pointsRequiredFor(kesAmount: number): number {
   return Math.ceil(rawPoints / 100) * 100;
 }
 
-// ─── Tier progress ───────────────────────────────────────────────────────────
+// Tier progress
 
 export interface TierProgress {
   current: LoyaltyTierName;
@@ -214,7 +214,7 @@ export function getNextTierProgress(points: number): TierProgress {
   return { current, next, pointsNeeded, percentage };
 }
 
-// ─── Tier config listing (for the /api/loyalty/tiers endpoint) ───────────────
+// Tier config listing (for the /api/loyalty/tiers endpoint)
 
 export interface TierPublicConfig {
   name: LoyaltyTierName;
@@ -241,7 +241,7 @@ export function getTierConfigList(): TierPublicConfig[] {
   });
 }
 
-// ─── Validation helpers ──────────────────────────────────────────────────────
+// Validation helpers
 
 export const MIN_REDEMPTION_POINTS = 100;
 export const REDEMPTION_RATE_KES_PER_100_POINTS = 10;

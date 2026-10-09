@@ -1,39 +1,37 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Offline-First Transaction Queue (IndexedDB)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Offline-First Transaction Queue (IndexedDB)
 //
 // Cashiers in areas with unstable internet (Juja, Nakuru, Ruiru) must be able
 // to keep processing sales when the connection drops. This module implements
 // an IndexedDB-backed queue of unsynced POS transactions:
 //
-//   • saveOfflineTransaction(payload)  — persists a failed POST /api/transactions
+//   • saveOfflineTransaction(payload) - persists a failed POST /api/transactions
 //                                         payload locally with a synthetic
 //                                         receipt number so the cashier can
 //                                         hand the customer a paper receipt
 //                                         immediately.
-//   • syncQueue()                       — replays every queued transaction
+//   • syncQueue() - replays every queued transaction
 //                                         against the live API in FIFO order.
 //                                         Successfully synced rows are deleted
 //                                         from the queue; failures remain and
 //                                         are retried on the next `online`
 //                                         event or manual retry.
-//   • getQueueCount() / subscribe()     — lightweight reactive count for the
+//   • getQueueCount() / subscribe() - lightweight reactive count for the
 //                                         POS "pending syncs" badge.
 //
 // Design notes:
 //   • Uses the `idb` Promise wrapper for ergonomic IndexedDB access.
 //   • The DB + store live entirely client-side; the server never sees these
-//     rows until syncQueue() succeeds. This is intentional — the queue is a
+//     rows until syncQueue() succeeds. This is intentional - the queue is a
 //     local buffer, not a source of truth.
 //   • Each queued row carries a client-generated `clientReceiptNumber`
 //     (format OFFLINE-<timestamp>-<rand>) so the cashier can print a receipt
 //     with a unique number even before the server assigns the real one.
 //   • AUDIT REMEDIATION (SYS-10): each queued row also carries a stable
-//     client-generated `idempotencyKey` — replays send the SAME key and the
+//     client-generated `idempotencyKey` - replays send the SAME key and the
 //     server dedupes on SalesTransaction.idempotencyKey (@unique); a 409 or
 //     an `idempotentReplay: true` response counts as success.
 //   • AUDIT REMEDIATION (SYS-10): replays attach the same Bearer token
-//     (localStorage `mbt_token`) used by the online checkout — previously
+//     (localStorage `mbt_token`) used by the online checkout - previously
 //     every replay was rejected 401 and offline sales never synced.
 //   • The actual `receiptNumber` is assigned server-side on sync; the client
 //     receipt number is included in the payload as `notes` so the server-side
@@ -41,14 +39,13 @@
 //   • All functions are SSR-safe (no-op when `window` is undefined) so they
 //     can be imported from any client component without breaking the server
 //     render.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { CheckoutPayload } from '@/lib/types';
 import type { TransactionItem } from '@/lib/api';
 import { getCachedVatRate } from '@/lib/vat-rate-cache';
 
-// ── Schema ───────────────────────────────────────────────────────────────────
+// Schema
 
 interface OfflineTransactionRow {
   /** Client-generated UUID (crypto.randomUUID()). Primary key. */
@@ -86,13 +83,13 @@ const DB_NAME = 'mbumah-offline-pos';
 const DB_VERSION = 1;
 const STORE_NAME = 'transactions';
 
-// ── Auth token (SYS-10) ─────────────────────────────────────────────────────
+// Auth token (SYS-10)
 
 /**
  * AUDIT REMEDIATION (SYS-10): the offline replay fetch previously sent NO
  * Authorization header, so the proxy 401'd every replay and offline sales
  * NEVER synced. Replicates the exact token read used by `request()` in
- * src/lib/api.ts (localStorage key `mbt_token`) — never hardcode a token.
+ * src/lib/api.ts (localStorage key `mbt_token`) - never hardcode a token.
  */
 function getStoredAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -110,12 +107,12 @@ function newIdempotencyKey(seed: string): string {
     : `idem-${seed}`;
 }
 
-// ── Singleton DB handle (lazy) ────────────────────────────────────────────────
+// Singleton DB handle (lazy)
 
 let dbPromise: Promise<IDBPDatabase<MbumahOfflineDB>> | null = null;
 
 function getDB(): Promise<IDBPDatabase<MbumahOfflineDB>> | null {
-  // SSR guard — IndexedDB only exists in the browser.
+  // SSR guard - IndexedDB only exists in the browser.
   if (typeof window === 'undefined' || typeof indexedDB === 'undefined') {
     return null;
   }
@@ -132,7 +129,7 @@ function getDB(): Promise<IDBPDatabase<MbumahOfflineDB>> | null {
   return dbPromise;
 }
 
-// ── Client receipt number generator ──────────────────────────────────────────
+// Client receipt number generator
 
 /**
  * Generate a unique, human-readable receipt number for offline sales. Format:
@@ -146,7 +143,7 @@ export function generateOfflineReceiptNumber(): string {
   return `OFFLINE-${ts}-${rand}`;
 }
 
-// ── Public API ───────────────────────────────────────────────────────────────
+// Public API
 
 /**
  * Persist a failed checkout payload to the local queue. Returns the queued row
@@ -154,7 +151,7 @@ export function generateOfflineReceiptNumber(): string {
  * receipt for the customer.
  *
  * Also appends the `clientReceiptNumber` to the payload's `notes` so the
- * server-side transaction — once synced — carries the offline reference.
+ * server-side transaction - once synced - carries the offline reference.
  */
 export async function saveOfflineTransaction(
   payload: CheckoutPayload,
@@ -222,7 +219,7 @@ export async function syncQueue(): Promise<SyncResult> {
   const db = getDB();
   if (!db) return result;
 
-  // Don't attempt a sync if we're known to be offline — the fetches would
+  // Don't attempt a sync if we're known to be offline - the fetches would
   // just fail immediately and inflate the attempt counters.
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     return result;
@@ -242,7 +239,7 @@ export async function syncQueue(): Promise<SyncResult> {
     result.attempted += 1;
     try {
       // AUDIT REMEDIATION (SYS-10): legacy rows queued before this fix have no
-      // stored key — mint one once, persist it on the row, and reuse it on
+      // stored key - mint one once, persist it on the row, and reuse it on
       // every subsequent retry.
       let idempotencyKey = row.idempotencyKey;
       if (!idempotencyKey) {
@@ -266,7 +263,7 @@ export async function syncQueue(): Promise<SyncResult> {
 
       // AUDIT REMEDIATION (SYS-10): a 409 (duplicate idempotencyKey) OR a
       // response carrying `idempotentReplay: true` means the sale was ALREADY
-      // recorded server-side — treat both as success and drop the queued row
+      // recorded server-side - treat both as success and drop the queued row
       // instead of retrying forever.
       const idempotentReplay =
         res.status === 409 || body?.idempotentReplay === true;
@@ -277,11 +274,11 @@ export async function syncQueue(): Promise<SyncResult> {
         );
       }
 
-      // Success (fresh create, idempotent replay, or 409 dup) — remove from queue.
+      // Success (fresh create, idempotent replay, or 409 dup) - remove from queue.
       await conn.delete(STORE_NAME, row.id);
       result.succeeded += 1;
     } catch (err) {
-      // Failure — record the error and leave in queue for next retry.
+      // Failure - record the error and leave in queue for next retry.
       const message = err instanceof Error ? err.message : 'Unknown sync error';
       await conn.put(STORE_NAME, {
         ...row,
@@ -293,7 +290,7 @@ export async function syncQueue(): Promise<SyncResult> {
       result.errors.push({ clientReceiptNumber: row.clientReceiptNumber, error: message });
 
       // If the failure looks like a network error (TypeError from fetch),
-      // stop the sync early — the rest will likely fail the same way and
+      // stop the sync early - the rest will likely fail the same way and
       // we don't want to hammer the (still-down) connection.
       if (err instanceof TypeError) {
         // Fill in the remaining count as "not attempted this run".
@@ -343,7 +340,7 @@ export async function discardQueuedTransaction(id: string): Promise<boolean> {
   }
 }
 
-// ── Reactive count subscription (for the POS badge) ──────────────────────────
+// Reactive count subscription (for the POS badge)
 //
 // A tiny pub/sub so React components can subscribe to queue-count changes
 // without polling. `useSyncExternalStore` is the idiomatic React 18+ hook for
@@ -362,7 +359,7 @@ function notifyCountChange() {
       }
     })
     .catch(() => {
-      /* ignore — will retry on next change */
+      /* ignore - will retry on next change */
     });
 }
 
@@ -390,10 +387,10 @@ export async function primeOfflineCount(): Promise<void> {
   listeners.forEach((l) => l());
 }
 
-// ── Online/offline event wiring ───────────────────────────────────────────────
+// Online/offline event wiring
 //
 // Registers window listeners that auto-trigger syncQueue() when connectivity
-// is restored. Idempotent — safe to call from multiple components; only the
+// is restored. Idempotent - safe to call from multiple components; only the
 // first call actually attaches the listeners.
 
 let listenersAttached = false;
@@ -449,7 +446,7 @@ export function initOfflineSync(): () => void {
   };
 }
 
-// ── Synthetic offline receipt ─────────────────────────────────────────────────
+// Synthetic offline receipt
 //
 // When a sale is queued offline, the cashier still needs to hand the customer
 // a receipt immediately. This builds a TransactionItem-shaped object from the
@@ -466,7 +463,7 @@ export function buildOfflineReceipt(
     0,
   );
   // v2.8.0: rate comes from the cached ADMIN SETTING (localStorage mirror of
-  // /api/settings/vat) instead of a hardcoded 16% — see use-vat-rate.ts.
+  // /api/settings/vat) instead of a hardcoded 16% - see use-vat-rate.ts.
   const taxRatePercent = getCachedVatRate();
   const tax = subtotal * (taxRatePercent / 100);
   const discount = payload.discountAmount || 0;
@@ -483,7 +480,7 @@ export function buildOfflineReceipt(
     discountAmount: discount,
     totalAmount: Math.round(total * 100) / 100,
     paymentMethod: payload.paymentMethod,
-    paymentStatus: 'PENDING_SYNC', // sentinel — the Receipt dialog treats this as "offline"
+    paymentStatus: 'PENDING_SYNC', // sentinel - the Receipt dialog treats this as "offline"
     transactionType: 'SALE',
     notes: row.clientReceiptNumber,
     isOffline: true,

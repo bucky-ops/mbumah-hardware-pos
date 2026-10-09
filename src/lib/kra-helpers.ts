@@ -1,6 +1,4 @@
-// ════════════════════════════════════════════════════════════════════════════
 // src/lib/kra-helpers.ts
-// ════════════════════════════════════════════════════════════════════════════
 //
 // KRA eTIMS (electronic Tax Invoice Management System) integration helpers.
 //
@@ -35,7 +33,7 @@ import { LogSeverity, LogComponent } from '@/lib/types';
 import { decryptSecret, isEncrypted } from '@/lib/crypto-helpers';
 import { getVatRatePercent } from '@/lib/vat-settings';
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// Constants
 
 /** KRA eTIMS API base URLs. */
 const KRA_API_BASE = {
@@ -52,7 +50,7 @@ const KRA_MAX_RETRIES = 3;
 /** Base delay for exponential backoff (1s, 2s, 4s). */
 const KRA_RETRY_BASE_MS = 1_000;
 
-// ── Enum-like constants (mirror prisma/schema.prisma String values) ──────────
+// Enum-like constants (mirror prisma/schema.prisma String values)
 
 export const SubmissionStatus = {
   PENDING: 'PENDING',
@@ -69,7 +67,7 @@ export const KraEnvironment = {
 } as const;
 export type KraEnvironment = (typeof KraEnvironment)[keyof typeof KraEnvironment];
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 /** Result of an invoice submission attempt. */
 export interface SubmissionResult {
@@ -120,7 +118,7 @@ export interface KraInvoicePayload {
   paymentMethod: string;
 }
 
-// ── Interface (the "port") ───────────────────────────────────────────────────
+// Interface (the "port")
 
 /**
  * Abstract KRA API service. API routes depend on this interface, not the
@@ -144,7 +142,7 @@ export interface IKraApiService {
   ensureValidToken(profileId: string): Promise<string>;
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// Helpers
 
 /**
  * Sleep for `ms` milliseconds. Used for exponential backoff.
@@ -155,7 +153,7 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * Determine if an HTTP status code is retryable (5xx or network-level).
- * 4xx errors are NOT retryable — the caller must fix the payload.
+ * 4xx errors are NOT retryable - the caller must fix the payload.
  */
 function isRetryableStatus(status: number | undefined): boolean {
   if (status === undefined) return true; // network error (no response)
@@ -189,7 +187,7 @@ function decryptPassword(encrypted: string): string {
   }
 }
 
-// ── Concrete Implementation (the "adapter") ──────────────────────────────────
+// Concrete Implementation (the "adapter")
 
 /**
  * Concrete KRA API service. Performs actual HTTP calls to the KRA eTIMS API.
@@ -236,7 +234,7 @@ export class KraApiService implements IKraApiService {
       return profile.authToken;
     }
 
-    // Token missing or expiring soon — fetch a new one.
+    // Token missing or expiring soon - fetch a new one.
     const base = KRA_API_BASE[profile.environment as KraEnvironment] || KRA_API_BASE.sandbox;
     const password = decryptPassword(profile.kraPasswordEncrypted);
 
@@ -343,7 +341,7 @@ export class KraApiService implements IKraApiService {
         const latencyMs = Date.now() - startTime;
 
         if (res.ok && (body.success || body.rcdNm)) {
-          // Success — extract KRA reference + CU pin.
+          // Success - extract KRA reference + CU pin.
           const result: SubmissionResult = {
             success: true,
             status: SubmissionStatus.SUBMITTED,
@@ -374,7 +372,7 @@ export class KraApiService implements IKraApiService {
           body.message ||
           `KRA returned HTTP ${res.status}`;
 
-        // 4xx errors are NOT retryable — the payload is invalid.
+        // 4xx errors are NOT retryable - the payload is invalid.
         if (!isRetryableStatus(res.status)) {
           break;
         }
@@ -480,7 +478,7 @@ export class KraApiService implements IKraApiService {
   }
 
   /**
-   * Fetch business info from KRA — validates the PIN and credentials.
+   * Fetch business info from KRA - validates the PIN and credentials.
    */
   async getBusinessInfo(
     pin: string,
@@ -523,7 +521,7 @@ export class KraApiService implements IKraApiService {
   }
 }
 
-// ── Singleton instance for convenient import ─────────────────────────────────
+// Singleton instance for convenient import
 
 /**
  * Default singleton instance. Import this in API routes:
@@ -532,7 +530,7 @@ export class KraApiService implements IKraApiService {
  */
 export const kraApiService: IKraApiService = new KraApiService();
 
-// ── Higher-level orchestration helpers ───────────────────────────────────────
+// Higher-level orchestration helpers
 
 /**
  * Map a SalesTransaction (with items) to a KRA invoice payload.

@@ -1,8 +1,6 @@
 'use client'
 
-// ════════════════════════════════════════════════════════════════════════════
 // src/hooks/use-realtime.ts
-// ════════════════════════════════════════════════════════════════════════════
 //
 // React hook for real-time notification management.
 // Auto-connects on mount, disconnects on unmount, accumulates notifications
@@ -23,7 +21,7 @@ import {
   type RealtimeNotification,
 } from '@/lib/socket-client'
 
-// ── Return type ──────────────────────────────────────────────────────────────
+// Return type
 
 export interface UseRealtimeNotificationsReturn {
   /** Accumulated real-time notifications (most recent first) */
@@ -36,11 +34,11 @@ export interface UseRealtimeNotificationsReturn {
   markAllRead: () => void
 }
 
-// ── Max notifications to keep in state ───────────────────────────────────────
+// Max notifications to keep in state
 
 const MAX_NOTIFICATIONS = 100
 
-// ── Hook ─────────────────────────────────────────────────────────────────────
+// Hook
 
 export function useRealtimeNotifications(
   storeId: string,
@@ -51,7 +49,7 @@ export function useRealtimeNotifications(
   const [unreadCount, setUnreadCount] = useState(0)
   const readIdsRef = useRef<Set<string>>(new Set())
 
-  // ── Initialize socket on mount ───────────────────────────────────────────
+  // Initialize socket on mount
 
   useEffect(() => {
     if (!storeId) return
@@ -64,7 +62,7 @@ export function useRealtimeNotifications(
       setConnectionStatus(status)
     })
 
-    // ── Subscribe to all notification events ────────────────────────────────
+    // Subscribe to all notification events
 
     const addNotification = (notif: RealtimeNotification) => {
       // Skip if already seen (dedup by id)
@@ -86,7 +84,7 @@ export function useRealtimeNotifications(
     const unsubLoyalty = onLoyaltyUpgrade(addNotification)
     const unsubStock = onStockMovement(addNotification)
 
-    // ── Cleanup on unmount ──────────────────────────────────────────────────
+    // Cleanup on unmount
 
     return () => {
       unsubStatus()
@@ -100,7 +98,7 @@ export function useRealtimeNotifications(
     }
   }, [storeId, userId])
 
-  // ── Mark all as read ─────────────────────────────────────────────────────
+  // Mark all as read
 
   const markAllRead = useCallback(() => {
     setNotifications((prev) => {

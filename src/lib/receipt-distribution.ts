@@ -1,14 +1,11 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Receipt Distribution (Email via Resend + WhatsApp/SMS via Twilio)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Receipt Distribution (Email via Resend + WhatsApp/SMS via Twilio)
 //
 // Sends customer receipts through three channels:
-//   • EMAIL    — Resend (https://resend.com) transactional email API
-//   • WHATSAPP — Twilio WhatsApp Business API (https://twilio.com)
-//   • SMS      — Twilio Programmable SMS (same account, plain E.164 `to`)
+//   • EMAIL - Resend (https://resend.com) transactional email API
+//   • WHATSAPP - Twilio WhatsApp Business API (https://twilio.com)
+//   • SMS - Twilio Programmable SMS (same account, plain E.164 `to`)
 //
 // DESIGN PRINCIPLES
-// ─────────────────
 // 1. Graceful degradation. In dev / sandbox, the Resend/Twilio API keys are
 //    typically absent. Rather than crashing, the library:
 //      • Logs a WARN-level systemLog entry.
@@ -34,10 +31,9 @@
 //      • Included only in the outbound message to the provider.
 //      • Stored in AuditLog.newValues for the customer's own record.
 //
-// ISO 27001: A.12.4.1 — Event logging (every send is logged)
-// ISO 27001: A.8.2.1  — Classification of information (PII masking)
-// ISO 9001: 8.2       — Customer communication (receipt distribution)
-// ─────────────────────────────────────────────────────────────────────────────
+// ISO 27001: A.12.4.1 - Event logging (every send is logged)
+// ISO 27001: A.8.2.1 - Classification of information (PII masking)
+// ISO 9001: 8.2 - Customer communication (receipt distribution)
 
 import { db } from "@/lib/db";
 import { systemLog } from "@/lib/logger";
@@ -46,7 +42,7 @@ import { recordAuditLog } from "@/lib/accounting-helpers";
 import { KES } from "@/lib/money";
 import type { SalesTransaction, SaleItem } from "@prisma/client";
 
-// ── Public types ─────────────────────────────────────────────────────────────
+// Public types
 
 export type DistributionChannel = "EMAIL" | "WHATSAPP" | "SMS";
 
@@ -79,7 +75,7 @@ export interface DistributeReceiptInput {
   userAgent?: string;
 }
 
-// ── Provider configuration ───────────────────────────────────────────────────
+// Provider configuration
 
 interface ProviderConfig {
   /** True when the provider's API key is present and non-empty. */
@@ -115,7 +111,7 @@ function getTwilioSmsConfig(): ProviderConfig {
   };
 }
 
-// ── PII masking ──────────────────────────────────────────────────────────────
+// PII masking
 
 /** Mask an email for logging: j•••@example.com */
 function maskEmail(email: string): string {
@@ -133,7 +129,7 @@ function maskPhone(phone: string): string {
   return `${head}${"•".repeat(Math.max(3, phone.length - 7))}${tail}`;
 }
 
-// ── Receipt HTML rendering ───────────────────────────────────────────────────
+// Receipt HTML rendering
 
 interface ReceiptRenderContext {
   transaction: SalesTransaction & {
@@ -150,7 +146,7 @@ interface ReceiptRenderContext {
  * The layout matches the in-app ReceiptModal so customers receive the same
  * document whether they view it on screen, print it, or receive it via
  * email/WhatsApp. Uses inline styles (no external CSS) for email-client
- * compatibility — Gmail and Outlook strip <style> tags.
+ * compatibility - Gmail and Outlook strip <style> tags.
  */
 export function renderReceiptHtml(ctx: ReceiptRenderContext): string {
   const { transaction, store } = ctx;
@@ -232,12 +228,12 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#039;");
 }
 
-// ── Compact plain-text receipt (for the SMS body) ───────────────────────────
+// Compact plain-text receipt (for the SMS body)
 
 /**
  * Build a compact plain-text receipt for the SMS channel.
  *
- * Unlike the WhatsApp body, items are omitted — SMS payloads must stay short
+ * Unlike the WhatsApp body, items are omitted - SMS payloads must stay short
  * (~<=320 chars ≈ two GSM-7 segments); the customer gets the essentials:
  * store name, receipt number, total, payment method and a thank-you.
  */
@@ -292,7 +288,7 @@ export function renderReceiptText(ctx: ReceiptRenderContext): string {
     .join("\n");
 }
 
-// ── Load full transaction with relations ─────────────────────────────────────
+// Load full transaction with relations
 
 async function loadTransactionForReceipt(transactionId: string) {
   return db.salesTransaction.findUnique({
@@ -306,7 +302,7 @@ async function loadTransactionForReceipt(transactionId: string) {
   });
 }
 
-// ── EMAIL distribution (Resend) ──────────────────────────────────────────────
+// EMAIL distribution (Resend)
 
 async function sendViaResend(
   to: string,
@@ -345,7 +341,7 @@ async function sendViaResend(
   return { providerId: data?.id ?? null, simulated: false };
 }
 
-// ── WHATSAPP distribution (Twilio) ───────────────────────────────────────────
+// WHATSAPP distribution (Twilio)
 
 async function sendViaTwilioWhatsApp(
   to: string,
@@ -382,7 +378,7 @@ async function sendViaTwilioWhatsApp(
   return { providerId: message.sid, simulated: false };
 }
 
-// ── SMS distribution (Twilio Programmable SMS) ─────────────────────────────
+// SMS distribution (Twilio Programmable SMS)
 
 async function sendViaTwilioSms(
   to: string,
@@ -407,7 +403,7 @@ async function sendViaTwilioSms(
     process.env.TWILIO_AUTH_TOKEN,
   );
 
-  // SMS recipients are plain E.164 — no whatsapp: prefix.
+  // SMS recipients are plain E.164 - no whatsapp: prefix.
   const normalizedTo = to.replace(/\s/g, "");
 
   const message = await client.messages.create({
@@ -419,7 +415,7 @@ async function sendViaTwilioSms(
   return { providerId: message.sid, simulated: false };
 }
 
-// ── Main entry point ─────────────────────────────────────────────────────────
+// Main entry point
 
 /**
  * Distribute a receipt to a customer via Email (Resend), WhatsApp (Twilio) or
@@ -436,7 +432,7 @@ export async function distributeReceipt(
 ): Promise<DistributionResult> {
   const { transactionId, channel, email, phone, customMessage, userId, storeId } = input;
 
-  // ── 1. Load transaction ──
+  // 1. Load transaction
   const transaction = await loadTransactionForReceipt(transactionId);
   if (!transaction) {
     throw new Error(`Transaction ${transactionId} not found.`);
@@ -445,7 +441,7 @@ export async function distributeReceipt(
     throw new Error("Transaction does not belong to this store.");
   }
 
-  // ── 2. Resolve recipient ──
+  // 2. Resolve recipient
   const resolvedEmail = email ?? transaction.customer?.email ?? undefined;
   const resolvedPhone = phone ?? transaction.customer?.phone ?? undefined;
 
@@ -458,7 +454,7 @@ export async function distributeReceipt(
 
   const recipient = channel === "EMAIL" ? resolvedEmail! : resolvedPhone!;
 
-  // ── 3. Render receipt ──
+  // 3. Render receipt
   const store = transaction.store;
   const renderCtx: ReceiptRenderContext = { transaction, store };
   const coverNote =
@@ -483,7 +479,7 @@ export async function distributeReceipt(
       const subject = `Receipt #${transaction.receiptNumber} — Mbumah Hardware`;
       providerResult = await sendViaResend(recipient, subject, html);
     } else if (channel === "SMS") {
-      // Compact SMS body — a custom message is prepended when provided, and
+      // Compact SMS body - a custom message is prepended when provided, and
       // the whole payload is kept within a ~320-char (2-segment) budget.
       const base = renderReceiptSmsText(renderCtx);
       const text = (customMessage ? `${customMessage}\n${base}` : base).slice(0, 320);
@@ -530,7 +526,7 @@ export async function distributeReceipt(
     throw err;
   }
 
-  // ── 4. Audit trail ──
+  // 4. Audit trail
   const maskedRecipient =
     channel === "EMAIL" ? maskEmail(recipient) : maskPhone(recipient);
 

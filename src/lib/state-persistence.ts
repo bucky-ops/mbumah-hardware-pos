@@ -51,7 +51,7 @@ export function saveAppState(
     };
     localStorage.setItem(STORAGE_KEYS.APP_STATE, JSON.stringify(state));
   } catch {
-    // localStorage may be full or unavailable — silently fail
+    // localStorage may be full or unavailable - silently fail
   }
 }
 

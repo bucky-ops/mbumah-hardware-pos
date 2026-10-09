@@ -1,6 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Standardized API Response Helpers
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Standardized API Response Helpers
 //
 // This module provides a SINGLE, consistent response format for ALL API
 // routes. Every response (success or error) follows the same envelope:
@@ -11,7 +9,7 @@
 //     "error"?: string,            // present on failure (user-friendly)
 //     "code"?: string,             // machine-readable error code
 //     "requestId"?: string,        // correlation ID (from request context)
-//     "timestamp": "2026-...",     // ISO 8601 — always present
+//     "timestamp": "2026-...",     // ISO 8601 - always present
 //     "meta"?: {                   // pagination / counts
 //       "page": 1,
 //       "limit": 20,
@@ -20,7 +18,7 @@
 //     }
 //   }
 //
-// ── Why standardize? ─────────────────────────────────────────────────────────
+// Why standardize?
 //
 // Before this module, routes returned ad-hoc shapes:
 //   • Some returned `{ success: true, data }`
@@ -34,17 +32,16 @@
 //
 // The helpers below (`successResponse`, `errorResponse`, `paginatedResponse`)
 // produce the canonical envelope. The `withStandardizedResponse` wrapper
-// converts any thrown error into a standardised error response — so route
+// converts any thrown error into a standardised error response - so route
 // handlers can just `throw` and let the wrapper handle the formatting.
 //
-// ── Integration with request context ─────────────────────────────────────────
+// Integration with request context
 //
 // Every response automatically includes the `X-Request-ID` header (from the
 // active request context) and the `requestId` in the JSON body. This is the
 // ISO 9001 traceability requirement: every observable event has a
 // correlation ID.
 //
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { NextResponse } from 'next/server';
 import {
@@ -58,7 +55,7 @@ import {
   withRequestContext,
 } from './request-context';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 /** Pagination metadata included in `meta` on list responses. */
 export interface PaginationMeta {
@@ -100,7 +97,7 @@ export interface ListResponse<T = unknown> extends SuccessResponse<T> {
   meta: PaginationMeta;
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// Helpers
 
 /**
  * Build the standard response headers, including the `X-Request-ID` from the
@@ -122,7 +119,7 @@ function currentRequestId(): string | undefined {
   return getRequestContextSnapshot()?.requestId;
 }
 
-// ── successResponse ──────────────────────────────────────────────────────────
+// successResponse
 
 /**
  * Build a standardised success `Response` object.
@@ -197,7 +194,7 @@ export function successResponseWithExtra<T>(
   });
 }
 
-// ── paginatedResponse ────────────────────────────────────────────────────────
+// paginatedResponse
 
 /**
  * Build a standardised paginated list response. Computes the `PaginationMeta`
@@ -254,7 +251,7 @@ export function buildPaginationMeta(
   };
 }
 
-// ── errorResponse ────────────────────────────────────────────────────────────
+// errorResponse
 
 /**
  * Build a standardised error `Response` object from a normalised error.
@@ -329,7 +326,7 @@ export function errorFromThrown(
   return errorResponse(normaliseError(err), options);
 }
 
-// ── withStandardizedResponse ─────────────────────────────────────────────────
+// withStandardizedResponse
 
 /**
  * Wrap an API route handler so that:
@@ -396,7 +393,7 @@ export function withStandardizedResponse<T>(
   };
 }
 
-// ── Re-exports for convenience ───────────────────────────────────────────────
+// Re-exports for convenience
 //
 // Re-export the request-context accessors so route handlers can import
 // everything from `@/lib/api-response` without needing a second import.
@@ -409,7 +406,7 @@ export {
 } from './request-context';
 export type { RequestContext, RequestContextSnapshot } from './request-context';
 
-// ── Convenience: build a not-found response ─────────────────────────────────
+// Convenience: build a not-found response
 
 /**
  * Build a standardised 404 response. Convenience for routes that need to

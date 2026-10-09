@@ -1,7 +1,7 @@
 // PRODUCT CODE GENERATORS (v2.5.2)
 //
 // FEATURE: "when a category is selected, the SKU and barcode are
-// automatically generated" — used by the Inventory and Catalog add-product
+// automatically generated" - used by the Inventory and Catalog add-product
 // forms (auto-fill on category change + manual re-generate buttons) and by
 // the products API as a server-side fallback.
 //
@@ -12,7 +12,7 @@
 //
 // Barcodes are valid EAN-13 numbers with a GS1 Kenya (620) prefix. They are
 // scanner-readable (checksum valid); registered GS1 numbers are only needed
-// for retail partner networks — until then these stay unique inside MBUMAH.
+// for retail partner networks - until then these stay unique inside MBUMAH.
 
 /** Store code → branch SKU segment (same normalisation as the server). */
 function normalizeBranchSegment(storeCode?: string | null): string | null {

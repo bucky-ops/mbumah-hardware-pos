@@ -1,8 +1,6 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — DLQ Offline Sync (Auto-Retry Processor + Handler Registry)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - DLQ Offline Sync (Auto-Retry Processor + Handler Registry)
 //
-// Phase 6 — Error Handling & Resilience Framework
+// Phase 6 - Error Handling & Resilience Framework
 //
 // This module provides:
 //   1. Convenience enqueue helpers (enqueueFailedSms, enqueueFailedEmail, etc.)
@@ -10,22 +8,21 @@
 //   3. Handler registration for the auto-processor
 //   4. `withOfflineSync()` HOF for wrapping external service calls
 //
-// ── IMPORTANT: No circular imports ────────────────────────────────────────────
+// IMPORTANT: No circular imports
 //
 // This module does NOT import from notification-helpers.ts (which imports this
-// module). Handler registration is done LAZILY — the DLQ service accepts handler
+// module). Handler registration is done LAZILY - the DLQ service accepts handler
 // functions, and the actual notification service calls are injected at runtime
 // by `registerDLQHandlers()` which is called from the processor start or the
 // demo endpoint. This breaks the circular dependency chain.
 //
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { dlq, DLQOperationType } from './dead-letter-queue';
 import { CircuitOpenError } from './circuit-breaker';
 import { systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
-// ── Handler registration ─────────────────────────────────────────────────────
+// Handler registration
 
 /** Whether handlers have been registered (idempotent guard). */
 let handlersRegistered = false;
@@ -44,7 +41,7 @@ export async function registerDLQHandlers(): Promise<void> {
   // Lazy import to break circular dependency
   const { notificationService } = await import('./notification-helpers');
 
-  // ── SEND_SMS handler ───────────────────────────────────────────────────
+  // SEND_SMS handler
   dlq.registerHandler(DLQOperationType.SEND_SMS, async (payload) => {
     try {
       const { to, message } = JSON.parse(payload) as { to: string; message: string };
@@ -55,7 +52,7 @@ export async function registerDLQHandlers(): Promise<void> {
     }
   });
 
-  // ── SEND_EMAIL handler ─────────────────────────────────────────────────
+  // SEND_EMAIL handler
   dlq.registerHandler(DLQOperationType.SEND_EMAIL, async (payload) => {
     try {
       const { to, subject, html } = JSON.parse(payload) as {
@@ -70,7 +67,7 @@ export async function registerDLQHandlers(): Promise<void> {
     }
   });
 
-  // ── SEND_WHATSAPP handler ──────────────────────────────────────────────
+  // SEND_WHATSAPP handler
   dlq.registerHandler(DLQOperationType.SEND_WHATSAPP, async (payload) => {
     try {
       const { to, message } = JSON.parse(payload) as { to: string; message: string };
@@ -81,7 +78,7 @@ export async function registerDLQHandlers(): Promise<void> {
     }
   });
 
-  // ── MPESA_STK_PUSH handler ─────────────────────────────────────────────
+  // MPESA_STK_PUSH handler
   // M-Pesa STK pushes can't be trivially retried from the DLQ because:
   //   1. The CheckoutRequestID is per-request (each STK push generates a new one)
   //   2. The OAuth token may have expired
@@ -97,7 +94,7 @@ export async function registerDLQHandlers(): Promise<void> {
     };
   });
 
-  // ── WEBHOOK_DELIVERY handler (generic) ─────────────────────────────────
+  // WEBHOOK_DELIVERY handler (generic)
   dlq.registerHandler(DLQOperationType.WEBHOOK_DELIVERY, async (payload) => {
     try {
       const { url, method, headers, body } = JSON.parse(payload) as {
@@ -132,7 +129,7 @@ export async function registerDLQHandlers(): Promise<void> {
     }
   });
 
-  // ── GENERIC handler ────────────────────────────────────────────────────
+  // GENERIC handler
   dlq.registerHandler(DLQOperationType.GENERIC, async (_payload, item) => {
     return {
       success: false,
@@ -148,7 +145,7 @@ export async function registerDLQHandlers(): Promise<void> {
   }).catch(() => {});
 }
 
-// ── Auto-processor ───────────────────────────────────────────────────────────
+// Auto-processor
 
 /** Handle for the processor interval timer. */
 let processorTimer: ReturnType<typeof setInterval> | null = null;
@@ -168,7 +165,7 @@ export function startDLQProcessor(
   intervalMs: number = DEFAULT_PROCESSOR_INTERVAL_MS,
 ): () => void {
   if (processorTimer) {
-    // Already running — no-op (idempotent).
+    // Already running - no-op (idempotent).
     return () => stopDLQProcessor();
   }
 
@@ -225,7 +222,7 @@ export function isDLQProcessorRunning(): boolean {
   return processorTimer !== null;
 }
 
-// ── withOfflineSync HOF ──────────────────────────────────────────────────────
+// withOfflineSync HOF
 
 /**
  * Options for the `withOfflineSync` wrapper.
@@ -293,7 +290,7 @@ export async function withOfflineSync<T>(
   }
 }
 
-// ── Convenience: enqueue helpers for common operation types ───────────────────
+// Convenience: enqueue helpers for common operation types
 
 /**
  * Enqueue a failed SMS send for later retry.

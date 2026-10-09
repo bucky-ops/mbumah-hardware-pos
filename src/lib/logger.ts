@@ -129,7 +129,7 @@ export function mapErrorToUserMessage(error: unknown): string {
 // ## Diagnostic mode (EXPOSE_ERRORS)
 //
 // By default, production 500 responses return a sanitized `userMessage` with
-// NO stack trace — to avoid leaking internals to end users. This is the
+// NO stack trace - to avoid leaking internals to end users. This is the
 // correct secure default, but it makes Vercel production crashes effectively
 // invisible (you see "An unexpected error occurred" in the Network tab with
 // no clue why).
@@ -151,7 +151,7 @@ export function mapErrorToUserMessage(error: unknown): string {
 //     }
 //   }
 //
-// Remove `EXPOSE_ERRORS` once the issue is resolved — it is NOT recommended
+// Remove `EXPOSE_ERRORS` once the issue is resolved - it is NOT recommended
 // for long-term production use (stack traces can leak schema/SQL details).
 export function withErrorBoundary(
   handler: (...args: unknown[]) => Promise<Response>,
@@ -166,11 +166,11 @@ export function withErrorBoundary(
       const errorName = error instanceof Error ? error.name : typeof error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown API error';
       // Prisma errors carry a `code` (e.g. P1003 = table missing, P1001 = connection lost).
-      // Grab it for diagnostics — `any` cast is intentional because Prisma's error
+      // Grab it for diagnostics - `any` cast is intentional because Prisma's error
       // class isn't imported here to avoid a circular dep.
       const errorCode = (error as { code?: string } | null)?.code;
 
-      // Best-effort system log — never let logging failures mask the original error.
+      // Best-effort system log - never let logging failures mask the original error.
       try {
         await systemLog({
           action: 'API_ERROR',
@@ -185,10 +185,10 @@ export function withErrorBoundary(
           },
         });
       } catch {
-        // logging failed (likely the same DB issue) — fall through to response
+        // logging failed (likely the same DB issue) - fall through to response
       }
 
-      // ── Structured stdout logging (always, every environment) ──────────
+      // Structured stdout logging (always, every environment)
       // Vercel captures console output in Runtime Logs, so this is the
       // diagnostic breadcrumb for production 500s whose response body is
       // sanitized. Previously a production 500 was completely opaque:
@@ -205,7 +205,7 @@ export function withErrorBoundary(
       }));
 
       // Map Prisma schema-drift errors to an actionable user message.
-      // P2021 = table missing, P2022 = column missing — both mean the
+      // P2021 = table missing, P2022 = column missing - both mean the
       // deployed database schema is behind the deployed code (see
       // scripts/sync-db-schema.mjs which makes that state impossible).
       const isSchemaDrift = errorCode === 'P2021' || errorCode === 'P2022';
@@ -242,7 +242,7 @@ export function withErrorBoundary(
         );
       }
 
-      // Production default: sanitized response — but now carrying the
+      // Production default: sanitized response - but now carrying the
       // NON-SENSITIVE diagnostic pair (error class + Prisma code + component)
       // so a 500 can be triaged straight from the browser Network tab
       // (e.g. code P2022 ⇒ schema drift) without leaking stack traces,

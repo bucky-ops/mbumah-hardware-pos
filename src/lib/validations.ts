@@ -6,8 +6,8 @@ export const loginSchema = z.object({
   password: z.string().min(1, 'Password is required').max(128),
 });
 
-// v2.12.2 (PR B — RBAC): INVENTORY_MANAGER added to the assignable role set.
-// The DB column (User.role) is a plain String — the allowed values are
+// v2.12.2 (PR B - RBAC): INVENTORY_MANAGER added to the assignable role set.
+// The DB column (User.role) is a plain String - the allowed values are
 // enforced HERE at the API layer, not by a schema enum. Adding the role
 // requires ZERO prisma/schema.prisma changes.
 export const ASSIGNABLE_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'CASHIER', 'ACCOUNTANT', 'INVENTORY_MANAGER'] as const;
@@ -37,7 +37,7 @@ export const checkoutSchema = z.object({
   storeId: z.string().min(1),
   customerId: z.string().optional(),
   cashierId: z.string().min(1),
-  // SYS-10: client-generated idempotency key — a replayed checkout (lost
+  // SYS-10: client-generated idempotency key - a replayed checkout (lost
   // response, offline sync) returns the original transaction instead of
   // double-applying stock/payments/journals.
   idempotencyKey: z.string().min(8).max(100).optional(),
@@ -55,7 +55,7 @@ export const checkoutSchema = z.object({
     isRentalItem: z.boolean().optional(),
     isBundle: z.boolean().optional(),
   })).min(1, 'At least one item is required'),
-  // F2-1: serialized-asset capture — serials are claimed (IN_STOCK → SOLD)
+  // F2-1: serialized-asset capture - serials are claimed (IN_STOCK → SOLD)
   // atomically inside the checkout transaction; a serial that is not IN_STOCK
   // in this store aborts the sale (double-sell protection).
   serials: z.array(z.object({
@@ -100,12 +100,12 @@ export const checkoutSchema = z.object({
   // (403 DEBT_BLOCKED_OVERDUE, requiresManagerOverride) unless this flag is
   // present AND the authenticated session role is manager-level.
   //
-  // v2.12.2 (PR B — RBAC): managerOverride may now be EITHER the legacy
-  // boolean (session-role path — backward compatible) OR a credential object
+  // v2.12.2 (PR B - RBAC): managerOverride may now be EITHER the legacy
+  // boolean (session-role path - backward compatible) OR a credential object
   // { approverEmail, approverPassword, approverId?, approverName?, reason? }
   // from the phase-2 Manager PIN modal. The object form is verified with the
   // shared bcrypt/manager-role check in src/lib/manager-auth.ts and unlocks
-  // the 5–10% discount band and the high-risk debt gate for cashiers.
+  // the 5-10% discount band and the high-risk debt gate for cashiers.
   managerOverride: z
     .union([
       z.boolean(),
@@ -120,7 +120,7 @@ export const checkoutSchema = z.object({
     .optional(),
 }).superRefine((data, ctx) => {
   // AUDIT FIX (1): a DEBT split leg charges the customer's credit account, so
-  // a customerId is MANDATORY — without one the DebtLedger charge row could
+  // a customerId is MANDATORY - without one the DebtLedger charge row could
   // never be written and the credit limit could not be enforced.
   if (
     data.paymentMethod === 'SPLIT' &&
@@ -203,9 +203,9 @@ export function validateInput<T>(schema: z.ZodSchema<T>, data: unknown): { succe
   return { success: false, error: errors };
 }
 
-// ── AUDIT FIX (Finding 1.4 — standardized validation response format) ────────
+// AUDIT FIX (Finding 1.4 - standardized validation response format)
 //
-// The audit found API routes answered validation failures inconsistently —
+// The audit found API routes answered validation failures inconsistently -
 // some returned 400 with a flat string, some leaked 500s, and no route
 // exposed machine-readable per-field errors, so clients could not highlight
 // the offending input. `validationErrorResponse` gives every route ONE

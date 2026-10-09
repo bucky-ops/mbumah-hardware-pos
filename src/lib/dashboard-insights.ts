@@ -1,14 +1,12 @@
-// ════════════════════════════════════════════════════════════════════════════
 // src/lib/dashboard-insights.ts
-// ════════════════════════════════════════════════════════════════════════════
 //
-// v2.12.0 DASHBOARD LOGIC REBUILD (Task DASH-BE) — server-only insight
+// v2.12.0 DASHBOARD LOGIC REBUILD (Task DASH-BE) - server-only insight
 // builders behind GET /api/dashboard.
 //
 // DESIGN CONTRACTS
-//   • SERVER-ONLY: imports @/lib/db (Prisma) — never bundle this into a
+//   • SERVER-ONLY: imports @/lib/db (Prisma) - never bundle this into a
 //     client component.
-//   • NEVER THROW: every exported builder is fault-isolated — a failing
+//   • NEVER THROW: every exported builder is fault-isolated - a failing
 //     query degrades that block to a safe default (null/empty/0) and logs a
 //     [DASHBOARD-INSIGHTS] breadcrumb; the dashboard response still renders
 //     with every other block intact.
@@ -26,19 +24,18 @@
 //   revenueTrend7d → buildRevenueTrend         (7-day net revenue + forecast)
 //   stock counts   → buildLowStockCounts       (out-of-stock vs low split)
 //   recentActivities → sanitizeActivity        (PII/id leak sanitization)
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { db } from '@/lib/db';
-// FINANCIAL MATH AUDIT (Task 12-b): Prisma Decimal valueOf() returns a STRING —
+// FINANCIAL MATH AUDIT (Task 12-b): Prisma Decimal valueOf() returns a STRING -
 // `number + decimal` concatenates. All accumulation below flows through
 // toDec()/round2() and emits plain numbers only at the JSON boundary.
 import { toDec, round2 } from '@/lib/utils/financialMath';
 
-// ── Shared constants ─────────────────────────────────────────────────────────
+// Shared constants
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Outstanding (unpaid or partly paid) debt statuses — matches the dashboard
+/** Outstanding (unpaid or partly paid) debt statuses - matches the dashboard
  *  aggregate and debt-helpers identifyOverdueCustomers exactly. */
 const OUTSTANDING_DEBT_STATUSES = ['OUTSTANDING', 'PARTIAL', 'OVERDUE'] as const;
 
@@ -78,14 +75,12 @@ async function safeInvoke<T>(label: string, fallback: T, fn: () => Promise<T>): 
   }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
 // 1. ACTIVE SHIFT SNAPSHOT  (response field: `shift`)
-// ════════════════════════════════════════════════════════════════════════════
 //
 // Fixes the "Shift Sales 0.00 / Txns 0 / Expected 156,270" impossibility: the
 // old UI stitched the shift row's own (never-updated) totalSales counters onto
 // X-read drawer figures. This snapshot derives EVERYTHING from the source of
-// truth — SalesTransaction rows inside the shift window — and applies the
+// truth - SalesTransaction rows inside the shift window - and applies the
 // user's expected-cash formula exactly:
 //
 //   expectedCash = startingCash + cashSales − expenses
@@ -116,7 +111,7 @@ export interface ShiftSnapshot {
 /**
  * Snapshot of the currently OPEN shift for a store, or null when no shift is
  * active. Schema note: the Shift.status domain is 'ACTIVE' | 'ENDED' (see
- * prisma/schema.prisma and the shifts routes) — the store-facing concept is
+ * prisma/schema.prisma and the shifts routes) - the store-facing concept is
  * "open", persisted as ACTIVE.
  */
 export async function buildShiftSnapshot(
@@ -137,7 +132,7 @@ export async function buildShiftSnapshot(
     if (!shift) return null;
 
     // All counted sales inside the shift window. VAT is excluded (net
-    // revenue basis — VAT is owed to KRA, never revenue).
+    // revenue basis - VAT is owed to KRA, never revenue).
     const txs = await db.salesTransaction.findMany({
       where: {
         storeId,
@@ -164,13 +159,13 @@ export async function buildShiftSnapshot(
         debtAcc = debtAcc.plus(net);
         txnsDebt += 1;
       } else {
-        // MPESA / SPLIT / GIFT_CARD — everything the drawer formula ignores.
+        // MPESA / SPLIT / GIFT_CARD - everything the drawer formula ignores.
         otherAcc = otherAcc.plus(net);
         txnsOther += 1;
       }
     }
 
-    // Expenses in the window. Status ACTIVE excludes VOIDED rows — counting
+    // Expenses in the window. Status ACTIVE excludes VOIDED rows - counting
     // a voided expense would overstate the drawer shortfall.
     const expenseAgg = await db.expense.aggregate({
       where: { storeId, status: 'ACTIVE', createdAt: { gte: shift.startedAt } },
@@ -196,7 +191,7 @@ export async function buildShiftSnapshot(
       txnsOther,
       txnsTotal: txs.length,
       expenses: round2(expensesDec),
-      // THE USER'S FORMULA — exact. Example: 70,000 + 95,520 = 165,520.
+      // THE USER'S FORMULA - exact. Example: 70,000 + 95,520 = 165,520.
       expectedCash: round2(startingCashDec.plus(cashAcc).minus(expensesDec)),
       formula: 'Starting + Cash Sales − Expenses',
       elapsedMinutes: Math.max(0, Math.floor((now.getTime() - shift.startedAt.getTime()) / 60000)),
@@ -204,16 +199,14 @@ export async function buildShiftSnapshot(
   });
 }
 
-// ════════════════════════════════════════════════════════════════════════════
 // 2. DEBT CRISIS  (response field: `debtCrisis`)
-// ════════════════════════════════════════════════════════════════════════════
 
 export interface DebtAgingBuckets {
   /** Days overdue = 0 (not yet due). */
   current: number;
-  /** 1–30 days overdue. */
+  /** 1-30 days overdue. */
   d30: number;
-  /** 31–60 days overdue. */
+  /** 31-60 days overdue. */
   d60: number;
   /** > 90 days overdue. */
   d90plus: number;
@@ -224,7 +217,7 @@ export interface DebtRiskCustomer {
   name: string;
   owes: number;
   lifetimeSpend: number;
-  /** owes / lifetimeSpend — null when lifetimeSpend is 0. */
+  /** owes / lifetimeSpend - null when lifetimeSpend is 0. */
   ratio: number | null;
   /** owes > 2 × lifetimeSpend (requires lifetimeSpend > 0). */
   highRisk: boolean;
@@ -243,7 +236,7 @@ export interface DebtCrisisSummary {
 
 export interface DebtCore {
   summary: DebtCrisisSummary;
-  /** FULL ranked per-customer list (not just top 10) — shared with the alert
+  /** FULL ranked per-customer list (not just top 10) - shared with the alert
    *  builder so "large debt" alerts never miss a customer outside the top 10. */
   riskCustomers: DebtRiskCustomer[];
 }
@@ -259,7 +252,7 @@ const EMPTY_DEBT_CRISIS: DebtCrisisSummary = {
   customers: [],
 };
 
-/** One fetch of every outstanding DebtLedger row — feeds total, aging buckets
+/** One fetch of every outstanding DebtLedger row - feeds total, aging buckets
  *  and the per-customer risk list so the bucket sums add up EXACTLY to
  *  outstandingTotal (single source, Decimal accumulation, rounding only at
  *  the JSON boundary). */
@@ -305,7 +298,7 @@ export async function buildDebtCrisis(
 ): Promise<DebtCore> {
   const fallback: DebtCore = { summary: EMPTY_DEBT_CRISIS, riskCustomers: [] };
   return safeInvoke<DebtCore>('debt crisis', fallback, async () => {
-    // ── ONE fetch drives total + buckets + per-customer list ──
+    // ONE fetch drives total + buckets + per-customer list
     let rows: OutstandingDebtRow[] = [];
     try {
       rows = await fetchOutstandingDebt(storeId);
@@ -343,8 +336,8 @@ export async function buildDebtCrisis(
       bucketAcc.current.plus(bucketAcc.d30).plus(bucketAcc.d60).plus(bucketAcc.d90plus),
     );
 
-    // ── Lifetime spend (fault-isolated sub-query: failure → no risk flags,
-    //    the rest of the block still renders) ──
+    // Lifetime spend (fault-isolated sub-query: failure → no risk flags,
+    //    the rest of the block still renders)
     let spendRows: Awaited<ReturnType<typeof fetchLifetimeSpend>> = [];
     try {
       spendRows = await fetchLifetimeSpend(storeId);
@@ -402,9 +395,7 @@ export async function buildDebtCrisis(
   });
 }
 
-// ════════════════════════════════════════════════════════════════════════════
 // 3. ALERTS  (response fields: `alerts`, `alertsCount`)
-// ════════════════════════════════════════════════════════════════════════════
 //
 // DEDUPLICATED + ACTIONABLE: every alert carries a stable dedupeKey (the UI
 // can key React rows and collapse duplicates) and a machine-readable `actions`
@@ -424,7 +415,7 @@ export interface DashboardAlert {
   detail: string;
   /** rental_overdue only: days overdue × ratePerDay. */
   fine?: number;
-  /** e.g. ['view','call'] | ['collect','view','call'] — UI renders buttons. */
+  /** e.g. ['view','call'] | ['collect','view','call'] - UI renders buttons. */
   actions: string[];
 }
 
@@ -507,7 +498,7 @@ const LARGE_DEBT_THRESHOLD = 100_000;
  * Build the deduplicated alert feed. Input blocks are pre-fetched/shared:
  * `riskCustomers` comes from buildDebtCrisis (no second debt scan),
  * `stockCounts` from buildLowStockCounts. The two bespoke queries (rentals,
- * old debts) are each fault-isolated — a failure drops only that slice.
+ * old debts) are each fault-isolated - a failure drops only that slice.
  */
 export async function buildAlerts(
   storeId: string,
@@ -517,7 +508,7 @@ export async function buildAlerts(
 ): Promise<DashboardAlert[]> {
   const alerts: DashboardAlert[] = [];
 
-  // (a) Overdue rentals — top 5 by days overdue, one alert per rental.
+  // (a) Overdue rentals - top 5 by days overdue, one alert per rental.
   await safeInvoke('overdue rentals', null, async () => {
     const rentals = await fetchOverdueRentals(storeId, now);
     for (const rental of rentals) {
@@ -535,7 +526,7 @@ export async function buildAlerts(
     return null;
   });
 
-  // (b) Debt payments 30+ days overdue — ONE alert per customer.
+  // (b) Debt payments 30+ days overdue - ONE alert per customer.
   await safeInvoke('overdue debts', null, async () => {
     const oldDebts = await fetchOldDebtByCustomer(storeId, now);
     for (const debt of oldDebts) {
@@ -551,7 +542,7 @@ export async function buildAlerts(
     return null;
   });
 
-  // (c) Large outstanding debt — one per customer above the threshold.
+  // (c) Large outstanding debt - one per customer above the threshold.
   for (const customer of riskCustomers) {
     if (customer.owes <= LARGE_DEBT_THRESHOLD) continue;
     alerts.push({
@@ -564,7 +555,7 @@ export async function buildAlerts(
     });
   }
 
-  // (d) Low stock — ONE grouped summary alert.
+  // (d) Low stock - ONE grouped summary alert.
   if (stockCounts.outOfStockCount + stockCounts.lowStockCount > 0) {
     alerts.push({
       type: 'stock_low',
@@ -581,16 +572,14 @@ export async function buildAlerts(
     .slice(0, ALERT_CAP);
 }
 
-// ════════════════════════════════════════════════════════════════════════════
 // 4. STORE HEALTH  (response field: `storeHealth`)
-// ════════════════════════════════════════════════════════════════════════════
 //
-// Transparent weighted score — the UI can show the formula because every
+// Transparent weighted score - the UI can show the formula because every
 // sub-score and its weight are returned:
 //   overall = 0.30×revenue + 0.25×stock + 0.25×debt + 0.20×engagement
 //
 // Engagement is ATV-AWARE (client-corrected): 6 sales @ Ksh 86,115 ATV scores
-// ~80, not 12 — a hardware store lives on few-but-large tickets.
+// ~80, not 12 - a hardware store lives on few-but-large tickets.
 
 export interface StoreHealthBreakdownItem {
   key: 'revenue' | 'stock' | 'debt' | 'engagement';
@@ -715,12 +704,10 @@ export async function buildStoreHealth(
   });
 }
 
-// ════════════════════════════════════════════════════════════════════════════
 // 5. 7-DAY REVENUE TREND  (response field: `revenueTrend7d`)
-// ════════════════════════════════════════════════════════════════════════════
 
 export interface RevenueTrendDay {
-  /** ISO date (local midnight) — e.g. '2026-10-01T00:00:00.000Z' semantics preserved via toISOString of local midnight. */
+  /** ISO date (local midnight) - e.g. '2026-10-01T00:00:00.000Z' semantics preserved via toISOString of local midnight. */
   date: string;
   /** Human label, e.g. 'Wed 1'. */
   label: string;
@@ -736,7 +723,7 @@ export interface RevenueTrend7d {
   forecastMethod: string;
   todayIsOutlier: boolean;
   peakHour: { hour: string; amount: number } | null;
-  /** e.g. 'Bulk sale — Ksh 341,862 at 2 PM' (only when the peak hour carries > 50% of today's revenue). */
+  /** e.g. 'Bulk sale - Ksh 341,862 at 2 PM' (only when the peak hour carries > 50% of today's revenue). */
   peakNote: string | null;
 }
 
@@ -825,9 +812,7 @@ export async function buildRevenueTrend(
   });
 }
 
-// ════════════════════════════════════════════════════════════════════════════
 // 6. LOW-STOCK PRECISE COUNTS  (response fields: outOfStockCount, lowStockCount)
-// ════════════════════════════════════════════════════════════════════════════
 
 export interface LowStockCounts {
   outOfStockCount: number;
@@ -859,9 +844,7 @@ export async function buildLowStockCounts(storeId: string): Promise<LowStockCoun
   });
 }
 
-// ════════════════════════════════════════════════════════════════════════════
 // 7. ACTIVITY SANITIZER  (response field: `recentActivities`)
-// ════════════════════════════════════════════════════════════════════════════
 //
 // Fixes data leakage: raw ids ('cmuybs1mo000yyg0cgn02uwmn') and internal
 // action strings ('CREATE SalesTransaction/cmuy...') never reach the client.
@@ -875,14 +858,14 @@ export interface SanitizedActivity {
   severity: string;
   /** Sanitized legacy message (id tokens stripped). */
   message: string;
-  /** Parsed metadata — null when any value is id-shaped. */
+  /** Parsed metadata - null when any value is id-shaped. */
   metadata: Record<string, unknown> | null;
   /** Human-readable, leak-free line for the UI. */
   displayMessage: string;
   actorName: string | null;
   actorRole: string | null;
   createdAt: string;
-  /** Legacy nested user — id DROPPED (was a leaking cuid). */
+  /** Legacy nested user - id DROPPED (was a leaking cuid). */
   user: { name: string; role: string } | null;
 }
 
@@ -942,7 +925,7 @@ function parseMetadataSafe(metadata: string | null): Record<string, unknown> | n
   }
 }
 
-/** Raw parse (NO id gating) — used ONLY to read display fields
+/** Raw parse (NO id gating) - used ONLY to read display fields
  *  (receiptNumber/amount/paymentMethod) for buildDisplayMessage. Id-bearing
  *  metadata is never RETURNED; parseMetadataSafe gates the response copy. */
 function parseMetadataRaw(metadata: string | null): Record<string, unknown> | null {
@@ -1068,7 +1051,7 @@ function humanizeAction(action: string, component: string): string {
   return tokenized || `${entity} activity`;
 }
 
-/** A raw log message may be shown as-is when it reads like prose — never
+/** A raw log message may be shown as-is when it reads like prose - never
  *  when it is an internal 'CREATE SalesTransaction/<id>' style dump. */
 function looksLikeProse(sanitized: string): boolean {
   if (!sanitized) return false;
@@ -1079,7 +1062,7 @@ function looksLikeProse(sanitized: string): boolean {
 }
 
 function buildDisplayMessage(row: ActivityRow, sanitizedMessage: string): string {
-  // 1. Metadata first — receipt-bearing rows become sale lines
+  // 1. Metadata first - receipt-bearing rows become sale lines
   //    ('Sale MBM-9D042 created · Ksh 86,270 · Cash'). Raw parse: the
   //    display fields are safe even when other metadata values are ids.
   const meta = parseMetadataRaw(row.metadata);
@@ -1105,7 +1088,7 @@ function buildDisplayMessage(row: ActivityRow, sanitizedMessage: string): string
 /**
  * Map a SystemLog row to a leak-free dashboard activity. The legacy fields
  * (action/component/severity/message/metadata/user) are preserved for the
- * current widgets — message stripped, metadata gated, user id dropped.
+ * current widgets - message stripped, metadata gated, user id dropped.
  */
 export function sanitizeActivity(row: ActivityRow): SanitizedActivity {
   const sanitizedMessage = stripSensitiveTokens(row.message ?? '');
@@ -1125,9 +1108,7 @@ export function sanitizeActivity(row: ActivityRow): SanitizedActivity {
   };
 }
 
-// ════════════════════════════════════════════════════════════════════════════
 // ORCHESTRATOR
-// ════════════════════════════════════════════════════════════════════════════
 
 export interface DashboardInsightsContext extends StoreHealthContext {
   /** Today's NET debt-tender revenue (route computes once, shared). */
@@ -1149,7 +1130,7 @@ export interface DashboardInsights {
 
 /**
  * Build every v2.12.0 dashboard insight block in parallel. Each block is
- * fault-isolated: a failure degrades that block only — the orchestrator
+ * fault-isolated: a failure degrades that block only - the orchestrator
  * (and therefore GET /api/dashboard) never throws.
  */
 export async function buildDashboardInsights(

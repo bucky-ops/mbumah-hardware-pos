@@ -1,6 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Admin-controlled VAT rate (v2.8.0)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Admin-controlled VAT rate (v2.8.0)
 //
 // CLIENT REQUIREMENT (2026-10):
 //   "VAT should be fully controlled by Admin. If Admin sets VAT to 0%, then
@@ -10,14 +8,13 @@
 // The rate is persisted in the global `SystemConfig` key-value store under
 // `vat_rate_percent` (SUPER_ADMIN/STORE_OWNER editable via PATCH
 // /api/settings/vat). Every document-creation path (POS checkout, invoices,
-// purchase orders) reads the rate through `getVatRatePercent()` — the admin
+// purchase orders) reads the rate through `getVatRatePercent()` - the admin
 // setting is AUTHORITATIVE and overrides any per-product/per-line default.
 // Historical documents keep their stored amounts.
 //
 // A tiny in-process TTL cache keeps the per-request DB hit negligible while
 // still making admin changes effective within seconds (and instantly on the
 // same pod after a write via `invalidateVatRateCache()`).
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { db } from '@/lib/db';
 import { VAT_RATE_PERCENT as LEGACY_DEFAULT_VAT_RATE_PERCENT } from '@/lib/utils/financialMath';
@@ -36,7 +33,7 @@ const CACHE_TTL_MS = 15_000;
 let cachedRate: number | null = null;
 let cachedAt = 0;
 
-/** Parse any stored/ garbage value into a safe 0–100 rate. */
+/** Parse any stored/ garbage value into a safe 0-100 rate. */
 function sanitizeRate(raw: unknown): number | null {
   const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
   if (!Number.isFinite(n) || n < 0 || n > 100) return null;
@@ -45,7 +42,7 @@ function sanitizeRate(raw: unknown): number | null {
 
 /**
  * Read the admin-controlled VAT rate (percent).
- * Returns a value in [0, 100] — 0 means "VAT disabled globally".
+ * Returns a value in [0, 100] - 0 means "VAT disabled globally".
  */
 export async function getVatRatePercent(): Promise<number> {
   const now = Date.now();
@@ -62,7 +59,7 @@ export async function getVatRatePercent(): Promise<number> {
     cachedAt = now;
     return cachedRate;
   } catch {
-    // Config table unavailable — never block sales; fall back to default.
+    // Config table unavailable - never block sales; fall back to default.
     return DEFAULT_VAT_RATE_PERCENT;
   }
 }

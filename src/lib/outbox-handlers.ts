@@ -1,6 +1,6 @@
-// Outbox handler registry — wires event kinds to delivery implementations.
+// Outbox handler registry - wires event kinds to delivery implementations.
 //
-// AUDIT REMEDIATION — FINANCIAL_MODULE_AUDIT_REPORT.md (F8-4):
+// AUDIT REMEDIATION - FINANCIAL_MODULE_AUDIT_REPORT.md (F8-4):
 //   Imported once by the cron pump route (/api/cron/outbox) and by any
 //   opportunistically-pumping caller, so every kind has a live handler.
 //
@@ -18,7 +18,7 @@ export function ensureOutboxHandlers(): void {
   if (registered) return;
   registered = true;
 
-  // MPESA_STK_PUSH — the checkout flow enqueues this INSIDE its transaction
+  // MPESA_STK_PUSH - the checkout flow enqueues this INSIDE its transaction
   // (F6-2). Delivery re-uses the shared Daraja core; the outbox retries with
   // backoff if Safaricom is unreachable.
   registerOutboxHandler('MPESA_STK_PUSH', async ({ payload }) => {
@@ -35,12 +35,12 @@ export function ensureOutboxHandlers(): void {
     });
   });
 
-  // ETIMS_INVOICE (v2.6.0) — checkout enqueues this right after the sale
+  // ETIMS_INVOICE (v2.6.0) - checkout enqueues this right after the sale
   // commits (SalesTransaction.etimsStatus = 'PENDING'). The shared core in
   // src/lib/etims-queue.ts performs ONE KRA submission attempt; the pump's
   // backoff/dead-letter semantics apply on failure, and the dedicated retry
   // cron (/api/cron/etims-retry) is the durable fallback. Registration here
-  // is REQUIRED — without it pumpOutbox would fail every ETIMS_INVOICE event
+  // is REQUIRED - without it pumpOutbox would fail every ETIMS_INVOICE event
   // with "No outbox handler registered" and dead-letter real tax invoices.
   registerOutboxHandler('ETIMS_INVOICE', async ({ payload }) => {
     const { submitEtimsInvoiceOnce } = await import('@/lib/etims-queue');
@@ -50,7 +50,7 @@ export function ensureOutboxHandlers(): void {
     if (!result.ok) throw new Error(result.error || 'eTIMS invoice submission failed');
   });
 
-  // AUDIT_ALERT — reserved for reconciliation findings surfaced to ops (F6-6).
+  // AUDIT_ALERT - reserved for reconciliation findings surfaced to ops (F6-6).
   registerOutboxHandler('AUDIT_ALERT', async ({ payload }) => {
     await systemLog({
       action: 'RECONCILIATION_ALERT',

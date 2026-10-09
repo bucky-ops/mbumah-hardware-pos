@@ -5,8 +5,8 @@
  * Provides convenient access to user permissions for auto-adjusting
  * UI visibility based on the current user's role.
  *
- * v2.12.2 (PR B — RBAC): adds the FEATURE permission layer built on
- * `hasFeaturePermission` (src/lib/permissions.ts) — dotted feature keys such
+ * v2.12.2 (PR B - RBAC): adds the FEATURE permission layer built on
+ * `hasFeaturePermission` (src/lib/permissions.ts) - dotted feature keys such
  * as 'pos.discount.gt5' or 'dashboard.view.revenue' that drive the LockedCard,
  * sidebar locks, the Manager Authorization modal and the cashier limited
  * dashboard. The resource→action `can(resource, action)` matrix is unchanged.
@@ -42,11 +42,11 @@ export function usePermissions() {
       user,
 
       // Core permission checks (user/role management is governed by the
-      // 'settings.roles.manage' FEATURE key below — SUPER_ADMIN only, v2.12.2)
+      // 'settings.roles.manage' FEATURE key below - SUPER_ADMIN only, v2.12.2)
       can,
       canCreateUsers: hasFeaturePermission(role, 'settings.roles.manage'),
 
-      // ── v2.12.2 FEATURE permission group (dotted keys, client-safe) ──
+      // v2.12.2 FEATURE permission group (dotted keys, client-safe)
       // Same keys as FEATURE_PERMISSIONS; camelCased for ergonomics.
       feature: {
         posSell: featureCan('pos.sell'),

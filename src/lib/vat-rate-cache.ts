@@ -1,12 +1,9 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — VAT rate client cache (v2.8.0)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - VAT rate client cache (v2.8.0)
 //
 // Plain (non-'use client') module so BOTH client code and client-only libs
 // (e.g. offline-sync) can read the last known admin-controlled VAT rate
 // without dragging React into the bundle. The `useVatRate` hook mirrors the
 // server value into localStorage; this helper reads that mirror.
-// ─────────────────────────────────────────────────────────────────────────────
 
 /** localStorage key mirroring the admin-controlled VAT rate. */
 export const VAT_RATE_CACHE_KEY = 'mbumah_vat_rate';
@@ -38,6 +35,6 @@ export function setCachedVatRate(percent: number): void {
   try {
     window.localStorage.setItem(VAT_RATE_CACHE_KEY, String(percent));
   } catch {
-    /* storage unavailable — non-fatal */
+    /* storage unavailable - non-fatal */
   }
 }

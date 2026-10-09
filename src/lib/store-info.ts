@@ -1,14 +1,11 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Store metadata (single source of truth)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Store metadata (single source of truth)
 //
 // Used by:
-//   • src/app/page.tsx          — sidebar store selector + POS receipt header
-//   • src/app/tabs/*-tab.tsx    — receipt printing, invoice headers, etc.
+//   • src/app/page.tsx - sidebar store selector + POS receipt header
+//   • src/app/tabs/*-tab.tsx - receipt printing, invoice headers, etc.
 //
 // Keeping this in one place ensures receipts always show the correct branch
-// name, location, and phone — no more hardcoded "Juja, Kiambu County".
-// ─────────────────────────────────────────────────────────────────────────────
+// name, location, and phone - no more hardcoded "Juja, Kiambu County".
 
 export interface StoreInfo {
   id: string;

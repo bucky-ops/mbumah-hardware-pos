@@ -1,8 +1,6 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Tamper-Evident Audit Trail (ISO 27001 A.12.4)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Tamper-Evident Audit Trail (ISO 27001 A.12.4)
 //
-// Phase 7 — ISO 27001 + ISO 9001 Compliance
+// Phase 7 - ISO 27001 + ISO 9001 Compliance
 //
 // ISO 27001 Annex A.12.4 requires that "event logs recording user
 // activities, exceptions, faults and information security events
@@ -11,20 +9,20 @@
 //
 // This module provides:
 //
-//   1. `auditTrail.log()` — Create an audit event with a SHA-256
+//   1. `auditTrail.log()` - Create an audit event with a SHA-256
 //      integrity hash that chains to the previous event. Any
 //      modification to an audit record can be detected by recomputing
 //      the hash chain.
 //
-//   2. `auditTrail.verify()` — Verify the integrity of the entire
+//   2. `auditTrail.verify()` - Verify the integrity of the entire
 //      audit chain (or a range). Returns a list of any broken links.
 //
-//   3. `auditTrail.query()` — Query audit events with rich filtering.
+//   3. `auditTrail.query()` - Query audit events with rich filtering.
 //
-//   4. `auditTrail.exportEvents()` — Export audit events for compliance
+//   4. `auditTrail.exportEvents()` - Export audit events for compliance
 //      reporting (CSV/JSON).
 //
-// ── Hash chain design ─────────────────────────────────────────────────────────
+// Hash chain design
 //
 // Each audit event carries an `integrityHash` field computed as:
 //
@@ -44,7 +42,7 @@
 // its hash will differ from what the next event's hash was computed
 // from, breaking the chain.
 //
-// ── ISO 9001 relevance ────────────────────────────────────────────────────────
+// ISO 9001 relevance
 //
 // ISO 9001 clause 7.5 (Documented Information) requires that documented
 // information be "adequately protected" and "retained for the period
@@ -53,14 +51,13 @@
 //   • Protecting the record from tampering via hash chains
 //   • Enforcing retention periods (see data-retention.ts)
 //
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { db } from '@/lib/db';
 import { systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { createHmac } from 'crypto';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 /** The actions that can be audited. */
 export const AuditAction = {
@@ -176,7 +173,7 @@ export interface AuditEvent {
   timestamp: Date;
 }
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// Constants
 
 /** Genesis hash for the first event in the chain. */
 const GENESIS_HASH = '00000000000000000000000000000000';
@@ -189,7 +186,7 @@ function getHmacSecret(): string {
   return process.env.AUDIT_HMAC_SECRET || 'mbumah-hardware-audit-trail-default-key';
 }
 
-// ── Hash computation ─────────────────────────────────────────────────────────
+// Hash computation
 
 /**
  * Compute a SHA-256 hash of a JSON-serialisable value.
@@ -227,7 +224,7 @@ function computeIntegrityHash(
   return createHmac(HASH_ALGORITHM, getHmacSecret()).update(payload).digest('hex');
 }
 
-// ── Audit Trail Service ─────────────────────────────────────────────────────
+// Audit Trail Service
 
 /**
  * Core audit trail service. Provides tamper-evident logging of all
@@ -247,7 +244,7 @@ export const auditTrail = {
    * @returns The ID of the created audit event.
    */
   async log(options: AuditEventOptions): Promise<string> {
-    // ── Get the previous hash (last event in the chain) ───────────────────
+    // Get the previous hash (last event in the chain)
     const lastEvent = await db.auditLog.findFirst({
       orderBy: { timestamp: 'desc' },
       select: { id: true, integrityHash: true, timestamp: true },
@@ -256,11 +253,11 @@ export const auditTrail = {
     const previousHash = lastEvent?.integrityHash ?? GENESIS_HASH;
     const now = new Date();
 
-    // ── Hash the old/new values ────────────────────────────────────────────
+    // Hash the old/new values
     const oldValuesHash = options.oldValues ? hashData(options.oldValues) : null;
     const newValuesHash = options.newValues ? hashData(options.newValues) : null;
 
-    // ── Compute the integrity hash ─────────────────────────────────────────
+    // Compute the integrity hash
     const integrityHash = computeIntegrityHash(
       previousHash,
       now,
@@ -272,7 +269,7 @@ export const auditTrail = {
       newValuesHash,
     );
 
-    // ── Persist to the AuditLog table ──────────────────────────────────────
+    // Persist to the AuditLog table
     const event = await db.auditLog.create({
       data: {
         storeId: options.storeId ?? null,
@@ -287,7 +284,7 @@ export const auditTrail = {
         userAgent: options.userAgent ?? null,
         timestamp: now,
         // F9-1 remediation: the chain columns now EXIST on the model
-        // (prisma/schema.prisma AuditLog) — persisting them makes the
+        // (prisma/schema.prisma AuditLog) - persisting them makes the
         // hash chain actually tamper-evident instead of a computed-only
         // value that was never stored.
         previousHash,
@@ -295,7 +292,7 @@ export const auditTrail = {
       },
     });
 
-    // ── Also log to SystemLog for real-time monitoring ─────────────────────
+    // Also log to SystemLog for real-time monitoring
     void systemLog({
       action: `AUDIT_${options.action}`,
       component: LogComponent.AUDIT,
@@ -368,7 +365,7 @@ export const auditTrail = {
 
       // F9-1 remediation: the chain columns are persisted since the schema
       // gained previousHash/integrityHash. Rows created BEFORE that change
-      // have a null integrityHash — verify() treats them as "legacy" (chain
+      // have a null integrityHash - verify() treats them as "legacy" (chain
       // position advanced, no break recorded) so historic rows don't fail
       // the audit, while any tampering with NEW rows is detected exactly.
       if (event.integrityHash) {

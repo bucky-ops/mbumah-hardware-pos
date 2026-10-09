@@ -6,9 +6,7 @@ import { type NextRequest } from 'next/server';
 import { systemLog } from './logger';
 import { LogSeverity, LogComponent } from './types';
 
-// ---------------------------------------------------------------------------
-// a) sanitizeInput — strip dangerous content from a string
-// ---------------------------------------------------------------------------
+// a) sanitizeInput - strip dangerous content from a string
 
 export function sanitizeInput(input: string): string {
   if (typeof input !== 'string') return '';
@@ -24,7 +22,7 @@ export function sanitizeInput(input: string): string {
   // Strip HTML tags
   sanitized = sanitized.replace(/<[^>]*>/g, '');
 
-  // Strip script injections — <script>...</script>, javascript: protocol, event handlers
+  // Strip script injections - <script>...</script>, javascript: protocol, event handlers
   sanitized = sanitized.replace(/<\s*script[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi, '');
   sanitized = sanitized.replace(/javascript\s*:/gi, '');
   sanitized = sanitized.replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '');
@@ -57,9 +55,7 @@ export function sanitizeInput(input: string): string {
   return sanitized;
 }
 
-// ---------------------------------------------------------------------------
-// b) sanitizeObject — recursively sanitize all string values in an object
-// ---------------------------------------------------------------------------
+// b) sanitizeObject - recursively sanitize all string values in an object
 
 // Fields that should NOT be sanitized (passwords, tokens, hashes)
 const SKIP_FIELDS = new Set(['password', 'passwordHash', 'token']);
@@ -91,9 +87,7 @@ export function sanitizeObject<T>(obj: T): T {
   return obj;
 }
 
-// ---------------------------------------------------------------------------
-// c) isCSRFValid — validate CSRF token or Origin header
-// ---------------------------------------------------------------------------
+// c) isCSRFValid - validate CSRF token or Origin header
 
 const ALLOWED_ORIGINS = [
   process.env.NEXT_PUBLIC_APP_URL,
@@ -103,7 +97,7 @@ const ALLOWED_ORIGINS = [
 export function isCSRFValid(request: NextRequest): boolean {
   const method = request.method.toUpperCase();
 
-  // Safe methods — no CSRF check needed
+  // Safe methods - no CSRF check needed
   if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
     return true;
   }
@@ -137,7 +131,7 @@ export function isCSRFValid(request: NextRequest): boolean {
         return true;
       }
     } catch {
-      // Invalid URL — skip
+      // Invalid URL - skip
     }
   }
 
@@ -149,9 +143,7 @@ export function isCSRFValid(request: NextRequest): boolean {
   return false;
 }
 
-// ---------------------------------------------------------------------------
-// d) getClientIp — extract client IP from request headers
-// ---------------------------------------------------------------------------
+// d) getClientIp - extract client IP from request headers
 
 export function getClientIp(request: NextRequest): string {
   // x-forwarded-for may contain multiple IPs; the first is the client
@@ -167,9 +159,7 @@ export function getClientIp(request: NextRequest): string {
   return 'unknown';
 }
 
-// ---------------------------------------------------------------------------
-// e) maskSensitiveData — mask sensitive data for logging / display
-// ---------------------------------------------------------------------------
+// e) maskSensitiveData - mask sensitive data for logging / display
 
 export function maskSensitiveData(data: string, type: 'email' | 'phone' | 'card' | 'token'): string {
   if (!data || typeof data !== 'string') return '***';
@@ -208,9 +198,7 @@ export function maskSensitiveData(data: string, type: 'email' | 'phone' | 'card'
   }
 }
 
-// ---------------------------------------------------------------------------
-// f) validateContentType — enforce application/json for write methods
-// ---------------------------------------------------------------------------
+// f) validateContentType - enforce application/json for write methods
 
 export function validateContentType(request: NextRequest): boolean {
   const method = request.method.toUpperCase();
@@ -227,9 +215,7 @@ export function validateContentType(request: NextRequest): boolean {
   return contentType.toLowerCase().includes('application/json');
 }
 
-// ---------------------------------------------------------------------------
 // g) SecurityEvent enum and logSecurityEvent function
-// ---------------------------------------------------------------------------
 
 export enum SecurityEvent {
   RATE_LIMITED = 'RATE_LIMITED',
@@ -281,17 +267,15 @@ export async function logSecurityEvent(options: SecurityEventLogOptions): Promis
   }
 }
 
-// ---------------------------------------------------------------------------
-// h) isRequestSizeValid — check Content-Length against a maximum
-// ---------------------------------------------------------------------------
+// h) isRequestSizeValid - check Content-Length against a maximum
 
 export function isRequestSizeValid(request: NextRequest, maxBytes: number = 1048576): boolean {
   const contentLength = request.headers.get('Content-Length');
 
-  if (!contentLength) return true; // No Content-Length header — allow
+  if (!contentLength) return true; // No Content-Length header - allow
 
   const length = parseInt(contentLength, 10);
-  if (isNaN(length)) return true; // Unparseable — allow
+  if (isNaN(length)) return true; // Unparseable - allow
 
   return length <= maxBytes;
 }

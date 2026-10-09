@@ -1,15 +1,13 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Serverless-Optimized Prisma Client
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Serverless-Optimized Prisma Client
 //
 // This module exports a single hardened `db` instance that:
 //
-//   1. **Validates the connection string eagerly** — if `DATABASE_URL` is
+//   1. **Validates the connection string eagerly** - if `DATABASE_URL` is
 //      missing or obviously malformed, we throw a highly descriptive error
 //      instead of letting Prisma crash silently with a cryptic 51ms 500 in
 //      the Vercel serverless logs.
 //
-//   2. **Is optimized for serverless** — a single PrismaClient is reused per
+//   2. **Is optimized for serverless** - a single PrismaClient is reused per
 //      Node process via `globalThis` to survive Hot Module Replacement in dev
 //      and warm Lambda invocations on Vercel. In production we keep the log
 //      surface minimal (`error` only) to avoid cold-start log noise.
@@ -18,20 +16,20 @@
 //      Client Extension backed by `AsyncLocalStorage`. When a request runs
 //      inside `runWithTenant(storeId, fn)`, every `find*` / `update*` /
 //      `delete*` on a store-scoped model automatically ANDs the current
-//      tenant's `storeId` into the `where` clause — developers can no longer
+//      tenant's `storeId` into the `where` clause - developers can no longer
 //      "forget" to scope a query. SUPER_ADMIN / internal flows run inside
 //      `runWithoutTenant(fn)` to opt out (e.g. cross-store dashboards).
 //
-//   4. **Enforces Financial Immutability at the ORM level** — `update`,
+//   4. **Enforces Financial Immutability at the ORM level** - `update`,
 //      `updateMany`, `delete`, and `deleteMany` on `JournalEntry`,
 //      `JournalEntryLine`, and `SystemLog` throw `IMMUTABILITY_VIOLATION`.
 //      Accounting and audit records are strictly append-only. A narrow,
 //      audited `withImmutabilityBypass(fn)` escape hatch exists for the
 //      legitimate posting / voiding paths (M-Pesa callback confirmation,
-//      journal posting, expense void) — these are the ONLY sanctioned
+//      journal posting, expense void) - these are the ONLY sanctioned
 //      mutations and each one is logged.
 //
-// ── VERCEL / NEON / SUPABASE CONNECTION POOLING (READ THIS) ──────────────────
+// VERCEL / NEON / SUPABASE CONNECTION POOLING (READ THIS)
 //
 // The `DATABASE_URL` configured in Vercel **MUST** be the **pooled** /
 // PgBouncer connection string from your database provider, NOT the direct
@@ -47,18 +45,17 @@
 //   • Prisma Accelerate: set `DATABASE_URL` to the Accelerate URL and use
 //                  `@prisma/extension-accelerate` (optional, future).
 //
-// `connection_limit=1` is correct for serverless — each function instance
+// `connection_limit=1` is correct for serverless - each function instance
 // holds at most one connection, and PgBouncer multiplexes it.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { type Prisma, PrismaClient } from "@prisma/client";
 import { AsyncLocalStorage } from "node:async_hooks";
 
-// ── 1. Eager environment validation ──────────────────────────────────────────
+// 1. Eager environment validation
 
 /**
  * Descriptive failure if the database URL is not configured. This is the #1
- * cause of the 51ms `500 Internal Server Error` on Vercel serverless — Prisma
+ * cause of the 51ms `500 Internal Server Error` on Vercel serverless - Prisma
  * instantiates, cannot find a connection string, and throws an opaque error.
  */
 function resolveDatabaseUrl(): string {
@@ -82,7 +79,7 @@ function resolveDatabaseUrl(): string {
     );
   }
 
-  // Heuristic sanity check — Prisma URLs are `file:` or `postgresql:` /
+  // Heuristic sanity check - Prisma URLs are `file:` or `postgresql:` /
   // `postgres:` schemes. A stray value (e.g. a pasted JSON blob) is caught
   // here with a clear message rather than a Prisma parse error.
   const isKnownScheme =
@@ -109,7 +106,7 @@ function resolveDatabaseUrl(): string {
   return url;
 }
 
-// Resolve once at module load — if DATABASE_URL is missing, we DON'T throw
+// Resolve once at module load - if DATABASE_URL is missing, we DON'T throw
 // here anymore. Instead, we defer the error to the first actual Prisma query,
 // where withErrorBoundary can catch it and return a proper JSON error response.
 // Previously, throwing at module evaluation caused opaque 500s on Vercel
@@ -124,7 +121,7 @@ try {
   DATABASE_URL_ERROR = err instanceof Error ? err : new Error(String(err));
 }
 
-// ── 2. Singleton PrismaClient (serverless-friendly) ──────────────────────────
+// 2. Singleton PrismaClient (serverless-friendly)
 
 const globalForPrisma = globalThis as unknown as {
   __mbumahPrisma?: PrismaClient;
@@ -133,7 +130,7 @@ const globalForPrisma = globalThis as unknown as {
 /**
  * Append `connect_timeout=15` to the datasource URL when connecting to Neon
  * (or any Postgres provider that may have cold starts). Neon serverless
- * cold starts can take 5–10 seconds, and Prisma's default connect timeout
+ * cold starts can take 5-10 seconds, and Prisma's default connect timeout
  * is too short, causing premature `P1001` / `P1002` errors.
  *
  * The parameter is only appended when:
@@ -183,7 +180,7 @@ if (process.env.NODE_ENV !== "production") {
   globalForPrisma.__mbumahPrisma = baseClient;
 }
 
-// ── 3. Tenant context (AsyncLocalStorage) ────────────────────────────────────
+// 3. Tenant context (AsyncLocalStorage)
 //
 // AsyncLocalStorage propagates the tenant context across async boundaries
 // (await, fetch, $transaction) WITHOUT needing to thread `storeId` through
@@ -226,20 +223,20 @@ export function getTenantContext(): TenantContext | undefined {
   return tenantStorage.getStore();
 }
 
-// ── 4. Store-scoped model whitelist ──────────────────────────────────────────
+// 4. Store-scoped model whitelist
 //
 // Models that carry a NON-nullable `storeId: String` and therefore qualify
 // for automatic tenant filtering. Models EXCLUDED on purpose:
 //
-//   • Store            — `id` IS the store; filtering makes no sense.
-//   • User             — `storeId` is nullable (SUPER_ADMIN has none); login
+//   • Store - `id` IS the store; filtering makes no sense.
+//   • User - `storeId` is nullable (SUPER_ADMIN has none); login
 //                        queries by email and must NOT be tenant-scoped.
-//   • Session          — no storeId; looked up by token during auth.
-//   • SystemLog        — `storeId` nullable; org-level logs have null.
-//   • SecurityEvent    — `storeId` nullable; org-level security scans.
-//   • Account          — org-scoped via `organizationId`, not storeId.
-//   • StoreTransfer    — uses fromStoreId / toStoreId (handled manually).
-//   • *Item children   — scoped via parent FK (e.g. SaleItem via transactionId),
+//   • Session - no storeId; looked up by token during auth.
+//   • SystemLog - `storeId` nullable; org-level logs have null.
+//   • SecurityEvent - `storeId` nullable; org-level security scans.
+//   • Account - org-scoped via `organizationId`, not storeId.
+//   • StoreTransfer - uses fromStoreId / toStoreId (handled manually).
+//   • *Item children - scoped via parent FK (e.g. SaleItem via transactionId),
 //                        injecting storeId would be a no-op or a type error.
 //
 // If you add a new store-scoped model to schema.prisma, add it here too.
@@ -256,7 +253,7 @@ const STORE_SCOPED_MODELS = new Set<string>([
   "debtLedger",
   "debtPayment",
   // Task 12-d (debt-plan audit, security): DebtPaymentPlan carries a storeId
-  // but was missing from this set — every plan query escaped Layer-4 tenancy.
+  // but was missing from this set - every plan query escaped Layer-4 tenancy.
   // The list route self-scopes via a validated query param, but the
   // single-plan routes ([id] GET/PATCH/DELETE, approve, pay, waive) looked up
   // rows by bare `findUnique({ where: { id } })`, so a financial user from
@@ -288,8 +285,8 @@ const STORE_SCOPED_MODELS = new Set<string>([
   "taxCategory",
   "notification",
   "subcategory",
-  // ── Payroll & HR (Phase 1 — ERP enhancement) ──
-  // LeaveType is intentionally NOT here — it's organisation-wide policy,
+  // Payroll & HR (Phase 1 - ERP enhancement)
+  // LeaveType is intentionally NOT here - it's organisation-wide policy,
   // not tenant-scoped data.
   "employee",
   "payrollPeriod",
@@ -298,10 +295,10 @@ const STORE_SCOPED_MODELS = new Set<string>([
   "employeeLeaveBalance",
   "leaveRequest",
   "attendanceRecord",
-  // ── v2.1.0 Accounting module (ISO 9001 / ISO 27001) ──
+  // v2.1.0 Accounting module (ISO 9001 / ISO 27001)
   // All accounting entities are store-scoped for multi-tenant isolation.
   // AuditLog has a nullable storeId (org-level audits have null), so it
-  // could be here — the injectTenant helper skips injection when storeId
+  // could be here - the injectTenant helper skips injection when storeId
   // is already set or when bypass is active.
   "financialPeriod",
   "trialBalanceSnapshot",
@@ -309,13 +306,13 @@ const STORE_SCOPED_MODELS = new Set<string>([
   "auditLog",
 ]);
 
-// ── 5. Immutability — append-only financial & audit models ───────────────────
+// 5. Immutability - append-only financial & audit models
 
 /**
  * Models that are strictly append-only. Any `update`, `updateMany`, `delete`,
  * or `deleteMany` on these models throws `IMMUTABILITY_VIOLATION`.
  *
- * `create` / `createMany` / `find*` remain allowed — financial and audit
+ * `create` / `createMany` / `find*` remain allowed - financial and audit
  * records are written once and never mutated. Voiding / posting is performed
  * through the audited `withImmutabilityBypass()` escape hatch in narrowly
  * defined internal paths (see `account-helper`, M-Pesa callback, journal
@@ -326,17 +323,17 @@ const IMMUTABLE_MODELS = new Set<string>([
   "journalEntryLine",
   "systemLog",
   // AuditLog is the tamper-proof audit trail (ISO 27001 A.12.4.2). Once
-  // written, audit records must NEVER be modified or deleted — doing so
+  // written, audit records must NEVER be modified or deleted - doing so
   // would violate the integrity guarantee required for compliance forensics.
   // Sanctioned administrative purges (e.g. GDPR right-to-be-forgotten) use
   // withImmutabilityBypass() with an explicit reason.
   "auditLog",
   // TrialBalanceSnapshot is a point-in-time financial record. Once captured,
-  // it must not be altered — doing so would invalidate the period-close
+  // it must not be altered - doing so would invalidate the period-close
   // verification. Corrections are made by generating a NEW snapshot.
   "trialBalanceSnapshot",
   // Payroll payslips are append-only financial records. Once a payroll run
-  // is COMPLETED, the per-employee PayrollDetail rows must never be edited —
+  // is COMPLETED, the per-employee PayrollDetail rows must never be edited -
   // corrections are made via adjusting entries in the NEXT payroll run.
   // Sanctioned voiding flows use withImmutabilityBypass().
   "payrollDetail",
@@ -391,18 +388,18 @@ export function withImmutabilityBypass<T>(
   return immutabilityBypassStorage.run({ reason }, fn);
 }
 
-// ── 6. Prisma Client Extension ────────────────────────────────────────────────
+// 6. Prisma Client Extension
 
 /**
  * Strictly-typed shape of the parameters Prisma passes to every query
  * interceptor registered via `$extends({ query: ... })`.
  *
- * AUDIT FIX (Finding 1.1 — `any` removed from the ORM extension): all
+ * AUDIT FIX (Finding 1.1 - `any` removed from the ORM extension): all
  * interceptor handlers below previously annotated their parameter as `any`,
  * which meant a refactor that changed the argument shape would silently
  * bypass tenant injection instead of failing to compile. The handlers are
  * still assigned into the extension via `Object.fromEntries(...) as Record<
- * string, object>`, so Prisma never checks these types itself — but the
+ * string, object>`, so Prisma never checks these types itself - but the
  * function bodies are now statically verified: `args` must carry a
  * filterable `where` before `injectTenant` can touch it, and `query` must
  * be invoked with the same shape it received.
@@ -419,7 +416,7 @@ interface QueryInterceptorArgs<
   model: string;
   /** Prisma operation name (e.g. "findMany", "updateMany", "delete"). */
   operation: string;
-  /** Query arguments — forwarded (possibly modified) to {@link QueryInterceptorArgs.query}. */
+  /** Query arguments - forwarded (possibly modified) to {@link QueryInterceptorArgs.query}. */
   args: TArgs;
   /**
    * Continuation: run the next handler / the actual query with the given
@@ -433,8 +430,8 @@ interface QueryInterceptorArgs<
  * Argument shape accepted by {@link injectTenant}: any Prisma query whose
  * `where` clause may carry a `storeId` filter. The index signature keeps the
  * type compatible with every model's argument bag (select/orderBy/data/…)
- * while still guaranteeing that `where` — the only key tenancy injection
- * reads or writes — is statically known.
+ * while still guaranteeing that `where` - the only key tenancy injection
+ * reads or writes - is statically known.
  */
 interface TenantFilterableArgs {
   /** Filter clause; tenancy injection ANDs `storeId` into it. */
@@ -447,11 +444,11 @@ const hardenedClient = baseClient.$extends({
   name: "mbumahHardened",
 
   query: {
-    // ── Multi-tenancy: AND-inject storeId on store-scoped models ──
+    // Multi-tenancy: AND-inject storeId on store-scoped models
     // For each store-scoped model we intercept read & mutate queries. When a
     // tenant context is active (and not bypassed) we merge `storeId` into the
     // `where` clause, ANDing it with any existing filter so we never widen
-    // access — only narrow it.
+    // access - only narrow it.
     ...(Object.fromEntries(
       [...STORE_SCOPED_MODELS].map((model) => {
         return [
@@ -492,7 +489,7 @@ const hardenedClient = baseClient.$extends({
       }),
     ) as Record<string, object>),
 
-    // ── Immutability: block mutations on financial/audit models ──
+    // Immutability: block mutations on financial/audit models
     journalEntry: {
       async update({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
@@ -565,7 +562,7 @@ const hardenedClient = baseClient.$extends({
         return query(args);
       },
     },
-    // ── v2.1.0: AuditLog is tamper-proof (ISO 27001 A.12.4.2) ──
+    // v2.1.0: AuditLog is tamper-proof (ISO 27001 A.12.4.2)
     auditLog: {
       async update({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
@@ -584,7 +581,7 @@ const hardenedClient = baseClient.$extends({
         return query(args);
       },
     },
-    // ── v2.1.0: TrialBalanceSnapshot is immutable once captured ──
+    // v2.1.0: TrialBalanceSnapshot is immutable once captured
     trialBalanceSnapshot: {
       async update({ model, operation, args, query }: QueryInterceptorArgs) {
         assertMutable(model, operation);
@@ -606,7 +603,7 @@ const hardenedClient = baseClient.$extends({
   },
 });
 
-// ── 7. Helpers used by the extension ──────────────────────────────────────────
+// 7. Helpers used by the extension
 
 /**
  * Merge the active tenant's `storeId` into a query's `where` clause.
@@ -615,7 +612,7 @@ const hardenedClient = baseClient.$extends({
  * inside `runWithTenant(storeId, fn)` is automatically narrowed to that
  * store at the ORM layer, so a developer cannot "forget" to scope a query.
  * It is invoked by the query interceptor of every model in
- * `STORE_SCOPED_MODELS` (see section 4) — 30+ handlers across find/count/
+ * `STORE_SCOPED_MODELS` (see section 4) - 30+ handlers across find/count/
  * aggregate/groupBy/update/delete operations.
  *
  * Rules:
@@ -631,7 +628,7 @@ const hardenedClient = baseClient.$extends({
  * @typeParam TArgs - The Prisma query-argument bag (extends
  *   {@link TenantFilterableArgs} so the `where` clause is statically known).
  * @param args - The query arguments, e.g. `{ where: { isActive: true },
- *   take: 10 }`. Never mutated — a shallow copy is returned when injection
+ *   take: 10 }`. Never mutated - a shallow copy is returned when injection
  *   is needed, because Prisma extension args can be reused or logged.
  * @returns The args to execute: either the original object (passthrough) or
  *   a shallow copy whose `where` now includes the tenant's `storeId`.
@@ -647,13 +644,13 @@ const hardenedClient = baseClient.$extends({
  *   on this function. Changes require review from someone who owns the
  *   tenancy model, plus a cross-tenant regression test.
  * - `where.storeId` already set is only passed through when it EQUALS the
- *   tenant store (exact string match — ANDing would be a no-op). Any other
- *   value — a DIFFERENT store id, or a non-string filter shape — is
+ *   tenant store (exact string match - ANDing would be a no-op). Any other
+ *   value - a DIFFERENT store id, or a non-string filter shape - is
  *   AND-narrowed so a query can only ever NARROW access, never widen it.
  *   SECURITY (QA 2026-09, v2.4.1): the previous behaviour respected ANY
  *   explicit `where.storeId`, trusting every route to have validated the
  *   param via `requireStoreAccess`. Several GET routes (debt, customers, …)
- *   never do — so a store-scoped CASHIER could read any store's customers
+ *   never do - so a store-scoped CASHIER could read any store's customers
  *   and debt ledgers just by passing another store's `storeId` query param.
  *   The ORM layer is now the enforcement point, not the route layer.
  * - Handles `undefined`, `null`, and absent `where` uniformly by creating
@@ -664,13 +661,13 @@ const hardenedClient = baseClient.$extends({
  *
  * Exported PURELY for the cross-tenant regression tests
  * (src/__tests__/lib/tenant-scoping.test.ts). Application code must never
- * call this directly — the `$extends` query interceptors above invoke it for
+ * call this directly - the `$extends` query interceptors above invoke it for
  * every store-scoped model operation.
  */
 export function injectTenant<TArgs extends TenantFilterableArgs>(args: TArgs): TArgs {
   const ctx = tenantStorage.getStore();
 
-  // No tenant context active — passthrough (login, seeding, SUPER_ADMIN).
+  // No tenant context active - passthrough (login, seeding, SUPER_ADMIN).
   if (!ctx || ctx.bypass || !ctx.storeId) {
     return args;
   }
@@ -683,18 +680,18 @@ export function injectTenant<TArgs extends TenantFilterableArgs>(args: TArgs): T
   }
 
   // Caller already specified a storeId filter. Only pass through when it is
-  // the EXACT tenant store (string equality — ANDing would be a no-op).
+  // the EXACT tenant store (string equality - ANDing would be a no-op).
   // Everything else is AND-narrowed: we never overwrite the caller's filter
   // (preserving intent and any OR semantics inside it), we just constrain
   // the result set to the tenant. Non-string shapes (`{ in: [...] }`,
-  // `{ not: ... }`, …) always take this branch — cheap and always safe.
+  // `{ not: ... }`, …) always take this branch - cheap and always safe.
   if (where.storeId === ctx.storeId) {
     return args;
   }
 
   const tenantFilter = { storeId: ctx.storeId };
 
-  // Preserve any existing AND array/object — spread-merging must not drop it.
+  // Preserve any existing AND array/object - spread-merging must not drop it.
   const existingAnd = Array.isArray(where.AND)
     ? where.AND
     : where.AND !== undefined
@@ -711,7 +708,7 @@ export function injectTenant<TArgs extends TenantFilterableArgs>(args: TArgs): T
  * `withImmutabilityBypass()` scope.
  *
  * NOTE: Prisma passes the `model` parameter to query interceptors in
- * **PascalCase** (e.g. `"JournalEntry"`) — matching the schema model name.
+ * **PascalCase** (e.g. `"JournalEntry"`) - matching the schema model name.
  * Our `IMMUTABLE_MODELS` set is keyed in camelCase (matching the Prisma
  * client property name). We normalise to lowercase before the lookup so the
  * check is casing-agnostic and works regardless of which convention Prisma
@@ -719,14 +716,14 @@ export function injectTenant<TArgs extends TenantFilterableArgs>(args: TArgs): T
  */
 function assertMutable(model: string, operation: string): void {
   if (immutabilityBypassStorage.getStore()) {
-    return; // Sanctioned bypass active — allow.
+    return; // Sanctioned bypass active - allow.
   }
   if (IMMUTABLE_MODELS.has(model) || IMMUTABLE_MODELS_LOWER.has(model.toLowerCase())) {
     throw new ImmutabilityViolationError(model, operation);
   }
 }
 
-// ── 8. Public exports ─────────────────────────────────────────────────────────
+// 8. Public exports
 
 /**
  * The hardened Prisma Client. Import this everywhere instead of constructing
@@ -738,19 +735,19 @@ function assertMutable(model: string, operation: string): void {
  * Multi-tenancy and immutability guards are applied automatically. To opt out
  * of tenancy for a cross-store scope, wrap the call in `runWithoutTenant`.
  *
- * ── TYPE NOTE ──────────────────────────────────────────────────────────────
+ * TYPE NOTE
  * `hardenedClient` is the result of `baseClient.$extends({ query: {...} })`.
  * Prisma's `$extends` returns a `DynamicClientExtensionThis<...>` type which,
  * because we build the `query` interceptors dynamically via
  * `Object.fromEntries(...)`, does NOT statically expose the per-model
- * accessors (`db.product`, `db.bankAccount`, …) — even though they exist at
+ * accessors (`db.product`, `db.bankAccount`, …) - even though they exist at
  * runtime. This would produce ~170 `TS2339: Property does not exist` errors
  * under `tsc --noEmit --strict`.
  *
  * The extension adds ONLY runtime query interceptors (tenancy injection +
  * immutability guards); it introduces NO new typed API surface (no `model`,
- * `client`, or `result` extensions). It is therefore semantically correct —
- * and type-safe — to treat `db` as a plain `PrismaClient` for static typing:
+ * `client`, or `result` extensions). It is therefore semantically correct -
+ * and type-safe - to treat `db` as a plain `PrismaClient` for static typing:
  * every model accessor and method that exists on `PrismaClient` exists on the
  * extended client at runtime. The double cast (`as unknown as PrismaClient`)
  * is the standard Prisma pattern for this situation.

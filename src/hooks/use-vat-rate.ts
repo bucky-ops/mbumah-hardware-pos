@@ -1,8 +1,6 @@
 'use client';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — useVatRate hook (v2.8.0)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - useVatRate hook (v2.8.0)
 //
 // Single source of truth for the ADMIN-CONTROLLED VAT rate on the client.
 //
@@ -15,7 +13,6 @@
 //   hardcoded 16%.
 // • `vatRate` falls back to the cached rate (default 16) while loading so
 //   first paint never shows a wrong label.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { useQuery } from '@tanstack/react-query';
 import { settingsApi } from '@/lib/api';

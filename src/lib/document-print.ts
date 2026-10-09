@@ -1,22 +1,22 @@
 /**
- * document-print — shared branding kit for PRINTED business documents.
+ * document-print - shared branding kit for PRINTED business documents.
  *
  * Task 35-b: every printed business document (invoices, quotations, proformas,
  * credit notes, delivery notes, rental receipts) must be branded, detailed and
  * attractive, with a scannable QR code, the company logo and a thank-you note.
  * The POS receipt (src/components/receipt-print.tsx) already does this via a
- * React component — this module covers the raw-HTML print windows.
+ * React component - this module covers the raw-HTML print windows.
  *
  * CLIENT + SERVER SAFE: no 'use client', no DOM access at import time (all
  * `window` touches are guarded). The server route /api/reports/export-pdf
  * reuses `buildDocumentQrDataUrl` for statement QRs (base64 data URI, so the
  * printed HTML stays fully self-contained / offline-capable).
  *
- * QR PAYLOAD FORMATS (v2.10.0 — QR codes open the DIGITAL RECEIPT)
- * ─────────────────────────────────────────────────────────────────
- * • Documents with a PUBLIC DIGITAL RECEIPT PAGE — `RECEIPT` plus all five
+ * QR PAYLOAD FORMATS (v2.10.0 - QR codes open the DIGITAL RECEIPT)
+ *
+ * • Documents with a PUBLIC DIGITAL RECEIPT PAGE - `RECEIPT` plus all five
  *   business documents (`INVOICE`, `QUOTATION`, `PROFORMA`, `CREDIT_NOTE`,
- *   `DEBIT_NOTE`) and `DELIVERY_NOTE` — encode
+ *   `DEBIT_NOTE`) and `DELIVERY_NOTE` - encode
  *   `<origin>/r/<docNumber>` (the /r/[receiptNumber] page resolves receipts,
  *   invoices and delivery notes). Scanning the QR now opens a colored,
  *   mobile-friendly digital copy of the document, exactly like POS receipts.
@@ -24,7 +24,7 @@
  *   string, because there is no public page for those numbers:
  *   `MBUMAH|<KIND>|<docNumber>|Total:<total>|Date:<date>`
  *   Callers may also force the verify string with `linkToPage: false`
- *   (the customer-credits print uses this — its docNo is a ledger reference,
+ *   (the customer-credits print uses this - its docNo is a ledger reference,
  *   not a document number, so a link would 404).
  */
 
@@ -42,7 +42,7 @@ export const QR_LINKED_KINDS = new Set([
   'DELIVERY_NOTE',
 ]);
 
-// ─── HTML escaping ──────────────────────────────────────────────────────────
+// HTML escaping
 
 /** Escape a string for safe inclusion in raw HTML (shared implementation). */
 export function escapeHtml(s: string): string {
@@ -54,7 +54,7 @@ export function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-// ─── QR helpers ─────────────────────────────────────────────────────────────
+// QR helpers
 
 export interface DocumentQrOptions {
   /** Truthful total to embed in the verify string (already formatted). */
@@ -102,14 +102,14 @@ export function buildDocumentQrPayload(
 }
 
 /**
- * Renders a payload to a PNG data-URI QR code (isomorphic — works in the
+ * Renders a payload to a PNG data-URI QR code (isomorphic - works in the
  * browser print window and on the server for statement HTML).
  */
 export async function buildDocumentQrDataUrl(payload: string): Promise<string> {
   return QRCode.toDataURL(payload, { width: 240, margin: 1, errorCorrectionLevel: 'M' });
 }
 
-// ─── Store identity ─────────────────────────────────────────────────────────
+// Store identity
 
 export interface DocumentStoreIdentity {
   storeName: string;
@@ -118,7 +118,7 @@ export interface DocumentStoreIdentity {
 }
 
 /**
- * Store identity for document headers — resolved from STORE_LIST by storeId,
+ * Store identity for document headers - resolved from STORE_LIST by storeId,
  * falling back to company-wide fields (never a hardcoded branch).
  */
 export function resolveDocumentStore(storeId: string | null | undefined): DocumentStoreIdentity {
@@ -134,7 +134,7 @@ export function resolveDocumentStore(storeId: string | null | undefined): Docume
   };
 }
 
-/** Absolute logo URL for print windows ('' on the server — callers skip it). */
+/** Absolute logo URL for print windows ('' on the server - callers skip it). */
 export function getDocumentLogoSrc(): string {
   if (typeof window !== 'undefined' && window.location?.origin) {
     return `${window.location.origin}${COMPANY.logoPath}`;
@@ -142,7 +142,7 @@ export function getDocumentLogoSrc(): string {
   return '';
 }
 
-// ─── Branded document builder ───────────────────────────────────────────────
+// Branded document builder
 
 export interface BrandedDocumentOptions {
   /** e.g. "INVOICE" / "QUOTATION" / "PROFORMA INVOICE" / "CREDIT NOTE". */
@@ -162,7 +162,7 @@ export interface BrandedDocumentOptions {
   billToHtml: string;
   /** Full items <table> including thead/tbody (escaped HTML built by the caller). */
   itemsTableHtml: string;
-  /** Totals block — `<div class="totals"><table>…<tr class="grand">…` . */
+  /** Totals block - `<div class="totals"><table>…<tr class="grand">…` . */
   totalsHtml: string;
   /** Optional notes / terms / extra sections between totals and signatures. */
   extraSectionsHtml?: string;
@@ -321,7 +321,7 @@ export function buildBrandedDocumentHtml(opts: BrandedDocumentOptions): string {
 </html>`;
 }
 
-// ─── Print window ───────────────────────────────────────────────────────────
+// Print window
 
 /**
  * Opens a print window and prints a complete HTML document.

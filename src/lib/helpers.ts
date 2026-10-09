@@ -1,6 +1,6 @@
 // Receipt & reference generators, formatting, calculations
 //
-// AUDIT REMEDIATION — FINANCIAL_MODULE_AUDIT_REPORT.md (SYS-7/F5-6/F1-9):
+// AUDIT REMEDIATION - FINANCIAL_MODULE_AUDIT_REPORT.md (SYS-7/F5-6/F1-9):
 //   Document numbers previously used `Math.random()` 5-digit suffixes.
 //   With a busy day's volume the birthday bound makes collisions (and the
 //   resulting P2002 500s mid-checkout) likely, and guessable receipt numbers
@@ -12,7 +12,7 @@ import crypto from 'crypto';
 import { calculateLineItem, formatKES as canonicalFormatKES } from '@/lib/utils/financialMath';
 
 function secureSuffix(): string {
-  // 5-char base36 ≈ 60M combinations — collision-safe at retail volumes and
+  // 5-char base36 ≈ 60M combinations - collision-safe at retail volumes and
   // unpredictable to outside observers.
   return crypto.randomBytes(4).toString('hex').toUpperCase().slice(0, 5);
 }
@@ -69,7 +69,7 @@ export function formatEmployeeCode(branchCode: string, seq: number): string | nu
 }
 
 /**
- * Canonical KES formatting (en-KE, exactly 2 decimal places) — delegated to
+ * Canonical KES formatting (en-KE, exactly 2 decimal places) - delegated to
  * the central financialMath utility so server-rendered PDFs show the exact
  * same string as the UI, receipts, e-mails and WhatsApp messages.
  */
@@ -77,7 +77,7 @@ export const formatKES = canonicalFormatKES;
 
 /**
  * Format a date as a readable string (e.g. "26 Jun 2026").
- * Accepts Date, ISO string, or timestamp. Returns '—' for null/undefined.
+ * Accepts Date, ISO string, or timestamp. Returns ' - ' for null/undefined.
  * Used by PDF report generation (export-pdf route) and other server-side
  * formatting where the api.ts formatDateTime (client-side) isn't available.
  */
@@ -135,16 +135,16 @@ export function generateGiftCardCode(): string {
 /**
  * Compute a sale line's gross subtotal, line discount, tax and total.
  *
- * FINANCIAL MATH AUDIT — UNIFORM FORMULA (src/lib/utils/financialMath.ts):
+ * FINANCIAL MATH AUDIT - UNIFORM FORMULA (src/lib/utils/financialMath.ts):
  * every operation runs in decimal.js (never IEEE-754 float) and rounds
  * HALF_UP to 2dp at the line level:
  *   subtotal = round_HUP(pricePerUnit × quantity)
  *   discount = round_HUP(subtotal × discountPercent / 100)
  *   net      = subtotal − discount
- *   VAT-INCLUSIVE (POS retail default — shelf price includes VAT):
+ *   VAT-INCLUSIVE (POS retail default - shelf price includes VAT):
  *     tax      = net − round_HUP(net / 1.16)
  *     total    = net                       (customer pays the shelf price)
- *   VAT-EXCLUSIVE (B2B / wholesale — pass `isVatInclusive = false`):
+ *   VAT-EXCLUSIVE (B2B / wholesale - pass `isVatInclusive = false`):
  *     tax      = round_HUP(net × taxRate / 100)
  *     total    = net + tax
  * Exempt lines (taxRate 0) always carry tax = 0.
@@ -155,7 +155,7 @@ export function generateGiftCardCode(): string {
  * The exported shape ({ subtotal, discount, tax, total }) is UNCHANGED so
  * all existing callers keep compiling; only the numeric behaviour (exact,
  * rounded, VAT-inclusive) is different. NOTE the semantic flip: `total` is
- * now the VAT-INCLUSIVE gross the customer pays — the header formula in
+ * now the VAT-INCLUSIVE gross the customer pays - the header formula in
  * checkout was updated in the same audit to `subtotal − lineDiscounts −
  * cartDiscount` (VAT is inside the lines, never added on top).
  */

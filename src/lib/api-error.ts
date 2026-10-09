@@ -1,6 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Structured API Error Class
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Structured API Error Class
 //
 // A single, typed error class for all API route failures. Replaces ad-hoc
 // `throw new Error("...")` + `Response.json({ error: "..." }, { status })`
@@ -8,10 +6,10 @@
 //
 //   1. Carries an HTTP status code, machine-readable error code, user-facing
 //      message, and optional developer detail.
-//   2. Integrates with `withErrorBoundary` (logger.ts) — the boundary reads
+//   2. Integrates with `withErrorBoundary` (logger.ts) - the boundary reads
 //      the status code and error code from the thrown APIError and produces
 //      the correct HTTP response.
-//   3. Integrates with Sentry (`captureAPIError`) — structured context is
+//   3. Integrates with Sentry (`captureAPIError`) - structured context is
 //      forwarded for aggregation.
 //   4. Supports a `cause` chain (ES2022) so we can wrap low-level Prisma /
 //      fetch errors without losing the original stack.
@@ -39,11 +37,10 @@
 //     });
 //   }
 //
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { captureAPIError } from "./sentry";
 
-// ── Error codes (machine-readable) ───────────────────────────────────────────
+// Error codes (machine-readable)
 
 export const ErrorCode = {
   // 400-level
@@ -63,7 +60,7 @@ export const ErrorCode = {
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 
-// ── APIError class ───────────────────────────────────────────────────────────
+// APIError class
 
 export interface APIErrorOptions {
   /** Developer-facing detail (not shown to end users in production). */
@@ -114,7 +111,7 @@ export class APIError extends Error {
     this.timestamp = new Date().toISOString();
   }
 
-  // ── Convenience factory methods ──────────────────────────────────────────
+  // Convenience factory methods
 
   static badRequest(message: string, options?: APIErrorOptions): APIError {
     return new APIError(400, ErrorCode.VALIDATION_ERROR, message, options);
@@ -152,7 +149,7 @@ export class APIError extends Error {
     return new APIError(502, ErrorCode.PAYMENT_ERROR, message, options);
   }
 
-  // ── Serialization ────────────────────────────────────────────────────────
+  // Serialization
 
   /**
    * Serialize to a JSON response body. In production, `detail` is omitted to
@@ -208,7 +205,7 @@ export class APIError extends Error {
   }
 }
 
-// ── Helper: wrap an async handler with APIError-aware error handling ─────────
+// Helper: wrap an async handler with APIError-aware error handling
 
 /**
  * Wrap an API route handler with structured error handling. Any thrown
@@ -238,7 +235,7 @@ export function apiHandler(
     try {
       return await handler(req, ...args);
     } catch (error) {
-      // Already a structured APIError — just respond + report.
+      // Already a structured APIError - just respond + report.
       if (error instanceof APIError) {
         // Enrich with route/method if not already set.
         if (!error.route) {
@@ -257,7 +254,7 @@ export function apiHandler(
         return error.toResponse();
       }
 
-      // Unknown error — wrap in a 500 APIError and report.
+      // Unknown error - wrap in a 500 APIError and report.
       const wrapped = APIError.internal(
         error instanceof Error ? error.message : "Unknown error",
         {
@@ -284,7 +281,7 @@ export function apiHandler(
 }
 
 /**
- * Convenience alias for `apiHandler` — provides a more descriptive name
+ * Convenience alias for `apiHandler` - provides a more descriptive name
  * for the common pattern of wrapping route handlers with error handling.
  *
  * @example

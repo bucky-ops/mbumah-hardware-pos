@@ -30,7 +30,7 @@ import { ApiRequestError } from '@/lib/error-handler';
 // Re-export types so consumers can import from this module
 export type { GiftCardItem } from './types';
 // v2.12.0 (Task DASH-BE): dashboard-insight DTOs re-exported for the UI agent
-// (DASH-UI) — the shapes returned inside DashboardStats by GET /api/dashboard.
+// (DASH-UI) - the shapes returned inside DashboardStats by GET /api/dashboard.
 export type {
   ShiftSnapshot,
   DebtAgingBuckets,
@@ -51,7 +51,7 @@ export type {
 const API_BASE = '/api';
 
 /**
- * R10 FIX (v2.5.1 — login flash/reload loop).
+ * R10 FIX (v2.5.1 - login flash/reload loop).
  *
  * OLD behaviour on ANY 401: clear localStorage tokens and call
  * `window.location.reload()`. Combined with globally-mounted pollers that run
@@ -62,7 +62,7 @@ const API_BASE = '/api';
  *
  * NEW behaviour: clear the stale tokens and dispatch `mbt:session-expired`.
  * The auth store (stores.ts) listens for that event and flips the SPA to the
- * LoginScreen WITHOUT a page reload. Loop impossible — after the tokens are
+ * LoginScreen WITHOUT a page reload. Loop impossible - after the tokens are
  * cleared there is nothing left to trigger another reload.
  */
 function handleSessionExpired(): void {
@@ -128,7 +128,7 @@ if (typeof window !== 'undefined') {
  * QA FIX (Kenya Plumbing Co. incident): authenticated raw-fetch helper.
  *
  * This app's auth is BEARER-TOKEN based (localStorage `mbt_token`), NOT
- * cookie-based — `credentials: 'same-origin'` alone always 401s. Several
+ * cookie-based - `credentials: 'same-origin'` alone always 401s. Several
  * components (loyalty card, customer history fallback) used bare fetch()
  * and silently broke. Use this helper anywhere `request()` is too heavy but
  * Authorization + CSRF headers are required. Returns status + parsed body
@@ -214,7 +214,7 @@ async function request<T>(
 
   if (response.status === 401) {
     // v2.5.3: surface the server's SPECIFIC message (e.g. "Invalid email or
-    // password." + the lockout warning) instead of generic copy — the inline
+    // password." + the lockout warning) instead of generic copy - the inline
     // login banner shows exactly what the API said. Generic copy remains for
     // session-expiry paths. (R10 v2.5.1: still throws the REAL status.)
     const errBody = await response.clone().json().catch(() => ({}));
@@ -277,7 +277,7 @@ async function request<T>(
             retryErrorBody = retryErrorData as Record<string, unknown>;
           }
         } catch {
-          // Non-JSON body — fall through
+          // Non-JSON body - fall through
         }
         // R2 FIX: ApiRequestError carries the real status.
         switch (retryResponse.status) {
@@ -303,7 +303,7 @@ async function request<T>(
       if (retryJson && retryJson.success && retryJson.data !== undefined && retryJson.data !== null) {
         if (!Array.isArray(retryJson.data) && typeof retryJson.data === 'object') {
           const d = retryJson.data as Record<string, unknown>;
-          // RECEIPT-INCIDENT FIX (2026-09-10): unwrap ENVELOPES only — never
+          // RECEIPT-INCIDENT FIX (2026-09-10): unwrap ENVELOPES only - never
           // ENTITIES. An entity row always carries an `id`; envelopes don't.
           // Without this guard the checkout response { data: fullTransaction }
           // was unwrapped to fullTransaction.items, so the receipt printed the
@@ -322,8 +322,8 @@ async function request<T>(
       }
       return retryJson;
     }
-    // R2 FIX: the retry also failed with 403 (non-CSRF reason — e.g. role or
-    // store-scope denial) — carry the real status. v2.12.5 (RBAC): the parsed
+    // R2 FIX: the retry also failed with 403 (non-CSRF reason - e.g. role or
+    // store-scope denial) - carry the real status. v2.12.5 (RBAC): the parsed
     // body travels too ({ code, permission, requiresManagerOverride, ... }).
     throw new ApiRequestError(
       errorMsg || `Request failed: ${response.status}`,
@@ -343,11 +343,11 @@ async function request<T>(
         serverErrorBody = errorData as Record<string, unknown>;
       }
     } catch {
-      // Response body is not JSON or empty — fall through to status-based messages
+      // Response body is not JSON or empty - fall through to status-based messages
     }
 
     // Specific error messages for common HTTP status codes
-    // R2 FIX: throw ApiRequestError(status) — the real status travels with
+    // R2 FIX: throw ApiRequestError(status) - the real status travels with
     // the error (400 stays 400 in the console, not UNKNOWN_ERROR/500).
     switch (response.status) {
       case 404:
@@ -369,18 +369,18 @@ async function request<T>(
 
   // Response-shape validation: ensure the response matches ApiResponse<T>
   if (!json || typeof json !== 'object') {
-    // Response is not a valid object — return a safe default
+    // Response is not a valid object - return a safe default
     return { success: false, error: 'Invalid response from server' } as ApiResponse<T>;
   }
 
   if (json.success === undefined) {
-    // `success` field is missing — attempt to infer from presence of data/error
+    // `success` field is missing - attempt to infer from presence of data/error
     if (json.data !== undefined) {
       json.success = true;
     } else if (json.error) {
       json.success = false;
     } else {
-      // Neither data nor error — treat as success with no data
+      // Neither data nor error - treat as success with no data
       json.success = true;
     }
     console.warn(
@@ -389,20 +389,20 @@ async function request<T>(
   }
 
   if (json.success && json.data === undefined && json.error === undefined) {
-    // Successful response but no data field at all — set null
+    // Successful response but no data field at all - set null
     // Components must use null checks / Array.isArray() before .map() calls.
     json.data = null as unknown as T;
   }
 
   // Nested-structure unwrap: if the API wrapped the array inside an object
   // (e.g. { data: { items: [...] } }), unwrap it to a flat array.
-  // RECEIPT-INCIDENT FIX (2026-09-10): unwrap ENVELOPES only — never ENTITIES.
+  // RECEIPT-INCIDENT FIX (2026-09-10): unwrap ENVELOPES only - never ENTITIES.
   // An entity (single record: transaction, receipt, product detail…) always
   // carries an `id`. The checkout response { data: fullTransaction } contains
   // fullTransaction.items, so the old unconditional unwrap replaced the
   // transaction with its LINE-ITEM ARRAY: lastTransaction became an array and
   // the printed receipt came out blank ("Invalid Date", "No line items
-  // recorded", GRAND TOTAL Ksh 0.00 — the incident PDF). Entities now pass
+  // recorded", GRAND TOTAL Ksh 0.00 - the incident PDF). Entities now pass
   // through untouched; envelope shapes keep the legacy unwrap behaviour.
   if (json.success && json.data !== undefined && json.data !== null) {
     if (!Array.isArray(json.data) && typeof json.data === 'object') {
@@ -477,7 +477,7 @@ export async function safeListRequest<T>(
       if (Array.isArray(d.products)) return { ...res, data: d.products as T[] };
       if (Array.isArray(d.customers)) return { ...res, data: d.customers as T[] };
       if (Array.isArray(d.transactions)) return { ...res, data: d.transactions as T[] };
-      // Can't extract — return empty array
+      // Can't extract - return empty array
       console.warn(`[safeListRequest] Expected array but got ${typeof res.data} from ${endpoint}`);
       return { ...res, data: [] };
     }
@@ -516,7 +516,7 @@ export const authApi = {
   },
 };
 
-// ─── Profile API (v2.7.0) ────────────────────────────────────────────────────
+// Profile API (v2.7.0)
 // Self-service profile endpoints. Until v2.7.0 the sidebar's "Profile &
 // Settings" entry showed a "coming soon" toast and the ONLY way to change a
 // name/phone/password was a SUPER_ADMIN in the Admin tab.
@@ -544,12 +544,12 @@ export interface ProfileData {
 }
 
 export const profileApi = {
-  /** GET /api/profile — the signed-in user's full profile. */
+  /** GET /api/profile - the signed-in user's full profile. */
   get: async () => {
     return request<ProfileData>('/profile');
   },
 
-  /** PATCH /api/profile — update your OWN name / phone / avatarUrl. */
+  /** PATCH /api/profile - update your OWN name / phone / avatarUrl. */
   update: async (data: { name?: string; phone?: string | null; avatarUrl?: string | null }) => {
     return request<ProfileData>('/profile', {
       method: 'PATCH',
@@ -558,7 +558,7 @@ export const profileApi = {
   },
 
   /**
-   * POST /api/profile/password — rotate your own password.
+   * POST /api/profile/password - rotate your own password.
    * Revokes every OTHER session (other devices); the current session stays.
    */
   changePassword: async (currentPassword: string, newPassword: string) => {
@@ -579,7 +579,7 @@ export interface ProductListItem {
   name: string;
   description: string | null;
   unitType: string;
-  // ── v2.6.0 UoM conversion (server-authoritative) ──
+  // v2.6.0 UoM conversion (server-authoritative)
   sellingUnit: string | null;
   conversionFactor: number;
   quantityInStock: number;
@@ -691,7 +691,7 @@ export const categoriesApi = {
     });
   },
 
-  // DML audit: categories were create-only — full SELECT/UPDATE/DELETE
+  // DML audit: categories were create-only - full SELECT/UPDATE/DELETE
   // lifecycle added so catalog taxonomy can be maintained like every entity.
   get: async (id: string) => {
     return request<CategoryItem>(`/categories/${id}`);
@@ -773,7 +773,7 @@ export const customersApi = {
   },
 };
 
-// ── Customer history (response shape returned by customersApi.getHistory) ──
+// Customer history (response shape returned by customersApi.getHistory)
 export interface CustomerHistoryTimelineEntry {
   type:
     | 'SALE'
@@ -876,7 +876,7 @@ export interface TransactionItem {
   taxAmount: number;
   discountAmount: number;
   totalAmount: number;
-  // FINANCIAL MATH AUDIT (spec §4): real till movement on cash sales —
+  // FINANCIAL MATH AUDIT (spec §4): real till movement on cash sales -
   // what the customer handed over and the change handed back. Serialized
   // from the Prisma Decimal columns as number | string.
   cashTendered?: number | string | null;
@@ -952,7 +952,7 @@ export const transactionsApi = {
   },
 };
 
-// ── Receipt Distribution (Phase 4 — Email via Resend + WhatsApp/SMS via Twilio) ──
+// Receipt Distribution (Phase 4 - Email via Resend + WhatsApp/SMS via Twilio)
 
 export interface ReceiptDistributionResult {
   success: boolean;
@@ -974,7 +974,7 @@ export const paymentsApi = {
 
   /**
    * Initiate a Daraja STK push (real or simulated depending on env). Accepts
-   * the enhanced payload — `phone`, `amount`, `accountReference`,
+   * the enhanced payload - `phone`, `amount`, `accountReference`,
    * `transactionDesc`, `storeId`.
    */
   darajaStk: async (payload: {
@@ -1060,7 +1060,7 @@ export const debtApi = {
   },
 };
 
-// ─── Debt Payment Plans ─────────────────────────────────────────────────────
+// Debt Payment Plans
 //
 // Installment-based repayment schedules for outstanding customer debts.
 
@@ -1159,7 +1159,7 @@ export interface DebtPaymentPlanStats {
   totalActivePlans: number;
   totalOutstandingBalance: number;
   /**
-   * Task 12-d: outstanding balance of DEFAULTED plans — the most at-risk
+   * Task 12-d: outstanding balance of DEFAULTED plans - the most at-risk
    * exposure, previously invisible because Outstanding only counts
    * ACTIVE/PAUSED plans.
    */
@@ -1282,7 +1282,7 @@ export const debtPaymentPlansApi = {
   },
 };
 
-// ─── Data Exports ────────────────────────────────────────────────────────────
+// Data Exports
 //
 // Server-side data export dashboard. Each call to `create` synchronously
 // generates the file (CSV or JSON) and persists it under
@@ -1434,7 +1434,7 @@ export const dataExportsApi = {
       // R2 FIX (v2.5.5): throw ApiRequestError (carries the real HTTP status)
       // instead of a plain Error. Previously normaliseError() saw a plain
       // Error and mislabelled every download failure as
-      // UNKNOWN_ERROR / statusCode 500 in the console — e.g. the missing
+      // UNKNOWN_ERROR / statusCode 500 in the console - e.g. the missing
       // download route surfaced as "Download failed (HTTP 404)" with
       // code UNKNOWN_ERROR and statusCode 500. Now the console shows the
       // truthful code (NOT_FOUND/404, GONE/410, FORBIDDEN/403, …).
@@ -1685,7 +1685,7 @@ export interface AccountItem {
   isActive: boolean;
 }
 
-// ── Phase 3 — Accounting Module types ───────────────────────────────────────
+// Phase 3 - Accounting Module types
 //
 // These mirror the Phase 1 Prisma models (FinancialPeriod, Budget,
 // TrialBalanceSnapshot, AuditLog) for use in the financial-tab UI sub-tabs.
@@ -1834,7 +1834,7 @@ export const financialApi = {
     }>(`/financial/revenue-trend?${query.toString()}`);
   },
 
-  // ── Phase 3 — Accounting Module CRUD ──────────────────────────────────────
+  // Phase 3 - Accounting Module CRUD
 
   createAccount: async (data: {
     organizationId: string;
@@ -2107,9 +2107,9 @@ export const stockMovementsApi = {
   },
 
   /**
-   * R11 FIX (v2.5.1 — "Adjust stock" UNKNOWN_ERROR / Resource not found):
+   * R11 FIX (v2.5.1 - "Adjust stock" UNKNOWN_ERROR / Resource not found):
    * the client used to POST to `/stock-movements/adjustment`, a route that
-   * does NOT exist — every adjustment from the Inventory tab returned 404
+   * does NOT exist - every adjustment from the Inventory tab returned 404
    * ("Resource not found", mislabelled UNKNOWN_ERROR/500 by the old error
    * normalizer). The real endpoint is POST /stock-movements and REQUIRES a
    * `type` field (PURCHASE | ADJUSTMENT | RETURN | TRANSFER) plus `note`
@@ -2132,7 +2132,7 @@ export const stockMovementsApi = {
   },
 };
 
-// ─── Store Transfers ────────────────────────────────────────
+// Store Transfers
 
 export interface StoreTransferItemDetail {
   id: string;
@@ -2256,7 +2256,7 @@ export const systemConfigApi = {
   },
 };
 
-// ── v2.8.0: Admin-controlled VAT rate (see /api/settings/vat) ───────────────
+// v2.8.0: Admin-controlled VAT rate (see /api/settings/vat)
 export interface VatRateData {
   vatRatePercent: number;
   isDefault: boolean;
@@ -2270,7 +2270,7 @@ export const settingsApi = {
     return res.data;
   },
 
-  /** Set the VAT rate (0–100). SUPER_ADMIN / STORE_OWNER only. */
+  /** Set the VAT rate (0-100). SUPER_ADMIN / STORE_OWNER only. */
   updateVatRate: async (vatRatePercent: number) => {
     return request<VatRateData>('/settings/vat', {
       method: 'PATCH',
@@ -2279,7 +2279,7 @@ export const settingsApi = {
   },
 };
 
-// ─── Remote Access Kit — fleet ops (v2.11.0) ─────────────────────────────────
+// Remote Access Kit - fleet ops (v2.11.0)
 
 export interface FleetAgent {
   storeId: string;
@@ -2365,7 +2365,7 @@ export const fleetApi = {
   },
 };
 
-// ─── Updates / rollback / backups (v2.9.0) ───────────────────────────────────
+// Updates / rollback / backups (v2.9.0)
 
 export interface UpdateStatusData {
   current: { version: string; buildSha: string; buildLabel: string };
@@ -2461,7 +2461,7 @@ export const usersApi = {
   },
 
   /**
-   * Soft-delete (deactivate) a user. The server never hard-deletes users —
+   * Soft-delete (deactivate) a user. The server never hard-deletes users -
    * sales/audit history must keep referring to a real row. Self-deletion and
    * removing the last active SUPER_ADMIN are rejected server-side.
    */
@@ -2855,7 +2855,7 @@ export const purchaseOrdersApi = {
 
 export interface NotificationItem {
   id: string;
-  // v2.12.7 (PR C): 'security' — durable SECURITY-category Notification rows
+  // v2.12.7 (PR C): 'security' - durable SECURITY-category Notification rows
   // (privilege-abuse lockouts, discount-spam alerts) now surface in the feed.
   type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security';
   title: string;
@@ -2864,7 +2864,7 @@ export interface NotificationItem {
   timestamp: string;
   isRead: boolean;
   targetTab: string;
-  // v2.12.7 (PR C): raw Notification.category ('SECURITY' on security rows) —
+  // v2.12.7 (PR C): raw Notification.category ('SECURITY' on security rows) -
   // drives the Alerts panel's Security filter tab.
   category?: string;
 }
@@ -2920,7 +2920,7 @@ export const shiftsApi = {
    * End-Shift dialog. Mirrors shiftsApi.end's path-param URL style
    * (GET /api/shifts/[id]/xread).
    *
-   * `blind: true` asks the SERVER to withhold expectedCash / difference —
+   * `blind: true` asks the SERVER to withhold expectedCash / difference -
    * the client must NEVER recompute expected cash locally (the old
    * `startingCash + totalSales` formula ignored CASH_IN/CASH_OUT legs and
    * leaked system totals to cashiers). blind=true is enforced for
@@ -2940,7 +2940,7 @@ export const shiftsApi = {
  *
  * When requested with `blind=1` the server OMITS the expected-cash figures
  * (`expectedCash`, `difference`) so a closing cashier cannot peek at system
- * totals — those properties are absent (undefined) in the blind response.
+ * totals - those properties are absent (undefined) in the blind response.
  * expectedCash/difference are therefore optional/nullable here.
  */
 export interface ShiftXRead {
@@ -2963,10 +2963,10 @@ export interface ShiftXRead {
   generatedAt: string;
 }
 
-// ─── Shift Schedules (planned roster) ────────────────────────────────────────
+// Shift Schedules (planned roster)
 //
 // Distinct from `shiftsApi` (which records actual clock-in/out worked
-// shifts). `shiftSchedulesApi` is the *planned* weekly roster — recurring
+// shifts). `shiftSchedulesApi` is the *planned* weekly roster - recurring
 // weekly shifts or one-off assignments.
 
 export type ShiftScheduleStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED';
@@ -3203,7 +3203,7 @@ export const giftCardsApi = {
    * (minified as "u.giftCardsApi.redeemByCode is not a function").
    * It now hits POST /api/gift-cards/redeem, which resolves the card by
    * code (case-insensitive), scopes it to the issuing store, and applies
-   * UP TO the requested amount — the response carries `discountAmount`
+   * UP TO the requested amount - the response carries `discountAmount`
    * (capped at the card balance) plus `remainingBalance`.
    */
   redeemByCode: async (payload: {
@@ -3225,7 +3225,7 @@ export const giftCardsApi = {
   },
 };
 
-// ─── Vouchers API ────────────────────────────────────────────────────────────
+// Vouchers API
 
 export interface VoucherItem {
   id: string;
@@ -3331,8 +3331,8 @@ export const vouchersApi = {
   /**
    * VF-1 (v2.8.0): REALLY send a voucher through a gateway (Resend email /
    * Twilio SMS / Twilio WhatsApp) instead of composing a deep link. The
-   * response carries an HONEST status — 'SENT' (gateway accepted), 'FAILED'
-   * (gateway/provider error) or 'SIMULATED' (gateway not configured) — plus
+   * response carries an HONEST status - 'SENT' (gateway accepted), 'FAILED'
+   * (gateway/provider error) or 'SIMULATED' (gateway not configured) - plus
    * the server-built message text and, for WhatsApp, a wa.me deep-link
    * fallback. The endpoint answers HTTP 200 even on FAILED/SIMULATED so the
    * structured result survives request() (which throws on non-2xx).
@@ -3362,19 +3362,19 @@ export const vouchersApi = {
 };
 
 /**
- * VF-1 (v2.8.0): result of POST /api/vouchers/send — an HONEST delivery
+ * VF-1 (v2.8.0): result of POST /api/vouchers/send - an HONEST delivery
  * outcome. 'SENT' = the gateway accepted the message; 'FAILED' = gateway or
  * provider error (see `error`); 'SIMULATED' = no gateway configured (nothing
- * was delivered — use the wa.me fallback / copy). Every attempt persists a
+ * was delivered - use the wa.me fallback / copy). Every attempt persists a
  * Message row (messageType 'VOUCHER') whose id is returned as `messageId`.
  */
 export interface VoucherSendResult {
   status: 'SENT' | 'FAILED' | 'SIMULATED';
-  /** Message row id (messageType=VOUCHER) — the delivery audit record. */
+  /** Message row id (messageType=VOUCHER) - the delivery audit record. */
   messageId: string;
   /** The exact server-built message text (identical across channels). */
   message: string;
-  /** WhatsApp only — wa.me deep-link fallback when no gateway is configured. */
+  /** WhatsApp only - wa.me deep-link fallback when no gateway is configured. */
   waLink: string | null;
   providerMessageId: string | null;
   error: string | null;
@@ -3419,7 +3419,7 @@ export const voucherCampaignsApi = {
   },
 };
 
-// ─── WhatsApp API ───────────────────────────────────────────────────────────
+// WhatsApp API
 
 export const whatsappApi = {
   send: async (params: { phone: string; message: string; storeId?: string; customerId?: string; messageType?: string }) => {
@@ -3481,7 +3481,7 @@ export function openSMS(phone: string, message: string): void {
 export function formatKES(amount: number): string {
   // FORMAT UNIFICATION (task 12-d): delegate to the ONE canonical en-KE KES
   // formatter (currency-utils → financialMath.formatKES) so every consumer of
-  // this helper renders the identical "Ksh 1,234.56" string — same 2dp
+  // this helper renders the identical "Ksh 1,234.56" string - same 2dp
   // HALF_UP rounding as receipts, PDFs, e-mails and WhatsApp messages.
   return formatCurrency(amount ?? 0, 'KES');
 }
@@ -3504,7 +3504,7 @@ export function formatDateTime(date: string | Date): string {
   });
 }
 
-// ─── Loyalty API ────────────────────────────────────────────
+// Loyalty API
 
 export interface LoyaltyTierItem {
   id: string;
@@ -3638,7 +3638,7 @@ export function formatRelativeTime(date: string | Date): string {
   return formatDate(date);
 }
 
-// ── Banking API ────────────────────────────────────────────
+// Banking API
 
 export interface BankAccountItem {
   id: string;
@@ -3754,7 +3754,7 @@ export const bankingApi = {
   },
 };
 
-// ── Security API ──────────────────────────────────────────────────────────────
+// Security API
 
 export interface SecurityDashboardOverview {
   securityScore: number;
@@ -3839,7 +3839,7 @@ export const securityApi = {
   },
 };
 
-// ── Product Recommendations API ─────────────────────────────────────────────
+// Product Recommendations API
 
 export interface RecommendationItem {
   productId: string;
@@ -3875,7 +3875,7 @@ export const recommendationsApi = {
   },
 };
 
-// ── Trends & Prediction API ─────────────────────────────────────────────────
+// Trends & Prediction API
 
 export interface ProductTrendItem {
   productId: string;
@@ -3936,7 +3936,7 @@ export const trendsApi = {
   },
 };
 
-// ── Messaging API (bulk + document-sending wrappers) ────────────────────────
+// Messaging API (bulk + document-sending wrappers)
 
 export interface BulkMessageRecipient {
   customerId: string;
@@ -3969,7 +3969,7 @@ export interface BulkMessageResult {
 
 export const messagingApi = {
   /**
-   * Bulk / holiday messaging — generates wa.me deep links (one per
+   * Bulk / holiday messaging - generates wa.me deep links (one per
    * recipient) and logs a Message record per recipient. RBAC: SUPER_ADMIN,
    * STORE_OWNER, BRANCH_MANAGER only.
    */
@@ -4014,9 +4014,7 @@ export const messagingApi = {
 };
 
 
-// ════════════════════════════════════════════════════════════════════════════
-// v2.0.0 — KRA eTIMS API client
-// ════════════════════════════════════════════════════════════════════════════
+// v2.0.0 - KRA eTIMS API client
 
 export interface KraBusinessProfileItem {
   id: string;
@@ -4146,9 +4144,7 @@ export const kraApi = {
 };
 
 
-// ════════════════════════════════════════════════════════════════════════════
-// v2.0.0 — Debt Reminders API client
-// ════════════════════════════════════════════════════════════════════════════
+// v2.0.0 - Debt Reminders API client
 
 export interface DebtReminderItem {
   id: string;
@@ -4244,9 +4240,7 @@ export const debtRemindersApi = {
 };
 
 
-// ════════════════════════════════════════════════════════════════════════════
-// v2.0.0 — Conversations API client (internal staff chat)
-// ════════════════════════════════════════════════════════════════════════════
+// v2.0.0 - Conversations API client (internal staff chat)
 
 export interface ConversationItem {
   id: string;
@@ -4284,7 +4278,7 @@ export interface ConversationMessageItem {
 }
 
 /**
- * ChatParticipantItem — minimal active-staff row for the chat participant
+ * ChatParticipantItem - minimal active-staff row for the chat participant
  * picker (v2.5.6 CHAT PRESENCE FIX). Served by GET /api/messages/participants
  * to ANY authenticated staff member, own-store only, active-only,
  * caller-excluded. Replaces the previous admin-only usersApi.list() call
@@ -4310,7 +4304,7 @@ export const conversationsApi = {
 
   /**
    * Active teammates for the participant picker (v2.5.6). Works for every
-   * staff role — the server always narrows to the caller's own store.
+   * staff role - the server always narrows to the caller's own store.
    */
   listParticipants: async (storeId: string) => {
     const query = new URLSearchParams({ storeId });

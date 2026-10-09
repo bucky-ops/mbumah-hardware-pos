@@ -1,18 +1,16 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Crash-Triggered Database Backup Hook (SRV-2, v2.9.0)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Crash-Triggered Database Backup Hook (SRV-2, v2.9.0)
 //
 // Last-ditch data-protection net: when the Node process hits an
 // `uncaughtException` or an `unhandledRejection`, we snapshot the database to
 // disk BEFORE anything else can go wrong, append an honest audit line, and
-// file a CRITICAL SystemLog entry (best-effort — the DB itself may be what
+// file a CRITICAL SystemLog entry (best-effort - the DB itself may be what
 // crashed).
 //
 // ## Exit semantics (deliberate, availability-first)
 //
 //   • uncaughtException  → backup → log → `process.exit(1)`.
 //     A crash must keep behaving like a crash (non-zero exit so process
-//     managers — Vercel, Task Scheduler, nodemon — restart the server and
+//     managers - Vercel, Task Scheduler, nodemon - restart the server and
 //     health checks page Sam). We only buy the backup before dying.
 //
 //   • unhandledRejection → backup → log → DO NOT exit.
@@ -26,12 +24,12 @@
 //
 // ## Backup strategy (chosen by DATABASE_URL)
 //
-//   • `file:` (SQLite — laptop kits) → atomic-ish file copy of the DB file
-//     plus its `-wal` / `-shm` sidecars when they exist (fs.copyFileSync —
+//   • `file:` (SQLite - laptop kits) → atomic-ish file copy of the DB file
+//     plus its `-wal` / `-shm` sidecars when they exist (fs.copyFileSync -
 //     synchronous, so it completes even as the process is dying).
 //   • postgres (cloud/Neon) → `pg_dump` via spawnSync (60 s timeout), stdout
 //     captured to `pg_dump.sql`. On Vercel serverless pg_dump does not exist
-//     and the filesystem is ephemeral — that failure is RECORDED HONESTLY in
+//     and the filesystem is ephemeral - that failure is RECORDED HONESTLY in
 //     the JSONL log and SystemLog (never faked as success). Neon PITR is the
 //     cloud disaster-recovery path; this hook is the laptop-kit lifeline.
 //
@@ -46,7 +44,6 @@
 //
 //   At most one crash backup per 5 minutes per process (a rejection storm or
 //   a crash-looping process must not fill the disk with snapshots).
-// ─────────────────────────────────────────────────────────────────────────────
 
 import * as fs from 'fs';
 import * as os from 'os';
@@ -56,7 +53,7 @@ import { spawnSync } from 'child_process';
 import { systemLog } from '@/lib/logger';
 import { LogSeverity } from '@/lib/types';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 type CrashTrigger = 'uncaughtException' | 'unhandledRejection';
 
@@ -77,7 +74,7 @@ interface CrashBackupLogLine {
   durationMs: number;
 }
 
-// ── Module state ─────────────────────────────────────────────────────────────
+// Module state
 
 /** Primary double-registration guard (per module instance). */
 let installed = false;
@@ -95,7 +92,7 @@ let lastCrashBackupAt = 0;
 const THROTTLE_MS = 5 * 60 * 1000;
 const SYSTEMLOG_BUDGET_MS = 3000; // never let a hung DB stall the exit path
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// Helpers
 
 /** `20260212-231505`-style local-time stamp for backup directories. */
 function formatStamp(date: Date): string {
@@ -109,7 +106,7 @@ function formatStamp(date: Date): string {
 /**
  * Resolve the crash-backup directory (WITHOUT creating it):
  *   1. `BACKUP_DIR` env override when set.
- *   2. Windows: `<Desktop>/MbumahBackups/crash` — a place Sam can find.
+ *   2. Windows: `<Desktop>/MbumahBackups/crash` - a place Sam can find.
  *   3. Everywhere else: `<os.tmpdir()>/mbumah-backups/crash`.
  */
 function resolveCrashBackupDir(): string {
@@ -140,7 +137,7 @@ function ensureDir(dir: string): string | null {
 /**
  * Resolve the SQLite database file from a `file:` DATABASE_URL.
  * Prisma resolves relative `file:` URLs against the schema.prisma directory,
- * which we cannot know from here — so try the plausible candidates in order
+ * which we cannot know from here - so try the plausible candidates in order
  * and use the first that actually exists.
  */
 function resolveSqliteFile(databaseUrl: string): string | null {
@@ -162,13 +159,13 @@ function resolveSqliteFile(databaseUrl: string): string | null {
     try {
       if (fs.existsSync(candidate)) return candidate;
     } catch {
-      /* existence probe failed — try the next candidate */
+      /* existence probe failed - try the next candidate */
     }
   }
   return null;
 }
 
-// ── Backup strategies ────────────────────────────────────────────────────────
+// Backup strategies
 
 /** SQLite: copy the db file + `-wal`/`-shm` sidecars into `<stamp>/`. */
 function sqliteFileCopyBackup(
@@ -265,7 +262,7 @@ function pgDumpBackup(
 
     if (result.error) {
       // ENOENT here is EXPECTED on Vercel serverless (no pg_dump binary) and
-      // on laptop kits without the Postgres client tools — record honestly.
+      // on laptop kits without the Postgres client tools - record honestly.
       return {
         ok: false,
         kind: 'pg_dump',
@@ -326,7 +323,7 @@ function appendBackupLogLine(
 }
 
 /**
- * Best-effort SystemLog entry. The DB may be the thing that crashed — the
+ * Best-effort SystemLog entry. The DB may be the thing that crashed - the
  * call is raced against a 3-second budget and every failure mode is caught
  * (systemLog itself is also internally defensive).
  */
@@ -374,10 +371,10 @@ async function bestEffortSystemLog(
   }
 }
 
-// ── Core: perform the crash backup ───────────────────────────────────────────
+// Core: perform the crash backup
 
 /**
- * Run the full crash-backup sequence. NEVER throws — every step is guarded.
+ * Run the full crash-backup sequence. NEVER throws - every step is guarded.
  * Returns nothing on purpose; callers cannot usefully react.
  */
 async function runCrashBackup(
@@ -386,7 +383,7 @@ async function runCrashBackup(
 ): Promise<void> {
   const startedAt = Date.now();
 
-  // ── Throttle: at most one crash backup per 5 minutes ──────────────────────
+  // Throttle: at most one crash backup per 5 minutes
   if (Date.now() - lastCrashBackupAt < THROTTLE_MS) {
     console.error(
       '[CRASH-BACKUP] Throttled — a crash backup ran less than 5 minutes ago; skipping',
@@ -396,7 +393,7 @@ async function runCrashBackup(
   }
   lastCrashBackupAt = Date.now();
 
-  // ── Resolve backup dir (mkdir on demand) ──────────────────────────────────
+  // Resolve backup dir (mkdir on demand)
   let backupDir: string | null = null;
   try {
     backupDir = ensureDir(resolveCrashBackupDir());
@@ -407,7 +404,7 @@ async function runCrashBackup(
     );
   }
 
-  // ── Choose strategy + run backup ──────────────────────────────────────────
+  // Choose strategy + run backup
   let result: CrashBackupResult;
   const databaseUrl = process.env.DATABASE_URL ?? '';
 
@@ -446,7 +443,7 @@ async function runCrashBackup(
       `(kind=${result.kind}, path=${result.path ?? 'n/a'}${result.error ? `, error=${result.error}` : ''}, ${durationMs}ms)`,
   );
 
-  // ── JSONL audit line (local, survives even when the DB is down) ───────────
+  // JSONL audit line (local, survives even when the DB is down)
   if (backupDir !== null) {
     const line: CrashBackupLogLine = {
       timestamp: new Date().toISOString(),
@@ -459,11 +456,11 @@ async function runCrashBackup(
     appendBackupLogLine(backupDir, line);
   }
 
-  // ── Best-effort DB SystemLog (CRITICAL) ───────────────────────────────────
+  // Best-effort DB SystemLog (CRITICAL)
   await bestEffortSystemLog(trigger, result, durationMs, crashError);
 }
 
-// ── Public API ───────────────────────────────────────────────────────────────
+// Public API
 
 /**
  * Install the crash-triggered database backup handlers.
@@ -477,7 +474,7 @@ export function installCrashBackup(): void {
       return;
     }
 
-    // ── uncaughtException: backup, then KEEP CRASH SEMANTICS (exit 1). ──────
+    // uncaughtException: backup, then KEEP CRASH SEMANTICS (exit 1).
     process.on('uncaughtException', (error: Error) => {
       void runCrashBackup('uncaughtException', error)
         .catch((backupError: unknown) => {
@@ -491,8 +488,8 @@ export function installCrashBackup(): void {
         });
     });
 
-    // ── unhandledRejection: backup + log, but DO NOT exit (availability- ────
-    // ── first: the server keeps serving; Sentry captures the event).      ────
+    // unhandledRejection: backup + log, but DO NOT exit (availability-
+    // first: the server keeps serving; Sentry captures the event).
     process.on('unhandledRejection', (reason: unknown) => {
       void runCrashBackup('unhandledRejection', reason).catch(
         (backupError: unknown) => {

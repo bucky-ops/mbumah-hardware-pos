@@ -1,8 +1,6 @@
-// ════════════════════════════════════════════════════════════════════════════
 // src/lib/notify.ts
-// ════════════════════════════════════════════════════════════════════════════
 //
-// Backend notification helper — sends real-time notifications to store rooms
+// Backend notification helper - sends real-time notifications to store rooms
 // and user-specific rooms via Socket.io. Used by API routes to push events
 // (low stock alerts, new transactions, payment confirmations, etc.) to
 // connected clients.
@@ -14,7 +12,7 @@
 import { io } from 'socket.io-client'
 import type { Socket } from 'socket.io-client'
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 export interface LowStockProduct {
   productId: string
@@ -65,7 +63,7 @@ export interface StockMovementNotification {
   reason?: string
 }
 
-// ── Singleton server-side socket ─────────────────────────────────────────────
+// Singleton server-side socket
 
 let serverSocket: Socket | null = null
 
@@ -73,7 +71,7 @@ let serverSocket: Socket | null = null
  * Get or create a server-side socket.io client connection to the
  * notification service. This is used by API routes to emit events.
  *
- * The connection is lazy — it only connects on first use.
+ * The connection is lazy - it only connects on first use.
  */
 function getServerSocket(): Socket {
   if (serverSocket?.connected) return serverSocket
@@ -106,7 +104,7 @@ function getServerSocket(): Socket {
   return serverSocket
 }
 
-// ── Public API ───────────────────────────────────────────────────────────────
+// Public API
 
 /**
  * Send a generic notification to a store room.

@@ -1,11 +1,11 @@
 'use client';
 
 /**
- * useTableFilters — combined search + sort + pagination state for table views.
+ * useTableFilters - combined search + sort + pagination state for table views.
  *
  * Wraps `usePagination` and adds a debounced search string plus a single-column
  * sort state. The hook returns the filter state plus a `applyToList` helper
- * that filters + sorts the source array in-place — so callers can simply do:
+ * that filters + sorts the source array in-place - so callers can simply do:
  *
  *   const filters = useTableFilters({ totalItems: rows.length });
  *   const visible = filters.applyToList(rows, {
@@ -27,7 +27,7 @@ export interface UseTableFiltersOptions {
   initialSortDir?: SortDirection;
   /** Debounce delay in ms for the search string */
   searchDebounceMs?: number;
-  /** Total number of items — forwarded to usePagination */
+  /** Total number of items - forwarded to usePagination */
   totalItems: number;
 }
 

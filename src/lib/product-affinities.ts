@@ -1,13 +1,11 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — v2.13.3 SMART RECOMMENDATIONS (Sell More engine)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - v2.13.3 SMART RECOMMENDATIONS (Sell More engine)
 //
 // Client-side product-affinity mapping layered on top of the server's
 // co-occurrence engine (GET /api/recommendations/frequently-bought, which
 // mines real transaction history).
 //
 // WHY BOTH?
-//   • Co-occurrence needs sales history — a NEW branch (e.g. Thika at launch)
+//   • Co-occurrence needs sales history - a NEW branch (e.g. Thika at launch)
 //     has zero transactions, so the server returns nothing and the Sell More
 //     section would always read "No frequent add-on suggestions yet".
 //   • The affinity map encodes domain knowledge a builder supplies at the
@@ -19,13 +17,13 @@
 // lines suggest the same product), drops items already in the cart and
 // out-of-stock lines, and takes the top 6. Empty cart → best-seller chips.
 //
-// Names are matched case-insensitively against the live branch catalog — an
+// Names are matched case-insensitively against the live branch catalog - an
 // affinity pointing at a product the branch doesn't stock (e.g. "Standard
 // Wheelbarrow" in a branch that doesn't carry it) is silently filtered out,
 // never shown as a dead chip.
 
 /**
- * Affinity map — cart product name (exact key, case-insensitive lookup) →
+ * Affinity map - cart product name (exact key, case-insensitive lookup) →
  * products the same customer very likely still needs for that job.
  */
 export const PRODUCT_AFFINITIES: Record<string, string[]> = {
@@ -44,7 +42,7 @@ export const PRODUCT_AFFINITIES: Record<string, string[]> = {
 };
 
 /**
- * Default chips when the cart is EMPTY — the branch's three proven traffic
+ * Default chips when the cart is EMPTY - the branch's three proven traffic
  * drivers. Matched against the catalog by name; unknown names are dropped so
  * a branch without an item never advertises it.
  */
@@ -57,7 +55,7 @@ export const BEST_SELLER_NAMES: string[] = [
 /** How many chips to show at most (spec: take top 6). */
 export const MAX_RECOMMENDATION_CHIPS = 6;
 
-/** Minimal shape the algorithm needs — satisfied by ProductListItem. */
+/** Minimal shape the algorithm needs - satisfied by ProductListItem. */
 export interface AffinityProduct {
   id: string;
   name: string;
@@ -86,7 +84,7 @@ function norm(name: string): string {
 /**
  * Case-insensitive index over PRODUCT_AFFINITIES: normalized key -> original
  * map key. PRODUCT_AFFINITIES keys are written in product-cased form (readable
- * in code reviews), so every lookup MUST go through this index — indexing the
+ * in code reviews), so every lookup MUST go through this index - indexing the
  * map directly with a lowercased cart name never matches and silently yields
  * zero suggestions.
  */
@@ -104,12 +102,12 @@ function affinitiesFor(name: string): string[] | undefined {
  * Core Sell More algorithm (spec PART 3):
  *   1. Collect affinity lists for every product name in the cart
  *   2. Flatten + deduplicate, dropping items already in the cart
- *   3. Rank by frequency — the more cart lines suggest the same product,
+ *   3. Rank by frequency - the more cart lines suggest the same product,
  *      the higher it ranks
  *   4. Keep only products this branch actually stocks (in stock, or rental)
  *   5. Take the top 6
  *
- * Pure function — no side effects, safe to call on every render.
+ * Pure function - no side effects, safe to call on every render.
  */
 export function computeAffinitySuggestions(
   cartProductNames: string[],
@@ -170,7 +168,7 @@ export function computeBestSellerSuggestions(
 }
 
 /**
- * True when the cart's contents map to at least one known affinity — used to
+ * True when the cart's contents map to at least one known affinity - used to
  * label chips with their provenance ("customers also bought" vs "best seller")
  * in the UI badge.
  */

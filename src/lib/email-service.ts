@@ -1,19 +1,17 @@
-// ════════════════════════════════════════════════════════════════════════════
 // src/lib/email-service.ts
-// ════════════════════════════════════════════════════════════════════════════
 //
 // Centralized email notification service for MBUMAH HARDWARE POS.
 //
 // Built on top of the Resend SDK (`import { Resend } from 'resend'`) and the
 // HTML templates in `./email-templates`. Every public function:
 //   • Creates the Resend client lazily (so the SDK is only initialized when
-//     an email is actually sent — keeps cold-start time low for routes that
+//     an email is actually sent - keeps cold-start time low for routes that
 //     don't send email).
 //   • Checks `process.env.RESEND_API_KEY` before sending. If the env var is
 //     missing (e.g. in dev), the function logs a warning and returns
 //     `{ success: false, error: 'RESEND_API_KEY not configured' }` instead
 //     of throwing.
-//   • Wraps the send in try/catch and NEVER throws to the caller — failures
+//   • Wraps the send in try/catch and NEVER throws to the caller - failures
 //     are returned as `{ success: false, error }` so the calling API route
 //     or background job can decide whether to retry, log, or ignore.
 //   • Persists an audit row to the `NotificationLog` table for every send
@@ -41,7 +39,7 @@ import {
   type DailyReportTemplateData,
 } from '@/lib/email-templates';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 export interface EmailResult {
   success: boolean;
@@ -107,7 +105,7 @@ export interface TierUpgradeEmailParams {
   storeName?: string;
 }
 
-// ── Notification type enum (mirrors NotificationLog.type) ────────────────────
+// Notification type enum (mirrors NotificationLog.type)
 
 export const NotificationType = {
   RECEIPT: 'RECEIPT',
@@ -120,7 +118,7 @@ export const NotificationType = {
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 
-// ── Internal helpers ─────────────────────────────────────────────────────────
+// Internal helpers
 
 /**
  * Returns the configured "from" email address. Falls back to a sensible
@@ -154,7 +152,7 @@ function createResendClient(): Resend {
 }
 
 /**
- * Persist a NotificationLog row. Best-effort — failures are swallowed and
+ * Persist a NotificationLog row. Best-effort - failures are swallowed and
  * logged so they never mask the original email result.
  */
 async function logNotification(
@@ -181,7 +179,7 @@ async function logNotification(
       },
     });
   } catch (logErr) {
-    // Logging must never block the email result — just record to console.
+    // Logging must never block the email result - just record to console.
     console.error('[email-service] Failed to persist NotificationLog:', {
       recipient: params.to,
       type: params.type,
@@ -190,11 +188,11 @@ async function logNotification(
   }
 }
 
-// ── Public API ───────────────────────────────────────────────────────────────
+// Public API
 
 /**
  * Base send function. Sends a single email via Resend and records the result
- * to NotificationLog. Never throws — failures are returned as
+ * to NotificationLog. Never throws - failures are returned as
  * `{ success: false, error }`.
  *
  * @example
@@ -287,7 +285,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
  *     to: customer.email,
  *     customerName: customer.name,
  *     transaction: { receiptNumber: 'RCP-001', items, subtotal, ... },
- *     store: { name: 'MBUMAH HARDWARE — Juja', phone: '0795 191 909' },
+ *     store: { name: 'MBUMAH HARDWARE - Juja', phone: '0795 191 909' },
  *   });
  */
 export async function sendReceiptEmail(params: ReceiptEmailParams): Promise<EmailResult> {
@@ -430,7 +428,7 @@ export async function sendLoyaltyTierUpgrade(
   });
 }
 
-// ── Higher-level orchestration: low-stock detection ─────────────────────────
+// Higher-level orchestration: low-stock detection
 
 /**
  * Scan a store for low-stock products and email an alert to every staff
@@ -477,8 +475,8 @@ export async function checkAndSendLowStockAlerts(
       return result; // Nothing to alert on
     }
 
-    // 2. Resolve supplier info per product (best-effort — products may not
-    //    have a linked supplier; that's fine, we just show "—")
+    // 2. Resolve supplier info per product (best-effort - products may not
+    //    have a linked supplier; that's fine, we just show " - ")
     const supplierMap = new Map<string, string>();
     const supplierLinks = await db.purchaseOrderItem.findMany({
       where: {
@@ -515,7 +513,7 @@ export async function checkAndSendLowStockAlerts(
     });
 
     if (recipients.length === 0) {
-      // No opted-in recipients — log and exit gracefully
+      // No opted-in recipients - log and exit gracefully
       await systemLog({
         action: 'LOW_STOCK_NO_RECIPIENTS',
         component: LogComponent.INVENTORY,

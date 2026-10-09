@@ -1,7 +1,5 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Remote Access Kit (RAK) · GitHub control bus client
-// (server-side only — v2.11.0, docs/REMOTE_ACCESS_KIT_PLAN.md §5)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Remote Access Kit (RAK) · GitHub control bus client
+// (server-side only - v2.11.0, docs/REMOTE_ACCESS_KIT_PLAN.md §5)
 //
 // The private ops-log repository (default `bucky-ops/mbumah-ops-log`) is BOTH
 // the command channel to the store fleet and the immutable audit ledger:
@@ -16,13 +14,12 @@
 // operation is an ordinary commit, the commit URL doubles as the audit
 // record the console links to.
 //
-// Configuration (all OPTIONAL — every consumer degrades honestly when unset):
-//   OPS_GITHUB_TOKEN   fine-grained PAT — Contents RW on the ops-log repo ONLY
+// Configuration (all OPTIONAL - every consumer degrades honestly when unset):
+//   OPS_GITHUB_TOKEN   fine-grained PAT - Contents RW on the ops-log repo ONLY
 //   OPS_LOG_REPO       "owner/repo", default 'bucky-ops/mbumah-ops-log'
 //   OPS_SIGNING_KEY    HMAC-SHA256 key shared with the kits; commands are
 //                      signed by the cloud and verified by the agent, so a
 //                      leaked device token alone cannot command a store.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import crypto from 'node:crypto';
 
@@ -43,10 +40,10 @@ export interface OpsConfig {
 
 const OPS_API_BASE = 'https://api.github.com';
 const OPS_TIMEOUT_MS = 10_000;
-/** GitHub returned transient 500s during rollout — one quiet retry on 5xx. */
+/** GitHub returned transient 500s during rollout - one quiet retry on 5xx. */
 const OPS_RETRY_DELAYS_MS = [800];
 
-// ── Config ───────────────────────────────────────────────────────────────────
+// Config
 
 export function getOpsConfig(): OpsConfig {
   const token = process.env.OPS_GITHUB_TOKEN ?? '';
@@ -58,7 +55,7 @@ export function getOpsConfig(): OpsConfig {
   return { token, repo, signingKey, configured: missing.length === 0, missing };
 }
 
-// ── Canonical JSON + HMAC signing ────────────────────────────────────────────
+// Canonical JSON + HMAC signing
 
 /**
  * Deterministic JSON: object keys recursively sorted so the cloud's signature
@@ -101,7 +98,7 @@ export function verifyCommandSignature(
   }
 }
 
-// ── GitHub REST plumbing (fault-isolated, never throws) ──────────────────────
+// GitHub REST plumbing (fault-isolated, never throws)
 
 interface GhResult<T> {
   ok: boolean;
@@ -151,7 +148,7 @@ async function ghApi<T>(
 
   let result = await run();
   for (const delay of OPS_RETRY_DELAYS_MS) {
-    // Retry only on GitHub-side blips (5xx) — 404/403/401 are answers, not errors.
+    // Retry only on GitHub-side blips (5xx) - 404/403/401 are answers, not errors.
     if (result.ok || (result.status < 500 && result.status !== 0)) break;
     await new Promise((resolve) => setTimeout(resolve, delay));
     result = await run();
@@ -173,7 +170,7 @@ interface GhCommitResponse {
   content: { html_url?: string };
 }
 
-// ── File operations (single-commit audit records) ────────────────────────────
+// File operations (single-commit audit records)
 
 /** PUT a text file (creates or updates in one commit). Returns commit info. */
 export async function putTextFile(
@@ -264,7 +261,7 @@ export function sanitizeStoreId(storeId: string): string {
   return storeId.toLowerCase().replace(/[^a-z0-9._-]/g, '-').slice(0, 80) || 'unknown';
 }
 
-// ── Shared fleet cache (60 s) so the console doesn't hammer the API ─────────
+// Shared fleet cache (60 s) so the console doesn't hammer the API
 
 interface CacheEntry {
   at: number;
@@ -288,7 +285,7 @@ export function invalidateFleetCache(): void {
   (globalThis as Record<symbol, unknown>)[FLEET_CACHE_KEY] = { at: 0, data: null };
 }
 
-// ── Latest release (same contract as the admin/updates panel) ────────────────
+// Latest release (same contract as the admin/updates panel)
 
 export async function fetchLatestReleaseTag(): Promise<{
   tag: string | null;
@@ -297,7 +294,7 @@ export async function fetchLatestReleaseTag(): Promise<{
 }> {
   try {
     const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
-    // GITHUB_TOKEN (read-only release checks) — separate from OPS_GITHUB_TOKEN.
+    // GITHUB_TOKEN (read-only release checks) - separate from OPS_GITHUB_TOKEN.
     if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
     const response = await fetch(
       `${OPS_API_BASE}/repos/bucky-ops/mbumah-hardware-pos/releases/latest`,

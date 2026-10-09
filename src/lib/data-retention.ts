@@ -1,8 +1,6 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Data Retention Policies (ISO 27001 A.8.3.2 + ISO 9001 7.5.3)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Data Retention Policies (ISO 27001 A.8.3.2 + ISO 9001 7.5.3)
 //
-// Phase 7 — ISO 27001 + ISO 9001 Compliance
+// Phase 7 - ISO 27001 + ISO 9001 Compliance
 //
 // ISO 27001 A.8.3.2 requires that "information shall be disposed of
 // using formal procedures" and ISO 9001 7.5.3 requires that documented
@@ -14,21 +12,20 @@
 //   3. Retention policy metadata for the compliance dashboard
 //   4. Soft-delete before hard-delete (grace period)
 //
-// ── Data categories ──────────────────────────────────────────────────────────
+// Data categories
 //
 // Each data category has:
-//   • retentionDays — how long to keep the data (0 = keep forever)
-//   • graceDays — extra days after expiry before hard-delete
-//   • description — human-readable reason for the retention period
-//   • isoReference — the ISO clause that mandates this period
+//   • retentionDays - how long to keep the data (0 = keep forever)
+//   • graceDays - extra days after expiry before hard-delete
+//   • description - human-readable reason for the retention period
+//   • isoReference - the ISO clause that mandates this period
 //
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { db, withImmutabilityBypass } from '@/lib/db';
 import { systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 export interface RetentionPolicy {
   /** The data category (e.g. 'system_logs', 'audit_logs'). */
@@ -87,7 +84,7 @@ export interface RetentionMetrics {
   lastExecutionAt: string | null;
 }
 
-// ── Default retention policies ───────────────────────────────────────────────
+// Default retention policies
 
 export const RETENTION_POLICIES: RetentionPolicy[] = [
   {
@@ -169,7 +166,7 @@ export const RETENTION_POLICIES: RetentionPolicy[] = [
   },
 ];
 
-// ── Data Retention Service ───────────────────────────────────────────────────
+// Data Retention Service
 
 let lastExecutionAt: Date | null = null;
 
@@ -264,7 +261,7 @@ export const dataRetention = {
         // ISO 27001: Audit logs have a LONG retention period and are
         // NOT configurable. We still honour the policy but with the
         // 7-year + 30-day grace period.
-        // AUDIT REMEDIATION (F9-7): auditLog is likewise append-only — the
+        // AUDIT REMEDIATION (F9-7): auditLog is likewise append-only - the
         // purge previously threw IMMUTABILITY_VIOLATION on every run. Use the
         // audited bypass ('retention_purge'); each execution is logged via the
         // DATA_RETENTION_EXECUTION systemLog in executeAll().
@@ -316,7 +313,7 @@ export const dataRetention = {
         // EXPORT-CLEANUP (v2.5.6): exports carry a `content` inline payload
         // copy (up to 10 MB) plus a best-effort file on disk. Read the
         // doomed rows first so we can unlink their files, then delete the
-        // rows. File removal is best-effort — on Vercel the tmpdir files
+        // rows. File removal is best-effort - on Vercel the tmpdir files
         // are already ephemeral per Lambda instance.
         const doomed = await db.dataExport.findMany({
           where: { expiresAt: { lte: cutoff } },
@@ -331,7 +328,7 @@ export const dataRetention = {
               try {
                 await unlink(row.filePath);
               } catch {
-                // file already gone (ephemeral tmpdir) — fine
+                // file already gone (ephemeral tmpdir) - fine
               }
             }),
           );
@@ -350,7 +347,7 @@ export const dataRetention = {
 
   /**
    * Estimate the number of purgeable records across all categories.
-   * This is a dry-run — no data is actually deleted.
+   * This is a dry-run - no data is actually deleted.
    */
   async estimatePurgeable(): Promise<Record<string, number>> {
     const estimates: Record<string, number> = {};

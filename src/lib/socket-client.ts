@@ -1,6 +1,4 @@
-// ════════════════════════════════════════════════════════════════════════════
 // src/lib/socket-client.ts
-// ════════════════════════════════════════════════════════════════════════════
 //
 // Browser-safe Socket.io client for the MBUMAH real-time notification service.
 // Connects through the Caddy gateway using XTransformPort=3003.
@@ -12,7 +10,7 @@
 import { io } from 'socket.io-client'
 import type { Socket } from 'socket.io-client'
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'reconnecting'
 
@@ -26,7 +24,7 @@ export interface RealtimeNotification {
   storeId?: string
 }
 
-// ── Singleton socket instance ────────────────────────────────────────────────
+// Singleton socket instance
 
 let socket: Socket | null = null
 let connectionStatus: ConnectionStatus = 'disconnected'
@@ -41,7 +39,7 @@ function updateStatus(status: ConnectionStatus) {
   statusListeners.forEach((listener) => listener(status))
 }
 
-// ── Public API ───────────────────────────────────────────────────────────────
+// Public API
 
 /**
  * Initialize the socket connection to the notification service.
@@ -52,7 +50,7 @@ function updateStatus(status: ConnectionStatus) {
  */
 export function initSocket(storeId: string, userId?: string): Socket {
   if (socket?.connected) {
-    // Already connected — just update rooms
+    // Already connected - just update rooms
     if (storeId) socket.emit('join-store', storeId)
     if (userId) socket.emit('join-user', userId)
     return socket
@@ -70,7 +68,7 @@ export function initSocket(storeId: string, userId?: string): Socket {
     forceNew: true,
   })
 
-  // ── Connection events ────────────────────────────────────────────────────
+  // Connection events
 
   socket.on('connect', () => {
     updateStatus('connected')
@@ -139,7 +137,7 @@ export function onStatusChange(listener: StatusListener): () => void {
   return () => statusListeners.delete(listener)
 }
 
-// ── Event listeners ──────────────────────────────────────────────────────────
+// Event listeners
 
 /**
  * Listen for general notifications.
@@ -189,7 +187,7 @@ export function onStockMovement(callback: (data: RealtimeNotification) => void):
   return () => socket?.off('stock-movement', callback)
 }
 
-// ── Emit helpers ─────────────────────────────────────────────────────────────
+// Emit helpers
 
 /**
  * Send a notification to a store room.

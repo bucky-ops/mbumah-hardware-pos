@@ -1,8 +1,8 @@
 // AES-256-GCM encryption helpers for credentials at rest.
 //
-// AUDIT REFERENCE — FINANCIAL_MODULE_AUDIT_REPORT.md:
+// AUDIT REFERENCE - FINANCIAL_MODULE_AUDIT_REPORT.md:
 //   • SYS-9 / F9-3: the KRA (eTIMS) portal password was previously stored as
-//     base64 — trivially reversible by anyone with DB read access. This module
+//     base64 - trivially reversible by anyone with DB read access. This module
 //     provides real authenticated encryption (AES-256-GCM) so that ciphertext
 //     is tamper-evident and keyed by a server-side secret that never touches
 //     the database.
@@ -14,11 +14,11 @@
 //     system is never accidentally unencrypted in environments that already
 //     have a strong NextAuth secret. Production deployments SHOULD set
 //     CREDENTIAL_ENCRYPTION_KEY explicitly (see docs/CREDENTIAL_ROTATION.md).
-//   • Output format: "v1:<iv_b64>:<tag_b64>:<ciphertext_b64>" — versioned so
+//   • Output format: "v1:<iv_b64>:<tag_b64>:<ciphertext_b64>" - versioned so
 //     future rotations can coexist with old rows.
 //   • Legacy base64 rows (no "v1:" prefix) are transparently detected by
 //     `isEncrypted()` so the KRA profile route can migrate them on next save.
-//   • Node's `crypto` is available in the Vercel Node.js runtime — no external
+//   • Node's `crypto` is available in the Vercel Node.js runtime - no external
 //     dependency, and this file is server-only (never import from client code).
 
 import crypto from 'crypto';
@@ -58,7 +58,7 @@ function getKey(): Buffer {
       'No encryption key material available: set CREDENTIAL_ENCRYPTION_KEY (or NEXTAUTH_SECRET).'
     );
   }
-  // Salt is static by design — determinism is required so previously stored
+  // Salt is static by design - determinism is required so previously stored
   // ciphertexts remain decryptable across cold starts and instances.
   cachedKey = crypto.scryptSync(secret, 'mbumah-credential-encryption-v1', 32);
   return cachedKey;
@@ -88,7 +88,7 @@ export function encryptSecret(plaintext: string): string {
 /**
  * Decrypt an envelope produced by `encryptSecret`.
  * Throws when the ciphertext was tampered with (GCM auth failure) or the key
- * material changed — both conditions MUST be treated as security incidents.
+ * material changed - both conditions MUST be treated as security incidents.
  */
 export function decryptSecret(envelope: string): string {
   if (!envelope) return '';
@@ -121,7 +121,7 @@ export function isEncrypted(value: string): boolean {
 export function decryptSecretLegacyAware(envelope: string): string {
   if (!envelope) return '';
   if (isEncrypted(envelope)) return decryptSecret(envelope);
-  // Legacy base64 "encryption" (audit finding F9-3) — decode but do NOT trust.
+  // Legacy base64 "encryption" (audit finding F9-3) - decode but do NOT trust.
   try {
     return Buffer.from(envelope, 'base64').toString('utf8');
   } catch {

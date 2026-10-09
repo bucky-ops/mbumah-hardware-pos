@@ -1,11 +1,9 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Privilege-Abuse Pattern Detection (v2.12.7, PR C)
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Privilege-Abuse Pattern Detection (v2.12.7, PR C)
 //
 // Companion to the abuse-lockout engine in src/lib/auth.ts. The lockout engine
 // answers "is this user burning the permission gate RIGHT NOW?" (5 denials /
 // 10 min → hard lock). This module answers the quieter question: "is a user
-// repeatedly probing ONE specific business rule?" — currently the
+// repeatedly probing ONE specific business rule?" - currently the
 // `pos.discount.gt5` gate (a cashier leaning on >5% discounts all day is the
 // classic shrinkage pattern, and 5 denials in 10 minutes almost never trips
 // for it because the cashier gives up between attempts).
@@ -13,25 +11,24 @@
 // DETECTION RULE (v2.12.7):
 //   • Per-user sliding window of `pos.discount.gt5` denials, 1 hour long.
 //   • At the 4th denial (>3 attempts) inside the window →
-//       – one SecurityEvent 'PRIVILEGE_ABUSE_PATTERN' (WARN, blocked — the
+//       one SecurityEvent 'PRIVILEGE_ABUSE_PATTERN' (WARN, blocked - the
 //         triggering request was itself denied), and
-//       – WARNING / SECURITY Notification rows for EVERY active BRANCH_MANAGER
+//       WARNING / SECURITY Notification rows for EVERY active BRANCH_MANAGER
 //         and SUPER_ADMIN of the org (excluding the offender), message shape:
-//         "Grace Wanjiku (Cashier) attempted 4x discount >5% in 1h — 14:32".
+//         "Grace Wanjiku (Cashier) attempted 4x discount >5% in 1h - 14:32".
 //   • The window is consumed on notify (fresh window afterwards) so a user
-//     spamming the gate gets at most ONE alert per hour — managers get a
+//     spamming the gate gets at most ONE alert per hour - managers get a
 //     signal, not a firehose. The per-denial SecurityEvent rows (written by
 //     recordPermissionDenied) remain the complete forensic record.
 //
 // SERVERLESS / PER-INSTANCE CAVEAT (mirrors the lockout engine in auth.ts and
 // the brute-force window in manager-auth.ts): the counter lives in module
 // memory. On Vercel each warm lambda instance counts independently, so the
-// trigger is BEST-EFFORT — an alert may fire late (cold start) or from one
+// trigger is BEST-EFFORT - an alert may fire late (cold start) or from one
 // instance while another misses its few denials. This is acceptable here
 // because the DURABLE record is the SecurityEvent feed + the hash-chained
 // AuditLog PERMISSION_DENIED rows: this module only decides WHEN to page a
 // human. A sweeper interval prunes stale entries on warm instances.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { db, runWithoutTenant } from '@/lib/db';
 import { systemLog } from '@/lib/logger';
@@ -54,7 +51,7 @@ interface SpamStamp {
   lastNotifiedAt: number;
 }
 
-/** Per-userId counter — per-instance, see the caveat above. */
+/** Per-userId counter - per-instance, see the caveat above. */
 const discountSpamMap = new Map<string, SpamStamp>();
 
 const spamSweeper = setInterval(() => {
@@ -85,7 +82,7 @@ function roleLabel(role: string): string {
   return ROLE_LABELS[role] ?? role;
 }
 
-/** Kenya-local timestamp for the alert message ("— 14:32, 8 Oct"). */
+/** Kenya-local timestamp for the alert message (" - 14:32, 8 Oct"). */
 function nairobiTime(date: Date): string {
   try {
     return new Intl.DateTimeFormat('en-KE', {
@@ -100,7 +97,7 @@ function nairobiTime(date: Date): string {
   }
 }
 
-/** Minimal session shape consumed here (structural — avoids an auth.ts import cycle). */
+/** Minimal session shape consumed here (structural - avoids an auth.ts import cycle). */
 export interface AbuseSignalSession {
   userId: string;
   email: string;
@@ -120,7 +117,7 @@ export interface DiscountSpamOptions {
 
 /**
  * Feed one `pos.discount.gt5` denial into the spam detector. Called from
- * recordPermissionDenied() in src/lib/auth.ts — never throws, never blocks
+ * recordPermissionDenied() in src/lib/auth.ts - never throws, never blocks
  * the denied request.
  */
 export async function noteDiscountSpam(opts: DiscountSpamOptions): Promise<void> {
@@ -129,7 +126,7 @@ export async function noteDiscountSpam(opts: DiscountSpamOptions): Promise<void>
   const { session } = opts;
   const now = Date.now();
 
-  // ── Sliding window update ──────────────────────────────────────────────────
+  // Sliding window update
   const entry = discountSpamMap.get(session.userId) ?? {
     timestamps: [],
     lastNotifiedAt: 0,
@@ -145,12 +142,12 @@ export async function noteDiscountSpam(opts: DiscountSpamOptions): Promise<void>
     return;
   }
 
-  // ── Trip: consume the window so we alert at most once per hour ────────────
+  // Trip: consume the window so we alert at most once per hour
   entry.lastNotifiedAt = now;
   entry.timestamps = [];
   discountSpamMap.set(session.userId, entry);
 
-  // Offender display name (AuthSession carries no name — one cheap lookup).
+  // Offender display name (AuthSession carries no name - one cheap lookup).
   let displayName = session.email;
   try {
     const user = await db.user.findUnique({
@@ -165,7 +162,7 @@ export async function noteDiscountSpam(opts: DiscountSpamOptions): Promise<void>
   const when = nairobiTime(new Date(now));
   const summary = `${displayName} (${roleLabel(session.role)}) attempted ${count}x discount >5% in 1h — ${when}`;
 
-  // ── SecurityEvent PRIVILEGE_ABUSE_PATTERN — the durable record ────────────
+  // SecurityEvent PRIVILEGE_ABUSE_PATTERN - the durable record
   try {
     await db.securityEvent.create({
       data: {
@@ -191,7 +188,7 @@ export async function noteDiscountSpam(opts: DiscountSpamOptions): Promise<void>
     /* never block the alert path on security logging */
   }
 
-  // ── Notify org BRANCH_MANAGERs + SUPER_ADMINs (durable Notification rows) ──
+  // Notify org BRANCH_MANAGERs + SUPER_ADMINs (durable Notification rows)
   try {
     const recipients = await runWithoutTenant(() =>
       db.user.findMany({
@@ -238,7 +235,7 @@ export async function noteDiscountSpam(opts: DiscountSpamOptions): Promise<void>
     /* never block the alert path on notifications */
   }
 
-  // ── Ops log breadcrumb ─────────────────────────────────────────────────────
+  // Ops log breadcrumb
   try {
     await systemLog({
       action: 'PRIVILEGE_ABUSE_PATTERN',

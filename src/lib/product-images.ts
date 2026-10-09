@@ -1,16 +1,16 @@
-// PRODUCT IMAGE RESOLVER (v2.5.2) — "every product shows a realistic image,
+// PRODUCT IMAGE RESOLVER (v2.5.2) - "every product shows a realistic image,
 // and a similar icon appears when the exact photo is missing."
 //
 // Resolution chain (cheapest → richest):
 //   1. the product's own `imageUrl` (real photo, usually CDN-hosted),
 //   2. a canonical category icon from /public/categories (ships with the
-//      app, tiny PNG, always renders — even offline),
+//      app, tiny PNG, always renders - even offline),
 //   3. UI-level letter/box fallback (ProductImage component).
 //
 // Shared by:
-//   • POST /api/products  — assigns the category icon as the default image
+//   • POST /api/products - assigns the category icon as the default image
 //     so a NEW product immediately shows a matching picture,
-//   • <ProductImage />    — client fallback when a photo 404s (broken links
+//   • <ProductImage /> - client fallback when a photo 404s (broken links
 //     never show as broken-image icons).
 
 /** Canonical category id → bundled icon (public/categories/*.png). */
@@ -42,10 +42,10 @@ const CATEGORY_IMAGE_BY_KEYWORD: Array<{ re: RegExp; image: string }> = [
 ];
 
 /**
- * PRODUCT PHOTO LIBRARY (v2.5.2) — realistic generated studio shots shipped
+ * PRODUCT PHOTO LIBRARY (v2.5.2) - realistic generated studio shots shipped
  * with the app (public/products/*.jpg, 40-160KB each, ~1.3MB total). Matched
- * against the PRODUCT NAME so every store's products — and any product added
- * in the future — automatically show the right photo without a data migration.
+ * against the PRODUCT NAME so every store's products - and any product added
+ * in the future - automatically show the right photo without a data migration.
  * The category icon below remains the fallback for everything else.
  */
 export const PRODUCT_PHOTO_BY_KEYWORD: Array<{ re: RegExp; image: string }> = [
@@ -69,7 +69,7 @@ export const PRODUCT_PHOTO_BY_KEYWORD: Array<{ re: RegExp; image: string }> = [
 ];
 
 /**
- * Best icon for a category — by exact id first, then by name keywords.
+ * Best icon for a category - by exact id first, then by name keywords.
  * Returns null when nothing matches (UI falls back to a letter tile).
  */
 export function deriveCategoryIcon(
@@ -86,9 +86,9 @@ export function deriveCategoryIcon(
 }
 
 /**
- * Best photo for a PRODUCT — the full resolution chain:
+ * Best photo for a PRODUCT - the full resolution chain:
  *   explicit photo URL → name-keyword studio shot → category icon → null.
- * Pure & isomorphic (no window access) — safe on the server and in tests.
+ * Pure & isomorphic (no window access) - safe on the server and in tests.
  */
 export function resolveProductImage(
   imageUrl?: string | null,

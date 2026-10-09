@@ -1,19 +1,19 @@
 /**
- * APP VERSION — single source of truth: package.json "version".
+ * APP VERSION - single source of truth: package.json "version".
  *
  * RELEASE FLOW (see RELEASE_FLOW.md at the repo root):
  *   1. Bump package.json → "version" (the ONLY place a version is edited)
  *   2. /api/health reports it (server)
  *   3. The app footer + login screen render it (client, via this module)
- *   4. openapi.json info.version mirrors it (via APP_VERSION — never edit
+ *   4. openapi.json info.version mirrors it (via APP_VERSION - never edit
  *      the spec's version by hand; it used to drift at 2.5.7 while the app
  *      shipped 2.6.1)
  *   5. Tag vX.Y.Z + GitHub Release are cut AUTOMATICALLY by
  *      .github/workflows/release.yml on every push to main that ships a
- *      new package.json version (manual tagging was forgotten twice —
+ *      new package.json version (manual tagging was forgotten twice -
  *      v2.5.8 and v2.6.1 both had to be released by hand afterwards)
  *
- * Importing package.json is build-time only (resolveJsonModule) — the JSON
+ * Importing package.json is build-time only (resolveJsonModule) - the JSON
  * lands in the client bundle once and can never drift from the deployed
  * build again (the footer previously hardcoded "v2.2.0" while the API
  * reported 2.5.0).
@@ -24,7 +24,7 @@ export const APP_VERSION: string = pkg.version;
 export const APP_VERSION_LABEL: string = `v${pkg.version}`;
 
 /**
- * Build identity — the exact commit this bundle was compiled from.
+ * Build identity - the exact commit this bundle was compiled from.
  *
  * Vercel exposes VERCEL_GIT_COMMIT_SHA on every build and auto-prefixes the
  * NEXT_PUBLIC_ variant for Next.js, so client bundles get it inlined at

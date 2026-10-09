@@ -1,18 +1,15 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Export Utilities
-// ─────────────────────────────────────────────────────────────────────────────
+// MBUMAH HARDWARE POS - Export Utilities
 //
 // Browser-safe export utilities for CSV and PDF generation.
-// No server-side file system access — all operations use the browser's
+// No server-side file system access - all operations use the browser's
 // download API and window.print().
 //
 // Functions:
-//   1. exportToCSV(data, filename)     — Export any data array to CSV
-//   2. exportToPDF(title, content)     — Generate a PDF receipt via browser print
-//   3. exportTransactions(transactions) — Export transaction history to CSV
-//   4. exportInventory(products)       — Export product inventory to CSV
+//   1. exportToCSV(data, filename) - Export any data array to CSV
+//   2. exportToPDF(title, content) - Generate a PDF receipt via browser print
+//   3. exportTransactions(transactions) - Export transaction history to CSV
+//   4. exportInventory(products) - Export product inventory to CSV
 //
-// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Escape a CSV field value for safe inclusion in a CSV file.
@@ -63,7 +60,7 @@ function formatDateForCSV(date: string | Date | null | undefined): string {
   }
 }
 
-// ─── Core CSV Export ─────────────────────────────────────────────────────────
+// Core CSV Export
 
 /**
  * Export any data array to a CSV file and trigger a browser download.
@@ -114,7 +111,7 @@ export function exportToCSV(
   );
 }
 
-// ─── PDF Export (Browser Print) ──────────────────────────────────────────────
+// PDF Export (Browser Print)
 
 /**
  * Generate a simple PDF receipt using the browser's print dialog.
@@ -239,7 +236,7 @@ export function generateReceiptHTML(receiptData: {
   `;
 }
 
-// ─── Transaction Export ──────────────────────────────────────────────────────
+// Transaction Export
 
 /**
  * Export transaction history to a CSV file.
@@ -306,7 +303,7 @@ export function exportTransactions(
   });
 }
 
-// ─── Inventory Export ────────────────────────────────────────────────────────
+// Inventory Export
 
 /**
  * Export product inventory to a CSV file.
@@ -376,7 +373,7 @@ export function exportInventory(
   });
 }
 
-// ─── Export Sales Report ─────────────────────────────────────────────────────
+// Export Sales Report
 
 /**
  * Export a sales summary report to CSV.
@@ -425,7 +422,7 @@ export function exportSalesReport(
   });
 }
 
-// ─── Internal Helpers ────────────────────────────────────────────────────────
+// Internal Helpers
 
 /**
  * Trigger a file download in the browser.
