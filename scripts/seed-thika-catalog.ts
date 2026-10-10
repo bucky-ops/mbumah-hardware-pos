@@ -69,7 +69,7 @@ function skuFor(name: string): string {
 
 async function main() {
   const store = await prisma.store.findUnique({ where: { id: THIKA_STORE_ID } });
-  if (!store) throw new Error(`Store ${THIKA_STORE_ID} not found — run prisma seed first.`);
+  if (!store) throw new Error(`Store ${THIKA_STORE_ID} not found - run prisma seed first.`);
 
   // 1. Ensure categories exist
   const existingCats = await prisma.productCategory.findMany({ where: { storeId: THIKA_STORE_ID } });
@@ -157,7 +157,7 @@ async function main() {
             storeId: THIKA_STORE_ID,
             movementType: delta > 0 ? 'PURCHASE' : 'ADJUSTMENT',
             quantity: delta,
-            notes: 'v2.13.3 Thika catalog seed — stock alignment',
+            notes: 'v2.13.3 Thika catalog seed - stock alignment',
             // PURCHASE movements require a non-negative unitCost (WAC recompute)
             ...(delta > 0 ? { unitCost: Math.round(item.price * COST_RATIO * 100) / 100 } : {}),
           },
@@ -171,7 +171,7 @@ async function main() {
     if (!needsPrice && !needsCat && !needsRental && Math.abs(stock - item.stock) <= 0.001) untouched += 1;
   }
 
-  console.log(`\nTHIKA SEED DONE — created:${created} corrected:${updated} already-exact:${untouched}`);
+  console.log(`\nTHIKA SEED DONE - created:${created} corrected:${updated} already-exact:${untouched}`);
 }
 
 main()

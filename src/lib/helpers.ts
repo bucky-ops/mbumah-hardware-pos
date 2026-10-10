@@ -82,9 +82,9 @@ export const formatKES = canonicalFormatKES;
  * formatting where the api.ts formatDateTime (client-side) isn't available.
  */
 export function formatDate(date: Date | string | number | null | undefined): string {
-  if (date === null || date === undefined) return '—';
+  if (date === null || date === undefined) return '-';
   const d = typeof date === 'object' ? date : new Date(date);
-  if (isNaN(d.getTime())) return '—';
+  if (isNaN(d.getTime())) return '-';
   return d.toLocaleDateString('en-GB', {
     day: '2-digit',
     month: 'short',

@@ -71,7 +71,7 @@ async function postCommandHandler(
     return NextResponse.json(
       {
         success: false,
-        error: `Remote Ops is not configured on this server — set ${config.missing.join(' + ')}. See docs/REMOTE_ACCESS_KIT_PLAN.md §5.`,
+        error: `Remote Ops is not configured on this server - set ${config.missing.join(' + ')}. See docs/REMOTE_ACCESS_KIT_PLAN.md §5.`,
       },
       { status: 400 },
     );
@@ -134,7 +134,7 @@ async function postCommandHandler(
     action: 'FLEET_COMMAND',
     component: 'RAK',
     severity: failures.length > 0 ? 'WARN' : 'INFO',
-    message: `Fleet ${type} command issued to [${targets.join(', ')}] by ${session.email}${version ? ` → ${version}` : ''}${force ? ' (FORCED)' : ''}${reason ? ` — ${reason}` : ''}`,
+    message: `Fleet ${type} command issued to [${targets.join(', ')}] by ${session.email}${version ? ` → ${version}` : ''}${force ? ' (FORCED)' : ''}${reason ? ` - ${reason}` : ''}`,
     metadata: { issued, failures, type, version, force: force === true },
   });
 

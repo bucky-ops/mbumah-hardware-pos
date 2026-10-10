@@ -6,10 +6,10 @@
 // service. Each export is a pure function that takes a typed `data` payload
 // and returns an HTML string. The HTML is intentionally self-contained
 // (inline CSS, no external images) so it renders correctly in every mail
-// client — including Gmail's HTML sanitizer and Outlook's Word-based engine.
+// client - including Gmail's HTML sanitizer and Outlook's Word-based engine.
 //
 // Design system:
-//   • Primary color: emerald (#10b981) — matches the in-app accent
+//   • Primary color: emerald (#10b981) - matches the in-app accent
 //   • Body text: dark gray (#1f2937 / #374151)
 //   • Max width: 600px (industry standard for mobile-friendly email)
 //   • Logo area: text-based "MBUMAH HARDWARE" wordmark (no external images
@@ -20,7 +20,7 @@
 // be imported by both server-only email-service.ts and server components.
 
 // FORMAT UNIFICATION (task 12-d): KES rendering delegates to the ONE canonical
-// en-KE formatter (financialMath.formatKES — server-safe, no DOM/ICU
+// en-KE formatter (financialMath.formatKES - server-safe, no DOM/ICU
 // divergence) so e-mails render the identical "Ksh 1,234.56" string as
 // receipts, PDFs and WhatsApp messages.
 import { formatKES as formatKESCanonical } from '@/lib/utils/financialMath';
@@ -51,7 +51,7 @@ function kes(amount: number | string | null | undefined): string {
   return formatKESCanonical(amount ?? 0);
 }
 
-/** Common HTML wrapper — header, footer, and basic responsive styles. */
+/** Common HTML wrapper - header, footer, and basic responsive styles. */
 function emailShell(title: string, bodyHtml: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -211,7 +211,7 @@ export interface TierUpgradeTemplateData {
 // ── Templates ────────────────────────────────────────────────────────────────
 
 /**
- * Professional receipt email — itemized table, totals, payment method, and
+ * Professional receipt email - itemized table, totals, payment method, and
  * M-Pesa reference (when applicable). Mirrors the printed receipt layout.
  */
 export function receiptTemplate(data: ReceiptTemplateData): string {
@@ -302,7 +302,7 @@ export function receiptTemplate(data: ReceiptTemplateData): string {
 }
 
 /**
- * Low-stock alert email — table of products at or below reorder level with
+ * Low-stock alert email - table of products at or below reorder level with
  * current stock, reorder level, and supplier contact for quick reordering.
  */
 export function lowStockTemplate(data: LowStockTemplateData): string {
@@ -324,7 +324,7 @@ export function lowStockTemplate(data: LowStockTemplateData): string {
           <td style="text-align:center;">${badge}</td>
           <td style="text-align:center;">${current} ${p.unitType ? p.unitType.toLowerCase() : ''}</td>
           <td style="text-align:center;">${reorder}</td>
-          <td>${p.supplierName || '<span style="color:' + BRAND.textMuted + '">—</span>'}</td>
+          <td>${p.supplierName || '<span style="color:' + BRAND.textMuted + '">-</span>'}</td>
         </tr>`;
     })
     .join('');
@@ -361,7 +361,7 @@ export function lowStockTemplate(data: LowStockTemplateData): string {
 }
 
 /**
- * Daily sales report email — KPIs, top products, and payment breakdown for
+ * Daily sales report email - KPIs, top products, and payment breakdown for
  * end-of-day reconciliation.
  */
 export function dailyReportTemplate(data: DailyReportTemplateData): string {
@@ -390,7 +390,7 @@ export function dailyReportTemplate(data: DailyReportTemplateData): string {
     .join('');
 
   return emailShell(
-    `Daily Sales Report — ${data.date}`,
+    `Daily Sales Report - ${data.date}`,
     `
     <h2>Daily Sales Report</h2>
     <p><strong>${data.storeName}</strong> &middot; ${data.date}</p>
@@ -453,7 +453,7 @@ export function dailyReportTemplate(data: DailyReportTemplateData): string {
 }
 
 /**
- * Welcome email sent to new customers — includes loyalty program info.
+ * Welcome email sent to new customers - includes loyalty program info.
  */
 export function welcomeTemplate(data: WelcomeTemplateData): string {
   return emailShell(
@@ -484,7 +484,7 @@ export function welcomeTemplate(data: WelcomeTemplateData): string {
 }
 
 /**
- * Password reset email — contains a time-limited reset link.
+ * Password reset email - contains a time-limited reset link.
  */
 export function passwordResetTemplate(data: PasswordResetTemplateData): string {
   const expiry = data.expiryHours ?? 1;
@@ -511,7 +511,7 @@ export function passwordResetTemplate(data: PasswordResetTemplateData): string {
 }
 
 /**
- * Loyalty tier upgrade congratulatory email — lists new tier benefits.
+ * Loyalty tier upgrade congratulatory email - lists new tier benefits.
  */
 export function tierUpgradeTemplate(data: TierUpgradeTemplateData): string {
   const tierBenefits: Record<string, string[]> = {

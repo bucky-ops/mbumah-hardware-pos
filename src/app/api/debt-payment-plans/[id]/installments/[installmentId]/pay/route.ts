@@ -333,7 +333,7 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
         data: {
           storeId: plan.storeId,
           entryNumber: generateJournalEntryNumber(),
-          description: `Installment payment from ${plan.customer?.name ?? 'customer'} — Plan #${plan.id.slice(-6)} (KES ${payNum.toLocaleString()})`,
+          description: `Installment payment from ${plan.customer?.name ?? 'customer'} - Plan #${plan.id.slice(-6)} (KES ${payNum.toLocaleString()})`,
           referenceType: 'DEBT_PAYMENT_PLAN',
           referenceId: plan.id,
           totalDebit: payNum,
@@ -347,7 +347,7 @@ async function payInstallmentHandler(...args: unknown[]): Promise<Response> {
                 accountId: cashAccountId,
                 debit: payNum,
                 credit: 0,
-                description: `Installment payment received — ${method}`,
+                description: `Installment payment received - ${method}`,
               },
               {
                 accountId: accounts.ACCOUNTS_RECEIVABLE,

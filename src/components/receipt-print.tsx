@@ -451,7 +451,7 @@ export function ReceiptDocument({
           </div>
         </div>
         <div className="mt-2.5 space-y-0.5 text-center text-[10px] leading-snug opacity-95">
-          <p className="font-semibold">{store?.name || 'MBUMAH HARDWARE — Juja Main'}</p>
+          <p className="font-semibold">{store?.name || 'MBUMAH HARDWARE - Juja Main'}</p>
           <p>{store?.location || COMPANY.tagline}</p>
           <p>
             Tel: {store?.phone || COMPANY.phone}
@@ -668,7 +668,7 @@ export function ReceiptDocument({
           <p className="text-xs font-bold">Thank you for your business!</p>
           <p className="text-[10px] italic text-muted-foreground">Asante sana! 🇰🇪</p>
           <p className="text-[9px] font-medium text-muted-foreground">
-            Goods once sold are not returnable unless per our returns policy —
+            Goods once sold are not returnable unless per our returns policy -
             present this receipt.
           </p>
           {store?.taxPin && (

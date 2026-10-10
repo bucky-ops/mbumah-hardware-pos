@@ -75,7 +75,7 @@ export function OfflineIndicator() {
           duration: 5000,
         });
       } else {
-        toast.info('No sales to sync — the queue is empty.');
+        toast.info('No sales to sync - the queue is empty.');
       }
     } catch (err) {
       toast.error(
@@ -149,7 +149,7 @@ export function OfflineIndicator() {
                 </span>
               </div>
               <p className="text-sm flex-1 min-w-0">
-                📶 Offline Mode: Sales will sync when connected.
+                Offline Mode: Sales will sync when connected.
               </p>
               {pendingCount > 0 && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-medium backdrop-blur-sm">
@@ -223,7 +223,7 @@ export function OfflineIndicator() {
             <div className="max-w-7xl mx-auto px-4 py-2 flex items-center gap-3">
               <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
               <p className="text-sm flex-1">
-                All sales synced successfully — queue is empty.
+                All sales synced successfully - queue is empty.
               </p>
             </div>
           </div>
@@ -255,7 +255,7 @@ export function OnlineBadge() {
     return (
       <span
         className="inline-flex items-center gap-1.5 rounded-full bg-rose-100 dark:bg-rose-950/40 px-2 py-0.5 text-xs font-medium text-rose-700 dark:text-rose-300"
-        title="Offline — sales will be queued locally"
+        title="Offline - sales will be queued locally"
       >
         <span className="relative flex h-2 w-2">
           <span className="absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-75 animate-ping" />
@@ -284,7 +284,7 @@ export function OnlineBadge() {
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-950/40 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300"
-      title="Online — all systems connected"
+      title="Online - all systems connected"
     >
       <CloudCheck className="h-3 w-3" aria-hidden />
       <span className="hidden sm:inline">Online</span>

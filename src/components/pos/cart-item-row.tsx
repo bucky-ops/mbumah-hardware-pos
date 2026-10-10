@@ -62,10 +62,10 @@ export function CartItemRow({
       data-lowstock={isBelowMinimum ? 'blocked' : isLowStockRow ? 'warn' : undefined}
       title={isBelowMinimum ? 'Low Stock: Item cannot be sold until restocked.' : undefined}
     >
-      {/* Low-stock banner (below minimum — cannot be sold) */}
+      {/* Low-stock banner (below minimum - cannot be sold) */}
       {isBelowMinimum && (
         <span className="absolute -top-2 left-2 z-10 text-[9px] px-1.5 py-0.5 rounded bg-red-500 text-white font-bold shadow">
-          LOW STOCK — CANNOT BE SOLD
+          LOW STOCK - CANNOT BE SOLD
         </span>
       )}
       {/* Image placeholder */}

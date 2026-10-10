@@ -102,7 +102,7 @@ function ChartTooltip({
   return (
     <div className="rounded-lg border bg-background/95 backdrop-blur-sm p-3 shadow-lg text-xs max-w-[240px]">
       <p className="font-semibold leading-tight">{row.productName}</p>
-      <p className="text-[10px] text-muted-foreground mt-0.5">SKU: {row.sku || '—'}</p>
+      <p className="text-[10px] text-muted-foreground mt-0.5">SKU: {row.sku || '-'}</p>
       {row.categoryName && (
         <p className="text-[10px] text-muted-foreground">Category: {row.categoryName}</p>
       )}

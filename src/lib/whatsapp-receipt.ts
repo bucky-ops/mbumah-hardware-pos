@@ -1,7 +1,7 @@
 /**
  * WhatsApp Receipt Deep-Link helpers.
  *
- * v1.2.0 Phase 2 — Offline-First POS + WhatsApp Receipts + PWA.
+ * v1.2.0 Phase 2 - Offline-First POS + WhatsApp Receipts + PWA.
  *
  * This module is 100% client-side. It generates a fully-formatted receipt as
  * plain text and opens `https://wa.me/<phone>?text=<encoded>` in a new tab.
@@ -9,18 +9,18 @@
  * can confirm before tapping Send.
  *
  * Why client-side deep links (not the WhatsApp Business Cloud API)?
- *  1. Zero backend dependency — works offline-first (the deep link opens as
+ *  1. Zero backend dependency - works offline-first (the deep link opens as
  *     soon as connectivity returns; the receipt text is built from the in-memory
  *     `TransactionItem`).
  *  2. No WhatsApp Business account approval / template approval needed.
  *  3. No per-message cost (WhatsApp Cloud API charges business-initiated
  *     conversations; a user-initiated deep-link chat is free).
- *  4. The cashier can edit the message in WhatsApp before sending — useful for
+ *  4. The cashier can edit the message in WhatsApp before sending - useful for
  *     adding verbal agreed discounts or hand-written notes.
  *
  * The trade-off: the customer must have WhatsApp installed on their phone and
  * the cashier's device is the one that sends (not the business account). For
- * MBUMAH HARDWARE's 5 branches this is the right trade-off — formal WhatsApp
+ * MBUMAH HARDWARE's 5 branches this is the right trade-off - formal WhatsApp
  * Business API integration is queued for v1.3.0 once M-Pesa Daraja go-live is
  * confirmed and we have a verified business number.
  */
@@ -65,8 +65,8 @@ export interface FormatReceiptOptions {
  *   - "0712 345 678"      → "254712345678"  (whitespace stripped)
  *
  * Valid Kenyan mobile prefixes (operator-agnostic):
- *   - 7XX (Safaricom, Airtel, Telkom) — 9 digits after the leading 0/254
- *   - 1XX (Faiba 4G, Sema Mobile)     — 9 digits after the leading 0/254
+ *   - 7XX (Safaricom, Airtel, Telkom) - 9 digits after the leading 0/254
+ *   - 1XX (Faiba 4G, Sema Mobile)     - 9 digits after the leading 0/254
  */
 export function normalizeKenyanPhone(input: string | null | undefined): string | null {
   if (!input) return null;
@@ -114,7 +114,7 @@ export function formatKenyanPhone(input: string | null | undefined): string {
 /**
  * Build the full multi-line WhatsApp receipt message body. Designed to look
  * clean inside WhatsApp's chat bubble (monospace would not render in WhatsApp,
- * so we use emoji + plain-text alignment with spaces — WhatsApp preserves
+ * so we use emoji + plain-text alignment with spaces - WhatsApp preserves
  * leading spaces inside a message).
  *
  * The message includes:
@@ -217,7 +217,7 @@ export function formatWhatsAppReceipt(
   if (store?.phone) {
     lines.push(`📞 For enquiries: ${formatKenyanPhone(store.phone) || store.phone}`);
   }
-  lines.push("—");
+  lines.push("-");
   lines.push("_Powered by MBUMAH HARDWARE POS_");
 
   return lines.join("\n");
@@ -275,7 +275,7 @@ export function resolveReceiptPhone(
 // ── Internal helpers ──────────────────────────────────────────────────────
 
 /**
- * Compact KES formatter for WhatsApp — drops the "KES" prefix (we add 💵 emoji
+ * Compact KES formatter for WhatsApp - drops the "KES" prefix (we add 💵 emoji
  * on the totals line) and uses thousands separators. Two decimal places only
  * when needed.
  *

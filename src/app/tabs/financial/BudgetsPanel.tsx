@@ -277,7 +277,7 @@ export default function BudgetsPanel() {
         </div>
         {periodLocked && (
           <p className="text-xs text-red-600 mt-1">
-            This period is LOCKED — budget mutations are blocked.
+            This period is LOCKED - budget mutations are blocked.
           </p>
         )}
       </CardHeader>
@@ -347,7 +347,7 @@ export default function BudgetsPanel() {
                     <TableRow key={b.id}>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs text-muted-foreground">{b.account?.code || '—'}</span>
+                          <span className="font-mono text-xs text-muted-foreground">{b.account?.code || '-'}</span>
                           <span className="text-sm">{b.account?.name || b.accountId}</span>
                         </div>
                       </TableCell>
@@ -365,7 +365,7 @@ export default function BudgetsPanel() {
                         {pct.toFixed(1)}%
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground max-w-[160px] truncate" title={b.notes || ''}>
-                        {b.notes || '—'}
+                        {b.notes || '-'}
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
@@ -500,11 +500,11 @@ export default function BudgetsPanel() {
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="p-2 rounded-lg bg-muted/30">
                 <p className="text-muted-foreground">Current Actual</p>
-                <p className="font-mono font-bold">{editTarget ? formatKES(editTarget.actualAmount) : '—'}</p>
+                <p className="font-mono font-bold">{editTarget ? formatKES(editTarget.actualAmount) : '-'}</p>
               </div>
               <div className="p-2 rounded-lg bg-muted/30">
                 <p className="text-muted-foreground">Current Variance</p>
-                <p className="font-mono font-bold">{editTarget ? formatKES(editTarget.variance) : '—'}</p>
+                <p className="font-mono font-bold">{editTarget ? formatKES(editTarget.variance) : '-'}</p>
               </div>
             </div>
           </div>

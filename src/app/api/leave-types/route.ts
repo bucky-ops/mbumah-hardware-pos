@@ -118,7 +118,7 @@ async function createLeaveTypeHandler(
     action: 'LEAVE_TYPE_CREATED',
     component: LogComponent.SYSTEM,
     severity: LogSeverity.INFO,
-    message: `Leave type created: ${leaveType.name} (${leaveType.code}) — ${leaveType.defaultDaysPerYear} days/year`,
+    message: `Leave type created: ${leaveType.name} (${leaveType.code}) - ${leaveType.defaultDaysPerYear} days/year`,
     userId: session.userId,
     metadata: { leaveTypeId: leaveType.id, code: leaveType.code },
   });

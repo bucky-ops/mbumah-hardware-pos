@@ -146,7 +146,7 @@ async function deleteCategoryHandler(...args: unknown[]): Promise<Response> {
     return Response.json(
       {
         success: false,
-        error: `Cannot delete "${existing.name}" — ${productCount} product(s) still reference it. Reassign or delete those products first, or deactivate the category instead.`,
+        error: `Cannot delete "${existing.name}" - ${productCount} product(s) still reference it. Reassign or delete those products first, or deactivate the category instead.`,
       },
       { status: 409 }
     );

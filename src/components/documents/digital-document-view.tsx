@@ -292,7 +292,7 @@ function DigitalDocShell({
         <div className="mt-5 rounded-xl bg-stone-50 p-3 text-center">
           <p className="flex items-center justify-center gap-1.5 text-[11px] font-medium text-stone-500">
             <Smartphone className="h-3.5 w-3.5" aria-hidden />
-            Digital copy — scanned from the QR code on your document
+            Digital copy - scanned from the QR code on your document
           </p>
         </div>
       </div>

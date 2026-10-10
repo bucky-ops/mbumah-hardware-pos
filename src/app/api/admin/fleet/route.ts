@@ -111,7 +111,7 @@ async function buildFleet(): Promise<Record<string, unknown>> {
 
   const setupNote = config.configured
     ? undefined
-    : `Remote Ops is not configured on this server — set ${config.missing.join(' + ')} (see docs/REMOTE_ACCESS_KIT_PLAN.md §5). Fleet agents and commands stay disabled until then.`;
+    : `Remote Ops is not configured on this server - set ${config.missing.join(' + ')} (see docs/REMOTE_ACCESS_KIT_PLAN.md §5). Fleet agents and commands stay disabled until then.`;
 
   if (!config.configured) {
     return {

@@ -399,7 +399,7 @@ export default function SecurityTab() {
             <div>
               <h1 className="text-xl font-bold tracking-tight">Audit Trail</h1>
               <p className="text-xs text-muted-foreground">
-                Permission denials, manager overrides and authorizations — every denial, exactly once
+                Permission denials, manager overrides and authorizations - every denial, exactly once
               </p>
             </div>
           </div>
@@ -445,7 +445,7 @@ export default function SecurityTab() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* v2.12.8 (PR C): view switcher — Dashboard | Audit Trail. */}
+          {/* v2.12.8 (PR C): view switcher - Dashboard | Audit Trail. */}
           {viewToggle}
           <Button
             variant="outline"
@@ -843,10 +843,10 @@ export default function SecurityTab() {
                           <SeverityBadge severity={event.severity} />
                         </TableCell>
                         <TableCell className="text-xs font-mono py-2">
-                          {event.ipAddress || '—'}
+                          {event.ipAddress || '-'}
                         </TableCell>
                         <TableCell className="text-xs py-2 max-w-[120px] truncate">
-                          {event.resource || '—'}
+                          {event.resource || '-'}
                         </TableCell>
                       </TableRow>
                     ))}

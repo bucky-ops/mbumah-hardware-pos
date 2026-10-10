@@ -1,9 +1,9 @@
-// R2/R8 FIX TESTS (v2.5) — truthful HTTP status in normalised errors +
+// R2/R8 FIX TESTS (v2.5) - truthful HTTP status in normalised errors +
 // friendly branch-blocked lookup messages.
 //
 // Background: request() used to throw plain Errors and discard
 // response.status, so normaliseError() stamped EVERY failed request as
-// code UNKNOWN_ERROR / statusCode 500 — a server 400 reached the console as
+// code UNKNOWN_ERROR / statusCode 500 - a server 400 reached the console as
 // a "500", which is what misled the Kenya Plumbing Co. investigation.
 
 import { describe, it, expect } from 'vitest';

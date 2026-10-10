@@ -391,7 +391,7 @@ export async function runFinancialAudit(
     issues.push({
       type: "POSTING_INTEGRITY",
       severity: "CRITICAL",
-      message: `Entry ${entry.entryNumber} is marked as both posted AND voided — this indicates data corruption.`,
+      message: `Entry ${entry.entryNumber} is marked as both posted AND voided - this indicates data corruption.`,
       entityId: entry.id,
       storeId: entry.storeId,
       detectedAt: new Date().toISOString(),

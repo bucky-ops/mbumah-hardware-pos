@@ -216,7 +216,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
 
   // Env guard: short-circuit gracefully when Resend isn't configured.
   if (!isEmailConfigured()) {
-    const warning = 'RESEND_API_KEY not configured — email send skipped.';
+    const warning = 'RESEND_API_KEY not configured - email send skipped.';
     console.warn(`[email-service] ${warning}`, { to, subject, type });
     await logNotification(params, 'FAILED', warning);
     return { success: false, error: warning };
@@ -306,7 +306,7 @@ export async function sendReceiptEmail(params: ReceiptEmailParams): Promise<Emai
 
   return sendEmail({
     to,
-    subject: `Receipt ${transaction.receiptNumber} — ${store.name}`,
+    subject: `Receipt ${transaction.receiptNumber} - ${store.name}`,
     html,
     text,
     userId,
@@ -338,7 +338,7 @@ export async function sendLowStockAlert(params: LowStockAlertParams): Promise<Em
 
   return sendEmail({
     to,
-    subject: `⚠️ Low Stock Alert — ${storeName} (${products.length} item${products.length !== 1 ? 's' : ''})`,
+    subject: `⚠️ Low Stock Alert - ${storeName} (${products.length} item${products.length !== 1 ? 's' : ''})`,
     html,
     userId,
     type: NotificationType.LOW_STOCK,
@@ -360,7 +360,7 @@ export async function sendDailyReport(params: DailyReportParams): Promise<EmailR
 
   return sendEmail({
     to,
-    subject: `Daily Sales Report — ${storeName} — ${date}`,
+    subject: `Daily Sales Report - ${storeName} - ${date}`,
     html,
     userId,
     type: NotificationType.DAILY_REPORT,
@@ -383,7 +383,7 @@ export async function sendWelcomeEmail(params: WelcomeEmailParams): Promise<Emai
 
   return sendEmail({
     to,
-    subject: `Welcome to MBUMAH HARDWARE${storeName ? ` — ${storeName}` : ''}!`,
+    subject: `Welcome to MBUMAH HARDWARE${storeName ? ` - ${storeName}` : ''}!`,
     html,
     type: NotificationType.WELCOME,
     metadata: { customerName, storeName, loyaltyTier },
@@ -421,7 +421,7 @@ export async function sendLoyaltyTierUpgrade(
 
   return sendEmail({
     to,
-    subject: `🎉 You're now ${newTier}! — MBUMAH HARDWARE Loyalty`,
+    subject: `🎉 You're now ${newTier}! - MBUMAH HARDWARE Loyalty`,
     html,
     type: NotificationType.TIER_UPGRADE,
     metadata: { customerName, newTier, storeName },

@@ -119,7 +119,7 @@ function MainApp() {
     } catch {
       // Storage unavailable - still flip to the login screen via the event.
     }
-    toast.info('Session timed out after 30 minutes — your cart was saved and will be restored on next login.', {
+    toast.info('Session timed out after 30 minutes - your cart was saved and will be restored on next login.', {
       duration: 8000,
     });
   }, []);
@@ -230,18 +230,18 @@ function MainApp() {
                   MBUMAH HARDWARE POS & ERP &copy; {new Date().getFullYear()}
                 </p>
                 {/* VERSION FLOW (v2.6.2): renders package.json version + the
-                    exact commit SHA this bundle was built from — see
+                    exact commit SHA this bundle was built from - see
                     src/lib/version.ts. Never hardcode a version here. */}
                 <span className="text-[10px] text-muted-foreground/50 hidden sm:inline" title="App version · build commit">{APP_BUILD_LABEL}</span>
               </div>
               <div className="flex items-center gap-3">
-                {/* ONLINE STATUS (v2.13.0): live navigator.onLine mirror —
+                {/* ONLINE STATUS (v2.13.0): live navigator.onLine mirror -
                     green pulsing dot when connected, red static when the
                     browser fires 'offline'. Chip hidden on xs (crowded). */}
                 <div
                   className="hidden sm:flex items-center gap-1.5 text-[10px] text-muted-foreground/60"
                   role="status"
-                  aria-label={online ? 'Connected to the internet' : 'Offline — check your internet connection'}
+                  aria-label={online ? 'Connected to the internet' : 'Offline - check your internet connection'}
                 >
                   <div
                     className={`h-1.5 w-1.5 rounded-full ${

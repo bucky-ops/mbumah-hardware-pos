@@ -23,7 +23,7 @@ export function StkStatusPanel({
           {status === 'processing' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {status === 'success' && <CheckCircle className="h-3.5 w-3.5" />}
           {status === 'failed' && <AlertCircle className="h-3.5 w-3.5" />}
-          {status === 'processing' ? 'STK Push Sent — Awaiting PIN' : status === 'success' ? 'Payment Confirmed' : 'Payment Failed'}
+          {status === 'processing' ? 'STK Push Sent - Awaiting PIN' : status === 'success' ? 'Payment Confirmed' : 'Payment Failed'}
         </span>
         <span className="font-mono">{formatKES(amount)}</span>
       </div>

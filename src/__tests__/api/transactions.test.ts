@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Transactions API — integration tests
+// Transactions API - integration tests
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // These tests verify the financial invariants of the POS checkout flow
@@ -48,7 +48,7 @@ const ORG_ID = 'org_mbumah';
 const STORE_ID = 'store_juja_main';
 const CASHIER_ID = 'user_super_admin';
 
-describe('Transactions API — financial invariants', () => {
+describe('Transactions API - financial invariants', () => {
   beforeAll(async () => {
     // Warm the account-id cache so in-tx lookups are cache hits.
     await getAccountIds(ORG_ID, [
@@ -64,7 +64,7 @@ describe('Transactions API — financial invariants', () => {
     ]);
   });
 
-  describe('Cash sale — journal entry balance', () => {
+  describe('Cash sale - journal entry balance', () => {
     it('creates a balanced journal entry (debits === credits)', async () => {
       await withRollback(async (tx) => {
         const receiptNumber = 'TEST-CASH-001';

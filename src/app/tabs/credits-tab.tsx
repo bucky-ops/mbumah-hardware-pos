@@ -478,7 +478,7 @@ export default function CreditsTab() {
     try {
       const customer = customers.find((c: CustomerItem) => c.id === entry.customerId);
       const customerName = customer?.name || 'Unknown Customer';
-      const customerPhone = customer?.phone || '—';
+      const customerPhone = customer?.phone || '-';
       const badge = getCreditTypeBadge(entry.creditType);
       const isCreditSide = entry.creditType === 'CREDIT' || entry.creditType === 'REFUND';
       const amt = (isCreditSide ? '+' : '-') + formatKES(entry.amount);
@@ -505,7 +505,7 @@ export default function CreditsTab() {
         metaRows: [
           { label: 'Entry type', value: badge.label },
           { label: 'Date', value: formatDateTime(entry.createdAt) },
-          { label: 'Ref', value: entry.reference || '—' },
+          { label: 'Ref', value: entry.reference || '-' },
           { label: 'Status', value: entry.status === 'VOIDED' ? 'VOIDED' : 'Active' },
         ],
         billToHtml: `
@@ -881,10 +881,10 @@ export default function CreditsTab() {
                               {amountPrefix}{formatKES(entry.amount)}
                             </TableCell>
                             <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
-                              {entry.reference || '—'}
+                              {entry.reference || '-'}
                             </TableCell>
                             <TableCell className="hidden lg:table-cell text-sm text-muted-foreground max-w-[200px] truncate">
-                              {entry.description || '—'}
+                              {entry.description || '-'}
                             </TableCell>
                             <TableCell className={`text-right font-semibold text-sm ${isVoided ? 'text-muted-foreground' : entry.runningBalance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                               {formatKES(Math.abs(entry.runningBalance))}

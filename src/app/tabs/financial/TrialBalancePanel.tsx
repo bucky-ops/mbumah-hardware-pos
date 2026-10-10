@@ -339,7 +339,7 @@ export default function TrialBalancePanel() {
                       onClick={() => setViewSnapshotId(s.id)}
                     >
                       <TableCell className="text-sm">{formatDate(s.snapshotDate)}</TableCell>
-                      <TableCell className="text-sm">{s.period?.periodName || '—'}</TableCell>
+                      <TableCell className="text-sm">{s.period?.periodName || '-'}</TableCell>
                       <TableCell className="text-right text-sm font-mono text-blue-600 dark:text-blue-400">
                         {formatKES(s.totalDebits)}
                       </TableCell>
@@ -370,7 +370,7 @@ export default function TrialBalancePanel() {
               <Camera className="h-5 w-5" /> Snapshot Detail
             </DialogTitle>
             <DialogDescription>
-              {selectedSnapshot ? `Captured ${formatDate(selectedSnapshot.snapshotDate)} · Period: ${selectedSnapshot.period?.periodName || '—'}` : ''}
+              {selectedSnapshot ? `Captured ${formatDate(selectedSnapshot.snapshotDate)} · Period: ${selectedSnapshot.period?.periodName || '-'}` : ''}
             </DialogDescription>
           </DialogHeader>
           <div className="overflow-auto flex-1">
@@ -409,8 +409,8 @@ export default function TrialBalancePanel() {
           </div>
           <Separator />
           <div className="flex items-center justify-between text-xs px-1">
-            <span>Total Debits: <strong className="font-mono text-blue-600 dark:text-blue-400">{selectedSnapshot ? formatKES(selectedSnapshot.totalDebits) : '—'}</strong></span>
-            <span>Total Credits: <strong className="font-mono text-green-600 dark:text-green-400">{selectedSnapshot ? formatKES(selectedSnapshot.totalCredits) : '—'}</strong></span>
+            <span>Total Debits: <strong className="font-mono text-blue-600 dark:text-blue-400">{selectedSnapshot ? formatKES(selectedSnapshot.totalDebits) : '-'}</strong></span>
+            <span>Total Credits: <strong className="font-mono text-green-600 dark:text-green-400">{selectedSnapshot ? formatKES(selectedSnapshot.totalCredits) : '-'}</strong></span>
             <Badge className={selectedSnapshot?.isBalanced
               ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
               : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}>

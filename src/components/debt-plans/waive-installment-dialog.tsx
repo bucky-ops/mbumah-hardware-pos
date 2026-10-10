@@ -136,7 +136,7 @@ export function WaiveInstallmentDialog({
 
           {isPartial && (
             <p className="text-[11px] text-amber-600 dark:text-amber-400">
-              This installment was partially paid — only the unpaid remainder
+              This installment was partially paid - only the unpaid remainder
               ({formatKES(remainingToWaive)}) will be forgiven; the collected
               portion stays in the ledger.
             </p>

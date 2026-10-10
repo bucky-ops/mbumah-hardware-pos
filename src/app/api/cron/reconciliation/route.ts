@@ -58,7 +58,7 @@ async function verifyCronSecret(request: Request): Promise<Response | null> {
       component: LogComponent.SYSTEM,
       severity: LogSeverity.WARN,
       message:
-        'CRON_SECRET env var is not set — /api/cron/reconciliation accepted an unauthenticated request.',
+        'CRON_SECRET env var is not set - /api/cron/reconciliation accepted an unauthenticated request.',
       metadata: { path: '/api/cron/reconciliation' },
     });
     return null;
@@ -191,7 +191,7 @@ async function checkStockLedger(): Promise<{
         action: 'STOCK_LEDGER_DRIFT',
         component: LogComponent.INVENTORY,
         severity: LogSeverity.ERROR,
-        message: `Stock ledger drift changed for "${anomaly.name}" (${anomaly.productId}): on-hand vs movement-sum delta moved by ${anomaly.delta.toFixed(4)} units since last run — stock may have been mutated outside stock_movements.`,
+        message: `Stock ledger drift changed for "${anomaly.name}" (${anomaly.productId}): on-hand vs movement-sum delta moved by ${anomaly.delta.toFixed(4)} units since last run - stock may have been mutated outside stock_movements.`,
         metadata: anomaly as unknown as Record<string, unknown>,
       });
     }
@@ -249,7 +249,7 @@ async function checkTrialBalance(): Promise<{
       action: 'TRIAL_BALANCE_IMBALANCE',
       component: LogComponent.FINANCIAL,
       severity: LogSeverity.ERROR,
-      message: `Trial balance does not balance: total debits ${totalDebit.toFixed(2)} vs total credits ${totalCredit.toFixed(2)} (imbalance ${imbalance.toFixed(2)}). Double-entry integrity is broken — investigate unposted/partially-posted journals.`,
+      message: `Trial balance does not balance: total debits ${totalDebit.toFixed(2)} vs total credits ${totalCredit.toFixed(2)} (imbalance ${imbalance.toFixed(2)}). Double-entry integrity is broken - investigate unposted/partially-posted journals.`,
       metadata: { totalDebit, totalCredit, imbalance },
     });
   }
@@ -270,7 +270,7 @@ async function checkStaleMpesa(): Promise<{ count: number }> {
       action: 'MPESA_STALE_PENDING',
       component: LogComponent.PAYMENT,
       severity: LogSeverity.WARN,
-      message: `${count} M-Pesa transaction(s) still PENDING after ${MPESA_STALE_MINUTES}m — Daraja callbacks lost or the payments-sweeper cron is not running.`,
+      message: `${count} M-Pesa transaction(s) still PENDING after ${MPESA_STALE_MINUTES}m - Daraja callbacks lost or the payments-sweeper cron is not running.`,
       metadata: { count, staleAfterMinutes: MPESA_STALE_MINUTES },
     });
   }
@@ -289,7 +289,7 @@ async function checkStuckExports(): Promise<{ count: number }> {
       action: 'EXPORT_STUCK_PROCESSING',
       component: LogComponent.SYSTEM,
       severity: LogSeverity.WARN,
-      message: `${count} data export(s) stuck in PROCESSING for more than ${EXPORT_STUCK_MINUTES}m — the generating function likely died mid-export and these will never complete.`,
+      message: `${count} data export(s) stuck in PROCESSING for more than ${EXPORT_STUCK_MINUTES}m - the generating function likely died mid-export and these will never complete.`,
       metadata: { count, stuckAfterMinutes: EXPORT_STUCK_MINUTES },
     });
   }

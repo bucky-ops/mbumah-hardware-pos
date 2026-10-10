@@ -1,15 +1,15 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// financialMath — FINANCIAL MATHEMATICS AUDIT spec tests
+// financialMath - FINANCIAL MATHEMATICS AUDIT spec tests
 // ─────────────────────────────────────────────────────────────────────────────
 // Verifies the uniform formula chain mandated by the audit:
 //   • Line items: base subtotal → line discount → net → VAT (inclusive /
-//     exclusive) — HALF_UP 2dp at the line level, zero float drift.
+//     exclusive) - HALF_UP 2dp at the line level, zero float drift.
 //   • Document aggregation: Σ(lineNet) === docGross EXACTLY (no
 //     off-by-one-cent drift).
 //   • Payment balances: balanceDue / changeDue clamped at zero.
 //   • Inventory valuation: weighted average cost (MAC).
 //   • Formatting: canonical en-KE KES + quantity renderers.
-// Pure unit tests — no database, no network.
+// Pure unit tests - no database, no network.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from 'vitest';
@@ -30,10 +30,10 @@ import {
   unitLabel,
 } from '@/lib/utils/financialMath';
 
-describe('toDec / toNum — the Prisma Decimal bridge', () => {
+describe('toDec / toNum - the Prisma Decimal bridge', () => {
   it('never concatenates: number + Decimal is FORBIDDEN, toDec().plus() is exact', () => {
     // Regression guard for the audit's Critical finding:
-    // `0 + PrismaDecimal` yields "0123.45" (string concat) — toDec never does.
+    // `0 + PrismaDecimal` yields "0123.45" (string concat) - toDec never does.
     const prismaLike = new Decimal('123.45');
     expect(toDec(prismaLike).plus(50).toNumber()).toBe(173.45);
     expect(toDec('1,234.50').toNumber()).toBe(1234.5);
@@ -51,11 +51,11 @@ describe('toDec / toNum — the Prisma Decimal bridge', () => {
   });
 });
 
-describe('round2 — strict HALF_UP policy at 2dp', () => {
+describe('round2 - strict HALF_UP policy at 2dp', () => {
   it('rounds exact halves UP (0.005 → 0.01, 1.005 → 1.01)', () => {
     expect(round2(0.005)).toBe(0.01);
     expect(round2(1.005)).toBe(1.01);
-    expect(round2(new Decimal('2.675'))).toBe(2.68); // float 2.675 is 2.67499… — string input is exact
+    expect(round2(new Decimal('2.675'))).toBe(2.68); // float 2.675 is 2.67499… - string input is exact
   });
 
   it('never produces float dust', () => {
@@ -65,7 +65,7 @@ describe('round2 — strict HALF_UP policy at 2dp', () => {
   });
 });
 
-describe('calculateLineItem — VAT-INCLUSIVE (POS retail default)', () => {
+describe('calculateLineItem - VAT-INCLUSIVE (POS retail default)', () => {
   it('extracts VAT from the shelf price: 116 gross → 100 net + 16 VAT', () => {
     const line = calculateLineItem(1, 116, 0, true, 16);
     expect(line.subtotal).toBe(116);
@@ -100,7 +100,7 @@ describe('calculateLineItem — VAT-INCLUSIVE (POS retail default)', () => {
   });
 });
 
-describe('calculateLineItem — VAT-EXCLUSIVE (B2B / wholesale POs)', () => {
+describe('calculateLineItem - VAT-EXCLUSIVE (B2B / wholesale POs)', () => {
   it('adds VAT on top: 1000 net → 160 VAT → 1160 gross', () => {
     const line = calculateLineItem(1, 1000, 0, false, 16);
     expect(line.subtotal).toBe(1000);
@@ -117,7 +117,7 @@ describe('calculateLineItem — VAT-EXCLUSIVE (B2B / wholesale POs)', () => {
   });
 });
 
-describe('aggregateDocument — Σ lines === docGross EXACTLY (audit assertion)', () => {
+describe('aggregateDocument - Σ lines === docGross EXACTLY (audit assertion)', () => {
   it('mixed basket aggregates to the cent with fullyConsistent=true', () => {
     const lines = [
       calculateLineItem(3, 150.5, 0, true, 16),   // 451.50 gross
@@ -142,7 +142,7 @@ describe('aggregateDocument — Σ lines === docGross EXACTLY (audit assertion)'
   });
 });
 
-describe('balanceDue / changeDue — payment balances (spec §4)', () => {
+describe('balanceDue / changeDue - payment balances (spec §4)', () => {
   it('Balance Due = max(0, finalTotal − Σ paid)', () => {
     expect(balanceDue(1000, 400, 300, 300)).toBe(0);
     expect(balanceDue(1000, 400)).toBe(600);
@@ -156,7 +156,7 @@ describe('balanceDue / changeDue — payment balances (spec §4)', () => {
   });
 });
 
-describe('weightedAverageCost — MAC on GRN (spec §5)', () => {
+describe('weightedAverageCost - MAC on GRN (spec §5)', () => {
   it('blends existing + received stock: (10×100 + 10×140)/20 = 120', () => {
     const r = weightedAverageCost(10, 100, 10, 140);
     expect(r.newQty).toBe(20);
@@ -182,7 +182,7 @@ describe('weightedAverageCost — MAC on GRN (spec §5)', () => {
   });
 });
 
-describe('formatKES / formatQty — the ONE canonical renderer', () => {
+describe('formatKES / formatQty - the ONE canonical renderer', () => {
   it('KES: en-KE style, exactly 2 decimals, ICU NBSP normalized', () => {
     expect(formatKES(1234567.5)).toBe('Ksh 1,234,567.50');
     expect(formatKES(0)).toBe('Ksh 0.00');

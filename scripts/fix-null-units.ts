@@ -26,7 +26,7 @@ const prisma = new PrismaClient({
 const DRY_RUN = process.argv.includes('--dry-run') || process.env.DRY_RUN === '1';
 
 async function main() {
-  console.log(`Scanning for products with NULL unitType${DRY_RUN ? ' (DRY RUN — nothing will be written)' : ''}…`);
+  console.log(`Scanning for products with NULL unitType${DRY_RUN ? ' (DRY RUN - nothing will be written)' : ''}…`);
 
   // `unitType` is schema-required, so NULL rows (legacy/raw inserts) are found
   // via raw SQL - works identically on Postgres (prod) and SQLite (local).
@@ -36,7 +36,7 @@ async function main() {
     WHERE "unitType" IS NULL`;
 
   if (nullUnitProducts.length === 0) {
-    console.log('No products with NULL unitType found — nothing to do.');
+    console.log('No products with NULL unitType found - nothing to do.');
     return;
   }
   console.log(`Found ${nullUnitProducts.length} product(s) with NULL unitType.`);
@@ -55,13 +55,13 @@ async function main() {
       || (p.categoryId != null && cementCategoryIds.has(p.categoryId));
     const unit = isCement ? 'BAG' : 'PIECE';
     if (isCement) bags++; else pieces++;
-    console.log(`  ${p.sku || p.id} — "${p.name}" → ${unit}`);
+    console.log(`  ${p.sku || p.id} - "${p.name}" → ${unit}`);
     if (!DRY_RUN) {
       await prisma.product.update({ where: { id: p.id }, data: { unitType: unit } });
     }
   }
 
-  console.log(`Done: ${bags} → BAG (cement), ${pieces} → PIECE${DRY_RUN ? ' (dry run — no rows written)' : ''}.`);
+  console.log(`Done: ${bags} → BAG (cement), ${pieces} → PIECE${DRY_RUN ? ' (dry run - no rows written)' : ''}.`);
 }
 
 main()

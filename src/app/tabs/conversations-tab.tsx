@@ -561,7 +561,7 @@ function ConversationThread({
         </div>
       </div>
 
-      {/* Settings dialog — key forces remount on open so form state resets from props */}
+      {/* Settings dialog - key forces remount on open so form state resets from props */}
       <ConversationSettingsDialog
         key={`settings-${conversation.id}-${showSettings}`}
         conversation={conversation}
@@ -1036,7 +1036,7 @@ export default function ConversationsTab() {
 
       <Card className="h-[calc(100vh-220px)] min-h-[500px] overflow-hidden p-0">
         <div className="grid md:grid-cols-[320px_1fr] h-full">
-          {/* List pane — hidden on mobile when a conversation is selected */}
+          {/* List pane - hidden on mobile when a conversation is selected */}
           <div className={`h-full ${selectedId ? 'hidden md:block' : 'block'}`}>
             <ConversationList
               storeId={currentStoreId}
@@ -1046,7 +1046,7 @@ export default function ConversationsTab() {
             />
           </div>
 
-          {/* Thread pane — hidden on mobile when no conversation is selected */}
+          {/* Thread pane - hidden on mobile when no conversation is selected */}
           <div className={`h-full ${selectedId ? 'block' : 'hidden md:block'}`}>
             {selectedId ? (
               <ConversationThread

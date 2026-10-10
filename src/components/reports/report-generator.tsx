@@ -388,7 +388,7 @@ export function ReportGenerator({
               {reportType !== 'daily' && resolvedStart && resolvedEnd && (
                 <span className="flex items-center gap-1">
                   <CalendarDays className="h-3 w-3" />
-                  {formatReportDate(resolvedStart)} — {formatReportDate(resolvedEnd)}
+                  {formatReportDate(resolvedStart)} - {formatReportDate(resolvedEnd)}
                 </span>
               )}
             </span>
@@ -411,7 +411,7 @@ export function ReportGenerator({
               data={preview}
               reportType={reportType}
             />
-            {/* Mobile-only download button — the header button is hidden on small screens */}
+            {/* Mobile-only download button - the header button is hidden on small screens */}
             <Button
               onClick={handleDownloadCSV}
               disabled={isDownloading}
@@ -465,7 +465,7 @@ function DailyPreview({ data }: { data: DailyReportData }) {
       <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
         <div className="flex items-center justify-between">
           <span className="font-semibold text-foreground">
-            End-of-Day Reconciliation — {data.store?.name || 'Store'}
+            End-of-Day Reconciliation - {data.store?.name || 'Store'}
           </span>
           <span>{formatReportDate(data.date)}</span>
         </div>
@@ -582,10 +582,10 @@ function SalesSummaryPreview({ data }: { data: SalesSummaryData }) {
       <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="font-semibold text-foreground">
-            Sales Summary — {data.store?.name || 'All Stores'}
+            Sales Summary - {data.store?.name || 'All Stores'}
           </span>
           <span>
-            {formatReportDate(data.period.startDate)} — {formatReportDate(data.period.endDate)}
+            {formatReportDate(data.period.startDate)} - {formatReportDate(data.period.endDate)}
           </span>
         </div>
       </div>
@@ -602,7 +602,7 @@ function SalesSummaryPreview({ data }: { data: SalesSummaryData }) {
                 {trendIcon}
                 {changePct !== null && changePct !== undefined
                   ? `${changePct > 0 ? '+' : ''}${changePct.toFixed(1)}%`
-                  : '—'}
+                  : '-'}
               </span>
             ) : undefined
           }
@@ -697,7 +697,7 @@ function SalesSummaryPreview({ data }: { data: SalesSummaryData }) {
                 key={h.hour}
                 className="group relative flex-1 rounded-t-sm bg-emerald-500/70 transition-colors hover:bg-emerald-500"
                 style={{ height: `${Math.max(2, heightPct)}%` }}
-                title={`${h.label} — ${formatNumber(h.revenue)} KES (${h.transactionCount} txns)`}
+                title={`${h.label} - ${formatNumber(h.revenue)} KES (${h.transactionCount} txns)`}
               >
                 <span className="absolute -top-5 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-foreground px-1 py-0.5 text-[9px] text-background group-hover:block">
                   {formatNumber(h.revenue)}

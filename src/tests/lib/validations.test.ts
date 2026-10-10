@@ -11,7 +11,7 @@
 //   • Gift card validation
 //   • The validateInput helper wrapper
 //
-// No database required — all tests are pure Zod parsing.
+// No database required - all tests are pure Zod parsing.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from 'vitest';

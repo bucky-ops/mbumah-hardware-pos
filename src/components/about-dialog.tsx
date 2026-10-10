@@ -71,13 +71,13 @@ export function AboutDialog({
           </DialogTitle>
           <DialogDescription asChild>
             <div className="text-left text-sm text-muted-foreground">
-              One system for the till, the store room and the back office — built for
+              One system for the till, the store room and the back office - built for
               Mbumah Hardware&apos;s branches, running from Nairobi to the world.
             </div>
           </DialogDescription>
         </DialogHeader>
 
-        {/* ── Version block — always in sync via src/lib/version.ts ── */}
+        {/* ── Version block - always in sync via src/lib/version.ts ── */}
         <div className="rounded-lg border bg-muted/40 p-4 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary" className="font-mono text-xs" data-testid="about-version">
@@ -89,12 +89,12 @@ export function AboutDialog({
           </div>
           <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
             <GitBranch className="mt-0.5 h-3 w-3 shrink-0" />
-            {/* Single span so the flex gap separates icon from TEXT BLOCK —
+            {/* Single span so the flex gap separates icon from TEXT BLOCK -
                 raw text nodes inside a flex <p> each become flex items and
                 the sentence renders with huge word gaps. */}
             <span>
               This version matches <span className="font-mono">/api/health</span>,
-              the footer, the login screen and the public API spec — all read one
+              the footer, the login screen and the public API spec - all read one
               source (<span className="font-mono">package.json</span>), so support
               can trust it.
             </span>

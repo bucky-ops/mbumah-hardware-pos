@@ -580,7 +580,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                 className="h-7 text-xs"
                 disabled={growingChart.length === 0}
                 onClick={() => setDrilldown({
-                  title: 'Top Growing Products — Detail',
+                  title: 'Top Growing Products - Detail',
                   rows: (
                     <Table>
                       <TableHeader>
@@ -597,7 +597,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                         {(trends?.growing ?? []).map((p) => (
                           <TableRow key={p.productId}>
                             <TableCell className="font-medium">{p.name}</TableCell>
-                            <TableCell className="text-muted-foreground">{p.category || '—'}</TableCell>
+                            <TableCell className="text-muted-foreground">{p.category || '-'}</TableCell>
                             <TableCell className="text-right">{p.currentQty}</TableCell>
                             <TableCell className="text-right text-muted-foreground">{p.previousQty}</TableCell>
                             <TableCell className="text-right">
@@ -605,7 +605,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                                 +{Math.round(p.growthPct || 0)}%
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-right">{p.revenue != null ? formatKES(p.revenue) : '—'}</TableCell>
+                            <TableCell className="text-right">{p.revenue != null ? formatKES(p.revenue) : '-'}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -669,7 +669,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                 className="h-7 text-xs"
                 disabled={decliningChart.length === 0}
                 onClick={() => setDrilldown({
-                  title: 'Top Declining Products — Reorder Warnings',
+                  title: 'Top Declining Products - Reorder Warnings',
                   rows: (
                     <Table>
                       <TableHeader>
@@ -686,7 +686,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                         {(trends?.declining ?? []).map((p) => (
                           <TableRow key={p.productId}>
                             <TableCell className="font-medium">{p.name}</TableCell>
-                            <TableCell className="text-muted-foreground">{p.category || '—'}</TableCell>
+                            <TableCell className="text-muted-foreground">{p.category || '-'}</TableCell>
                             <TableCell className="text-right">{p.currentQty}</TableCell>
                             <TableCell className="text-right text-muted-foreground">{p.previousQty}</TableCell>
                             <TableCell className="text-right">
@@ -717,7 +717,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
               <div className="h-64 flex flex-col items-center justify-center text-center">
                 <TrendingDown className="h-10 w-10 text-muted-foreground/30 mb-2" />
                 <p className="text-sm text-muted-foreground">No declining products in this range.</p>
-                <p className="text-xs text-muted-foreground/70 mt-1">All products are moving well — no reorders needed.</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">All products are moving well - no reorders needed.</p>
               </div>
             ) : (
               <>
@@ -749,7 +749,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                 <div className="mt-3 rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 p-2 flex items-start gap-2">
                   <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                   <p className="text-xs text-amber-800 dark:text-amber-300">
-                    {decliningChart.length} product{decliningChart.length !== 1 ? 's' : ''} showing declining sales — review reorder levels and consider promotions or restocking.
+                    {decliningChart.length} product{decliningChart.length !== 1 ? 's' : ''} showing declining sales - review reorder levels and consider promotions or restocking.
                   </p>
                 </div>
               </>
@@ -1349,13 +1349,13 @@ export default function ReportsTab() {
     const from = new Date(dateFrom);
     const to = new Date(dateTo);
     const days = Math.ceil((to.getTime() - from.getTime()) / 86400000) + 1;
-    return `${from.toLocaleDateString('en-KE', { month: 'short', day: 'numeric' })} — ${to.toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' })} (${days} days)`;
+    return `${from.toLocaleDateString('en-KE', { month: 'short', day: 'numeric' })} - ${to.toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' })} (${days} days)`;
   }, [dateFrom, dateTo]);
 
   return (
     <div className="space-y-4">
       {/* ================================================================== */}
-      {/* Report Types Grid — Glass-morphism with stagger animations         */}
+      {/* Report Types Grid - Glass-morphism with stagger animations         */}
       {/* ================================================================== */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {[
@@ -1957,12 +1957,12 @@ export default function ReportsTab() {
                       <div className="space-y-3">
                         <div className="flex items-center gap-3">
                           <div className="p-3 rounded-xl bg-primary/10">
-                            <span className="text-2xl font-bold text-primary">{inventoryTurnover || '—'}</span>
+                            <span className="text-2xl font-bold text-primary">{inventoryTurnover || '-'}</span>
                           </div>
                           <div>
                             <p className="text-sm font-medium">Turnover Ratio</p>
                             <p className="text-xs text-muted-foreground">
-                              {Number(inventoryTurnover) >= 2 ? 'Excellent — inventory moves quickly' : Number(inventoryTurnover) >= 1 ? 'Good — healthy stock rotation' : 'Low — consider reducing stock levels'}
+                              {Number(inventoryTurnover) >= 2 ? 'Excellent - inventory moves quickly' : Number(inventoryTurnover) >= 1 ? 'Good - healthy stock rotation' : 'Low - consider reducing stock levels'}
                             </p>
                           </div>
                         </div>
@@ -1970,7 +1970,7 @@ export default function ReportsTab() {
                         <div className="grid grid-cols-2 gap-2 text-xs">
                           <div className="p-2 rounded-lg bg-muted/30">
                             <p className="text-muted-foreground">Revenue</p>
-                            <p className="font-medium">{salesReport ? formatKES(salesReport.totalRevenue) : '—'}</p>
+                            <p className="font-medium">{salesReport ? formatKES(salesReport.totalRevenue) : '-'}</p>
                           </div>
                           <div className="p-2 rounded-lg bg-muted/30">
                             <p className="text-muted-foreground">Inventory Value</p>

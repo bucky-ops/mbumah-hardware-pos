@@ -490,7 +490,7 @@ async function updateStoreTransferHandler(
               storeId: existing.fromStoreId,
               movementType: 'TRANSFER',
               quantity: outstanding,
-              notes: `Cancelled transfer ${existing.transferNumber} — un-received stock returned to origin`,
+              notes: `Cancelled transfer ${existing.transferNumber} - un-received stock returned to origin`,
               referenceId: existing.id,
               performedBy: actorId,
             },

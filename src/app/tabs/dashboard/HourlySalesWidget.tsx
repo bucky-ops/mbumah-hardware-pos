@@ -136,7 +136,7 @@ export function HourlySalesWidget({ storeId }: HourlySalesWidgetProps) {
               Hourly Sales Heatmap
             </CardTitle>
             <CardDescription className="text-xs mt-0.5">
-              Today&apos;s revenue by hour (6 AM – 9 PM)
+              Today&apos;s revenue by hour (6 AM - 9 PM)
             </CardDescription>
           </div>
           <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-cyan-300 text-cyan-700 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/30">
@@ -192,7 +192,7 @@ export function HourlySalesWidget({ storeId }: HourlySalesWidgetProps) {
               Peak Hour
             </div>
             <p className="text-sm font-bold mt-0.5 text-amber-700 dark:text-amber-400">
-              {peakHour && peakHour.amount > 0 ? hourLabel(parseInt(peakHour.hour, 10)) : '—'}
+              {peakHour && peakHour.amount > 0 ? hourLabel(parseInt(peakHour.hour, 10)) : '-'}
             </p>
             <p className="text-[9px] text-muted-foreground tabular-nums">
               {peakHour && peakHour.amount > 0 ? formatKES(peakHour.amount) : 'No data'}
@@ -205,7 +205,7 @@ export function HourlySalesWidget({ storeId }: HourlySalesWidgetProps) {
               Quiet Hour
             </div>
             <p className="text-sm font-bold mt-0.5 text-cyan-700 dark:text-cyan-400">
-              {quietHour ? hourLabel(parseInt(quietHour.hour, 10)) : '—'}
+              {quietHour ? hourLabel(parseInt(quietHour.hour, 10)) : '-'}
             </p>
             <p className="text-[9px] text-muted-foreground tabular-nums">
               {quietHour ? formatKES(quietHour.amount) : 'No data'}

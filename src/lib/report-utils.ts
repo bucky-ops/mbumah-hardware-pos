@@ -182,7 +182,7 @@ export function generateSalesCSV(data: SalesSummaryData): string {
 
   // Header
   sections.push(toCSV(
-    ['MBUMAH HARDWARE POS — Sales Summary Report'],
+    ['MBUMAH HARDWARE POS - Sales Summary Report'],
     [[]],
   ));
   sections.push(toCSV(
@@ -290,7 +290,7 @@ export function generateSalesCSV(data: SalesSummaryData): string {
 export function generateDailyReportCSV(data: DailyReportData): string {
   const sections: string[] = [];
 
-  sections.push('MBUMAH HARDWARE POS — End-of-Day Reconciliation');
+  sections.push('MBUMAH HARDWARE POS - End-of-Day Reconciliation');
   sections.push(`Date: ${formatReportDate(data.date)}`);
   sections.push(`Store: ${data.store?.name || 'All Stores'}`);
   sections.push('');
@@ -306,10 +306,10 @@ export function generateDailyReportCSV(data: DailyReportData): string {
       ['Transaction Count', data.sales.transactionCount],
       ['Avg Transaction Value', formatNumber(data.sales.avgTransactionValue)],
       ['', ''],
-      ['Returns — Count', data.returns.count],
-      ['Returns — Refunded', formatNumber(data.returns.totalRefunded)],
-      ['Voided — Count', data.voided.count],
-      ['Voided — Amount', formatNumber(data.voided.totalVoided)],
+      ['Returns - Count', data.returns.count],
+      ['Returns - Refunded', formatNumber(data.returns.totalRefunded)],
+      ['Voided - Count', data.voided.count],
+      ['Voided - Amount', formatNumber(data.voided.totalVoided)],
     ],
   ));
 

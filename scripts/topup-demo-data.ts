@@ -53,7 +53,7 @@ function poDateStr(d: Date): string {
 }
 
 async function main() {
-  console.log(`\n=== MBUMAH demo-data top-up — mode: ${APPLY ? '🟢 APPLY' : '🟡 DRY RUN'} ===\n`);
+  console.log(`\n=== MBUMAH demo-data top-up - mode: ${APPLY ? '🟢 APPLY' : '🟡 DRY RUN'} ===\n`);
 
   // before counts
   const before = await snapshot();
@@ -65,10 +65,10 @@ async function main() {
   const storeNairobiCbd = await prisma.store.findUnique({ where: { id: 'store_nairobi_cbd' } });
   const storeNakuru = await prisma.store.findUnique({ where: { id: 'store_nakuru' } });
   if (!store || !storeThika || !storeRuiru || !storeNairobiCbd || !storeNakuru) {
-    throw new Error('Expected 5 canonical stores missing — aborting (unknown DB state).');
+    throw new Error('Expected 5 canonical stores missing - aborting (unknown DB state).');
   }
   const org = await prisma.organization.findFirst();
-  if (!org) throw new Error('No organization found — aborting.');
+  if (!org) throw new Error('No organization found - aborting.');
 
   const userIds = new Set((await prisma.user.findMany({ select: { id: true } })).map(u => u.id));
   const productIds = new Set((await prisma.product.findMany({ select: { id: true } })).map(p => p.id));
@@ -389,7 +389,7 @@ async function main() {
     rebar10mm: 'prod_rebar_10mm', nails4inch: 'prod_nails_4inch',
   };
   const pos: { number: string; date: Date; supplierId: string; status: string; expectedDate?: Date; approvedAt?: Date; receivedAt?: Date; cancelledAt?: Date; notes: string; items: { productId: string; productName: string; quantity: number; unitCost: number; receivedQty: number }[] }[] = [
-    { number: `PO-${poDateStr(daysAgo(14))}-0001`, date: daysAgo(14), supplierId: jujaSuppliers.bamburi, status: 'RECEIVED', expectedDate: daysAgo(10), approvedAt: daysAgoAtHour(13, 10), receivedAt: daysAgoAtHour(10, 14), notes: 'Routine restocking order — fully received.',
+    { number: `PO-${poDateStr(daysAgo(14))}-0001`, date: daysAgo(14), supplierId: jujaSuppliers.bamburi, status: 'RECEIVED', expectedDate: daysAgo(10), approvedAt: daysAgoAtHour(13, 10), receivedAt: daysAgoAtHour(10, 14), notes: 'Routine restocking order - fully received.',
       items: [
         { productId: jujaProducts.cement, productName: 'Bamburi Cement 50kg', quantity: 100, unitCost: 680, receivedQty: 100 },
         { productId: jujaProducts.mabati30, productName: 'Mabati 30-Gauge (8ft)', quantity: 200, unitCost: 580, receivedQty: 200 },
@@ -402,18 +402,18 @@ async function main() {
         { productId: jujaProducts.crown20l, productName: 'Crown Vinyl Silk 20L', quantity: 15, unitCost: 5500, receivedQty: 0 },
         { productId: jujaProducts.rebar10mm, productName: 'Rebar 10mm x 12m', quantity: 80, unitCost: 780, receivedQty: 0 },
       ] },
-    { number: `PO-${poDateStr(daysAgo(21))}-0003`, date: daysAgo(21), supplierId: jujaSuppliers.dulux, status: 'PARTIALLY_RECEIVED', expectedDate: daysAgo(14), approvedAt: daysAgoAtHour(20, 9), receivedAt: daysAgoAtHour(14, 15), notes: 'Partial delivery — Dulux paint backordered by supplier. Cement and mabati delivered in full.',
+    { number: `PO-${poDateStr(daysAgo(21))}-0003`, date: daysAgo(21), supplierId: jujaSuppliers.dulux, status: 'PARTIALLY_RECEIVED', expectedDate: daysAgo(14), approvedAt: daysAgoAtHour(20, 9), receivedAt: daysAgoAtHour(14, 15), notes: 'Partial delivery - Dulux paint backordered by supplier. Cement and mabati delivered in full.',
       items: [
         { productId: jujaProducts.cement, productName: 'Bamburi Cement 50kg', quantity: 200, unitCost: 680, receivedQty: 200 },
         { productId: jujaProducts.mabati30, productName: 'Mabati 30-Gauge (8ft)', quantity: 300, unitCost: 580, receivedQty: 300 },
         { productId: jujaProducts.dulux20l, productName: 'Dulux Weathershield 20L', quantity: 30, unitCost: 7200, receivedQty: 12 },
       ] },
-    { number: `PO-${poDateStr(new Date())}-0004`, date: new Date(), supplierId: jujaSuppliers.bamburi, status: 'DRAFT', notes: 'Draft — pending review before sending to supplier.',
+    { number: `PO-${poDateStr(new Date())}-0004`, date: new Date(), supplierId: jujaSuppliers.bamburi, status: 'DRAFT', notes: 'Draft - pending review before sending to supplier.',
       items: [
         { productId: jujaProducts.nails4inch, productName: '4-inch Nails', quantity: 200, unitCost: 110, receivedQty: 0 },
         { productId: jujaProducts.rebar10mm, productName: 'Rebar 10mm x 12m', quantity: 50, unitCost: 780, receivedQty: 0 },
       ] },
-    { number: `PO-${poDateStr(daysAgo(30))}-0005`, date: daysAgo(30), supplierId: jujaSuppliers.mabati, status: 'CANCELLED', expectedDate: daysAgo(23), approvedAt: daysAgoAtHour(29, 14), cancelledAt: daysAgoAtHour(28, 9), notes: 'Cancelled — supplier could not meet delivery timeline. Will reorder from alternative supplier.',
+    { number: `PO-${poDateStr(daysAgo(30))}-0005`, date: daysAgo(30), supplierId: jujaSuppliers.mabati, status: 'CANCELLED', expectedDate: daysAgo(23), approvedAt: daysAgoAtHour(29, 14), cancelledAt: daysAgoAtHour(28, 9), notes: 'Cancelled - supplier could not meet delivery timeline. Will reorder from alternative supplier.',
       items: [
         { productId: jujaProducts.cement, productName: 'Bamburi Cement 50kg', quantity: 50, unitCost: 680, receivedQty: 0 },
         { productId: jujaProducts.mabati30, productName: 'Mabati 30-Gauge (8ft)', quantity: 100, unitCost: 580, receivedQty: 0 },
@@ -544,7 +544,7 @@ async function main() {
   for (const k of Object.keys(before)) {
     console.log(`${k.padEnd(24)} ${String(before[k]).padStart(5)} → ${after[k]}`);
   }
-  console.log(`\n${APPLY ? '✅ APPLY complete.' : '🟡 Dry run only — re-run with APPLY=1 to write.'}`);
+  console.log(`\n${APPLY ? '✅ APPLY complete.' : '🟡 Dry run only - re-run with APPLY=1 to write.'}`);
 }
 
 async function snapshot(): Promise<Record<string, number>> {

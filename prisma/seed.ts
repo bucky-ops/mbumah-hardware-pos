@@ -29,7 +29,7 @@ function stage(n: number, total: number, name: string): (status: 'ok' | 'skipped
   console.log(`\n[seed ${n}/${total}] Starting: ${name}`);
   return (status, detail) => {
     const icon = status === 'ok' ? '✅' : status === 'skipped' ? '⏭️' : '⚠️';
-    console.log(`[seed ${n}/${total}] ${icon} ${name} — ${status}${detail ? ` (${detail})` : ''}`);
+    console.log(`[seed ${n}/${total}] ${icon} ${name} - ${status}${detail ? ` (${detail})` : ''}`);
     stageResults.push({ name, status, detail });
   };
 }
@@ -96,7 +96,7 @@ async function main() {
     const failed = stageResults.filter(s => s.status === 'failed').length;
     for (const r of stageResults) {
       const icon = r.status === 'ok' ? '✅' : r.status === 'skipped' ? '⏭️' : '⚠️';
-      console.log(`  ${icon} ${r.name} — ${r.status}${r.detail ? ` (${r.detail})` : ''}`);
+      console.log(`  ${icon} ${r.name} - ${r.status}${r.detail ? ` (${r.detail})` : ''}`);
     }
     console.log(`\n  Total: ${ok} ok, ${skipped} skipped, ${failed} failed of ${stageResults.length} stages reached.`);
     console.log('========================================\n');
@@ -104,7 +104,7 @@ async function main() {
 }
 
 async function seedBody() {
-  // 1. Create Organization (upsert — idempotent on re-run)
+  // 1. Create Organization (upsert - idempotent on re-run)
   const done1 = stage(1, TOTAL_STAGES, 'Create Organization');
   const org = await prisma.organization.upsert({
     where: { id: 'org_mbumah' },
@@ -118,7 +118,7 @@ async function seedBody() {
   });
   done1('ok', org.id);
 
-  // 2. Create Stores (upsert — idempotent on re-run)
+  // 2. Create Stores (upsert - idempotent on re-run)
   const done2 = stage(2, TOTAL_STAGES, 'Create Stores (5 branches)');
   const store = await prisma.store.upsert({
     where: { id: 'store_juja_main' },
@@ -201,7 +201,7 @@ async function seedBody() {
   });
   done2('ok', '5 stores');
 
-  // 3. Seed Super Admin (upsert — idempotent on re-run)
+  // 3. Seed Super Admin (upsert - idempotent on re-run)
   const done3 = stage(3, TOTAL_STAGES, 'Seed Super Admin');
   const adminPasswordHash = await bcrypt.hash('password123', 12);
   const superAdmin = await prisma.user.upsert({
@@ -222,7 +222,7 @@ async function seedBody() {
 
   // ── F6-3 remediation: dedicated `system` actor ──────────────────────────
   // The M-Pesa callback (and other automated flows) previously wrote
-  // `CashDrawerLog.userId = 'system'` — a FK to User that did not exist,
+  // `CashDrawerLog.userId = 'system'` - a FK to User that did not exist,
   // which made EVERY successful M-Pesa confirmation throw. The `system`
   // user is a non-loginable service identity (isActive: false ⇒ no session
   // can ever be created for it; the random password hash is unknowable).
@@ -235,7 +235,7 @@ async function seedBody() {
       storeId: store.id,
       email: 'system@mbumahhardware.co.ke',
       name: 'System (automated)',
-      // Unusable password hash — this identity never authenticates.
+      // Unusable password hash - this identity never authenticates.
       passwordHash: bcrypt.hashSync(crypto.randomUUID(), 12),
       role: 'SUPER_ADMIN',
       isActive: false,
@@ -474,7 +474,7 @@ async function seedBody() {
       await prisma.rolePermission.create({ data: perm });
       permCreated++;
     } catch {
-      // Skip duplicate — idempotent on re-run
+      // Skip duplicate - idempotent on re-run
     }
   }
   done5('ok', permCreated + ' permissions created (' + (permissions.length - permCreated) + ' duplicates skipped)');
@@ -483,7 +483,7 @@ async function seedBody() {
   const done6 = stage(6, TOTAL_STAGES, 'Seed product categories (10)');
   // NOTE: Uses a sequential loop (NOT Promise.all) because Neon's PgBouncer
   // runs in transaction-mode pooling, which cannot handle concurrent queries
-  // on the same Prisma client connection — Promise.all would open 10
+  // on the same Prisma client connection - Promise.all would open 10
   // concurrent transactions that interfere with each other's session state
   // and fail with "relation does not exist" or connection errors. SQLite
   // tolerated this; PostgreSQL via PgBouncer does not.
@@ -551,7 +551,7 @@ async function seedBody() {
     { id: 'prod_screws_wood', sku: 'MBM-NAS-0004', name: 'Wood Screws Assorted (Box)', categoryId: 'cat_nails_screws', unitType: 'BOX', quantityInStock: 80, pricePerUnit: 500, costPrice: 380, reorderLevel: 20, imageUrl: '/categories/cat_nails.png' },
   ];
 
-  // Batch-insert all products via createMany (idempotent on re-run — duplicates
+  // Batch-insert all products via createMany (idempotent on re-run - duplicates
   // on the @id field are caught by try/catch below).
   let _prodCreated = 0;
   for (const p of products) {
@@ -559,7 +559,7 @@ async function seedBody() {
       await prisma.product.create({ data: { ...p, storeId: store.id } as any });
       _prodCreated++;
     } catch {
-      // Skip duplicate — idempotent on re-run
+      // Skip duplicate - idempotent on re-run
     }
   }
 
@@ -1815,7 +1815,7 @@ async function seedBody() {
       status: 'OPEN',
       periodType: 'MONTHLY',
       employeeCount: employees.length,
-      notes: 'Demo payroll period — seeded for testing.',
+      notes: 'Demo payroll period - seeded for testing.',
     },
   });
 
@@ -1854,7 +1854,7 @@ async function seedBody() {
     nails4inch: 'prod_nails_4inch',
   };
 
-  // PO-1: RECEIVED — fully received order from Bamburi Cement (~2 weeks ago)
+  // PO-1: RECEIVED - fully received order from Bamburi Cement (~2 weeks ago)
   const po1Date = daysAgo(14);
   const po1Items = [
     { productId: jujaProducts.cement, productName: 'Bamburi Cement 50kg', quantity: 100, unitCost: 680, totalCost: 100 * 680, receivedQty: 100 },
@@ -1880,7 +1880,7 @@ async function seedBody() {
         subTotal: po1SubTotal,
         taxAmount: po1Tax,
         totalAmount: po1Total,
-        notes: 'Routine restocking order — fully received.',
+        notes: 'Routine restocking order - fully received.',
         createdById: 'user_super_admin',
         approvedById: 'user_super_admin',
         approvedAt: daysAgoAtHour(13, 10),
@@ -1900,7 +1900,7 @@ async function seedBody() {
     });
   }
 
-  // PO-2: APPROVED — approved but not yet sent (~1 week ago)
+  // PO-2: APPROVED - approved but not yet sent (~1 week ago)
   const po2Date = daysAgo(7);
   const po2Items = [
     { productId: jujaProducts.mabati28, productName: 'Mabati 28-Gauge (8ft)', quantity: 100, unitCost: 720, totalCost: 100 * 720, receivedQty: 0 },
@@ -1943,7 +1943,7 @@ async function seedBody() {
     });
   }
 
-  // PO-3: PARTIALLY_RECEIVED — partially received (~3 weeks ago)
+  // PO-3: PARTIALLY_RECEIVED - partially received (~3 weeks ago)
   const po3Date = daysAgo(21);
   const po3Items = [
     { productId: jujaProducts.cement, productName: 'Bamburi Cement 50kg', quantity: 200, unitCost: 680, totalCost: 200 * 680, receivedQty: 200 },
@@ -1968,7 +1968,7 @@ async function seedBody() {
         subTotal: po3SubTotal,
         taxAmount: po3Tax,
         totalAmount: po3Total,
-        notes: 'Partial delivery — Dulux paint backordered by supplier. Cement and mabati delivered in full.',
+        notes: 'Partial delivery - Dulux paint backordered by supplier. Cement and mabati delivered in full.',
         createdById: 'user_super_admin',
         approvedById: 'user_super_admin',
         approvedAt: daysAgoAtHour(20, 9),
@@ -1988,7 +1988,7 @@ async function seedBody() {
     });
   }
 
-  // PO-4: DRAFT — a draft order (created today)
+  // PO-4: DRAFT - a draft order (created today)
   const po4Date = new Date();
   const po4Items = [
     { productId: jujaProducts.nails4inch, productName: '4-inch Nails', quantity: 200, unitCost: 110, totalCost: 200 * 110, receivedQty: 0 },
@@ -2011,7 +2011,7 @@ async function seedBody() {
         subTotal: po4SubTotal,
         taxAmount: po4Tax,
         totalAmount: po4Total,
-        notes: 'Draft — pending review before sending to supplier.',
+        notes: 'Draft - pending review before sending to supplier.',
         createdById: 'user_super_admin',
         items: {
           create: po4Items.map(i => ({
@@ -2027,7 +2027,7 @@ async function seedBody() {
     });
   }
 
-  // PO-5: CANCELLED — a cancelled order (~1 month ago)
+  // PO-5: CANCELLED - a cancelled order (~1 month ago)
   const po5Date = daysAgo(30);
   const po5Items = [
     { productId: jujaProducts.cement, productName: 'Bamburi Cement 50kg', quantity: 50, unitCost: 680, totalCost: 50 * 680, receivedQty: 0 },
@@ -2051,7 +2051,7 @@ async function seedBody() {
         subTotal: po5SubTotal,
         taxAmount: po5Tax,
         totalAmount: po5Total,
-        notes: 'Cancelled — supplier could not meet delivery timeline. Will reorder from alternative supplier.',
+        notes: 'Cancelled - supplier could not meet delivery timeline. Will reorder from alternative supplier.',
         createdById: 'user_super_admin',
         approvedById: 'user_super_admin',
         approvedAt: daysAgoAtHour(29, 14),

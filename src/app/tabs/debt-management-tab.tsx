@@ -68,14 +68,14 @@ const AGING_BUCKET_CONFIG: Record<
     description: 'Not yet due',
   },
   DAYS_30: {
-    label: '1–30 days',
+    label: '1-30 days',
     color: 'text-amber-700 dark:text-amber-300',
     bg: 'bg-amber-100 dark:bg-amber-900/30',
     icon: Clock,
     description: 'Weekly reminders (SMS + WhatsApp)',
   },
   DAYS_60: {
-    label: '31–60 days',
+    label: '31-60 days',
     color: 'text-orange-700 dark:text-orange-300',
     bg: 'bg-orange-100 dark:bg-orange-900/30',
     icon: AlertTriangle,
@@ -189,7 +189,7 @@ function OverdueBoardSection({ storeId }: { storeId: string }) {
         icon: DollarSign,
       },
       {
-        label: '1–60 days',
+        label: '1-60 days',
         value: (byBucket.DAYS_30 ?? 0) + (byBucket.DAYS_60 ?? 0),
         color: 'text-amber-600 dark:text-amber-400',
         icon: Clock,
@@ -257,7 +257,7 @@ function OverdueBoardSection({ storeId }: { storeId: string }) {
           {customers.length === 0 ? (
             <div className="text-center py-12 space-y-2">
               <CheckCircle className="h-10 w-10 text-emerald-500/60 mx-auto" />
-              <p className="text-sm font-medium text-foreground">No overdue customers 🎉</p>
+              <p className="text-sm font-medium text-foreground">No overdue customers</p>
               <p className="text-xs text-muted-foreground">All customer debts are current. Great job!</p>
             </div>
           ) : (
@@ -455,13 +455,13 @@ function PipelineSection({ storeId }: { storeId: string }) {
             </CardTitle>
             <CardDescription>
               Scan overdue debts and create PENDING reminder tasks based on aging escalation rules.
-              Fast — no network calls.
+              Fast - no network calls.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="text-xs text-muted-foreground space-y-1">
-              <p>• <span className="font-medium">1–30 days late</span>: weekly (SMS + WhatsApp)</p>
-              <p>• <span className="font-medium">31–60 days late</span>: every 3 days (SMS + WhatsApp + Email)</p>
+              <p>• <span className="font-medium">1-30 days late</span>: weekly (SMS + WhatsApp)</p>
+              <p>• <span className="font-medium">31-60 days late</span>: every 3 days (SMS + WhatsApp + Email)</p>
               <p>• <span className="font-medium">61+ days late</span>: daily + manager escalation</p>
             </div>
             <Button
@@ -500,7 +500,7 @@ function PipelineSection({ storeId }: { storeId: string }) {
             </CardTitle>
             <CardDescription>
               Send all PENDING reminders via SMS (Twilio), WhatsApp (Twilio), and Email (Resend).
-              Network-bound — batches of 100.
+              Network-bound - batches of 100.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -798,13 +798,13 @@ function HistorySection({ storeId }: { storeId: string }) {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm">
-                          {r.customer?.name || '—'}
+                          {r.customer?.name || '-'}
                           {r.customer?.phone && (
                             <p className="text-xs text-muted-foreground">{r.customer.phone}</p>
                           )}
                         </TableCell>
                         <TableCell className="text-right font-mono text-sm">
-                          {r.debtLedger ? formatKES(r.debtLedger.balance) : '—'}
+                          {r.debtLedger ? formatKES(r.debtLedger.balance) : '-'}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground max-w-xs">
                           <p className="truncate" title={r.message}>{r.message}</p>

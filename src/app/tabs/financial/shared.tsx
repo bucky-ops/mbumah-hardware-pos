@@ -49,7 +49,7 @@ export function formatRangeLabel(from: string, to: string): string {
   const f = new Date(from);
   const t = new Date(to);
   const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
-  return `${f.toLocaleDateString('en-US', opts)} – ${t.toLocaleDateString('en-US', opts)}`;
+  return `${f.toLocaleDateString('en-US', opts)} - ${t.toLocaleDateString('en-US', opts)}`;
 }
 
 // --- AnimatedCounter
@@ -91,13 +91,12 @@ export function AnimatedCounter({ value, prefix = '', suffix = '' }: { value: nu
 
 // --- Chart of Accounts visual config
 
-export const accountTypeColors: Record<string, { bg: string; text: string; dot: string; border: string; icon: string; gradient: string; headerBg: string }> = {
+export const accountTypeColors: Record<string, { bg: string; text: string; dot: string; border: string; gradient: string; headerBg: string }> = {
   ASSET: {
     bg: 'bg-green-50 dark:bg-green-900/20',
     text: 'text-green-700 dark:text-green-400',
     dot: 'bg-green-500',
     border: 'border-l-green-500',
-    icon: '💰',
     gradient: 'from-green-500/10 to-green-600/5',
     headerBg: 'bg-gradient-to-r from-green-100 to-green-50 dark:from-green-900/30 dark:to-green-800/10',
   },
@@ -106,7 +105,6 @@ export const accountTypeColors: Record<string, { bg: string; text: string; dot: 
     text: 'text-red-700 dark:text-red-400',
     dot: 'bg-red-500',
     border: 'border-l-red-500',
-    icon: '📋',
     gradient: 'from-red-500/10 to-orange-500/5',
     headerBg: 'bg-gradient-to-r from-red-100 to-orange-50 dark:from-red-900/30 dark:to-orange-800/10',
   },
@@ -115,7 +113,6 @@ export const accountTypeColors: Record<string, { bg: string; text: string; dot: 
     text: 'text-purple-700 dark:text-purple-400',
     dot: 'bg-purple-500',
     border: 'border-l-purple-500',
-    icon: '🏦',
     gradient: 'from-purple-500/10 to-purple-600/5',
     headerBg: 'bg-gradient-to-r from-purple-100 to-purple-50 dark:from-purple-900/30 dark:to-purple-800/10',
   },
@@ -124,7 +121,6 @@ export const accountTypeColors: Record<string, { bg: string; text: string; dot: 
     text: 'text-blue-700 dark:text-blue-400',
     dot: 'bg-blue-500',
     border: 'border-l-blue-500',
-    icon: '📈',
     gradient: 'from-blue-500/10 to-blue-600/5',
     headerBg: 'bg-gradient-to-r from-blue-100 to-blue-50 dark:from-blue-900/30 dark:to-blue-800/10',
   },
@@ -133,7 +129,6 @@ export const accountTypeColors: Record<string, { bg: string; text: string; dot: 
     text: 'text-amber-700 dark:text-amber-400',
     dot: 'bg-amber-500',
     border: 'border-l-amber-500',
-    icon: '📉',
     gradient: 'from-amber-500/10 to-amber-600/5',
     headerBg: 'bg-gradient-to-r from-amber-100 to-amber-50 dark:from-amber-900/30 dark:to-amber-800/10',
   },

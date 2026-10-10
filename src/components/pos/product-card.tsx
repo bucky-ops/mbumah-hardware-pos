@@ -141,7 +141,7 @@ export function ProductCard({
       style={{ borderTopColor: categoryColor, borderTopWidth: '4px' }}
       onClick={handleClick}
       role="button"
-      aria-label={`${product.name}, ${formatKES(product.pricePerUnit)}, ${isOutOfStock ? 'out of stock — cannot be sold until restocked' : `${product.quantityInStock} in stock`}`}
+      aria-label={`${product.name}, ${formatKES(product.pricePerUnit)}, ${isOutOfStock ? 'out of stock - cannot be sold until restocked' : `${product.quantityInStock} in stock`}`}
     >
       {/* Category accent strip on left side of card */}
       <span
@@ -160,7 +160,7 @@ export function ProductCard({
         />
       )}
 
-      {/* In-cart indicator — v2.13.3: blue pill with words ("1 in cart") per the
+      {/* In-cart indicator - v2.13.3: blue pill with words ("1 in cart") per the
           functional-POS spec; instantly visible optimistic feedback that the
           + tap registered, pops on every re-add. */}
       {cartQuantity && cartQuantity > 0 && (
@@ -173,7 +173,7 @@ export function ProductCard({
         </div>
       )}
 
-      {/* Image area — taller & more readable */}
+      {/* Image area - taller & more readable */}
       <div className="h-32 bg-muted flex items-center justify-center relative overflow-hidden shrink-0">
         {product.imageUrl ? (
           <img
@@ -234,7 +234,7 @@ export function ProductCard({
           </div>
         )}
 
-        {/* Badges — v2.12.1: left stack capped at 55% + per-badge truncation so
+        {/* Badges - v2.12.1: left stack capped at 55% + per-badge truncation so
             RENTAL/BUNDLE/BEST SELLER/ON SALE/NEW can never collide with the
             top-right stock badge on narrow cards. */}
         <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 z-20 max-w-[55%]">
@@ -275,7 +275,7 @@ export function ProductCard({
       </div>
 
       <CardContent className="p-3 flex-1 flex flex-col gap-1">
-        {/* Product name — wraps fully, never truncates words */}
+        {/* Product name - wraps fully, never truncates words */}
         <h3 className="font-semibold text-[15px] leading-snug break-words min-h-[2.6em]">{product.name}</h3>
         {product.category && (
           <div className="flex items-center gap-1.5">
@@ -299,7 +299,7 @@ export function ProductCard({
             </span>
           </div>
 
-          {/* Quick add button — touch-friendly 44px target with gradient + ripple + press animation */}
+          {/* Quick add button - touch-friendly 44px target with gradient + ripple + press animation */}
           <Button
             type="button"
             size="icon"
@@ -335,7 +335,7 @@ export function ProductCard({
           </Button>
         </div>
 
-        {/* Stock bar — clear low/out-of-stock visual with colored thresholds */}
+        {/* Stock bar - clear low/out-of-stock visual with colored thresholds */}
         <div className="flex items-center gap-2 mt-auto pt-1.5">
           <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={stockPercent} aria-valuemin={0} aria-valuemax={100} aria-label={`Stock level: ${stockPercent}%`}>
             <div

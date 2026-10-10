@@ -219,7 +219,7 @@ export function DashboardStats({ storeId, onLowStockClick }: { storeId: string; 
               onKeyDown={isClickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onLowStockClick(); } } : undefined}
             >
               <CardContent className="p-3 flex items-center gap-3">
-                {/* Gradient icon circle — emerald/blue/amber/red per stat */}
+                {/* Gradient icon circle - emerald/blue/amber/red per stat */}
                 <div className={`shrink-0 h-9 w-9 rounded-xl flex items-center justify-center shadow-md ${stat.iconCircle}`}>
                   <Icon className="h-4 w-4" />
                 </div>
@@ -247,7 +247,7 @@ export function DashboardStats({ storeId, onLowStockClick }: { storeId: string; 
         })}
       </div>
 
-      {/* Subtle live activity indicator strip — shows we're tracking real-time */}
+      {/* Subtle live activity indicator strip - shows we're tracking real-time */}
       <div className="flex items-center justify-center gap-1.5 text-[9px] text-muted-foreground/60">
         <Activity className="h-2.5 w-2.5" />
         <span>Auto-refreshing every 30s · Last refresh {lastUpdatedStr}</span>

@@ -241,13 +241,13 @@ function logTransition(name: string, state: CircuitState, metrics: CircuitBreake
         severity,
         message:
           state === 'OPEN'
-            ? `Circuit breaker "${name}" TRIPPED OPEN — failing fast. ` +
+            ? `Circuit breaker "${name}" TRIPPED OPEN - failing fast. ` +
               `Failure rate: ${(metrics.failureRate * 100).toFixed(1)}% ` +
               `(${metrics.windowFailures}/${metrics.windowSize}). ` +
               `Cooldown: ${metrics.msUntilHalfOpen}ms. ` +
               `Total trips: ${metrics.totalTrips}.`
             : state === 'HALF_OPEN'
-              ? `Circuit breaker "${name}" entering HALF_OPEN — probing with up to ` +
+              ? `Circuit breaker "${name}" entering HALF_OPEN - probing with up to ` +
                 `${CIRCUIT_BREAKER_PRESETS.EXTERNAL_API.halfOpenMaxCalls} trial calls.`
               : `Circuit breaker "${name}" RECOVERED → CLOSED. ` +
                 `Total calls since reset: ${metrics.totalCalls} ` +

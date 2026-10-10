@@ -81,7 +81,7 @@ function formatRole(role: string): string {
 }
 
 function formatDate(value: string | null): string {
-  if (!value) return '—';
+  if (!value) return '-';
   try {
     return new Date(value).toLocaleString('en-KE', {
       dateStyle: 'medium',
@@ -294,7 +294,7 @@ function ProfileTabs({
 
         <Separator />
 
-        {/* Read-only account facts — email/role/store changes stay admin-only
+        {/* Read-only account facts - email/role/store changes stay admin-only
             by design (segregation of duties, see /api/users/[id]). */}
         <div className="grid gap-2 text-sm">
           <div className="flex items-center gap-2 rounded-lg border p-2.5">
@@ -304,7 +304,7 @@ function ProfileTabs({
           </div>
           <div className="flex items-center gap-2 rounded-lg border p-2.5">
             <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 flex-1 truncate">{profile.organization?.name || '—'}</span>
+            <span className="min-w-0 flex-1 truncate">{profile.organization?.name || '-'}</span>
             <span className="text-[11px] text-muted-foreground">Organization</span>
           </div>
           <div className="flex items-center gap-2 rounded-lg border p-2.5">

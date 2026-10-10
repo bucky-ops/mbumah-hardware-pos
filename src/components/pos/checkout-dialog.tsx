@@ -536,7 +536,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
       footer={renderFooter()}
     >
       <div className="space-y-4">
-        {/* Step progress indicator — always visible */}
+        {/* Step progress indicator - always visible */}
         {mpesaStatus !== 'success' && renderStepIndicator()}
 
         {/* === SUCCESS SCREEN (overrides steps) === */}
@@ -594,7 +594,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
 
                 <Separator />
 
-                {/* Payment Method Selector — Cash, Debt, Either/Split, M-Pesa
+                {/* Payment Method Selector - Cash, Debt, Either/Split, M-Pesa
                      Each card has icon, name, and selected state with gradient border */}
                 <div>
                   <Label className="text-sm font-medium">Payment Method</Label>
@@ -624,7 +624,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
                                 aria-hidden
                               />
                             )}
-                            {/* Icon — circle with gradient when selected, plain when not */}
+                            {/* Icon - circle with gradient when selected, plain when not */}
                             <span
                               className={`relative z-10 flex items-center justify-center h-9 w-9 rounded-full ${
                                 isSelected
@@ -674,7 +674,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
                         className="text-lg font-semibold mt-1"
                         autoFocus
                       />
-                      {/* Quick cash buttons — exact, round up to 100/500/1000 */}
+                      {/* Quick cash buttons - exact, round up to 100/500/1000 */}
                       <div className="flex flex-wrap gap-1.5 mt-2">
                         {[
                           { label: 'Exact', amt: finalTotal },
@@ -1052,7 +1052,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
                   <div className="p-3 rounded-lg border bg-muted/30 space-y-1.5 text-sm">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Cash Received</span>
-                      <span className="font-semibold">{cashReceived ? formatKES(Number(cashReceived)) : '—'}</span>
+                      <span className="font-semibold">{cashReceived ? formatKES(Number(cashReceived)) : '-'}</span>
                     </div>
                     {change > 0 && (
                       <div className="flex justify-between text-green-600">
@@ -1093,7 +1093,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
                     <Smartphone className="h-4 w-4" />
                     <AlertTitle>M-Pesa Payment</AlertTitle>
                     <AlertDescription>
-                      STK push will be sent to <span className="font-semibold">{mpesaPhone || '—'}</span> for <span className="font-semibold">{formatKES(finalTotal)}</span>.
+                      STK push will be sent to <span className="font-semibold">{mpesaPhone || '-'}</span> for <span className="font-semibold">{formatKES(finalTotal)}</span>.
                     </AlertDescription>
                   </Alert>
                 )}

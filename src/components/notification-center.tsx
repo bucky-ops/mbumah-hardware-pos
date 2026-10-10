@@ -132,7 +132,7 @@ function SecurityEventsFeed({
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                   {who}
-                  {what ? ` — ${what}` : ''}
+                  {what ? ` - ${what}` : ''}
                   {event.ipAddress ? ` · ${event.ipAddress}` : ''}
                 </p>
                 <p
@@ -368,7 +368,7 @@ export function NotificationCenter({
             </div>
           </div>
           <SheetDescription>
-            Stay updated on stock, rentals, debts and sales — mark all as read from the ⋮ menu
+            Stay updated on stock, rentals, debts and sales - mark all as read from the ⋮ menu
           </SheetDescription>
         </SheetHeader>
 
@@ -510,7 +510,7 @@ export function NotificationCenter({
                 );
               })}
 
-              {/* v2.12.7 (PR C): merged recent SecurityEvents — read-only feed
+              {/* v2.12.7 (PR C): merged recent SecurityEvents - read-only feed
                   below the SECURITY notifications, manager roles only. */}
               {filter === 'security' && canSeeSecurity && (
                 <SecurityEventsFeed events={securityEvents} isLoading={securityEventsLoading} />

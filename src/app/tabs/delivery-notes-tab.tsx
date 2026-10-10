@@ -409,7 +409,7 @@ export default function DeliveryNotesTab() {
         channel: 'whatsapp',
         phone,
         message: (res as { message?: string }).message || `Delivery Note ${note.deliveryNumber}`,
-        title: `WhatsApp — ${(res as { documentTitle?: string }).documentTitle || note.deliveryNumber}`,
+        title: `WhatsApp - ${(res as { documentTitle?: string }).documentTitle || note.deliveryNumber}`,
         waLink: (res as { waLink?: string }).waLink,
       });
     }).catch((err: unknown) => {
@@ -425,7 +425,7 @@ export default function DeliveryNotesTab() {
     if (!phone) return;
     try {
       const text = [
-        `MBUMAH HARDWARE — Delivery Note ${note.deliveryNumber}`,
+        `MBUMAH HARDWARE - Delivery Note ${note.deliveryNumber}`,
         `Customer: ${note.customerName}`,
         typeof note.itemCount === 'number' ? `Items: ${note.itemCount}` : null,
         `Status: ${note.status}`,
@@ -436,7 +436,7 @@ export default function DeliveryNotesTab() {
         channel: 'sms',
         phone,
         message: text,
-        title: `SMS — ${note.deliveryNumber}`,
+        title: `SMS - ${note.deliveryNumber}`,
       });
     } catch (err) {
       const msg = handleError(err, 'Send delivery note via SMS');
@@ -472,7 +472,7 @@ export default function DeliveryNotesTab() {
         <td>${escapeHtml(item.productName)}</td>
         <td class="text-center">${escapeHtml(formatQty(item.quantity))}</td>
         <td>${escapeHtml(unitLabel(item.unitType))}</td>
-        <td>${escapeHtml(item.notes || '—')}</td>
+        <td>${escapeHtml(item.notes || '-')}</td>
       </tr>
     `).join('');
     const store = resolveDocumentStore(currentStoreId);
@@ -491,14 +491,14 @@ export default function DeliveryNotesTab() {
       taxPin: store.taxPin,
       metaRows: [
         { label: 'Status', value: getStatusLabel(detail.status) },
-        { label: 'Scheduled', value: detail.scheduledDate ? formatDate(detail.scheduledDate) : '—' },
+        { label: 'Scheduled', value: detail.scheduledDate ? formatDate(detail.scheduledDate) : '-' },
         { label: 'Created', value: formatDateTime(detail.createdAt) },
       ],
       billToHtml: `
         <div class="who">${escapeHtml(detail.customerName)}</div>
         ${detail.customerPhone ? `<div class="muted">${escapeHtml(detail.customerPhone)}</div>` : ''}
         ${detail.deliveryAddress ? `<div class="muted">${escapeHtml(detail.deliveryAddress)}</div>` : ''}
-        <div class="muted">Driver: ${escapeHtml(detail.driverName || '—')} · Vehicle: ${escapeHtml(detail.vehicleNumber || '—')}</div>
+        <div class="muted">Driver: ${escapeHtml(detail.driverName || '-')} · Vehicle: ${escapeHtml(detail.vehicleNumber || '-')}</div>
       `,
       itemsTableHtml: `
         <table class="items">
@@ -729,7 +729,7 @@ export default function DeliveryNotesTab() {
                             {dn.customerPhone}
                           </span>
                         ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
+                          <span className="text-muted-foreground text-xs">-</span>
                         )}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell max-w-48 truncate">
@@ -739,7 +739,7 @@ export default function DeliveryNotesTab() {
                             <span className="truncate">{dn.deliveryAddress}</span>
                           </span>
                         ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
+                          <span className="text-muted-foreground text-xs">-</span>
                         )}
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
@@ -749,7 +749,7 @@ export default function DeliveryNotesTab() {
                             {dn.driverName}
                           </span>
                         ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
+                          <span className="text-muted-foreground text-xs">-</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -1182,7 +1182,7 @@ export default function DeliveryNotesTab() {
                 </div>
               </div>
 
-              {/* v2.10.0 DIGITAL RECEIPT CARD — dedicated full-width block below
+              {/* v2.10.0 DIGITAL RECEIPT CARD - dedicated full-width block below
                   the header (the old badge sat inside the non-wrapping action
                   row and could be squeezed/clipped on narrow screens): the QR
                   is clickable (opens the viewer with scroll + autofit) and the
@@ -1201,7 +1201,7 @@ export default function DeliveryNotesTab() {
                           Digital delivery note (QR)
                         </p>
                         <p className="text-xs leading-relaxed text-muted-foreground">
-                          Scanning this QR — or tapping it — opens the colored digital
+                          Scanning this QR - or tapping it - opens the colored digital
                           copy of this delivery note at{' '}
                           <span className="font-mono">/r/{noteDetail.deliveryNumber}</span>.
                           Printed copies carry the same QR. Use Autofit to fit the whole
@@ -1346,7 +1346,7 @@ export default function DeliveryNotesTab() {
                             <TableCell className="text-center text-sm">{formatQty(item.quantity)}</TableCell>
                             <TableCell className="text-sm text-muted-foreground">{unitLabel(item.unitType)}</TableCell>
                             <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                              {item.notes || '—'}
+                              {item.notes || '-'}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -1408,11 +1408,11 @@ export default function DeliveryNotesTab() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── v2.10.0: Digital receipt viewer — scroll + autofit + public page ── */}
+      {/* ── v2.10.0: Digital receipt viewer - scroll + autofit + public page ── */}
       <DigitalReceiptViewer
         open={receiptViewerOpen}
         onOpenChange={setReceiptViewerOpen}
-        title={`Digital delivery note — ${viewerDoc?.docNumber ?? ''}`}
+        title={`Digital delivery note - ${viewerDoc?.docNumber ?? ''}`}
         subtitle={viewerDoc ? `DELIVERY NOTE · ${viewerDoc.status ?? ''}` : undefined}
         publicPath={viewerDoc ? `/r/${encodeURIComponent(viewerDoc.docNumber)}` : undefined}
       >

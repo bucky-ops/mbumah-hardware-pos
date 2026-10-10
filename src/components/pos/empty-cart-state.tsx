@@ -6,7 +6,7 @@ import { Plus, Sparkles, Keyboard } from 'lucide-react';
 export function EmptyCartState() {
   return (
     <div className="p-8 text-center">
-      {/* empty cart illustration — animated */}
+      {/* empty cart illustration - animated */}
       <div className="relative mx-auto w-32 h-32 mb-5">
         {/* Cart body */}
         <div className="absolute bottom-6 left-4 right-4 h-16 border-2 border-muted-foreground/12 rounded-b-xl bg-muted/15 backdrop-blur-sm animate-fade-in">

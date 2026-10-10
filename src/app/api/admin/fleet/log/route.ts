@@ -50,7 +50,7 @@ async function buildLog(
   if (!config.configured) {
     return {
       configured: false,
-      note: `Remote Ops is not configured — set ${config.missing.join(' + ')}.`,
+      note: `Remote Ops is not configured - set ${config.missing.join(' + ')}.`,
       rows: [],
     };
   }

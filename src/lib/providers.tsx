@@ -94,7 +94,7 @@ export function Providers({ children }: { children: ReactNode }) {
           <GlobalErrorHandler>
             {children}
           </GlobalErrorHandler>
-          {/* v2.5.0: 45-second ALERT POPUPS (bottom-left stack) — mounted
+          {/* v2.5.0: 45-second ALERT POPUPS (bottom-left stack) - mounted
               inside QueryClientProvider so its notification poller can run. */}
           <AlertPopupHost />
           <Toaster position="top-right" richColors closeButton />

@@ -472,7 +472,7 @@ function InvoicesSection({ storeId }: { storeId: string }) {
       kraApi.submitInvoice({ ...data, storeId }),
     onSuccess: (data) => {
       if (data.dryRun) {
-        toast.success('Dry-run complete. Payload mapped — no KRA call was made.');
+        toast.success('Dry-run complete. Payload mapped - no KRA call was made.');
       } else {
         toast.success(data.message || 'Invoice submitted to KRA.');
       }
@@ -611,14 +611,14 @@ function InvoicesSection({ storeId }: { storeId: string }) {
                             {inv.transaction ? (
                               <span className="text-sm">{inv.transaction.receiptNumber}</span>
                             ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
+                              <span className="text-xs text-muted-foreground">-</span>
                             )}
                           </TableCell>
                           <TableCell className="text-sm">
                             {inv.transaction?.customer?.name || 'Walk-in Customer'}
                           </TableCell>
                           <TableCell className="text-right font-mono text-sm">
-                            {inv.transaction ? formatKES(inv.transaction.totalAmount) : '—'}
+                            {inv.transaction ? formatKES(inv.transaction.totalAmount) : '-'}
                           </TableCell>
                           <TableCell>
                             <Badge className={statusCfg.color}>
@@ -627,7 +627,7 @@ function InvoicesSection({ storeId }: { storeId: string }) {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
-                            {inv.submittedAt ? formatDateTime(inv.submittedAt) : '—'}
+                            {inv.submittedAt ? formatDateTime(inv.submittedAt) : '-'}
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
@@ -889,15 +889,15 @@ function InvoiceDetailDialog({
             </div>
             <div>
               <span>Submitted: </span>
-              <span className="font-medium text-foreground">{invoice.submittedAt ? formatDateTime(invoice.submittedAt) : '—'}</span>
+              <span className="font-medium text-foreground">{invoice.submittedAt ? formatDateTime(invoice.submittedAt) : '-'}</span>
             </div>
             <div>
               <span>Accepted: </span>
-              <span className="font-medium text-foreground">{invoice.acceptedAt ? formatDateTime(invoice.acceptedAt) : '—'}</span>
+              <span className="font-medium text-foreground">{invoice.acceptedAt ? formatDateTime(invoice.acceptedAt) : '-'}</span>
             </div>
             <div>
               <span>KRA Ref: </span>
-              <span className="font-mono text-foreground">{invoice.kraSubmissionId || '—'}</span>
+              <span className="font-mono text-foreground">{invoice.kraSubmissionId || '-'}</span>
             </div>
           </div>
         </div>

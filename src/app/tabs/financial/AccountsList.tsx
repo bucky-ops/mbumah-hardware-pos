@@ -90,7 +90,6 @@ export function AccountsList({
                     ) : (
                       <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                     )}
-                    <span className="text-sm">{colors.icon}</span>
                     <span className={`text-xs font-bold uppercase tracking-wider ${colors.text}`}>
                       {accountTypeLabels[type] || type}
                     </span>

@@ -269,7 +269,7 @@ function RecordPaymentDialog({ debt, open, onOpenChange, onRecordPayment }: {
                       : 'border-transparent bg-muted/30 hover:bg-muted/50'
                   }`}
                 >
-                  {method === 'CASH' ? '💵 Cash' : '📱 M-Pesa'}
+                  {method === 'CASH' ? 'Cash' : 'M-Pesa'}
                 </button>
               ))}
             </div>
@@ -838,7 +838,7 @@ export default function FinancialTab() {
   // nonsense statement.
   if (totalRevenue > 0 && totalExpenses > totalRevenue * 100) {
     console.warn(
-      `[P&L AUDIT] Expenses (KES ${totalExpenses}) exceed revenue (KES ${totalRevenue}) by >100x — possible data anomaly.`
+      `[P&L AUDIT] Expenses (KES ${totalExpenses}) exceed revenue (KES ${totalRevenue}) by >100x - possible data anomaly.`
     );
   }
 
@@ -1092,7 +1092,7 @@ export default function FinancialTab() {
   return (
     <div className="space-y-4">
       {/* ================================================================== */}
-      {/* Phase 3 — Sub-tab navigation                                        */}
+      {/* Phase 3 - Sub-tab navigation                                        */}
       {/* ================================================================== */}
       <Tabs value={activeSubTab} onValueChange={setActiveSubTab} className="space-y-4">
         <TabsList className="h-9 w-fit flex-wrap">
@@ -2127,7 +2127,6 @@ export default function FinancialTab() {
                       ) : (
                         <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                       )}
-                      <span className="text-sm">{colors.icon}</span>
                       <span className={`text-xs font-bold uppercase tracking-wider ${colors.text}`}>
                         {accountTypeLabels[type] || type}
                       </span>
@@ -2346,7 +2345,7 @@ export default function FinancialTab() {
                         </TableCell>
                         <TableCell className="text-sm">{formatDate(je.entryDate)}</TableCell>
                         <TableCell className="text-sm max-w-[200px] truncate">{je.description}</TableCell>
-                        <TableCell className="text-sm">{je.referenceType || '—'}</TableCell>
+                        <TableCell className="text-sm">{je.referenceType || '-'}</TableCell>
                         <TableCell className="text-right font-medium text-sm font-mono text-blue-600 dark:text-blue-400">
                           {formatKES(je.totalDebit)}
                         </TableCell>
@@ -2409,7 +2408,7 @@ export default function FinancialTab() {
                               {je.lines.map((line) => (
                                 <div key={line.id} className="flex items-center gap-3 text-xs py-1 px-2 rounded hover:bg-muted/30">
                                   <span className="font-mono text-muted-foreground w-10">
-                                    {line.account?.code || '—'}
+                                    {line.account?.code || '-'}
                                   </span>
                                   <span className="flex-1">{line.account?.name || line.accountId}</span>
                                   {line.account?.type && (
@@ -2660,7 +2659,7 @@ export default function FinancialTab() {
                       ) : null}
                       <TableCell className="text-sm">
                         <span className="font-mono text-muted-foreground mr-1">{line.account?.code || ''}</span>
-                        {line.account?.name || '—'}
+                        {line.account?.name || '-'}
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm text-blue-600 dark:text-blue-400">
                         {line.debit > 0 ? formatKES(line.debit) : ''}
@@ -2744,8 +2743,8 @@ export default function FinancialTab() {
                 <Select value={expenseForm.paymentMethod} onValueChange={(val) => setExpenseForm(prev => ({ ...prev, paymentMethod: val }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="CASH">💵 Cash</SelectItem>
-                    <SelectItem value="MPESA">📱 M-Pesa</SelectItem>
+                    <SelectItem value="CASH">Cash</SelectItem>
+                    <SelectItem value="MPESA">M-Pesa</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -2924,7 +2923,7 @@ export default function FinancialTab() {
       </Dialog>
 
       {/* ================================================================== */}
-      {/* Phase 3 — Add / Edit Account Dialog                                 */}
+      {/* Phase 3 - Add / Edit Account Dialog                                 */}
       {/* ================================================================== */}
       <Dialog open={showAccountDialog} onOpenChange={setShowAccountDialog}>
         <DialogContent className="max-w-md">
@@ -2983,9 +2982,9 @@ export default function FinancialTab() {
                   value={accountForm.subType || 'NONE'}
                   onValueChange={(v) => setAccountForm((prev) => ({ ...prev, subType: v === 'NONE' ? '' : v }))}
                 >
-                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="-" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="NONE">— None —</SelectItem>
+                    <SelectItem value="NONE">- None -</SelectItem>
                     <SelectItem value="CURRENT_ASSET">Current Asset</SelectItem>
                     <SelectItem value="FIXED_ASSET">Fixed Asset</SelectItem>
                     <SelectItem value="INVENTORY">Inventory</SelectItem>
@@ -3023,7 +3022,7 @@ export default function FinancialTab() {
             <div className="space-y-2">
               <Label>Description (optional)</Label>
               <Textarea
-                placeholder="e.g. Operating cash drawer — front-of-house."
+                placeholder="e.g. Operating cash drawer - front-of-house."
                 value={accountForm.description}
                 onChange={(e) => setAccountForm((prev) => ({ ...prev, description: e.target.value }))}
                 rows={2}
@@ -3055,7 +3054,7 @@ export default function FinancialTab() {
       </Dialog>
 
       {/* ================================================================== */}
-      {/* Phase 3 — Deactivate Account Confirmation                           */}
+      {/* Phase 3 - Deactivate Account Confirmation                           */}
       {/* ================================================================== */}
       <AlertDialog open={!!deactivateAccountTarget} onOpenChange={(open) => { if (!open) setDeactivateAccountTarget(null); }}>
         <AlertDialogContent>
@@ -3064,7 +3063,7 @@ export default function FinancialTab() {
               <PowerOff className="h-5 w-5 text-red-600" /> Deactivate Account
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Deactivate account &ldquo;{deactivateAccountTarget?.code} — {deactivateAccountTarget?.name}&rdquo;?
+              Deactivate account &ldquo;{deactivateAccountTarget?.code} - {deactivateAccountTarget?.name}&rdquo;?
               Deactivation is blocked if the account has a non-zero balance (would corrupt historical reports).
               The account remains in the ledger for historical reporting but cannot be used on new entries.
             </AlertDialogDescription>
@@ -3133,8 +3132,8 @@ export default function FinancialTab() {
                 <Select value={editExpenseForm.paymentMethod} onValueChange={(val) => setEditExpenseForm(prev => ({ ...prev, paymentMethod: val }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="CASH">💵 Cash</SelectItem>
-                    <SelectItem value="MPESA">📱 M-Pesa</SelectItem>
+                    <SelectItem value="CASH">Cash</SelectItem>
+                    <SelectItem value="MPESA">M-Pesa</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

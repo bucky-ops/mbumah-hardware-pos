@@ -375,7 +375,7 @@ export function CreateScheduleDialog({
               </div>
             </div>
 
-            {/* Conditional: recurring — dayOfWeek + recurrenceEndDate */}
+            {/* Conditional: recurring - dayOfWeek + recurrenceEndDate */}
             {scheduleType === 'recurring' && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -411,7 +411,7 @@ export function CreateScheduleDialog({
               </div>
             )}
 
-            {/* Conditional: one-off — specificDate */}
+            {/* Conditional: one-off - specificDate */}
             {scheduleType === 'one-off' && (
               <div className="space-y-1.5">
                 <Label htmlFor="specific-date" className="flex items-center gap-1">
@@ -509,7 +509,7 @@ export function CreateScheduleDialog({
                 </span>
               </div>
               <p className="text-xs text-emerald-800 dark:text-emerald-200">
-                <span className="font-semibold">{preview.when || '—'}</span>
+                <span className="font-semibold">{preview.when || '-'}</span>
                 {' · '}
                 <span>{preview.timeRange}</span>
                 {' · '}

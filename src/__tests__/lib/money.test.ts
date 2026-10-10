@@ -4,19 +4,19 @@
 //
 // These tests verify the financial-correctness guarantees of the Money class:
 //   • No floating-point drift on add / subtract / multiply
-//   • HALF_UP cent rounding (2dp) — the FINANCIAL MATH AUDIT policy
+//   • HALF_UP cent rounding (2dp) - the FINANCIAL MATH AUDIT policy
 //   • Exact allocation (no lost or created pennies)
 //   • Safe parsing of user input (no throws on bad input)
 //   • Currency enforcement (cannot add KES + USD)
 //
-// These are PURE unit tests — no database, no network. They run in < 100ms.
+// These are PURE unit tests - no database, no network. They run in < 100ms.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from 'vitest';
 import { Money, KES, toKES, toPrisma, currencyDecimals } from '@/lib/money';
 import Decimal from 'decimal.js';
 
-describe('Money — construction', () => {
+describe('Money - construction', () => {
   it('KES() factory creates a Money with KES currency', () => {
     const m = KES(500);
     expect(m.currency).toBe('KES');
@@ -72,7 +72,7 @@ describe('Money — construction', () => {
   });
 });
 
-describe('Money — arithmetic (no floating-point drift)', () => {
+describe('Money - arithmetic (no floating-point drift)', () => {
   it('0.1 + 0.2 === 0.3 (NOT 0.30000000000000004)', () => {
     // This is the classic IEEE-754 bug that the Money class exists to fix.
     const result = KES(0.1).add(KES(0.2));
@@ -116,7 +116,7 @@ describe('Money — arithmetic (no floating-point drift)', () => {
   });
 });
 
-describe('Money — rounding (HALF_UP — FINANCIAL MATH AUDIT policy)', () => {
+describe('Money - rounding (HALF_UP - FINANCIAL MATH AUDIT policy)', () => {
   it('rounds 0.005 to 0.01 (HALF_UP, half away from zero)', () => {
     // The audit-mandated policy: exact halves round UP to the next cent.
     // Config is owned by src/lib/utils/financialMath.ts.
@@ -156,7 +156,7 @@ describe('Money — rounding (HALF_UP — FINANCIAL MATH AUDIT policy)', () => {
   });
 });
 
-describe('Money — allocation (exact penny distribution)', () => {
+describe('Money - allocation (exact penny distribution)', () => {
   it('allocate [1,1,1] of 1.00 → [0.34, 0.33, 0.33] (no lost penny)', () => {
     const result = KES(1).allocate([1, 1, 1]);
     expect(result).toHaveLength(3);
@@ -195,7 +195,7 @@ describe('Money — allocation (exact penny distribution)', () => {
   });
 });
 
-describe('Money — comparison', () => {
+describe('Money - comparison', () => {
   it('eq checks value AND currency', () => {
     expect(KES(100).eq(KES(100))).toBe(true);
     expect(KES(100).eq(KES(200))).toBe(false);
@@ -227,7 +227,7 @@ describe('Money — comparison', () => {
   });
 });
 
-describe('Money — currency handling', () => {
+describe('Money - currency handling', () => {
   it('currencyDecimals returns correct precision per currency', () => {
     expect(currencyDecimals('KES')).toBe(2);
     expect(currencyDecimals('USD')).toBe(2);
@@ -243,7 +243,7 @@ describe('Money — currency handling', () => {
   });
 });
 
-describe('Money — serialization', () => {
+describe('Money - serialization', () => {
   it('toNumber returns a JS number', () => {
     expect(typeof KES(100).toNumber()).toBe('number');
     expect(KES(100).toNumber()).toBe(100);
@@ -279,7 +279,7 @@ describe('Money — serialization', () => {
   });
 });
 
-describe('Money — immutability', () => {
+describe('Money - immutability', () => {
   it('add returns a NEW Money (does not mutate)', () => {
     const a = KES(100);
     const b = a.add(KES(50));
@@ -292,7 +292,7 @@ describe('Money — immutability', () => {
     const a = KES(1.005);
     const b = a.round();
     expect(a.toNumber()).toBe(1.005); // unchanged
-    expect(b.toNumber()).toBe(1.01); // HALF_UP — audit policy
+    expect(b.toNumber()).toBe(1.01); // HALF_UP - audit policy
   });
 
   it('multiply returns a NEW Money (does not mutate)', () => {

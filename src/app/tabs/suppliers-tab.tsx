@@ -286,14 +286,14 @@ function SupplierPOPerformanceCard({ purchaseOrders }: { purchaseOrders: Purchas
               <Timer className="h-4 w-4 text-amber-600" />
               <span className="text-xs text-muted-foreground">Avg. Lead Time</span>
             </div>
-            <p className="text-xl font-bold text-amber-600">{avgLeadTime > 0 ? `${avgLeadTime}d` : '—'}</p>
+            <p className="text-xl font-bold text-amber-600">{avgLeadTime > 0 ? `${avgLeadTime}d` : '-'}</p>
           </div>
           <div className="p-3 rounded-lg bg-purple-50/80 dark:bg-purple-900/20 backdrop-blur-sm border border-purple-200/30 dark:border-purple-800/30">
             <div className="flex items-center gap-2 mb-1">
               <Star className="h-4 w-4 text-purple-600" />
               <span className="text-xs text-muted-foreground">Quality Rating</span>
             </div>
-            <p className="text-xl font-bold text-purple-600">{qualityRating > 0 ? qualityRating : '—'}/5</p>
+            <p className="text-xl font-bold text-purple-600">{qualityRating > 0 ? qualityRating : '-'}/5</p>
             {qualityRating > 0 && <StarRating rating={Math.round(qualityRating)} readonly />}
           </div>
         </div>
@@ -1035,7 +1035,7 @@ function SupplierDetailView({
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Last Order</p>
-                <p className="text-lg font-bold">{lastOrderDate ? formatDate(lastOrderDate) : '—'}</p>
+                <p className="text-lg font-bold">{lastOrderDate ? formatDate(lastOrderDate) : '-'}</p>
               </div>
             </div>
           </CardContent>
@@ -1061,23 +1061,23 @@ function SupplierDetailView({
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Tax PIN</p>
-                  <p className="font-medium">{supplier.taxPin || '—'}</p>
+                  <p className="font-medium">{supplier.taxPin || '-'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Contact Person</p>
-                  <p className="font-medium">{supplier.contactPerson || '—'}</p>
+                  <p className="font-medium">{supplier.contactPerson || '-'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">City</p>
-                  <p className="font-medium">{supplier.city || '—'}</p>
+                  <p className="font-medium">{supplier.city || '-'}</p>
                 </div>
                 <div className="sm:col-span-2">
                   <p className="text-xs text-muted-foreground mb-1">Address</p>
-                  <p className="font-medium">{supplier.address || '—'}</p>
+                  <p className="font-medium">{supplier.address || '-'}</p>
                 </div>
                 <div className="sm:col-span-2">
                   <p className="text-xs text-muted-foreground mb-1">Notes</p>
-                  <p className="font-medium whitespace-pre-wrap">{supplier.notes || '—'}</p>
+                  <p className="font-medium whitespace-pre-wrap">{supplier.notes || '-'}</p>
                 </div>
               </div>
             </CardContent>
@@ -1530,7 +1530,7 @@ function SendOrderDialog({
               <SelectValue placeholder="Select a purchase order..." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">No PO — send custom message</SelectItem>
+              <SelectItem value="none">No PO - send custom message</SelectItem>
               {poLoading ? (
                 <SelectItem value="__loading" disabled>Loading…</SelectItem>
               ) : purchaseOrders.length === 0 ? (
@@ -1571,12 +1571,12 @@ function SendOrderDialog({
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Recipient</span>
             <span className="font-medium">
-              {channel === 'WHATSAPP' ? (supplier.phone || '—') : (supplier.email || '—')}
+              {channel === 'WHATSAPP' ? (supplier.phone || '-') : (supplier.email || '-')}
             </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Contact person</span>
-            <span className="font-medium">{supplier.contactPerson || '—'}</span>
+            <span className="font-medium">{supplier.contactPerson || '-'}</span>
           </div>
         </div>
       </div>
@@ -1680,7 +1680,7 @@ export default function SuppliersTab() {
 
   return (
     <div className="p-1 space-y-4">
-      {/* Overview Stats — Glass-morphism with gradient icons */}
+      {/* Overview Stats - Glass-morphism with gradient icons */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="glass-card stagger-1 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
           <CardContent className="p-4">
@@ -1906,7 +1906,7 @@ export default function SuppliersTab() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="hidden sm:table-cell text-sm">{supplier.city || '—'}</TableCell>
+                      <TableCell className="hidden sm:table-cell text-sm">{supplier.city || '-'}</TableCell>
                       <TableCell>
                         <StarRating rating={supplier.rating} readonly />
                       </TableCell>
@@ -1917,7 +1917,7 @@ export default function SuppliersTab() {
                         </Badge>
                       </TableCell>
                       <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">
-                        {supplier.purchaseOrders?.[0]?.orderDate ? formatDate(supplier.purchaseOrders[0].orderDate) : '—'}
+                        {supplier.purchaseOrders?.[0]?.orderDate ? formatDate(supplier.purchaseOrders[0].orderDate) : '-'}
                       </TableCell>
                       <TableCell className="text-right font-medium">{supplier.purchaseOrderCount || 0}</TableCell>
                       <TableCell className="text-right">
@@ -2075,7 +2075,7 @@ export default function SuppliersTab() {
                   {purchaseOrders.map((po) => (
                     <TableRow key={po.id}>
                       <TableCell className="font-mono text-sm">{po.poNumber}</TableCell>
-                      <TableCell className="text-sm">{po.supplier?.name || '—'}</TableCell>
+                      <TableCell className="text-sm">{po.supplier?.name || '-'}</TableCell>
                       <TableCell className="text-sm">{formatDate(po.orderDate)}</TableCell>
                       <TableCell>
                         <POStatusTimeline status={po.status} />

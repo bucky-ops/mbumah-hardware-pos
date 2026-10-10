@@ -181,7 +181,7 @@ export function FleetRemoteOpsSection() {
     onSuccess: (res) => {
       const data = res.data;
       if (!data) {
-        toast.error('Command response was empty — check the activity log.');
+        toast.error('Command response was empty - check the activity log.');
         return;
       }
       const links = data.issued
@@ -242,7 +242,7 @@ export function FleetRemoteOpsSection() {
             )}
           </CardTitle>
           <CardDescription>
-            Push updates, roll back, freeze or view any store from anywhere — signed commands via the{' '}
+            Push updates, roll back, freeze or view any store from anywhere - signed commands via the{' '}
             <span className="font-mono text-xs">{fleet?.repo ?? 'mbumah-ops-log'}</span> repo; every action is a
             GitHub commit.
           </CardDescription>
@@ -312,7 +312,7 @@ export function FleetRemoteOpsSection() {
                   </Badge>
                 )}
               </div>
-              <span className="text-xs text-muted-foreground">This deployment (Vercel) — merges to main deploy automatically</span>
+              <span className="text-xs text-muted-foreground">This deployment (Vercel) - merges to main deploy automatically</span>
             </div>
 
             {/* Agent rows */}
@@ -356,13 +356,13 @@ export function FleetRemoteOpsSection() {
                           <span>Version: <span className="font-medium text-foreground">{agent.version ?? 'unknown'}</span></span>
                           <span>Health: <span className="font-medium text-foreground">{agent.health ?? 'unknown'}</span></span>
                           <span>Heartbeat: {timeAgo(agent.lastHeartbeatAt)}</span>
-                          <span>Last event: {agent.lastEvent ?? '—'} · {timeAgo(agent.lastEventAt)}</span>
+                          <span>Last event: {agent.lastEvent ?? '-'} · {timeAgo(agent.lastEventAt)}</span>
                         </div>
                         {agent.pendingCommand && (
                           <div className="text-xs text-amber-700">
                             Pending {agent.pendingCommand.type}
                             {agent.pendingCommand.version ? ` → ${agent.pendingCommand.version}` : ''}
-                            {agent.pendingCommand.force ? ' (FORCED)' : ''} — issued by {agent.pendingCommand.issuedBy || 'unknown'} {timeAgo(agent.pendingCommand.issuedAt)}
+                            {agent.pendingCommand.force ? ' (FORCED)' : ''} - issued by {agent.pendingCommand.issuedBy || 'unknown'} {timeAgo(agent.pendingCommand.issuedAt)}
                           </div>
                         )}
                       </div>
@@ -468,7 +468,7 @@ export function FleetRemoteOpsSection() {
                   {(Object.keys(COMMAND_LABELS) as CommandType[]).map((t) => (
                     <SelectItem key={t} value={t} disabled={t === 'tunnel'}>
                       {COMMAND_LABELS[t]}
-                      {t === 'tunnel' ? ' (Phase 3 — soon)' : ''}
+                      {t === 'tunnel' ? ' (Phase 3 - soon)' : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -517,7 +517,7 @@ export function FleetRemoteOpsSection() {
                 />
                 {latestTag && !version && (
                   <p className="text-xs text-muted-foreground">
-                    Latest published release is <span className="font-mono">{latestTag}</span> — used if left empty.
+                    Latest published release is <span className="font-mono">{latestTag}</span> - used if left empty.
                   </p>
                 )}
               </div>
@@ -525,7 +525,7 @@ export function FleetRemoteOpsSection() {
 
             {commandType === 'tunnel' && (
               <div className="space-y-1.5">
-                <Label htmlFor="fleet-ttl">Session length (minutes, 5–240)</Label>
+                <Label htmlFor="fleet-ttl">Session length (minutes, 5-240)</Label>
                 <Input id="fleet-ttl" inputMode="numeric" value={ttl} onChange={(e) => setTtl(e.target.value)} />
               </div>
             )}
@@ -534,7 +534,7 @@ export function FleetRemoteOpsSection() {
               <div className="flex items-center justify-between rounded-xl border border-slate-200 p-3">
                 <div className="space-y-0.5">
                   <Label htmlFor="fleet-force" className="text-sm">Force during trading hours</Label>
-                  <p className="text-xs text-muted-foreground">Off (recommended): executes in tonight&apos;s 22:00–06:00 dormant window.</p>
+                  <p className="text-xs text-muted-foreground">Off (recommended): executes in tonight&apos;s 22:00-06:00 dormant window.</p>
                 </div>
                 <Switch id="fleet-force" checked={force} onCheckedChange={setForce} data-testid="fleet-force" />
               </div>
@@ -542,11 +542,11 @@ export function FleetRemoteOpsSection() {
 
             <div className="space-y-1.5">
               <Label htmlFor="fleet-reason">
-                Reason {reasonRequired ? '(required)' : '(optional — goes into the permanent ledger)'}
+                Reason {reasonRequired ? '(required)' : '(optional - goes into the permanent ledger)'}
               </Label>
               <Input
                 id="fleet-reason"
-                placeholder={commandType === 'freeze' ? 'Peak trading — no updates until January' : 'e.g. v2.11.0 feature rollout'}
+                placeholder={commandType === 'freeze' ? 'Peak trading - no updates until January' : 'e.g. v2.11.0 feature rollout'}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 data-testid="fleet-reason"

@@ -1,6 +1,6 @@
 // Weighted Average Cost (WAC) unit tests.
 //
-// `calculateWeightedAverageCost` is a pure function — no DB, no I/O — so these
+// `calculateWeightedAverageCost` is a pure function - no DB, no I/O - so these
 // tests are fast (microsecond-level) and hermetic. They cover the IAS 2
 // invariants plus the edge cases that have bitten real-world WAC
 // implementations:
@@ -18,9 +18,9 @@
 import { describe, it, expect } from 'vitest';
 import { calculateWeightedAverageCost } from '@/lib/account-helper';
 
-describe('calculateWeightedAverageCost — IAS 2 inventory valuation', () => {
+describe('calculateWeightedAverageCost - IAS 2 inventory valuation', () => {
   // ─────────────────────────────────────────────────────────────────────
-  // 1. Standard blend — the textbook case.
+  // 1. Standard blend - the textbook case.
   // ─────────────────────────────────────────────────────────────────────
   it('blends the existing WAC with the incoming unit cost weighted by quantity', () => {
     // Existing: 100 units @ Ksh 10 = Ksh 1,000
@@ -39,7 +39,7 @@ describe('calculateWeightedAverageCost — IAS 2 inventory valuation', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // 2. First-ever reception — zero current stock → WAC = incoming cost.
+  // 2. First-ever reception - zero current stock → WAC = incoming cost.
   // ─────────────────────────────────────────────────────────────────────
   it('adopts the incoming unit cost as the WAC when the shelf is empty (first reception)', () => {
     const result = calculateWeightedAverageCost({
@@ -55,7 +55,7 @@ describe('calculateWeightedAverageCost — IAS 2 inventory valuation', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // 3. Zero incoming quantity — WAC unchanged, no division by zero.
+  // 3. Zero incoming quantity - WAC unchanged, no division by zero.
   // ─────────────────────────────────────────────────────────────────────
   it('leaves the WAC unchanged when the incoming quantity is zero (no movement)', () => {
     const result = calculateWeightedAverageCost({
@@ -71,7 +71,7 @@ describe('calculateWeightedAverageCost — IAS 2 inventory valuation', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // 4. Issuance (negative incoming) — WAC unchanged, quantity reduces.
+  // 4. Issuance (negative incoming) - WAC unchanged, quantity reduces.
   // ─────────────────────────────────────────────────────────────────────
   it('keeps the WAC constant when stock is issued (negative incoming) and reduces quantity', () => {
     const result = calculateWeightedAverageCost({
@@ -115,7 +115,7 @@ describe('calculateWeightedAverageCost — IAS 2 inventory valuation', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // 7. Floating-point precision — 4 DP rounding prevents drift.
+  // 7. Floating-point precision - 4 DP rounding prevents drift.
   // ─────────────────────────────────────────────────────────────────────
   it('rounds the blended WAC to 4 decimal places to prevent binary-float drift', () => {
     // 100 @ 10.001 + 3 @ 3.3333 = 1000.1 + 9.9999 = 1010.0999 over 103
@@ -128,7 +128,7 @@ describe('calculateWeightedAverageCost — IAS 2 inventory valuation', () => {
     });
 
     expect(result.newStock).toBe(103);
-    // 4 DP — no trailing float noise.
+    // 4 DP - no trailing float noise.
     expect(result.newWac).toBe(9.8068);
     // totalValue = sum of constituent values, rounded to 4 DP.
     expect(result.totalValue).toBe(1010.0999);
@@ -151,7 +151,7 @@ describe('calculateWeightedAverageCost — IAS 2 inventory valuation', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // 8. Guardrails — negative inputs throw.
+  // 8. Guardrails - negative inputs throw.
   // ─────────────────────────────────────────────────────────────────────
   it('throws when currentStock is negative (prior stockout corruption)', () => {
     expect(() =>
@@ -223,7 +223,7 @@ describe('calculateWeightedAverageCost — IAS 2 inventory valuation', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // 10. totalValue invariant — newStock × newWac ≈ constituent sum.
+  // 10. totalValue invariant - newStock × newWac ≈ constituent sum.
   // ─────────────────────────────────────────────────────────────────────
   it('preserves the total value invariant (totalValue ≈ Σ constituent values)', () => {
     const currentStock = 250;
@@ -244,7 +244,7 @@ describe('calculateWeightedAverageCost — IAS 2 inventory valuation', () => {
     // totalValue reported by the helper must match the raw sum (4 DP).
     expect(result.totalValue).toBeCloseTo(expectedTotalValue, 4);
 
-    // newStock × newWac reconstructs the same total — but because newWac is
+    // newStock × newWac reconstructs the same total - but because newWac is
     // rounded to 4 DP, the reconstruction can drift by up to
     // newStock × 0.00005 (here: 425 × 0.00005 ≈ 0.02). We allow a 5-cent
     // tolerance which comfortably absorbs the 4-DP rounding ceiling while
@@ -253,7 +253,7 @@ describe('calculateWeightedAverageCost — IAS 2 inventory valuation', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // 11. Issuance at scale — issuing ALL stock leaves WAC at the old value
+  // 11. Issuance at scale - issuing ALL stock leaves WAC at the old value
   //     but totalValue = 0 (no leftover inventory to value).
   // ─────────────────────────────────────────────────────────────────────
   it('handles a full stock-out issuance (issue 100% of on-hand) leaving totalValue at 0', () => {

@@ -112,7 +112,7 @@ async function cancelInvoiceHandler(
     action: result.success ? 'ETIMS_INVOICE_CANCELLED' : 'ETIMS_INVOICE_CANCEL_FAILED',
     component: LogComponent.PAYMENT,
     severity: result.success ? LogSeverity.WARN : LogSeverity.ERROR,
-    message: `eTIMS invoice cancellation for ${invoiceNumber} (receipt ${tx.receiptNumber}): ${result.success ? 'success' : 'failed'} — ${result.cancellationReference || result.errorMessage}`,
+    message: `eTIMS invoice cancellation for ${invoiceNumber} (receipt ${tx.receiptNumber}): ${result.success ? 'success' : 'failed'} - ${result.cancellationReference || result.errorMessage}`,
     userId: session.userId,
     storeId,
     metadata: {

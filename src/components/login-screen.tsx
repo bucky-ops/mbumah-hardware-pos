@@ -95,7 +95,7 @@ export function LoginScreen() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Animated gradient background — multi-layer for depth */}
+      {/* Animated gradient background - multi-layer for depth */}
       <div className="absolute inset-0 bg-gradient-to-br from-[oklch(0.22_0.07_260)] via-[oklch(0.295_0.1_260)] to-[oklch(0.22_0.06_260)]" />
       <div className="absolute inset-0 bg-gradient-to-tr from-[oklch(0.22_0.08_30)] via-transparent to-[oklch(0.25_0.09_150)] animate-gradient-shift" />
       {/* Subtle animated mesh gradient overlay */}
@@ -107,7 +107,7 @@ export function LoginScreen() {
       {/* Dot grid pattern overlay */}
       <div className="absolute inset-0 dot-grid-pattern pointer-events-none" />
 
-      {/* Decorative hardware pattern — very subtle */}
+      {/* Decorative hardware pattern - very subtle */}
       <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
         <div className="absolute top-10 left-10"><Wrench className="h-24 w-24 text-white" /></div>
         <div className="absolute top-32 right-20"><Hammer className="h-16 w-16 text-white" /></div>
@@ -124,7 +124,7 @@ export function LoginScreen() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
-        {/* Welcome tagline above card — animated entrance */}
+        {/* Welcome tagline above card - animated entrance */}
         <motion.div
           className="text-center mb-5 text-white"
           initial={{ opacity: 0, y: 12 }}
@@ -140,7 +140,7 @@ export function LoginScreen() {
           </h2>
         </motion.div>
 
-        {/* Login card — glassmorphism + border shimmer */}
+        {/* Login card - glassmorphism + border shimmer */}
         <motion.div
           initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -148,7 +148,7 @@ export function LoginScreen() {
         >
           <Card className="shadow-2xl border border-white/10 glass-card animate-border-shimmer">
             <CardHeader className="text-center pb-2">
-              {/* Animated logo — scale-in entrance */}
+              {/* Animated logo - scale-in entrance */}
               <motion.div
                 className="mx-auto w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center mb-4 shadow-lg ring-4 ring-white/20 animate-glow-pulse"
                 initial={{ scale: 0.3, rotate: -10 }}
@@ -164,7 +164,7 @@ export function LoginScreen() {
                 Point of Sale &amp; ERP System
               </CardDescription>
 
-              {/* Trust badges row — subtle hover effects */}
+              {/* Trust badges row - subtle hover effects */}
               <motion.div
                 className="flex flex-wrap items-center justify-center gap-1.5 mt-3"
                 initial={{ opacity: 0, y: 8 }}
@@ -183,7 +183,7 @@ export function LoginScreen() {
               </motion.div>
             </CardHeader>
             <CardContent>
-              {/* INLINE error banner — replaces the old toast.error popup.
+              {/* INLINE error banner - replaces the old toast.error popup.
                   Announced via role=alert; dismissible; never an overlay. */}
               <AnimatePresence initial={false}>
                 {errorMessage ? (
@@ -238,7 +238,7 @@ export function LoginScreen() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="password" className="text-sm font-medium">Password</Label>
-                    {/* INLINE forgot-password help — replaces the old
+                    {/* INLINE forgot-password help - replaces the old
                         toast.info popup; help opens in place. */}
                     <button
                       type="button"
@@ -263,7 +263,7 @@ export function LoginScreen() {
                         className="overflow-hidden"
                       >
                         <p className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:text-amber-300">
-                          Password resets are handled by your branch manager — call{" "}
+                          Password resets are handled by your branch manager - call{" "}
                           <a href="tel:+254795191909" className="font-semibold underline underline-offset-2">0795 191 909</a>
                           {" "}or email{" "}
                           <a href="mailto:info@mbumahhardware.co.ke" className="font-semibold underline underline-offset-2">info@mbumahhardware.co.ke</a>.
@@ -295,7 +295,7 @@ export function LoginScreen() {
                     </button>
                   </div>
                 </div>
-                {/* Submit button — animated gradient + loading state */}
+                {/* Submit button - animated gradient + loading state */}
                 <Button
                   type="submit"
                   className="w-full bg-gradient-to-r from-accent-orange via-amber-500 to-accent-orange hover:from-accent-orange/90 hover:via-amber-600 hover:to-accent-orange/90 text-accent-orange-foreground font-semibold h-11 shadow-md shadow-accent-orange/20 animate-gradient-button micro-click"
@@ -362,7 +362,7 @@ export function LoginScreen() {
             </div>
           </Card>
         </motion.div>
-        {/* Branding text — fade-in from below */}
+        {/* Branding text - fade-in from below */}
         <motion.p
           className="text-center mt-4 text-xs text-white/40 font-medium tracking-wider"
           initial={{ opacity: 0, y: 8 }}
@@ -372,7 +372,7 @@ export function LoginScreen() {
           Powered by MBUMAH HARDWARE · Made in Kenya 🇰🇪
         </motion.p>
         {/* VERSION BADGE (v2.6.2): version + build commit, visible BEFORE
-            login — support can verify the deployed release from the gate. */}
+            login - support can verify the deployed release from the gate. */}
         <motion.p
           className="text-center mt-1 text-[10px] text-white/25 tracking-wider"
           initial={{ opacity: 0 }}

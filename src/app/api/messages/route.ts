@@ -131,7 +131,7 @@ async function sendMessageHandler(...args: unknown[]): Promise<Response> {
     action: 'MESSAGE_CREATED',
     component: 'MESSAGING',
     severity: 'INFO',
-    message: `Message created: ${resolvedMessageType} via ${resolvedChannel}${waLink ? ' (wa.me link generated — delivery pending until opened)' : ''}`,
+    message: `Message created: ${resolvedMessageType} via ${resolvedChannel}${waLink ? ' (wa.me link generated - delivery pending until opened)' : ''}`,
     storeId,
     metadata: {
       messageId: message.id,

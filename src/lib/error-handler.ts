@@ -109,7 +109,7 @@ export function toErrorMessage(err: unknown): string {
       const prismaErr = err as unknown as { code?: string; meta?: { cause?: string } };
       if (prismaErr.code === 'P2002') return 'A record with this value already exists';
       if (prismaErr.code === 'P2025') return 'Record not found';
-      if (prismaErr.code === 'P2003') return 'Cannot delete — this record is referenced by other data';
+      if (prismaErr.code === 'P2003') return 'Cannot delete - this record is referenced by other data';
       return prismaErr.meta?.cause || msg;
     }
     // Zod errors

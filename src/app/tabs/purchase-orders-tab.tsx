@@ -634,7 +634,7 @@ function ReceiveItemsDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <PackageCheck className="h-5 w-5 text-emerald-600" />
-            Receive Items — {purchaseOrder.poNumber}
+            Receive Items - {purchaseOrder.poNumber}
           </DialogTitle>
           <DialogDescription>
             Enter quantities received for each item. Stock will be updated automatically.
@@ -983,7 +983,7 @@ function PODetailView({
             {/* PO Info Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <InfoItem icon={<FileText className="h-4 w-4" />} label="PO Number" value={detail.poNumber} />
-              <InfoItem icon={<ShoppingBag className="h-4 w-4" />} label="Supplier" value={detail.supplier?.name || '—'} />
+              <InfoItem icon={<ShoppingBag className="h-4 w-4" />} label="Supplier" value={detail.supplier?.name || '-'} />
               <InfoItem icon={<CalendarDays className="h-4 w-4" />} label="Order Date" value={formatDate(detail.orderDate)} />
               <InfoItem
                 icon={<Truck className="h-4 w-4" />}
@@ -1710,7 +1710,7 @@ export default function PurchaseOrdersTab() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <span className="text-sm">{po.supplier?.name || '—'}</span>
+                            <span className="text-sm">{po.supplier?.name || '-'}</span>
                           </TableCell>
                           <TableCell>
                             <Badge className={`text-[10px] gap-1 ${getStatusBadgeClasses(po.status)}`}>
@@ -1722,7 +1722,7 @@ export default function PurchaseOrdersTab() {
                             {formatDate(po.orderDate)}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
-                            {po.expectedDate ? formatDate(po.expectedDate) : '—'}
+                            {po.expectedDate ? formatDate(po.expectedDate) : '-'}
                           </TableCell>
                           <TableCell className="text-right font-medium text-sm">
                             {formatKES(po.totalAmount)}
@@ -1774,7 +1774,7 @@ export default function PurchaseOrdersTab() {
               {pagination && pagination.totalPages > 1 && (
                 <div className="flex items-center justify-between px-4 py-3 border-t">
                   <p className="text-xs text-muted-foreground">
-                    Showing {(page - 1) * limit + 1}–{Math.min(page * limit, pagination.total)} of{' '}
+                    Showing {(page - 1) * limit + 1}-{Math.min(page * limit, pagination.total)} of{' '}
                     {pagination.total} orders
                   </p>
                   <div className="flex items-center gap-1">

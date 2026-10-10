@@ -760,16 +760,16 @@ async function createTransactionInner(
     const safeTax   = adminVatRate;
 
     if (Number.isNaN(safePrice) || safePrice < 0) {
-      throw new CheckoutInputError(`items[${index}].pricePerUnit: Invalid value "${item.pricePerUnit}" — expected a non-negative number.`);
+      throw new CheckoutInputError(`items[${index}].pricePerUnit: Invalid value "${item.pricePerUnit}" - expected a non-negative number.`);
     }
     if (Number.isNaN(safeCost) || safeCost < 0) {
-      throw new CheckoutInputError(`items[${index}].costPrice: Invalid value "${item.costPrice}" — expected a non-negative number.`);
+      throw new CheckoutInputError(`items[${index}].costPrice: Invalid value "${item.costPrice}" - expected a non-negative number.`);
     }
     if (Number.isNaN(safeQty) || safeQty <= 0) {
-      throw new CheckoutInputError(`items[${index}].quantity: Invalid value "${item.quantity}" — expected a positive number.`);
+      throw new CheckoutInputError(`items[${index}].quantity: Invalid value "${item.quantity}" - expected a positive number.`);
     }
     if (Number.isNaN(safeTax) || safeTax < 0 || safeTax > 100) {
-      throw new CheckoutInputError(`items[${index}].taxRate: Invalid value "${item.taxRate}" — expected a number between 0 and 100.`);
+      throw new CheckoutInputError(`items[${index}].taxRate: Invalid value "${item.taxRate}" - expected a number between 0 and 100.`);
     }
 
     const calc = calculateLineTotal(safePrice, safeQty, safeDisc, safeTax);
@@ -1496,7 +1496,7 @@ async function createTransactionInner(
       const factor = toNum(product.conversionFactor);
       const hasConversion = Number.isFinite(factor) && factor > 0 && factor !== 1;
       const movementNotes = hasConversion
-        ? `Sale ${receiptNumber} — sold ${round4(toDec(soldUnits))} ${product.sellingUnit || product.unitType} (×${factor})`
+        ? `Sale ${receiptNumber} - sold ${round4(toDec(soldUnits))} ${product.sellingUnit || product.unitType} (×${factor})`
         : `Sale ${receiptNumber}`;
 
       await tx.stockMovement.create({

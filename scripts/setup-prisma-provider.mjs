@@ -97,9 +97,9 @@ if (currentProvider === provider) {
   // Write back only if the schema content changed.
   if (schema !== readFileSync(schemaPath, 'utf8')) {
     writeFileSync(schemaPath, schema);
-    console.log(`ℹ  Prisma provider already "${provider}" — wrote @db.Decimal stripped version.`);
+    console.log(`ℹ  Prisma provider already "${provider}" - wrote @db.Decimal stripped version.`);
   } else {
-    console.log(`ℹ  Prisma provider already "${provider}" — no change needed.`);
+    console.log(`ℹ  Prisma provider already "${provider}" - no change needed.`);
   }
 } else {
   const updatedSchema = schema.replace(providerRegex, `$1${provider}$3`);

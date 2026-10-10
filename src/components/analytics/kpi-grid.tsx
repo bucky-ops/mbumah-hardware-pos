@@ -183,7 +183,7 @@ function KpiCard({ config, index }: { config: KpiCardConfig; index: number }) {
 
   const pctLabel =
     delta.changePercent === null
-      ? '—'
+      ? '-'
       : `${delta.changePercent > 0 ? '+' : ''}${delta.changePercent.toFixed(1)}%`;
 
   return (

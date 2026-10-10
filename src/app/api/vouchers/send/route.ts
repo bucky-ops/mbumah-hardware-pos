@@ -203,7 +203,7 @@ async function sendVoucherHandler(...args: unknown[]): Promise<Response> {
     } else {
       const result = await sendEmail({
         to: recipient,
-        subject: `Your voucher from ${storeName} — ${voucher.code}`,
+        subject: `Your voucher from ${storeName} - ${voucher.code}`,
         html: emailHtml,
         text: message,
         userId: session.userId,

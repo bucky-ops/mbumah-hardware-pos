@@ -220,7 +220,7 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
           id: `txn-${t.id}`,
           type: 'recent_transaction',
           title: 'Recent Sale',
-          description: `${t.customer?.name || 'Walk-in'} — ${formatKES(t.totalAmount)} via ${t.paymentMethod}${minutesAgo <= 1 ? ' (just now)' : ` (${minutesAgo}m ago)`}`,
+          description: `${t.customer?.name || 'Walk-in'} - ${formatKES(t.totalAmount)} via ${t.paymentMethod}${minutesAgo <= 1 ? ' (just now)' : ` (${minutesAgo}m ago)`}`,
           severity: 'info',
           timestamp: t.createdAt.toISOString(),
           isRead: false,

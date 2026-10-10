@@ -333,7 +333,7 @@ export default function BankingTab() {
 
   const getAccountName = (accId: string) => {
     const acc = accounts.find((a) => a.id === accId);
-    return acc ? `${acc.bankName} — ${acc.accountName}` : accId;
+    return acc ? `${acc.bankName} - ${acc.accountName}` : accId;
   };
 
   // Render
@@ -550,7 +550,7 @@ export default function BankingTab() {
               <SelectContent>
                 <SelectItem value="all">All Accounts</SelectItem>
                 {accounts.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>{a.bankName} — {a.accountName}</SelectItem>
+                  <SelectItem key={a.id} value={a.id}>{a.bankName} - {a.accountName}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -673,7 +673,7 @@ export default function BankingTab() {
                           {isCredit ? '+' : '-'}{formatKES(tx.amount)}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground font-mono">
-                          {tx.reference || '—'}
+                          {tx.reference || '-'}
                         </TableCell>
                         <TableCell className="text-right text-sm">
                           {formatKES(tx.balanceAfter)}
@@ -856,7 +856,7 @@ export default function BankingTab() {
                         <TableCell className="text-sm">{formatDate(tx.transactionDate)}</TableCell>
                         <TableCell className="text-sm">{getAccountName(tx.bankAccountId)}</TableCell>
                         <TableCell className="text-xs font-mono text-muted-foreground">
-                          {tx.reference || '—'}
+                          {tx.reference || '-'}
                         </TableCell>
                         <TableCell className={`text-right font-semibold ${isCredit ? 'text-emerald-600' : 'text-red-600'}`}>
                           {isCredit ? '+' : '-'}{formatKES(tx.amount)}
@@ -1027,7 +1027,7 @@ export default function BankingTab() {
                   </SelectTrigger>
                   <SelectContent>
                     {accounts.filter((a) => a.isActive).map((a) => (
-                      <SelectItem key={a.id} value={a.id}>{a.bankName} — {a.accountName}</SelectItem>
+                      <SelectItem key={a.id} value={a.id}>{a.bankName} - {a.accountName}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1158,7 +1158,7 @@ export default function BankingTab() {
                 </SelectTrigger>
                 <SelectContent>
                   {accounts.filter((a) => a.isActive).map((a) => (
-                    <SelectItem key={a.id} value={a.id}>{a.bankName} — {a.accountName}</SelectItem>
+                    <SelectItem key={a.id} value={a.id}>{a.bankName} - {a.accountName}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

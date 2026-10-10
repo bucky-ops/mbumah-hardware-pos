@@ -39,7 +39,7 @@ import {
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Digital Receipt — MBUMAH HARDWARE',
+  title: 'Digital Receipt - MBUMAH HARDWARE',
   robots: { index: false, follow: false },
 };
 
@@ -271,7 +271,7 @@ export default async function DigitalReceiptPage({
           <div className="mt-5 rounded-xl bg-stone-50 p-3 text-center">
             <p className="flex items-center justify-center gap-1.5 text-[11px] font-medium text-stone-500">
               <Smartphone className="h-3.5 w-3.5" aria-hidden />
-              Digital copy — scanned from the QR code on your paper receipt
+              Digital copy - scanned from the QR code on your paper receipt
             </p>
           </div>
         </div>

@@ -818,7 +818,7 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
         <p className="leading-relaxed">
           <strong>How to redeem a gift card:</strong> Open any active card&apos;s
           <span className="font-medium"> ⋯ menu</span> and choose{' '}
-          <span className="font-medium">Redeem</span> — or click the{' '}
+          <span className="font-medium">Redeem</span> - or click the{' '}
           <span className="font-medium">Redeem</span> button on the card detail view.
           You can also enter the gift card code directly at checkout.
         </p>

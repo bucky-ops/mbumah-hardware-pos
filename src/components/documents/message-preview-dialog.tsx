@@ -85,7 +85,7 @@ export function MessagePreviewDialog({
       toast.success('Message copied to clipboard');
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error('Could not copy — please select the text manually.');
+      toast.error('Could not copy - please select the text manually.');
     }
   };
 
@@ -127,7 +127,7 @@ export function MessagePreviewDialog({
           <DialogDescription id="msg-preview-desc" className="text-xs">
             {phone
               ? `Review the exact ${channelLabel} output below before it opens in the app.`
-              : `No phone number on file — the ${channelLabel} app will let you pick a recipient.`}
+              : `No phone number on file - the ${channelLabel} app will let you pick a recipient.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -153,7 +153,7 @@ export function MessagePreviewDialog({
                     Simulated
                   </Badge>
                   <span className="text-xs text-muted-foreground">
-                    No {channelLabel} gateway configured — the message was NOT sent.
+                    No {channelLabel} gateway configured - the message was NOT sent.
                   </span>
                 </>
               )}
@@ -172,7 +172,7 @@ export function MessagePreviewDialog({
                 <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
-                    Not delivered — use the fallbacks below.
+                    Not delivered - use the fallbacks below.
                   </p>
                   {error && (
                     <p className="text-xs text-amber-700 dark:text-amber-400/90 break-words mt-0.5">

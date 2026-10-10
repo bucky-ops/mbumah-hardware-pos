@@ -1464,7 +1464,7 @@ export default function MessagingTab() {
                       className="text-xs h-9"
                       onClick={() => {
                         setBulkMessage(t.content);
-                        if (!bulkSubject.trim()) setBulkSubject(t.label.replace(/^[^\w]+\s/, '').trim() + ' — Mbumah Hardware');
+                        if (!bulkSubject.trim()) setBulkSubject(t.label.replace(/^[^\w]+\s/, '').trim() + ' - Mbumah Hardware');
                       }}
                     >
                       {t.label}
@@ -1550,7 +1550,7 @@ export default function MessagingTab() {
                 <div className="rounded-lg border bg-muted/30 p-3 text-sm">
                   Channel: <span className="font-medium">{bulkResult.broadcastSummary.channel}</span>
                   {' · '}Audience: <span className="font-medium">{AUDIENCE_LABELS[bulkResult.broadcastSummary.audience] ?? bulkResult.broadcastSummary.audience}</span>
-                  {' · '}Subject: <span className="font-medium">{bulkResult.broadcastSummary.subject || '—'}</span>
+                  {' · '}Subject: <span className="font-medium">{bulkResult.broadcastSummary.subject || '-'}</span>
                   {bulkResult.broadcastSummary.scheduledAt && (
                     <> {' · '}Scheduled: <span className="font-medium">{formatDateTime(bulkResult.broadcastSummary.scheduledAt)}</span></>
                   )}
@@ -1579,7 +1579,7 @@ export default function MessagingTab() {
                         {bulkResult.sent.map((r: BulkMessageRecipient) => (
                           <TableRow key={r.customerId}>
                             <TableCell className="font-medium text-sm break-words">{r.name || 'Unknown'}</TableCell>
-                            <TableCell className="text-sm break-all">{r.phone || '—'}</TableCell>
+                            <TableCell className="text-sm break-all">{r.phone || '-'}</TableCell>
                             <TableCell className="text-right">
                               {r.waLink ? (
                                 <Button
@@ -1608,7 +1608,7 @@ export default function MessagingTab() {
                                   Open
                                 </Button>
                               ) : (
-                                <span className="text-xs text-muted-foreground">—</span>
+                                <span className="text-xs text-muted-foreground">-</span>
                               )}
                             </TableCell>
                           </TableRow>
@@ -1831,7 +1831,7 @@ export default function MessagingTab() {
                                     wa.me
                                   </a>
                                 ) : (
-                                  <span className="text-xs text-muted-foreground">—</span>
+                                  <span className="text-xs text-muted-foreground">-</span>
                                 )}
                               </TableCell>
                             </TableRow>
@@ -1844,7 +1844,7 @@ export default function MessagingTab() {
                   {/* Pagination */}
                   <div className="flex items-center justify-between px-4 py-3 border-t">
                     <p className="text-sm text-muted-foreground">
-                      Showing {(historyPage - 1) * historyPageSize + 1}–
+                      Showing {(historyPage - 1) * historyPageSize + 1}-
                       {Math.min(historyPage * historyPageSize, filteredMessages.length)} of{' '}
                       {filteredMessages.length}
                     </p>

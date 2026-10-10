@@ -218,7 +218,7 @@ export class CircuitOpenError extends Error {
   readonly metrics: CircuitBreakerMetrics;
 
   constructor(name: string, metrics: CircuitBreakerMetrics) {
-    super(`Circuit "${name}" is OPEN — requests are failing fast. ` +
+    super(`Circuit "${name}" is OPEN - requests are failing fast. ` +
       `Last failure: ${metrics.lastFailureAt ?? 'unknown'}. ` +
       `Retry in ${metrics.msUntilHalfOpen}ms.`);
     this.name = 'CircuitOpenError';

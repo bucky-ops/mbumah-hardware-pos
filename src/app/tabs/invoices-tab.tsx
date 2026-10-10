@@ -569,7 +569,7 @@ export default function InvoicesTab() {
       invoice.status === 'CONVERTED' ||
       (due !== null && !Number.isNaN(due.getTime()) && due < todayStart);
     if (isExpired) {
-      toast.error('Quote expired — revalidate prices before converting');
+      toast.error('Quote expired - revalidate prices before converting');
       return;
     }
     if (convertMutation.isPending) return;
@@ -747,7 +747,7 @@ export default function InvoicesTab() {
         channel: 'whatsapp',
         phone,
         message: (res as { message?: string }).message || `${invoice.invoiceType} ${invoice.invoiceNumber}`,
-        title: `WhatsApp — ${(res as { documentTitle?: string }).documentTitle || invoice.invoiceNumber}`,
+        title: `WhatsApp - ${(res as { documentTitle?: string }).documentTitle || invoice.invoiceNumber}`,
         waLink: (res as { waLink?: string }).waLink,
       });
     } catch (err) {
@@ -775,7 +775,7 @@ export default function InvoicesTab() {
         channel: 'sms',
         phone,
         message: text,
-        title: `SMS — ${invoice.invoiceNumber}`,
+        title: `SMS - ${invoice.invoiceNumber}`,
       });
     } catch (err) {
       const msg = handleError(err, 'Send invoice via SMS');
@@ -1051,7 +1051,7 @@ export default function InvoicesTab() {
                             <Printer className="h-4 w-4" />
                           </Button>
 
-                          {/* v2.8.0: Download PDF (client request — all invoice types). */}
+                          {/* v2.8.0: Download PDF (client request - all invoice types). */}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -1088,8 +1088,8 @@ export default function InvoicesTab() {
                             <MessageSquare className="h-4 w-4" />
                           </Button>
 
-                          {/* v2.8.0: Delete (client request — remove a finished
-                              invoice) — opens the confirmation AlertDialog. */}
+                          {/* v2.8.0: Delete (client request - remove a finished
+                              invoice) - opens the confirmation AlertDialog. */}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -1716,7 +1716,7 @@ export default function InvoicesTab() {
                     <Trash2 className="h-4 w-4" /> Delete
                   </Button>
 
-                  {/* v2.10.0 DIGITAL RECEIPT CARD — dedicated full-width section
+                  {/* v2.10.0 DIGITAL RECEIPT CARD - dedicated full-width section
                       below Quick Actions: the QR can never be clipped/squeezed
                       by the action buttons, it is clickable (opens the viewer
                       with scroll + autofit), and the payload now points at the
@@ -1736,7 +1736,7 @@ export default function InvoicesTab() {
                           Digital receipt (QR)
                         </p>
                         <p className="text-xs leading-relaxed text-muted-foreground">
-                          Scanning this QR — or tapping it — opens the colored digital
+                          Scanning this QR - or tapping it - opens the colored digital
                           copy of this {PRINT_DOC_LABELS[invoiceDetail.invoiceType]?.toLowerCase() || 'document'}
                           {' '}at <span className="font-mono">/r/{invoiceDetail.invoiceNumber}</span>.
                           Printed copies carry the same QR. Use Autofit to fit the
@@ -1786,14 +1786,14 @@ export default function InvoicesTab() {
         </DialogContent>
       </Dialog>
 
-      {/* ── v2.8.0: Delete confirmation (AlertDialog — rentals-tab pattern) ── */}
+      {/* ── v2.8.0: Delete confirmation (AlertDialog - rentals-tab pattern) ── */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {deleteTarget?.invoiceType.replace('_', ' ')} {deleteTarget?.invoiceNumber}?</AlertDialogTitle>
             <AlertDialogDescription>
               This permanently removes the document and its line items. This action cannot be undone.
-              {deleteTarget?.status === 'PAID' && ' Note: this document is marked PAID — consider cancelling it instead to keep the payment history.'}
+              {deleteTarget?.status === 'PAID' && ' Note: this document is marked PAID - consider cancelling it instead to keep the payment history.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1819,11 +1819,11 @@ export default function InvoicesTab() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── v2.10.0: Digital receipt viewer — scroll + autofit + public page ── */}
+      {/* ── v2.10.0: Digital receipt viewer - scroll + autofit + public page ── */}
       <DigitalReceiptViewer
         open={receiptViewerOpen}
         onOpenChange={setReceiptViewerOpen}
-        title={`Digital receipt — ${viewerDoc?.docNumber ?? ''}`}
+        title={`Digital receipt - ${viewerDoc?.docNumber ?? ''}`}
         subtitle={viewerDoc?.typeLabel}
         publicPath={viewerDoc ? `/r/${encodeURIComponent(viewerDoc.docNumber)}` : undefined}
       >

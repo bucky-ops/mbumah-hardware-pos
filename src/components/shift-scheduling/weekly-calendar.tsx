@@ -47,7 +47,7 @@ export function WeeklyCalendar({
 
   return (
     <div className="space-y-3">
-      {/* Day headers — 7 columns on sm+, stack vertically on mobile */}
+      {/* Day headers - 7 columns on sm+, stack vertically on mobile */}
       <div className="hidden sm:grid grid-cols-7 gap-2">
         {days.map((d) => {
           const date = new Date(d.date);
@@ -77,7 +77,7 @@ export function WeeklyCalendar({
         })}
       </div>
 
-      {/* Calendar grid — 7 columns on sm+, vertical stack on mobile */}
+      {/* Calendar grid - 7 columns on sm+, vertical stack on mobile */}
       <div className="grid grid-cols-1 sm:grid-cols-7 gap-2">
         {days.map((d) => {
           const date = new Date(d.date);

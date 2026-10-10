@@ -102,7 +102,7 @@ export function formatSequence(
 
 export class UniqueConstraintError extends Error {
   constructor(public model: string) {
-    super(`Duplicate unique value on ${model} — sequence contention`);
+    super(`Duplicate unique value on ${model} - sequence contention`);
     this.name = 'UniqueConstraintError';
   }
 }

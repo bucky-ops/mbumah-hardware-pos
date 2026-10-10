@@ -269,7 +269,7 @@ async function createExportHandler(...args: unknown[]): Promise<Response> {
       action: 'DATA_EXPORT_CREATED',
       component: LogComponent.FINANCIAL,
       severity: LogSeverity.INFO,
-      message: `Data export "${exportType}" (${format}) generated — ${result.recordCount} records, ${stat.size} bytes.`,
+      message: `Data export "${exportType}" (${format}) generated - ${result.recordCount} records, ${stat.size} bytes.`,
       storeId,
       userId: createdById,
       metadata: {

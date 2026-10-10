@@ -392,7 +392,7 @@ async function updateLeaveHandler(
     action: `LEAVE_REQUEST_${newStatus}`,
     component: LogComponent.SYSTEM,
     severity: LogSeverity.INFO,
-    message: `Leave request ${newStatus.toLowerCase()}: ${leaveRequest.employee.firstName} ${leaveRequest.employee.lastName} — ${leaveRequest.leaveType.name} (${leaveRequest.workingDays} day(s))${rejectionReason ? ` — Reason: ${rejectionReason}` : ''}`,
+    message: `Leave request ${newStatus.toLowerCase()}: ${leaveRequest.employee.firstName} ${leaveRequest.employee.lastName} - ${leaveRequest.leaveType.name} (${leaveRequest.workingDays} day(s))${rejectionReason ? ` - Reason: ${rejectionReason}` : ''}`,
     storeId: leaveRequest.storeId,
     userId: session.userId,
     metadata: { leaveRequestId, employeeId: leaveRequest.employeeId, oldStatus, newStatus },

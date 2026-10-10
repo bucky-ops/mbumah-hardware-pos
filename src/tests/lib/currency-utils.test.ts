@@ -3,14 +3,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // Pure-logic tests for:
-//   • formatCurrency — display formatting for KES, USD, UGX, TZS
-//   • convertCurrency — cross-currency conversion (static rates)
-//   • parseCurrencyInput — user-input parsing
-//   • getCurrencyByCountry — country → currency code lookup
+//   • formatCurrency - display formatting for KES, USD, UGX, TZS
+//   • convertCurrency - cross-currency conversion (static rates)
+//   • parseCurrencyInput - user-input parsing
+//   • getCurrencyByCountry - country → currency code lookup
 //   • SUPPORTED_CURRENCIES / CURRENCY_BY_CODE metadata
-//   • Money class — formatting (formatKES, formatCompact) with different currencies
+//   • Money class - formatting (formatKES, formatCompact) with different currencies
 //
-// No database required — all tests are pure arithmetic.
+// No database required - all tests are pure arithmetic.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from 'vitest';
@@ -78,10 +78,10 @@ describe('Currency metadata', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. formatCurrency — KES
+// 2. formatCurrency - KES
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('formatCurrency — KES', () => {
+describe('formatCurrency - KES', () => {
   it('formats a simple amount with Ksh prefix and 2 decimals', () => {
     expect(formatCurrency(1234, 'KES')).toBe('Ksh 1,234.00');
   });
@@ -126,10 +126,10 @@ describe('formatCurrency — KES', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. formatCurrency — USD
+// 3. formatCurrency - USD
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('formatCurrency — USD', () => {
+describe('formatCurrency - USD', () => {
   it('formats USD with $ prefix and 2 decimals', () => {
     expect(formatCurrency(100, 'USD')).toBe('$ 100.00');
   });
@@ -144,10 +144,10 @@ describe('formatCurrency — USD', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. formatCurrency — UGX and TZS (0 decimals)
+// 4. formatCurrency - UGX and TZS (0 decimals)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('formatCurrency — UGX (0 decimals)', () => {
+describe('formatCurrency - UGX (0 decimals)', () => {
   it('formats UGX with no decimal places', () => {
     expect(formatCurrency(50000, 'UGX')).toBe('USh 50,000');
   });
@@ -164,7 +164,7 @@ describe('formatCurrency — UGX (0 decimals)', () => {
   });
 });
 
-describe('formatCurrency — TZS (0 decimals)', () => {
+describe('formatCurrency - TZS (0 decimals)', () => {
   it('formats TZS with no decimal places', () => {
     expect(formatCurrency(15000, 'TZS')).toBe('TSh 15,000');
   });
@@ -175,10 +175,10 @@ describe('formatCurrency — TZS (0 decimals)', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5. formatCurrency — edge cases
+// 5. formatCurrency - edge cases
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('formatCurrency — edge cases', () => {
+describe('formatCurrency - edge cases', () => {
   it('handles NaN by formatting as zero', () => {
     expect(formatCurrency(NaN, 'KES')).toBe('Ksh 0.00');
   });
@@ -235,9 +235,9 @@ describe('convertCurrency', () => {
   });
 
   it('returns 0 for unknown currency codes', () => {
-    // @ts-expect-error — testing invalid input
+    // @ts-expect-error - testing invalid input
     expect(convertCurrency(100, 'KES', 'XYZ')).toBe(0);
-    // @ts-expect-error — testing invalid input
+    // @ts-expect-error - testing invalid input
     expect(convertCurrency(100, 'XYZ', 'KES')).toBe(0);
   });
 
@@ -341,10 +341,10 @@ describe('getCurrencyByCountry', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 9. Money class — formatKES with different currencies
+// 9. Money class - formatKES with different currencies
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Money.formatKES — multi-currency', () => {
+describe('Money.formatKES - multi-currency', () => {
   it('KES format includes Ksh prefix', () => {
     expect(KES(1234567.5).formatKES()).toBe('Ksh 1,234,567.50');
   });
@@ -376,11 +376,11 @@ describe('Money.formatKES — multi-currency', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 10. Rounding behavior — banker's rounding with Decimal
+// 10. Rounding behavior - banker's rounding with Decimal
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('Rounding behavior', () => {
-  it('formatCurrency rounds halves up (HALF_UP — audit policy)', () => {
+  it('formatCurrency rounds halves up (HALF_UP - audit policy)', () => {
     // HALF_UP: exact halves round to the next cent (0.005 → 0.01).
     expect(formatCurrency(0.005, 'KES')).toBe('Ksh 0.01');
     expect(formatCurrency(0.015, 'KES')).toBe('Ksh 0.02');
@@ -389,7 +389,7 @@ describe('Rounding behavior', () => {
   });
 
   it('convertCurrency rounds to target currency\'s precision', () => {
-    // UGX has 0 decimals — result should be an integer
+    // UGX has 0 decimals - result should be an integer
     const ugx = convertCurrency(1, 'KES', 'UGX');
     expect(Number.isInteger(ugx)).toBe(true);
   });
