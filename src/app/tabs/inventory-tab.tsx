@@ -9,7 +9,7 @@ import {
   Minus, BarChart3, ChevronUp, ChevronDown, ChevronsUpDown,
   Download, History, RotateCcw, X,
   Filter, ChevronRight, Tag, Palette, Zap, ShoppingCart, Info,
-  MessageCircle, RefreshCw, Pencil, Settings2, Check
+  MessageCircle, RefreshCw, Pencil, Settings2, Check, PackagePlus
 } from 'lucide-react';
 
 import { useAppStore, useAuthStore } from '@/lib/stores';
@@ -739,6 +739,17 @@ export default function InventoryTab() {
     });
   };
 
+  // v2.14.1: Reorder prefill. Suggested quantity restores stock to the same
+  // full level the stock bars use as 100% (reorderLevel x 3), minimum +1.
+  const suggestedReorderQty = (product: ProductListItem): number =>
+    Math.max(product.reorderLevel * 3 - product.quantityInStock, 1);
+
+  const openReorderPrefill = (product: ProductListItem) => {
+    setAdjustStockProduct(product);
+    setStockAdjustAmount(suggestedReorderQty(product));
+    setStockAdjustReason('Reorder to restock level');
+  };
+
   const handleCreateCategory = () => {
     if (!newCategoryName.trim()) {
       toast.error('Category name is required');
@@ -782,7 +793,7 @@ export default function InventoryTab() {
               {outOfStockCount > 0 && lowStockCount > 0 && ' · '}
               {lowStockCount > 0 && `${lowStockCount} low stock`}
             </span>
-            <span className="text-amber-700 dark:text-amber-400"> — items need attention</span>
+            <span className="text-amber-700 dark:text-amber-400"> - items need attention</span>
           </div>
           <div className="flex gap-2">
             {outOfStockCount > 0 && (
@@ -797,7 +808,7 @@ export default function InventoryTab() {
         </div>
       )}
 
-      {/* Stats Cards — Glass-morphism with gradient icons */}
+      {/* Stats Cards - Glass-morphism with gradient icons */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="glass-card stagger-1 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
           <CardContent className="p-4">
@@ -1339,7 +1350,7 @@ export default function InventoryTab() {
                           <TableCell className="text-sm">
                             <div className="flex items-center gap-2">
                               <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: catColor }} />
-                              <span className="truncate max-w-[100px]">{product.category?.name || '—'}</span>
+                              <span className="truncate max-w-[100px]">{product.category?.name || '-'}</span>
                             </div>
                           </TableCell>
                           <TableCell className="text-right font-medium">{formatKES(product.pricePerUnit)}</TableCell>
@@ -1439,6 +1450,12 @@ export default function InventoryTab() {
                                 <DropdownMenuItem onClick={() => setDetailProduct(product)}>
                                   <Info className="mr-2 h-4 w-4" /> View Details
                                 </DropdownMenuItem>
+                                {/* v2.14.1: Reorder prefill on at/below-reorder products */}
+                                {product.quantityInStock <= product.reorderLevel && (
+                                  <DropdownMenuItem onClick={() => openReorderPrefill(product)}>
+                                    <PackagePlus className="mr-2 h-4 w-4 text-amber-600" /> Reorder (+{suggestedReorderQty(product)})
+                                  </DropdownMenuItem>
+                                )}
                                 <DropdownMenuItem onClick={() => setEditProduct(product)}>
                                   <Edit className="mr-2 h-4 w-4" /> Edit
                                 </DropdownMenuItem>
@@ -1580,7 +1597,7 @@ export default function InventoryTab() {
                             </span>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">
-                            {movement.notes || '—'}
+                            {movement.notes || '-'}
                           </TableCell>
                         </TableRow>
                         {isExpanded && (
@@ -1601,7 +1618,7 @@ export default function InventoryTab() {
                                 </div>
                                 <div>
                                   <span className="text-muted-foreground">Reference</span>
-                                  <p className="font-mono mt-0.5">{movement.referenceId || '—'}</p>
+                                  <p className="font-mono mt-0.5">{movement.referenceId || '-'}</p>
                                 </div>
                                 {movement.notes && (
                                   <div className="col-span-2 sm:col-span-4">
@@ -1751,10 +1768,10 @@ export default function InventoryTab() {
                           <span className="w-2 h-2 rounded-full" style={{ backgroundColor: detailProduct.category.color || getCategoryColor(detailProduct.category.name) }} />
                           {detailProduct.category.name}
                         </span>
-                      ) : '—'}
+                      ) : '-'}
                     </div>
                     <div><span className="text-muted-foreground">Unit Type:</span> {unitLabel(detailProduct.unitType)}</div>
-                    <div><span className="text-muted-foreground">Barcode:</span> {detailProduct.barcode || '—'}</div>
+                    <div><span className="text-muted-foreground">Barcode:</span> {detailProduct.barcode || '-'}</div>
                     <div><span className="text-muted-foreground">Rental:</span> {detailProduct.isRental ? 'Yes' : 'No'}</div>
                     <div><span className="text-muted-foreground">Bundle:</span> {detailProduct.isBundle ? 'Yes' : 'No'}</div>
                     <div><span className="text-muted-foreground">Created:</span> {formatDate(detailProduct.createdAt)}</div>
@@ -1835,6 +1852,18 @@ export default function InventoryTab() {
                   >
                     <Edit className="mr-2 h-4 w-4" /> Edit Product
                   </Button>
+                  {detailProduct && detailProduct.quantityInStock <= detailProduct.reorderLevel && (
+                    <Button
+                      variant="outline"
+                      className="flex-1 border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/30"
+                      onClick={() => {
+                        setDetailProduct(null);
+                        openReorderPrefill(detailProduct);
+                      }}
+                    >
+                      <PackagePlus className="mr-2 h-4 w-4" /> Reorder
+                    </Button>
+                  )}
                   <Button
                     className="flex-1 bg-accent-orange hover:bg-accent-orange/90 text-accent-orange-foreground"
                     onClick={() => {
@@ -1853,7 +1882,7 @@ export default function InventoryTab() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Product Dialog — ResponsiveDialog so all sections fit */}
+      {/* Edit Product Dialog - ResponsiveDialog so all sections fit */}
       <ResponsiveDialog
         open={!!editProduct}
         onOpenChange={(open) => { if (!open) setEditProduct(null); }}
@@ -2013,6 +2042,20 @@ export default function InventoryTab() {
                   <Button variant="outline" size="sm" className="text-xs" onClick={() => setStockAdjustAmount(5)}>+5</Button>
                   <Button variant="outline" size="sm" className="text-xs" onClick={() => setStockAdjustAmount(10)}>+10</Button>
                   <Button variant="outline" size="sm" className="text-xs" onClick={() => setStockAdjustAmount(50)}>+50</Button>
+                  {/* v2.14.1: Reorder quick-fill for at/below-reorder products */}
+                  {adjustStockProduct.quantityInStock <= adjustStockProduct.reorderLevel && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-400"
+                      onClick={() => {
+                        setStockAdjustAmount(suggestedReorderQty(adjustStockProduct));
+                        setStockAdjustReason('Reorder to restock level');
+                      }}
+                    >
+                      <PackagePlus className="mr-1 h-3 w-3" /> Reorder +{suggestedReorderQty(adjustStockProduct)}
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -2112,7 +2155,7 @@ export default function InventoryTab() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Category Dialog — ResponsiveDialog so color palette wraps on small screens */}
+      {/* Add Category Dialog - ResponsiveDialog so color palette wraps on small screens */}
       <ResponsiveDialog
         open={addCategoryOpen}
         onOpenChange={setAddCategoryOpen}
@@ -2189,7 +2232,7 @@ export default function InventoryTab() {
         </div>
       </ResponsiveDialog>
 
-      {/* Edit Category Dialog — DML audit: categories must be editable */}
+      {/* Edit Category Dialog - DML audit: categories must be editable */}
       <ResponsiveDialog
         open={editCategoryOpen}
         onOpenChange={setEditCategoryOpen}
