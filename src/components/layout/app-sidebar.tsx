@@ -20,8 +20,20 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import {
   Store, LogOut, Sun, Moon, Bell, X, ChevronDown, ChevronLeft, ChevronRight,
-  Keyboard, ShieldCheck, CheckCircle, Lock,
+  ChevronsRight, Keyboard, ShieldCheck, CheckCircle, Lock, Maximize2,
 } from 'lucide-react';
+
+// v2.14.1 (fullscreen autohide): keyboard shortcut hints surfaced in
+// icon-mode tooltips (spec: "tooltip on hover label + shortcut F2 F3 F4 F5").
+const SHORTCUT_HINTS: Partial<Record<AppTab, string>> = {
+  pos: 'F2',
+  inventory: 'F3',
+  customers: 'F4',
+  financial: 'F5',
+};
+
+// Idle delay before the sidebar slides away in fullscreen (spec: 2s).
+const FULLSCREEN_IDLE_HIDE_MS = 2000;
 
 /** Get role-based avatar ring class */
 function getAvatarRingClass(role?: string): string {
@@ -40,6 +52,12 @@ export function AppSidebar() {
   const { theme, setTheme } = useTheme();
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  // v2.14.1 (fullscreen autohide): when the app is fullscreen on desktop the
+  // sidebar slides away after 2s of pointer/keyboard inactivity and peeks
+  // back via the left-edge sensor, the top-bar toggle, or keyboard focus.
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [peek, setPeek] = useState(false);
+  const peekRef = useRef(false);
   const notificationCount = useNotificationCount(currentStoreId);
   const sidebarRef = useRef<HTMLElement>(null);
   // Track previous notification count for bounce animation
@@ -67,9 +85,56 @@ export function AppSidebar() {
     () => false,
   );
 
+  // Mirror peek into a ref so the inactivity timer can read it without
+  // re-subscribing listeners on every peek change.
+  useEffect(() => {
+    peekRef.current = peek;
+  }, [peek]);
+
+  // Track Fullscreen API state. Native F11 fullscreen also fires
+  // fullscreenchange in Chromium/Firefox, so both entry paths are covered.
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+      setPeek(false);
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
   // Derive the sidebar visual state
   const sidebarState = getSidebarState(isDesktop);
-  const collapsed = sidebarState === 'collapsed';
+  const fullscreenAutohide = isFullscreen && isDesktop;
+  // In fullscreen the rail is icons-only (64px) per the autohide spec.
+  const collapsed = fullscreenAutohide || sidebarState === 'collapsed';
+
+  // Fullscreen autohide: hide after 2s of inactivity. Activity re-arms the
+  // timer; while the rail is peeked (hover/focus) it stays pinned until the
+  // pointer leaves. The top-bar toggle raises mbumah:sidebar-peek-toggle.
+  useEffect(() => {
+    if (!fullscreenAutohide) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const armTimer = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (!peekRef.current) setPeek(false);
+      }, FULLSCREEN_IDLE_HIDE_MS);
+    };
+    const onActivity = () => {
+      if (!peekRef.current) armTimer();
+    };
+    const onPeekToggle = () => setPeek((p) => !p);
+    armTimer();
+    window.addEventListener('mousemove', onActivity);
+    window.addEventListener('keydown', onActivity);
+    window.addEventListener('mbumah:sidebar-peek-toggle', onPeekToggle);
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener('mousemove', onActivity);
+      window.removeEventListener('keydown', onActivity);
+      window.removeEventListener('mbumah:sidebar-peek-toggle', onPeekToggle);
+    };
+  }, [fullscreenAutohide]);
 
   // Auto-expand sidebar when transitioning from mobile to desktop while collapsed
   useEffect(() => {
@@ -136,7 +201,7 @@ export function AppSidebar() {
           aria-disabled="true"
           tabIndex={-1}
           data-locked="true"
-          aria-label={`${label} — requires ${requiresLabel}`}
+          aria-label={`${label} - requires ${requiresLabel}`}
           onClick={(e) => e.preventDefault()}
           className={`w-full flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-300 ease-out relative group cursor-not-allowed select-none opacity-50 ${
             collapsed ? 'px-0 py-2.5 justify-center' : 'px-4 py-2.5'
@@ -195,10 +260,19 @@ export function AppSidebar() {
     );
 
     if (collapsed) {
+      // Icon-mode tooltip: label + keyboard shortcut hint (v2.14.1).
+      const shortcutHint = SHORTCUT_HINTS[id];
       return (
         <Tooltip key={id}>
           <TooltipTrigger asChild>{btn}</TooltipTrigger>
-          <TooltipContent side="right" sideOffset={8}>{label}</TooltipContent>
+          <TooltipContent side="right" sideOffset={8} className="flex items-center gap-1.5">
+            <span>{label}</span>
+            {shortcutHint && (
+              <kbd className="rounded border border-white/20 bg-white/10 px-1 font-sans text-[9px] font-semibold text-slate-300">
+                {shortcutHint}
+              </kbd>
+            )}
+          </TooltipContent>
         </Tooltip>
       );
     }
@@ -217,6 +291,23 @@ export function AppSidebar() {
         />
       )}
 
+      {/* Fullscreen edge sensor (v2.14.1): a 20px left-edge strip that peeks
+          the autohidden rail on hover, click, or keyboard focus. */}
+      {fullscreenAutohide && !peek && (
+        <div className="fixed left-0 top-0 z-40 flex h-full w-5 items-center" aria-hidden="false">
+          <button
+            type="button"
+            aria-label="Show navigation"
+            onMouseEnter={() => setPeek(true)}
+            onFocus={() => setPeek(true)}
+            onClick={() => setPeek(true)}
+            className="flex h-16 w-5 items-center justify-center rounded-r-lg border border-l-0 border-white/10 bg-[#0f172a]/80 text-slate-400 shadow-md backdrop-blur-sm transition-colors hover:text-white"
+          >
+            <ChevronsRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Sidebar */}
       <aside
         ref={sidebarRef}
@@ -226,16 +317,21 @@ export function AppSidebar() {
         // state is conveyed through data-sidebar-state (React logged a
         // console error for the invalid prop).
         data-collapsed={collapsed}
-        data-sidebar-state={sidebarState}
+        data-sidebar-state={fullscreenAutohide ? 'collapsed' : sidebarState}
         tabIndex={sidebarState === 'mobile-overlay' ? -1 : undefined}
-        className={`fixed top-0 left-0 z-50 h-full bg-[#0f172a] text-slate-300 transform transition-all duration-300 ease-in-out lg:translate-x-0 lg:static lg:z-auto border-r border-white/10 shadow-lg lg:shadow-none ${
-          sidebarState === 'expanded' ? 'w-64' : sidebarState === 'collapsed' ? 'lg:w-16 w-64' : 'w-64'
+        onMouseLeave={() => { if (fullscreenAutohide) setPeek(false); }}
+        className={`fixed top-0 left-0 z-50 h-full bg-[#0f172a] text-slate-300 transform transition-all duration-300 ease-in-out lg:static lg:z-auto border-r border-white/10 shadow-lg lg:shadow-none ${
+          collapsed ? 'lg:w-16 w-64' : 'w-64'
         } ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          fullscreenAutohide
+            ? peek
+              ? 'lg:translate-x-0 lg:ml-0'
+              : 'lg:-translate-x-full lg:-ml-16 lg:overflow-x-hidden'
+            : `${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`
         }`}
       >
         <div className="flex flex-col h-full">
-          {/* Logo + Collapse Toggle — v2.13.3 brand refresh: the 3D Mbumah logo
+          {/* Logo + Collapse Toggle - v2.13.3 brand refresh: the 3D Mbumah logo
               (navy gear · orange house · silver trowel) sits in a WHITE rounded-xl
               container with drop shadow so it pops on the dark #0f172a sidebar
               (spec PART 1). Replaces the old flat green "MH" initials square. */}
@@ -246,7 +342,7 @@ export function AppSidebar() {
               {/* Light/white background: full-colour logo as-is (spec PART 1) */}
               <img
                 src={collapsed ? '/logo3d-gear-256.png' : '/logo3d-200.webp'}
-                alt="MBUMAH HARDWARE — Your Building Partner in Juja"
+                alt="MBUMAH HARDWARE - Your Building Partner in Juja"
                 className={collapsed ? 'w-full h-full object-cover' : 'w-full h-auto'}
                 width={collapsed ? 36 : 132}
                 height={collapsed ? 36 : 132}
@@ -278,11 +374,12 @@ export function AppSidebar() {
                 <X className="h-4 w-4" />
               </Button>
             )}
-            {/* Collapse/expand toggle button */}
+            {/* Collapse/expand toggle button (hidden in fullscreen: the
+                rail is managed by the autohide peek instead) */}
             <button
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               onClick={toggleSidebarCollapse}
-              className="hidden lg:flex absolute -right-3 top-1/2 -translate-y-1/2 z-50 h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-[#0f172a] text-slate-400 hover:text-white hover:bg-white/10 shadow-sm transition-all duration-200"
+              className={`${fullscreenAutohide ? 'hidden' : 'hidden lg:flex'} absolute -right-3 top-1/2 -translate-y-1/2 z-50 h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-[#0f172a] text-slate-400 hover:text-white hover:bg-white/10 shadow-sm transition-all duration-200`}
             >
               {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
             </button>
@@ -332,7 +429,7 @@ export function AppSidebar() {
                     <Store className="h-3.5 w-3.5 shrink-0" />
                     {/* Branch code surfacing (v2.3.0 codes: JUJ/THI/RUI/NAI/NAK) */}
                     <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-400 tracking-wide">
-                      {STORE_LIST.find(s => s.id === currentStoreId)?.code || '—'}
+                      {STORE_LIST.find(s => s.id === currentStoreId)?.code || '-'}
                     </span>
                     <span className="truncate font-medium">{STORE_LIST.find(s => s.id === currentStoreId)?.shortName || 'Select Branch'}</span>
                     <ChevronDown className="h-3 w-3 ml-auto shrink-0" />
@@ -381,7 +478,7 @@ export function AppSidebar() {
             ))}
           </nav>
 
-          {/* Footer - User Profile Dropdown — role-based avatar ring */}
+          {/* Footer - User Profile Dropdown - role-based avatar ring */}
           <div className={`border-t border-white/10 py-3 space-y-2 ${collapsed ? 'px-1' : 'px-3'}`}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -433,7 +530,7 @@ export function AppSidebar() {
                   {theme === 'dark' ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
                   {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
                 </DropdownMenuItem>
-                {/* v2.7.0: real Profile & Settings dialog — replaces the
+                {/* v2.7.0: real Profile & Settings dialog - replaces the
                     "coming soon" toast that lived here since the redesign. */}
                 <DropdownMenuItem onClick={() => setProfileOpen(true)} data-testid="profile-settings-menu">
                   <ShieldCheck className="mr-2 h-4 w-4" />
@@ -442,6 +539,20 @@ export function AppSidebar() {
                 <DropdownMenuItem onClick={() => toast.info('Press ? or Ctrl+/ for keyboard shortcuts')}>
                   <Keyboard className="mr-2 h-4 w-4" />
                   Keyboard Shortcuts
+                </DropdownMenuItem>
+                {/* v2.14.1 (fullscreen autohide): Fullscreen API entry point
+                    alongside native F11; in fullscreen the sidebar autohides. */}
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (document.fullscreenElement) {
+                      void document.exitFullscreen();
+                    } else {
+                      document.documentElement.requestFullscreen().catch(() => toast.error('Fullscreen is not available here'));
+                    }
+                  }}
+                >
+                  <Maximize2 className="mr-2 h-4 w-4" />
+                  Toggle Fullscreen
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={handleLogout}>

@@ -117,18 +117,26 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
           >
             <Menu className="h-5 w-5" />
           </Button>
-          {/* Desktop sidebar collapse/expand toggle */}
+          {/* Desktop sidebar collapse/expand toggle. In fullscreen the
+              sidebar is autohidden (v2.14.1), so this button toggles the
+              peek instead of the persisted collapse state. */}
           <Button
             variant="ghost"
             size="icon"
             className="hidden lg:flex"
-            onClick={toggleSidebarCollapse}
+            onClick={() => {
+              if (typeof document !== 'undefined' && document.fullscreenElement) {
+                window.dispatchEvent(new CustomEvent('mbumah:sidebar-peek-toggle'));
+                return;
+              }
+              toggleSidebarCollapse();
+            }}
             aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {isSidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
           </Button>
           <div className="flex items-center gap-2 min-w-0">
-            {/* v2.13.3: small 3D brand mark in the top bar — keeps the logo
+            {/* v2.13.3: small 3D brand mark in the top bar - keeps the logo
                 visible when the sidebar is collapsed (spec PART 1). Falls back
                 to the gear-only crop so it stays crisp at 24px. */}
             <img
@@ -205,11 +213,11 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
                   <ShoppingCart className="mr-2 h-4 w-4 text-green-600" />
                   Start a new sale
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => toast.info('📞 Call support: 0795 191 909\n📧 Email: info@mbumahhardware.co.ke')}>
+                <DropdownMenuItem onClick={() => toast.info('Call support: 0795 191 909\nEmail: info@mbumahhardware.co.ke')}>
                   <Smartphone className="mr-2 h-4 w-4" />
                   Contact support
                 </DropdownMenuItem>
-                {/* v2.7.0: real About dialog — the old toast hardcoded
+                {/* v2.7.0: real About dialog - the old toast hardcoded
                     "Version 1.0.0" while the app shipped 2.6.x. The dialog
                     reads the version from src/lib/version.ts so it can never
                     drift from /api/health, the footer or openapi.json again. */}
@@ -273,7 +281,7 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
                 {cartItemCount}
               </Badge>
             )}
-            {/* v2.12.5 (RBAC): signed-in role chip — muted, hidden on xs */}
+            {/* v2.12.5 (RBAC): signed-in role chip - muted, hidden on xs */}
             {roleBadgeLabel ? (
               <Badge
                 variant="outline"
@@ -285,7 +293,7 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
               </Badge>
             ) : null}
             <CurrencySwitcher />
-            {/* Live date + clock — "Wed 7 Oct · 19:35:50" */}
+            {/* Live date + clock - "Wed 7 Oct · 19:35:50" */}
             <Badge
               variant="outline"
               className="hidden sm:flex items-center gap-1.5 border-slate-200 bg-white/60 font-mono tabular-nums text-slate-600"
