@@ -416,7 +416,7 @@ export function StockMovementLog({
                               {m.product?.name || 'Unknown product'}
                             </span>
                             <span className="text-[11px] text-muted-foreground">
-                              {m.product?.sku || '—'}
+                              {m.product?.sku || '-'}
                             </span>
                           </div>
                         </TableCell>
@@ -438,7 +438,7 @@ export function StockMovementLog({
                           </span>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {m.notes || '—'}
+                          {m.notes || '-'}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {m.performedBy ? (
@@ -460,7 +460,7 @@ export function StockMovementLog({
         {total > pageSize && (
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">
-              Showing {offset + 1}–{Math.min(offset + pageSize, total)} of {total}
+              Showing {offset + 1}-{Math.min(offset + pageSize, total)} of {total}
             </p>
             <div className="flex items-center gap-1">
               <Button

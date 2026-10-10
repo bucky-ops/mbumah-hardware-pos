@@ -189,7 +189,7 @@ export function AnalyticsDashboard({ storeId, className }: AnalyticsDashboardPro
         minute: '2-digit',
         second: '2-digit',
       })
-    : '—';
+    : '-';
 
   return (
     <div className={cn('space-y-4 sm:space-y-6', className)}>
@@ -294,27 +294,27 @@ export function AnalyticsDashboard({ storeId, className }: AnalyticsDashboardPro
           <div className="flex items-center gap-4 flex-wrap">
             <SummaryItem
               label="Period Revenue"
-              value={trendQuery.data ? formatKES(trendQuery.data.summary.totalRevenue) : '—'}
+              value={trendQuery.data ? formatKES(trendQuery.data.summary.totalRevenue) : '-'}
             />
             <SummaryItem
               label="Period Transactions"
-              value={trendQuery.data ? String(trendQuery.data.summary.totalTransactions) : '—'}
+              value={trendQuery.data ? String(trendQuery.data.summary.totalTransactions) : '-'}
             />
             <SummaryItem
               label="Avg Order Value"
-              value={trendQuery.data ? formatKES(trendQuery.data.summary.avgOrderValue) : '—'}
+              value={trendQuery.data ? formatKES(trendQuery.data.summary.avgOrderValue) : '-'}
             />
             <SummaryItem
               label="Top Products Revenue"
-              value={topProductsQuery.data ? formatKES(topProductsQuery.data.totalRevenue) : '—'}
+              value={topProductsQuery.data ? formatKES(topProductsQuery.data.totalRevenue) : '-'}
             />
             <SummaryItem
               label="Payment Total"
-              value={paymentQuery.data ? formatKES(paymentQuery.data.totalRevenue) : '—'}
+              value={paymentQuery.data ? formatKES(paymentQuery.data.totalRevenue) : '-'}
             />
             <SummaryItem
               label="Heatmap Total"
-              value={heatmapQuery.data?.matrix ? formatKES(heatmapQuery.data.matrix.totalRevenue) : '—'}
+              value={heatmapQuery.data?.matrix ? formatKES(heatmapQuery.data.matrix.totalRevenue) : '-'}
             />
           </div>
           <span className="text-muted-foreground">

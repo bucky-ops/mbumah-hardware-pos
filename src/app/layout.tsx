@@ -62,7 +62,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "MBUMAH HARDWARE - POS & ERP System",
   description:
-    "Enterprise Point of Sale & ERP System for MBUMAH HARDWARE. Manage sales, inventory, customers, rentals, and financials — with offline-first checkout.",
+    "Enterprise Point of Sale & ERP System for MBUMAH HARDWARE. Manage sales, inventory, customers, rentals, and financials - with offline-first checkout.",
   keywords: ["MBUMAH HARDWARE", "POS", "ERP", "Point of Sale", "Inventory", "Kenya"],
   authors: [{ name: "MBUMAH HARDWARE" }],
   manifest: "/manifest.json",
@@ -103,7 +103,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
         <Providers>{children}</Providers>
-        {/* Vercel Analytics & Speed Insights — placed as direct children of
+        {/* Vercel Analytics & Speed Insights - placed as direct children of
             <body> (outside <Providers>) per Vercel best practice. They don't
             need React Query / Theme context, and isolating them here avoids
             any provider-level hydration timing from affecting analytics init. */}

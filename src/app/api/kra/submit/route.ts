@@ -201,7 +201,7 @@ async function submitHandler(
       return Response.json({
         success: true,
         data: existing,
-        message: 'Invoice already accepted by KRA (idempotent — no resubmit).',
+        message: 'Invoice already accepted by KRA (idempotent - no resubmit).',
       });
     }
     if (existing.submissionStatus === SubmissionStatus.SUBMITTED) {

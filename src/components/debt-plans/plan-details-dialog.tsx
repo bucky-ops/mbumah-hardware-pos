@@ -426,7 +426,7 @@ export function PlanDetailsDialog({
                                     {formatKES(inst.amountPaid)}
                                   </span>
                                 ) : (
-                                  <span className="text-muted-foreground">—</span>
+                                  <span className="text-muted-foreground">-</span>
                                 )}
                               </TableCell>
                               <TableCell>
@@ -470,7 +470,7 @@ export function PlanDetailsDialog({
                                     Pay balance
                                   </Button>
                                 ) : (
-                                  <span className="text-xs text-muted-foreground">—</span>
+                                  <span className="text-xs text-muted-foreground">-</span>
                                 )}
                               </TableCell>
                             </TableRow>
@@ -553,7 +553,7 @@ export function PlanDetailsDialog({
                             <CheckCircle2 className="h-3 w-3" /> Approved By
                           </p>
                           <p className="font-medium">
-                            {current.approvedBy?.name ?? '—'}
+                            {current.approvedBy?.name ?? '-'}
                           </p>
                         </div>
                       </div>
@@ -589,7 +589,7 @@ export function PlanDetailsDialog({
                           <Clock className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                           <span className="text-sm">
                             Next installment due{' '}
-                            <strong>{formatDate(nextDue.dueDate)}</strong> —{' '}
+                            <strong>{formatDate(nextDue.dueDate)}</strong> -{' '}
                             {formatKES(Math.max(0, nextDue.amountDue - nextDue.amountPaid))}
                           </span>
                         </div>
@@ -620,7 +620,7 @@ export function PlanDetailsDialog({
 
                       {current.autoCharge && (
                         <div className="rounded-lg bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900 p-3 text-xs text-sky-700 dark:text-sky-300">
-                          Auto-charge via M-Pesa is enabled — STK push will be
+                          Auto-charge via M-Pesa is enabled - STK push will be
                           attempted on each due date.
                         </div>
                       )}
@@ -643,7 +643,7 @@ export function PlanDetailsDialog({
         </DialogContent>
       </Dialog>
 
-      {/* Sub-dialogs — keyed per open so each opens with fresh state
+      {/* Sub-dialogs - keyed per open so each opens with fresh state
           (Task 12-d: stale payment amount / waiver reason reset). */}
       <RecordPaymentDialog
         key={payInstallment?.id ?? 'none'}

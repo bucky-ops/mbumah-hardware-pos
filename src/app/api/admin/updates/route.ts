@@ -81,13 +81,13 @@ async function fetchLatestRelease(): Promise<{
           release: null,
           note: process.env.GITHUB_TOKEN
             ? 'GitHub release check rate-limited or token rejected (HTTP 403/429).'
-            : 'GitHub release check rate-limited (HTTP 403/429) — set GITHUB_TOKEN to raise the anonymous rate limit.',
+            : 'GitHub release check rate-limited (HTTP 403/429) - set GITHUB_TOKEN to raise the anonymous rate limit.',
         };
       }
       if (response.status === 404) {
         return {
           release: null,
-          note: 'No GitHub release found for bucky-ops/mbumah-hardware-pos (HTTP 404) — publish a release to enable update checks.',
+          note: 'No GitHub release found for bucky-ops/mbumah-hardware-pos (HTTP 404) - publish a release to enable update checks.',
         };
       }
       return {

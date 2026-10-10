@@ -91,7 +91,7 @@ export async function generateReceiptPdf(
   const receiptElement = document.getElementById(elementId);
   if (!receiptElement) {
     throw new Error(
-      `Receipt DOM element #${elementId} not found — open the receipt dialog first.`,
+      `Receipt DOM element #${elementId} not found - open the receipt dialog first.`,
     );
   }
 
@@ -151,7 +151,7 @@ export async function generateReceiptPdf(
 export function printReceiptElement(elementId = RECEIPT_CONTENT_ID): void {
   const source = document.getElementById(elementId);
   if (!source) {
-    throw new Error(`Receipt DOM element #${elementId} not found — open the receipt dialog first.`);
+    throw new Error(`Receipt DOM element #${elementId} not found - open the receipt dialog first.`);
   }
 
   let printRoot = document.getElementById(PRINT_ROOT_ID);

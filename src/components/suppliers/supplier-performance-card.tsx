@@ -59,7 +59,7 @@ function getAvatarGradient(name: string): string {
 // formatKES: canonical en-KE KES formatter imported from '@/lib/api' (task 12-d)
 
 function formatDate(date: string | null): string {
-  if (!date) return '—';
+  if (!date) return '-';
   return new Date(date).toLocaleDateString('en-KE', {
     month: 'short',
     day: 'numeric',

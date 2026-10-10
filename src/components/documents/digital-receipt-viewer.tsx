@@ -124,14 +124,14 @@ export function DigitalReceiptViewer({
           {subtitle ? <DialogDescription>{subtitle}</DialogDescription> : null}
         </DialogHeader>
 
-        {/* Viewer toolbar — scroll / autofit / public page */}
+        {/* Viewer toolbar - scroll / autofit / public page */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border bg-muted/30 px-3 py-2">
           <div className="flex items-center gap-2">
             <Switch
               id="receipt-autofit"
               checked={autofit}
               onCheckedChange={setAutofit}
-              aria-label="Autofit — fit the whole receipt on screen"
+              aria-label="Autofit - fit the whole receipt on screen"
             />
             <Label
               htmlFor="receipt-autofit"
@@ -148,7 +148,7 @@ export function DigitalReceiptViewer({
           </div>
           <p className="text-[11px] leading-tight text-muted-foreground">
             {autofit
-              ? 'Fitted to screen — scale ' + Math.round(scale * 100) + '%'
+              ? 'Fitted to screen - scale ' + Math.round(scale * 100) + '%'
               : SCROLL_HINT}
           </p>
           <div className="ml-auto flex items-center gap-2">
@@ -184,7 +184,7 @@ export function DigitalReceiptViewer({
 
         {/* Receipt viewport: scroll mode (natural size + overflow) or autofit
             mode (measured CSS scale, no scrolling). The DOM tree is stable in
-            both modes — only styles change — so the ResizeObserver stays
+            both modes - only styles change - so the ResizeObserver stays
             attached to the same nodes. */}
         <div
           ref={containerRef}

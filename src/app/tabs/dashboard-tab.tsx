@@ -142,7 +142,7 @@ function formatHour(hour: number): string {
 /** Receipt "MBM-9D042" → "…9D042" (last-5 emphasis, per redesign spec). */
 function receiptTail(receipt: string | null | undefined): string {
   const r = (receipt ?? '').trim();
-  if (!r) return '—';
+  if (!r) return '-';
   return r.length <= 5 ? r : `…${r.slice(-5)}`;
 }
 
@@ -250,7 +250,7 @@ function DashboardHero({ onTab, limited }: { onTab: (tab: AppTab) => void; limit
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
-              {firstName ? `Karibu, ${firstName}` : 'Karibu'} <span aria-hidden="true">👋</span>
+              {firstName ? `Karibu, ${firstName}` : 'Karibu'}
             </h1>
             <p className="mt-1 text-xs text-emerald-50/95 sm:text-sm">
               Here&rsquo;s what&rsquo;s happening at <span className="font-semibold">{storeName}</span> today
@@ -258,7 +258,7 @@ function DashboardHero({ onTab, limited }: { onTab: (tab: AppTab) => void; limit
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-emerald-50/90 sm:text-xs">
               <span className="inline-flex items-center gap-1.5">
                 <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                {/* Live ticking clock — filled client-side to avoid SSR mismatch */}
+                {/* Live ticking clock - filled client-side to avoid SSR mismatch */}
                 <span className="font-mono tabular-nums">{clock?.time ?? '--:--:--'}</span>
               </span>
               <span className="hidden text-emerald-200/60 sm:inline" aria-hidden="true">·</span>
@@ -325,7 +325,7 @@ function DebtCrisisBanner({ crisis, onTab }: { crisis: DebtCrisisSummary; onTab:
             {crisis.banner || 'High debt exposure'}
           </p>
           <p className="mt-0.5 text-xs text-red-600">
-            — {num(crisis.debtRatioPercent).toFixed(1)}% of today&rsquo;s sales are on debt
+            - {num(crisis.debtRatioPercent).toFixed(1)}% of today&rsquo;s sales are on debt
           </p>
         </div>
       </div>
@@ -541,7 +541,7 @@ function ActiveShiftCard({ shift }: { shift: ShiftSnapshot }) {
         </div>
       </CardContent>
 
-      {/* End Shift dialog — preserves the v2.6.0 blind-closeout flow */}
+      {/* End Shift dialog - preserves the v2.6.0 blind-closeout flow */}
       <Dialog open={endOpen} onOpenChange={closeEndDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -567,7 +567,7 @@ function ActiveShiftCard({ shift }: { shift: ShiftSnapshot }) {
                 >
                   <p className={`flex items-center gap-2 text-sm font-semibold ${Math.abs(endResult.cashDifference) < 1 ? 'text-emerald-700' : 'text-amber-700'}`}>
                     <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-                    Shift closed — cash variance
+                    Shift closed - cash variance
                   </p>
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-xs text-slate-500">Counted</span>
@@ -741,7 +741,7 @@ function KpiCard({ label, value, icon: Icon, iconClass, sub, badge, onClick, spa
       className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow ${
         interactive ? 'cursor-pointer hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40' : ''
       }`}
-      aria-label={interactive ? `${label} — open details` : label}
+      aria-label={interactive ? `${label} - open details` : label}
     >
       <div className="flex items-start justify-between gap-2">
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${iconClass}`}>
@@ -785,8 +785,8 @@ function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppT
   const noSalesToday = todayRevenue === 0 && txns === 0;
   const zeroSalesTrendBadge = noSalesToday ? (
     <span
-      title="No sales yet today — start selling!"
-      aria-label="No sales yet today — start selling!"
+      title="No sales yet today - start selling!"
+      aria-label="No sales yet today - start selling!"
       className="inline-flex cursor-help items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400"
     >
       <Minus className="h-3 w-3" aria-hidden="true" />
@@ -817,7 +817,7 @@ function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppT
         icon={Banknote}
         iconClass="bg-emerald-100 text-emerald-600"
         badge={noSalesToday ? zeroSalesTrendBadge : showTrendBadge ? <TrendBadge pct={revenueChange} /> : undefined}
-        sub={<span>{noSalesToday ? 'No sales yet today — start selling!' : 'net of VAT · today'}</span>}
+        sub={<span>{noSalesToday ? 'No sales yet today - start selling!' : 'net of VAT · today'}</span>}
         sparkline={revenueSpark.length >= 2 ? revenueSpark : null}
         sparklineClass="text-emerald-500"
       />
@@ -907,7 +907,7 @@ function LimitedDashboard({ data }: { data: DashboardData | null }) {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* 4 KPI cards only — every number comes from the API's limited payload */}
+      {/* 4 KPI cards only - every number comes from the API's limited payload */}
       <section aria-label="Today's key metrics" className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
         <KpiCard
           label="Today's Sales"
@@ -968,7 +968,7 @@ function LimitedDashboard({ data }: { data: DashboardData | null }) {
         </div>
       </div>
 
-      {/* My Sales — the caller's own last sales only (receipt tail, method,
+      {/* My Sales - the caller's own last sales only (receipt tail, method,
           amount, time-ago). Empty state kept friendly for new cashiers. */}
       <Card className="rounded-2xl border-slate-200 shadow-sm">
         <CardHeader className="pb-3">
@@ -981,7 +981,7 @@ function LimitedDashboard({ data }: { data: DashboardData | null }) {
         <CardContent>
           {mySales.length === 0 ? (
             <p className="py-6 text-center text-xs text-slate-500">
-              No sales recorded yet — your completed sales will appear here.
+              No sales recorded yet - your completed sales will appear here.
             </p>
           ) : (
             <ul className="max-h-96 divide-y divide-slate-100 overflow-y-auto custom-scrollbar" aria-label="My recent sales">
@@ -1015,7 +1015,7 @@ function LimitedDashboard({ data }: { data: DashboardData | null }) {
         </CardContent>
       </Card>
 
-      {/* Locked sections — 2-col grid of LockedCards with Request Access */}
+      {/* Locked sections - 2-col grid of LockedCards with Request Access */}
       <section aria-label="Locked dashboards" className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
         <LockedCard permission="dashboard.view.revenue" title="Revenue Trend" />
         <LockedCard permission="dashboard.view.debt_aging" title="Debt Aging" />
@@ -1074,7 +1074,7 @@ function HourlyRevenueChart({ data }: { data: DashboardData | null }) {
           </div>
         ) : (
           <div className="flex gap-2">
-            {/* Y axis — compact K labels */}
+            {/* Y axis - compact K labels */}
             <div className="flex h-40 w-10 shrink-0 flex-col justify-between pb-0 text-right text-[9px] tabular-nums text-slate-400">
               {yTicks.map((t, i) => (
                 <span key={`${t}-${i}`}>{formatCompact(t)}</span>
@@ -1326,7 +1326,7 @@ function QuickActionsRow({ onTab }: { onTab: (tab: AppTab) => void }) {
         })}
       </section>
 
-      {/* Cash Drawer dialog — existing /api/cash-drawer pattern */}
+      {/* Cash Drawer dialog - existing /api/cash-drawer pattern */}
       <Dialog open={drawerOpen} onOpenChange={setDrawerOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -1523,7 +1523,7 @@ function StoreHealthCard({ data }: { data: DashboardData | null }) {
                   {overall}
                 </text>
                 <text x="44" y="57" textAnchor="middle" fontSize="9" fill="#64748b">
-                  {health?.label ?? '—'}
+                  {health?.label ?? '-'}
                 </text>
               </svg>
               <div className="min-w-0 text-xs text-slate-500">
@@ -1545,7 +1545,7 @@ function StoreHealthCard({ data }: { data: DashboardData | null }) {
                   <li key={item?.key ?? item?.label}>
                     <div className="flex items-center justify-between gap-2 text-xs">
                       <span className="font-medium text-slate-700">
-                        {item?.label ?? '—'}
+                        {item?.label ?? '-'}
                         <span className="ml-1.5 text-[10px] text-slate-400">{weight}% weight</span>
                       </span>
                       <span className="font-semibold tabular-nums" style={{ color }}>
@@ -1609,7 +1609,7 @@ function HourlyHeatmapCard({ data }: { data: DashboardData | null }) {
           <Clock className="h-4 w-4 text-emerald-600" aria-hidden="true" />
           Hourly sales heatmap
         </CardTitle>
-        <CardDescription className="text-xs">6 AM – 9 PM · darker means busier</CardDescription>
+        <CardDescription className="text-xs">6 AM - 9 PM · darker means busier</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {max <= 0 ? (
@@ -1758,7 +1758,7 @@ function TopCustomersCard({ data, onTab }: { data: DashboardData | null; onTab: 
                       style={{ width: `${Math.min(100, (owes / maxOwes) * 100)}%` }}
                     />
                   </div>
-                  {/* spend context bar — share of top spender */}
+                  {/* spend context bar - share of top spender */}
                   <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-slate-50">
                     <div className="h-full rounded-full bg-emerald-200" style={{ width: `${Math.min(100, (spend / maxSpend) * 100)}%` }} />
                   </div>
@@ -1930,13 +1930,13 @@ function SalesTrendForecastCard({ data }: { data: DashboardData | null }) {
             {trend?.todayIsOutlier === true && (
               <p className="flex items-start gap-1.5 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-[11px] text-amber-700">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                Today is a bulk-sale outlier — forecast uses the median of the previous 6 days.
+                Today is a bulk-sale outlier - forecast uses the median of the previous 6 days.
               </p>
             )}
           </>
         )}
 
-        {/* Growing products — the backend does not provide this series yet;
+        {/* Growing products - the backend does not provide this series yet;
             honest empty state, never fabricated. */}
         <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-3">
           <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
@@ -1944,7 +1944,7 @@ function SalesTrendForecastCard({ data }: { data: DashboardData | null }) {
             Top 3 growing products
           </p>
           <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
-            Not enough history yet — check back after a few more days of sales.
+            Not enough history yet - check back after a few more days of sales.
           </p>
         </div>
       </CardContent>
@@ -1991,7 +1991,7 @@ function DebtAgingCard({ data }: { data: DashboardData | null }) {
         {total <= 0 ? (
           <div className="flex h-28 flex-col items-center justify-center gap-2 text-center">
             <CheckCircle className="h-8 w-8 text-emerald-300" aria-hidden="true" />
-            <p className="text-sm text-slate-500">No outstanding debt — all clear</p>
+            <p className="text-sm text-slate-500">No outstanding debt - all clear</p>
           </div>
         ) : (
           <>
@@ -2003,7 +2003,7 @@ function DebtAgingCard({ data }: { data: DashboardData | null }) {
 
             {buckets && (
               <>
-                {/* Segmented aging bar — shares of the total */}
+                {/* Segmented aging bar - shares of the total */}
                 <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-100" role="img" aria-label="Debt aging distribution">
                   {segments.map((seg) => (
                     <div
@@ -2295,7 +2295,7 @@ export default function DashboardTab() {
       {/* 4. KPI ROW */}
       <KpiRow data={view} onTab={onTab} />
 
-      {/* 5. MIDDLE ROW — hourly bars (2/3) + payment donut (1/3) */}
+      {/* 5. MIDDLE ROW - hourly bars (2/3) + payment donut (1/3) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 sm:gap-6">
         <div className="lg:col-span-2">
           <HourlyRevenueChart data={view} />
@@ -2306,27 +2306,27 @@ export default function DashboardTab() {
       {/* 6. QUICK ACTIONS */}
       <QuickActionsRow onTab={onTab} />
 
-      {/* 7. BOTTOM GRID — activity / health / heatmap */}
+      {/* 7. BOTTOM GRID - activity / health / heatmap */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 sm:gap-6">
         <RecentActivityCard data={view} />
         <StoreHealthCard data={view} />
         <HourlyHeatmapCard data={view} />
       </div>
 
-      {/* 8–10. Customers / products / 7-day trend */}
+      {/* 8-10. Customers / products / 7-day trend */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 sm:gap-6">
         <TopCustomersCard data={view} onTab={onTab} />
         <TopProductsCard data={view} />
         <SalesTrendForecastCard data={view} />
       </div>
 
-      {/* 11–12. Debt aging + alerts */}
+      {/* 11-12. Debt aging + alerts */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 sm:gap-6">
         <DebtAgingCard data={view} />
         <AlertsCard data={view} onTab={onTab} />
       </div>
 
-      {/* Footer meta — live data confirmation */}
+      {/* Footer meta - live data confirmation */}
       <p className="pb-1 text-center text-[10px] text-slate-400">
         Live data · auto-refreshes every 30s{user?.name ? ` · signed in as ${user.name}` : ''} · last sync {lastSyncLabel}
       </p>

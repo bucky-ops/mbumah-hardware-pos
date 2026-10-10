@@ -516,7 +516,7 @@ export function CreatePlanDialog({
                 <div>
                   <p className="text-muted-foreground">Final due date</p>
                   <p className="font-semibold">
-                    {preview.endDate ? formatDate(preview.endDate) : '—'}
+                    {preview.endDate ? formatDate(preview.endDate) : '-'}
                   </p>
                 </div>
                 <div>

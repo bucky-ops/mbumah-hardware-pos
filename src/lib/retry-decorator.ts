@@ -442,7 +442,7 @@ async function logRetryAttempt(
       action: 'RETRY_ATTEMPT',
       component: LogComponent.SYSTEM,
       severity: LogSeverity.WARN,
-      message: `Retrying ${operation ?? 'unknown'} (attempt ${attempt + 1}) after ${nextDelayMs}ms — last error: ${normalised.message}`,
+      message: `Retrying ${operation ?? 'unknown'} (attempt ${attempt + 1}) after ${nextDelayMs}ms - last error: ${normalised.message}`,
       metadata: {
         operation: operation ?? 'unknown',
         attempt,

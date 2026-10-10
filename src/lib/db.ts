@@ -382,7 +382,7 @@ export function withImmutabilityBypass<T>(
   if (process.env.NODE_ENV !== "production") {
     // Dev-time visibility: surface every bypass so reviewers can spot misuse.
     console.warn(
-      `[IMMUTABILITY_BYPASS] reason="${reason}" — financial immutability guard disabled for this async scope.`,
+      `[IMMUTABILITY_BYPASS] reason="${reason}" - financial immutability guard disabled for this async scope.`,
     );
   }
   return immutabilityBypassStorage.run({ reason }, fn);

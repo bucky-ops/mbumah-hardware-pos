@@ -317,7 +317,7 @@ export function assertPeriodOpen(
   if (period.status === FinancialPeriodStatus.LOCKED) {
     throw APIError.forbidden(
       `Financial period "${period.periodName}" is LOCKED. ` +
-        `LOCKED periods are frozen permanently — no journal entries may be posted. ` +
+        `LOCKED periods are frozen permanently - no journal entries may be posted. ` +
         `Create an adjusting entry in a subsequent OPEN period instead.`,
     );
   }
@@ -667,7 +667,7 @@ export async function approveJournalEntry(
   }
   if (entry.isPosted) {
     throw APIError.conflict(
-      `Entry ${entry.entryNumber} is already posted — approval is moot.`,
+      `Entry ${entry.entryNumber} is already posted - approval is moot.`,
     );
   }
   if (entry.isApproved) {
@@ -860,7 +860,7 @@ export async function voidJournalEntry(
   // in place (flag only); only POSTED entries get a reversing entry.
   if (!entry.isPosted) {
     throw APIError.badRequest(
-      `Entry ${entry.entryNumber} is a DRAFT (never posted). Delete it or void it in place instead — voiding would mint a posted reversal from nothing.`,
+      `Entry ${entry.entryNumber} is a DRAFT (never posted). Delete it or void it in place instead - voiding would mint a posted reversal from nothing.`,
     );
   }
 

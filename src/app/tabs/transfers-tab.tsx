@@ -127,7 +127,7 @@ function TransferDetailDialog({
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Requested By</p>
-              <p className="font-medium mt-1">{transfer.requestedBy || '—'}</p>
+              <p className="font-medium mt-1">{transfer.requestedBy || '-'}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Created</p>
@@ -135,11 +135,11 @@ function TransferDetailDialog({
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Shipped</p>
-              <p className="font-medium mt-1">{transfer.shippedAt ? formatDateTime(transfer.shippedAt) : '—'}</p>
+              <p className="font-medium mt-1">{transfer.shippedAt ? formatDateTime(transfer.shippedAt) : '-'}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Received</p>
-              <p className="font-medium mt-1">{transfer.receivedAt ? formatDateTime(transfer.receivedAt) : '—'}</p>
+              <p className="font-medium mt-1">{transfer.receivedAt ? formatDateTime(transfer.receivedAt) : '-'}</p>
             </div>
           </div>
 
@@ -172,7 +172,7 @@ function TransferDetailDialog({
                           {item.product?.name || 'Unknown'}
                         </TableCell>
                         <TableCell className="text-xs py-2 font-mono text-muted-foreground">
-                          {item.product?.sku || '—'}
+                          {item.product?.sku || '-'}
                         </TableCell>
                         <TableCell className="text-xs py-2 text-right">{formatQty(item.quantity)}</TableCell>
                         <TableCell className="text-xs py-2 text-right">{formatQty(item.receivedQty)}</TableCell>
@@ -479,8 +479,8 @@ export default function TransfersTab() {
                 </TableHeader>
                 <TableBody>
                   {transfers.map((t) => {
-                    const from = t.fromStore?.name || stores.find(s => s.id === t.fromStoreId)?.name || '—';
-                    const to = t.toStore?.name || stores.find(s => s.id === t.toStoreId)?.name || '—';
+                    const from = t.fromStore?.name || stores.find(s => s.id === t.fromStoreId)?.name || '-';
+                    const to = t.toStore?.name || stores.find(s => s.id === t.toStoreId)?.name || '-';
                     return (
                       <TableRow key={t.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedTransfer(t)}>
                         <TableCell className="text-xs font-mono font-medium py-3">{t.transferNumber}</TableCell>
@@ -500,7 +500,7 @@ export default function TransfersTab() {
                           <Badge variant="secondary" className="text-[10px] px-1.5">{t.items?.length || 0}</Badge>
                         </TableCell>
                         <TableCell className="py-3">{transferStatusBadge(t.status)}</TableCell>
-                        <TableCell className="text-xs py-3">{t.requestedBy || '—'}</TableCell>
+                        <TableCell className="text-xs py-3">{t.requestedBy || '-'}</TableCell>
                         <TableCell className="text-xs py-3">{formatDate(t.createdAt)}</TableCell>
                         <TableCell className="py-3">
                           <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setSelectedTransfer(t)}>
@@ -524,13 +524,13 @@ export default function TransfersTab() {
               <CardDescription>Transfer stock between stores</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Stores failed to load — the form cannot work without them.
+              {/* Stores failed to load - the form cannot work without them.
                   Give an explicit reason + retry instead of silent dead dropdowns. */}
               {!storesLoading && stores.length === 0 && (
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-300">
                   <span className="flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 shrink-0" />
-                    Store list could not be loaded ({storesError?.message || 'no stores returned'}) — source and destination dropdowns need it.
+                    Store list could not be loaded ({storesError?.message || 'no stores returned'}) - source and destination dropdowns need it.
                   </span>
                   <Button size="sm" variant="outline" className="h-8" onClick={() => refetchStores()}>
                     Retry
@@ -547,7 +547,7 @@ export default function TransfersTab() {
                     </SelectTrigger>
                     <SelectContent>
                       {stores.map(s => (
-                        <SelectItem key={s.id} value={s.id}>{s.name} {s.location ? `— ${s.location}` : ''}</SelectItem>
+                        <SelectItem key={s.id} value={s.id}>{s.name} {s.location ? `- ${s.location}` : ''}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -560,7 +560,7 @@ export default function TransfersTab() {
                     </SelectTrigger>
                     <SelectContent>
                       {stores.filter(s => s.id !== fromStoreId).map(s => (
-                        <SelectItem key={s.id} value={s.id}>{s.name} {s.location ? `— ${s.location}` : ''}</SelectItem>
+                        <SelectItem key={s.id} value={s.id}>{s.name} {s.location ? `- ${s.location}` : ''}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

@@ -104,7 +104,7 @@ export function CategoryChips({
         className="flex gap-2 overflow-x-auto scrollbar-thin py-0.5 flex-1 px-1 scroll-snap-x"
         style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}
       >
-        {/* "All" chip — special styling with gradient background when active */}
+        {/* "All" chip - special styling with gradient background when active */}
         <button
           onClick={() => onSelect('all')}
           className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap flex items-center gap-1.5 min-w-fit chip-hover-lift ${

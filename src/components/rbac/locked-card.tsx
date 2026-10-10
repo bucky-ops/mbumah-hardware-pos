@@ -107,7 +107,7 @@ export function LockedCard({ permission, title, description, className }: Locked
     <div
       className={`flex flex-col items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm sm:p-6 ${className ?? ''}`}
       data-testid={`locked-card-${permission}`}
-      aria-label={`${title ?? 'Locked section'} — ${explanation}`}
+      aria-label={`${title ?? 'Locked section'} - ${explanation}`}
     >
       <span className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
         <Lock className="h-5 w-5" aria-hidden="true" />

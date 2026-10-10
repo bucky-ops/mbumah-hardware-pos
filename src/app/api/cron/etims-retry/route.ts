@@ -47,7 +47,7 @@ async function verifyCronSecret(request: Request): Promise<Response | null> {
       component: LogComponent.SYSTEM,
       severity: LogSeverity.WARN,
       message:
-        'CRON_SECRET env var is not set — /api/cron/etims-retry accepted an unauthenticated request.',
+        'CRON_SECRET env var is not set - /api/cron/etims-retry accepted an unauthenticated request.',
       metadata: { path: '/api/cron/etims-retry' },
     });
     return null;

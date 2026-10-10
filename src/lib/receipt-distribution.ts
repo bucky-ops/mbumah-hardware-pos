@@ -168,7 +168,7 @@ export function renderReceiptHtml(ctx: ReceiptRenderContext): string {
     .join("");
 
   const customerName = transaction.customer?.name ?? "Walk-in Customer";
-  const cashierName = transaction.cashier?.name ?? "—";
+  const cashierName = transaction.cashier?.name ?? "-";
 
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 420px; margin: 0 auto; padding: 24px; color: #1f2937;">
@@ -213,7 +213,7 @@ export function renderReceiptHtml(ctx: ReceiptRenderContext): string {
         <p style="margin:2px 0;">Paid via <strong>${escapeHtml(transaction.paymentMethod)}</strong></p>
         <p style="margin:2px 0;">Status: ${escapeHtml(transaction.paymentStatus)}</p>
       </div>
-      <p style="text-align:center;font-size:11px;color:#9ca3af;margin-top:16px;">Thank you for your business! — Asante kwa biashara yako!</p>
+      <p style="text-align:center;font-size:11px;color:#9ca3af;margin-top:16px;">Thank you for your business! - Asante kwa biashara yako!</p>
     </div>
   `;
 }
@@ -261,12 +261,12 @@ export function renderReceiptText(ctx: ReceiptRenderContext): string {
   const itemLines = items
     .map(
       (i) =>
-        `  • ${i.productName} ×${i.quantity} — ${KES(i.lineTotal).formatKES()}`,
+        `  • ${i.productName} ×${i.quantity} - ${KES(i.lineTotal).formatKES()}`,
     )
     .join("\n");
 
   return [
-    `*${storeName}* — Receipt`,
+    `*${storeName}* - Receipt`,
     `Receipt #: ${transaction.receiptNumber}`,
     `Date: ${new Date(transaction.createdAt).toLocaleString("en-KE", { timeZone: "Africa/Nairobi" })}`,
     `Customer: ${transaction.customer?.name ?? "Walk-in"}`,
@@ -316,7 +316,7 @@ async function sendViaResend(
       action: "RECEIPT_EMAIL_SIMULATED",
       component: LogComponent.FINANCIAL,
       severity: LogSeverity.WARN,
-      message: `RESEND_API_KEY not set — email to ${maskEmail(to)} was simulated (not actually sent).`,
+      message: `RESEND_API_KEY not set - email to ${maskEmail(to)} was simulated (not actually sent).`,
       metadata: { recipient: maskEmail(to), provider: "resend" },
     });
     return { providerId: null, simulated: true };
@@ -354,7 +354,7 @@ async function sendViaTwilioWhatsApp(
       action: "RECEIPT_WHATSAPP_SIMULATED",
       component: LogComponent.FINANCIAL,
       severity: LogSeverity.WARN,
-      message: `TWILIO_ACCOUNT_SID/AUTH_TOKEN not set — WhatsApp to ${maskPhone(to)} was simulated (not actually sent).`,
+      message: `TWILIO_ACCOUNT_SID/AUTH_TOKEN not set - WhatsApp to ${maskPhone(to)} was simulated (not actually sent).`,
       metadata: { recipient: maskPhone(to), provider: "twilio" },
     });
     return { providerId: null, simulated: true };
@@ -391,7 +391,7 @@ async function sendViaTwilioSms(
       action: "RECEIPT_SMS_SIMULATED",
       component: LogComponent.FINANCIAL,
       severity: LogSeverity.WARN,
-      message: `TWILIO_ACCOUNT_SID/AUTH_TOKEN not set — SMS to ${maskPhone(to)} was simulated (not actually sent).`,
+      message: `TWILIO_ACCOUNT_SID/AUTH_TOKEN not set - SMS to ${maskPhone(to)} was simulated (not actually sent).`,
       metadata: { recipient: maskPhone(to), provider: "twilio" },
     });
     return { providerId: null, simulated: true };
@@ -476,7 +476,7 @@ export async function distributeReceipt(
           </p>
         </div>
       `;
-      const subject = `Receipt #${transaction.receiptNumber} — Mbumah Hardware`;
+      const subject = `Receipt #${transaction.receiptNumber} - Mbumah Hardware`;
       providerResult = await sendViaResend(recipient, subject, html);
     } else if (channel === "SMS") {
       // Compact SMS body - a custom message is prepended when provided, and
@@ -553,7 +553,7 @@ export async function distributeReceipt(
     action: "RECEIPT_DISTRIBUTED",
     component: LogComponent.FINANCIAL,
     severity: LogSeverity.INFO,
-    message: `Receipt ${transaction.receiptNumber} sent via ${channel} to ${maskedRecipient}${providerResult.simulated ? " (SIMULATED — no API key)" : ""}.`,
+    message: `Receipt ${transaction.receiptNumber} sent via ${channel} to ${maskedRecipient}${providerResult.simulated ? " (SIMULATED - no API key)" : ""}.`,
     storeId,
     userId,
     metadata: {

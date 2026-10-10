@@ -90,7 +90,7 @@ async function customerSearchHandler(
     action: 'ETIMS_CUSTOMER_SEARCH',
     component: LogComponent.AUTH,
     severity: LogSeverity.INFO,
-    message: `eTIMS customer lookup for TIN ${tin}: ${result.success ? 'found' : 'not found'} — ${result.customer?.name || result.errorMessage}`,
+    message: `eTIMS customer lookup for TIN ${tin}: ${result.success ? 'found' : 'not found'} - ${result.customer?.name || result.errorMessage}`,
     userId: session.userId,
     storeId,
     metadata: {

@@ -218,7 +218,7 @@ async function createTaxFilingHandler(...args: unknown[]): Promise<Response> {
     // Unparseable period - nothing to recompute against. Legacy behaviour
     // (store declared totals) with an explicit warning; hard-failing here
     // would break existing consumers that file non-YYYY-MM periods.
-    recomputeNote = 'FILING_PERIOD_NOT_YYYY_MM — server recompute skipped; declared totals stored unverified.';
+    recomputeNote = 'FILING_PERIOD_NOT_YYYY_MM - server recompute skipped; declared totals stored unverified.';
   }
 
   // Authoritative stored totals = server-computed when available. totalWht has

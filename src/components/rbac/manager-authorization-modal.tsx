@@ -207,7 +207,7 @@ export function ManagerAuthorizationModal({
           {confirmOnly ? (
             <p className="rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs leading-relaxed text-amber-800">
               You are signed in as a manager. Approving will resubmit this sale with your
-              authorization — the action is recorded in the audit trail.
+              authorization - the action is recorded in the audit trail.
             </p>
           ) : (
             <>

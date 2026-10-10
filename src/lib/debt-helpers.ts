@@ -364,6 +364,6 @@ export function buildReminderMessage(
     `${urgency} ` +
     `Your outstanding balance of ${formattedBalance} was due on ${formattedDue}. ` +
     `Please make payment via M-Pesa or visit our store. ` +
-    `For queries, call us. Thank you. — MBUMAH HARDWARE`
+    `For queries, call us. Thank you. - MBUMAH HARDWARE`
   );
 }

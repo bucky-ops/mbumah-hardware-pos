@@ -164,7 +164,7 @@ export function HourlyHeatmap({ data, loading, className }: HourlyHeatmapProps) 
                             cell.revenue === 0 && 'cursor-default',
                           )}
                           aria-label={`${dayName(day, true)} ${hourLabel(hour)}: ${formatKES(cell.revenue)} over ${cell.transactions} transactions`}
-                          title={`${dayName(day, true)} ${hourLabel(hour)} — ${formatKES(cell.revenue)} (${cell.transactions} txns)`}
+                          title={`${dayName(day, true)} ${hourLabel(hour)} - ${formatKES(cell.revenue)} (${cell.transactions} txns)`}
                         >
                           {intensity >= 3 && cell.transactions > 0 && (
                             <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold tabular-nums leading-none">

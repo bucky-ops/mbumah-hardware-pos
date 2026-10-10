@@ -297,7 +297,7 @@ describe('round2', () => {
     // Task 12-c: round2 is now the canonical financialMath implementation
     // (decimal.js HALF_UP, half AWAY FROM ZERO). The old local float hack
     // (`Math.round((n + EPSILON) * 100)/100`) returned -1.0 for -1.005 only
-    // because -1.005 + EPSILON lands just inside the -1.00 bucket — a float
+    // because -1.005 + EPSILON lands just inside the -1.00 bucket - a float
     // artifact, not a rounding policy. Canonical HALF_UP: -1.005 → -1.01.
     // Negative half-cents never occur in schedule math (balances clamp ≥ 0);
     // this assertion pins the canonical policy, not the old artifact.
@@ -415,7 +415,7 @@ describe('calculateEndDate', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('calculateInstallmentAmount', () => {
-  // Task 12-d: signature gained a `frequency` parameter — the interest model
+  // Task 12-d: signature gained a `frequency` parameter - the interest model
   // is now pro-rated by plan duration (shared with calculateInstallmentSchedule
   // via calculateTotalWithInterest), so every call site passes a frequency.
 

@@ -189,7 +189,7 @@ export function CreateExportDialog({
     onSuccess: (res) => {
       const recordCount = res.data?.recordCount ?? 0;
       toast.success('Export generated', {
-        description: `${exportType} (${format}) — ${recordCount} record${
+        description: `${exportType} (${format}) - ${recordCount} record${
           recordCount === 1 ? '' : 's'
         }.`,
       });

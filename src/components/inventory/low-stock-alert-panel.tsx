@@ -220,7 +220,7 @@ export function LowStockAlertPanel({
           </Button>
         </div>
 
-        {/* Summary header — "X products need attention" + breakdown chips */}
+        {/* Summary header - "X products need attention" + breakdown chips */}
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <p className="text-sm">
             <span className="font-semibold text-foreground">{summary.total}</span>

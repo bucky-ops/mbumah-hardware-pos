@@ -338,7 +338,7 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
                       ? newStockLevel > selectedProduct.reorderLevel ? 'text-green-600' : 'text-amber-600'
                       : 'text-red-600'
                   }`}>
-                    {newStockLevel ?? '—'} {unitLabel(selectedProduct.unitType)}
+                    {newStockLevel ?? '-'} {unitLabel(selectedProduct.unitType)}
                   </span>
                 </div>
                 {newStockLevel !== null && newStockLevel >= 0 && (
@@ -654,7 +654,7 @@ function AuditLogSection({ storeId }: { storeId: string }) {
       Component: log.component,
       Severity: log.severity,
       Action: log.action,
-      User: log.user?.name || '—',
+      User: log.user?.name || '-',
       Message: log.message,
       IPAddress: log.ipAddress || 'N/A',
     }));
@@ -789,7 +789,7 @@ function AuditLogSection({ storeId }: { storeId: string }) {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm font-medium">{log.action}</TableCell>
-                      <TableCell className="text-sm">{log.user?.name || '—'}</TableCell>
+                      <TableCell className="text-sm">{log.user?.name || '-'}</TableCell>
                       <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{log.message}</TableCell>
                     </TableRow>
                     {expandedLog === log.id && (
@@ -883,7 +883,7 @@ function ConfigEditor({ storeId: _storeId }: { storeId: string }) {
   const saveVatRateMutation = useMutation({
     mutationFn: (percent: number) => settingsApi.updateVatRate(percent),
     onSuccess: (_data, percent) => {
-      toast.success(`VAT rate set to ${percent}% — applies to all new sales, invoices and purchase orders`);
+      toast.success(`VAT rate set to ${percent}% - applies to all new sales, invoices and purchase orders`);
       queryClient.invalidateQueries({ queryKey: VAT_RATE_QUERY_KEY });
       setStoreSettings((s) => ({ ...s, taxRate: String(percent) }));
       setVatRateDirty(false);
@@ -936,18 +936,6 @@ function ConfigEditor({ storeId: _storeId }: { storeId: string }) {
   const cancelEdit = () => {
     setEditingKey(null);
     setEditValue('');
-  };
-
-  const getConfigIcon = (key: string) => {
-    const k = key.toLowerCase();
-    if (k.includes('store') || k.includes('name') || k.includes('app')) return '🏪';
-    if (k.includes('vat') || k.includes('tax')) return '🧾';
-    if (k.includes('receipt')) return '🖨️';
-    if (k.includes('currency')) return '💰';
-    if (k.includes('stock') || k.includes('reorder') || k.includes('inventory')) return '📦';
-    if (k.includes('payment') || k.includes('debt')) return '💳';
-    if (k.includes('notif') || k.includes('email') || k.includes('sms')) return '🔔';
-    return '⚙️';
   };
 
   const handleStructuredSave = (section: string) => {
@@ -1003,8 +991,8 @@ function ConfigEditor({ storeId: _storeId }: { storeId: string }) {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="flex items-center gap-1.5"><span className="text-sm">🧾</span> VAT Rate (%)</Label>
-                {/* v2.8.0: PERSISTED — controls VAT on all new sales/invoices/POs.
+                <Label className="flex items-center gap-1.5">VAT Rate (%)</Label>
+                {/* v2.8.0: PERSISTED - controls VAT on all new sales/invoices/POs.
                     Set 0 to disable VAT everywhere. */}
                 <Input
                   type="number"
@@ -1049,14 +1037,14 @@ function ConfigEditor({ storeId: _storeId }: { storeId: string }) {
         {activeCategory === 'Receipts' && (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="flex items-center gap-1.5">🖨️ Receipt Header</Label>
+              <Label className="flex items-center gap-1.5">Receipt Header</Label>
               <Input
                 value={receiptSettings.header}
                 onChange={(e) => setReceiptSettings({ ...receiptSettings, header: e.target.value })}
               />
             </div>
             <div className="space-y-2">
-              <Label className="flex items-center gap-1.5">🖨️ Receipt Footer</Label>
+              <Label className="flex items-center gap-1.5">Receipt Footer</Label>
               <Textarea
                 value={receiptSettings.footer}
                 onChange={(e) => setReceiptSettings({ ...receiptSettings, footer: e.target.value })}
@@ -1162,7 +1150,6 @@ function ConfigEditor({ storeId: _storeId }: { storeId: string }) {
               />
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm">💵</span>
                   <Label>Cash Payments</Label>
                 </div>
                 <p className="text-[10px] text-muted-foreground">Accept cash payments at the counter</p>
@@ -1191,7 +1178,6 @@ function ConfigEditor({ storeId: _storeId }: { storeId: string }) {
             <div className="space-y-2">
               {categoryConfigs.map((config: SystemConfigItem) => (
                 <div key={config.id} className="flex items-center gap-3 p-2.5 rounded-lg border hover:bg-muted/30 transition-colors">
-                  <span className="text-sm">{getConfigIcon(config.key)}</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium font-mono">{config.key}</p>
@@ -1574,7 +1560,7 @@ function UserManagement({ storeId }: { storeId: string }) {
               />
             </div>
             <div className="space-y-2">
-              <Label>Email (login identity — cannot be changed here)</Label>
+              <Label>Email (login identity - cannot be changed here)</Label>
               <Input
                 type="email"
                 value={editForm.email}
@@ -1886,7 +1872,7 @@ export default function AdminTab() {
       <UpdatesSafetySection />
 
       {/* ================================================================== */}
-      {/* Fleet & Remote Ops — Remote Access Kit (v2.11.0)                */}
+      {/* Fleet & Remote Ops - Remote Access Kit (v2.11.0)                */}
       {/* ================================================================== */}
       <FleetRemoteOpsSection />
 
@@ -1957,7 +1943,7 @@ export default function AdminTab() {
                           <TableCell><Badge variant={getSeverityColor(log.severity) as "destructive" | "outline" | "secondary"} className="text-[10px]">{log.severity}</Badge></TableCell>
                           <TableCell className="text-sm">{log.action}</TableCell>
                           <TableCell className="text-sm max-w-[300px] truncate">{log.message}</TableCell>
-                          <TableCell className="text-sm">{log.user?.name || '—'}</TableCell>
+                          <TableCell className="text-sm">{log.user?.name || '-'}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -2004,7 +1990,7 @@ export default function AdminTab() {
                             {m.quantity > 0 ? '+' : ''}{m.quantity}
                           </span>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{m.notes || '—'}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{m.notes || '-'}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

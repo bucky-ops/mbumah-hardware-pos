@@ -427,9 +427,9 @@ export default function CatalogTab() {
       // Fallback: build a wa.me link with the current filtered product list
       try {
         const lines = safeFilteredProducts.slice(0, 40).map(
-          (p, i) => `${i + 1}. ${p.name} — ${formatKES(p.pricePerUnit)} (${p.sku})`,
+          (p, i) => `${i + 1}. ${p.name} - ${formatKES(p.pricePerUnit)} (${p.sku})`,
         );
-        const header = `*Mbumah Hardware — Product Catalog*\n${safeFilteredProducts.length} item(s) available:\n\n`;
+        const header = `*Mbumah Hardware - Product Catalog*\n${safeFilteredProducts.length} item(s) available:\n\n`;
         const footer = `\n\nReply to order. Thank you!`;
         const message = header + lines.join('\n') + footer;
         openWhatsApp(phone, message);
@@ -458,14 +458,14 @@ export default function CatalogTab() {
     try {
       const items = safeFilteredProducts.slice(0, 10);
       const lines = items.map(
-        (p, i) => `${i + 1}. ${p.name} — ${formatKES(p.pricePerUnit)}`,
+        (p, i) => `${i + 1}. ${p.name} - ${formatKES(p.pricePerUnit)}`,
       );
       const remaining = safeFilteredProducts.length - items.length;
       const message = [
-        `MBUMAH HARDWARE Catalog — ${safeFilteredProducts.length} item(s) available:`,
+        `MBUMAH HARDWARE Catalog - ${safeFilteredProducts.length} item(s) available:`,
         '',
         ...lines,
-        remaining > 0 ? `…and ${remaining} more — visit us or ask for the full list.` : '',
+        remaining > 0 ? `…and ${remaining} more - visit us or ask for the full list.` : '',
         '',
         'Reply to order. Thank you!',
       ].filter(Boolean).join('\n');
@@ -494,7 +494,7 @@ export default function CatalogTab() {
           isLow ? 'ring-1 ring-amber-300 dark:ring-amber-700/60' : ''
         }`}
       >
-        {/* Image / placeholder — photo → category icon → letter tile */}
+        {/* Image / placeholder - photo → category icon → letter tile */}
         <div className="relative h-40 bg-muted/30 overflow-hidden">
           <ProductImage
             imageUrl={product.imageUrl}
@@ -585,7 +585,7 @@ export default function CatalogTab() {
             <div className="mt-2 rounded-md border border-red-200 dark:border-red-800/60 bg-red-50 dark:bg-red-950/30 px-2 py-1 flex items-center gap-1.5">
               <AlertTriangle className="h-3 w-3 text-red-600 dark:text-red-400 shrink-0" />
               <span className="text-[10px] text-red-700 dark:text-red-400">
-                Restock hint: out of stock — order now
+                Restock hint: out of stock - order now
               </span>
             </div>
           )}
@@ -1029,7 +1029,7 @@ export default function CatalogTab() {
         )}
       </div>
 
-      {/* ---- Product Editor (Add / Edit) — ResponsiveDialog (xl) ---- */}
+      {/* ---- Product Editor (Add / Edit) - ResponsiveDialog (xl) ---- */}
       <ResponsiveDialog
         open={editorOpen}
         onOpenChange={(open) => { if (!open) closeEditor(); }}

@@ -67,9 +67,9 @@ if (typeof globalThis.matchMedia === 'undefined') {
 // The first DB-touching transaction after a cold process start absorbs
 // one-time costs (engine spin-up, connection open, client-extension init).
 // Under CI those costs (~5s) happen INSIDE the test's rollback transaction
-// and trip Prisma's low-level socket timeout. Warming up here — AFTER the
+// and trip Prisma's low-level socket timeout. Warming up here - AFTER the
 // DATABASE_URL forcing above, via dynamic import so the client is created
-// with the forced env — makes every timed transaction deterministic.
+// with the forced env - makes every timed transaction deterministic.
 import { beforeAll } from 'vitest';
 
 beforeAll(async () => {

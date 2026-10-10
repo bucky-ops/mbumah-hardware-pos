@@ -45,7 +45,7 @@ async function withRollback<T>(
     return result;
   } catch (e) {
     if (e === ROLLBACK) {
-      // Transaction rolled back cleanly — but `result` was assigned before
+      // Transaction rolled back cleanly - but `result` was assigned before
       // the throw, so return it. (TypeScript can't see this, so we cast.)
       return (undefined as unknown) as T;
     }
@@ -59,10 +59,10 @@ const ORG_ID = 'org_mbumah';
 const STORE_ID = 'store_juja_main';
 const CASHIER_ID = 'user_super_admin';
 
-describe('recordSaleJournalEntry — double-entry accounting', () => {
+describe('recordSaleJournalEntry - double-entry accounting', () => {
   // Ensure all required accounts exist (auto-creates if missing) before the
   // tests run. This warms the in-memory cache so in-tx lookups are cache hits.
-  // The return value is intentionally discarded — the call is for its
+  // The return value is intentionally discarded - the call is for its
   // side effect (populating the account-id cache inside account-helper).
   let cashierOrgId: string;
 
@@ -83,7 +83,7 @@ describe('recordSaleJournalEntry — double-entry accounting', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // Test 1: Cash sale — revenue + VAT credited, cash debited, balanced.
+  // Test 1: Cash sale - revenue + VAT credited, cash debited, balanced.
   // ─────────────────────────────────────────────────────────────────────
   it('credits Sales Revenue + VAT Payable and debits Cash on Hand for a cash sale (debits = credits)', async () => {
     const receiptNumber = `TEST-CASH-${Date.now()}`;
@@ -189,7 +189,7 @@ describe('recordSaleJournalEntry — double-entry accounting', () => {
       const revenueLine = je!.lines.find((l) => l.account.code === ACCOUNT_CODES.SALES_REVENUE);
       expect(Number(revenueLine!.credit)).toBeCloseTo(grossRevenue, 2);
 
-      // Sales Discounts (4300) is debited — contra-revenue.
+      // Sales Discounts (4300) is debited - contra-revenue.
       const discountLine = je!.lines.find((l) => l.account.code === ACCOUNT_CODES.SALES_DISCOUNTS);
       expect(discountLine).toBeDefined();
       expect(Number(discountLine!.debit)).toBeCloseTo(discountAmount, 2);
@@ -236,7 +236,7 @@ describe('recordSaleJournalEntry — double-entry accounting', () => {
       expect(Number(je!.totalDebit)).toBeCloseTo(finalTotal, 2);
       expect(Number(je!.totalCredit)).toBeCloseTo(finalTotal, 2);
 
-      // Gift Card Liability (2300) DEBITED — liability decreases.
+      // Gift Card Liability (2300) DEBITED - liability decreases.
       const gcLine = je!.lines.find((l) => l.account.code === ACCOUNT_CODES.GIFT_CARD_LIABILITY);
       expect(gcLine).toBeDefined();
       expect(Number(gcLine!.debit)).toBeCloseTo(finalTotal, 2);
@@ -249,7 +249,7 @@ describe('recordSaleJournalEntry — double-entry accounting', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // Test 4: Golden-rule safeguard — unbalanced entry must throw.
+  // Test 4: Golden-rule safeguard - unbalanced entry must throw.
   // If the payment breakdown doesn't sum to revenue + tax (+ discount), the
   // helper must refuse to write a journal entry (prevents silent corruption).
   // ─────────────────────────────────────────────────────────────────────

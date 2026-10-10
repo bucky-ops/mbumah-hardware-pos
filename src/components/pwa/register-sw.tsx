@@ -15,6 +15,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -110,8 +111,8 @@ export function RegisterSW() {
         }
       `}</style>
       <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-100 text-lg dark:bg-orange-900/40">
-          🔄
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/40">
+          <RefreshCw className="h-4 w-4 text-orange-600 dark:text-orange-400" aria-hidden="true" />
         </div>
         <div className="flex-1 min-w-0">
           <p id="sw-update-title" className="text-sm font-semibold text-slate-900 dark:text-slate-100">

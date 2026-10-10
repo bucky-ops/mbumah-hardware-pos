@@ -45,7 +45,7 @@ export interface EtimsSubmissionResult {
 // Same compliance message the manual route returns as a 503 - kept in ONE
 // place so the async queue surfaces the identical control.
 const MOCK_BLOCK_ERROR =
-  'eTIMS integration is a mock — refusing to issue a tax invoice that was never transmitted to KRA (compliance control). Integrate the real KRA API or set ETIMS_ALLOW_MOCK_ISSUANCE=true to override.';
+  'eTIMS integration is a mock - refusing to issue a tax invoice that was never transmitted to KRA (compliance control). Integrate the real KRA API or set ETIMS_ALLOW_MOCK_ISSUANCE=true to override.';
 
 /**
  * Perform ONE KRA eTIMS submission attempt for a committed SalesTransaction.

@@ -484,7 +484,7 @@ export default function VouchersTab() {
     onSuccess: (res) => {
       const result = res.data;
       if (!result) {
-        toast.error('Send failed — empty response from server.');
+        toast.error('Send failed - empty response from server.');
         return;
       }
 
@@ -504,8 +504,8 @@ export default function VouchersTab() {
       } else {
         toast.warning(
           result.status === 'SIMULATED'
-            ? 'Gateway not configured — the message was NOT sent. Use the fallback buttons.'
-            : 'Voucher send failed — see the details.',
+            ? 'Gateway not configured - the message was NOT sent. Use the fallback buttons.'
+            : 'Voucher send failed - see the details.',
           { description: result.error || undefined },
         );
       }
@@ -521,7 +521,7 @@ export default function VouchersTab() {
           channel: result.channel === 'SMS' ? 'sms' : 'whatsapp',
           phone: result.recipient,
           message: result.message,
-          title: `Voucher ${sendVoucher?.code || ''} — ${result.channel === 'SMS' ? 'SMS' : 'WhatsApp'}`,
+          title: `Voucher ${sendVoucher?.code || ''} - ${result.channel === 'SMS' ? 'SMS' : 'WhatsApp'}`,
           waLink: result.waLink || undefined,
           status: result.status,
           error: result.error || undefined,
@@ -823,7 +823,7 @@ export default function VouchersTab() {
       channel,
       phone,
       message: getCampaignMessage(campaign),
-      title: `${channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} — ${campaign.name}`,
+      title: `${channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} - ${campaign.name}`,
     });
     setPreviewOpen(true);
   }
@@ -1132,7 +1132,7 @@ export default function VouchersTab() {
                               {formatVoucherValue(voucher)}
                             </TableCell>
                             <TableCell className="text-right text-sm text-muted-foreground">
-                              {voucher.minimumPurchase > 0 ? formatKES(voucher.minimumPurchase) : '—'}
+                              {voucher.minimumPurchase > 0 ? formatKES(voucher.minimumPurchase) : '-'}
                             </TableCell>
                             <TableCell className="text-center">
                               <div className="flex flex-col items-center">
@@ -1152,7 +1152,7 @@ export default function VouchersTab() {
                               {formatDate(voucher.startDate)}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
-                              {voucher.endDate ? formatDate(voucher.endDate) : '—'}
+                              {voucher.endDate ? formatDate(voucher.endDate) : '-'}
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-1">
@@ -1499,7 +1499,7 @@ export default function VouchersTab() {
                             </TableCell>
                             <TableCell>{getVoucherTypeBadge(redemption.voucherType)}</TableCell>
                             <TableCell className="text-sm text-muted-foreground">
-                              {redemption.redeemedBy || '—'}
+                              {redemption.redeemedBy || '-'}
                             </TableCell>
                             <TableCell className="text-right text-sm">
                               {formatKES(redemption.originalTotal)}
@@ -2159,7 +2159,7 @@ export default function VouchersTab() {
                   <span>
                     Deliver{' '}
                     <code className="font-mono bg-muted px-1 py-0.5 rounded">{sendVoucher.code}</code>
-                    {' '}({sendVoucher.name}) through a real gateway — Resend for email, Twilio for SMS/WhatsApp. The delivery status is recorded honestly.
+                    {' '}({sendVoucher.name}) through a real gateway - Resend for email, Twilio for SMS/WhatsApp. The delivery status is recorded honestly.
                   </span>
                 )}
               </DialogDescription>
@@ -2196,7 +2196,7 @@ export default function VouchersTab() {
                 </Select>
               </div>
 
-              {/* Customer (optional) — prefills the recipient */}
+              {/* Customer (optional) - prefills the recipient */}
               <div className="grid gap-2">
                 <Label className="text-sm font-medium">Customer (optional)</Label>
                 <Select value={sendCustomerId} onValueChange={handleSendCustomerChange}>
@@ -2233,7 +2233,7 @@ export default function VouchersTab() {
                 )}
               </div>
 
-              {/* EMAIL result panel — the shared preview dialog is WhatsApp/SMS
+              {/* EMAIL result panel - the shared preview dialog is WhatsApp/SMS
                   only, so email shows a simple honest result here instead. */}
               {emailResult && (
                 <div className="space-y-2">
@@ -2268,7 +2268,7 @@ export default function VouchersTab() {
                       <div className="min-w-0">
                         <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
                           {emailResult.status === 'SIMULATED'
-                            ? 'No email gateway configured — the message was NOT sent.'
+                            ? 'No email gateway configured - the message was NOT sent.'
                             : 'The email gateway rejected the send.'}
                         </p>
                         {emailResult.error && (

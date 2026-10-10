@@ -122,7 +122,7 @@ export function JournalEntriesTable({
                       </TableCell>
                       <TableCell className="text-sm">{formatDate(je.entryDate)}</TableCell>
                       <TableCell className="text-sm max-w-[200px] truncate">{je.description}</TableCell>
-                      <TableCell className="text-sm">{je.referenceType || '—'}</TableCell>
+                      <TableCell className="text-sm">{je.referenceType || '-'}</TableCell>
                       <TableCell className="text-right font-medium text-sm font-mono text-blue-600 dark:text-blue-400">
                         {formatKES(je.totalDebit)}
                       </TableCell>
@@ -169,7 +169,7 @@ export function JournalEntriesTable({
                             {je.lines.map((line) => (
                               <div key={line.id} className="flex items-center gap-3 text-xs py-1 px-2 rounded hover:bg-muted/30">
                                 <span className="font-mono text-muted-foreground w-10">
-                                  {line.account?.code || '—'}
+                                  {line.account?.code || '-'}
                                 </span>
                                 <span className="flex-1">{line.account?.name || line.accountId}</span>
                                 {line.account?.type && (

@@ -15,7 +15,7 @@
 //     `withImmutabilityBypass()` succeed (this is what the M-Pesa callback,
 //     journal void, and expense void paths rely on).
 //   • Finally verify that `create` is NOT blocked (financial records are
-//     append-only — writes are allowed, mutations are not).
+//     append-only - writes are allowed, mutations are not).
 import { describe, it, expect, beforeAll } from 'vitest';
 import { db, withImmutabilityBypass, ImmutabilityViolationError } from '@/lib/db';
 import {
@@ -51,7 +51,7 @@ const ORG_ID = 'org_mbumah';
 const STORE_ID = 'store_juja_main';
 const CASHIER_ID = 'user_super_admin';
 
-describe('Prisma Client Extension — financial immutability guard', () => {
+describe('Prisma Client Extension - financial immutability guard', () => {
   let cashAccountId: string;
 
   beforeAll(async () => {
@@ -66,12 +66,12 @@ describe('Prisma Client Extension — financial immutability guard', () => {
     let jeId: string | null = null;
 
     await withRollback(async (tx) => {
-      // Create a JE inside the rollback tx (create is allowed — append-only).
+      // Create a JE inside the rollback tx (create is allowed - append-only).
       const je = await tx.journalEntry.create({
         data: {
           storeId: STORE_ID,
           entryNumber: generateJournalEntryNumber(),
-          description: 'Immutability test — delete',
+          description: 'Immutability test - delete',
           referenceType: 'SALE',
           referenceId: `immutability-test-${Date.now()}`,
           totalDebit: 100,
@@ -99,7 +99,7 @@ describe('Prisma Client Extension — financial immutability guard', () => {
 
     // Sanity: the JE was never deleted (the rejected delete threw before
     // touching the row). It still exists inside the (now-rolled-back) tx
-    // scope, but outside the tx it never committed — so a top-level lookup
+    // scope, but outside the tx it never committed - so a top-level lookup
     // should return null.
     if (jeId) {
       const after = await db.journalEntry.findUnique({ where: { id: jeId } });
@@ -116,7 +116,7 @@ describe('Prisma Client Extension — financial immutability guard', () => {
         data: {
           storeId: STORE_ID,
           entryNumber: generateJournalEntryNumber(),
-          description: 'Immutability test — update',
+          description: 'Immutability test - update',
           referenceType: 'SALE',
           referenceId: `immutability-update-${Date.now()}`,
           totalDebit: 50,
@@ -172,7 +172,7 @@ describe('Prisma Client Extension — financial immutability guard', () => {
         data: {
           storeId: STORE_ID,
           entryNumber: generateJournalEntryNumber(),
-          description: 'Immutability test — line delete',
+          description: 'Immutability test - line delete',
           referenceType: 'SALE',
           referenceId: `immutability-line-${Date.now()}`,
           totalDebit: 10,
@@ -224,7 +224,7 @@ describe('Prisma Client Extension — financial immutability guard', () => {
         data: {
           storeId: STORE_ID,
           entryNumber: generateJournalEntryNumber(),
-          description: 'Immutability test — bypass',
+          description: 'Immutability test - bypass',
           referenceType: 'SALE',
           referenceId: `immutability-bypass-${Date.now()}`,
           totalDebit: 200,
@@ -256,15 +256,15 @@ describe('Prisma Client Extension — financial immutability guard', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // 8. create is NOT blocked — append-only means writes are fine.
+  // 8. create is NOT blocked - append-only means writes are fine.
   // ─────────────────────────────────────────────────────────────────────
-  it('allows journalEntry.create() (append-only — writes are permitted, mutations are not)', async () => {
+  it('allows journalEntry.create() (append-only - writes are permitted, mutations are not)', async () => {
     await withRollback(async (tx) => {
       const je = await tx.journalEntry.create({
         data: {
           storeId: STORE_ID,
           entryNumber: generateJournalEntryNumber(),
-          description: 'Immutability test — create allowed',
+          description: 'Immutability test - create allowed',
           referenceType: 'SALE',
           referenceId: `immutability-create-${Date.now()}`,
           totalDebit: 1,

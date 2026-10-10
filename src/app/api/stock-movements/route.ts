@@ -368,7 +368,7 @@ async function createStockAdjustmentHandler(
   const composedNotes =
     writeOffPrefix +
     (reasonText && noteText
-      ? `${reasonText} — ${noteText}`
+      ? `${reasonText} - ${noteText}`
       : reasonText || noteText || `Stock ${movementTypeValue.toLowerCase()}`);
 
   const result = await db.$transaction(async (tx) => {
@@ -447,7 +447,7 @@ async function createStockAdjustmentHandler(
           data: {
             storeId,
             entryNumber: generateJournalEntryNumber(),
-            description: `Stock write-off (${writeOffCategory || 'UNCLASSIFIED'}) — ${product.name}`,
+            description: `Stock write-off (${writeOffCategory || 'UNCLASSIFIED'}) - ${product.name}`,
             referenceType: 'STOCK_MOVEMENT',
             referenceId: movement.id,
             totalDebit: writeOffValue,
@@ -461,7 +461,7 @@ async function createStockAdjustmentHandler(
                   accountId: accounts.COST_OF_GOODS_SOLD,
                   debit: writeOffValue,
                   credit: 0,
-                  description: `Write-off loss for ${product.sku} — ${composedNotes}`,
+                  description: `Write-off loss for ${product.sku} - ${composedNotes}`,
                 },
                 {
                   accountId: accounts.INVENTORY,

@@ -518,7 +518,7 @@ export default function SystemHealthTab() {
                       <CardTitle className="text-base">Resilience Pipeline</CardTitle>
                     </div>
                     <CardDescription className="text-xs">
-                      Phases 1–7 system resilience chain
+                      Phases 1-7 system resilience chain
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -814,7 +814,7 @@ export default function SystemHealthTab() {
                               <TableCell><StatusBadge status={item.status} size="sm" /></TableCell>
                               <TableCell className="text-xs font-mono">{item.retryCount}/{item.maxRetries}</TableCell>
                               <TableCell className="text-xs max-w-[200px] truncate text-muted-foreground">
-                                {item.lastError || '—'}
+                                {item.lastError || '-'}
                               </TableCell>
                               <TableCell className="text-xs text-muted-foreground">
                                 {formatTimeAgo(item.createdAt)}

@@ -7,7 +7,7 @@
 //   • Data retention service (getPolicies, getPolicy)
 //   • Audit trail creation and verification (DB-dependent, rollback)
 //   • Audit trail query and export (DB read-only)
-//   • Compliance dashboard (DB read — skipped if DLQ model absent)
+//   • Compliance dashboard (DB read - skipped if DLQ model absent)
 //
 // Pure-logic tests are used where possible. DB-dependent tests use the
 // rollback pattern to keep the dev database clean.
@@ -38,10 +38,10 @@ async function withRollback<T>(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1. Retention policies — pure data structure
+// 1. Retention policies - pure data structure
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Retention policies — structure', () => {
+describe('Retention policies - structure', () => {
   it('has at least 5 defined policies', () => {
     expect(RETENTION_POLICIES.length).toBeGreaterThanOrEqual(5);
   });
@@ -102,7 +102,7 @@ describe('Retention policies — structure', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. dataRetention service — getPolicies / getPolicy
+// 2. dataRetention service - getPolicies / getPolicy
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('dataRetention service', () => {
@@ -131,10 +131,10 @@ describe('dataRetention service', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. Audit trail creation (DB — rollback)
+// 3. Audit trail creation (DB - rollback)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Audit trail — creation (DB rollback)', () => {
+describe('Audit trail - creation (DB rollback)', () => {
   it('creates an audit event with correct fields inside a transaction', async () => {
     await withRollback(async (tx) => {
       const event = await tx.auditLog.create({
@@ -157,7 +157,7 @@ describe('Audit trail — creation (DB rollback)', () => {
       expect(found).not.toBeNull();
       expect(found!.entityType).toBe('Product');
     });
-    // Rollback happened — no further assertion needed; the test
+    // Rollback happened - no further assertion needed; the test
     // above already verified the row exists inside the tx.
   });
 
@@ -213,10 +213,10 @@ describe('Audit trail — creation (DB rollback)', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. Audit trail query (DB — read-only)
+// 4. Audit trail query (DB - read-only)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Audit trail — query (DB read)', () => {
+describe('Audit trail - query (DB read)', () => {
   it('query returns events and total count', async () => {
     const { events, total } = await auditTrail.query({ limit: 10 });
     expect(Array.isArray(events)).toBe(true);
@@ -253,10 +253,10 @@ describe('Audit trail — query (DB read)', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5. Audit trail export (DB — read)
+// 5. Audit trail export (DB - read)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Audit trail — export', () => {
+describe('Audit trail - export', () => {
   it('exportEvents returns an array of plain objects', async () => {
     const events = await auditTrail.exportEvents({ limit: 5 });
     expect(Array.isArray(events)).toBe(true);
@@ -272,7 +272,7 @@ describe('Audit trail — export', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 6. Compliance dashboard (DB read — requires DLQ model)
+// 6. Compliance dashboard (DB read - requires DLQ model)
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // The full dashboard calls dlq.getMetrics() which needs the DeadLetterQueue
@@ -285,7 +285,7 @@ async function checkDlqAvailable(): Promise<boolean> {
   if (dlqAvailable !== null) return dlqAvailable;
   try {
     // If db.deadLetterQueue exists, this will not throw.
-    // @ts-expect-error — checking for model existence at runtime
+    // @ts-expect-error - checking for model existence at runtime
     if (typeof db.deadLetterQueue?.count !== 'function') {
       dlqAvailable = false;
       return false;

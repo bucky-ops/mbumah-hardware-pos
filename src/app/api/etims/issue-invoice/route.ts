@@ -82,7 +82,7 @@ async function issueInvoiceHandler(...args: unknown[]): Promise<Response> {
       {
         success: false,
         error:
-          'eTIMS integration is a mock — refusing to issue a tax invoice that was never transmitted to KRA (compliance control). Integrate the real KRA API or set ETIMS_ALLOW_MOCK_ISSUANCE=true to override.',
+          'eTIMS integration is a mock - refusing to issue a tax invoice that was never transmitted to KRA (compliance control). Integrate the real KRA API or set ETIMS_ALLOW_MOCK_ISSUANCE=true to override.',
       },
       { status: 503 }
     );

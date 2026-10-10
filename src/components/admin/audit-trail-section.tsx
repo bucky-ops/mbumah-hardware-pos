@@ -368,7 +368,7 @@ export function AuditTrailSection() {
                           {row.userName}
                         </div>
                         <div className="text-[10px] text-muted-foreground truncate" title={row.userEmail}>
-                          {row.userEmail || '—'}
+                          {row.userEmail || '-'}
                         </div>
                       </TableCell>
                       <TableCell className="py-2 align-top">
@@ -403,10 +403,10 @@ export function AuditTrailSection() {
                         )}
                       </TableCell>
                       <TableCell className="py-2 align-top">
-                        <span className="text-xs whitespace-nowrap">{row.branchName ?? '—'}</span>
+                        <span className="text-xs whitespace-nowrap">{row.branchName ?? '-'}</span>
                       </TableCell>
                       <TableCell className="py-2 align-top">
-                        <span className="text-xs font-mono whitespace-nowrap">{row.ipAddress || '—'}</span>
+                        <span className="text-xs font-mono whitespace-nowrap">{row.ipAddress || '-'}</span>
                       </TableCell>
                     </TableRow>
                   ))}

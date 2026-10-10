@@ -143,7 +143,7 @@ export function UserHoursBreakdown({ stats, isLoading }: UserHoursBreakdownProps
                   new Date(g.date).toLocaleDateString('en-US', { weekday: 'short' }),
                 )
                 .join(', ')}
-              {' — '}
+              {' - '}
               {stats?.coverageGaps?.length} day
               {(stats?.coverageGaps?.length ?? 0) === 1 ? '' : 's'} with no shifts.
             </p>

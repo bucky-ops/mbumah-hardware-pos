@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
     } catch (err) {
       processorResult = {
         error: err instanceof Error ? err.message : String(err),
-        note: 'Processor cycle failed — this is expected if no handlers are registered or the target service is down.',
+        note: 'Processor cycle failed - this is expected if no handlers are registered or the target service is down.',
       };
     }
   }

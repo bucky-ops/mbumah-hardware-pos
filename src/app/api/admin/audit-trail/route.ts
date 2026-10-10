@@ -296,7 +296,7 @@ async function getAuditTrailHandler(...args: unknown[]): Promise<Response> {
       result: 'DENIED',
       branchName: row.storeId ? storeMap.get(row.storeId) ?? null : null,
       ipAddress: row.ipAddress ?? null,
-      details: truncate(detailsParts.join(' — ')),
+      details: truncate(detailsParts.join(' - ')),
     });
   }
 

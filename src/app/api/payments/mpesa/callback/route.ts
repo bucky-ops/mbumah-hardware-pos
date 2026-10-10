@@ -307,7 +307,7 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
         storeId: mpesaTx.storeId,
         metadata: { expected, received: data.amount, transactionId: mpesaTx.transactionId },
       });
-      return Response.json({ success: true, message: 'Amount mismatch — queued for reconciliation.' });
+      return Response.json({ success: true, message: 'Amount mismatch - queued for reconciliation.' });
     }
   }
 
@@ -373,7 +373,7 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
             });
           } else {
             console.warn(
-              '[mpesa-callback] system user missing — cash drawer entry skipped (run prisma/seed.ts)'
+              '[mpesa-callback] system user missing - cash drawer entry skipped (run prisma/seed.ts)'
             );
           }
 
@@ -417,7 +417,7 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
           action: 'MPESA_CALLBACK_DUPLICATE_RECEIPT',
           component: LogComponent.PAYMENT,
           severity: LogSeverity.WARN,
-          message: `Receipt ${data.mpesaReceiptNumber} already settled another transaction — ignored.`,
+          message: `Receipt ${data.mpesaReceiptNumber} already settled another transaction - ignored.`,
           storeId: mpesaTx.storeId,
           metadata: { checkoutRequestId: data.checkoutRequestId },
         });
@@ -495,7 +495,7 @@ async function mpesaCallbackHandler(...args: unknown[]): Promise<Response> {
               quantity: item.quantity,
               referenceId: mpesaTx.transactionId!,
               performedBy: 'system',
-              notes: `M-Pesa payment failed (${data.resultDesc}) — automatic restock`,
+              notes: `M-Pesa payment failed (${data.resultDesc}) - automatic restock`,
             },
           });
         }

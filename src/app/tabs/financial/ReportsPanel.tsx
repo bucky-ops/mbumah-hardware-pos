@@ -168,7 +168,7 @@ function ProfitAndLossReport({ storeId }: { storeId: string }) {
               <div className="space-y-1">
                 {revenueAccounts.map((a) => (
                   <div key={a.accountCode} className="flex justify-between pl-4">
-                    <span className="text-muted-foreground">{a.accountCode} — {a.accountName}</span>
+                    <span className="text-muted-foreground">{a.accountCode} - {a.accountName}</span>
                     <span className="font-medium">{formatKES(revenueAmount(a))}</span>
                   </div>
                 ))}
@@ -186,7 +186,7 @@ function ProfitAndLossReport({ storeId }: { storeId: string }) {
               <div className="space-y-1">
                 {expenseAccounts.map((a) => (
                   <div key={a.accountCode} className="flex justify-between pl-4">
-                    <span className="text-muted-foreground">{a.accountCode} — {a.accountName}</span>
+                    <span className="text-muted-foreground">{a.accountCode} - {a.accountName}</span>
                     <span className="font-medium">({formatKES(a.netBalance)})</span>
                   </div>
                 ))}
@@ -292,7 +292,7 @@ function BalanceSheetReport({ storeId }: { storeId: string }) {
               <div className="space-y-1 text-sm font-mono">
                 {assets.map((a) => (
                   <div key={a.accountCode} className="flex justify-between pl-2">
-                    <span className="text-muted-foreground">{a.accountCode} — {a.accountName}</span>
+                    <span className="text-muted-foreground">{a.accountCode} - {a.accountName}</span>
                     <span className="font-medium">{formatKES(a.netBalance)}</span>
                   </div>
                 ))}
@@ -311,7 +311,7 @@ function BalanceSheetReport({ storeId }: { storeId: string }) {
                 <div className="space-y-1 text-sm font-mono">
                   {liabilities.map((a) => (
                     <div key={a.accountCode} className="flex justify-between pl-2">
-                      <span className="text-muted-foreground">{a.accountCode} — {a.accountName}</span>
+                      <span className="text-muted-foreground">{a.accountCode} - {a.accountName}</span>
                       <span className="font-medium">{formatKES(creditNormalAmount(a))}</span>
                     </div>
                   ))}
@@ -327,7 +327,7 @@ function BalanceSheetReport({ storeId }: { storeId: string }) {
                 <div className="space-y-1 text-sm font-mono">
                   {equity.map((a) => (
                     <div key={a.accountCode} className="flex justify-between pl-2">
-                      <span className="text-muted-foreground">{a.accountCode} — {a.accountName}</span>
+                      <span className="text-muted-foreground">{a.accountCode} - {a.accountName}</span>
                       <span className="font-medium">{formatKES(creditNormalAmount(a))}</span>
                     </div>
                   ))}
@@ -403,7 +403,7 @@ function AuditTrailReport({ storeId }: { storeId: string }) {
       Timestamp: formatDate(e.timestamp),
       EntityType: e.entityType,
       Action: e.action,
-      User: e.user?.email || e.userId || '—',
+      User: e.user?.email || e.userId || '-',
       EntityId: e.entityId,
       Reason: e.reason || '',
     }));
@@ -501,9 +501,9 @@ function AuditTrailReport({ storeId }: { storeId: string }) {
                       <TableCell>
                         <Badge variant="outline" className="text-[9px]">{e.action}</Badge>
                       </TableCell>
-                      <TableCell className="text-xs">{e.user?.email || e.userId || '—'}</TableCell>
+                      <TableCell className="text-xs">{e.user?.email || e.userId || '-'}</TableCell>
                       <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate" title={e.reason || ''}>
-                        {e.reason || '—'}
+                        {e.reason || '-'}
                       </TableCell>
                     </TableRow>
                     {expanded.has(e.id) && (

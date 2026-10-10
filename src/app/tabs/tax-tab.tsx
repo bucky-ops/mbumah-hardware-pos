@@ -98,7 +98,7 @@ function TaxCategoryDialog({
   const handleSave = () => {
     if (!name.trim()) { toast.error('Name is required'); return; }
     const rateNum = parseFloat(rate);
-    if (isNaN(rateNum) || rateNum < 0 || rateNum > 100) { toast.error('Rate must be 0–100'); return; }
+    if (isNaN(rateNum) || rateNum < 0 || rateNum > 100) { toast.error('Rate must be 0-100'); return; }
     createMutation.mutate({
       storeId,
       name: name.trim(),
@@ -290,7 +290,7 @@ function FilingDetailDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Tax Filing — {filing.filingPeriod}</DialogTitle>
+          <DialogTitle>Tax Filing - {filing.filingPeriod}</DialogTitle>
           <DialogDescription>{taxTypeName(filing.filingType)} Filing Details</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
@@ -317,15 +317,15 @@ function FilingDetailDialog({
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Filing Date</p>
-              <p className="text-sm font-medium mt-1">{filing.filingDate ? formatDate(filing.filingDate) : '—'}</p>
+              <p className="text-sm font-medium mt-1">{filing.filingDate ? formatDate(filing.filingDate) : '-'}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Due Date</p>
-              <p className="text-sm font-medium mt-1">{filing.dueDate ? formatDate(filing.dueDate) : '—'}</p>
+              <p className="text-sm font-medium mt-1">{filing.dueDate ? formatDate(filing.dueDate) : '-'}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">eTIMS Reference</p>
-              <p className="text-sm font-medium mt-1">{filing.etimsReference || '—'}</p>
+              <p className="text-sm font-medium mt-1">{filing.etimsReference || '-'}</p>
             </div>
           </div>
           {filing.notes && (
@@ -422,7 +422,7 @@ export default function TaxTab() {
       if (etimsUrl.length > 0 && etimsApiKey.length > 0) {
         toast.success('eTIMS connection successful');
       } else {
-        toast.error('eTIMS connection failed — check API URL and Key');
+        toast.error('eTIMS connection failed - check API URL and Key');
       }
     }, 1500);
   };
@@ -553,11 +553,11 @@ export default function TaxTab() {
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground">eTIMS Code</p>
-                            <p className="font-medium font-mono">{cat.etimsCode || '—'}</p>
+                            <p className="font-medium font-mono">{cat.etimsCode || '-'}</p>
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground">Description</p>
-                            <p className="font-medium">{cat.description || '—'}</p>
+                            <p className="font-medium">{cat.description || '-'}</p>
                           </div>
                         </div>
                         {cat.taxRates && cat.taxRates.length > 0 && (
@@ -579,7 +579,7 @@ export default function TaxTab() {
                                     <TableCell className="text-xs py-2">{rate.name}</TableCell>
                                     <TableCell className="text-xs py-2 font-mono">{rate.rate}%</TableCell>
                                     <TableCell className="text-xs py-2">{formatDate(rate.effectiveFrom)}</TableCell>
-                                    <TableCell className="text-xs py-2">{rate.effectiveTo ? formatDate(rate.effectiveTo) : '—'}</TableCell>
+                                    <TableCell className="text-xs py-2">{rate.effectiveTo ? formatDate(rate.effectiveTo) : '-'}</TableCell>
                                     <TableCell className="py-2">
                                       <Badge className={`text-[9px] px-1.5 ${rate.isActive ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
                                         {rate.isActive ? 'Active' : 'Inactive'}
@@ -677,8 +677,8 @@ export default function TaxTab() {
                       <TableCell className="text-xs py-3 text-right">{formatKES(f.totalSales)}</TableCell>
                       <TableCell className="text-xs py-3 text-right text-red-600">{formatKES(f.totalTax)}</TableCell>
                       <TableCell className="py-3">{filingStatusBadge(f.status)}</TableCell>
-                      <TableCell className="text-xs py-3">{f.filingDate ? formatDate(f.filingDate) : '—'}</TableCell>
-                      <TableCell className="text-xs py-3 font-mono">{f.etimsReference || '—'}</TableCell>
+                      <TableCell className="text-xs py-3">{f.filingDate ? formatDate(f.filingDate) : '-'}</TableCell>
+                      <TableCell className="text-xs py-3 font-mono">{f.etimsReference || '-'}</TableCell>
                       <TableCell className="py-3">
                         <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setSelectedFiling(f)}>
                           <Eye className="h-3.5 w-3.5" />

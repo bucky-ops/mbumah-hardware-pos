@@ -130,7 +130,7 @@ export function WhatsNewDialog() {
           </DialogTitle>
           <DialogDescription asChild>
             <div className="text-left text-sm text-muted-foreground">
-              You&apos;re on version {APP_VERSION} — here&apos;s what changed since your
+              You&apos;re on version {APP_VERSION} - here&apos;s what changed since your
               last visit.
             </div>
           </DialogDescription>

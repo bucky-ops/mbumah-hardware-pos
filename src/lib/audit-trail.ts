@@ -302,7 +302,7 @@ export const auditTrail = {
       message:
         `${options.action} ${options.resourceType}/${options.resourceId}` +
         (options.actorId ? ` by ${options.actorId}` : ' by system') +
-        (options.reason ? ` — reason: ${options.reason}` : ''),
+        (options.reason ? ` - reason: ${options.reason}` : ''),
       storeId: options.storeId,
       userId: options.actorId,
       metadata: {
@@ -376,7 +376,7 @@ export const auditTrail = {
             eventId: event.id,
             entityType: event.entityType,
             entityId: event.entityId,
-            reason: 'HASH_MISMATCH — event was modified after creation or the chain was tampered with',
+            reason: 'HASH_MISMATCH - event was modified after creation or the chain was tampered with',
           });
           result.isIntact = false;
           previousHash = event.integrityHash; // re-anchor at the stored value
@@ -389,7 +389,7 @@ export const auditTrail = {
             eventId: event.id,
             entityType: event.entityType,
             entityId: event.entityId,
-            reason: 'CHAIN_BREAK — previousHash does not match the prior event\'s integrityHash',
+            reason: 'CHAIN_BREAK - previousHash does not match the prior event\'s integrityHash',
           });
           result.isIntact = false;
         }

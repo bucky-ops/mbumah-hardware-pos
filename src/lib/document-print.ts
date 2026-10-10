@@ -96,7 +96,7 @@ export function buildDocumentQrPayload(
     'MBUMAH',
     normalizedKind,
     docNumber,
-    `Total:${opts?.total ?? '—'}`,
+    `Total:${opts?.total ?? '-'}`,
     `Date:${opts?.date ?? ''}`,
   ].join('|');
 }
@@ -176,7 +176,7 @@ export interface BrandedDocumentOptions {
 }
 
 const THANKS_POLICY_LINE =
-  'Please retain this document — returns are accepted within 14 days with the original receipt. Warranted goods per manufacturer terms.';
+  'Please retain this document - returns are accepted within 14 days with the original receipt. Warranted goods per manufacturer terms.';
 
 /**
  * Builds a COMPLETE standalone branded HTML document (inline <style>, print
@@ -227,7 +227,7 @@ export function buildBrandedDocumentHtml(opts: BrandedDocumentOptions): string {
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>${escapeHtml(opts.docTypeLabel)} ${escapeHtml(opts.docNumber)} — MBUMAH HARDWARE</title>
+  <title>${escapeHtml(opts.docTypeLabel)} ${escapeHtml(opts.docNumber)} - MBUMAH HARDWARE</title>
   <style>
     * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     @page { margin: 12mm; }

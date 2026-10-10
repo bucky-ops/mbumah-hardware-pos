@@ -10,9 +10,9 @@
  * instead of throwing - feed rows must never crash the dashboard.
  */
 export function timeAgo(date: string | Date | null | undefined): string {
-  if (!date) return '—';
+  if (!date) return '-';
   const t = new Date(date).getTime();
-  if (Number.isNaN(t)) return '—';
+  if (Number.isNaN(t)) return '-';
 
   const diffMs = Date.now() - t;
   // Future timestamps (clock skew, in-flight writes) read as "just now".

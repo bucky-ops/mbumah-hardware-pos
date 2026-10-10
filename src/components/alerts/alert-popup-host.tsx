@@ -124,7 +124,7 @@ function AlertPopup({ alert }: { alert: AlertInstance }) {
             </p>
           ) : null}
         </div>
-        {/* Close option — always available (product requirement) */}
+        {/* Close option - always available (product requirement) */}
         <button
           type="button"
           onClick={() => dismissAlert(alert.id)}

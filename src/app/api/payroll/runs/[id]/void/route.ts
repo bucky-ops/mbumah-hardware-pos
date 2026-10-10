@@ -78,7 +78,7 @@ async function voidRunHandler(
 
   if (run.status === 'PAID') {
     return Response.json(
-      { success: false, error: 'Payroll run is PAID — money has moved. Use a reversing run / journal entry through finance instead.' },
+      { success: false, error: 'Payroll run is PAID - money has moved. Use a reversing run / journal entry through finance instead.' },
       { status: 409 }
     );
   }
@@ -95,7 +95,7 @@ async function voidRunHandler(
   });
   if (paidDetails > 0) {
     return Response.json(
-      { success: false, error: `${paidDetails} payslip(s) on this run are already PAID — cannot void. Use finance to reverse instead.` },
+      { success: false, error: `${paidDetails} payslip(s) on this run are already PAID - cannot void. Use finance to reverse instead.` },
       { status: 409 }
     );
   }
@@ -107,7 +107,7 @@ async function voidRunHandler(
   });
   if (linkedJournal) {
     return Response.json(
-      { success: false, error: `Run has posted journal entry ${linkedJournal.entryNumber} — cannot void here. Use a reversing journal entry through finance.` },
+      { success: false, error: `Run has posted journal entry ${linkedJournal.entryNumber} - cannot void here. Use a reversing journal entry through finance.` },
       { status: 409 }
     );
   }

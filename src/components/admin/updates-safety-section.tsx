@@ -58,7 +58,7 @@ const UPDATES_QUERY_KEY = ['admin-updates'] as const;
 function deploymentLabel(d: UpdateStatusData['deployments'][number]): string {
   const when = new Date(d.createdAt);
   const date = Number.isNaN(when.getTime())
-    ? '—'
+    ? '-'
     : when.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) +
       ' ' +
       when.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -148,7 +148,7 @@ export function UpdatesSafetySection() {
         </CardTitle>
         <CardDescription className="text-xs">
           Automatic dormant-hours updates, one-click rollback and crash-safe
-          database backups — the safety net behind every release
+          database backups - the safety net behind every release
         </CardDescription>
       </CardHeader>
 
@@ -266,7 +266,7 @@ export function UpdatesSafetySection() {
               </p>
             ) : data.channel === 'laptop' ? (
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                This is a laptop installation — run{' '}
+                This is a laptop installation - run{' '}
                 <span className="font-mono text-[10px]">Rollback-Mbumah-POS.bat</span>{' '}
                 in the app folder and pick the version to restore. Your data is
                 never changed by a rollback.

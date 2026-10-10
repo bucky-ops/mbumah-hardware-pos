@@ -101,7 +101,7 @@ async function createBranchHandler(...args: unknown[]): Promise<Response> {
       action: 'BRANCH_CREATE_DENIED',
       component: 'AUTH',
       severity: 'WARN',
-      message: `User "${requestingUser.name}" (${requestingUser.role}) attempted to create a branch — denied`,
+      message: `User "${requestingUser.name}" (${requestingUser.role}) attempted to create a branch - denied`,
       userId: requestingUser.id,
       storeId: requestingUser.storeId || undefined,
       metadata: { requestingRole: requestingUser.role },

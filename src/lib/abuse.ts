@@ -160,7 +160,7 @@ export async function noteDiscountSpam(opts: DiscountSpamOptions): Promise<void>
   }
 
   const when = nairobiTime(new Date(now));
-  const summary = `${displayName} (${roleLabel(session.role)}) attempted ${count}x discount >5% in 1h — ${when}`;
+  const summary = `${displayName} (${roleLabel(session.role)}) attempted ${count}x discount >5% in 1h - ${when}`;
 
   // SecurityEvent PRIVILEGE_ABUSE_PATTERN - the durable record
   try {

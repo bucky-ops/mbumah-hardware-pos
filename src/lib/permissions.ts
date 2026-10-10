@@ -121,7 +121,7 @@ export const PERMISSION_DENIED_MESSAGES: Record<string, string> = {
   'pos.discount.gt10':
     "Discounts above 10% can only be approved by the Store Owner. This limit cannot be overridden at the counter.",
   'pos.view.all_sales': "You can only view your own sales. Ask your Branch Manager for the full transactions list.",
-  'dashboard.view.revenue': "Your dashboard is limited to your own activity. Revenue figures are hidden — ask your Branch Manager.",
+  'dashboard.view.revenue': "Your dashboard is limited to your own activity. Revenue figures are hidden - ask your Branch Manager.",
   'dashboard.view.profit_margin': 'Profit margins are visible to managers only.',
   'dashboard.view.debt_aging': "You don't have permission to view customer debt aging. Ask your Branch Manager.",
   'inventory.edit': "You don't have permission to edit catalog or inventory items. Ask your Branch Manager.",

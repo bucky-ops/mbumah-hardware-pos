@@ -276,7 +276,7 @@ export default function POSTab() {
     setRecommendationsOpen((prev) => {
       try {
         localStorage.setItem('mbt_sell_more_open', prev ? '0' : '1');
-      } catch { /* private mode — collapse still works this session */ }
+      } catch { /* private mode - collapse still works this session */ }
       return !prev;
     });
   }, []);
@@ -357,7 +357,7 @@ export default function POSTab() {
 
     const handleOnline = () => {
       setIsOnline(true);
-      toast.success('Back online — syncing queued sales…', { duration: 3000 });
+      toast.success('Back online - syncing queued sales…', { duration: 3000 });
     };
     const handleOffline = () => {
       setIsOnline(false);
@@ -406,7 +406,7 @@ export default function POSTab() {
         toast.info('No queued sales to sync.');
       }
     } catch {
-      toast.error('Sync failed — please check your connection and try again.');
+      toast.error('Sync failed - please check your connection and try again.');
     } finally {
       setIsSyncing(false);
     }
@@ -555,7 +555,7 @@ export default function POSTab() {
           const row = await saveOfflineTransaction(payload);
           if (row) {
             const synthetic = buildOfflineReceipt(row, authUser?.name || 'Cashier');
-            toast.warning('Network error — Sale saved locally and will sync automatically.', {
+            toast.warning('Network error - Sale saved locally and will sync automatically.', {
               duration: 5000,
             });
             return { success: true, data: synthetic };
@@ -737,14 +737,14 @@ export default function POSTab() {
 
         const msg = err.message || '';
         if (err.status === 403 && /manager approval/i.test(msg)) {
-          toast.error('Manager approval failed — check credentials/role');
+          toast.error('Manager approval failed - check credentials/role');
           setManagerApprovalOpen(true);
           setManagerApprovalPassword('');
           return;
         }
         if (err.status === 400 && /credit limit|manager approval|CREDIT_LIMIT_EXCEEDED/i.test(msg)) {
           setManagerApprovalOpen(true);
-          toast.error(msg || "Sale exceeds the customer's available debt limit — manager approval required");
+          toast.error(msg || "Sale exceeds the customer's available debt limit - manager approval required");
           return;
         }
       }
@@ -951,7 +951,7 @@ export default function POSTab() {
     if (match) {
       handleAddToCart(match);
     } else {
-      toast.error(`Could not add "${rec.productName || 'product'}" — try refreshing the catalog.`);
+      toast.error(`Could not add "${rec.productName || 'product'}" - try refreshing the catalog.`);
     }
   };
 
@@ -1060,11 +1060,11 @@ export default function POSTab() {
         minimumStockLevel: minStock,
       });
     } else if (stock <= reorder && !product.isRental) {
-      toast.warning(`${product.name}: Low stock — only ${stock} left (reorder at ${reorder}). Restock soon.`);
+      toast.warning(`${product.name}: Low stock - only ${stock} left (reorder at ${reorder}). Restock soon.`);
     } else {
       // v2.13.3 spec wording - green toast names the product AND the price so
       // the cashier gets instant price feedback while ringing.
-      toast.success(`Added ${product.name} — ${formatKES(Number(product.pricePerUnit) || 0)}`);
+      toast.success(`Added ${product.name} - ${formatKES(Number(product.pricePerUnit) || 0)}`);
     }
   };
 
@@ -1104,7 +1104,7 @@ export default function POSTab() {
     if (matches.length === 0) {
       // Exact-match miss: non-blocking feedback; the typed/scanned value stays
       // in the box and the debounced filter proceeds as before.
-      toast.error(`No product matched "${code}" — check the code or add the item manually.`);
+      toast.error(`No product matched "${code}" - check the code or add the item manually.`);
     }
     // >1 match (duplicate barcode/SKU): keep the filter results for a manual pick.
   };
@@ -1165,7 +1165,7 @@ export default function POSTab() {
     }
     const record = heldList.find((c) => c.id === holdId);
     if (!record || !Array.isArray(record.items)) {
-      toast.error('Held cart not found — it may have been deleted on another device.');
+      toast.error('Held cart not found - it may have been deleted on another device.');
       refreshHeldCarts();
       return;
     }
@@ -1246,7 +1246,7 @@ export default function POSTab() {
       (i) => !i.isRentalItem && (i.stockSnapshot ?? 0) <= (i.minimumStockLevel ?? 0)
     );
     if (unsellable.length > 0) {
-      toast.error(`${unsellable[0].productName}: Low Stock — Item cannot be sold until restocked. Remove it from the cart to continue.`, { duration: 6000 });
+      toast.error(`${unsellable[0].productName}: Low Stock - Item cannot be sold until restocked. Remove it from the cart to continue.`, { duration: 6000 });
       return;
     }
 
@@ -1331,7 +1331,7 @@ export default function POSTab() {
         // v2.6.0: still blocked, but no longer a dead end - open the inline
         // manager-approval form; submitting it re-runs handleCheckout with
         // the managerApproval attached.
-        toast.error("Sale exceeds the customer's available debt limit — manager approval required");
+        toast.error("Sale exceeds the customer's available debt limit - manager approval required");
         setManagerApprovalOpen(true);
         return;
       }
@@ -1490,9 +1490,9 @@ export default function POSTab() {
       const phone = receiptSendPhone
         ? (receiptSendPhone.startsWith('0') ? `254${receiptSendPhone.slice(1)}` : receiptSendPhone)
         : '';
-      const msg = `MBUMAH HARDWARE — Receipt ${lastTransaction.receiptNumber}. Total: ${formatKES(lastTransaction.totalAmount)}. Paid via ${lastTransaction.paymentMethod}. Thank you for shopping with us!`;
+      const msg = `MBUMAH HARDWARE - Receipt ${lastTransaction.receiptNumber}. Total: ${formatKES(lastTransaction.totalAmount)}. Paid via ${lastTransaction.paymentMethod}. Thank you for shopping with us!`;
       openSMS(phone, msg);
-      toast.success(phone ? 'Receipt prepared for SMS' : 'SMS app opened — choose a recipient');
+      toast.success(phone ? 'Receipt prepared for SMS' : 'SMS app opened - choose a recipient');
       setReceiptSendOpen(false);
     } catch (err) {
       toast.error(handleError(err, 'Send receipt via SMS'));
@@ -1571,7 +1571,7 @@ export default function POSTab() {
       {/* Confetti Overlay */}
       <ConfettiOverlay active={confettiActive} />
 
-      {/* Product Grid — Catalog (3 of 5 columns on desktop) */}
+      {/* Product Grid - Catalog (3 of 5 columns on desktop) */}
       <div className="col-span-1 lg:col-span-3 min-w-0 space-y-4">
         {/* ── Online / Offline status indicator ──
             Shows the cashier live connectivity + the count of sales queued
@@ -1828,9 +1828,9 @@ export default function POSTab() {
           </Card>
         )}
 
-        {/* v2.13.3 Sell More — Customers also bought. Shows affinity chips from
+        {/* v2.13.3 Sell More - Customers also bought. Shows affinity chips from
             the cart map, server co-occurrence on top, or best sellers when the
-            cart is empty — the section is ALWAYS visible (spec PART 3) so the
+            cart is empty - the section is ALWAYS visible (spec PART 3) so the
             cashier has an upsell prompt in every state. */}
         {(visibleRecommendations.length > 0 || cart.items.length > 0 || bestSellerSuggestions.length > 0) && (
           <Card className="border-primary/30 bg-gradient-to-br from-primary/5 via-card to-card overflow-hidden">
@@ -1846,7 +1846,7 @@ export default function POSTab() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold flex items-center gap-2">
-                    💡 Sell More — Customers also bought
+                    Sell More - Customers also bought
                     <Badge className="text-[10px] h-5 px-1.5 bg-blue-600 hover:bg-blue-600 text-white border-0">
                       {visibleRecommendations.length > 0
                         ? visibleRecommendations.length
@@ -1894,7 +1894,7 @@ export default function POSTab() {
                           type="button"
                           onClick={() => handleAddRecommendation({ product: rec.product as ProductListItem })}
                           className="group flex items-center gap-1.5 pl-1.5 pr-3 py-1.5 rounded-full border border-border bg-white dark:bg-background hover:border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all min-h-[36px] focus:outline-none focus:ring-2 focus:ring-ring"
-                          title={`Add ${name} — ${formatKES(price)}`}
+                          title={`Add ${name} - ${formatKES(price)}`}
                         >
                           <span className="h-4 w-4 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform" aria-hidden>
                             <Plus className="h-3 w-3" />
@@ -1921,7 +1921,7 @@ export default function POSTab() {
 
       {/* Cart Sidebar - Desktop only (2 of 5 columns) */}
       <div className="hidden lg:block lg:col-span-2">
-        {/* v2.5.0: dvh (not vh) — fits the REAL viewport. `gap-0` overrides
+        {/* v2.5.0: dvh (not vh) - fits the REAL viewport. `gap-0` overrides
             the shadcn Card's default gap-6: 5 flex gaps × 24px starved the
             scroll list at short viewports and collapsed it to 0px height
             (items invisible exactly when space is tight). */}
@@ -2014,7 +2014,7 @@ export default function POSTab() {
                   </Button>
                 </div>
 
-                {/* Cart-level flat discount (Ksh) — cashier manual override */}
+                {/* Cart-level flat discount (Ksh) - cashier manual override */}
                 <div className="flex gap-1.5 items-center">
                   <Tag className="h-3.5 w-3.5 text-green-600 shrink-0" />
                   <Input
@@ -2049,7 +2049,7 @@ export default function POSTab() {
                   )}
                 </div>
 
-                {/* Pay with Gift Card — opens dedicated dialog */}
+                {/* Pay with Gift Card - opens dedicated dialog */}
                 <Button
                   variant="outline"
                   size="sm"
@@ -2087,7 +2087,7 @@ export default function POSTab() {
                 </div>
 
                 {/* v2.12.5 RBAC: high-risk debt warning on the selected customer.
-                    Amounts shown ONLY to roles holding customers.view.debt —
+                    Amounts shown ONLY to roles holding customers.view.debt -
                     cashiers see the generic credit-approval notice instead. */}
                 {(() => {
                   const sel = selectedCustomer && selectedCustomer !== 'walk-in'
@@ -2104,7 +2104,7 @@ export default function POSTab() {
                     >
                       <AlertTriangle className="mr-1 inline h-3 w-3 align-[-2px]" aria-hidden="true" />
                       {canSeeDebt
-                        ? `High-risk debt: ${sel.name} owes ${formatKES(outstanding)} — manager approval required for further credit.`
+                        ? `High-risk debt: ${sel.name} owes ${formatKES(outstanding)} - manager approval required for further credit.`
                         : 'Credit approval required for this customer'}
                     </p>
                   );
@@ -2218,7 +2218,7 @@ export default function POSTab() {
                 </div>
               </div>
 
-              {/* Checkout button — always pinned at the bottom, never scrolled out of view */}
+              {/* Checkout button - always pinned at the bottom, never scrolled out of view */}
               <div className="shrink-0 p-3 border-t bg-card/80 backdrop-blur-sm space-y-1.5">
                 <Button
                   className="w-full bg-gradient-to-r from-accent-orange to-amber-500 hover:from-accent-orange/90 hover:to-amber-600 text-white font-semibold h-12 shadow-lg shadow-accent-orange/20 checkout-glow checkout-glow-pulse micro-click btn-press"
@@ -2249,7 +2249,7 @@ export default function POSTab() {
         </Card>
       </div>
 
-      {/* Checkout Dialog (shared — desktop & mobile) */}
+      {/* Checkout Dialog (shared - desktop & mobile) */}
       <CheckoutDialog
         open={checkoutOpen}
         onOpenChange={setCheckoutOpen}
@@ -2291,7 +2291,7 @@ export default function POSTab() {
         onManagerApprovalOpenChange={handleManagerApprovalOpenChange}
       />
 
-      {/* v2.12.5 RBAC: Manager Authorization modal — 5–10% discount band,
+      {/* v2.12.5 RBAC: Manager Authorization modal - 5-10% discount band,
           high-risk credit approval and the 90+ day credit-hold confirm. */}
       <ManagerAuthorizationModal
         open={managerAuthOpen}
@@ -2302,7 +2302,7 @@ export default function POSTab() {
         onSuccess={handleManagerAuthSuccess}
       />
 
-      {/* AUDIT FIX (Task 3-e): held-carts picker — resume any parked cart out of
+      {/* AUDIT FIX (Task 3-e): held-carts picker - resume any parked cart out of
           order, or delete it. Replaces the blind LIFO recall. */}
       <HeldCartsDialog
         open={heldCartsOpen}
@@ -2313,7 +2313,7 @@ export default function POSTab() {
         onDelete={deleteHeldCart}
       />
 
-      {/* Receipt Dialog (ResponsiveDialog) — Print + WhatsApp + New Sale */}
+      {/* Receipt Dialog (ResponsiveDialog) - Print + WhatsApp + New Sale */}
       <ResponsiveDialog
         open={receiptOpen}
         onOpenChange={setReceiptOpen}
@@ -2465,7 +2465,7 @@ export default function POSTab() {
         )}
       </ResponsiveDialog>
 
-      {/* Receipt Print Preview — enhanced receipt dialog with Print, PDF, WhatsApp, New Sale */}
+      {/* Receipt Print Preview - enhanced receipt dialog with Print, PDF, WhatsApp, New Sale */}
       <ReceiptPrintPreview
         open={receiptPrintOpen}
         onOpenChange={setReceiptPrintOpen}
@@ -2527,7 +2527,7 @@ export default function POSTab() {
             </div>
             <p className="text-[11px] text-muted-foreground mt-1.5">
               WhatsApp is sent from the MBUMAH HARDWARE WhatsApp Business account (requires WhatsApp on this number).
-              SMS opens the Messages app with the receipt pre-filled — leave the number empty to pick a recipient in the SMS app.
+              SMS opens the Messages app with the receipt pre-filled - leave the number empty to pick a recipient in the SMS app.
             </p>
           </div>
           {lastTransaction && (
@@ -2636,7 +2636,7 @@ export default function POSTab() {
       />
 
       {/* Low-stock popup (QA Phase 5): exact spec wording "Low Stock: Item
-          cannot be sold until restocked." — shown when an at/below-minimum
+          cannot be sold until restocked." - shown when an at/below-minimum
           stock item is added to the cart. */}
       <Dialog open={!!lowStockPopupItem} onOpenChange={(o) => { if (!o) setLowStockPopupItem(null); }}>
         <DialogContent className="sm:max-w-md">
@@ -2647,7 +2647,7 @@ export default function POSTab() {
             </DialogTitle>
             <DialogDescription>
               <span className="font-semibold text-foreground">{lowStockPopupItem?.name}</span>
-              {' '}— Item cannot be sold until restocked.
+              {' '}- Item cannot be sold until restocked.
             </DialogDescription>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
@@ -2674,7 +2674,7 @@ export default function POSTab() {
         </DialogContent>
       </Dialog>
 
-      {/* Pay with Gift Card Dialog — redeem a gift card code against the cart */}
+      {/* Pay with Gift Card Dialog - redeem a gift card code against the cart */}
       <Dialog open={payWithGiftCardOpen} onOpenChange={setPayWithGiftCardOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -2989,7 +2989,7 @@ export default function POSTab() {
                 </div>
               </div>
 
-              {/* Checkout button — always pinned at the bottom of the sheet */}
+              {/* Checkout button - always pinned at the bottom of the sheet */}
               <div className="shrink-0 p-3 border-t bg-card/80 backdrop-blur-sm space-y-1.5">
                 <Button
                   className="w-full bg-gradient-to-r from-accent-orange to-amber-500 hover:from-accent-orange/90 hover:to-amber-600 text-white font-semibold h-12 shadow-lg shadow-accent-orange/20 checkout-glow checkout-glow-pulse micro-click btn-press"
@@ -3011,7 +3011,7 @@ export default function POSTab() {
         </SheetContent>
       </Sheet>
 
-      {/* Clear Cart Confirmation Dialog (shared — desktop & mobile) */}
+      {/* Clear Cart Confirmation Dialog (shared - desktop & mobile) */}
       <AlertDialog open={clearCartConfirmOpen} onOpenChange={setClearCartConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

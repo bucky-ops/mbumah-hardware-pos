@@ -125,7 +125,7 @@ function getTwilioConfig() {
 
 /** Shared error text for the unconfigured-SMS/WhatsApp honest failure. */
 const TWILIO_NOT_CONFIGURED_ERROR =
-  'Twilio not configured — set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_PHONE';
+  'Twilio not configured - set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_PHONE';
 
 /**
  * Resend credentials. When RESEND_API_KEY is unset, email sends short-circuit
@@ -150,7 +150,7 @@ function isResendConfigured(): boolean {
 }
 
 /** Shared error text for the unconfigured-Resend honest failure (VF-1). */
-const RESEND_NOT_CONFIGURED_ERROR = 'Resend not configured — set RESEND_API_KEY';
+const RESEND_NOT_CONFIGURED_ERROR = 'Resend not configured - set RESEND_API_KEY';
 
 /**
  * Normalize a Kenyan phone number to E.164 format (+254XXXXXXXXX).
@@ -187,7 +187,7 @@ export class NotificationService implements INotificationService {
 
     if (!isTwilioConfigured()) {
       console.warn(
-        '[NotificationService] Twilio not configured — SMS NOT sent (honest failure).',
+        '[NotificationService] Twilio not configured - SMS NOT sent (honest failure).',
         { to: normalized, messagePreview: message.slice(0, 60) },
       );
       return { success: false, simulated: true, errorMessage: TWILIO_NOT_CONFIGURED_ERROR };
@@ -241,7 +241,7 @@ export class NotificationService implements INotificationService {
     // sim_ fake success let the UI claim "Sent" with no email ever leaving.
     if (!isResendConfigured()) {
       console.warn(
-        '[NotificationService] Resend not configured — email NOT sent (honest failure).',
+        '[NotificationService] Resend not configured - email NOT sent (honest failure).',
         { to, subject },
       );
       return { success: false, simulated: true, errorMessage: RESEND_NOT_CONFIGURED_ERROR };
@@ -296,7 +296,7 @@ export class NotificationService implements INotificationService {
 
     if (!isTwilioConfigured()) {
       console.warn(
-        '[NotificationService] Twilio not configured — WhatsApp NOT sent (honest failure).',
+        '[NotificationService] Twilio not configured - WhatsApp NOT sent (honest failure).',
         { to: normalized, messagePreview: message.slice(0, 60) },
       );
       return { success: false, simulated: true, errorMessage: TWILIO_NOT_CONFIGURED_ERROR };
@@ -486,7 +486,7 @@ export async function processPendingDebtReminders(
           } else {
             result = await notificationService.sendEmail(
               customer.email,
-              'Outstanding Balance Reminder — MBUMAH HARDWARE',
+              'Outstanding Balance Reminder - MBUMAH HARDWARE',
               `<div style="font-family: sans-serif; max-width: 600px; margin: auto;">
                 <h2 style="color: #10b981;">MBUMAH HARDWARE</h2>
                 <p>Dear ${customer.name},</p>

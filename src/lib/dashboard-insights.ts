@@ -517,7 +517,7 @@ export async function buildAlerts(
         type: 'rental_overdue',
         severity: 'warning',
         dedupeKey: `rental:${rental.id}`,
-        title: `Overdue rental: ${rental.product.name} — ${rental.customer.name}`,
+        title: `Overdue rental: ${rental.product.name} - ${rental.customer.name}`,
         detail: `${days} days overdue`,
         fine: round2(toDec(days).mul(toDec(rental.ratePerDay))),
         actions: ['view', 'call'],
@@ -798,7 +798,7 @@ export async function buildRevenueTrend(
       peak && peak.amount > 0 ? { hour: peak.hour, amount: round2(peak.amount) } : null;
     const peakNote =
       peakHour && todayRevenue > 0 && peakHour.amount > 0.5 * todayRevenue
-        ? `Bulk sale — ${fmtKsh(peakHour.amount)} at ${hourLabel(peakHour.hour)}`
+        ? `Bulk sale - ${fmtKsh(peakHour.amount)} at ${hourLabel(peakHour.hour)}`
         : null;
 
     return {

@@ -128,7 +128,7 @@ export function DataExportsTab() {
             Data Exports
           </h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            Generate CSV / JSON exports of your store&apos;s data — products,
+            Generate CSV / JSON exports of your store&apos;s data - products,
             transactions, customers, debt, inventory, and more. Files are kept
             for 7 days.
           </p>

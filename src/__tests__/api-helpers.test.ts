@@ -1,9 +1,9 @@
 // Unit tests for the audit-remediation API helpers:
 //   • src/lib/api-pagination.ts  (parsePagination / buildPaginationMeta)
-//   • src/lib/validations.ts     (validationErrorResponse — canonical 400)
+//   • src/lib/validations.ts     (validationErrorResponse - canonical 400)
 //   • src/lib/rate-limit.ts      (tier enforcement incl. new WEBHOOK tier)
 //
-// These are pure-logic tests — no database, no network — complementing the
+// These are pure-logic tests - no database, no network - complementing the
 // financial-accounting suite. They pin down the exact clamping and response
 // contracts the audit findings promised so regressions fail fast in CI.
 

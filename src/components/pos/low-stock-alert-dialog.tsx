@@ -49,7 +49,7 @@ export function LowStockAlertDialog({
           </DialogTitle>
           <DialogDescription>
             {totalAffected} product{totalAffected !== 1 ? 's' : ''} need attention
-            — {outOfStockProducts.length} out of stock, {lowStockProducts.length} low stock
+            - {outOfStockProducts.length} out of stock, {lowStockProducts.length} low stock
           </DialogDescription>
         </DialogHeader>
 
@@ -164,7 +164,7 @@ export function LowStockAlertDialog({
               {totalAffected > 0 && (
                 <div className="p-3 rounded-lg border bg-muted/30">
                   <p className="text-xs text-muted-foreground">
-                    💡 <strong>Tip:</strong> Consider restocking to at least 2× the reorder level to maintain healthy inventory.
+                    <strong>Tip:</strong> Consider restocking to at least 2× the reorder level to maintain healthy inventory.
                     Use the <strong>Admin → Stock Adjustment</strong> tool to update stock levels.
                   </p>
                 </div>

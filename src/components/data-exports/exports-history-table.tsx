@@ -125,7 +125,7 @@ function formatBytes(bytes: number): string {
 }
 
 function formatDateRange(from: string | null, to: string | null): string {
-  if (!from && !to) return '—';
+  if (!from && !to) return '-';
   const fmt = (d: string) => new Date(d).toLocaleDateString('en-KE', {
     year: 'numeric',
     month: 'short',
@@ -243,7 +243,7 @@ export function ExportsHistoryTable({
     },
     onSuccess: (item) => {
       toast.success('Download started', {
-        description: `${item.exportType} (${item.format}) — ${item.recordCount} records.`,
+        description: `${item.exportType} (${item.format}) - ${item.recordCount} records.`,
       });
     },
     onError: (err) => {
@@ -349,7 +349,7 @@ export function ExportsHistoryTable({
                     {item.recordCount.toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-xs">
-                    {item.fileSizeBytes > 0 ? formatBytes(item.fileSizeBytes) : '—'}
+                    {item.fileSizeBytes > 0 ? formatBytes(item.fileSizeBytes) : '-'}
                   </TableCell>
                   <TableCell>
                     {(() => {
@@ -404,7 +404,7 @@ export function ExportsHistoryTable({
                         }
                         title={
                           isExportExpired(item)
-                            ? 'Expired — files are kept for 7 days. Generate a new export.'
+                            ? 'Expired - files are kept for 7 days. Generate a new export.'
                             : 'Download'
                         }
                       >

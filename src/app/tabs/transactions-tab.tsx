@@ -373,11 +373,11 @@ function ReceiptModal({
           </DialogTitle>
           <DialogDescription>Receipt #{transaction.receiptNumber}</DialogDescription>
         </DialogHeader>
-        {/* Branded, colored, QR-coded receipt — same component as the
+        {/* Branded, colored, QR-coded receipt - same component as the
             checkout modal; id=RECEIPT_CONTENT_ID drives print/PDF export. */}
         <ReceiptDocument transaction={transaction} storeId={currentStoreId} />
 
-        {/* Distribution controls (Phase 4 — Email via Resend + WhatsApp via Twilio) */}
+        {/* Distribution controls (Phase 4 - Email via Resend + WhatsApp via Twilio) */}
         {distChannel ? (
           <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
             <p className="text-xs font-medium flex items-center gap-1.5">
@@ -521,7 +521,7 @@ function TransactionRow({
         <TableCell className="text-xs">{formatDateTime(transaction.createdAt)}</TableCell>
         <TableCell className="text-xs">
           <div className="flex items-center gap-2">
-            {/* Customer avatar — initials in gradient circle */}
+            {/* Customer avatar - initials in gradient circle */}
             <div
               className={`shrink-0 h-7 w-7 rounded-full bg-gradient-to-br ${avatarGradient} text-white text-[10px] font-bold flex items-center justify-center shadow-sm`}
               title={customerName}
@@ -860,7 +860,7 @@ export default function TransactionsTab() {
         <p class="bold">Receipt #: ${transaction.receiptNumber}</p>
         <p>Date: ${formatDateTime(transaction.createdAt)}</p>
         <p>Customer: ${transaction.customer?.name || 'Walk-in'}</p>
-        <p>Cashier: ${transaction.cashier?.name || '—'}</p>
+        <p>Cashier: ${transaction.cashier?.name || '-'}</p>
         <hr>
         <table>
           <thead><tr><th>Item</th><th class="center">Qty</th><th class="right">Price</th><th class="right">Total</th></tr></thead>

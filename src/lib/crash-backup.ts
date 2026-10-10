@@ -386,7 +386,7 @@ async function runCrashBackup(
   // Throttle: at most one crash backup per 5 minutes
   if (Date.now() - lastCrashBackupAt < THROTTLE_MS) {
     console.error(
-      '[CRASH-BACKUP] Throttled — a crash backup ran less than 5 minutes ago; skipping',
+      '[CRASH-BACKUP] Throttled - a crash backup ran less than 5 minutes ago; skipping',
       trigger,
     );
     return;
@@ -414,7 +414,7 @@ async function runCrashBackup(
         ok: false,
         kind: 'skipped',
         path: null,
-        error: 'DATABASE_URL is not set — nothing to back up',
+        error: 'DATABASE_URL is not set - nothing to back up',
       };
     } else if (databaseUrl.startsWith('file:')) {
       result =

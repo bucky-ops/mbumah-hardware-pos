@@ -563,7 +563,7 @@ export function EditScheduleDialog({
                   </span>
                 </div>
                 <p className="text-xs text-emerald-800 dark:text-emerald-200">
-                  <span className="font-semibold">{preview.when || '—'}</span>
+                  <span className="font-semibold">{preview.when || '-'}</span>
                   {' · '}
                   <span>{preview.timeRange}</span>
                   {' · '}

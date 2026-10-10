@@ -230,7 +230,7 @@ export function ShiftSchedulingTab() {
 
       {/* Main content: two columns on desktop, stacked on mobile */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Calendar — 2/3 width */}
+        {/* Calendar - 2/3 width */}
         <div className="lg:col-span-2">
           <WeeklyCalendar
             weekDays={weekDays}
@@ -240,7 +240,7 @@ export function ShiftSchedulingTab() {
           />
         </div>
 
-        {/* Right column — hours breakdown + legend */}
+        {/* Right column - hours breakdown + legend */}
         <div className="space-y-4">
           <UserHoursBreakdown stats={stats} isLoading={statsLoading} />
 

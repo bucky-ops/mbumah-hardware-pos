@@ -1,6 +1,6 @@
 // Financial-remediation regression tests.
 //
-// Companion to FINANCIAL_MODULE_AUDIT_REPORT.md — each test pins one of the
+// Companion to FINANCIAL_MODULE_AUDIT_REPORT.md - each test pins one of the
 // audit's remediated behaviors so a future refactor cannot silently reintroduce
 // the vulnerability. Coverage map:
 //
@@ -13,7 +13,7 @@
 import { describe, it, expect, afterAll } from 'vitest';
 
 // The crypto-helpers derive their key from NEXTAUTH_SECRET when
-// CREDENTIAL_ENCRYPTION_KEY is unset — provide a deterministic test secret
+// CREDENTIAL_ENCRYPTION_KEY is unset - provide a deterministic test secret
 // BEFORE the module is exercised (the key is cached on first use).
 process.env.NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || 'audit-test-secret-for-crypto-helpers-only';
 import { db } from '@/lib/db';
@@ -31,7 +31,7 @@ const ORG_ID = 'org_mbumah';
 const STORE_ID = 'store_juja_main';
 const CASHIER_ID = 'user_super_admin';
 
-// Rows created by this suite — removed in afterAll so the dev DB stays clean.
+// Rows created by this suite - removed in afterAll so the dev DB stays clean.
 const createdProductIds: string[] = [];
 const createdSerialIds: string[] = [];
 const createdGiftCardIds: string[] = [];
@@ -88,7 +88,7 @@ async function makeTestProduct(overrides: { quantity?: number; cost?: number } =
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SYS-7/F1-6/F5-6 — sequence helpers
+// SYS-7/F1-6/F5-6 - sequence helpers
 // ─────────────────────────────────────────────────────────────────────────────
 describe('sequence helpers (SYS-7 remediation)', () => {
   it('formats document numbers as PREFIX-YYYYMMDD-NNNN', () => {
@@ -108,7 +108,7 @@ describe('sequence helpers (SYS-7 remediation)', () => {
     const result = await withSequenceRetry(async (attempt) => {
       attempts = attempt;
       if (attempt === 1) {
-        // First attempt collides — the retry must regenerate.
+        // First attempt collides - the retry must regenerate.
         throw Object.assign(new Error('dup'), { code: 'P2002' });
       }
       return 'PO-20260904-0002';
@@ -127,7 +127,7 @@ describe('sequence helpers (SYS-7 remediation)', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SYS-9/F9-3 — AES-256-GCM credential encryption
+// SYS-9/F9-3 - AES-256-GCM credential encryption
 // ─────────────────────────────────────────────────────────────────────────────
 describe('crypto-helpers (SYS-9/F9-3 remediation)', () => {
   it('round-trips a secret through AES-256-GCM', () => {
@@ -159,13 +159,13 @@ describe('crypto-helpers (SYS-9/F9-3 remediation)', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// R1/R2/F3-5 — atomic conditional decrements
+// R1/R2/F3-5 - atomic conditional decrements
 // ─────────────────────────────────────────────────────────────────────────────
 describe('conditional decrements (R1/R2 remediation)', () => {
   it('refuses to oversell stock past zero (R1)', async () => {
     const product = await makeTestProduct({ quantity: 5 });
 
-    // Claim 5 — succeeds (balance hits 0).
+    // Claim 5 - succeeds (balance hits 0).
     const first = await db.product.updateMany({
       where: { id: product.id, quantityInStock: { gte: 5 } },
       data: { quantityInStock: { decrement: 5 } },
@@ -197,7 +197,7 @@ describe('conditional decrements (R1/R2 remediation)', () => {
     });
     createdGiftCardIds.push(card.id);
 
-    // Drain 800 — succeeds.
+    // Drain 800 - succeeds.
     const first = await db.giftCard.updateMany({
       where: { id: card.id, status: { in: ['ACTIVE', 'PARTIALLY_REDEEMED'] }, currentBalance: { gte: 800 } },
       data: { currentBalance: { decrement: 800 } },
@@ -212,17 +212,17 @@ describe('conditional decrements (R1/R2 remediation)', () => {
     });
     expect(second.count).toBe(0);
 
-    // Balance is exactly 200 — not 2000, not negative.
+    // Balance is exactly 200 - not 2000, not negative.
     const fresh = await db.giftCard.findUnique({ where: { id: card.id } });
     expect(Number(fresh?.currentBalance)).toBe(200);
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// F2-1 — serialized-asset double-sell lock
+// F2-1 - serialized-asset double-sell lock
 // ─────────────────────────────────────────────────────────────────────────────
 describe('serial lifecycle (F2-1 remediation)', () => {
-  it('claims a serial exactly once — the second claimer loses', async () => {
+  it('claims a serial exactly once - the second claimer loses', async () => {
     const product = await makeTestProduct({ quantity: 3 });
     const suffix = Math.random().toString(36).slice(2, 10);
 
@@ -261,7 +261,7 @@ describe('serial lifecycle (F2-1 remediation)', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// F1-1 — goods-receipt double-entry posting
+// F1-1 - goods-receipt double-entry posting
 // ─────────────────────────────────────────────────────────────────────────────
 describe('recordGoodsReceiptEntry (F1-1 remediation)', () => {
   it('posts a BALANCED Dr Inventory(+VAT)/Cr AP journal inside the tx', async () => {
@@ -272,7 +272,7 @@ describe('recordGoodsReceiptEntry (F1-1 remediation)', () => {
         storeId: STORE_ID,
         poId,
         poNumber: 'PO-AUDIT-0001',
-        // FINANCIAL MATH AUDIT: POs are VAT-EXCLUSIVE B2B documents — the
+        // FINANCIAL MATH AUDIT: POs are VAT-EXCLUSIVE B2B documents - the
         // passed amount is the NET received value; input VAT (16% = 160)
         // is computed ON TOP, so the supplier liability is 1000 + 160.
         grossAmount: 1000,
@@ -320,7 +320,7 @@ describe('recordGoodsReceiptEntry (F1-1 remediation)', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// F8-4/F6-2 — transactional outbox
+// F8-4/F6-2 - transactional outbox
 // ─────────────────────────────────────────────────────────────────────────────
 describe('transactional outbox (F8-4 remediation)', () => {
   it('delivers an enqueued event and marks it COMPLETED', async () => {

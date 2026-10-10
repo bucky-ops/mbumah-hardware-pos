@@ -49,7 +49,7 @@ async function verifyCronSecret(request: Request): Promise<Response | null> {
       component: LogComponent.SYSTEM,
       severity: LogSeverity.WARN,
       message:
-        'CRON_SECRET env var is not set — /api/cron/debt-reminders accepted an unauthenticated request.',
+        'CRON_SECRET env var is not set - /api/cron/debt-reminders accepted an unauthenticated request.',
       metadata: { path: '/api/cron/debt-reminders' },
     });
     return null;
@@ -240,7 +240,7 @@ async function runDebtReminderSweep(): Promise<DebtReminderSweepResult> {
         action: 'DEBT_REMINDER_CRON_RUN',
         component: LogComponent.FINANCIAL,
         severity: failed > 0 ? LogSeverity.WARN : LogSeverity.INFO,
-        message: `Debt-reminder sweep: scanned ${ledgers.length} aged ledger(s), sent ${sent}, failed ${failed}, skipped ${skipped}${unconfigured ? ' (Twilio unconfigured — sends simulated)' : ''}.`,
+        message: `Debt-reminder sweep: scanned ${ledgers.length} aged ledger(s), sent ${sent}, failed ${failed}, skipped ${skipped}${unconfigured ? ' (Twilio unconfigured - sends simulated)' : ''}.`,
         metadata: {
           scanned: ledgers.length,
           sent,

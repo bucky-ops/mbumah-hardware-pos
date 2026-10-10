@@ -567,7 +567,7 @@ export default function LoyaltyTab() {
                           </Avatar>
                           <div>
                             <p className="text-xs font-medium">{customer.name}</p>
-                            <p className="text-[10px] text-muted-foreground">{customer.phone ?? '—'}</p>
+                            <p className="text-[10px] text-muted-foreground">{customer.phone ?? '-'}</p>
                           </div>
                         </div>
                       </TableCell>
@@ -753,10 +753,10 @@ export default function LoyaltyTab() {
                         </span>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground max-w-[120px] truncate">
-                        {tx.referenceId ?? '—'}
+                        {tx.referenceId ?? '-'}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground max-w-[160px] truncate">
-                        {tx.description ?? '—'}
+                        {tx.description ?? '-'}
                       </TableCell>
                     </TableRow>
                   );
@@ -845,7 +845,7 @@ export default function LoyaltyTab() {
                           <div className="flex items-center gap-4 mt-1.5 text-[10px] text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
-                              {formatDate(campaign.startDate)} — {campaign.endDate ? formatDate(campaign.endDate) : 'No end'}
+                              {formatDate(campaign.startDate)} - {campaign.endDate ? formatDate(campaign.endDate) : 'No end'}
                             </span>
                             {campaign.bonusPoints > 0 && (
                               <span className="flex items-center gap-1">
@@ -1204,7 +1204,7 @@ export default function LoyaltyTab() {
                           </span>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">
-                          {tx.description ?? '—'}
+                          {tx.description ?? '-'}
                         </TableCell>
                       </TableRow>
                     );

@@ -269,7 +269,7 @@ export default function FinancialPeriodsPanel() {
                           )}
                           {p.status === 'LOCKED' && (
                             <DropdownMenuItem disabled className="gap-2 opacity-50">
-                              <Ban className="h-4 w-4" /> Locked — terminal
+                              <Ban className="h-4 w-4" /> Locked - terminal
                             </DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
@@ -343,7 +343,7 @@ export default function FinancialPeriodsPanel() {
               You are about to <strong>{actionState?.action.toLowerCase()}</strong> the period
               &ldquo;{actionState?.period.periodName}&rdquo;. This action is recorded in the audit
               trail with your user ID and the reason provided below.
-              {actionState?.action === 'LOCK' && ' LOCK is terminal — locked periods cannot be reopened.'}
+              {actionState?.action === 'LOCK' && ' LOCK is terminal - locked periods cannot be reopened.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2 py-2">

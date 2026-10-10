@@ -32,7 +32,7 @@ function sizeKeyOf(name: string): string {
 }
 
 async function main() {
-  console.log(`Scanning nail products for duplicate images${DRY_RUN ? ' (DRY RUN — nothing will be written)' : ''}…`);
+  console.log(`Scanning nail products for duplicate images${DRY_RUN ? ' (DRY RUN - nothing will be written)' : ''}…`);
 
   const products = await prisma.product.findMany({
     select: { id: true, name: true, sku: true, imageUrl: true, createdAt: true },
@@ -41,7 +41,7 @@ async function main() {
   const nails = products.filter((p) => /nail/i.test(p.name));
 
   if (nails.length === 0) {
-    console.log('No nail products found — nothing to do.');
+    console.log('No nail products found - nothing to do.');
     return;
   }
 
@@ -58,7 +58,7 @@ async function main() {
   for (const [key, rows] of groups) {
     const canonical = rows.find((r) => r.imageUrl) ?? rows[0];
     const duplicates = rows.filter((r) => r.id !== canonical.id && r.imageUrl);
-    console.log(`Group "${key}": ${rows.length} nail product(s) — keeping image on "${canonical.name}" (${canonical.sku || canonical.id})`);
+    console.log(`Group "${key}": ${rows.length} nail product(s) - keeping image on "${canonical.name}" (${canonical.sku || canonical.id})`);
     for (const d of duplicates) {
       cleared++;
       console.log(`  clearing imageUrl on "${d.name}" (${d.sku || d.id})`);
@@ -68,7 +68,7 @@ async function main() {
     }
   }
 
-  console.log(`Done: ${cleared} duplicate image(s) cleared${DRY_RUN ? ' (dry run — no rows written)' : ''}.`);
+  console.log(`Done: ${cleared} duplicate image(s) cleared${DRY_RUN ? ' (dry run - no rows written)' : ''}.`);
 }
 
 main()

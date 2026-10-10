@@ -682,7 +682,7 @@ export async function recordGoodsReceiptEntry(
     data: {
       storeId,
       entryNumber: generateJournalEntryNumber(),
-      description: `Goods receipt for PO ${poNumber} — KES ${supplierLiability.toLocaleString()}`,
+      description: `Goods receipt for PO ${poNumber} - KES ${supplierLiability.toLocaleString()}`,
       referenceType: 'GOODS_RECEIPT',
       referenceId: poId,
       totalDebit,

@@ -343,7 +343,7 @@ export default function PayrollTab() {
             Payroll &amp; HR
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage employees, leave, payroll runs, and attendance — Kenyan statutory compliance (PAYE, NSSF, SHIF, Housing Levy).
+            Manage employees, leave, payroll runs, and attendance - Kenyan statutory compliance (PAYE, NSSF, SHIF, Housing Levy).
           </p>
         </div>
       </div>
@@ -444,7 +444,7 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
   const terminateMutation = useMutation({
     mutationFn: (id: string) => apiFetch(`/api/employees/${id}`, { method: 'DELETE' }),
     onSuccess: (res: { message?: string; data?: { fullName?: string } }) => {
-      toast.success(res?.message || 'Employee terminated — payroll history preserved');
+      toast.success(res?.message || 'Employee terminated - payroll history preserved');
       qc.invalidateQueries({ queryKey: ['payroll-employees', storeId] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -645,7 +645,7 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
                         {e.employeeCode ? (
                           <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground tracking-wide whitespace-nowrap">{e.employeeCode}</span>
                         ) : (
-                          <span className="text-[10px] text-muted-foreground">—</span>
+                          <span className="text-[10px] text-muted-foreground">-</span>
                         )}
                       </td>
                       <td className="px-2 py-2.5 hidden md:table-cell">
@@ -887,12 +887,12 @@ function EmployeeDetailDialog({ employee, onClose }: { employee: Employee | null
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="grid grid-cols-2 gap-4 text-sm">
-            <DetailItem icon={Mail} label="Email" value={employee.email || '—'} />
-            <DetailItem icon={Phone} label="Phone" value={employee.phone || '—'} />
-            <DetailItem icon={IdCard} label="National ID" value={employee.nationalId || '—'} />
-            <DetailItem icon={FileText} label="KRA PIN" value={employee.kraPin || '—'} />
-            <DetailItem icon={PiggyBank} label="NSSF No." value={employee.nssfNumber || '—'} />
-            <DetailItem icon={AlertCircle} label="SHIF/NHIF No." value={employee.nhifNumber || '—'} />
+            <DetailItem icon={Mail} label="Email" value={employee.email || '-'} />
+            <DetailItem icon={Phone} label="Phone" value={employee.phone || '-'} />
+            <DetailItem icon={IdCard} label="National ID" value={employee.nationalId || '-'} />
+            <DetailItem icon={FileText} label="KRA PIN" value={employee.kraPin || '-'} />
+            <DetailItem icon={PiggyBank} label="NSSF No." value={employee.nssfNumber || '-'} />
+            <DetailItem icon={AlertCircle} label="SHIF/NHIF No." value={employee.nhifNumber || '-'} />
             <DetailItem icon={Calendar} label="Hire Date" value={formatDate(employee.hireDate)} />
             <DetailItem icon={Briefcase} label="Status" value={<StatusBadge status={employee.status} />} />
           </div>
@@ -915,9 +915,9 @@ function EmployeeDetailDialog({ employee, onClose }: { employee: Employee | null
                 <h4 className="text-sm font-semibold mb-2 flex items-center gap-2"><Building2 className="h-4 w-4" /> Banking</h4>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <DetailItem label="Bank" value={employee.bankName} />
-                  <DetailItem label="Account Name" value={employee.bankAccountName || '—'} />
-                  <DetailItem label="Account No." value={employee.bankAccountNumber || '—'} />
-                  <DetailItem label="Branch Code" value={employee.bankBranchCode || '—'} />
+                  <DetailItem label="Account Name" value={employee.bankAccountName || '-'} />
+                  <DetailItem label="Account No." value={employee.bankAccountNumber || '-'} />
+                  <DetailItem label="Branch Code" value={employee.bankBranchCode || '-'} />
                 </div>
               </div>
             </>
@@ -989,7 +989,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Leave Requests — 2/3 width */}
+        {/* Leave Requests - 2/3 width */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-3">
@@ -1055,7 +1055,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                               </Button>
                             </div>
                           ) : (
-                            <span className="text-xs text-muted-foreground block text-right">—</span>
+                            <span className="text-xs text-muted-foreground block text-right">-</span>
                           )}
                         </td>
                       </tr>
@@ -1067,7 +1067,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
           </CardContent>
         </Card>
 
-        {/* Leave Types — 1/3 width */}
+        {/* Leave Types - 1/3 width */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
@@ -1209,10 +1209,10 @@ function PeriodsSubTab({ storeId }: { storeId: string }) {
                         <p className="text-xs text-muted-foreground">{p.periodType}</p>
                       </td>
                       <td className="px-2 py-2.5 hidden md:table-cell text-xs">{formatDate(p.startDate)} → {formatDate(p.endDate)}</td>
-                      <td className="px-2 py-2.5 hidden lg:table-cell text-xs">{p.payDate ? formatDate(p.payDate) : '—'}</td>
+                      <td className="px-2 py-2.5 hidden lg:table-cell text-xs">{p.payDate ? formatDate(p.payDate) : '-'}</td>
                       <td className="px-2 py-2.5 text-right">{p.employeeCount || 0}</td>
-                      <td className="px-2 py-2.5 text-right hidden sm:table-cell">{p.totalGross ? formatKES(p.totalGross) : '—'}</td>
-                      <td className="px-2 py-2.5 text-right hidden sm:table-cell font-medium">{p.totalNet ? formatKES(p.totalNet) : '—'}</td>
+                      <td className="px-2 py-2.5 text-right hidden sm:table-cell">{p.totalGross ? formatKES(p.totalGross) : '-'}</td>
+                      <td className="px-2 py-2.5 text-right hidden sm:table-cell font-medium">{p.totalNet ? formatKES(p.totalNet) : '-'}</td>
                       <td className="px-2 py-2.5"><StatusBadge status={p.status} /></td>
                     </tr>
                   ))}
@@ -1320,7 +1320,7 @@ function RunsSubTab({ storeId }: { storeId: string }) {
   function handleVoid(run: PayrollRun) {
     const reason = window.prompt(
       `Void the ${run.runType} pay run for ${run.periodName}?\n\nTotals stay visible for audit; status becomes VOIDED.\nOnly possible because nothing was paid and nothing was posted to the ledger.\n\nReason:`,
-      'Deductions booked without earnings — superseded by corrected run'
+      'Deductions booked without earnings - superseded by corrected run'
     );
     if (reason === null) return;
     voidRunMutation.mutate({ runId: run.id, reason: reason.trim() || 'Voided by admin' });
@@ -1401,9 +1401,9 @@ function RunsSubTab({ storeId }: { storeId: string }) {
                         <Badge variant="outline" className="text-xs">{r.runType}</Badge>
                       </td>
                       <td className="px-2 py-2.5 text-right">{r.employeeCount || 0}</td>
-                      <td className="px-2 py-2.5 text-right hidden md:table-cell">{r.totalGross ? formatKES(r.totalGross) : '—'}</td>
-                      <td className="px-2 py-2.5 text-right hidden md:table-cell text-red-600">{r.totalDeductions ? formatKES(r.totalDeductions) : '—'}</td>
-                      <td className="px-2 py-2.5 text-right font-medium">{r.totalNet ? formatKES(r.totalNet) : '—'}</td>
+                      <td className="px-2 py-2.5 text-right hidden md:table-cell">{r.totalGross ? formatKES(r.totalGross) : '-'}</td>
+                      <td className="px-2 py-2.5 text-right hidden md:table-cell text-red-600">{r.totalDeductions ? formatKES(r.totalDeductions) : '-'}</td>
+                      <td className="px-2 py-2.5 text-right font-medium">{r.totalNet ? formatKES(r.totalNet) : '-'}</td>
                       <td className="px-2 py-2.5">
                         <div className="flex items-center gap-1.5">
                           {r.status === 'PROCESSING' && <Loader2 className="h-3 w-3 animate-spin text-blue-500" />}
@@ -1540,7 +1540,7 @@ function AttendanceSubTab({ storeId }: { storeId: string }) {
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select employee..." /></SelectTrigger>
                 <SelectContent>
                   {employeesForAttendance.filter((e) => e.status === 'ACTIVE').map((e) => (
-                    <SelectItem key={e.id} value={e.id}>{e.fullName} — {e.jobTitle || 'Staff'}</SelectItem>
+                    <SelectItem key={e.id} value={e.id}>{e.fullName} - {e.jobTitle || 'Staff'}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1606,9 +1606,9 @@ function AttendanceSubTab({ storeId }: { storeId: string }) {
                         <p className="text-xs text-muted-foreground">{r.employee.jobTitle || 'Staff'}</p>
                       </td>
                       <td className="px-2 py-2.5 text-xs">{formatDate(r.date)}</td>
-                      <td className="px-2 py-2.5 text-xs">{r.checkIn ? formatDateTime(r.checkIn) : '—'}</td>
-                      <td className="px-2 py-2.5 text-xs">{r.checkOut ? formatDateTime(r.checkOut) : '—'}</td>
-                      <td className="px-2 py-2.5 text-right font-medium">{r.workingHours ? `${r.workingHours.toFixed(1)}h` : '—'}</td>
+                      <td className="px-2 py-2.5 text-xs">{r.checkIn ? formatDateTime(r.checkIn) : '-'}</td>
+                      <td className="px-2 py-2.5 text-xs">{r.checkOut ? formatDateTime(r.checkOut) : '-'}</td>
+                      <td className="px-2 py-2.5 text-right font-medium">{r.workingHours ? `${r.workingHours.toFixed(1)}h` : '-'}</td>
                       <td className="px-2 py-2.5"><StatusBadge status={r.status} /></td>
                     </tr>
                   ))}

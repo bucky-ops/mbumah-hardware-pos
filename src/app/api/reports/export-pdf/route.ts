@@ -108,7 +108,7 @@ async function buildSalesReport(ctx: ReportContext): Promise<ReportResult> {
     t.receiptNumber,
     formatDate(t.createdAt),
     t.customer?.name || 'Walk-in',
-    t.cashier?.name || '—',
+    t.cashier?.name || '-',
     String(t.items.length),
     formatKES(t.subtotal),
     formatKES(t.taxAmount),
@@ -144,7 +144,7 @@ async function buildInventoryReport(ctx: ReportContext): Promise<ReportResult> {
   const headers = ['SKU', 'Barcode', 'Product', 'Category', 'In Stock', 'Reorder Lvl', 'Cost Price', 'Sell Price', 'Stock Value'];
   const rows = products.map((p) => [
     p.sku,
-    p.barcode || '—',
+    p.barcode || '-',
     p.name,
     p.category?.name || 'Uncategorized',
     String(p.quantityInStock),
@@ -185,8 +185,8 @@ async function buildDebtReport(ctx: ReportContext): Promise<ReportResult> {
 
   const headers = ['Customer', 'Phone', 'Original Debt', 'Amount Paid', 'Balance', 'Due Date', 'Status'];
   const rows = debts.map((d) => [
-    d.customer?.name || '—',
-    d.customer?.phone || '—',
+    d.customer?.name || '-',
+    d.customer?.phone || '-',
     // Task 12-b fix: DebtLedger has no `originalAmount` column - the original
     // debt is `amountOwed` (was rendering undefined → "KES 0.00").
     formatKES(d.amountOwed),
@@ -227,9 +227,9 @@ async function buildRentalsReport(ctx: ReportContext): Promise<ReportResult> {
 
   const headers = ['Customer', 'Phone', 'Item', 'Start', 'End', 'Rate/Day', 'Total Charge', 'Deposit', 'Status'];
   const rows = rentals.map((r) => [
-    r.customer?.name || '—',
-    r.customer?.phone || '—',
-    r.product?.name || '—',
+    r.customer?.name || '-',
+    r.customer?.phone || '-',
+    r.product?.name || '-',
     formatDate(r.rentalStartDate),
     formatDate(r.expectedReturnDate),
     formatKES(r.ratePerDay),
@@ -261,7 +261,7 @@ async function buildRentalsReport(ctx: ReportContext): Promise<ReportResult> {
 
 function formatDateTimeEAT(d: Date | string): string {
   const date = typeof d === 'string' ? new Date(d) : d;
-  if (Number.isNaN(date.getTime())) return '—';
+  if (Number.isNaN(date.getTime())) return '-';
   return date.toLocaleString('en-KE', {
     timeZone: 'Africa/Nairobi',
     day: '2-digit', month: 'short', year: 'numeric',
@@ -429,11 +429,11 @@ async function loadCustomerStatement(storeId: string, customerId: string): Promi
 
     entries.push({
       at: r.rentalStartDate,
-      activity: `Rental started — ${r.product?.name || 'equipment'}`,
+      activity: `Rental started - ${r.product?.name || 'equipment'}`,
       icon: '🔑',
       tone: 'out',
       reference: r.id.slice(-8).toUpperCase(),
-      details: `SKU ${r.product?.sku || '—'} · deposit ${formatKES(deposit)} · rate ${formatKES(r.ratePerDay)}/day · due ${formatDate(r.expectedReturnDate)}`,
+      details: `SKU ${r.product?.sku || '-'} · deposit ${formatKES(deposit)} · rate ${formatKES(r.ratePerDay)}/day · due ${formatDate(r.expectedReturnDate)}`,
       debit: 0,
       credit: 0,
       memo: false,
@@ -444,7 +444,7 @@ async function loadCustomerStatement(storeId: string, customerId: string): Promi
       icon: '🛡️',
       tone: 'info',
       reference: r.id.slice(-8).toUpperCase(),
-      details: `Refundable deposit for ${r.product?.name || 'equipment'} — held as liability, not income`,
+      details: `Refundable deposit for ${r.product?.name || 'equipment'} - held as liability, not income`,
       debit: 0,
       credit: 0,
       memo: true,
@@ -456,7 +456,7 @@ async function loadCustomerStatement(storeId: string, customerId: string): Promi
       refundsGiven += refund;
       entries.push({
         at: r.actualReturnDate || r.updatedAt,
-        activity: `Rental returned — ${r.product?.name || 'equipment'}`,
+        activity: `Rental returned - ${r.product?.name || 'equipment'}`,
         icon: '✅',
         tone: 'in',
         reference: r.id.slice(-8).toUpperCase(),
@@ -488,7 +488,7 @@ async function loadCustomerStatement(storeId: string, customerId: string): Promi
   return {
     customer: {
       name: customer.name,
-      phone: customer.phone || '—',
+      phone: customer.phone || '-',
       email: customer.email,
       idNumber: customer.idNumber,
       currentDebtBalance: n(customer.currentDebtBalance),
@@ -500,8 +500,8 @@ async function loadCustomerStatement(storeId: string, customerId: string): Promi
     entries,
     rentals: rentals.map((r) => ({
       id: r.id,
-      productName: r.product?.name || '—',
-      sku: r.product?.sku || '—',
+      productName: r.product?.name || '-',
+      sku: r.product?.sku || '-',
       status: r.status,
       start: r.rentalStartDate,
       end: r.actualReturnDate,
@@ -609,7 +609,7 @@ async function buildCustomerStatement(storeId: string, customerId: string): Prom
   highlights.push(
     debtBalance > 0
       ? `Outstanding store credit: ${formatKES(debtBalance)} of a ${formatKES(data.customer.debtLimit)} limit (${utilization}% utilised).`
-      : `Account is fully settled — no outstanding store credit.`
+      : `Account is fully settled - no outstanding store credit.`
   );
   highlights.push(
     `Purchases to date: ${formatKES(t.purchases)} across ${data.counts.sales} transaction(s).`
@@ -624,7 +624,7 @@ async function buildCustomerStatement(storeId: string, customerId: string): Prom
   }
   if (data.customer.loyaltyPoints > 0) {
     highlights.push(
-      `Loyalty: ${data.customer.loyaltyPoints} points (${data.customer.loyaltyTier} tier) — worth about ${formatKES(data.customer.loyaltyPoints * 10)} in redeemable vouchers.`
+      `Loyalty: ${data.customer.loyaltyPoints} points (${data.customer.loyaltyTier} tier) - worth about ${formatKES(data.customer.loyaltyPoints * 10)} in redeemable vouchers.`
     );
   }
   const last = data.entries[data.entries.length - 1];
@@ -632,7 +632,7 @@ async function buildCustomerStatement(storeId: string, customerId: string): Prom
     highlights.push(`Last account activity: ${last.activity.toLowerCase()} on ${formatDateTimeEAT(last.at)}.`);
   }
 
-  return { title: `Account Statement — ${data.customer.name}`, data, highlights };
+  return { title: `Account Statement - ${data.customer.name}`, data, highlights };
 }
 
 // Statement HTML template (R14)
@@ -676,7 +676,7 @@ async function buildHtmlStatement(
     const amountCell =
       e.debit > 0 ? `<span class="neg">+${escapeHtml(formatKES(e.debit))}</span>`
       : e.credit > 0 ? `<span class="pos">−${escapeHtml(formatKES(e.credit))}</span>`
-      : '<span class="muted">—</span>';
+      : '<span class="muted">-</span>';
     return `
       <tr class="${e.memo ? 'memo' : ''}">
         <td class="nowrap">${escapeHtml(formatDateTimeEAT(e.at))}</td>
@@ -684,7 +684,7 @@ async function buildHtmlStatement(
         <td class="mono">${escapeHtml(e.reference)}</td>
         <td class="details">${escapeHtml(e.details)}${e.memo ? ' <span class="chip">memo</span>' : ''}</td>
         <td class="right">${amountCell}</td>
-        ${e.memo ? '<td class="right muted">—</td>' : `<td class="right bold">${escapeHtml(formatKES(running))}</td>`}
+        ${e.memo ? '<td class="right muted">-</td>' : `<td class="right bold">${escapeHtml(formatKES(running))}</td>`}
       </tr>`;
   }).join('');
 
@@ -723,7 +723,7 @@ async function buildHtmlStatement(
             <td class="mono">${escapeHtml(r.sku)}</td>
             <td class="nowrap">${escapeHtml(formatDate(r.start))}</td>
             <td class="nowrap">${escapeHtml(formatDate(r.expected))}</td>
-            <td class="nowrap">${r.end ? escapeHtml(formatDate(r.end)) : '—'}</td>
+            <td class="nowrap">${r.end ? escapeHtml(formatDate(r.end)) : '-'}</td>
             <td class="right">${escapeHtml(formatKES(r.deposit))}</td>
             <td class="right">${escapeHtml(formatKES(round2(toDec(r.charge).plus(r.lateFee).plus(r.damage))))}</td>
             <td>${escapeHtml(r.status)}</td>
@@ -758,7 +758,7 @@ async function buildHtmlStatement(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${escapeHtml(report.title)} — MBUMAH HARDWARE</title>
+  <title>${escapeHtml(report.title)} - MBUMAH HARDWARE</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1a1a1a; background: #fff; padding: 32px; font-size: 12px; }
@@ -849,7 +849,7 @@ async function buildHtmlStatement(
     <div><span class="cb-label">Member since</span>${escapeHtml(formatDate(c.joinedAt))}</div>
   </div>
 
-  <h2>Summary — Key Figures</h2>
+  <h2>Summary - Key Figures</h2>
   <div class="summary-grid">
     ${summaryCards.map((s) => `<div class="scard"><span class="sc-label">${escapeHtml(s.label)}</span><span class="sc-value ${s.cls}">${escapeHtml(s.value)}</span></div>`).join('')}
   </div>
@@ -874,7 +874,7 @@ async function buildHtmlStatement(
     <thead><tr><th>Date &amp; Time</th><th>Activity</th><th>Reference</th><th>Details</th><th class="right">Amount</th><th class="right">Balance</th></tr></thead>
     <tbody>${statementRows || '<tr><td colspan="6" class="no-data">No account activity.</td></tr>'}</tbody>
   </table>
-  <p class="muted" style="margin-top:6px">Balance = running store-credit owed (memo rows — deposits held/released — do not change the credit balance).</p>
+  <p class="muted" style="margin-top:6px">Balance = running store-credit owed (memo rows - deposits held/released - do not change the credit balance).</p>
 
   <h2>Equipment Rental History</h2>
   ${rentalsTable}
@@ -939,7 +939,7 @@ function buildHtmlReport(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${escapeHtml(report.title)} — MBUMAH HARDWARE</title>
+  <title>${escapeHtml(report.title)} - MBUMAH HARDWARE</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {

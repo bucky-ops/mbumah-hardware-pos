@@ -1,10 +1,10 @@
-// SECURITY REGRESSION TESTS — ORM-level tenant scoping (injectTenant)
+// SECURITY REGRESSION TESTS - ORM-level tenant scoping (injectTenant)
 //
 // Background (QA 2026-09, v2.4.1): injectTenant previously RESPECTED any
 // explicitly-passed `where.storeId` on the assumption that route-level
 // `requireStoreAccess` validation would reject cross-store requests first.
 // Several GET routes (debt, customers, transactions, …) accept a `storeId`
-// query param WITHOUT that validation — so a store-scoped CASHIER could read
+// query param WITHOUT that validation - so a store-scoped CASHIER could read
 // another branch's customers/debt ledgers by simply changing the query param
 // (reproduced live against production: Nakuru cashier reading Juja + Thika
 // customers). The fix makes injectTenant ALWAYS narrow: pass-through only
@@ -25,7 +25,7 @@ function scoped(args: Record<string, unknown>) {
   >;
 }
 
-describe('injectTenant — cross-tenant scoping (SECURITY)', () => {
+describe('injectTenant - cross-tenant scoping (SECURITY)', () => {
   it('passes through when no tenant context is active (login/seeding)', () => {
     const args = { where: { storeId: OTHER } };
     expect(injectTenant(args as never)).toBe(args);
@@ -56,7 +56,7 @@ describe('injectTenant — cross-tenant scoping (SECURITY)', () => {
   it('passes through when the caller filters on their OWN store', () => {
     const args = { where: { storeId: TENANT, status: 'OUTSTANDING' } };
     const out = scoped(args);
-    expect(out).toEqual(args); // identical — ANDing would be a no-op
+    expect(out).toEqual(args); // identical - ANDing would be a no-op
   });
 
   it('AND-narrows when the caller requests ANOTHER store (the v2.4.1 leak)', () => {

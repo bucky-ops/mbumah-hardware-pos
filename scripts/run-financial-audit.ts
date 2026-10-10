@@ -16,7 +16,7 @@ import { LogSeverity, LogComponent } from '../src/lib/types';
 
 async function main() {
   console.log('━'.repeat(60));
-  console.log('MBUMAH HARDWARE POS — Financial Audit');
+  console.log('MBUMAH HARDWARE POS - Financial Audit');
   console.log(`Started: ${new Date().toISOString()}`);
   console.log('━'.repeat(60));
 
@@ -82,7 +82,7 @@ async function main() {
   console.log(`Completed:        ${new Date().toISOString()}`);
 
   if (totalCritical > 0) {
-    console.log('\n✖ AUDIT FAILED — CRITICAL issues detected.');
+    console.log('\n✖ AUDIT FAILED - CRITICAL issues detected.');
     await systemLog({
       action: 'NIGHTLY_AUDIT_FAILED',
       component: LogComponent.FINANCIAL,
@@ -93,7 +93,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log('\n✓ AUDIT PASSED — ledger is balanced and consistent.');
+  console.log('\n✓ AUDIT PASSED - ledger is balanced and consistent.');
   process.exit(0);
 }
 

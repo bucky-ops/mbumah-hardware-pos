@@ -135,7 +135,7 @@ export function PaymentPlanCard({ plan, onViewDetails }: PaymentPlanCardProps) {
             <span className="flex items-center gap-1 text-rose-600 dark:text-rose-400">
               <AlertTriangle className="h-3.5 w-3.5" />
               {plan.installmentsOverdue} overdue ·{' '}
-              {upcomingInstallment ? formatDate(upcomingInstallment.dueDate) : '—'}
+              {upcomingInstallment ? formatDate(upcomingInstallment.dueDate) : '-'}
             </span>
           ) : upcomingInstallment ? (
             <span className="flex items-center gap-1">

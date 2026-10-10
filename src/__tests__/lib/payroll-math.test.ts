@@ -1,5 +1,5 @@
 /**
- * Payroll math tests — calculatePayForPeriod (Kenya 2024/2025 statutory rules).
+ * Payroll math tests - calculatePayForPeriod (Kenya 2024/2025 statutory rules).
  *
  * Focus:
  *  1. Full-month calculation matches hand-computed statutory values.
@@ -36,7 +36,7 @@ const FULL_MONTH_INPUT = {
   overtimeHours: 0,
 };
 
-describe('payroll math — calculatePayForPeriod', () => {
+describe('payroll math - calculatePayForPeriod', () => {
   it('computes a full-month payslip that matches hand-calculated statutory values', () => {
     const r = calculatePayForPeriod(FULL_MONTH_INPUT);
 

@@ -88,12 +88,12 @@ export async function GET() {
   if (userCount === null) {
     checks.seed = {
       status: 'warning',
-      detail: 'Seed state unknown — user count query failed',
+      detail: 'Seed state unknown - user count query failed',
     };
   } else if (userCount === 0) {
     checks.seed = {
       status: 'warning',
-      detail: 'Database is EMPTY (0 users) — run the seed (SEED_DATABASE=true / installer) or verify DATABASE_URL points at the intended database',
+      detail: 'Database is EMPTY (0 users) - run the seed (SEED_DATABASE=true / installer) or verify DATABASE_URL points at the intended database',
     };
   } else {
     checks.seed = {
@@ -155,7 +155,7 @@ export async function GET() {
     status: process.env.SENTRY_DSN ? 'ok' : 'warning',
     detail: process.env.SENTRY_DSN
       ? 'Configured'
-      : 'Not configured — errors will not be sent to Sentry',
+      : 'Not configured - errors will not be sent to Sentry',
   };
 
   const totalResponseTime = Date.now() - startTime;

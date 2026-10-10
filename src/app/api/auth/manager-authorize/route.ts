@@ -129,7 +129,7 @@ async function managerAuthorizeHandler(
     action: 'MANAGER_AUTHORIZED',
     component: LogComponent.AUTH,
     severity: LogSeverity.INFO,
-    message: `${result.manager.name} (${result.manager.role}) authorized a step-up action for ${session.email}${reason ? ` — reason: ${reason}` : ''}.`,
+    message: `${result.manager.name} (${result.manager.role}) authorized a step-up action for ${session.email}${reason ? ` - reason: ${reason}` : ''}.`,
     userId: session.userId,
     storeId: session.storeId || undefined,
     metadata: {

@@ -62,10 +62,10 @@ function getAvatarGradient(name: string): string {
   return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
 }
 
-function getLoyaltyTier(points: number): { tier: string; color: string; bg: string; icon: string } {
-  if (points >= 1500) return { tier: 'Gold', color: 'text-yellow-700 dark:text-yellow-400', bg: 'bg-yellow-100 dark:bg-yellow-900/30', icon: '🥇' };
-  if (points >= 500) return { tier: 'Silver', color: 'text-gray-600 dark:text-gray-300', bg: 'bg-gray-100 dark:bg-gray-800/50', icon: '🥈' };
-  return { tier: 'Bronze', color: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30', icon: '🥉' };
+function getLoyaltyTier(points: number): { tier: string; color: string; bg: string } {
+  if (points >= 1500) return { tier: 'Gold', color: 'text-yellow-700 dark:text-yellow-400', bg: 'bg-yellow-100 dark:bg-yellow-900/30' };
+  if (points >= 500) return { tier: 'Silver', color: 'text-gray-600 dark:text-gray-300', bg: 'bg-gray-100 dark:bg-gray-800/50' };
+  return { tier: 'Bronze', color: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30' };
 }
 
 function getDebtStatus(debtBalance: number, debtLimit: number): { color: string; label: string; bgClass: string } {
@@ -297,7 +297,7 @@ function CustomerHistoryDialog({
         .filter((e) => e.type === 'payment')
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
       const text = [
-        'MBUMAH HARDWARE — Account Statement',
+        'MBUMAH HARDWARE - Account Statement',
         `Customer: ${customer.name}`,
         `Outstanding balance: ${formatKES(outstanding)}`,
         ...(lastPayment ? [`Last payment: ${formatKES(lastPayment.amount)} on ${formatDate(lastPayment.date)}`] : []),
@@ -366,7 +366,7 @@ function CustomerHistoryDialog({
                 <h3 className="font-semibold text-lg truncate">{customer.name}</h3>
                 <div className="flex flex-wrap gap-2 mt-1">
                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${loyalty.bg} ${loyalty.color}`}>
-                    {loyalty.icon} {loyalty.tier} Member
+                    {loyalty.tier} Member
                   </span>
                   <DebtStatusBadge customer={customer} />
                 </div>
@@ -379,13 +379,13 @@ function CustomerHistoryDialog({
 
             {/* Summary stats grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              <SummaryStat label="Total Spent" value={summary ? formatKES(summary.totalSpent) : '—'} accent="text-green-600 dark:text-green-400" />
+              <SummaryStat label="Total Spent" value={summary ? formatKES(summary.totalSpent) : '-'} accent="text-green-600 dark:text-green-400" />
               <SummaryStat label="Outstanding Debt" value={summary ? formatKES(summary.outstandingDebt) : formatKES(customer.currentDebtBalance)} accent={customer.currentDebtBalance > 0 ? 'text-red-600' : 'text-green-600'} />
               <SummaryStat label="Loyalty Points" value={`${customer.loyaltyPoints} pts`} />
-              <SummaryStat label="Avg Order Value" value={summary && summary.transactionCount > 0 ? formatKES(summary.avgOrderValue) : '—'} />
-              <SummaryStat label="Last Visit" value={summary?.lastVisit ? formatDate(summary.lastVisit) : '—'} />
+              <SummaryStat label="Avg Order Value" value={summary && summary.transactionCount > 0 ? formatKES(summary.avgOrderValue) : '-'} />
+              <SummaryStat label="Last Visit" value={summary?.lastVisit ? formatDate(summary.lastVisit) : '-'} />
               <SummaryStat label="Customer Since" value={formatDate(customer.createdAt)} />
-              <SummaryStat label="Transactions" value={summary ? String(summary.transactionCount) : '—'} />
+              <SummaryStat label="Transactions" value={summary ? String(summary.transactionCount) : '-'} />
               <SummaryStat label="Credit Limit" value={formatKES(customer.debtLimit)} />
             </div>
           </CardContent>
@@ -636,7 +636,7 @@ export default function CustomersTab() {
       }
       // Revoke late - the print dialog may still be open.
       setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000);
-      toast.success('Account statement ready — Ctrl/Cmd+P to save as PDF.');
+      toast.success('Account statement ready - Ctrl/Cmd+P to save as PDF.');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not generate statement');
     } finally {
@@ -796,7 +796,7 @@ export default function CustomersTab() {
 
   return (
     <div className="space-y-4">
-      {/* Stats Cards — Glass-morphism with gradient icons */}
+      {/* Stats Cards - Glass-morphism with gradient icons */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="glass-card stagger-1 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-default">
           <CardContent className="p-4">
@@ -1193,7 +1193,7 @@ export default function CustomersTab() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm">{customer.phone || '—'}</TableCell>
+                        <TableCell className="text-sm">{customer.phone || '-'}</TableCell>
                         <TableCell className="text-right font-medium">
                           <span className={customer.currentDebtBalance > 0 ? 'text-red-600' : 'text-green-600'}>
                             {formatKES(customer.currentDebtBalance)}
@@ -1204,7 +1204,7 @@ export default function CustomersTab() {
                         </TableCell>
                         <TableCell>
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${loyalty.bg} ${loyalty.color}`}>
-                            <span className="text-[10px]">{loyalty.icon}</span> {loyalty.tier}
+                            {loyalty.tier}
                           </span>
                         </TableCell>
                         <TableCell>
@@ -1311,7 +1311,7 @@ export default function CustomersTab() {
                   <SelectContent>
                     {activeDebts.map((debt) => (
                       <SelectItem key={debt.id} value={debt.id}>
-                        {formatKES(debt.amountOwed - debt.amountPaid)} owed — Due {formatDate(debt.dueDate)}
+                        {formatKES(debt.amountOwed - debt.amountPaid)} owed - Due {formatDate(debt.dueDate)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1380,7 +1380,7 @@ export default function CustomersTab() {
                 </div>
                 {paymentAmountNum > currentDebtBalance && (
                   <p className="text-xs text-yellow-600 flex items-center gap-1">
-                    <AlertTriangle className="h-3 w-3" /> Amount exceeds balance — will be capped at {formatKES(currentDebtBalance)}
+                    <AlertTriangle className="h-3 w-3" /> Amount exceeds balance - will be capped at {formatKES(currentDebtBalance)}
                   </p>
                 )}
               </div>
@@ -1441,7 +1441,7 @@ export default function CustomersTab() {
                     <h3 className="font-semibold text-lg">{selectedCustomer.name}</h3>
                     <div className="flex items-center flex-wrap gap-2 mt-1">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${loyalty.bg} ${loyalty.color}`}>
-                        {loyalty.icon} {loyalty.tier} Member
+                        {loyalty.tier} Member
                       </span>
                       <DebtStatusBadge customer={selectedCustomer} />
                     </div>
@@ -1505,7 +1505,7 @@ export default function CustomersTab() {
                   </div>
                 </div>
 
-                {/* Loyalty Card — Phase 3 loyalty points system */}
+                {/* Loyalty Card - Phase 3 loyalty points system */}
                 <LoyaltyCard
                   customerId={selectedCustomer.id}
                   onRedeemed={() => {

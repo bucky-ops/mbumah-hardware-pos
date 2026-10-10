@@ -194,7 +194,7 @@ export function onStockMovement(callback: (data: RealtimeNotification) => void):
  */
 export function emitNotification(storeId: string, data: Omit<RealtimeNotification, 'id' | 'timestamp'>): void {
   if (!socket?.connected) {
-    console.warn('[SocketClient] Cannot emit notification — not connected')
+    console.warn('[SocketClient] Cannot emit notification - not connected')
     return
   }
   socket.emit('notification', {
