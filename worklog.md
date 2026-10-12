@@ -868,3 +868,30 @@ Stage Summary:
 - 14-PHASE REPO ORGANIZATION IS COMPLETE (PR #101 phase 1 + PR #103 phase 2), merged to main @ 3cc38ba, production healthy.
 - Repo final shape: root = product/deploy/docs/governance only; docs/ = topic docs + runbooks/ + archive/ + assets/; deploy/windows installers; bun.lock sole lockfile; governance files (CONTRIBUTING/SECURITY/CODE_OF_CONDUCT/CHANGELOG/SUPPORT) + .github templates present.
 - Deferred / human-review items remaining: (1) Sentry not configured on prod (health check warning - owner decision); (2) Neon credential rotation = owner action (workflow ready, SECURITY.md advisory stands); (3) delete-duplicate-vercel-project.yml can be removed once duplicate project confirmed gone; (4) /api/healthy vs /api/health auth split may confuse self-hosters (documented in docs/deployment.md? unverified); (5) mini-services/notification-service still unwired in deploy configs (works via manual bun run; wire into docker-compose/nginx when realtime notifications go live); (6) 16 pre-existing DB-dependent test failures need a migrated CI database to turn green.
+---
+Task ID: 34
+Agent: Z.ai Code (main)
+Task: "based on the audit implement corrections as suggested also ensure for offline its also updated then proceed to a new release" - implement audit corrections, update the offline story, cut v2.15.0, then hotfix v2.15.1.
+
+Work Log:
+- Audit corrections implemented (PR #104, branch feat/v2.15.0-release, 5 commits):
+  - TESTS SELF-SUFFICIENT: scripts/prepare-test-db.mjs wired as pretest (mirrors CI's SQLite prepare: mkdir prisma/prisma, db push --skip-generate, seed against the forced dev.db URL, then restores the committed postgresql schema text so the tree stays clean). Local suite went 411/16-failed -> 447/447 PASSED.
+  - OFFLINE TOAST DEDUPE: pos-tab no longer toasts success for automatic background syncs (OfflineIndicator owns the single "Offline sales synced" transition toast app-wide); POS keeps per-sync FAILURE detail only. Manual sync + offline/online announcements unchanged.
+  - REALTIME WIRED SELF-HOSTED: mini-services/notification-service/Dockerfile (bun 1-slim, frozen lockfile), internal-only `notification` service in docker-compose.prod.yml (healthcheck /health, nginx depends_on healthy), nginx location /socket.io/ -> notification:3003 with websocket upgrade + 24h timeouts. FIXED LATENT BUG: nginx proxy_pass http://nextjs_app had no matching compose alias since the container rename -> app service now carries the nextjs_app network alias (prod compose would fail nginx startup before).
+  - DOCS: docs/deployment.md health endpoints (/api/health public vs /api/healthy authenticated) + realtime wiring notes; new docs/offline-mode.md indexed in docs/README.md.
+  - RELEASE: package.json 2.15.0, CHANGELOG [2.15.0] + missing [2.14.0] section, whats-new 2.15.0 entry.
+- GATES v2.15.0: lint 0/392 (baseline), typecheck 468 (baseline), vitest 447/447, prisma schema valid, compose YAML validated, notification service e2e (health JSON ok, Engine.IO polling handshake 200 with XTransformPort query, websocket connect + join-store -> room-joined ok).
+- PR #104 -> CI green -> squash 5883601 -> prod /api/health 2.15.0 healthy -> Release v2.15.0 auto-published.
+- RELEASE-PROCESS STEP 3 BROWSER E2E (agent-browser against local dev on seeded prisma/prisma/dev.db, admin@mbumahhardware.co.ke / password123): whats-new dialog shows 2.15.0 entry + "You're on version 2.15.0"; footer badge 2.15.0; offline indicator green -> amber("Offline. Open the offline queue.") when offline.
+- CRITICAL DISCOVERY: OFFLINE SALES NEVER QUEUED. TanStack Query default mutations networkMode 'online' PAUSES every mutation while navigator.onLine=false -> checkoutMutation.mutationFn never ran ([HANDLE-CHECKOUT] logged, [MUTATION-FN] never), saveOfflineTransaction unreachable, silent no-op at the till. The queue engine/replay/indicator shipped in v2.14.0/v2.15.0 were correct but UI-gated dead. FIX: QueryClient defaultOptions mutations.networkMode 'always' (providers.tsx) - checkout's own navigator.onLine check routes to the queue; other mutations surface network errors via onError.
+- LIVE VERIFICATION AFTER FIX (full loop, twice): offline sale -> toast "Offline Mode: Sale saved locally..." + amber badge + synthetic receipt; reconnect -> auto-sync -> real server receipt (MBM-20261012-94892 130.00, second 140.00, both CASH Completed) -> green dot; toasts on reconnect = exactly ["Offline sales synced","Back online - syncing queued sales..."] - NO duplicate success toast (dedupe verified live).
+- v2.15.1 SHIPPED (PR #105, squash 6a7fca7): providers fix + CHANGELOG [2.15.1] + whats-new 2.15.1. Prod /api/health 2.15.1 healthy; Release v2.15.1 auto-published.
+- INFRA NOTES: GitHub PR webhooks dropped AGAIN (documented in ci-cd.yml) - close/reopen didn't fire CI, force-push did; workflow_dispatch ran but Build job is base_ref-gated so it skips in dispatch runs; transients hit: SQLite socket timeout flake in CI Test (documented, rerun-failed-jobs per release-process.md), Setup Bun 504 (rerun cleared). Merge conflicts when PR head shares squash-history with main -> rebuild branch as origin/main + cherry-pick of the delta, force-push PR head.
+- Channel lesson: agent-browser snapshot refs go stale fast in dialogs - re-snapshot before every click; `find text X click` races fresh dialogs (wait 2-3s first).
+
+Stage Summary:
+- v2.15.1 IS PRODUCTION: healthy, both releases (v2.15.0 + v2.15.1) auto-published with pages; prod verified after each merge.
+- Offline story now ACTUALLY works end-to-end (was silently inert since v2.14.0) and is single-toast, documented (docs/offline-mode.md) and tested.
+- Audit corrections all landed EXCEPT: Neon rotation (owner), delete-duplicate workflow removal (needs Vercel confirmation), Sentry decision (owner).
+- Next candidates: laptop compose (no nginx) realtime wiring if laptop mode needs notifications; remove whats-new churn risk by gating dialog to entries <= seen version (already handled by dialog); monitor CI flake rate.
+- Baselines for next session: lint 0/392, typecheck 468, vitest 447/447 (local green via pretest), main @ 6a7fca7.
