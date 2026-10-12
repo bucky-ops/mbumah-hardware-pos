@@ -1,9 +1,9 @@
 # Applying Financial Integrity Constraints to Production (Neon)
 
-**Audit reference:** `FINANCIAL_MODULE_AUDIT_REPORT.md` — hard DB guarantees for
+**Audit reference:** `docs/archive/FINANCIAL_MODULE_AUDIT_REPORT.md` — hard DB guarantees for
 stock non-negativity, single-sided journal lines, and per-entry debit = credit.
 
-**DDL source of truth:** [`prisma/sql/financial_constraints.sql`](../sql/financial_constraints.sql)
+**DDL source of truth:** [`prisma/sql/financial_constraints.sql`](../../prisma/sql/financial_constraints.sql)
 (the same statements are appended to
 `prisma/migrations/20260904120000_financial_baseline/migration.sql` so fresh
 databases get them automatically via `prisma migrate deploy`).

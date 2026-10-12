@@ -32,7 +32,7 @@ Every actor field is now derived from the authenticated session, never the reque
 |---|---|
 | `scripts/set-vercel-env.sh` — the file containing the **live Neon password at HEAD** — deleted | `git rm scripts/set-vercel-env.sh` |
 | KRA portal password: real AES-256-GCM envelope (`v1:iv:tag:data`), key from `CREDENTIAL_ENCRYPTION_KEY` (scrypt fallback from `NEXTAUTH_SECRET`); legacy base64 rows decoded transparently and re-encrypted on next save | `src/lib/crypto-helpers.ts` (new), `src/app/api/kra/profile/route.ts`, `src/lib/kra-helpers.ts` |
-| Git-history purge + password rotation: ⛔ **blocked** — requires force-push to protected `main` and the owning-account Vercel token (issue #9); runbook documented, rotation workflow exists and is ready | `scripts/apply-prod-constraints.md` + issue #9 |
+| Git-history purge + password rotation: ⛔ **blocked** — requires force-push to protected `main` and the owning-account Vercel token (issue #9); runbook documented, rotation workflow exists and is ready | `docs/runbooks/apply-prod-constraints.md` + issue #9 |
 
 ### F6-1 — Forgeable M-Pesa callback (P0) · ✅ Implemented
 `src/app/api/payments/mpesa/callback/route.ts`:
@@ -76,7 +76,7 @@ Every read-then-write race replaced with an atomic conditional update (`updateMa
 | R7 GRN receivedQty race | `purchase-orders/[id]/route.ts` — optimistic CAS on the pre-read token + in-tx re-read retry |
 | R8 rental double-return | `rentals/[id]/return/route.ts` — conditional status claim inside the tx |
 
-**DB backstop (applied to production Neon):** CHECK constraints `NOT VALID` on `products/warehouse_stocks/inventories/batches` (non-negative) and `journal_entry_lines` (single-side, non-negative) + deferred per-entry balance trigger `trg_je_entry_balanced` (`prisma/sql/financial_constraints.sql`, appended to the new migration baseline; runbook in `scripts/apply-prod-constraints.md`).
+**DB backstop (applied to production Neon):** CHECK constraints `NOT VALID` on `products/warehouse_stocks/inventories/batches` (non-negative) and `journal_entry_lines` (single-side, non-negative) + deferred per-entry balance trigger `trg_je_entry_balanced` (`prisma/sql/financial_constraints.sql`, appended to the new migration baseline; runbook in `docs/runbooks/apply-prod-constraints.md`).
 
 ### F1-1 — Buy side never posted to the GL (P0) · ✅ Implemented
 `recordGoodsReceiptEntry()` in `src/lib/account-helper.ts`: Dr Inventory (net) + Dr VAT Payable (recoverable input VAT) / Cr Accounts Payable (gross) — posted inside the **same** receive transaction, with a debits==credits assertion. Zero-value receipts skip posting. Production's Inventory GL will now stop drifting negative.
