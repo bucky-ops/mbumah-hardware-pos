@@ -78,6 +78,19 @@ export function Providers({ children }: { children: ReactNode }) {
             refetchInterval: 60 * 1000,
             refetchIntervalInBackground: false,
           },
+          mutations: {
+            // CRITICAL for the offline queue (v2.15.0): TanStack's default
+            // networkMode for mutations is 'online', which PAUSES every
+            // mutation while navigator.onLine is false - the checkout
+            // mutationFn never ran, saveOfflineTransaction() was never
+            // reached and the "sell while offline" flow silently did
+            // nothing (observed live: [HANDLE-CHECKOUT] logged, mutationFn
+            // never did). 'always' lets mutations execute offline; the
+            // checkout mutationFn's own navigator.onLine check routes the
+            // sale into the IndexedDB queue, and non-offline mutations
+            // surface their network error via their normal onError paths.
+            networkMode: 'always',
+          },
         },
       })
   );

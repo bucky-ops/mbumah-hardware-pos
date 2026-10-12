@@ -22,6 +22,14 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.15.1',
+    title: 'Offline selling now truly works at the till',
+    bullets: [
+      'Fixed: completing a sale while offline now saves it on the spot (amber queue badge + instant paper receipt) - previously the tap could silently do nothing until the internet returned.',
+      'Back online, the queued sale syncs itself and shows one clean confirmation; the sale lands in Transactions with its real receipt number.',
+    ],
+  },
+  {
     version: '2.15.0',
     title: 'Offline sales polish + realtime alerts for self-hosted branches',
     bullets: [
