@@ -1,6 +1,6 @@
-# Mbumah POS v2.0.0 — Development Plan
+# Mbumah POS v2.0.0 - Development Plan
 
-> **Status:** Planning / Phase 1–2 complete.
+> **Status:** Planning / Phase 1-2 complete.
 > **Base branch:** `v2.0.0-dev` (branched from `main`).
 > **Target release:** v2.0.0 → `main` (Vercel production).
 
@@ -13,7 +13,7 @@ hardware retail ERP. It builds on the stable v1.x foundation (51 Prisma
 models, 102 API routes, 22 UI tabs) by adding **KRA eTIMS compliance**,
 **enhanced debt management with automated reminders**, a richer **messaging
 module**, **responsive UI with a resizable sidebar**, **colored email
-receipts**, and **MPESA B2B enhancements** — while hardening every existing
+receipts**, and **MPESA B2B enhancements** - while hardening every existing
 module to production-grade quality.
 
 ### Development Workflow
@@ -26,7 +26,7 @@ only the final stable cut merges to `main`.
 
 ## 2. Feature Overview
 
-### ✅ Existing Features (Verified on `main`)
+### Existing Features (Verified on `main`)
 
 | # | Module                     | Status | Notes                                                     |
 |---|----------------------------|--------|-----------------------------------------------------------|
@@ -51,7 +51,7 @@ only the final stable cut merges to `main`.
 | 19| Security Audit Log         | ✅     | `security-tab.tsx`, system logs                           |
 | 20| Admin & User Management    | ✅     | User CRUD, store assignment, role management              |
 
-### 🔴 Planned for v2.0.0
+### Planned for v2.0.0
 
 | #  | Feature                              | Priority | PR Target         |
 |----|--------------------------------------|----------|-------------------|
@@ -66,115 +66,115 @@ only the final stable cut merges to `main`.
 
 ---
 
-## 3. Phase 2 — Current State Audit Checklist
+## 3. Phase 2 - Current State Audit Checklist
 
 > Verified against `main` branch (commit `1b58d35`) and `v2.0.0-dev`.
 
 ### Infrastructure
 
-- [x] **Next.js 16** App Router — confirmed (`next-server v16.1.3`)
-- [x] **TypeScript 5** strict mode — confirmed
-- [x] **Prisma ORM** — 51 models, SQLite (dev) / Neon Postgres (prod)
+- [x] **Next.js 16** App Router - confirmed (`next-server v16.1.3`)
+- [x] **TypeScript 5** strict mode - confirmed
+- [x] **Prisma ORM** - 51 models, SQLite (dev) / Neon Postgres (prod)
 - [x] **102 API routes** under `src/app/api/`
 - [x] **22 UI tabs** under `src/app/tabs/`
-- [x] **Global auth middleware** — `src/middleware.ts` enforces Bearer token
-- [x] **JWT auth** — token in `localStorage.mbt_token`, CSRF cookie
-- [x] **Vercel deployment** — auto-deploys on push to `main`
-- [x] **Analytics** — `@vercel/analytics` + SpeedInsights installed
+- [x] **Global auth middleware** - `src/middleware.ts` enforces Bearer token
+- [x] **JWT auth** - token in `localStorage.mbt_token`, CSRF cookie
+- [x] **Vercel deployment** - auto-deploys on push to `main`
+- [x] **Analytics** - `@vercel/analytics` + SpeedInsights installed
 
 ### Module Verification
 
-- [x] **Multi-Branch POS** — ✅ Verified. 5 stores seeded
+- [x] **Multi-Branch POS** - ✅ Verified. 5 stores seeded
       (`store_juja_main`, `store_thika_rd`, etc.); all queries store-scoped;
       store switcher in TopBar; `requireStoreAccess` on API.
-- [x] **RBAC** — ✅ Verified. 5 roles (SUPER_ADMIN / STORE_OWNER /
+- [x] **RBAC** - ✅ Verified. 5 roles (SUPER_ADMIN / STORE_OWNER /
       BRANCH_MANAGER / CASHIER / ACCOUNTANT). `requireAuth({roles})` on API;
       `filterTabsByRole()` on UI; CASHIER sees only 5 tabs, SUPER_ADMIN all.
-- [x] **Product & Inventory** — ✅ Verified. `Product` model with
+- [x] **Product & Inventory** - ✅ Verified. `Product` model with
       `quantityInStock`, `reorderLevel`, `isRental`, `imageUrl`. Low-stock
       banner, stock-status filters, stock movements, photo upload component.
-- [x] **Sales & POS** — ✅ Verified. `SalesTransaction` with items,
+- [x] **Sales & POS** - ✅ Verified. `SalesTransaction` with items,
       MPESA STK Push, split payments (CASH/MPESA/DEBT), thermal + on-screen
       receipts with logo + dynamic store info.
-- [x] **Customer CRM** — ✅ Verified. `Customer` with loyalty points,
+- [x] **Customer CRM** - ✅ Verified. `Customer` with loyalty points,
       `CustomerCredit`, debt aging (0/30/60/90+ buckets), account history
       dialog, WhatsApp statement send (bug fixed this round: `customerId`
       field added).
-- [x] **Equipment Rentals** — ✅ Verified. `EquipmentRental` with
+- [x] **Equipment Rentals** - ✅ Verified. `EquipmentRental` with
       ratePerDay/Week/Month, security deposits, late fees, overdue auto-sync
       (made non-blocking this round to prevent 500s).
-- [x] **Gift Cards** — ✅ Verified. Full CRUD, redemption, balance adjust,
+- [x] **Gift Cards** - ✅ Verified. Full CRUD, redemption, balance adjust,
       hard-delete (SUPER_ADMIN), visibility toggle.
-- [x] **Financial Management** — ✅ Verified. Double-entry via
+- [x] **Financial Management** - ✅ Verified. Double-entry via
       `JournalEntry` + `JournalEntryLine` + `Account` (chart of accounts).
       Revenue trend with expenses + gross profit + margin.
-- [x] **Shift Management** — ✅ Verified. `Shift` model, start/end,
+- [x] **Shift Management** - ✅ Verified. `Shift` model, start/end,
       cash drawer logs (`CashDrawerLog`), reconciliation.
-- [x] **Supplier Management** — ✅ Verified. `Supplier` + `PurchaseOrder`
+- [x] **Supplier Management** - ✅ Verified. `Supplier` + `PurchaseOrder`
       + goods-received notes.
-- [x] **Expense Tracking** — ✅ Verified. `Expense` model with 7 categories
+- [x] **Expense Tracking** - ✅ Verified. `Expense` model with 7 categories
       (RENT, SALARIES, UTILITIES, TRANSPORT, MAINTENANCE, SUPPLIES, OTHER),
       void + journal posting.
-- [x] **Reports & Analytics** — ✅ Verified. `reports-tab.tsx` (2694 lines),
+- [x] **Reports & Analytics** - ✅ Verified. `reports-tab.tsx` (2694 lines),
       CSV + branded PDF export, 7-day sales forecast (linear regression with
-      confidence bands — implemented this round).
-- [x] **Payroll & HR** — ✅ Verified. 8 models (Employee, LeaveType, Leave,
+      confidence bands - implemented this round).
+- [x] **Payroll & HR** - ✅ Verified. 8 models (Employee, LeaveType, Leave,
       PayrollPeriod, PayrollRun, PayrollDetail, Attendance). Kenya statutory
       calc in `payroll-helpers.ts` (PAYE/NSSF/SHIF/Housing Levy). 5 seeded
       employees.
-- [x] **Messaging** — ✅ Verified (exists). `Message` model +
+- [x] **Messaging** - ✅ Verified (exists). `Message` model +
       `messaging-tab.tsx` (2351 lines). WhatsApp deep-links, SMS, email.
       **Enhancement planned for v2.0.0** (see §4.C).
-- [x] **Vouchers & Promotions** — ✅ Verified. `Voucher` model,
+- [x] **Vouchers & Promotions** - ✅ Verified. `Voucher` model,
       campaign types, redemption tracking.
-- [x] **Delivery Notes** — ✅ Verified. `DeliveryNote` model + tab.
-- [x] **Customer Credits** — ✅ Verified. `CustomerCredit` model,
+- [x] **Delivery Notes** - ✅ Verified. `DeliveryNote` model + tab.
+- [x] **Customer Credits** - ✅ Verified. `CustomerCredit` model,
       refund/store-credit/gift reasons.
-- [x] **Banking** — ✅ Verified. Bank accounts, reconciliations
+- [x] **Banking** - ✅ Verified. Bank accounts, reconciliations
       (`banking-tab.tsx` 1374 lines).
-- [x] **Security Audit** — ✅ Verified. `security-tab.tsx` (785 lines),
+- [x] **Security Audit** - ✅ Verified. `security-tab.tsx` (785 lines),
       system logs, login history.
-- [x] **Admin** — ✅ Verified. `admin-tab.tsx` (1907 lines), user CRUD,
+- [x] **Admin** - ✅ Verified. `admin-tab.tsx` (1907 lines), user CRUD,
       store assignment, role management, health checks.
 
 ### Bugs Fixed This Round (v2.0.0-dev)
 
-- [x] **401 on `/api/trends/analysis`** — `fetchDashboardTrends` used raw
+- [x] **401 on `/api/trends/analysis`** - `fetchDashboardTrends` used raw
       `fetch()` without `Authorization` header. Fixed with `authedFetch`
       helper in `dashboard-tab.tsx`.
-- [x] **401 on `/api/products?limit=1`** — admin-tab health-check pings used
+- [x] **401 on `/api/products?limit=1`** - admin-tab health-check pings used
       raw `fetch()` without auth. Fixed with `authedFetch` in `admin-tab.tsx`.
-- [x] **401 on `/api/expenses` & `/api/cash-drawer`** — same root cause in
+- [x] **401 on `/api/expenses` & `/api/cash-drawer`** - same root cause in
       `dashboard-tab.tsx`. Fixed by applying `authedFetch` to all raw fetches.
-- [x] **500 on `/api/rentals`** — overdue-status write inside read handler
+- [x] **500 on `/api/rentals`** - overdue-status write inside read handler
       could throw on concurrent update. Made non-blocking (best-effort
       background sync with `.catch()`).
-- [x] **"Mark all read" no-op stub** — bell dropdown button did nothing.
+- [x] **"Mark all read" no-op stub** - bell dropdown button did nothing.
       Wired to fetch + persist all IDs to localStorage + invalidate query.
-- [x] **WhatsApp statement always 400** — `sendDocument` call sent
+- [x] **WhatsApp statement always 400** - `sendDocument` call sent
       `documentId` but API required `customerId`. Added `customerId` field.
-- [x] **Dashboard forecast always empty** — `/api/trends/analysis` never
+- [x] **Dashboard forecast always empty** - `/api/trends/analysis` never
       returned a `forecast` array. Implemented 7-day linear regression with
       confidence bands (lights up dashboard + reports widgets).
 
 ### Not Yet Implemented (v2.0.0 targets)
 
-- [ ] **eTIMS / TIMS** — ❌ No `KraSubmission`, `InvoiceForKRA`, or
+- [ ] **eTIMS / TIMS** - ❌ No `KraSubmission`, `InvoiceForKRA`, or
       `KraBusinessProfile` models. No KRA API integration. **Planned: §4.A.**
-- [ ] **Automated debt reminders** — ❌ No `PaymentReminder` model or
+- [ ] **Automated debt reminders** - ❌ No `PaymentReminder` model or
       scheduler. Reminders are manual (WhatsApp statement button only).
       **Planned: §4.B.**
-- [ ] **Real-time notifications** — ❌ 60-second polling; no WebSocket push.
+- [ ] **Real-time notifications** - ❌ 60-second polling; no WebSocket push.
       Read state is localStorage-only (per-browser). **Planned: §4.H.**
-- [ ] **Server-side notification read state** — ❌ No `Notification` Prisma
+- [ ] **Server-side notification read state** - ❌ No `Notification` Prisma
       model; `isRead` hardcoded `false` in the computed API. **Planned: §4.H.**
-- [ ] **Resizable sidebar** — ❌ Fixed width; no drag-to-resize.
+- [ ] **Resizable sidebar** - ❌ Fixed width; no drag-to-resize.
       **Planned: §4.D.**
-- [ ] **Email receipt delivery** — ❌ Receipts print only; no email send.
+- [ ] **Email receipt delivery** - ❌ Receipts print only; no email send.
       **Planned: §4.E.**
-- [ ] **MPESA B2B payouts** — ❌ Only STK Push (C2B) implemented.
+- [ ] **MPESA B2B payouts** - ❌ Only STK Push (C2B) implemented.
       **Planned: §4.F.**
-- [ ] **Catalog pagination** — ❌ Products fetched in one query (fine for
+- [ ] **Catalog pagination** - ❌ Products fetched in one query (fine for
       current catalog size; needed for scale). **Planned: §4.G.**
 
 ---
@@ -188,30 +188,30 @@ Management System. Every sales invoice must be submitted to KRA in real time
 and a CU (Communication Unit) / QR code returned.
 
 **Database (`prisma/schema.prisma`):**
-- `KraBusinessProfile` — org-level: KRA PIN, tax type, ID/secret, CU PIN,
+- `KraBusinessProfile` - org-level: KRA PIN, tax type, ID/secret, CU PIN,
   sandbox vs production flag.
-- `InvoiceForKRA` — links to `SalesTransaction`; fields: `invoiceNumber`
+- `InvoiceForKRA` - links to `SalesTransaction`; fields: `invoiceNumber`
   (KRA format `UUI`), `cuPin`, `qrCode`, `submissionStatus` (PENDING /
   SUBMITTED / ACCEPTED / REJECTED), `kraResponse` (JSON), `submittedAt`,
   `retryCount`.
-- `KraSubmission` — audit log of every API call (request, response, latency,
+- `KraSubmission` - audit log of every API call (request, response, latency,
   status).
 
 **Backend (`src/lib/kra-helpers.ts`):**
-- `submitInvoiceToKra(transaction)` — maps `SalesTransaction` + items to the
+- `submitInvoiceToKra(transaction)` - maps `SalesTransaction` + items to the
   eTIMS invoice JSON (item codes, HS codes, VAT 16%, totals, discounts),
   signs the request, calls the KRA endpoint.
-- `getSubmissionStatus(cuPin)` — polls KRA for acceptance/rejection.
-- `refreshBusinessProfile()` — fetches/refreshes the OAuth token.
+- `getSubmissionStatus(cuPin)` - polls KRA for acceptance/rejection.
+- `refreshBusinessProfile()` - fetches/refreshes the OAuth token.
 - Robust error handling: network timeouts, KRA 5xx retries (exponential
   backoff, max 3), validation-error surfacing.
 
 **API (`src/app/api/kra/`):**
-- `POST /api/kra/submission` — submit an invoice (called after sale completes
+- `POST /api/kra/submission` - submit an invoice (called after sale completes
   or via a batch backfill job).
-- `GET /api/kra/submission/[id]` — query submission status.
-- `GET /api/kra/business-profile` — read KRA config (admin only).
-- `POST /api/kra/business-profile` — upsert KRA credentials (SUPER_ADMIN only).
+- `GET /api/kra/submission/[id]` - query submission status.
+- `GET /api/kra/business-profile` - read KRA config (admin only).
+- `POST /api/kra/business-profile` - upsert KRA credentials (SUPER_ADMIN only).
 
 **UI:**
 - New "KRA / eTIMS" sub-section in the Admin tab (or a dedicated tab for
@@ -229,26 +229,26 @@ for testing, partial refunds (credit notes must also be submitted).
 **Goal:** Reduce outstanding debt through automated, multi-channel reminders
 with aging-based escalation.
 
-**Backend (`src/lib/debt-helpers.ts` — extend):**
-- `calculateAging(debt)` — returns bucket: `CURRENT` (0–30d), `30_DAYS`
-  (31–60d), `60_DAYS` (61–90d), `90_PLUS` (90d+).
-- `getOverdueCustomers(storeId, { minDays })` — returns customers with debts
+**Backend (`src/lib/debt-helpers.ts` - extend):**
+- `calculateAging(debt)` - returns bucket: `CURRENT` (0-30d), `30_DAYS`
+  (31-60d), `60_DAYS` (61-90d), `90_PLUS` (90d+).
+- `getOverdueCustomers(storeId, { minDays })` - returns customers with debts
   past due, grouped by aging bucket.
-- `shouldSendReminder(debt, lastReminderAt)` — escalation rules:
-  - 0–30d: no auto-reminder (grace period).
-  - 31–60d: weekly reminder (SMS + WhatsApp).
-  - 61–90d: every 3 days (SMS + WhatsApp + email).
+- `shouldSendReminder(debt, lastReminderAt)` - escalation rules:
+  - 0-30d: no auto-reminder (grace period).
+  - 31-60d: weekly reminder (SMS + WhatsApp).
+  - 61-90d: every 3 days (SMS + WhatsApp + email).
   - 90d+: daily (all channels + manager alert).
 
 **Database:**
-- `PaymentReminder` model — `customerId`, `debtId`, `channel` (SMS/WhatsApp/
+- `PaymentReminder` model - `customerId`, `debtId`, `channel` (SMS/WhatsApp/
   EMAIL), `sentAt`, `message`, `status` (SENT/FAILED/DELIVERED), `response`.
 
 **API (`src/app/api/reminders/`):**
-- `POST /api/reminders/debt` — trigger a reminder run (called by scheduler or
+- `POST /api/reminders/debt` - trigger a reminder run (called by scheduler or
   admin button). Fetches overdue customers, sends reminders via the messaging
   module, logs to `PaymentReminder`.
-- `GET /api/reminders/history?customerId=…` — reminder history per customer.
+- `GET /api/reminders/history?customerId=…` - reminder history per customer.
 
 **Scheduler:** a cron job (Vercel Cron or the existing `webDevReview` cron)
 runs the reminder logic daily at 09:00 Africa/Nairobi.
@@ -266,23 +266,23 @@ alerts into one coherent module with real-time delivery.
 **Scope decision:** **Both** internal staff chat AND customer notifications.
 
 **Database (`prisma/schema.prisma`):**
-- `Conversation` — group or 1:1; `type` (STAFF / CUSTOMER / SYSTEM);
+- `Conversation` - group or 1:1; `type` (STAFF / CUSTOMER / SYSTEM);
   participants (JSON or relation table).
-- `Message` — already exists; extend with `conversationId`, `deliveryStatus`
+- `Message` - already exists; extend with `conversationId`, `deliveryStatus`
   (SENT / DELIVERED / READ), `readBy` (JSON array of user IDs).
-- `UserNotificationPreference` — per-user: which channels (in-app / SMS /
+- `UserNotificationPreference` - per-user: which channels (in-app / SMS /
   email) for which alert types (low-stock, overdue rental, large debt, new
   sale, shift start).
 
 **API:**
-- `GET/POST /api/messages` — fetch conversation / send message.
-- `POST /api/messages/[id]/read` — mark as read.
-- `GET/PUT /api/notifications/preferences` — user notification prefs.
+- `GET/POST /api/messages` - fetch conversation / send message.
+- `POST /api/messages/[id]/read` - mark as read.
+- `GET/PUT /api/notifications/preferences` - user notification prefs.
 
 **Real-time:** WebSocket mini-service (port 3003) per the project's
 socket.io convention; frontend connects via `io("/?XTransformPort=3003")`.
 
-**UI (`src/app/tabs/messaging-tab.tsx` — enhance):**
+**UI (`src/app/tabs/messaging-tab.tsx` - enhance):**
 - Conversation list (left) + thread view (right) layout.
 - Internal staff chat with typing indicators + presence.
 - Customer notification log (SMS/WhatsApp/email sent history).
@@ -299,17 +299,17 @@ socket.io convention; frontend connects via `io("/?XTransformPort=3003")`.
 | Breakpoint | Default width | Behavior                          |
 |------------|---------------|-----------------------------------|
 | < 768px    | 0 (hidden)    | Slide-over drawer with overlay    |
-| 768–1024px | 64px          | Collapsed (icons only)            |
-| 1024–1280px| 240px         | Expanded, draggable to 200–320px  |
-| > 1280px   | 280px         | Expanded, draggable to 240–360px  |
+| 768-1024px | 64px          | Collapsed (icons only)            |
+| 1024-1280px| 240px         | Expanded, draggable to 200-320px  |
+| > 1280px   | 280px         | Expanded, draggable to 240-360px  |
 
 **Implementation:**
-- `src/components/layout/sidebar.tsx` — drag-to-resize via a `mousedown` /
+- `src/components/layout/sidebar.tsx` - drag-to-resize via a `mousedown` /
   `mousemove` / `mouseup` listener on a 4px drag handle. Width persisted to
   Zustand (`sidebarWidth`) + localStorage.
-- `src/app/globals.css` — CSS variables `--sidebar-width` consumed by the
+- `src/app/globals.css` - CSS variables `--sidebar-width` consumed by the
   main content `margin-left` / `pl-[var(--sidebar-width)]`.
-- `src/app/layout.tsx` — sidebar open/collapsed state in Zustand.
+- `src/app/layout.tsx` - sidebar open/collapsed state in Zustand.
 - Mobile: `Sheet` (shadcn) for the slide-over drawer; hamburger button in
   TopBar.
 
@@ -334,11 +334,11 @@ email automatically after each sale (opt-in per customer).
 - **Color scheme:** green header bar, amber MPESA badge, red debt badge.
 
 **Email delivery:**
-- `src/lib/email-helpers.ts` — `sendReceiptEmail(transaction, customer)`
+- `src/lib/email-helpers.ts` - `sendReceiptEmail(transaction, customer)`
   using Resend (preferred) or SMTP fallback.
 - HTML email template (responsive, inline CSS) embedding the receipt.
 - PDF attachment generated via the existing `export-pdf` route logic.
-- `POST /api/notifications/email` — triggered after a successful sale if
+- `POST /api/notifications/email` - triggered after a successful sale if
   customer has email + opted in.
 
 **UI:** "Email receipt" checkbox in the POS checkout dialog; customer opt-in
@@ -350,13 +350,13 @@ field in the Customers tab.
 
 **Goal:** Add B2B payouts and robust reconciliation.
 
-**B2B payouts (`src/lib/mpesa-helpers.ts` — extend):**
-- `sendB2BPayout({ amount, phone, occasion })` — Daraja B2C API for paying
+**B2B payouts (`src/lib/mpesa-helpers.ts` - extend):**
+- `sendB2BPayout({ amount, phone, occasion })` - Daraja B2C API for paying
   suppliers / refunding customers directly to M-Pesa.
 - Status polling via the B2C result URL callback.
 
 **Reconciliation:**
-- `POST /api/mpesa/reconcile` — matches M-Pesa callback records to
+- `POST /api/mpesa/reconcile` - matches M-Pesa callback records to
   `SalesTransaction` records; flags mismatches.
 - Reconciliation dashboard in the Financial tab showing matched / unmatched /
   disputed transactions.
@@ -389,14 +389,14 @@ double-processing), retry queue for failed callbacks.
 all connected clients instantly instead of 60-second polling.
 
 **Backend (mini-service, port 3003):**
-- `mini-services/notify-service/index.ts` — socket.io server.
+- `mini-services/notify-service/index.ts` - socket.io server.
 - Emits `notification:new` on: product stock hitting 0, rental going overdue,
   debt exceeding KES 50,000, new large sale.
 - REST endpoint `POST /notify` (internal) for the Next.js API to trigger
   pushes.
 
 **Frontend:**
-- `src/lib/realtime.ts` — socket.io client connecting via
+- `src/lib/realtime.ts` - socket.io client connecting via
   `io("/?XTransformPort=3003")`.
 - `useRealtimeNotifications()` hook replacing the 60s polling.
 - Toast popups on new critical alerts.
@@ -438,7 +438,7 @@ the issue body. Sub-tasks become checkboxes.
 
 ## 7. Definition of Done (v2.0.0)
 
-- [ ] All features A–H implemented, reviewed, and merged to `v2.0.0-dev`
+- [ ] All features A-H implemented, reviewed, and merged to `v2.0.0-dev`
 - [ ] `bun run lint` passes clean on `v2.0.0-dev`
 - [ ] agent-browser E2E passes for every tab on `v2.0.0-dev`
 - [ ] No 401/500 errors in browser console or `dev.log`

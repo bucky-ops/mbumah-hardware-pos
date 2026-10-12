@@ -1,4 +1,4 @@
-# Vercel Deployment Recovery Guide — Mbumah Hardware POS
+# Vercel Deployment Recovery Guide - Mbumah Hardware POS
 
 This guide walks you through diagnosing and recovering from production 500
 errors on Vercel, with specific focus on the `POST /api/auth/login` and
@@ -9,8 +9,8 @@ errors on Vercel, with specific focus on the `POST /api/auth/login` and
 ## Table of Contents
 
 1. [Quick Triage Checklist](#1-quick-triage-checklist)
-2. [The 51ms 500 — Root Cause & Fix](#2-the-51ms-500--root-cause--fix)
-3. [Environment Variables — Required Set](#3-environment-variables--required-set)
+2. [The 51ms 500 - Root Cause & Fix](#2-the-51ms-500--root-cause--fix)
+3. [Environment Variables - Required Set](#3-environment-variables--required-set)
 4. [Database Connection Pooling (Neon / Supabase)](#4-database-connection-pooling-neon--supabase)
 5. [Step-by-Step Recovery Procedure](#5-step-by-step-recovery-procedure)
 6. [Post-Deployment Smoke Test](#6-post-deployment-smoke-test)
@@ -21,26 +21,26 @@ errors on Vercel, with specific focus on the `POST /api/auth/login` and
 
 ## 1. Quick Triage Checklist
 
-When a 500 appears in production, run through this checklist in order —
+When a 500 appears in production, run through this checklist in order -
 each step takes < 30 seconds and narrows the blast radius:
 
-- [ ] **Check Vercel function logs** — Project → Functions → filter by
+- [ ] **Check Vercel function logs** - Project → Functions → filter by
       `500` status. Look for the error message in the first 5 lines.
-- [ ] **Check `DATABASE_URL`** — Project → Settings → Environment
+- [ ] **Check `DATABASE_URL`** - Project → Settings → Environment
       Variables → confirm `DATABASE_URL` is set for **Production** and
       points to the **pooled** connection string (ends in `-pooler` on
       Neon, port `6543` on Supabase).
-- [ ] **Check function region** — Settings → Functions → must match the
+- [ ] **Check function region** - Settings → Functions → must match the
       database region (Neon: `sin1`/`iad1`; Supabase: `ap-southeast-1`).
-- [ ] **Check recent deploys** — did the 500 start after a specific
+- [ ] **Check recent deploys** - did the 500 start after a specific
       commit? Click "Deployments" → compare the failing deploy with the
       last known-good one.
-- [ ] **Check `.env` parity** — run `diff <(sort .env.local) <(sort .env.production)`
+- [ ] **Check `.env` parity** - run `diff <(sort .env.local) <(sort .env.production)`
       locally to spot any key that exists locally but not in Vercel.
 
 ---
 
-## 2. The 51ms 500 — Root Cause & Fix
+## 2. The 51ms 500 - Root Cause & Fix
 
 ### Symptom
 
@@ -49,7 +49,7 @@ POST /api/auth/login  500  51ms
 GET  /api/dashboard   500  51ms
 ```
 
-A 51ms response time is the signature of a **module-load crash** — the
+A 51ms response time is the signature of a **module-load crash** - the
 serverless function never reached the handler; it threw during `import`
 evaluation. The two most common causes:
 
@@ -81,7 +81,7 @@ throws an `EnvValidationError` listing every missing key in one shot.
 
 ### Root Cause B: Font preload warning (`unused preloaded font`)
 
-**Not a crash** — a Chrome console warning caused by `Geist_Mono` being
+**Not a crash** - a Chrome console warning caused by `Geist_Mono` being
 preloaded but not used on the login screen. Fixed in `src/app/layout.tsx`
 by setting `Geist_Mono` to `preload: false` (the mono font is only used in
 receipts / serial numbers, not on the first-screen surface).
@@ -95,7 +95,7 @@ are now imported in `src/app/layout.tsx` inside `<body>`.
 
 ---
 
-## 3. Environment Variables — Required Set
+## 3. Environment Variables - Required Set
 
 | Key | Required | Example | Notes |
 |-----|----------|---------|-------|
@@ -110,7 +110,7 @@ are now imported in `src/app/layout.tsx` inside `<body>`.
 1. Project → **Settings** → **Environment Variables**.
 2. Add each key for **Production**, **Preview**, and **Development**
    (or just Production if Preview/Dev use different values).
-3. **Redeploy** — environment variables are baked at build time; a
+3. **Redeploy** - environment variables are baked at build time; a
    redeploy is required after adding/changing them.
 
 > **Security:** Never commit `.env` to git. The `.env.example` file lists
@@ -160,7 +160,7 @@ best concurrency-to-connection ratio.
 
 Follow this exact sequence to recover from a production 500:
 
-### Step 1 — Confirm the root cause
+### Step 1 - Confirm the root cause
 
 ```bash
 # Clone the latest main and reproduce locally
@@ -175,7 +175,7 @@ bun run dev
 If the app boots locally, the issue is **environment-specific to Vercel**
 (go to Step 2). If it crashes locally, fix the local `.env` first.
 
-### Step 2 — Verify Vercel env vars
+### Step 2 - Verify Vercel env vars
 
 ```bash
 # Install the Vercel CLI
@@ -205,7 +205,7 @@ echo -n "..." | vercel env add DATABASE_URL preview
 echo -n "..." | vercel env add DATABASE_URL development
 ```
 
-### Step 3 — Redeploy
+### Step 3 - Redeploy
 
 ```bash
 # Trigger a production deploy from the CLI
@@ -215,7 +215,7 @@ vercel --prod
 git push origin main
 ```
 
-### Step 4 — Monitor the deploy
+### Step 4 - Monitor the deploy
 
 ```bash
 # Stream the build + deployment logs
@@ -227,7 +227,7 @@ Watch for:
 - `✓ Deployed` (functions uploaded)
 - Any `Error:` or `FATAL:` in the first 10 seconds of warm-up
 
-### Step 5 — Hit the smoke endpoints
+### Step 5 - Hit the smoke endpoints
 
 ```bash
 # Health check (no DB required)
@@ -253,18 +253,18 @@ All three should return `200` with JSON. If any returns `500`, go to
 After a successful deploy, run this checklist manually (or via
 `agent-browser`):
 
-1. **Login** — Super Admin can log in at `/`.
-2. **Dashboard** — Today's Revenue KPI loads (not `Ksh0` / `NaN`).
-3. **POS** — Products appear in the catalog grid.
-4. **Checkout** — A cash sale completes and a receipt is generated.
-5. **Journal Entry** — The sale created a balanced JE (check the
+1. **Login** - Super Admin can log in at `/`.
+2. **Dashboard** - Today's Revenue KPI loads (not `Ksh0` / `NaN`).
+3. **POS** - Products appear in the catalog grid.
+4. **Checkout** - A cash sale completes and a receipt is generated.
+5. **Journal Entry** - The sale created a balanced JE (check the
    Financial tab → Journal Entries).
-6. **Offline mode** — Toggle `navigator.onLine` to `false` in DevTools;
+6. **Offline mode** - Toggle `navigator.onLine` to `false` in DevTools;
    the badge should switch to "Offline Mode". A checkout should save
    locally and show "pending sync(s)".
-7. **Analytics** — View page source; confirm `/_vercel/insights/script.js`
+7. **Analytics** - View page source; confirm `/_vercel/insights/script.js`
    and `/_vercel/speed-insights/script.js` are injected (they'll 200 on
-   Vercel, 404 locally — both are fine).
+   Vercel, 404 locally - both are fine).
 
 ---
 
@@ -274,12 +274,12 @@ After a successful deploy, run this checklist manually (or via
 |---------|-------------|-----|
 | `500` in 51ms on every route | `DATABASE_URL` missing/malformed | Set the **pooled** URL in Vercel env vars (see [§4](#4)). |
 | `500` after 5-10s on login | Prisma connection timeout | Add `?pgbouncer=true&connection_limit=1` to `DATABASE_URL`. |
-| `429 Too Many Requests` | Connection pool exhausted | Same as above — pooling is required for serverless. |
+| `429 Too Many Requests` | Connection pool exhausted | Same as above - pooling is required for serverless. |
 | `PrismaClientInitializationError` | Schema drift (DB ≠ `schema.prisma`) | Run `bun run db:push` locally against the prod DB, or trigger a migration. |
-| `IMMUTABILITY_VIOLATION` | App code tried to `update`/`delete` a JE/JEL/SystemLog | Wrap the sanctioned mutation in `withImmutabilityBypass(fn, reason)` — see `src/lib/db.ts`. |
+| `IMMUTABILITY_VIOLATION` | App code tried to `update`/`delete` a JE/JEL/SystemLog | Wrap the sanctioned mutation in `withImmutabilityBypass(fn, reason)` - see `src/lib/db.ts`. |
 | `ENV_VALIDATION_FAILED` | Missing `NEXTAUTH_SECRET` / `JWT_SECRET` | Generate with `openssl rand -base64 32` and add to Vercel. |
 | Hydration mismatch in console | Server/client render divergence | Check `suppressHydrationWarning` on `<html>`; ensure `next-themes` is wrapped in `<Providers>`. |
-| `unused preloaded font` warning | `Geist_Mono` preloaded but unused | Already fixed — `preload: false` in `layout.tsx`. |
+| `unused preloaded font` warning | `Geist_Mono` preloaded but unused | Already fixed - `preload: false` in `layout.tsx`. |
 
 ---
 
@@ -293,7 +293,7 @@ If a deploy is broken and you need to revert immediately:
 2. Find the last known-good deploy (green checkmark).
 3. Click the `⋯` menu → **Promote to Production**.
 
-The rollback is instant — Vercel switches the production alias to the
+The rollback is instant - Vercel switches the production alias to the
 previous deployment's functions. No rebuild needed.
 
 ### Via Vercel CLI
@@ -322,7 +322,7 @@ git push origin main
 
 ---
 
-## Appendix — Architecture Diagram (text)
+## Appendix - Architecture Diagram (text)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -355,5 +355,5 @@ git push origin main
 
 ---
 
-*Last updated: 2026-06-25 — reflects the Step 2 (Phase 3/4/5) enterprise
+*Last updated: 2026-06-25 - reflects the Step 2 (Phase 3/4/5) enterprise
 upgrade. For questions, contact the system administrator.*

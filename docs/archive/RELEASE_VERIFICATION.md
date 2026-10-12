@@ -16,7 +16,7 @@
   - [ ] `NEXTAUTH_SECRET`
   - [ ] `NEXTAUTH_URL`
 
-## 2. Critical Crash Fix — "Loading..." State
+## 2. Critical Crash Fix - "Loading..." State
 
 - [ ] App loads at `https://mbumah-hardware-pos-one.vercel.app` without hanging
 - [ ] No `TypeError: eL.map is not a function` in browser console
@@ -182,7 +182,7 @@ Verify all tabs load without crashes:
 - [ ] Debt Management tab does not crash when `summary.byBucket` is undefined
 - [ ] Catalog tab does not crash when API returns non-array data
 - [ ] Inventory tab shows error state with Retry button on API failure
-- [ ] All tabs wrapped in `SectionErrorBoundary` — single tab crash doesn't take down the app
+- [ ] All tabs wrapped in `SectionErrorBoundary` - single tab crash doesn't take down the app
 
 ---
 

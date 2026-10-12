@@ -1,7 +1,7 @@
-# Vercel Deploy Fixes — MBUMAH Hardware POS
+# Vercel Deploy Fixes - MBUMAH Hardware POS
 
 > **Purpose:** Step-by-step guide to fix the production `/api/auth/login` 500 error
-> on Vercel. The root cause is **NOT a code bug** — it is a Vercel environment-variable
+> on Vercel. The root cause is **NOT a code bug** - it is a Vercel environment-variable
 > misconfiguration pointing to a dead Neon database endpoint.
 >
 > **Production URL:** https://mbumah-hardware-pos-one.vercel.app
@@ -38,7 +38,7 @@ The 500 is caused **solely** by 4 broken Vercel env vars, confirmed via the live
 
 You need to update 4 env vars in the Vercel dashboard. There are two ways to do this:
 
-#### Option A — Automated (requires a Vercel API token from the project-owning account)
+#### Option A - Automated (requires a Vercel API token from the project-owning account)
 
 ```bash
 # The token MUST belong to the SAME Vercel account that owns the
@@ -51,10 +51,10 @@ This script:
 1. Finds the project by name
 2. Deletes any existing env vars with the same keys (idempotent)
 3. Creates fresh env vars for: `DATABASE_URL`, `DIRECT_URL`, `NEXTAUTH_SECRET`,
-   `JWT_SECRET`, `NEXTAUTH_URL`, `EXPOSE_ERRORS` — all targeting the **Production** environment
+   `JWT_SECRET`, `NEXTAUTH_URL`, `EXPOSE_ERRORS` - all targeting the **Production** environment
 4. Triggers a production redeploy
 
-#### Option B — Manual (via Vercel dashboard)
+#### Option B - Manual (via Vercel dashboard)
 
 1. Go to **Vercel Dashboard** → **mbumah-hardware-pos-one** project →
    **Settings** → **Environment Variables**
@@ -73,7 +73,7 @@ NEXTAUTH_URL = https://mbumah-hardware-pos-one.vercel.app
 EXPOSE_ERRORS = true
 ```
 
-> **IMPORTANT — PgBouncer query params are mandatory:**
+> **IMPORTANT - PgBouncer query params are mandatory:**
 > The `?pgbouncer=true&connect_timeout=15` suffix on `DATABASE_URL` is what tells
 > Prisma to use PgBouncer-compatible (transaction-mode) pooling. Without it, each
 > serverless function invocation opens a direct Postgres connection, and you will
@@ -85,7 +85,7 @@ EXPOSE_ERRORS = true
 
 > **NOTE on `NEXTAUTH_SECRET` and `JWT_SECRET`:**
 > These are already set correctly (42 chars and 32 chars respectively, both strong).
-> Do NOT regenerate them — regenerating would invalidate all existing user sessions.
+> Do NOT regenerate them - regenerating would invalidate all existing user sessions.
 > The `set-vercel-env.sh` script generates new secrets only if the env vars
 > `NEXTAUTH_SECRET` / `JWT_SECRET` are not already set in your shell environment.
 
@@ -158,7 +158,7 @@ If `reachable: true` and `counts` show data → **skip to Step 3**.
 #### If the database is empty or missing tables
 
 Run these commands **locally** with the production `DATABASE_URL` set in your shell
-(this pushes the schema and seeds the database directly — Vercel does NOT run
+(this pushes the schema and seeds the database directly - Vercel does NOT run
 `prisma db push` or `prisma db seed` during builds):
 
 ```bash
@@ -170,9 +170,9 @@ export DIRECT_URL="postgresql://neondb_owner:REDACTED-ROTATED-SEE-SECURITY-ADVIS
 bun run db:push
 
 # 3. Seed the database (creates the SUPER_ADMIN user, demo data, RBAC permissions)
-#    NOTE: This takes ~3-5 minutes over Neon+PgBouncer due to the number of
-#    records. The seed script uses createMany for bulk inserts to minimize
-#    round-trips.
+# NOTE: This takes ~3-5 minutes over Neon+PgBouncer due to the number of
+# records. The seed script uses createMany for bulk inserts to minimize
+# round-trips.
 bun run db:seed
 ```
 
@@ -186,7 +186,7 @@ bun run db:seed
 ### Step 3: Redeploy Without Build Cache
 
 After updating env vars (Step 1) and confirming the database is seeded (Step 2),
-trigger a fresh production deployment. **"Without build cache"** is important — it
+trigger a fresh production deployment. **"Without build cache"** is important - it
 ensures the new env vars are picked up and the Prisma Client is regenerated with
 the correct `postgresql` provider.
 
@@ -246,13 +246,13 @@ vercel logs https://mbumah-hardware-pos-one.vercel.app --follow
 
 | Log Pattern | Meaning | Action |
 |-------------|---------|--------|
-| `POST /api/auth/login 200` | ✅ Login working | None — proceed to Step 5 |
+| `POST /api/auth/login 200` | ✅ Login working | None - proceed to Step 5 |
 | `POST /api/auth/login 500` | ❌ Still failing | Check the `[AUTH_LOGIN_FATAL_ERROR]` log entry for details |
 | `[AUTH_LOGIN_DB_ERROR]` | DB connection issue | Verify `DATABASE_URL` is the pooled Neon URL with `pgbouncer=true` |
 | `Can't reach database server at` | DB unreachable | Verify the Neon endpoint is correct and Neon project is active |
 | `ENV_VALIDATION_FAILED` | Env var missing/malformed | Check `/api/health/env` for which vars are broken |
-| `URL must start with protocol file:` | Prisma provider mismatch | Verify `prisma/schema.prisma` has `provider = "postgresql"` (it does — committed in git) |
-| `IMMUTABILITY_VIOLATION` | Financial immutability guard fired | This is expected for direct `update`/`delete` on `JournalEntry` — use `withImmutabilityBypass()` |
+| `URL must start with protocol file:` | Prisma provider mismatch | Verify `prisma/schema.prisma` has `provider = "postgresql"` (it does - committed in git) |
+| `IMMUTABILITY_VIOLATION` | Financial immutability guard fired | This is expected for direct `update`/`delete` on `JournalEntry` - use `withImmutabilityBypass()` |
 
 ---
 
@@ -353,12 +353,12 @@ All build & runtime compatibility checks pass:
 | `layout.tsx` `<SpeedInsights />` | ✅ | Imported from `@vercel/speed-insights/next`, rendered inside `<Providers>` |
 | Font `preload: false` | ✅ | Both Geist Sans and Geist Mono set to `preload: false` (eliminates Chrome console warning) |
 | `force-dynamic` on API routes | ✅ | All **93** API route.ts files have `export const dynamic = 'force-dynamic'` |
-| `next.config.ts` `serverExternalPackages` | ✅ | `["@prisma/client"]` — ensures Prisma Client is bundled correctly for serverless |
-| `next.config.ts` `typescript.ignoreBuildErrors` | ✅ | `true` — prevents build failure on pre-existing type issues |
-| `next.config.ts` `eslint.ignoreDuringBuilds` | ✅ | `true` — prevents build failure on pre-existing lint issues |
+| `next.config.ts` `serverExternalPackages` | ✅ | `["@prisma/client"]` - ensures Prisma Client is bundled correctly for serverless |
+| `next.config.ts` `typescript.ignoreBuildErrors` | ✅ | `true` - prevents build failure on pre-existing type issues |
+| `next.config.ts` `eslint.ignoreDuringBuilds` | ✅ | `true` - prevents build failure on pre-existing lint issues |
 | `prisma/schema.prisma` provider | ✅ | `provider = "postgresql"` (committed permanently) |
 | `prisma/schema.prisma` directUrl | ✅ | `directUrl = env("DIRECT_URL")` |
-| `postinstall` script | ✅ | `bash scripts/setup-prisma-provider.sh && prisma generate` — runs on Vercel install phase |
+| `postinstall` script | ✅ | `bash scripts/setup-prisma-provider.sh && prisma generate` - runs on Vercel install phase |
 | `scripts/setup-prisma-provider.sh` default | ✅ | Defaults to `postgresql` when `DATABASE_URL` is unset (critical for Vercel install phase) |
 
 ---
@@ -384,13 +384,13 @@ curl -s -H "Authorization: Bearer YOUR_TOKEN" https://api.vercel.com/v2/user | j
 
 **Cause:** `DATABASE_URL` points to a dead/unreachable Neon endpoint.
 
-**Fix:** See Step 1 — update `DATABASE_URL` to the `ep-calm-butterfly-aivj6kzm-pooler`
+**Fix:** See Step 1 - update `DATABASE_URL` to the `ep-calm-butterfly-aivj6kzm-pooler`
 endpoint with `?pgbouncer=true&connect_timeout=15`.
 
 ### "URL must start with protocol `file:`"
 
 **Cause:** `prisma/schema.prisma` has `provider = "sqlite"` but `DATABASE_URL` is a
-PostgreSQL URL. This was the Cycle G root cause — now permanently fixed (the committed
+PostgreSQL URL. This was the Cycle G root cause - now permanently fixed (the committed
 schema has `provider = "postgresql"` and the setup script defaults to postgresql).
 
 **Fix:** This should not recur. If it does, verify `prisma/schema.prisma` has
@@ -420,7 +420,7 @@ Neon's connection limit.
 **Cause:** The Prisma Client was generated with the wrong provider (sqlite instead
 of postgresql), or `prisma generate` didn't run before `next build`.
 
-**Fix:** This is fixed by the `vercel.json` change in Phase 2 — `buildCommand` is now
+**Fix:** This is fixed by the `vercel.json` change in Phase 2 - `buildCommand` is now
 `"npm run vercel-build"` which explicitly runs `SKIP_ENV_VALIDATION=1 prisma generate
 && next build`. If it still happens, trigger a redeploy **without build cache** (Step 3).
 
