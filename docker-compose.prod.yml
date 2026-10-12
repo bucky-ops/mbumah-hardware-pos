@@ -106,6 +106,33 @@ services:
       retries: 3
       start_period: 60s
     networks:
+      mbumah-internal:
+        # nginx/conf.d/mbumah-pos.conf proxies to http://nextjs_app - keep
+        # this alias in sync or nginx fails with "host not found in upstream".
+        aliases:
+          - nextjs_app
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Notification — Realtime socket.io service (port 3003, internal only)
+  # Receives same-origin /socket.io/ traffic from nginx (websocket upgrade).
+  # Powers live receipt distribution and POS notifications. Never expose
+  # port 3003 to the host - the service trusts same-origin connections.
+  # ─────────────────────────────────────────────────────────────────────────────
+  notification:
+    build:
+      context: ./mini-services/notification-service
+      dockerfile: Dockerfile
+    container_name: mbumah_notification
+    restart: unless-stopped
+    expose:
+      - "3003"
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:3003/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
       - mbumah-internal
 
   # ─────────────────────────────────────────────────────────────────────────────
@@ -117,6 +144,8 @@ services:
     restart: unless-stopped
     depends_on:
       app:
+        condition: service_healthy
+      notification:
         condition: service_healthy
     ports:
       - "${HTTP_PORT:-80}:80"

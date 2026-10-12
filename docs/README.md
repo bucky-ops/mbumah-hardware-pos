@@ -15,6 +15,7 @@ Documentation for Mbumah Hardware POS. Start with the [README](../README.md) for
 | [Configuration](configuration.md) | Environment variables, M-Pesa Daraja, optional services |
 | [Deployment](deployment.md) | Vercel, Docker Compose, self-hosting, SSL, backups, provider switching |
 | [Troubleshooting and FAQ](troubleshooting-and-faq.md) | M-Pesa callbacks, Vercel 500s, ghost shifts, common fixes |
+| [Offline mode](offline-mode.md) | Offline sales queue, idempotent replay, top-bar indicator, testing |
 | [Release process](release-process.md) | Versioning, changelog, release automation |
 
 ## Operations

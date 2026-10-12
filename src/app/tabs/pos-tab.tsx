@@ -342,9 +342,12 @@ export default function POSTab() {
   }, [cart.items.length]);
 
   // Offline-first POS: connectivity tracking + auto-sync
-  // On mount: prime the cached queue count, register the online/offline
-  // window listeners (which auto-fire syncQueue when connectivity returns),
-  // and subscribe to background-sync results so we can toast the cashier.
+  // On mount: prime the cached queue count and register the online/offline
+  // window listeners (which auto-fire syncQueue when connectivity returns).
+  // Toast ownership: the global <OfflineIndicator /> in the top bar owns the
+  // single "Offline sales synced" transition toast (exactly one per pending
+  // > 0 -> 0 transition), so this tab only surfaces what the indicator
+  // cannot see: per-sync FAILURE detail (which sales will retry).
   useEffect(() => {
     // Initialise connectivity from the live navigator value (handles the case
     // where the app was launched while already offline).
@@ -368,13 +371,11 @@ export default function POSTab() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Toast the result of each automatic background sync.
+    // Surface only the failure detail of automatic background syncs - the
+    // success path is announced once, app-wide, by the OfflineIndicator.
+    // (Previously both surfaces toasted here, so every reconnect with the
+    // POS tab mounted showed two success toasts for the same sync.)
     const unsubSync = onBackgroundSync((result) => {
-      if (result.succeeded > 0) {
-        toast.success(`Synced ${result.succeeded} offline sale${result.succeeded !== 1 ? 's' : ''} to the server.`, {
-          duration: 4000,
-        });
-      }
       if (result.failed > 0) {
         toast.error(`${result.failed} sale${result.failed !== 1 ? 's' : ''} failed to sync and will retry.`, {
           duration: 5000,

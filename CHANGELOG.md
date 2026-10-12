@@ -2,6 +2,43 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.15.0] Release: audit corrections, realtime self-hosting wiring, offline polish
+
+### Fixed
+- **Duplicate sync toasts at the till**: an automatic background sync with the POS tab mounted toasted twice for the same event (POS tab's own success toast + the global OfflineIndicator's transition toast). Toast ownership is now explicit - the top-bar indicator owns the single "Offline sales synced" success per queue transition, and the POS tab surfaces only what the indicator cannot see: per-sync failure detail (which sales will retry). Manual "Sync now" and offline/online announcements are unchanged.
+- **Latent self-hosted startup bug**: nginx `proxy_pass http://nextjs_app` referenced a hostname the compose file never defined (the app container had been renamed to `mbumah_app`), so `docker-compose.prod.yml` failed at nginx startup with "host not found in upstream". The app service now carries the `nextjs_app` network alias (documented in place).
+- **Fresh-clone test suite**: `bun run test` failed 16 DB-dependent tests locally because the hermetic SQLite test database (`prisma/prisma/dev.db`) only existed in CI. A new `pretest` hook (`scripts/prepare-test-db.mjs`) mirrors the CI prepare step (schema push + seed against the forced URL, committed postgresql schema text restored afterwards), making the suite self-sufficient: 17 files / 447 tests green on a fresh clone (was 411/16 failed).
+
+### Added
+- **Realtime notifications ship self-hosted**: `mini-services/notification-service` now has a production Dockerfile (bun runtime, frozen lockfile) and runs as an internal-only `notification` service in `docker-compose.prod.yml` (healthcheck on `/health`, nginx `depends_on` healthy). Nginx routes same-origin `/socket.io/` traffic to it with websocket upgrade headers and 24h timeouts. Verified end-to-end: Engine.IO polling handshake 200, websocket connect, `join-store` -> `room-joined`. On Vercel the client degrades gracefully (no realtime push, everything else unchanged).
+- **Offline mode documentation** (`docs/offline-mode.md`): queue flow (queue -> replay -> dedupe -> cleanup), cashier-facing surfaces, step-by-step offline testing, developer notes; indexed from `docs/README.md`.
+- **Health endpoints guide** (`docs/deployment.md`): documents the `/api/health` (public, automation) vs `/api/healthy` (authenticated, in-app) split and the realtime service wiring.
+
+### Improved
+- Repository organization phase 2: client source materials consolidated under `docs/assets/`, ops runbook moved to `docs/runbooks/`, sandbox template artifacts removed, repo-wide markdown hygiene (single H1, no emoji headings, no em dashes), gitignore env-variant coverage.
+
+### Notes
+- No schema changes; no changes to totals, VAT math, payments, debt or discount gates.
+- Version reads from `package.json` everywhere (API, footer badge, OpenAPI) per the release process.
+
+## [2.14.0] Production hardening: self-test, engraved admin, offline queue UX, stock contract
+
+### Added
+- **POST self-test + engraved-admin self-heal**: `/api/system/post` runs isolated production checks (PASS/FAIL/DEGRADED); `/api/system/heal` repairs the seeded engraved super admin idempotently; engraved accounts cannot be deleted, deactivated or demoted via the users API (403 `ENGRAVED_ADMIN_PROTECTED`); Admin tab gains a System Health card and shield badge.
+- **Offline queue UX**: top-bar `OfflineIndicator` (green/amber dot + Offline Queue dialog listing every queued sale) on every tab, single per-transition reconnect toast, `clearOfflineQueue()` for the confirmed dialog action; canonical import path `@/lib/offline` with the queue contract documented in `src/lib/offline/README.md`.
+- **Stock shortage contract**: checkout pre-validates every sellable line and fails with one structured 400 (`INSUFFICIENT_STOCK` + per-product details) before any charge; race losers map to the same contract; the POS clamps lines to available stock and routes zero-stock lines to the existing low-stock popup.
+- **Ops**: `scripts/backup.sh` (sqlite3 `.backup` -> gzip with retention), database idempotency keys on `DebtLedger`/`EquipmentRental`/`Expense`/`StockMovement`.
+
+### Improved
+- **Fullscreen sidebar autohide**: in browser fullscreen the sidebar collapses to a 64px icon rail, auto-hides after 2s idle, peeks from a left-edge sensor, and restores state on exit; icon tooltips show F2-F5 shortcut hints; user menu gains "Toggle Fullscreen".
+- **Inventory reorder prefill**: at/below-reorder products show "Reorder (+N)" (row menu, detail panel and a quick-fill chip in the Adjust Stock dialog) that prefills the suggested quantity to restore the stock level.
+- **Typography sweep**: repo-wide string-literal cleanup (em dashes -> hyphens, decorative emojis out of internal UI); customer-facing templates exempt.
+- **Repository organization phase 1**: Windows installers under `deploy/windows/`, QA screenshots and sandbox scripts removed, `bun.lock` as the sole lockfile, governance files (CONTRIBUTING/SECURITY/CODE_OF_CONDUCT/CHANGELOG/SUPPORT) and `.github` templates in place.
+
+### Notes
+- Receipts gained print/PDF parity (`<receipt-number>.pdf`), amount no-wrap, unit abbreviations and a fixed totals strip.
+- No changes to totals, VAT math, payments, debt or discount gates.
+
 ## [2.13.3] Feature release: functional POS + new 3D logo + smart recommendations
 
 ### Added

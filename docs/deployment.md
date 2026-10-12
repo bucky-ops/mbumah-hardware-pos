@@ -123,6 +123,19 @@ docker-compose exec app npx prisma db seed
 
 `docker-compose.yml` includes an app service (Next.js production server), a PostgreSQL service, and an M-Pesa mock server for local payment simulation.
 
+`docker-compose.prod.yml` additionally runs the realtime notification service (`notification`, socket.io on port 3003, internal-only). Nginx routes the browser's same-origin `/socket.io/` traffic to it with websocket upgrade headers, so live receipt distribution and POS notifications work without exposing any extra port to the host. Never map port 3003 to the host - the service trusts same-origin connections (CORS `*`) and expects to sit behind the reverse proxy. On Vercel the service does not run; the client degrades gracefully (connection status stays `disconnected`, no realtime push - everything else works).
+
+## Health endpoints
+
+There are two health endpoints and they serve different audiences:
+
+| Endpoint | Auth | Purpose |
+|----------|------|---------|
+| `GET /api/health` | public | Liveness + readiness for load balancers, Docker healthchecks and uptime monitors. Returns `status`, `version`, database connectivity, ledger balance and security checks. |
+| `GET /api/healthy` | authenticated | Richer in-app health card data; requires a signed-in session and returns 401 for anonymous callers. |
+
+Use `/api/health` for automation (Docker `healthcheck`, uptime pings, CI smoke tests) - it is the endpoint that returns `200` without cookies. `/api/healthy` is meant for the app's own health UI where the caller is already signed in.
+
 ## Self-hosting guide (Docker, Nginx, PostgreSQL)
 
 This is the full procedure for a local server or VPS using `docker-compose.prod.yml`.
