@@ -30,8 +30,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files
+# env files (never commit secrets; keep the example)
 .env
+.env*.local
+.env.development
+.env.production
 !.env.example
 
 # vercel
@@ -97,7 +100,4 @@ scripts/populate/*.log
 worklog.md
 
 # Generated artifacts
-*.tsbuildinfo
-dev.log
-server.log
 package-lock.json
