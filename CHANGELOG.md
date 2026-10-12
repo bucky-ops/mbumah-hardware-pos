@@ -2,6 +2,15 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.15.1] Hotfix: offline sales actually queue (mutation networkMode)
+
+### Fixed
+- **Critical: the offline sale flow never fired while offline** - TanStack Query pauses mutations when `navigator.onLine` is false under its default `networkMode: 'online'`, so `checkoutMutation.mutationFn` never ran, `saveOfflineTransaction()` was never reached and tapping "Process Payment" offline silently did nothing (queue stayed empty, no synthetic receipt). The app-wide QueryClient now sets `mutations.networkMode: 'always'`; the checkout mutationFn's own `navigator.onLine` check routes offline sales into the IndexedDB queue, and mutations without an offline path surface their network error via their normal `onError` handlers.
+- Caught by the post-release browser E2E (release-process step 3): `[HANDLE-CHECKOUT]` logged while the mutation function never did; after the fix the full loop was verified live on the POS - offline sale saved locally with amber queue badge and synthetic receipt, reconnect auto-synced it to the server (real receipt number, Completed), queue drained to the green dot, and exactly one "Offline sales synced" success toast appeared (no duplicates).
+
+### Notes
+- No schema changes; no changes to totals, VAT math, payments, debt or discount gates. The offline queue engine, idempotent replay and indicator were already correct - only the mutation gating blocked them.
+
 ## [2.15.0] Release: audit corrections, realtime self-hosting wiring, offline polish
 
 ### Fixed
