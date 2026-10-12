@@ -95,7 +95,7 @@ powershell -ExecutionPolicy Bypass -File deploy\nodocker\install-nodocker.ps1
 For shop-LAN access (phones/other PCs connect to the laptop):
 ```powershell
 powershell -ExecutionPolicy Bypass -File deploy\nodocker\install-nodocker.ps1 -UseLan
-# or pin the IP:  ... -LanIp 192.168.1.50
+# or pin the IP: ... -LanIp 192.168.1.50
 ```
 
 ### Linux / macOS
@@ -197,7 +197,7 @@ installer prints the matching crontab lines instead):
 Safety rails:
 
 - **Nothing happens while the shop works.** The updater only acts inside the
-  dormant window **22:00–06:00** (configurable) or when the POS is not
+  dormant window **22:00-06:00** (configurable) or when the POS is not
   running at all; a manual run with `-Force` overrides.
 - **A failed update rolls itself back automatically.** If any build/verify/
   health step fails, the previous version is re-installed and health-checked.

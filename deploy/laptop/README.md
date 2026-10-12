@@ -23,7 +23,7 @@ Stack (all local, via `docker-compose.laptop.yml`):
 | OS | Windows 10/11 (Docker Desktop + WSL2), Ubuntu 20.04+, or macOS |
 | Docker | Desktop/Engine 24+ with Compose v2 |
 | Browser on POS terminals | **Chrome or Edge** (thermal receipt printing uses WebUSB; Firefox/Safari do not work) |
-| Internet | Needed **only** during the first build (~10–15 min) and for M-Pesa / eTIMS(KRA) / SMS-email features. Selling, inventory, printing and reporting work fully offline. |
+| Internet | Needed **only** during the first build (~10-15 min) and for M-Pesa / eTIMS(KRA) / SMS-email features. Selling, inventory, printing and reporting work fully offline. |
 
 ---
 
@@ -40,7 +40,7 @@ For shop-LAN access (cashiers' devices connect to the laptop):
 ```powershell
 powershell -ExecutionPolicy Bypass -File deploy\laptop\install-laptop.ps1 -UseLan
 # or force a specific IP:
-#   ... -LanIp 192.168.1.50
+# ... -LanIp 192.168.1.50
 ```
 
 ### Linux / macOS / WSL
@@ -62,7 +62,7 @@ login credentials.
 ```bash
 cp deploy/laptop/.env.laptop.example .env
 # edit .env: set POSTGRES_PASSWORD, NEXTAUTH_SECRET, JWT_SECRET, CRON_SECRET
-#            (openssl rand -base64 32) and NEXTAUTH_URL / NEXT_PUBLIC_APP_URL
+# (openssl rand -base64 32) and NEXTAUTH_URL / NEXT_PUBLIC_APP_URL
 docker compose -f docker-compose.laptop.yml up -d --build
 ```
 

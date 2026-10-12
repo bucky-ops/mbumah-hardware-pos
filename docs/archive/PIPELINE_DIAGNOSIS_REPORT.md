@@ -1,4 +1,4 @@
-# Pipeline Diagnosis Report — Mbumah Hardware POS
+# Pipeline Diagnosis Report - Mbumah Hardware POS
 
 **Role:** Principal DevOps Engineer
 **Date:** Cycle E (Phase 5)
@@ -13,7 +13,7 @@
 
 The "Loading…" hang is a **frontend symptom** of a **backend 500** on the login or session-validation API. When the frontend's `fetch()` to `/api/auth/*` returns a 500 (or hangs), the React state never transitions out of the loading skeleton, and the user sees an infinite spinner.
 
-After Cycle E Phases 1–4, the build pipeline is now correctly configured (`SKIP_ENV_VALIDATION`, `force-dynamic`, PgBouncer-pooled singleton, idempotent seed, SpeedInsights, health-check endpoints). The **remaining root causes are operational, not code**:
+After Cycle E Phases 1-4, the build pipeline is now correctly configured (`SKIP_ENV_VALIDATION`, `force-dynamic`, PgBouncer-pooled singleton, idempotent seed, SpeedInsights, health-check endpoints). The **remaining root causes are operational, not code**:
 
 | # | Likely root cause | Probability | Diagnosed by |
 |---|---|---|---|
@@ -27,25 +27,25 @@ Follow the 5-stage checklist below **in order**. Each stage has a ✅ pass condi
 
 ---
 
-## Stage 1 — GitHub Source Verification
+## Stage 1 - GitHub Source Verification
 
 **Goal:** Confirm the deployed code matches `main` and contains the Cycle E fixes.
 
 ### Steps
 1. Open `https://github.com/bucky-ops/mbumah-hardware-pos` → branch `main`.
 2. Confirm the latest commit includes Cycle E changes:
-   - `prisma/seed.ts` — has `seedBody()` function + `stage()` helper + `upsert` for org/store/super-admin.
-   - `src/app/layout.tsx` — imports `SpeedInsights` from `@vercel/speed-insights/next` and renders `<SpeedInsights />`.
-   - `src/app/api/health/db/route.ts` — exists.
-   - `src/app/api/health/env/route.ts` — exists.
-   - `src/lib/env.ts` — has `console.log('ENV VALIDATION: ', …)` debug line.
-   - `package.json` — `vercel-build` = `"node scripts/setup-prisma-provider.mjs && SKIP_ENV_VALIDATION=1 prisma generate && SKIP_ENV_VALIDATION=1 next build"` and `@vercel/speed-insights` in `dependencies`.
-3. Confirm `prisma/schema.prisma` line 20 reads `provider = "sqlite"` (correct — auto-switched to `postgresql` by `setup-prisma-provider.mjs` during Vercel build).
+   - `prisma/seed.ts` - has `seedBody()` function + `stage()` helper + `upsert` for org/store/super-admin.
+   - `src/app/layout.tsx` - imports `SpeedInsights` from `@vercel/speed-insights/next` and renders `<SpeedInsights />`.
+   - `src/app/api/health/db/route.ts` - exists.
+   - `src/app/api/health/env/route.ts` - exists.
+   - `src/lib/env.ts` - has `console.log('ENV VALIDATION: ', …)` debug line.
+   - `package.json` - `vercel-build` = `"node scripts/setup-prisma-provider.mjs && SKIP_ENV_VALIDATION=1 prisma generate && SKIP_ENV_VALIDATION=1 next build"` and `@vercel/speed-insights` in `dependencies`.
+3. Confirm `prisma/schema.prisma` line 20 reads `provider = "sqlite"` (correct - auto-switched to `postgresql` by `setup-prisma-provider.mjs` during Vercel build).
 
-### ✅ Pass condition
+### Pass condition
 All 6 files present and match the descriptions above.
 
-### ❌ Fix action
+### Fix action
 ```bash
 git add -A && git commit -m "Cycle E: pipeline diagnosis fixes (seed hardening, SpeedInsights, health routes)" && git push origin main
 ```
@@ -53,7 +53,7 @@ Then wait ~2 min for Vercel to auto-deploy.
 
 ---
 
-## Stage 2 — Vercel Build & Environment Verification
+## Stage 2 - Vercel Build & Environment Verification
 
 **Goal:** Confirm the Vercel build succeeds and all required env vars are set.
 
@@ -62,7 +62,7 @@ Then wait ~2 min for Vercel to auto-deploy.
 2. Click **Building** / **Ready** → scroll the **Build Log**.
 3. Confirm these lines appear:
    - `[setup-prisma-provider] Switched provider: "sqlite" → "postgresql"` (or `Provider already "postgresql"`)
-   - `ENV VALIDATION: SKIPPED (build phase — process.env cast without Zod)` ← from `src/lib/env.ts`
+   - `ENV VALIDATION: SKIPPED (build phase - process.env cast without Zod)` ← from `src/lib/env.ts`
    - `prisma:generate` completed
    - `Next.js (Build)` → `✓ Compiled successfully` / `✓ Building pages` / `✓ Collecting page data`
 4. Confirm deployment status = **Ready** (not Error).
@@ -78,22 +78,22 @@ Then wait ~2 min for Vercel to auto-deploy.
 | `NEXTAUTH_SECRET` | ✅ YES | ≥ 32 chars (generate: `openssl rand -base64 32`) |
 | `JWT_SECRET` | ✅ YES | ≥ 32 chars |
 | `NEXTAUTH_URL` | optional | `https://mbumah-hardware-pos-one.vercel.app` |
-| `EXPOSE_ERRORS` | optional | `true` for debugging ONLY — **remove for production** |
-| `ALLOW_DEV_BYPASS` | optional | `true` enables `/api/auth/dev-bypass` — **remove for production** |
+| `EXPOSE_ERRORS` | optional | `true` for debugging ONLY - **remove for production** |
+| `ALLOW_DEV_BYPASS` | optional | `true` enables `/api/auth/dev-bypass` - **remove for production** |
 
 3. **Critical:** `DATABASE_URL` MUST contain `-pooler` in the hostname. If it does not, you are using the direct connection, which will exhaust Neon's ~20-connection limit under serverless load → intermittent 500s.
 
-### ✅ Pass condition
+### Pass condition
 Build status = Ready AND all ✅-required vars are set AND `DATABASE_URL` contains `-pooler`.
 
-### ❌ Fix action
+### Fix action
 - Missing vars: add them in Vercel → Settings → Environment Variables, then **Redeploy**.
 - Wrong `DATABASE_URL` (no `-pooler`): copy the **Pooled connection** string from the Neon dashboard (`ep-winter-waterfall-a25wj37w-pooler.eu-central-1.aws.neon.tech`), set it as `DATABASE_URL`, keep the non-pooled as `DIRECT_URL`.
 - Build error: download the build log, search for `ENV VALIDATION:` and `Error:`.
 
 ---
 
-## Stage 3 — Neon Database Verification
+## Stage 3 - Neon Database Verification
 
 **Goal:** Confirm the Neon database is reachable, the schema is pushed, and the seed data exists.
 
@@ -117,10 +117,10 @@ Build status = Ready AND all ✅-required vars are set AND `DATABASE_URL` contai
    ```
 2. Confirm: `users` ≥ 10, `orgs` = 1, and a SUPER_ADMIN row exists with `email = 'admin@mbumahhardware.co.ke'`.
 
-### ✅ Pass condition
+### Pass condition
 Database is Active, 40+ tables exist, `users` ≥ 10, SUPER_ADMIN row exists.
 
-### ❌ Fix action
+### Fix action
 
 **If tables are missing (schema not pushed):**
 ```bash
@@ -141,14 +141,14 @@ npx prisma db push --schema prisma/schema.prisma
 export DATABASE_URL="postgresql://...-pooler...?pgbouncer=true&connect_timeout=15"
 bun run db:seed
 ```
-The hardened seed (Cycle E Phase 2) is now idempotent — re-running it on a partially-seeded DB will upsert the foundation records and continue. If it fails mid-way, it logs the error and exits 0 (the DB retains whatever was seeded).
+The hardened seed (Cycle E Phase 2) is now idempotent - re-running it on a partially-seeded DB will upsert the foundation records and continue. If it fails mid-way, it logs the error and exits 0 (the DB retains whatever was seeded).
 
 **If the database is suspended:**
 - Make any query to wake it (the health endpoint will do this). Or upgrade to a Neon tier that doesn't auto-suspend.
 
 ---
 
-## Stage 4 — Runtime Health Check Verification
+## Stage 4 - Runtime Health Check Verification
 
 **Goal:** Use the new health endpoints to pinpoint the exact failure mode.
 
@@ -197,15 +197,15 @@ curl -s https://mbumah-hardware-pos-one.vercel.app/api/health | python3 -m json.
 ```
 This returns the full picture (env + DB + DB stats + security + account security). Use this as the "all-in-one" smoke test.
 
-### ✅ Pass condition
+### Pass condition
 All three endpoints return HTTP 200 with `status: "ok"` (or `healthy`).
 
-### ❌ Fix action
-Follow the `detail` / `hints` fields in the JSON response — they are written to be self-diagnosing.
+### Fix action
+Follow the `detail` / `hints` fields in the JSON response - they are written to be self-diagnosing.
 
 ---
 
-## Stage 5 — Functional Verification (End-to-End)
+## Stage 5 - Functional Verification (End-to-End)
 
 **Goal:** Confirm the user can actually log in and use the POS.
 
@@ -242,10 +242,10 @@ If any of the above 500s:
 3. The `ENV VALIDATION:` log line tells you whether Zod validation ran at runtime (should say `RUNNING`).
 4. The error stack will show the exact Prisma query or env access that failed.
 
-### ✅ Pass condition
+### Pass condition
 Login succeeds, dashboard renders, `/api/dashboard` returns 200 with data, zero 5xx in Vercel logs.
 
-### ❌ Fix action
+### Fix action
 - **Login 500 with "no active SUPER_ADMIN user found":** DB not seeded → Stage 3 ❌ fix.
 - **Login 500 with Prisma error "no such table" or "relation does not exist":** schema not pushed → Stage 3 ❌ fix.
 - **Login 500 with "Can't reach database server":** `DATABASE_URL` wrong or Neon suspended → Stage 2b/3.
@@ -254,7 +254,7 @@ Login succeeds, dashboard renders, `/api/dashboard` returns 200 with data, zero 
 
 ---
 
-## Appendix A — The "Loading…" Hang Root Cause Chain
+## Appendix A - The "Loading…" Hang Root Cause Chain
 
 ```
 User opens https://mbumah-hardware-pos-one.vercel.app
@@ -287,24 +287,24 @@ Frontend calls fetch('/api/auth/session', { headers: { Authorization: 'Bearer ..
 └──────────────────────────────────────────────────────────┘
 ```
 
-## Appendix B — Cycle E Change Manifest
+## Appendix B - Cycle E Change Manifest
 
 | Phase | File | Change |
 |---|---|---|
 | 1 | `src/lib/env.ts` | Added `console.log('ENV VALIDATION: …')` debug line (server-only). |
-| 1 | `package.json` | Verified `vercel-build` script intact (kept `setup-prisma-provider.mjs` prefix — critical for provider switch). |
+| 1 | `package.json` | Verified `vercel-build` script intact (kept `setup-prisma-provider.mjs` prefix - critical for provider switch). |
 | 1 | `src/lib/db.ts` | Verified globalThis singleton + PgBouncer comments intact. |
 | 1 | All 92 API routes | Verified `export const dynamic = 'force-dynamic'` (0 missing). |
 | 2 | `prisma/schema.prisma` | Verified `provider = "sqlite"` (auto-switched to `postgresql` on Vercel). |
 | 2 | `prisma/seed.ts` | Hardened: `stage()` progress helper, foundation records (org/stores/super-admin) use `upsert`, entire body wrapped in try/catch with graceful exit + stage summary. |
 | 3 | `src/app/layout.tsx` | Added `<SpeedInsights />` import + render (Analytics was already wired). |
 | 3 | `package.json` | Added `@vercel/speed-insights` dependency. |
-| 4 | `src/app/api/health/db/route.ts` | **NEW** — DB connectivity + foundation-data presence check. |
-| 4 | `src/app/api/health/env/route.ts` | **NEW** — env var presence + validity check (pooled URL detection, secret strength). |
+| 4 | `src/app/api/health/db/route.ts` | **NEW** - DB connectivity + foundation-data presence check. |
+| 4 | `src/app/api/health/env/route.ts` | **NEW** - env var presence + validity check (pooled URL detection, secret strength). |
 | 4 | `src/middleware.ts` | Added `pathname.startsWith('/api/health/')` to public-path whitelist (was exact-match only). |
-| 5 | `PIPELINE_DIAGNOSIS_REPORT.md` | **NEW** — this document. |
+| 5 | `PIPELINE_DIAGNOSIS_REPORT.md` | **NEW** - this document. |
 
-## Appendix C — Quick Triage Command
+## Appendix C - Quick Triage Command
 
 Run this single block to get the full diagnosis in ~5 seconds:
 

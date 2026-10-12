@@ -1,4 +1,4 @@
-# Database Evaluation & Population Plan — Mbumah Hardware POS
+# Database Evaluation & Population Plan - Mbumah Hardware POS
 
 **Target:** production database behind `https://mbumah-hardware-pos-one.vercel.app` (Neon PostgreSQL, Prisma ORM, multi-tenant).
 **Prepared:** 12 September 2026 · **Method:** populate through the application's own REST APIs (safe, keeps journals balanced, respects RBAC/multi-tenancy).
@@ -81,29 +81,29 @@ Already present (table in §1). Distinct attributes today: name, location, addre
 >
 > | Store | Size | Hours | Distinct character |
 > |---|---|---|---|
-> | Juja Main (flagship) | 850 m², 2 floors | Mon–Sat 07:00–19:00, Sun 09:00–16:00 | Full catalogue, warehouse, rentals desk |
-> | Nairobi CBD | 240 m² | Mon–Sat 07:30–19:30, Sun 09:00–17:00 | High foot traffic, fast movers only |
-> | Nakuru | 420 m² | Mon–Sat 08:00–18:30, Sun 10:00–15:00 | Building materials focus |
-> | Ruiru | 360 m² | Mon–Sat 07:30–18:30, Sun closed | Construction-site deliveries |
-> | Thika | 380 m² | Mon–Sat 07:30–18:30, Sun 09:00–14:00 | Mixed trade + walk-in retail |
+> | Juja Main (flagship) | 850 m², 2 floors | Mon-Sat 07:00-19:00, Sun 09:00-16:00 | Full catalogue, warehouse, rentals desk |
+> | Nairobi CBD | 240 m² | Mon-Sat 07:30-19:30, Sun 09:00-17:00 | High foot traffic, fast movers only |
+> | Nakuru | 420 m² | Mon-Sat 08:00-18:30, Sun 10:00-15:00 | Building materials focus |
+> | Ruiru | 360 m² | Mon-Sat 07:30-18:30, Sun closed | Construction-site deliveries |
+> | Thika | 380 m² | Mon-Sat 07:30-18:30, Sun 09:00-14:00 | Mixed trade + walk-in retail |
 
-### 3.2 Users — 50 (requirement 2)
-Distribution target 10 per store. Per store mix: 1 `STORE_OWNER`, 2 `BRANCH_MANAGER`, 1–2 inventory staff (`CASHIER` role + *Storekeeper* job title on their employee profile), remainder `CASHIER`. Realistic Kenyan names, unique emails `first.last.<store>@mbumahhardware.co.ke`, phones `07XX XXX XXX`, password `password123` (test data — document that production should force a change).
+### 3.2 Users - 50 (requirement 2)
+Distribution target 10 per store. Per store mix: 1 `STORE_OWNER`, 2 `BRANCH_MANAGER`, 1-2 inventory staff (`CASHIER` role + *Storekeeper* job title on their employee profile), remainder `CASHIER`. Realistic Kenyan names, unique emails `first.last.<store>@mbumahhardware.co.ke`, phones `07XX XXX XXX`, password `password123` (test data - document that production should force a change).
 
-### 3.3 Categories — 10 (requirement 3)
+### 3.3 Categories - 10 (requirement 3)
 Canonical list, created per store so each store owns its own catalogue tree:
 
 1. Power Tools 2. Hand Tools 3. Building Materials 4. Electrical Supplies 5. Plumbing Supplies 6. Paint & Finishes 7. Hardware & Fasteners 8. Garden & Outdoor 9. Safety & Workwear 10. Home Appliances
 
 Each carries an icon, a colour, a sort order and a one-line description.
 
-### 3.4 Products — 200 (requirement 4)
-40 per store, spread across the 10 categories (≈4 per category per store), generated from a 48-item template catalogue with **store-specific brand/model variations** so names differ store to store. Attributes per product: unique SKU (`MBM-<STORE>-<CAT>-<0001>`), EAN-style barcode, name, description with specs (voltage, wattage, dimensions, material…), unit type (PIECE/KILOGRAM/METER/LITER/BAG/BOX/SET), stock 12–160, reorder level, cost price ≈ 60–80 % of selling price, VAT 16 %, and 2–3 **rental-flagged** items per store (generators, concrete mixers, pressure washers…) to power requirement 11.
+### 3.4 Products - 200 (requirement 4)
+40 per store, spread across the 10 categories (≈4 per category per store), generated from a 48-item template catalogue with **store-specific brand/model variations** so names differ store to store. Attributes per product: unique SKU (`MBM-<STORE>-<CAT>-<0001>`), EAN-style barcode, name, description with specs (voltage, wattage, dimensions, material…), unit type (PIECE/KILOGRAM/METER/LITER/BAG/BOX/SET), stock 12-160, reorder level, cost price ≈ 60-80 % of selling price, VAT 16 %, and 2-3 **rental-flagged** items per store (generators, concrete mixers, pressure washers…) to power requirement 11.
 
-### 3.5 Customers — 150 (requirement 5)
-30 per store. Kenyan names, phone, optional email, address (town/estate), National ID number, debt limit KES 20,000–80,000. Purchase history is produced automatically by linking customers to the sales in requirement 6 (each DEBT sale and ~50 % of paid sales carry a customerId).
+### 3.5 Customers - 150 (requirement 5)
+30 per store. Kenyan names, phone, optional email, address (town/estate), National ID number, debt limit KES 20,000-80,000. Purchase history is produced automatically by linking customers to the sales in requirement 6 (each DEBT sale and ~50 % of paid sales carry a customerId).
 
-### 3.6 Sales transactions — 300 (requirement 6)
+### 3.6 Sales transactions - 300 (requirement 6)
 60 per store, created through the real checkout API so stock, payments, receipts and journals all stay correct. Payment-method mix per store (chosen so the DEBT sales produce exactly the debt ledgers required by requirement 10):
 
 | Store | CASH | MPESA | DEBT | SPLIT | New total |
@@ -114,26 +114,26 @@ Each carries an icon, a colour, a sort order and a one-line description.
 | Ruiru | 20 | 10 | 20 | 5 | 55 |
 | Thika | 20 | 10 | 18 | 5 | 53 |
 
-Basket realism: 1–4 lines per sale; quantities fit the category (40 bags of cement vs 1 drill); occasional 5–10 % discount; totals KES 300–120,000; cash sales round the tender to the next 50/100/200/500/1000 note. `SPLIT` = part cash + part M-Pesa.
+Basket realism: 1-4 lines per sale; quantities fit the category (40 bags of cement vs 1 drill); occasional 5-10 % discount; totals KES 300-120,000; cash sales round the tender to the next 50/100/200/500/1000 note. `SPLIT` = part cash + part M-Pesa.
 > Note: the checkout API stamps `createdAt = now`, so new sales are all dated today. For time-spread analytics the dev team can run the backdating SQL in §6.
 
-### 3.7 Suppliers — 15 (requirement 7)
-3 per store (Juja already has 4). Each has contact person, phone, email, town, KRA PIN, payment terms (NET_15/NET_30/IMMEDIATE), 3–5 star rating and a note describing what they supply (cement & steel, paint, tools, electrical, plumbing, timber).
+### 3.7 Suppliers - 15 (requirement 7)
+3 per store (Juja already has 4). Each has contact person, phone, email, town, KRA PIN, payment terms (NET_15/NET_30/IMMEDIATE), 3-5 star rating and a note describing what they supply (cement & steel, paint, tools, electrical, plumbing, timber).
 
-### 3.8 Purchase orders — 50 (requirement 8)
-10 per store (Juja gets +5 to reach 10). Each PO: 2–5 of that store's products at realistic unit costs, quantity 10–100, expected date 1–3 weeks out, and a realistic **status spread** driven through the legal status workflow `DRAFT → PENDING_APPROVAL → APPROVED → SENT → CONFIRMED`: 2 DRAFT, 2 PENDING_APPROVAL, 2 APPROVED, 2 SENT, 2 CONFIRMED per store.
+### 3.8 Purchase orders - 50 (requirement 8)
+10 per store (Juja gets +5 to reach 10). Each PO: 2-5 of that store's products at realistic unit costs, quantity 10-100, expected date 1-3 weeks out, and a realistic **status spread** driven through the legal status workflow `DRAFT → PENDING_APPROVAL → APPROVED → SENT → CONFIRMED`: 2 DRAFT, 2 PENDING_APPROVAL, 2 APPROVED, 2 SENT, 2 CONFIRMED per store.
 
-### 3.9 Expenses — 100 (requirement 9)
-20 per store across the schema's categories `RENT, SALARIES, UTILITIES, TRANSPORT, MAINTENANCE, SUPPLIES, OTHER` with amounts scaled to Kenyan retail (rent 35–60 k, electricity 8–25 k, transport 2–8 k, maintenance 3–15 k…). Each expense posts a balanced journal entry (debit expense account, credit cash/M-Pesa) — handled by the API.
+### 3.9 Expenses - 100 (requirement 9)
+20 per store across the schema's categories `RENT, SALARIES, UTILITIES, TRANSPORT, MAINTENANCE, SUPPLIES, OTHER` with amounts scaled to Kenyan retail (rent 35-60 k, electricity 8-25 k, transport 2-8 k, maintenance 3-15 k…). Each expense posts a balanced journal entry (debit expense account, credit cash/M-Pesa) - handled by the API.
 
-### 3.10 Debt ledgers — 100 (requirement 10)
+### 3.10 Debt ledgers - 100 (requirement 10)
 Created the way the business actually creates them: by selling on credit. The 82 DEBT sales from §3.6 create 82 new ledgers (30-day due date, `OUTSTANDING`, aging `CURRENT`, customer balance incremented within credit limit) → 18 existing + 82 new = **100**.
 
-### 3.11 Equipment rentals — 50 (requirement 11)
+### 3.11 Equipment rentals - 50 (requirement 11)
 10 per store (Juja +6). Only `isRental` products (generators, mixers, pressure washers, scaffolding). Fields: security deposit ≈ 5× daily rate, daily/weekly/monthly rates, expected return date +3…+21 days (2 per store set in the past so the overdue workflow has data), and a couple of returns processed through the real return endpoint (`RETURNED` with damage assessment NONE/MINOR).
 
-### 3.12 Employees — 25 (requirement 12)
-5 per store (Juja +3). Full HR record: names, per-store-unique email, phone, National ID, KRA PIN, NSSF & NHIF/SHIF numbers, job title (Store Manager, Senior Cashier, Inventory Clerk/Storekeeper, Sales Assistant, Cleaner/Casual), employment type (PERMANENT/CONTRACT/CASUAL), hire dates 2019–2026, basic salary KES 15,000–95,000 plus house/transport/medical allowances, bank details (Equity/KCB/Co-op/NCBA) and emergency contact. Store managers are linked to their login account via `userId`.
+### 3.12 Employees - 25 (requirement 12)
+5 per store (Juja +3). Full HR record: names, per-store-unique email, phone, National ID, KRA PIN, NSSF & NHIF/SHIF numbers, job title (Store Manager, Senior Cashier, Inventory Clerk/Storekeeper, Sales Assistant, Cleaner/Casual), employment type (PERMANENT/CONTRACT/CASUAL), hire dates 2019-2026, basic salary KES 15,000-95,000 plus house/transport/medical allowances, bank details (Equity/KCB/Co-op/NCBA) and emergency contact. Store managers are linked to their login account via `userId`.
 
 ---
 
@@ -154,10 +154,10 @@ Created the way the business actually creates them: by selling on credit. The 82
 ```
 
 Scripts live in `scripts/populate/`:
-- `mbumah_client.py` — authenticated API client (CSRF + Bearer, retries, re-login)
-- `catalog.py` — canonical categories, product templates, name pools
-- `populate.py` — phased population, resumable, per-store chunking
-- `verify.py` — final counts vs targets + financial-integrity scan
+- `mbumah_client.py` - authenticated API client (CSRF + Bearer, retries, re-login)
+- `catalog.py` - canonical categories, product templates, name pools
+- `populate.py` - phased population, resumable, per-store chunking
+- `verify.py` - final counts vs targets + financial-integrity scan
 
 Every step is idempotent-ish: names/emails/SKUs are checked against the store's existing data before posting, and a failed record is retried once; a duplicate returns HTTP 409 which we treat as success.
 
@@ -165,23 +165,23 @@ Every step is idempotent-ish: names/emails/SKUs are checked against the store's 
 
 ## 5. Data-quality guardrails honoured during population
 
-1. Journals stay balanced — sales/expenses go through the app's own transactional writers only.
+1. Journals stay balanced - sales/expenses go through the app's own transactional writers only.
 2. No product sells below zero stock; local stock ledger tracks every unit sold/rented.
 3. No customer exceeds their credit limit; DEBT spread across many customers.
 4. All money rounded to 2 dp before sending; totals = sum of lines.
-5. RBAC respected — population runs as SUPER_ADMIN (the only role allowed to assign STORE_OWNER/ACCOUNTANT and approve POs).
-6. Audit trail preserved — every API write logs `POPULATE_*` entries to `system_logs` with the actor.
+5. RBAC respected - population runs as SUPER_ADMIN (the only role allowed to assign STORE_OWNER/ACCOUNTANT and approve POs).
+6. Audit trail preserved - every API write logs `POPULATE_*` entries to `system_logs` with the actor.
 
 ---
 
 ## 6. Known gaps found during evaluation (recommendations)
 
 1. **Sub-cent journal "dust" (pre-existing, now fixed in code):** the `/api/health` endpoint reported `unbalanced entries in last 24h` and `/api/financial/audit` flagged sale entries (e.g. JE-20260905-C63A5, JE-20260905-DB73A, JE-20260910-77C22, JE-20260912-58C5D). At 2 dp the debits and credits are identical (e.g. 94,025.00 = 94,025.00); the difference is decimal dust beyond 2 dp left by VAT extraction (revenue = total ÷ 1.16 produces repeating decimals stored at 30-dp column scale). **Fixes shipped with this population round:** ① every sale-journal line is now rounded to 2 dp before posting and any residual is absorbed into the tender leg so new entries balance exactly; ② the integrity auditors (`quickIntegrityCheck`, `verifyEntryBalance`) now compare at the currency's 2 dp scale so historical dust no longer produces false CRITICAL alarms. Optional one-time data cleanup (dev team, inside a transaction after backup): `UPDATE journal_entry_lines SET debit = ROUND(debit,2), credit = ROUND(credit,2) WHERE ROUND(debit,2) <> debit OR ROUND(credit,2) <> credit;` plus the matching header totals.
-2. **No store size / operating-hours columns** (see §3.1) — recommend `sizeSqm`, `operatingHours` + `PUT /api/stores/[id]`.
-3. **No inventory-staff RBAC role** — recommend adding `STOREKEEPER` to the role enum with products/stock permissions only.
-4. **Checkout has no `date` field** — new sales are dated "now"; expenses/rentals likewise cannot be backdated via API. Recommend accepting an optional ISO `date` (SUPER_ADMIN only) or providing a DB-level seed script for historical data.
-5. **Legacy categories coexist with the canonical 10** — every store now has the canonical 10 (Power Tools → Home Appliances). The 8–10 legacy names (Cement, Iron Sheets, Paints…) cannot be deleted because historical products reference them (the DELETE endpoint correctly refuses with 409). This is correct behaviour; the two taxonomies coexist.
-6. **Default test password** — all populated users share `password123`; production should enforce first-login password rotation.
+2. **No store size / operating-hours columns** (see §3.1) - recommend `sizeSqm`, `operatingHours` + `PUT /api/stores/[id]`.
+3. **No inventory-staff RBAC role** - recommend adding `STOREKEEPER` to the role enum with products/stock permissions only.
+4. **Checkout has no `date` field** - new sales are dated "now"; expenses/rentals likewise cannot be backdated via API. Recommend accepting an optional ISO `date` (SUPER_ADMIN only) or providing a DB-level seed script for historical data.
+5. **Legacy categories coexist with the canonical 10** - every store now has the canonical 10 (Power Tools → Home Appliances). The 8-10 legacy names (Cement, Iron Sheets, Paints…) cannot be deleted because historical products reference them (the DELETE endpoint correctly refuses with 409). This is correct behaviour; the two taxonomies coexist.
+6. **Default test password** - all populated users share `password123`; production should enforce first-login password rotation.
 
 ---
 

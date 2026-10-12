@@ -3306,7 +3306,7 @@ ALTER TABLE "shift_schedules" ADD CONSTRAINT "shift_schedules_userId_fkey" FOREI
 --   After cleaning up any pre-existing violations, tighten to fully validated
 --   with:
 --       ALTER TABLE products VALIDATE CONSTRAINT chk_products_stock_nonneg;
---   (see scripts/apply-prod-constraints.md for the full runbook)
+--   (see docs/runbooks/apply-prod-constraints.md for the full runbook)
 --
 -- HOW TO RUN
 --   psql "$DIRECT_URL" -f prisma/sql/financial_constraints.sql

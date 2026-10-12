@@ -1,10 +1,10 @@
-# MBUMAH HARDWARE POS — Verification Checklist
+# MBUMAH HARDWARE POS - Verification Checklist
 
 > **Purpose**: Comprehensive system validation checklist for pre-release,
 > post-deployment, and regression testing. Every item must be verified
 > before a production release is cut.
 >
-> **Last updated**: 2026-06-30 (Post eL.map crash fix — 5-phase defensive hardening)
+> **Last updated**: 2026-06-30 (Post eL.map crash fix - 5-phase defensive hardening)
 > **Version**: v0.2.0
 
 ---
@@ -474,11 +474,11 @@ agent-browser open http://localhost:3000
 agent-browser snapshot          # page renders, no blank screen
 
 # 5. Test key flows manually
-#    - Login → Dashboard → POS → Checkout → Receipt
-#    - Products → Create → Edit → Delete
-#    - Customers → Create → View History
-#    - Financial → Journal Entry → Trial Balance
-#    - Purchase Orders → Create → Approve → Receive
+# - Login → Dashboard → POS → Checkout → Receipt
+# - Products → Create → Edit → Delete
+# - Customers → Create → View History
+# - Financial → Journal Entry → Trial Balance
+# - Purchase Orders → Create → Approve → Receive
 
 # 6. Check database
 bunx prisma validate            # schema is valid
@@ -497,15 +497,15 @@ curl -s https://mbumah-hardware-pos-one.vercel.app/api/health/db
 # Expected: { "success": true }
 
 # 3. Smoke test (browser)
-#    - Open the URL in browser
-#    - Verify login page renders
-#    - Login and verify dashboard loads
-#    - Click through 3-4 tabs to confirm no crashes
+# - Open the URL in browser
+# - Verify login page renders
+# - Login and verify dashboard loads
+# - Click through 3-4 tabs to confirm no crashes
 ```
 
 ---
 
-## 14. Defensive Coding & Crash Prevention (Phase 2 — eL.map Fix)
+## 14. Defensive Coding & Crash Prevention (Phase 2 - eL.map Fix)
 
 ### 14.1 `.map()` Safety Guards
 

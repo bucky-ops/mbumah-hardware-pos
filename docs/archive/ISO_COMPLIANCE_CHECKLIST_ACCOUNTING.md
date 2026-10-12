@@ -1,4 +1,4 @@
-# ISO Compliance Checklist — Accounting Module
+# ISO Compliance Checklist - Accounting Module
 
 **Project:** Mbumah Hardware POS & ERP
 **Module:** Financial Accounting (Double-Entry Bookkeeping)
@@ -27,139 +27,139 @@ enhancement program.
 
 ---
 
-## Part A — ISO/IEC 27001:2022 (Information Security Management)
+## Part A - ISO/IEC 27001:2022 (Information Security Management)
 
-### A.5 — Organizational Controls
+### A.5 - Organizational Controls
 
-#### A.5.12 — Classification of Information
+#### A.5.12 - Classification of Information
 - **Status:** ✅ Implemented
 - **Implementation:**
   - Financial data classified as **CONFIDENTIAL** (customer PII, transaction amounts) and **INTERNAL** (chart of accounts, journal entries).
   - PII masking in all log entries: emails masked as `j•••@example.com`, phones as `+254•••••123`.
-  - `src/lib/receipt-distribution.ts` — `maskEmail()` and `maskPhone()` functions applied to every log entry and AuditLog record.
+  - `src/lib/receipt-distribution.ts` - `maskEmail()` and `maskPhone()` functions applied to every log entry and AuditLog record.
   - AuditLog stores masked recipient values, never raw PII.
 
-#### A.5.15 — Access Control
+#### A.5.15 - Access Control
 - **Status:** ✅ Implemented
 - **Implementation:**
   - Role-Based Access Control (RBAC) with 5 roles: `SUPER_ADMIN`, `STORE_OWNER`, `BRANCH_MANAGER`, `ACCOUNTANT`, `CASHIER`.
   - `PERMISSION_MATRIX` in `src/lib/types.ts` defines explicit resource/action permissions per role.
   - `withFinancialAuth()` wrapper in `src/lib/auth.ts` enforces authentication + role on ALL 14 financial API routes.
   - Three role tiers for financial access:
-    - `FINANCIAL_ROLES.READ` — GET endpoints (SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER, ACCOUNTANT)
-    - `FINANCIAL_ROLES.WRITE` — POST/PUT/DELETE endpoints (SUPER_ADMIN, STORE_OWNER, ACCOUNTANT)
-    - `FINANCIAL_ROLES.AUDIT` — Audit/trial-balance/snapshot endpoints (SUPER_ADMIN, STORE_OWNER, ACCOUNTANT)
+    - `FINANCIAL_ROLES.READ` - GET endpoints (SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER, ACCOUNTANT)
+    - `FINANCIAL_ROLES.WRITE` - POST/PUT/DELETE endpoints (SUPER_ADMIN, STORE_OWNER, ACCOUNTANT)
+    - `FINANCIAL_ROLES.AUDIT` - Audit/trial-balance/snapshot endpoints (SUPER_ADMIN, STORE_OWNER, ACCOUNTANT)
   - CASHIER role has **zero** financial permissions (`financials: []`).
 
-#### A.5.16 — Identity Management
+#### A.5.16 - Identity Management
 - **Status:** ✅ Implemented
 - **Implementation:**
   - Bearer token authentication via `getSessionFromRequest()` in `src/lib/auth.ts`.
   - Session validation against database (checks user exists, is active, token not expired).
-  - Every financial API call requires a valid session — unauthenticated requests return HTTP 401.
+  - Every financial API call requires a valid session - unauthenticated requests return HTTP 401.
 
-#### A.5.17 — Authentication Information
+#### A.5.17 - Authentication Information
 - **Status:** ✅ Implemented
 - **Implementation:**
   - JWT tokens with `NEXTAUTH_SECRET` and `JWT_SECRET` environment variables.
   - Account lockout after failed login attempts (tracked in `User.failedLoginAttempts`, `lockedUntil`).
   - Password hashing via NextAuth.js credential provider.
 
-#### A.5.18 — Access Rights
+#### A.5.18 - Access Rights
 - **Status:** ✅ Implemented
 - **Implementation:**
   - `requireStoreAccess()` in `src/lib/auth.ts` enforces that non-SUPER_ADMIN users can only access their own store's data.
   - Cross-store access attempts are logged as `CROSS_STORE_ACCESS_DENIED` with WARN severity.
   - `runWithSessionTenant()` applies ORM-level tenant filtering so store-scoped queries are automatically filtered by `storeId`.
 
-### A.8 — Asset Management
+### A.8 - Asset Management
 
-#### A.8.2 — Information Classification and Handling
+#### A.8.2 - Information Classification and Handling
 - **Status:** ✅ Implemented
 - **Implementation:**
   - Financial data marked as confidential in the data model.
   - `AuditLog.oldValues` and `AuditLog.newValues` stored as Json with PII fields masked before persistence.
   - Receipt distribution (`receipt-distribution.ts`) masks recipient email/phone in all log entries.
 
-#### A.8.3 — Restriction of Information Transfer
+#### A.8.3 - Restriction of Information Transfer
 - **Status:** ✅ Implemented
 - **Implementation:**
   - Receipt distribution via Email (Resend) and WhatsApp (Twilio) only sends to explicitly provided or customer-record recipients.
   - No bulk distribution without per-transaction authorization.
   - Provider credentials (RESEND_API_KEY, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) stored as environment variables, never in code or logs.
 
-### A.9 — Access Control
+### A.9 - Access Control
 
-#### A.9.4.1 — Access Restriction
+#### A.9.4.1 - Access Restriction
 - **Status:** ✅ Implemented
 - **Implementation:**
   - `withFinancialAuth()` restricts financial endpoints to authorized roles only.
   - Unauthorized access attempts logged as `FINANCIAL_ACCESS_DENIED` with the user's email, role, attempted path, and required roles.
   - HTTP 403 returned for insufficient permissions.
 
-#### A.9.4.2 — Secure Log-on Procedures
+#### A.9.4.2 - Secure Log-on Procedures
 - **Status:** ✅ Implemented
 - **Implementation:**
   - Login via NextAuth.js credential provider with bcrypt password hashing.
   - Account lockout after configurable failed attempts.
   - Session tokens are JWT-based with expiration.
 
-#### A.9.4.4 — Use of Privileged Utility Programs
+#### A.9.4.4 - Use of Privileged Utility Programs
 - **Status:** ✅ Implemented
 - **Implementation:**
   - `withImmutabilityBypass()` in `src/lib/db.ts` is a controlled escape hatch for the immutability guard.
   - Only used in sanctioned code paths (journal voiding, reconciliation) with explicit per-entry reason strings.
-  - Never exposed via API — all mutations go through `accounting-helpers.ts` lifecycle functions.
+  - Never exposed via API - all mutations go through `accounting-helpers.ts` lifecycle functions.
 
-### A.12 — Operations Security
+### A.12 - Operations Security
 
-#### A.12.1.1 — Operational Procedures and Responsibilities
+#### A.12.1.1 - Operational Procedures and Responsibilities
 - **Status:** ✅ Implemented
 - **Implementation:**
   - Documented financial period lifecycle: OPEN → CLOSED → LOCKED (irreversible).
   - Each state transition requires explicit user action with mandatory reason (CLOSE, LOCK, REOPEN).
   - `closeFinancialPeriod()` blocks if unposted entries exist or audit issues are found.
 
-#### A.12.4.1 — Event Logging
+#### A.12.4.1 - Event Logging
 - **Status:** ✅ Implemented
 - **Implementation:**
   - Comprehensive `AuditLog` model records every financial mutation:
-    - `entityType`, `entityId` — what was changed
-    - `action` — CREATE, UPDATE, DELETE, POST, VOID, APPROVE, CLOSE, LOCK, REOPEN, RECONCILE, BUDGET_SET, SNAPSHOT
-    - `userId` — who performed the action
-    - `oldValues`, `newValues` — before/after state (Json)
-    - `reason` — mandatory for VOID, CLOSE, LOCK
-    - `ipAddress`, `userAgent` — for forensic analysis
-    - `timestamp` — precise UTC timestamp
+    - `entityType`, `entityId` - what was changed
+    - `action` - CREATE, UPDATE, DELETE, POST, VOID, APPROVE, CLOSE, LOCK, REOPEN, RECONCILE, BUDGET_SET, SNAPSHOT
+    - `userId` - who performed the action
+    - `oldValues`, `newValues` - before/after state (Json)
+    - `reason` - mandatory for VOID, CLOSE, LOCK
+    - `ipAddress`, `userAgent` - for forensic analysis
+    - `timestamp` - precise UTC timestamp
   - `recordAuditLog()` in `accounting-helpers.ts` is the central audit writer.
   - All 25 lifecycle functions in `accounting-helpers.ts` write AuditLog records.
   - Receipt distribution writes `RECEIPT_DISTRIBUTED` and `RECEIPT_DISTRIBUTION_FAILED` audit entries.
 
-#### A.12.4.2 — Protection of Log Information
+#### A.12.4.2 - Protection of Log Information
 - **Status:** ✅ Implemented
 - **Implementation:**
   - `AuditLog` is in the `IMMUTABLE_MODELS` set in `src/lib/db.ts`.
   - Prisma Client Extension intercepts and blocks `update`, `updateMany`, `delete`, `deleteMany` on AuditLog.
   - Only `withImmutabilityBypass()` can override this, and it is never used for AuditLog mutations.
-  - AuditLog table is append-only — records can be created but never modified or deleted.
+  - AuditLog table is append-only - records can be created but never modified or deleted.
 
-#### A.12.4.3 — Administrator and Operator Logs
+#### A.12.4.3 - Administrator and Operator Logs
 - **Status:** ✅ Implemented
 - **Implementation:**
   - `FINANCIAL_ACCESS_DENIED` log entries record every unauthorized financial access attempt.
   - `CROSS_STORE_ACCESS_DENIED` records cross-tenant access attempts.
   - All logs include userId, storeId, IP address, user agent, and timestamp.
 
-### A.14 — System Acquisition, Development and Maintenance
+### A.14 - System Acquisition, Development and Maintenance
 
-#### A.14.2.2 — System Change Control
+#### A.14.2.2 - System Change Control
 - **Status:** ✅ Implemented
 - **Implementation:**
   - Git-based version control with comprehensive commit messages.
   - 6-phase enhancement program executed sequentially with documented stopping points.
   - Each phase verified with lint (0 errors), type check, and agent-browser end-to-end testing before proceeding.
 
-#### A.14.2.3 — Technical Application of System Change Control
+#### A.14.2.3 - Technical Application of System Change Control
 - **Status:** ✅ Implemented
 - **Implementation:**
   - TypeScript strict mode enforced across the codebase.
@@ -167,7 +167,7 @@ enhancement program.
   - Banker's rounding (HALF_EVEN) per GAAP/IFRS standard.
   - Prisma Decimal type for all database monetary fields (no Float columns).
 
-#### A.14.2.5 — Secure System Engineering Principles
+#### A.14.2.5 - Secure System Engineering Principles
 - **Status:** ✅ Implemented
 - **Implementation:**
   - Defense-in-depth: balance validation at 3 layers (UI → API → accounting-helpers).
@@ -175,9 +175,9 @@ enhancement program.
   - Segregation of duties: `approveJournalEntry()` blocks the creator from approving their own entry.
   - Immutability guards prevent modification of posted/voided journal entries.
 
-### A.16 — Incident Management
+### A.16 - Incident Management
 
-#### A.16.1.5 — Response to Security Incidents
+#### A.16.1.5 - Response to Security Incidents
 - **Status:** ✅ Implemented
 - **Implementation:**
   - `runFinancialAudit()` in `src/lib/financial-audit.ts` detects integrity violations (unbalanced entries, trial balance mismatch).
@@ -186,20 +186,20 @@ enhancement program.
 
 ---
 
-## Part B — ISO 9001:2015 (Quality Management System)
+## Part B - ISO 9001:2015 (Quality Management System)
 
-### Clause 4 — Context of the Organization
+### Clause 4 - Context of the Organization
 
-#### 4.1 — Understanding the Organization and its Context
+#### 4.1 - Understanding the Organization and its Context
 - **Status:** ✅ Implemented
 - **Implementation:**
   - Multi-tenant architecture supports the Mbumah Hardware multi-branch operation (5 stores).
   - Organization → Store → Transaction hierarchy with `organizationId` and `storeId` scoping.
   - Kenyan-specific: KES currency, KRA PIN, VAT (16%), M-Pesa payment integration.
 
-### Clause 6 — Planning
+### Clause 6 - Planning
 
-#### 6.1 — Actions to Address Risks and Opportunities
+#### 6.1 - Actions to Address Risks and Opportunities
 - **Status:** ✅ Implemented
 - **Implementation:**
   - `Budget` model with budgeted vs. actual variance tracking.
@@ -207,9 +207,9 @@ enhancement program.
   - Financial period close audit (`verifyPeriodClose()`) identifies CRITICAL/HIGH issues before period closure.
   - Trial balance verification ensures accounting equation (Σdebit === Σcredit) holds.
 
-### Clause 7 — Support
+### Clause 7 - Support
 
-#### 7.5 — Documented Information
+#### 7.5 - Documented Information
 - **Status:** ✅ Implemented
 - **Implementation:**
   - This compliance checklist document.
@@ -217,24 +217,24 @@ enhancement program.
   - `worklog.md` maintains a running record of all development phases.
   - Prisma schema with detailed comments on every model and field.
 
-### Clause 8 — Operation
+### Clause 8 - Operation
 
-#### 8.1 — Operational Planning and Control
+#### 8.1 - Operational Planning and Control
 - **Status:** ✅ Implemented
 - **Implementation:**
   - Financial period lifecycle: OPEN → CLOSED → LOCKED provides controlled operational phases.
   - Journal entry lifecycle: DRAFT → APPROVED → POSTED → (optionally VOIDED).
   - Each transition is a sanctioned, audit-logged operation.
 
-#### 8.2 — Products and Services — Customer Communication
+#### 8.2 - Products and Services - Customer Communication
 - **Status:** ✅ Implemented
 - **Implementation:**
-  - Receipt distribution via Email (Resend) and WhatsApp (Twilio) — `src/lib/receipt-distribution.ts`.
+  - Receipt distribution via Email (Resend) and WhatsApp (Twilio) - `src/lib/receipt-distribution.ts`.
   - Branded HTML receipt with store logo, address, phone, itemized totals.
   - Graceful degradation: when API keys are absent, the system simulates the send and informs the user (no silent failure).
   - Audit trail: every receipt distribution logged with recipient (masked), channel, and provider ID.
 
-#### 8.3 — Design and Development
+#### 8.3 - Design and Development
 - **Status:** ✅ Implemented
 - **Implementation:**
   - Double-entry bookkeeping per GAAP/IFRS standards.
@@ -242,30 +242,30 @@ enhancement program.
   - Normal balance concept (DEBIT for assets/expenses, CREDIT for liabilities/equity/revenue).
   - Contra-account support (override normal balance for Accumulated Depreciation, Sales Discounts).
 
-#### 8.5 — Production and Service Provision
+#### 8.5 - Production and Service Provision
 - **Status:** ✅ Implemented
 - **Implementation:**
   - `recordSaleJournalEntry()` in `src/lib/account-helper.ts` automatically records journal entries for every POS sale.
   - Payment breakdown (cash, M-Pesa, debt) correctly allocated to appropriate accounts.
   - COGS (Cost of Goods Sold) automatically recorded for inventory transactions.
 
-#### 8.6 — Release of Products and Services
+#### 8.6 - Release of Products and Services
 - **Status:** ✅ Implemented
 - **Implementation:**
   - Journal entries require approval before posting (segregation of duties).
   - `postJournalEntry()` re-validates balance and period before posting (defense-in-depth).
   - System-generated entries (sales, M-Pesa callbacks) can bypass approval via `postImmediately` flag.
 
-#### 8.7 — Control of Nonconforming Outputs
+#### 8.7 - Control of Nonconforming Outputs
 - **Status:** ✅ Implemented
 - **Implementation:**
-  - `voidJournalEntry()` creates a reversing entry rather than deleting the original (error correction via reversing entry — ISO 9001 best practice).
+  - `voidJournalEntry()` creates a reversing entry rather than deleting the original (error correction via reversing entry - ISO 9001 best practice).
   - Voided entries retain the `isVoided` flag and `voidReason` for audit trail.
   - `reconcileJournalEntryLine()` supports bank/account reconciliation to identify and correct discrepancies.
 
-### Clause 9 — Performance Evaluation
+### Clause 9 - Performance Evaluation
 
-#### 9.1 — Monitoring, Measurement, Analysis and Evaluation
+#### 9.1 - Monitoring, Measurement, Analysis and Evaluation
 - **Status:** ✅ Implemented
 - **Implementation:**
   - `generateTrialBalance()` computes real-time trial balance as of any date.
@@ -277,23 +277,23 @@ enhancement program.
   - `captureTrialBalanceSnapshot()` freezes point-in-time financial position for archival.
   - Budget variance analysis with automatic recalculation.
 
-#### 9.2 — Internal Audit
+#### 9.2 - Internal Audit
 - **Status:** ✅ Implemented
 - **Implementation:**
   - `listAuditTrail()` in `accounting-helpers.ts` provides filterable audit trail queries.
   - Audit Trail UI in the Reports sub-tab allows filtering by entityType, action, user, date range.
   - Snapshots provide historical baselines for comparison audits.
 
-### Clause 10 — Improvement
+### Clause 10 - Improvement
 
-#### 10.1 — General
+#### 10.1 - General
 - **Status:** ✅ Implemented
 - **Implementation:**
   - Financial period reopen mechanism (CLOSED → OPEN) allows adjusting entries when errors are discovered.
   - LOCKED state prevents modification after financial statements are issued (regulatory requirement).
   - Reconciliation workflow identifies and resolves discrepancies.
 
-#### 10.2 — Nonconformity and Corrective Action
+#### 10.2 - Nonconformity and Corrective Action
 - **Status:** ✅ Implemented
 - **Implementation:**
   - `voidJournalEntry()` with mandatory `voidReason` documents the corrective action.
@@ -302,7 +302,7 @@ enhancement program.
 
 ---
 
-## Part C — Technical Implementation Matrix
+## Part C - Technical Implementation Matrix
 
 ### Financial Data Models (Phase 1)
 
@@ -313,7 +313,7 @@ enhancement program.
 | `JournalEntryLine` | Debit/credit lines | A.12.4.2 (Log Protection) | 8.5 (Production) |
 | `FinancialPeriod` | Period lifecycle | A.12.1.1 (Procedures) | 8.1 (Operation) |
 | `TrialBalanceSnapshot` | Point-in-time freeze | A.12.4.2 (Log Protection) | 9.1 (Monitoring) |
-| `Budget` | Budget vs. actual | — | 6.1 (Planning) |
+| `Budget` | Budget vs. actual | - | 6.1 (Planning) |
 | `AuditLog` | Immutable audit trail | A.12.4.1, A.12.4.2 | 9.2 (Internal Audit) |
 
 ### Business Logic Functions (Phase 2)
@@ -363,7 +363,7 @@ enhancement program.
 
 ---
 
-## Part D — Verification Evidence
+## Part D - Verification Evidence
 
 ### Lint & Type Check
 - `bun run lint` → **0 errors**, 337 pre-existing warnings ✅
@@ -397,7 +397,7 @@ enhancement program.
 
 ---
 
-## Part E — Environment Variables Required
+## Part E - Environment Variables Required
 
 | Variable | Purpose | Required |
 |----------|---------|----------|
@@ -413,7 +413,7 @@ enhancement program.
 
 ---
 
-## Part F — Continuous Improvement Recommendations
+## Part F - Continuous Improvement Recommendations
 
 1. **Nightly Audit Cron Job:** Schedule `runFinancialAudit()` to run nightly via Vercel Cron, alerting on CRITICAL issues.
 2. **Twilio Template Approval:** Pre-approve WhatsApp message templates with Twilio for production deployment.

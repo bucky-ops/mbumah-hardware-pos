@@ -1,9 +1,9 @@
 # Applying Financial Integrity Constraints to Production (Neon)
 
-**Audit reference:** `FINANCIAL_MODULE_AUDIT_REPORT.md` — hard DB guarantees for
+**Audit reference:** `docs/archive/FINANCIAL_MODULE_AUDIT_REPORT.md` - hard DB guarantees for
 stock non-negativity, single-sided journal lines, and per-entry debit = credit.
 
-**DDL source of truth:** [`prisma/sql/financial_constraints.sql`](../sql/financial_constraints.sql)
+**DDL source of truth:** [`prisma/sql/financial_constraints.sql`](../../prisma/sql/financial_constraints.sql)
 (the same statements are appended to
 `prisma/migrations/20260904120000_financial_baseline/migration.sql` so fresh
 databases get them automatically via `prisma migrate deploy`).
@@ -14,16 +14,16 @@ databases get them automatically via `prisma migrate deploy`).
 
 Every `CHECK` constraint is added with `NOT VALID`:
 
-- **Enforced immediately for new writes** — from the moment the `ALTER TABLE`
+- **Enforced immediately for new writes** - from the moment the `ALTER TABLE`
   commits, any `INSERT`/`UPDATE` that would violate the constraint fails.
-- **Existing rows are not scanned** — PostgreSQL skips validation of rows that
+- **Existing rows are not scanned** - PostgreSQL skips validation of rows that
   already exist. This avoids a full-table scan and a long `ACCESS EXCLUSIVE`
   lock at apply time, which matters because production already contains rows
   that may pre-date these guarantees (seeded opening stock balances, legacy
   journal lines from before the posting-remediation work).
 
 Running without `NOT VALID` (i.e. a validating `ADD CONSTRAINT`) on a table
-with existing violations — or even on a large clean table — would block all
+with existing violations - or even on a large clean table - would block all
 reads and writes for the duration of the scan.
 
 ## Apply commands
@@ -61,7 +61,7 @@ psql "$DIRECT_URL" -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;"
 
 `NOT VALID` constraints only protect *new* rows. After cleaning up any
 pre-existing violations, re-validate each constraint (this takes a
-`SHARE UPDATE EXCLUSIVE` lock — brief, does not block reads/writes except
+`SHARE UPDATE EXCLUSIVE` lock - brief, does not block reads/writes except
 other DDL):
 
 ```bash

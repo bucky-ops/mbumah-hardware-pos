@@ -15,7 +15,7 @@ All notable changes to Mbumah Hardware POS are documented in this file (Keep a C
 - **Zero-sales KPI honesty (new branches)**: when a branch has no sales today, the Today's Revenue card shows a gray trend badge (never green or red at zero) with a hover tooltip "No sales yet today - start selling!" and the same coaching line as the card sub-text. Live/updated/auto-refresh-30s behavior from v2.13.0 is untouched.
 
 ### Notes
-- RBAC, manager-PIN overrides, abuse detection and the audit trail (v2.12.x–v2.13.0) are unchanged and fully enforced.
+- RBAC, manager-PIN overrides, abuse detection and the audit trail (v2.12.x-v2.13.0) are unchanged and fully enforced.
 - No schema changes; no changes to totals, VAT math, payments, debt or discount gates.
 
 ## [2.13.2] Hotfix: checkout 500 regression + limited-dashboard money card
@@ -40,11 +40,11 @@ Closes the two acceptance nuances documented at the v2.13.0 E2E verification. No
 
 ## [2.13.0] Feature release: RBAC & Audit
 
-The v2.12.1 → v2.13.0 ladder completes the RBAC roadmap. This release's headline is already live since v2.12.5–v2.12.8; v2.13.0 adds the release polish and ships the full ladder together.
+The v2.12.1 → v2.13.0 ladder completes the RBAC roadmap. This release's headline is already live since v2.12.5-v2.12.8; v2.13.0 adds the release polish and ships the full ladder together.
 
-### The ladder (v2.12.1 → v2.12.8)
-- **v2.12.2–v2.12.5, RBAC core**: 16-key dotted feature-permission matrix (`src/lib/permissions.ts`) with a 5-role system (SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER, CASHIER, INVENTORY_MANAGER), backend `403 PERMISSION_DENIED` enforcement, role-filtered sidebar with lock affordances, LockedCard + access requests, cashier limited dashboard, manager step-up authorization at the counter (`POST /api/auth/manager-authorize`) for >5% discounts and high-risk debt (KES 150k+).
-- **v2.12.6–v2.12.8, Audit & abuse**: consolidated Audit Trail page with CSV export, discount-spam abuse detection (>3 denials/1h → SecurityEvent + manager notifications), privilege-abuse lockout (5 denials/10 min → 15-minute lock + Super Admin alerts), Security tab in the notification center, inventory price guard for INVENTORY_MANAGER.
+### The ladder (v2.12.1 v2.12.8)
+- **v2.12.2-v2.12.5, RBAC core**: 16-key dotted feature-permission matrix (`src/lib/permissions.ts`) with a 5-role system (SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER, CASHIER, INVENTORY_MANAGER), backend `403 PERMISSION_DENIED` enforcement, role-filtered sidebar with lock affordances, LockedCard + access requests, cashier limited dashboard, manager step-up authorization at the counter (`POST /api/auth/manager-authorize`) for >5% discounts and high-risk debt (KES 150k+).
+- **v2.12.6-v2.12.8, Audit & abuse**: consolidated Audit Trail page with CSV export, discount-spam abuse detection (>3 denials/1h → SecurityEvent + manager notifications), privilege-abuse lockout (5 denials/10 min → 15-minute lock + Super Admin alerts), Security tab in the notification center, inventory price guard for INVENTORY_MANAGER.
 - **v2.12.1, POS hotfix**: per-unit fallback ("per " bug), product-card badge overlap, FAB overlap on checkout, category scrollbar, VAT "(incl.)" labels, stock counter units, duplicate-image cleanup script.
 
 ### Added (v2.13.0)
