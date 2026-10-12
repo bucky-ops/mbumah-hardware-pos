@@ -11,6 +11,7 @@
     "lint:fix": "eslint . --fix",
     "prisma:validate": "prisma validate",
     "typecheck": "tsc --noEmit --strict",
+    "pretest": "node scripts/prepare-test-db.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
