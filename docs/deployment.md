@@ -127,14 +127,14 @@ docker-compose exec app npx prisma db seed
 
 ## Health endpoints
 
-There are two health endpoints and they serve different audiences:
+There are two health surfaces and they serve different audiences:
 
 | Endpoint | Auth | Purpose |
 |----------|------|---------|
-| `GET /api/health` | public | Liveness + readiness for load balancers, Docker healthchecks and uptime monitors. Returns `status`, `version`, database connectivity, ledger balance and security checks. |
-| `GET /api/healthy` | authenticated | Richer in-app health card data; requires a signed-in session and returns 401 for anonymous callers. |
+| `GET /api/health` | public | Liveness + readiness for load balancers, Docker healthchecks and uptime monitors. Returns `status`, `version`, `appMode`, `workspaceMode`, `databaseProvider`, database connectivity, ledger balance and security checks. |
+| `GET /api/health/system-status` | authenticated | Aggregated in-app system status (health, circuit breakers, DLQ, compliance, retention) for the System Health tab; requires a signed-in session and returns 401 for anonymous callers. |
 
-Use `/api/health` for automation (Docker `healthcheck`, uptime pings, CI smoke tests) - it is the endpoint that returns `200` without cookies. `/api/healthy` is meant for the app's own health UI where the caller is already signed in.
+Use `/api/health` for automation (Docker `healthcheck`, uptime pings, CI smoke tests) - it is the endpoint that returns `200` without cookies. `/api/health/system-status` is meant for the app's own health UI where the caller is already signed in.
 
 ## Self-hosting guide (Docker, Nginx, PostgreSQL)
 

@@ -61,14 +61,14 @@ For a single shop machine that must not depend on the internet or on Docker:
 
 The subdomain variables work identically there: set the `SUBDOMAIN WORKSPACES` block in `.env`, apply the hosts entries from `npm run domains:print`, and run `npm run domains:verify` after starting the server. Offline mode (SQLite, mock M-Pesa, local HTTPS) is covered step by step in [Local offline setup](local-offline-setup.md).
 
-## Health endpoints: /api/health vs /api/healthy
+## Health endpoints: /api/health vs /api/health/system-status
 
 There are two health surfaces with different audiences:
 
 | Endpoint | Auth | Use |
 |----------|------|-----|
-| `GET /api/health` | public | Liveness + readiness for automation: Docker healthchecks (the `app` service healthchecks it), uptime monitors, CI smoke tests. Returns status, version, database connectivity and security checks without any session. |
-| `GET /api/healthy` | auth-gated | The richer in-app health card variant documented in [Deployment](deployment.md). Like every non-public `/api` route it requires a signed-in session (401 for anonymous callers) - automation must always target `/api/health`. |
+| `GET /api/health` | public | Liveness + readiness for automation: Docker healthchecks (the `app` service healthchecks it), uptime monitors, CI smoke tests. Returns status, version, appMode, workspaceMode, databaseProvider, database connectivity and security checks without any session. |
+| `GET /api/health/system-status` | auth-gated | The aggregated in-app system status (health, circuit breakers, DLQ, compliance, retention) documented in [Deployment](deployment.md). Like every non-public `/api` route it requires a signed-in session (401 for anonymous callers) - automation must always target `/api/health`. |
 
 Public health paths (`/api/health` and `/api/health/*`) are passed through by the proxy before the auth layer; everything else under `/api` needs the Bearer token or the session cookie.
 
