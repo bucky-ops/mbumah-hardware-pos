@@ -1,6 +1,6 @@
 {
   "name": "mbumah-hardware-pos",
-  "version": "2.15.1",
+  "version": "2.15.2",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
@@ -16,7 +16,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
-    "db:push": "node scripts/setup-prisma-provider.mjs && prisma db push",
+    "db:push": "node scripts/ensure-schema.mjs",
     "db:generate": "node scripts/setup-prisma-provider.mjs && prisma generate",
     "db:migrate": "node scripts/setup-prisma-provider.mjs && prisma migrate dev",
     "db:migrate:deploy": "node scripts/setup-prisma-provider.mjs && prisma migrate deploy",
