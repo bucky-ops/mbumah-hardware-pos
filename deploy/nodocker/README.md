@@ -245,7 +245,7 @@ Manual update (equivalent to what the updater runs):
 git pull origin main
 npm install           # refresh dependencies (reconciles the lockfile; do not use npm ci, the lockfile is bun-managed)
 npm run db:push       # apply schema changes (self-healing: backs up SQLite data and converges even when unique-index additions are refused)
-npm run build         # rebuild (SKIP_ENV_VALIDATION=1 is set by the installer; re-set it if needed)
+BUILD_STANDALONE=1 npm run build   # rebuild (both flags the installer sets; the launcher needs standalone)
 # then start with start-pos.ps1 / start-pos.sh (they refresh static assets)
 ```
 

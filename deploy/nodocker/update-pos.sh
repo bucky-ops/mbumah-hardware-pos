@@ -151,7 +151,7 @@ run_rebuild() { # mirrors install-nodocker.sh steps 5-7 (minus seeding)
   echo "[BUILD 2/4] Applying the database schema..."
   if ! npm run db:push; then echo "[FAIL] db:push failed"; return 1; fi
   echo "[BUILD 3/4] Building the production app..."
-  if ! npm run build; then echo "[FAIL] build failed"; return 1; fi
+  if ! BUILD_STANDALONE=1 npm run build; then echo "[FAIL] build failed"; return 1; fi
 
   echo "[BUILD 4/4] Verifying the database..."
   local vrc=0

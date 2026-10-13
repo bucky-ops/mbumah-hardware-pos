@@ -35,9 +35,11 @@ RUN npx prisma generate
 # Build the Next.js application.
 # SKIP_ENV_VALIDATION=1 prevents Zod env validation from failing during build
 # (runtime env vars are injected at container start, not build time).
-# output: "standalone" in next.config.ts produces a self-contained output
-# in .next/standalone/ that includes only the necessary server code.
+# BUILD_STANDALONE=1 opts into output: "standalone" in next.config.ts, which
+# produces a self-contained output in .next/standalone/ that includes only the
+# necessary server code (the container runner starts that server directly).
 ENV SKIP_ENV_VALIDATION=1
+ENV BUILD_STANDALONE=1
 RUN bun run build
 
 # Stage 3: Runner - Minimal production image

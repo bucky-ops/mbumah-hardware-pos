@@ -1,6 +1,6 @@
 {
   "name": "mbumah-hardware-pos",
-  "version": "2.17.2",
+  "version": "2.17.3",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
@@ -29,10 +29,9 @@
     "health": "curl -s http://localhost:3000/api/health | bun -e 'process.stdin.on(\"data\",d=>console.log(JSON.stringify(JSON.parse(d.toString()),null,2)))'",
     "vercel-build": "SKIP_ENV_VALIDATION=1 node scripts/setup-prisma-provider.mjs && prisma generate && node scripts/sync-db-schema.mjs && node scripts/backfill-store-slugs.mjs && next build",
     "db:backup": "node scripts/backup-db.mjs",
-    "db:verify": "node scripts/setup-prisma-provider.mjs && prisma validate"
-  },
-  "prisma": {
-    "seed": "bun prisma/seed.ts"
+    "db:verify": "node scripts/setup-prisma-provider.mjs && prisma validate",
+    "db:preflight": "node scripts/preflight-schema.mjs",
+    "db:repair": "node scripts/repair-db.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -134,5 +133,8 @@
     "typescript": "^5",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^4.1.9"
+  },
+  "prisma": {
+    "seed": "bun prisma/seed.ts"
   }
 }

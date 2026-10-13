@@ -102,7 +102,7 @@ echo "[BUILD 3/4] Seeding the database (admin + demo data)..."
 npm run db:seed
 
 echo "[BUILD 4/4] Building the production app (3-8 min)..."
-npm run build
+BUILD_STANDALONE=1 npm run build
 
 # ── 6b. Verify the database is REALLY usable (tables + seeded admin) ─────
 # A silent failure in db push/seed used to produce an install that

@@ -3,9 +3,12 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Standalone output produces a self-contained build in .next/standalone/
   // that includes only the server code needed to run without node_modules.
-  // Required for Docker production deployments. Vercel ignores this setting
-  // and uses its own build output format.
-  output: "standalone",
+  // It is OPT-IN (BUILD_STANDALONE=1): the Docker image and the no-Docker
+  // installers/updaters set it because their launchers run
+  // .next/standalone/server.js. Plain `next build` (and Vercel, which uses
+  // its own output format) builds without it, which also avoids the Windows
+  // EINVAL copyfile errors the standalone file walk can trigger.
+  output: process.env.BUILD_STANDALONE === "1" ? "standalone" : undefined,
 
   reactStrictMode: true,
 
