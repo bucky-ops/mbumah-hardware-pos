@@ -60,10 +60,20 @@ export interface AuthSession {
 export async function getSessionFromRequest(
   request: NextRequest
 ): Promise<AuthSession | null> {
+  // v2.16.0 WORKSPACE COOKIE FALLBACK: the SPA keeps its Bearer token in
+  // localStorage (origin-scoped). When a shared session cookie domain is
+  // configured (NEXTAUTH_COOKIE_DOMAIN, e.g. ".mbumah.test"), the login
+  // route ALSO sets an `mbt_token` cookie so a branch subdomain can adopt
+  // the root-domain session without a second login. Authorization header
+  // always wins; the cookie is only a bootstrap fallback.
   const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-
-  const token = authHeader.slice(7);
+  let token: string | null = null;
+  if (authHeader?.startsWith('Bearer ')) {
+    token = authHeader.slice(7);
+  }
+  if (!token || token.trim().length === 0) {
+    token = request.cookies.get('mbt_token')?.value ?? null;
+  }
   if (!token) return null;
 
   const session = await db.session.findUnique({
@@ -118,7 +128,15 @@ export async function getSessionFromRequest(
 function runWithSessionTenant<T>(
   session: AuthSession,
   fn: () => Promise<T>,
+  tenantOverride?: string | null,
 ): Promise<T> {
+  // v2.16.0: a VALIDATED explicit tenant (the request's ?storeId that passed
+  // assertStoreScope via org-wide role or an active StoreMembership) wins so
+  // multi-store users get ORM-level scoping to the workspace they opened,
+  // not their primary store.
+  if (tenantOverride !== undefined && tenantOverride !== null) {
+    return runWithTenant(tenantOverride, fn);
+  }
   if (session.role === 'SUPER_ADMIN' || !session.storeId) {
     return runWithoutTenant(fn);
   }
@@ -441,6 +459,22 @@ export async function assertStoreScope(
     searchParams.get('storeId') || searchParams.get('store');
 
   if (requestedStoreId && requestedStoreId !== session.storeId) {
+    // v2.16.0 WORKSPACES: organization-wide roles may open any branch, and
+    // multi-store members (e.g. WAREHOUSE_MANAGER) may open their ASSIGNED
+    // branches via an active StoreMembership. Everyone else is denied and
+    // security-logged (existing behavior).
+    if (session.role === 'STORE_OWNER') return null;
+
+    const membership = await db.storeMembership.findFirst({
+      where: {
+        userId: session.userId,
+        storeId: requestedStoreId,
+        status: 'ACTIVE',
+      },
+      select: { id: true },
+    });
+    if (membership) return null;
+
     return denyCrossStoreAccess(request, session, requestedStoreId);
   }
 
@@ -528,10 +562,22 @@ export function requireStoreAccess(
     const storeScopeDenied = await assertStoreScope(request, session);
     if (storeScopeDenied) return storeScopeDenied;
 
+    // v2.16.0 WORKSPACES: when the request targets a DIFFERENT store than the
+    // session's primary one (validated just above by assertStoreScope), run
+    // the ORM tenancy against THAT store so branch workspaces show the right
+    // branch's data instead of an empty primary-store filter.
+    let tenantOverride: string | null | undefined;
+    if (session.role !== 'SUPER_ADMIN') {
+      const requested = new URL(request.url).searchParams.get('storeId') || new URL(request.url).searchParams.get('store');
+      if (requested && requested !== session.storeId) {
+        tenantOverride = requested;
+      }
+    }
+
     // Run the handler inside the ORM-level tenant context. Non-admin users
     // are scoped to their own store; SUPER_ADMIN runs without enforcement.
     return runWithSessionTenant(session, () =>
-      handler(request, session, ...args.slice(1))
+      handler(request, session, ...args.slice(1)), tenantOverride
     );
   };
 }

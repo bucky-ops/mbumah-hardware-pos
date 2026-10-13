@@ -165,6 +165,33 @@ const envSchema = z.object({
   OPS_GITHUB_TOKEN: z.string().optional(),
   OPS_LOG_REPO: z.string().optional(),
   OPS_SIGNING_KEY: z.string().optional(),
+
+  // ── v2.16.0 SUBDOMAIN WORKSPACES - all optional, auto defaults ──────────
+  // Root domain for branch workspaces (mbumah.test locally, mbumah.co.ke in
+  // production). Empty = subdomain mode never activates (path mode only).
+  NEXT_PUBLIC_ROOT_DOMAIN: z.string().optional(),
+  // Master switch for subdomain workspaces ("true" default; "false" forces
+  // path mode everywhere even when the host looks like a branch subdomain).
+  NEXT_PUBLIC_USE_SUBDOMAINS: z.string().optional(),
+  // Workspace mode: auto (default) | subdomain | path | off.
+  NEXT_PUBLIC_STORE_WORKSPACE_MODE: z.string().optional(),
+  // Comma-separated Host allowlist with "*.domain" wildcards. Unset falls
+  // back to the built-in defaults (localhost, LAN IPs, *.vercel.app, root).
+  ALLOWED_HOSTS: z.string().optional(),
+  // Shared session cookie domain (".mbumah.test" / ".mbumah.co.ke") enabling
+  // one login across the root domain and all branch subdomains.
+  NEXTAUTH_COOKIE_DOMAIN: z.string().optional(),
+  NEXTAUTH_COOKIE_SECURE: z.string().optional(),
+  NEXTAUTH_COOKIE_SAME_SITE: z.enum(['lax', 'strict', 'none']).optional(),
+  // Local offline DNS documentation flags (informational, read by scripts).
+  LOCAL_DNS_MODE: z.enum(['hosts', 'dnsmasq', 'router-dns', 'manual', 'none']).optional(),
+  LOCAL_DOMAIN: z.string().optional(),
+  ENABLE_LOCAL_HTTPS: z.string().optional(),
+  // M-Pesa environment selector documented for offline mode ("mock" default
+  // offline). mpesa-daraja.ts currently derives the mode from credentials +
+  // NODE_ENV; declaring the name here documents the intended offline value.
+  MPESA_ENVIRONMENT: z.enum(['mock', 'sandbox', 'production']).optional(),
+  APP_MODE: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

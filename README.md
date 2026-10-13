@@ -26,6 +26,13 @@ Built with Next.js 16 (App Router), TypeScript, Prisma ORM, PostgreSQL (Neon in 
 | Reporting | Sales, inventory, and financial reports with CSV and PDF export |
 | Tax compliance | eTIMS-ready invoice structures and KRA tax-type summaries |
 
+## Multi-branch workspaces
+
+Since v2.16.0 every branch can be reached as its own workspace website - `juja-main.mbumah.co.ke` in production, `/stores/juja-main/dashboard` everywhere else - while the whole organization runs on one shared database. The root domain serves the organization console with org-wide KPIs, the branch selector serves multi-branch warehouse managers, a shared session cookie gives single sign-on across subdomains, and a global chat channel connects all branches. Host-header allowlisting, reserved subdomains and audit-logged authorization checks keep the workspaces isolated.
+
+- Feature reference: [docs/subdomain-workspaces.md](docs/subdomain-workspaces.md)
+- Running it without internet (hosts file, dnsmasq, local HTTPS, mock M-Pesa): [docs/local-offline-setup.md](docs/local-offline-setup.md)
+
 ## Quick start
 
 Prerequisites: Node.js 20 or newer (or Bun 1.1+), and a PostgreSQL or SQLite database.

@@ -35,6 +35,8 @@ import { isRateLimited } from '@/lib/rate-limit';
 import { loginSchema, validateInput } from '@/lib/validations';
 import { checkBruteForce, recordFailedAttempt, recordSuccessfulLogin } from '@/lib/brute-force';
 import { sanitizeInput, getClientIp } from '@/lib/security';
+// v2.16.0 (subdomain workspaces): shared session cookie for cross-subdomain SSO.
+import { buildSessionCookieHeaders } from '@/lib/workspace/session-cookie';
 
 // Force this route to be dynamically rendered at request time.
 // This prevents Next.js from attempting to collect page data / statically
@@ -313,6 +315,13 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
       });
     } catch { /* ignore logging errors */ }
 
+    // v2.16.0 (subdomain workspaces): active workspace memberships for the
+    // post-login route decision (multi-store users go to /branches/select).
+    const membershipRows = await db.storeMembership.findMany({
+      where: { userId: user.id, status: 'ACTIVE' },
+      select: { storeId: true },
+    });
+
     const authUser = {
       id: user.id,
       email: user.email,
@@ -331,6 +340,14 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
         name: user.store.name,
         location: user.store.location,
       } : null,
+      // v2.16.0 (subdomain workspaces): workspace memberships so the client
+      // can route multi-store users to /branches/select right after login.
+      memberships: Array.from(
+        new Set([
+          ...membershipRows.map((m) => m.storeId),
+          user.storeId,
+        ].filter(Boolean) as string[]),
+      ),
     };
 
     return Response.json({
@@ -340,6 +357,8 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
         token: session.token,
         expiresAt: session.expiresAt,
       },
+    }, {
+      headers: buildSessionCookieHeaders(session.token, session.expiresAt),
     });
   } catch (error) {
     // CATCH-ALL: log the FULL error object to Vercel function logs

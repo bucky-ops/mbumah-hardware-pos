@@ -23,9 +23,12 @@
  * in the Point-of-Sale surface - see LOGIN_POPUP_FIX_GUIDE.md.
  */
 import React, { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/lib/stores';
 import { APP_BUILD_LABEL } from '@/lib/version';
+// v2.16.0 (subdomain workspaces): role-based post-login destination.
+import { postLoginRedirect } from '@/lib/workspace/links';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -78,6 +81,7 @@ export function LoginScreen() {
   const [showForgotHelp, setShowForgotHelp] = useState(false);
   const login = useAuthStore((s) => s.login);
   const isLoading = useAuthStore((s) => s.isLoading);
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,6 +89,12 @@ export function LoginScreen() {
     try {
       // No success toast - the dashboard rendering is the confirmation.
       await login(email, password);
+      // v2.16.0 (subdomain workspaces): route org-wide roles to the
+      // organization console and multi-store managers to the branch
+      // selector. Returns null (stay) inside a workspace context or for
+      // branch-only roles, so the classic SPA behavior is unchanged.
+      const target = postLoginRedirect(useAuthStore.getState().user);
+      if (target) router.push(target);
     } catch (err: unknown) {
       // INLINE feedback instead of a popup toast: the error appears inside
       // the card, announced to screen readers, and clears on the next try.

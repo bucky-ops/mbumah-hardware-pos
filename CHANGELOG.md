@@ -2,6 +2,27 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.16.0] Feature: subdomain workspaces for offline and localhost modes
+
+### Added
+- **Branch subdomain workspaces** - every branch can now be reached as its own website (`juja-main.mbumah.co.ke`) while everything stays on one shared database. The root domain remains the organization console; path mode (`/stores/juja-main/dashboard`) remains the universal fallback for localhost, raw IPs, previews and tunnels without wildcard DNS. Mode selection is automatic (`NEXT_PUBLIC_STORE_WORKSPACE_MODE=auto`) with explicit `subdomain`, `path` and `off` overrides.
+- **Host security layer in the Edge proxy** (extends the previous API-only pipeline to pages): Host header allowlist (`ALLOWED_HOSTS`, built-in defaults cover localhost, LAN IPs, `*.vercel.app` and the configured root domain), port stripping, reserved-subdomain protection (www, api, auth, admin, app, ...), branch subdomain rewrites to the internal path workspace, advisory `x-store-subdomain` / `x-store-slug` request headers, and a CORS OPTIONS preflight answer for trusted origins only (never a wildcard with credentials).
+- **Store workspace schema**: `Store.slug` + `Store.subdomain` (unique, RFC 1123 labels, reserved-word protected) and `Store.brandingColor` (branch accent). Production-safe idempotent backfill (`scripts/backfill-store-slugs.mjs`, wired into `vercel-build` and `npm run db:backfill-slugs`) stamps legacy rows without touching populated values.
+- **Multi-store memberships**: new `StoreMembership` model (unique active row per user+store) grants additional branch access; `assertStoreScope` now honors org-wide roles (SUPER_ADMIN, STORE_OWNER) and active memberships, and the ORM tenant context follows the validated requested store so branch workspaces show the right branch's data. A demo WAREHOUSE_MANAGER (`warehouse@mbumahhardware.co.ke`, password123) is seeded with Juja Main + Thika assignments.
+- **Organization console** (`/org/dashboard`): combined metrics (revenue, transactions, low stock, overdue rentals, debt aging, pending M-Pesa), per-branch performance table, recent audit events, and "Open branch workspace" actions that open a new tab (subdomain URL when available, path mode otherwise). SUPER_ADMIN and STORE_OWNER get the full view; ACCOUNTANT a read-only financial view; branch-only roles are denied and the attempt is audit-logged.
+- **Branch selector** (`/branches/select`) for multi-store members: shows only assigned active stores, opens workspaces in new tabs, auto-redirects single-store members, calm empty state for unassigned users.
+- **Global chat across subdomains** (`/chat` + `/api/chat/*`): a singleton GLOBAL channel readable by every authenticated user of every branch (chat visibility is separate from data access), branch origin badges on messages, store threads unchanged, Zod-validated sends (2000 char cap) on the MESSAGING rate tier, 5s/15s polling fallback - no WebSocket dependency, serverless-friendly.
+- **Cross-subdomain session sharing (opt-in)**: when `NEXTAUTH_COOKIE_DOMAIN` is configured, login also sets a shared `mbt_token` cookie; branch subdomain origins adopt it at boot and validate via `/api/auth/me`. Without it, behavior is unchanged (Bearer in localStorage, per-origin login).
+- **Workspace routing for the SPA**: `/stores/[slug]/[[...rest]]` renders the exact same shell (extracted to `src/components/app/main-app.tsx`) pinned to the resolved branch, with per-branch page titles (`{Store Name} | Mbumah Hardware POS`), a branch badge in the top bar, and the branch accent color. Single-branch roles no longer see a store switcher in a pinned workspace; org roles keep it (the server still validates every switch).
+- **Local setup tooling**: `npm run domains:print` prints copy-pasteable hosts-file entries (macOS/Linux/Windows instructions in the docs), `npm run domains:verify` runs a PASS/FAIL verification matrix against a running server (subdomain resolution, host header attacks, reserved subdomains, port stripping, health through a branch host).
+
+### Tests
+- 28 new unit tests: workspace domain helpers (host parsing, allowlist, reserved subdomains, mode resolution, internal rewrites) and workspace store definitions consistency (seed vs client store-info vs domains config). Suite: 19 files / 475 tests green; lint 0 errors; typecheck at baseline.
+
+### Notes
+- All branches keep sharing one database; tenant isolation is unchanged and every workspace request is re-authorized server-side (denied attempts are written to the security event feed).
+- Docs: `docs/subdomain-workspaces.md` (master reference), `docs/local-offline-setup.md`, `docs/lan-deployment.md`, `docs/tunnel-development.md`, `docs/multi-store-workspaces.md`, `docs/global-chat.md`, `docs/rbac.md`, `docs/architecture.md`, `docs/vercel-deployment.md`, `docs/self-hosting.md`.
+
 ## [2.15.2] Hotfix: offline laptops self-heal database schema drift
 
 ### Fixed

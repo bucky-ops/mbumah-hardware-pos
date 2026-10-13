@@ -14,6 +14,11 @@ export const UserRole = {
   // (User.role is `String @default("CASHIER")` in prisma/schema.prisma; the
   // allowed values are enforced at the API layer, not by a DB enum).
   INVENTORY_MANAGER: 'INVENTORY_MANAGER',
+  // v2.16.0 (subdomain workspaces): multi-branch stock steward. Assigned to
+  // one or MORE branches via StoreMembership; uses the branch selector
+  // (/branches/select) to open assigned branch workspaces in separate tabs.
+  // No sales, no financials, no overrides - inventory and supply chain only.
+  WAREHOUSE_MANAGER: 'WAREHOUSE_MANAGER',
 } as const;
 
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
@@ -273,6 +278,10 @@ export interface AuthUser {
   organizationId: string;
   storeId?: string;
   isActive: boolean;
+  // v2.16.0 (subdomain workspaces): workspace membership store ids beyond the
+  // primary store (e.g. WAREHOUSE_MANAGER with two assigned branches). Returned
+  // by /api/auth/login and /api/auth/me.
+  memberships?: string[];
 }
 
 export interface CartItem {
@@ -655,6 +664,22 @@ export const PERMISSION_MATRIX: Record<UserRole, Record<string, string[]>> = {
     admin: [],
     rentals: [],
     reports: [],
+  },
+  // v2.16.0 (subdomain workspaces): multi-branch warehouse manager. Same
+  // operational envelope as INVENTORY_MANAGER plus stock-movement visibility;
+  // per-branch reach comes from ACTIVE StoreMembership rows, not from this
+  // matrix (the matrix answers "what can this role do", membership answers
+  // "where can this user do it").
+  WAREHOUSE_MANAGER: {
+    products: ['create', 'read', 'update'],
+    purchase_orders: ['create', 'read', 'update', 'receive'],
+    customers: ['read'],
+    transactions: [],
+    financials: [],
+    debt: [],
+    admin: ['read'],
+    rentals: [],
+    reports: ['read'],
   },
 };
 

@@ -1,0 +1,13 @@
+{
+  "comment": "Branch workspace definitions for the subdomain + offline tooling. Kept in sync with prisma/seed.ts (store slug/subdomain/brandingColor) and src/lib/store-info.ts. scripts/domains/print-hosts.mjs and scripts/domains/verify-subdomains.mjs read this file.",
+  "rootDomainLocal": "mbumah.test",
+  "rootDomainProduction": "mbumah.co.ke",
+  "defaultPort": 3000,
+  "stores": [
+    { "id": "store_juja_main", "slug": "juja-main", "subdomain": "juja-main", "name": "MBUMAH HARDWARE - Juja Main" },
+    { "id": "store_thika", "slug": "thika", "subdomain": "thika", "name": "MBUMAH HARDWARE - Thika" },
+    { "id": "store_ruiru", "slug": "ruiru", "subdomain": "ruiru", "name": "MBUMAH HARDWARE - Ruiru" },
+    { "id": "store_nairobi_cbd", "slug": "nairobi-cbd", "subdomain": "nairobi-cbd", "name": "MBUMAH HARDWARE - Nairobi CBD" },
+    { "id": "store_nakuru", "slug": "nakuru", "subdomain": "nakuru", "name": "MBUMAH HARDWARE - Nakuru" }
+  ]
+}

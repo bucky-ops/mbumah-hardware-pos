@@ -17,6 +17,12 @@ export interface StoreInfo {
   phone: string;
   email?: string;
   taxPin?: string;
+  // v2.16.0 (subdomain workspaces): path + subdomain workspace identifiers
+  // and the branch accent color. Mirrors Store.slug / Store.subdomain /
+  // Store.brandingColor in the DB (prisma/seed.ts keeps both in sync).
+  slug: string;
+  subdomain: string;
+  brandingColor: string;
 }
 
 export const STORE_LIST: StoreInfo[] = [
@@ -29,6 +35,9 @@ export const STORE_LIST: StoreInfo[] = [
     phone: '0795191909',
     email: 'juja@mbumahhardware.co.ke',
     taxPin: 'P051234567A',
+    slug: 'juja-main',
+    subdomain: 'juja-main',
+    brandingColor: '#B45309',
   },
   {
     id: 'store_thika',
@@ -39,6 +48,9 @@ export const STORE_LIST: StoreInfo[] = [
     phone: '0795191909',
     email: 'thika@mbumahhardware.co.ke',
     taxPin: 'P051234567B',
+    slug: 'thika',
+    subdomain: 'thika',
+    brandingColor: '#047857',
   },
   {
     id: 'store_ruiru',
@@ -49,6 +61,9 @@ export const STORE_LIST: StoreInfo[] = [
     phone: '0795191909',
     email: 'ruiru@mbumahhardware.co.ke',
     taxPin: 'P051234567C',
+    slug: 'ruiru',
+    subdomain: 'ruiru',
+    brandingColor: '#9A3412',
   },
   {
     id: 'store_nairobi_cbd',
@@ -59,6 +74,9 @@ export const STORE_LIST: StoreInfo[] = [
     phone: '0795191909',
     email: 'nairobi@mbumahhardware.co.ke',
     taxPin: 'P051234567D',
+    slug: 'nairobi-cbd',
+    subdomain: 'nairobi-cbd',
+    brandingColor: '#B91C1C',
   },
   {
     id: 'store_nakuru',
@@ -69,6 +87,9 @@ export const STORE_LIST: StoreInfo[] = [
     phone: '0795191909',
     email: 'nakuru@mbumahhardware.co.ke',
     taxPin: 'P051234567E',
+    slug: 'nakuru',
+    subdomain: 'nakuru',
+    brandingColor: '#BE185D',
   },
 ];
 
@@ -93,6 +114,16 @@ export function getStoreInfo(storeId: string | null | undefined): StoreInfo {
     STORE_LIST.find((s) => s.id === 'store_juja_main') ||
     STORE_LIST[0]
   );
+}
+
+/**
+ * Workspace lookup by slug or subdomain (v2.16.0). Used by offline client
+ * code that cannot call /api/stores; the server path always verifies against
+ * the DB via /api/me/store-context.
+ */
+export function getStoreBySlug(slugOrSubdomain: string): StoreInfo | undefined {
+  const needle = slugOrSubdomain.toLowerCase();
+  return STORE_LIST.find((s) => s.slug === needle || s.subdomain === needle);
 }
 
 /**

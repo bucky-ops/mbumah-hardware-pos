@@ -5,7 +5,7 @@ Mbumah Hardware POS supports two deployment paths:
 - **Vercel** with a managed serverless PostgreSQL provider (Neon recommended, Supabase supported). Best for multi-branch access over the internet.
 - **Docker Compose** on a local server or VPS with Nginx and PostgreSQL. Best when the shop must keep running without internet.
 
-Environment variables are listed in [Configuration](configuration.md). Failure modes after deploying are collected in [Troubleshooting and FAQ](troubleshooting-and-faq.md).
+Environment variables are listed in [Configuration](configuration.md). Failure modes after deploying are collected in [Troubleshooting and FAQ](troubleshooting-and-faq.md). For branch subdomain workspaces (`*.mbumah.co.ke`, local `mbumah.test`, offline and LAN setups) see [Subdomain workspaces](subdomain-workspaces.md) and [Local offline setup](local-offline-setup.md).
 
 ## Vercel
 

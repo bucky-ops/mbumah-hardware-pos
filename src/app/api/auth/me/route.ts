@@ -17,7 +17,8 @@ export const dynamic = 'force-dynamic';
 async function getMeHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
   const authHeader = request.headers.get('authorization');
-  const token = authHeader?.replace('Bearer ', '');
+  // v2.16.0: cookie fallback for branch-subdomain session adoption.
+  const token = authHeader?.replace('Bearer ', '') || request.cookies.get('mbt_token')?.value || null;
 
   if (!token) {
     return Response.json(
@@ -66,6 +67,16 @@ async function getMeHandler(...args: unknown[]): Promise<Response> {
 
   const user = session.user;
 
+  // v2.16.0 WORKSPACES: multi-store memberships (e.g. WAREHOUSE_MANAGER with
+  // two assigned branches) plus the workspace identity of the primary store.
+  const memberships = await db.storeMembership.findMany({
+    where: { userId: user.id, status: 'ACTIVE' },
+    select: { storeId: true },
+  });
+  const membershipStoreIds = Array.from(
+    new Set([...memberships.map((m) => m.storeId), user.storeId].filter(Boolean) as string[]),
+  );
+
   return Response.json({
     success: true,
     data: {
@@ -90,7 +101,11 @@ async function getMeHandler(...args: unknown[]): Promise<Response> {
         location: user.store.location,
         phone: user.store.phone,
         email: user.store.email,
+        slug: user.store.slug,
+        subdomain: user.store.subdomain,
+        brandingColor: user.store.brandingColor,
       } : null,
+      memberships: membershipStoreIds,
     },
   });
 }
