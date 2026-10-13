@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Production-grade ESLint configuration
+// MBUMAH HARDWARE POS - Production-grade ESLint configuration
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // This config layers the Next.js core-web-vitals + TypeScript presets (which
@@ -10,9 +10,9 @@
 // the rules that catch real bugs in a financial/POS codebase.
 //
 // Severity policy:
-//   • "error"   — rules that catch genuine bugs or security issues. Failing
+//   • "error"   - rules that catch genuine bugs or security issues. Failing
 //                 these blocks `bun run lint` and CI.
-//   • "warn"    — rules that improve code quality but aren't worth blocking
+//   • "warn"    - rules that improve code quality but aren't worth blocking
 //                 a deploy (e.g. `any` usage in a large legacy surface).
 //                 Warnings surface in the lint output and PR review but do
 //                 NOT fail the build.
@@ -34,7 +34,7 @@ const __dirname = dirname(__filename);
 const eslintConfig = [
   // Report unused eslint-disable directives as errors (flat-config way of
   // enforcing the old `no-unused-disable-directive` rule). Keeps the disable
-  // comments honest — if a suppression becomes unnecessary after a fix, ESLint
+  // comments honest - if a suppression becomes unnecessary after a fix, ESLint
   // flags it so it can be removed.
   {
     linterOptions: {
@@ -56,7 +56,7 @@ const eslintConfig = [
   {
     rules: {
       // ── TypeScript: catch real bugs, warn on style ─────────────────────────
-      // `no-explicit-any` is "warn" (not error) — the codebase legitimately
+      // `no-explicit-any` is "warn" (not error) - the codebase legitimately
       // uses `any` for Prisma JSON fields, third-party SDK payloads, and
       // rapid prototyping surfaces. Promoting to error would surface 100s of
       // sites without clear value; warnings keep them visible for cleanup.
@@ -77,7 +77,7 @@ const eslintConfig = [
           ignoreRestSiblings: true,
         },
       ],
-      // Non-null assertion (`x!`) is a footgun — it silently suppresses the
+      // Non-null assertion (`x!`) is a footgun - it silently suppresses the
       // null check. Warn so reviewers see it, but don't block (Prisma
       // relations + React refs use it legitimately in places).
       "@typescript-eslint/no-non-null-assertion": "warn",
@@ -93,7 +93,7 @@ const eslintConfig = [
           minimumDescriptionLength: 10,
         },
       ],
-      // Enforce `import type { X }` for type-only imports — cleaner emitted JS
+      // Enforce `import type { X }` for type-only imports - cleaner emitted JS
       // and avoids runtime cycles. Auto-fixable.
       "@typescript-eslint/consistent-type-imports": [
         "warn",
@@ -103,7 +103,7 @@ const eslintConfig = [
       "@typescript-eslint/prefer-as-const": "error",
 
       // ── React Hooks ─────────────────────────────────────────────────────────
-      // Exhaustive-deps catches stale-closure bugs — the #1 source of
+      // Exhaustive-deps catches stale-closure bugs - the #1 source of
       // subtle React state bugs. Warn (not error) because the codebase has
       // intentional one-time-run effects (`[]` deps) that would fire many
       // warnings; reviewers can validate each.
@@ -138,10 +138,10 @@ const eslintConfig = [
       "no-undef": "off",                // TS handles this
       "no-unreachable": "error",        // code after return = dead code
       "no-useless-escape": "error",
-      "no-constant-condition": "warn",  // `while(true)` etc — usually intentional
+      "no-constant-condition": "warn",  // `while(true)` etc - usually intentional
       "no-dupe-keys": "error",          // duplicate object keys = bug
       "no-self-assign": "error",
-      "no-unused-expressions": "warn",  // `foo && foo()` as statement — warn
+      "no-unused-expressions": "warn",  // `foo && foo()` as statement - warn
       "valid-typeof": "error",
     },
   },

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Mbumah Hardware POS — database population via production APIs.
+Mbumah Hardware POS - database population via production APIs.
 
 Phases: users, categories, products, customers, suppliers, pos, sales,
         expenses, rentals, employees, verify
@@ -364,7 +364,7 @@ class Populator:
             have_pos = d if isinstance(d, list) else []
             gap = TARGETS["pos"] - len(have_pos)
             if gap <= 0 or not have:
-                log(f"pos {sid}: gap={gap} suppliers={len(have)} — skip")
+                log(f"pos {sid}: gap={gap} suppliers={len(have)} - skip")
                 continue
             plan = self.PO_PLAN[:gap] if sid == "store_juja_main" else self.PO_PLAN[:gap]
             log(f"pos {sid}: +{len(plan)}")
@@ -380,7 +380,7 @@ class Populator:
                 expected = (NOW + timedelta(days=rng.randint(7, 21))).strftime("%Y-%m-%dT%H:%M:%SZ")
                 body = {"storeId": sid, "supplierId": sup["id"], "items": items,
                         "expectedDate": expected,
-                        "notes": f"Replenishment order {k + 1} — {sup.get('name', 'supplier')}"}
+                        "notes": f"Replenishment order {k + 1} - {sup.get('name', 'supplier')}"}
                 d = self.st_ok(self.cl.post("/api/purchase-orders", body), f"PO #{k + 1} {sid}")
                 if d:
                     pid = d.get("id")
@@ -407,7 +407,7 @@ class Populator:
             stock = {p_["id"]: int(float(p_.get("quantityInStock") or 0)) for p_ in sellable}
             cashiers = [u["id"] for u in users if u.get("storeId") == sid and u.get("role") in ("CASHIER", "BRANCH_MANAGER", "STORE_OWNER")]
             if not cashiers:
-                log(f"sales {sid}: no cashier users — skip")
+                log(f"sales {sid}: no cashier users - skip")
                 continue
             # current debt per customer
             s, p = self.cl.get(f"/api/debt?storeId={sid}&limit=500")
@@ -488,7 +488,7 @@ class Populator:
                     cand = sorted(sellable, key=lambda q: float(q.get("pricePerUnit") or 9e9))
                     pr = next((q for q in cand if stock.get(q["id"], 0) >= 1), None)
                     if not pr:
-                        log(f"  sale {k + 1}: could not build basket — skip")
+                        log(f"  sale {k + 1}: could not build basket - skip")
                         continue
                     price = float(pr.get("pricePerUnit"))
                     qty = 1 if method == "DEBT" else min(rng.randint(1, 5), stock.get(pr["id"], 1))
@@ -561,18 +561,18 @@ class Populator:
         users = self.get_users()
         created = self.state["created"].setdefault("expenses", [])
         desc = {
-            "RENT": ["Monthly shop rent — {m}", "Premises rent {m} (landlord J. Kamau)"],
-            "UTILITIES": ["KPLC electricity bill — {m}", "Nairobi Water bill — {m}",
-                          "Internet & fibre (Faiba 30Mbps) — {m}", "Garbage collection — {m}"],
-            "SALARIES": ["Casual wages fortnight 1 — {m}", "Casual wages fortnight 2 — {m}",
-                         "Staff lunch & welfare allowance — {m}"],
-            "TRANSPORT": ["Delivery truck diesel — {m}", "Boda deliveries float — {m}",
-                          "Matatu courier to site — {m}", "Vehicle service & tyres — {m}"],
-            "MAINTENANCE": ["Forklift service & oil — {m}", "Shop repainting & signage touch-up — {m}",
-                            "Security lights & gate repair — {m}"],
-            "SUPPLIES": ["Packaging materials (bags, tape) — {m}", "Office stationery & receipt rolls — {m}",
-                         "Cleaning supplies — {m}"],
-            "OTHER": ["County single business permit — {m}"],
+            "RENT": ["Monthly shop rent - {m}", "Premises rent {m} (landlord J. Kamau)"],
+            "UTILITIES": ["KPLC electricity bill - {m}", "Nairobi Water bill - {m}",
+                          "Internet & fibre (Faiba 30Mbps) - {m}", "Garbage collection - {m}"],
+            "SALARIES": ["Casual wages fortnight 1 - {m}", "Casual wages fortnight 2 - {m}",
+                         "Staff lunch & welfare allowance - {m}"],
+            "TRANSPORT": ["Delivery truck diesel - {m}", "Boda deliveries float - {m}",
+                          "Matatu courier to site - {m}", "Vehicle service & tyres - {m}"],
+            "MAINTENANCE": ["Forklift service & oil - {m}", "Shop repainting & signage touch-up - {m}",
+                            "Security lights & gate repair - {m}"],
+            "SUPPLIES": ["Packaging materials (bags, tape) - {m}", "Office stationery & receipt rolls - {m}",
+                         "Cleaning supplies - {m}"],
+            "OTHER": ["County single business permit - {m}"],
         }
         amount = {"RENT": (35000, 62000), "UTILITIES": (1800, 18500), "SALARIES": (9500, 42000),
                   "TRANSPORT": (1800, 7800), "MAINTENANCE": (2800, 14500),
@@ -637,7 +637,7 @@ class Populator:
             have = d if isinstance(d, list) else []
             gap = TARGETS["rentals"] - len(have)
             if gap <= 0 or not rental_products or not have_customers:
-                log(f"rentals {sid}: gap={gap} products={len(rental_products)} — skip")
+                log(f"rentals {sid}: gap={gap} products={len(rental_products)} - skip")
                 continue
             rng = C.rng_for(f"rent-{sid}")
             log(f"rentals {sid}: +{gap} over {len(rental_products)} rental products")
@@ -657,7 +657,7 @@ class Populator:
                         "expectedReturnDate": exp, "securityDeposit": deposit,
                         "ratePerDay": day, "ratePerWeek": money(day * 5.5),
                         "ratePerMonth": money(day * 20),
-                        "notes": f"Site hire — {cu.get('name', 'customer')}"}
+                        "notes": f"Site hire - {cu.get('name', 'customer')}"}
                 r = self.st_ok(self.cl.post("/api/rentals", body), f"rental {pr['name']}")
                 if r:
                     rid = r.get("id")
@@ -740,7 +740,7 @@ class Populator:
                         "emergencyContactName": f"{rng.choice(C.FIRST_F)} {ln}",
                         "emergencyContactPhone": rng.choice(C.PHONE_PREFIX) + f"{rng.randint(0, 9999999):07d}",
                         "emergencyContactRelation": rng.choice(["Spouse", "Sibling", "Parent"]),
-                        "notes": f"Populated HR record — {title}"}
+                        "notes": f"Populated HR record - {title}"}
                 if user and user["id"] not in linked:
                     body["userId"] = user["id"]
                     linked.add(user["id"])
@@ -748,7 +748,7 @@ class Populator:
                 if r:
                     created.append({"id": r.get("id"), "storeId": sid, "title": title,
                                     "userId": body.get("userId")})
-                    log(f"  + {fn} {ln} — {title} ({etype}, KES {basic:,.0f}/mo{' hourly' if casual else ''})")
+                    log(f"  + {fn} {ln} - {title} ({etype}, KES {basic:,.0f}/mo{' hourly' if casual else ''})")
                 time.sleep(0.12)
         save_state(self.state)
 

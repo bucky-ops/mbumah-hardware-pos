@@ -20,9 +20,9 @@ gaps, and financial-data corruption.
 2. **Tick every box.** If a step fails, STOP and fix it before continuing -
    later steps depend on earlier ones passing.
 3. **Record results** in the deployment ticket / release notes:
-   `✅ pass` / `⚠️ degraded` / `❌ fail` with the observed value.
+   `pass` / `degraded` / `fail` with the observed value.
 4. **Production deployments** require ALL sections green. Preview deployments
-   may tolerate `⚠️ degraded` on non-critical paths.
+   may tolerate `degraded` on non-critical paths.
 5. The expected values below assume the seed data (`bun run db:seed`) has been
    applied to the target database.
 
@@ -32,7 +32,7 @@ gaps, and financial-data corruption.
 
 | # | Check | Command / Where | Expected |
 |---|-------|-----------------|----------|
-| 0.1 | Build passed on Vercel | Vercel dashboard → Deployments | ✅ "Ready" status, no build errors |
+| 0.1 | Build passed on Vercel | Vercel dashboard → Deployments | "Ready" status, no build errors |
 | 0.2 | `SKIP_ENV_VALIDATION=1` was set during build | Vercel build logs | `prisma generate` + `next build` both ran without `EnvValidationError` |
 | 0.3 | Prisma Client generated for the right provider | Vercel build logs | `scripts/setup-prisma-provider.mjs` logged `Switched provider: sqlite → postgresql` (because `DATABASE_URL` is a Neon URL) |
 | 0.4 | All env vars set in Vercel | Vercel → Project → Settings → Environment Variables | See [§1 Env Var Matrix](#1-environment-variable-matrix) below |
@@ -47,15 +47,15 @@ confirm presence and that the Neon URL is the **pooled** one.
 
 | Variable | Prod | Preview | Dev | Notes |
 |----------|:----:|:-------:|:---:|-------|
-| `DATABASE_URL` | ✅ | ✅ | ✅ | **Must be the Neon `-pooler` URL** with `?pgbouncer=true&connect_timeout=15` |
-| `DIRECT_URL` | ✅ | ✅ | - | Non-pooler Neon URL, for migrations only |
-| `NEXTAUTH_SECRET` | ✅ | ✅ | ✅ | ≥ 16 chars, random |
-| `JWT_SECRET` | ✅ | ✅ | ✅ | ≥ 16 chars, random (used by custom token auth) |
-| `NEXTAUTH_URL` | ✅ | ✅ | - | Canonical production URL |
-| `ALLOW_DEV_BYPASS` | ❌ (unset) | optional | optional | Set `true` ONLY on previews where you want the bypass button |
-| `EXPOSE_ERRORS` | ❌ (unset) | optional | optional | Set `true` temporarily when debugging 500s, then **remove** |
+| `DATABASE_URL` | ✓ | ✓ | ✓ | **Must be the Neon `-pooler` URL** with `?pgbouncer=true&connect_timeout=15` |
+| `DIRECT_URL` | ✓ | ✓ | - | Non-pooler Neon URL, for migrations only |
+| `NEXTAUTH_SECRET` | ✓ | ✓ | ✓ | ≥ 16 chars, random |
+| `JWT_SECRET` | ✓ | ✓ | ✓ | ≥ 16 chars, random (used by custom token auth) |
+| `NEXTAUTH_URL` | ✓ | ✓ | - | Canonical production URL |
+| `ALLOW_DEV_BYPASS` | ✗ (unset) | optional | optional | Set `true` ONLY on previews where you want the bypass button |
+| `EXPOSE_ERRORS` | ✗ (unset) | optional | optional | Set `true` temporarily when debugging 500s, then **remove** |
 
-> ⚠️ **Never** set `ALLOW_DEV_BYPASS=true` or `EXPOSE_ERRORS=true` in the
+> **Never** set `ALLOW_DEV_BYPASS=true` or `EXPOSE_ERRORS=true` in the
 > Production environment. The dev-bypass route returns 403 in production
 > regardless, but defense-in-depth says don't tempt it.
 
@@ -169,9 +169,9 @@ Expected JSON (HTTP **200**):
 | # | Step | Expected |
 |---|------|----------|
 | 4.3.1 | Add products, open checkout, select "M-Pesa" | Phone-number field appears |
-| 4.3.2 | Enter `2547XXXXXXXX`, confirm | STK push triggered (or simulated in dev). Transaction recorded as `PENDING` → `COMPLETED`. |
+| 4.3.2 | Enter `2547XXXXXXXX`, confirm | STK Push triggered (or simulated in dev). Transaction recorded as `PENDING` → `COMPLETED`. |
 
-> On preview without M-Pesa Daraja credentials, the STK push will fail - that's
+> On preview without M-Pesa Daraja credentials, the STK Push will fail - that's
 > expected. Verify the error is surfaced gracefully (toast, no crash).
 
 ### 4.4 Refund / void
@@ -265,10 +265,10 @@ Expected JSON (HTTP **200**):
 | # | Step | Expected |
 |---|------|----------|
 | 10.1 | `GET /manifest.json` | `200`, `Content-Type: application/json`, valid manifest with `name`, `icons[]`, `display: standalone` |
-| 10.2 | View page source → `<link rel="manifest" href="/manifest.json">` present | ✅ |
+| 10.2 | View page source → `<link rel="manifest" href="/manifest.json">` present | ✓ |
 | 10.3 | `<link rel="icon">` entries present | logo.svg + logo.png |
 | 10.4 | `<link rel="apple-touch-icon">` present | logo.png |
-| 10.5 | `<meta name="theme-color">` present (light + dark variants) | ✅ (rendered from `viewport` export) |
+| 10.5 | `<meta name="theme-color">` present (light + dark variants) | ✓ (rendered from `viewport` export) |
 | 10.6 | Install the PWA (Chrome → address bar install icon) | Installs as standalone app with MBUMAH icon |
 
 ---
@@ -314,12 +314,12 @@ abbreviated subset (≈ 5 minutes):
 If ANY of the following occur in the first 30 minutes post-deploy, **roll back
 to the previous Vercel deployment immediately**:
 
-- ❌ `GET /api/health` returns `503` or `status: unhealthy`
-- ❌ Login returns `500` for valid credentials
-- ❌ Checkout (`POST /api/transactions`) returns `500` for a valid payload
-- ❌ Any data-loss symptom (missing transactions, zeroed balances)
-- ❌ RBAC bypass (a cashier can call an admin endpoint successfully)
-- ❌ Dev bypass works in production (`GET /api/auth/dev-bypass` → `200`)
+- `GET /api/health` returns `503` or `status: unhealthy`
+- Login returns `500` for valid credentials
+- Checkout (`POST /api/transactions`) returns `500` for a valid payload
+- Any data-loss symptom (missing transactions, zeroed balances)
+- RBAC bypass (a cashier can call an admin endpoint successfully)
+- Dev bypass works in production (`GET /api/auth/dev-bypass` → `200`)
 
 **Rollback procedure:** Vercel dashboard → Deployments → previous "Ready"
 deployment → "⋯" → **Promote to Production**.
@@ -330,7 +330,7 @@ deployment → "⋯" → **Promote to Production**.
 
 | Role | Name | Date | Result |
 |------|------|------|--------|
-| Deploying engineer | | | ✅ All green / ⚠️ Degraded / ❌ Rolled back |
+| Deploying engineer | | | All green / Degraded / Rolled back |
 | QA reviewer (if applicable) | | | |
 | Product owner (prod releases) | | | |
 

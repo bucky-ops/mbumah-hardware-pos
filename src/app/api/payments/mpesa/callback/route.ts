@@ -1,4 +1,4 @@
-// POST /api/payments/mpesa/callback - Safaricom Daraja STK push result webhook.
+// POST /api/payments/mpesa/callback - Safaricom Daraja STK Push result webhook.
 //
 // AUDIT REMEDIATION - FINANCIAL_MODULE_AUDIT_REPORT.md:
 //   • F6-1 (P0): this endpoint was publicly forgeable - no credential check,
@@ -23,7 +23,7 @@
 //     routes the transaction to reconciliation (PROCESSING) instead of settling.
 //   • F6-5: the failure path now runs a SYMMETRIC compensating transaction -
 //     restock + SALE_CANCELLED stock movement + void the pending journal -
-//     so a cancelled/timeout STK push no longer permanently shrinks inventory.
+//     so a cancelled/timeout STK Push no longer permanently shrinks inventory.
 //
 // NOTE: this route stays PUBLIC (Safaricom cannot present a user session) but
 // is credentialed. `export const POST` is deliberately not wrapped in

@@ -106,7 +106,7 @@ model Store {
   invoices         Invoice[]
   deliveryNotes    DeliveryNote[]
 
-  // ── Payroll & HR (Phase 1 — ERP enhancement) ──
+  // ── Payroll & HR (Phase 1 - ERP enhancement) ──
   // NOTE: LeaveType and EmployeeLeaveBalance are NOT directly related to Store:
   //   • LeaveType is organisation-wide policy (not tenant data)
   //   • EmployeeLeaveBalance resolves via Employee.storeId
@@ -187,7 +187,7 @@ model User {
   shifts          Shift[]
   issuedGiftCards GiftCard[]         @relation("IssuedByUser")
 
-  // Employee profile (optional — an employee may exist without a user account,
+  // Employee profile (optional - an employee may exist without a user account,
   // e.g. casual labourers; a user may exist without an employee profile, e.g.
   // an org-level SUPER_ADMIN who isn't on any store payroll).
   employee Employee?
@@ -516,7 +516,7 @@ model SalesTransaction {
   etimsIssuedAt      DateTime?
   // SYS-10/F1-8 remediation: client-generated idempotency key. A unique
   // constraint on this column makes checkout retries/offline replays
-  // (lost-response duplicates) safe — the retried POST returns the ORIGINAL
+  // (lost-response duplicates) safe - the retried POST returns the ORIGINAL
   // transaction instead of double-applying stock, payments and journals.
   // Nullable + unique is safe in PostgreSQL/SQLite: multiple NULLs allowed.
   idempotencyKey     String?   @unique
@@ -755,7 +755,7 @@ model JournalEntry {
   totalDebit    Decimal
   totalCredit   Decimal
 
-  // ── Posting lifecycle (ISO 9001 — Process Control) ──────────────────────
+  // ── Posting lifecycle (ISO 9001 - Process Control) ──────────────────────
   // Draft → Submitted → Approved → Posted → (optionally Voided)
   // The accounting equation (totalDebit === totalCredit) is enforced at the
   // application layer in accounting-helpers.ts:validateJournalEntryBalancing()
@@ -769,15 +769,15 @@ model JournalEntry {
   approvedAt    DateTime?
   approvedByUserId String? // User who approved the entry
 
-  // ── Voiding (error correction via reversing entry — ISO 9001) ────────────
+  // ── Voiding (error correction via reversing entry - ISO 9001) ────────────
   isVoided      Boolean   @default(false)
   voidedAt      DateTime?
-  voidedBy      String? // Legacy field (plain user ID string) — kept for backward compat
+  voidedBy      String? // Legacy field (plain user ID string) - kept for backward compat
   voidedByUserId String? // Proper FK relation to User
   voidReason    String? // Mandatory reason when voiding
   reversingEntryId String? @unique // FK to the reversing JournalEntry (created on void)
 
-  // ── Document references (ISO 9001 — Traceability) ───────────────────────
+  // ── Document references (ISO 9001 - Traceability) ───────────────────────
   referenceDocumentType String? // INVOICE, RECEIPT, EXPENSE_VOUCHER, BANK_STATEMENT
   referenceDocumentId   String? // ID of the source document
 
@@ -820,12 +820,12 @@ model JournalEntryLine {
   credit         Decimal  @default(0)
   description    String?
 
-  // ── Tax tracking (ISO 9001 — VAT compliance) ────────────────────────────
+  // ── Tax tracking (ISO 9001 - VAT compliance) ────────────────────────────
   isTaxRelated   Boolean  @default(false) // True if this line is a VAT line
   taxRateApplied Decimal? // e.g. 16.00 for 16% VAT
   taxAmount      Decimal? // The computed tax amount
 
-  // ── Reconciliation (ISO 9001 — Bank/account reconciliation) ─────────────
+  // ── Reconciliation (ISO 9001 - Bank/account reconciliation) ─────────────
   reconciledAt      DateTime?
   reconciledByUserId String?
 
@@ -1372,7 +1372,7 @@ model SecurityEvent {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PAYROLL & HUMAN RESOURCES (Phase 1 — ERP Enhancement)
+// PAYROLL & HUMAN RESOURCES (Phase 1 - ERP Enhancement)
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // Design notes:
@@ -1380,7 +1380,7 @@ model SecurityEvent {
 //   • Multi-tenancy: Every store-scoped model carries a non-nullable `storeId`
 //     and is registered in `STORE_SCOPED_MODELS` in src/lib/db.ts so the Prisma
 //     Client Extension automatically AND-injects `storeId` into every query.
-//     This enforces zero-trust tenant isolation at the ORM layer — developers
+//     This enforces zero-trust tenant isolation at the ORM layer - developers
 //     cannot "forget" to scope a payroll query by store.
 //
 //   • LeaveType is the ONLY model here WITHOUT a storeId. Leave types are
@@ -1389,14 +1389,14 @@ model SecurityEvent {
 //     LeaveRequest, etc. resolve via employee.storeId.
 //
 //   • Monetary fields now use Decimal (banker's rounding)
-//     across the entire schema — Product.pricePerUnit, SalesTransaction.total,
+//     across the entire schema - Product.pricePerUnit, SalesTransaction.total,
 //     PayrollDetail.netPay, etc. This Phase 2 migration ensures KRA eTIMS
 //     compliance and eliminates IEEE-754 float rounding errors. Payroll
 //     fields (basicSalary, grossPay, paye, nssf, nhif, etc.) follow the
 //     same convention.
 //
 //   • PAYSLIP immutability: PayrollDetail is append-only (a payslip, once
-//     generated, must never be silently edited — corrections are made via
+//     generated, must never be silently edited - corrections are made via
 //     adjusting entries in the next payroll run). PayrollDetail is registered
 //     in IMMUTABLE_MODELS in src/lib/db.ts; sanctioned mutations (e.g. voiding
 //     a payslip) use withImmutabilityBypass().
@@ -1413,7 +1413,7 @@ model SecurityEvent {
 
 /// A staff member employed at a store. An Employee MAY be linked to a User
 /// account (so they can log in and view their own payslips / request leave),
-/// but does not HAVE to be — casual labourers and contractors without system
+/// but does not HAVE to be - casual labourers and contractors without system
 /// access still need payroll records.
 model Employee {
   id      String @id @default(cuid())
@@ -1433,12 +1433,12 @@ model Employee {
   // Identity
   firstName  String
   lastName   String
-  email      String? // Unique per store (not globally) — two stores
+  email      String? // Unique per store (not globally) - two stores
   // could legitimately have employees with the
   // same personal email.
   phone      String?
-  nationalId String? // Kenyan National ID — required for KRA PAYE
-  kraPin     String? // KRA PIN — required for PAYE returns
+  nationalId String? // Kenyan National ID - required for KRA PAYE
+  kraPin     String? // KRA PIN - required for PAYE returns
   nssfNumber String? // National Social Security Fund
   nhifNumber String? // National Hospital Insurance Fund (now SHIF)
   photoUrl   String?
@@ -1467,7 +1467,7 @@ model Employee {
   nhifExempt Boolean @default(false)
 
   // Bank details for salary disbursement (NEVER store raw account numbers in
-  // logs — mask in UI). Encrypted at rest by Neon TLS; application-layer
+  // logs - mask in UI). Encrypted at rest by Neon TLS; application-layer
   // encryption can be layered on later if required.
   bankName          String?
   bankAccountName   String?
@@ -1576,7 +1576,7 @@ model PayrollRun {
 }
 
 /// An individual payslip line within a PayrollRun. One row per employee per
-/// run. This is the IMMUTABLE financial record — once a run is COMPLETED, the
+/// run. This is the IMMUTABLE financial record - once a run is COMPLETED, the
 /// PayrollDetail rows must never be edited (corrections go in the next run).
 model PayrollDetail {
   id           String @id @default(cuid())
@@ -1593,7 +1593,7 @@ model PayrollDetail {
   overtimePay        Decimal @default(0)
   grossPay           Decimal @default(0) // Sum of all earnings
 
-  // Statutory deductions (KES) — computed per Kenyan law in payroll-helpers.ts
+  // Statutory deductions (KES) - computed per Kenyan law in payroll-helpers.ts
   paye        Decimal @default(0) // Pay As You Earn income tax
   nssf        Decimal @default(0) // National Social Security Fund
   nhif        Decimal @default(0) // National Hospital Insurance Fund / SHIF
@@ -1798,7 +1798,7 @@ model AttendanceRecord {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// v2.0.0 — eTIMS / KRA INTEGRATION CONTEXT
+// v2.0.0 - eTIMS / KRA INTEGRATION CONTEXT
 // ════════════════════════════════════════════════════════════════════════════
 //
 // These models support Kenya Revenue Authority's electronic Tax Invoice
@@ -1813,7 +1813,7 @@ model AttendanceRecord {
 // rest of the schema and compatible with the SQLite→PostgreSQL provider
 // switch. Values are documented inline.
 
-/// KRA business profile — org/store-level credentials & registration details.
+/// KRA business profile - org/store-level credentials & registration details.
 /// One per store (a store may have its own KRA PIN). Credentials are stored
 /// AES-encrypted at rest (see src/lib/crypto-helpers.ts).
 model KraBusinessProfile {
@@ -1824,7 +1824,7 @@ model KraBusinessProfile {
   registrationDate     DateTime
   kraUsername          String // eTIMS portal username
   kraPasswordEncrypted String // AES-encrypted (NEVER plaintext)
-  // Sandbox vs production — KRA provides a test environment.
+  // Sandbox vs production - KRA provides a test environment.
   environment          String    @default("sandbox") // sandbox, production
   isActive             Boolean   @default(true)
   // Cached OAuth token (eTIMS uses bearer tokens with expiry).
@@ -1906,7 +1906,7 @@ model KraSubmission {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// v2.0.0 — DEBT MANAGEMENT CONTEXT (reminders)
+// v2.0.0 - DEBT MANAGEMENT CONTEXT (reminders)
 // ════════════════════════════════════════════════════════════════════════════
 //
 // DebtLedger (existing) already has agingBucket + lastReminderAt fields.
@@ -1945,7 +1945,7 @@ model DebtReminder {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// v2.0.0 — MESSAGING CONTEXT (internal staff chat + notifications)
+// v2.0.0 - MESSAGING CONTEXT (internal staff chat + notifications)
 // ════════════════════════════════════════════════════════════════════════════
 //
 // NOTE: The existing `Message` model (above) handles OUTBOUND customer
@@ -1954,7 +1954,7 @@ model DebtReminder {
 // They are deliberately separate to avoid conflating two distinct domains.
 
 // ══════════════════════════════════════════════════════════════════════
-// v2.16.0 — MULTI-STORE WORKSPACE MEMBERSHIPS (subdomain workspaces)
+// v2.16.0 - MULTI-STORE WORKSPACE MEMBERSHIPS (subdomain workspaces)
 // ══════════════════════════════════════════════════════════════════════
 // Assignment of a user to a store for workspace-access purposes. The primary
 // session store stays User.storeId; a membership row GRANTS additional store
@@ -1987,7 +1987,7 @@ model StoreMembership {
   @@map("store_memberships")
 }
 
-/// A conversation thread — internal staff chat or customer-support chat.
+/// A conversation thread - internal staff chat or customer-support chat.
 /// storeId is nullable since v2.16.0: a GLOBAL organization chat channel has
 /// no store scope and is readable by every authenticated user of the org.
 model Conversation {
@@ -2015,7 +2015,7 @@ model Conversation {
 }
 
 /// A single message in a conversation. Separate from the outbound `Message`
-/// model — this is for threaded internal/customer-support chat.
+/// model - this is for threaded internal/customer-support chat.
 model ConversationMessage {
   id             String   @id @default(cuid())
   conversationId String
@@ -2067,14 +2067,14 @@ model NotificationPreference {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// v2.0.0 — INVENTORY CONTEXT ENHANCEMENTS
+// v2.0.0 - INVENTORY CONTEXT ENHANCEMENTS
 // ════════════════════════════════════════════════════════════════════════════
 //
 // Optional physical-tracking models for warehouses that need finer-grained
 // inventory control. All are optional (a product need not have variants,
 // serials, batches, or bin locations).
 
-/// A product variant — e.g. "Cement 50kg" vs "Cement 25kg" under one parent.
+/// A product variant - e.g. "Cement 50kg" vs "Cement 25kg" under one parent.
 /// Enables size/colour/style differentiation without duplicating the parent.
 model ProductVariant {
   id              String   @id @default(cuid())
@@ -2105,7 +2105,7 @@ model ProductVariant {
   @@map("product_variants")
 }
 
-/// Bin location — physical shelf/aisle/row where stock is stored. Enables
+/// Bin location - physical shelf/aisle/row where stock is stored. Enables
 /// pick-path optimization and multi-location tracking within one store.
 model BinLocation {
   id           String   @id @default(cuid())
@@ -2132,7 +2132,7 @@ model BinLocation {
   @@map("bin_locations")
 }
 
-/// Serial number — tracks individual units of a product (for warranty,
+/// Serial number - tracks individual units of a product (for warranty,
 /// returns, high-value items). One product may have many serials.
 model SerialNumber {
   id                  String    @id @default(cuid())
@@ -2158,7 +2158,7 @@ model SerialNumber {
   @@map("serial_numbers")
 }
 
-/// Batch — tracks groups of items received together (for expiry tracking,
+/// Batch - tracks groups of items received together (for expiry tracking,
 /// recall management, supplier traceability). Common for construction
 /// chemicals, paints, adhesives.
 model Batch {
@@ -2191,15 +2191,15 @@ model Batch {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PHASE 2 — Production-grade schema completion + Decimal money migration.
+// PHASE 2 - Production-grade schema completion + Decimal money migration.
 //
 // The 14 models below were referenced by API routes + UI tabs but were never
-// declared in schema.prisma — causing `db.<model>` to be `undefined` at
+// declared in schema.prisma - causing `db.<model>` to be `undefined` at
 // runtime (500 errors) and TS2339 at compile time. They are added here using
 // the same conventions as the rest of the schema:
 //   • String @id @default(cuid()) for cross-DB compatibility
 //   • storeId on all store-scoped models (multi-tenancy)
-//   • String for enum-like fields (SQLite compat — no Prisma enums)
+//   • String for enum-like fields (SQLite compat - no Prisma enums)
 //   • Decimal for monetary fields (arbitrary precision; works on SQLite
 //     NUMERIC and PostgreSQL DECIMAL). NOTE: no @db.Decimal annotation so
 //     the schema compiles on BOTH providers.
@@ -2537,7 +2537,7 @@ model StoreTransfer {
   requestedBy    String?
   approvedBy     String?
   // F3-2 remediation: the receive/ship/cancel handlers write these actor
-  // columns — they were previously missing, which made every receive crash
+  // columns - they were previously missing, which made every receive crash
   // with a PrismaClientValidationError AFTER stock had been credited.
   shippedBy      String?
   receivedBy     String?
@@ -2638,7 +2638,7 @@ model Notification {
 }
 
 // ============================================================================
-// v2.1.0 — WORLD-CLASS ACCOUNTING MODULE (ISO 27001 / ISO 9001 COMPLIANT)
+// v2.1.0 - WORLD-CLASS ACCOUNTING MODULE (ISO 27001 / ISO 9001 COMPLIANT)
 // ============================================================================
 //
 // These models implement a PhD-level double-entry accounting system with:
@@ -2648,7 +2648,7 @@ model Notification {
 //   • Comprehensive audit trail (every CRUD operation on financial entities)
 //
 // Design principles:
-//   - All monetary fields use Decimal — never Float.
+//   - All monetary fields use Decimal - never Float.
 //   - Json type is used for flexible structured data (balances, old/new values).
 //     Prisma supports Json on both SQLite (stored as TEXT) and PostgreSQL
 //     (native JSONB), so cross-DB compat is preserved.
@@ -2797,14 +2797,14 @@ model Budget {
 //   • The request IP and user agent (for security forensics)
 //   • A precise timestamp
 //
-// This table is IMMUTABLE — the Prisma Client Extension in db.ts blocks
+// This table is IMMUTABLE - the Prisma Client Extension in db.ts blocks
 // UPDATE and DELETE on AuditLog outside of sanctioned bypass paths. This
 // ensures the audit trail cannot be tampered with, satisfying ISO 27001
 // control A.12.4 (Logging and Monitoring).
 //
-// ISO 27001: A.12.4.1 — Event logging
-// ISO 27001: A.12.4.2 — Protection of log information
-// ISO 27001: A.12.4.3 — Administrator and operator logs
+// ISO 27001: A.12.4.1 - Event logging
+// ISO 27001: A.12.4.2 - Protection of log information
+// ISO 27001: A.12.4.3 - Administrator and operator logs
 // ISO 9001: Traceability of all financial data modifications
 
 model AuditLog {
@@ -2842,10 +2842,10 @@ model AuditLog {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// v3.4.0 — DEBT PAYMENT PLANS, DATA EXPORT, SHIFT SCHEDULING
+// v3.4.0 - DEBT PAYMENT PLANS, DATA EXPORT, SHIFT SCHEDULING
 // ════════════════════════════════════════════════════════════════════════════
 
-/// Debt Payment Plan — installment-based repayment for outstanding debts.
+/// Debt Payment Plan - installment-based repayment for outstanding debts.
 /// Allows a store to formalize a repayment schedule with a customer, breaking
 /// a debt into N installments with due dates. Payments are tracked per
 /// installment and the plan status reflects overall progress.
@@ -2947,7 +2947,7 @@ model DebtPlanInstallment {
   @@map("debt_plan_installments")
 }
 
-/// Data Export — track batch data exports for compliance and audit.
+/// Data Export - track batch data exports for compliance and audit.
 /// Records each export (type, format, filters) and stores the resulting file
 /// path so users can re-download or audit what was exported when.
 model DataExport {
@@ -2996,7 +2996,7 @@ model DataExport {
   @@map("data_exports")
 }
 
-/// Shift Schedule — planned/recurring shift assignments for employees.
+/// Shift Schedule - planned/recurring shift assignments for employees.
 /// Distinct from Shift (which records an actual worked shift). ShiftSchedule
 /// is the *planned* roster; Shift is the *actual* worked record (clock-in/out).
 model ShiftSchedule {
@@ -3005,7 +3005,7 @@ model ShiftSchedule {
   userId          String
   // Shift title/label (e.g., "Morning", "Evening", "Weekend")
   title           String
-  // MONDAY, TUESDAY, ..., SUNDAY — for recurring weekly shifts.
+  // MONDAY, TUESDAY, ..., SUNDAY - for recurring weekly shifts.
   // For one-off shifts, this is null and specificDate is set.
   dayOfWeek       Int?     // 0 = Sunday, 6 = Saturday
   // For one-off shifts (overrides dayOfWeek if set)

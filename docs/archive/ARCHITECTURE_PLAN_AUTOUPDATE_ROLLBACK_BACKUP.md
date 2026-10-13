@@ -266,7 +266,7 @@ backups/
 |---|---|
 | `instrumentation.ts` (Next.js root hook) | Registers the process-level `uncaughtException`/`unhandledRejection` handlers - the single entry point for crash-triggered backups |
 | `src/lib/crash-backup.ts` + `fs` copy | Synchronous-ish file-copy backup of the SQLite file and WAL sidecars, portable across Windows and Linux |
-| `pg_dump` | Logical export for cloud Postgres snapshots where a file copy does not apply |
+| `pg_dump` | Logical export for cloud PostgreSQL snapshots where a file copy does not apply |
 | Neon API / PITR | Cloud disaster recovery: point-in-time restore to any retained minute; console-documented retention window |
 | `schtasks` / cron | Schedules "Mbumah POS Nightly Backup" at 02:30 on Windows and Linux |
 | `verify-db.mjs` | Proves a restored backup is intact and seeded during quarterly restore drills |
@@ -365,7 +365,7 @@ The plan is sized for a small team of 2-3 developers at intermediate skill level
 |---|---|---|
 | Updates pipeline (updater scripts, rings, fleet dashboard) | Developer 1 | PowerShell/Bash, GitHub Releases API, scheduling |
 | Rollback and admin surface (rollback scripts, admin endpoints, Vercel API) | Developer 2 | Next.js API routes, Vercel platform, ledger design |
-| Backups and drills (crash hook, scheduled tasks, PITR runbook, drills) | Developer 3 (or shared with Developer 1 in a 2-person team) | SQLite and Postgres operations, restore rehearsals |
+| Backups and drills (crash hook, scheduled tasks, PITR runbook, drills) | Developer 3 (or shared with Developer 1 in a 2-person team) | SQLite and PostgreSQL operations, restore rehearsals |
 | Phase sign-off and freeze-window calendar | Business owner (Mbumah) | Acceptance checklist format introduced with v2.8.0 |
 
 ---

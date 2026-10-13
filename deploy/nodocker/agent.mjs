@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ============================================================================
-// MBUMAH HARDWARE POS — Remote Access Kit EDGE AGENT (v2.11.0)
+// MBUMAH HARDWARE POS - Remote Access Kit EDGE AGENT (v2.11.0)
 // ============================================================================
 // Runs on each store laptop (scheduled task "Mbumah POS Agent", every 15 min).
 // Pull-only: it polls the private ops-log repo for a signed command targeted
@@ -19,11 +19,11 @@
 //     4. commit results/<store>/<ts>-<cmd>.json + append ledger/<store>.jsonl
 //     5. heartbeat every 6 h (version + /api/health summary + frozen state)
 //
-// Every run is a single tick that exits — power cuts and offline laptops are
+// Every run is a single tick that exits - power cuts and offline laptops are
 // normal states, never errors. The next tick (or shop opening, via the
 // update-on-launch check) converges everything.
 //
-// Usage:  node deploy/nodocker/agent.mjs            (one tick — scheduled mode)
+// Usage:  node deploy/nodocker/agent.mjs            (one tick - scheduled mode)
 //         node deploy/nodocker/agent.mjs --status   (print config + state)
 //
 // Config comes from the kit .env:  STORE_ID, OPS_SIGNING_KEY, GITHUB_TOKEN
@@ -237,7 +237,7 @@ async function executeCommand(cmd) {
     flags.push('-Quiet');
     if (cmd.force) flags.push('-Force');
     if (cmd.version) flags.push('-ToVersion', String(cmd.version));
-    if (isFrozen()) return { outcome: 'rejected_frozen', detail: 'store is frozen — run Unfreeze first' };
+    if (isFrozen()) return { outcome: 'rejected_frozen', detail: 'store is frozen - run Unfreeze first' };
     const r = await runScript({ script: 'update-pos', flags }, UPDATE_TIMEOUT_MS);
     return {
       outcome: r.code === 0 ? 'success' : 'failed',
@@ -247,7 +247,7 @@ async function executeCommand(cmd) {
   }
   if (type === 'rollback') {
     if (!cmd.version) return { outcome: 'failed', detail: 'rollback command missing version' };
-    if (isFrozen()) return { outcome: 'rejected_frozen', detail: 'store is frozen — rollback blocked too' };
+    if (isFrozen()) return { outcome: 'rejected_frozen', detail: 'store is frozen - rollback blocked too' };
     const r = await runScript({ script: 'rollback-pos', flags: ['-ToVersion', String(cmd.version), '-Quiet'].filter(Boolean) }, UPDATE_TIMEOUT_MS);
     return {
       outcome: r.code === 0 ? 'success' : 'failed',
@@ -322,7 +322,7 @@ async function heartbeat(state, extra = {}) {
       version = h.version ?? null;
       health = h.status ?? (h.checks?.database_stats?.status === 'ok' ? 'ok' : null);
     }
-  } catch { /* app not running — heartbeat still records liveness + version */ }
+  } catch { /* app not running - heartbeat still records liveness + version */ }
   if (!version) {
     try {
       version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version ?? null;
@@ -343,7 +343,7 @@ async function heartbeat(state, extra = {}) {
 
 async function tick() {
   if (!DEVICE_TOKEN) {
-    log('no GITHUB_TOKEN/OPS_GITHUB_TOKEN in .env — agent idle (RAK not configured on this kit).');
+    log('no GITHUB_TOKEN/OPS_GITHUB_TOKEN in .env - agent idle (RAK not configured on this kit).');
     return;
   }
   const state = readState();
@@ -359,7 +359,7 @@ async function tick() {
     return;
   }
   if (!cmdRes.ok) {
-    log(`command fetch failed (HTTP ${cmdRes.status}) — will retry next tick`);
+    log(`command fetch failed (HTTP ${cmdRes.status}) - will retry next tick`);
     if (dueForHeartbeat) await heartbeat(state);
     return;
   }
@@ -379,7 +379,7 @@ async function tick() {
   // 2. Verify authenticity + freshness + replay.
   const { sig, ...payload } = cmd;
   if (!verifySignature(payload, sig)) {
-    log('[REJECT] bad signature — reporting and discarding');
+    log('[REJECT] bad signature - reporting and discarding');
     await commitResult(commandId, 'rejected_signature', 'HMAC verification failed', { type: cmd.type });
     await deleteFile(`commands/${STORE}.json`, `ops(${STORE}): discard rejected (bad signature) ${commandId}`);
     return;
@@ -398,7 +398,7 @@ async function tick() {
 
   // 3. Execute + 4. report.
   const result = await executeCommand(cmd);
-  log(`outcome: ${result.outcome} — ${result.detail}`);
+  log(`outcome: ${result.outcome} - ${result.detail}`);
   await commitResult(commandId, result.outcome, result.detail, {
     type: cmd.type,
     fromVersion: state.lastVersion || null,

@@ -11,12 +11,12 @@
 
 | # | Test area | Verdict before QA | Verdict after QA fixes |
 |---|---|---|---|
-| 0 | Payroll math | ❌ Wrong (negative net pay stored) | ✅ Guard added; stored bad record documented |
-| 1 | Product CRUD | ⚠️ Worked, but soft-deleted items leaked into lists | ✅ Verified working (C/R/U/D) |
-| 2 | Inventory math (10 → 12) | ✅ Correct | ✅ Verified 10 → 11 → 12 |
-| 3 | POS low-stock cart | ❌ Dead button - no glow, no popup, no block | ✅ Red glow + popup + checkout block |
-| 4 | Inter-store transfers | ❌ Completely broken (never worked) | ✅ Verified end-to-end Thika → Nakuru |
-| 5 | Employee CRUD | ❌ READ & DELETE returned HTTP 500 | ✅ All 4 operations verified |
+| 0 | Payroll math | Wrong (negative net pay stored) | Guard added; stored bad record documented |
+| 1 | Product CRUD | Worked, but soft-deleted items leaked into lists | Verified working (C/R/U/D) |
+| 2 | Inventory math (10 → 12) | Correct | Verified 10 → 11 → 12 |
+| 3 | POS low-stock cart | Dead button - no glow, no popup, no block | Red glow + popup + checkout block |
+| 4 | Inter-store transfers | Completely broken (never worked) | Verified end-to-end Thika → Nakuru |
+| 5 | Employee CRUD | READ & DELETE returned HTTP 500 | All 4 operations verified |
 
 **3 production bugs were found, fixed, and re-verified live** (PRs #30, #31, #32). Details below.
 
@@ -35,7 +35,7 @@ The June 2026 **SUPPLEMENTAL** payroll run (`cmqvfzg180005jj04fyi24ejc`) for Den
 | **grossPay (earned this period)** | **0.00** | 0.00 (zero attendance) |
 | housingLevy | **2,699.99** | **0.00** |
 | totalDeductions | 2,699.99 | 0.00 |
-| **netPay** | **−2,699.99** ❌ | **0.00** |
+| **netPay** | **−2,699.99** | **0.00** |
 
 - The payslip charged the Housing Levy (1.5% × 179,999 = 2,699.99) **against zero earnings**. Deductions were levied on salary that was never paid. A negative net pay is impossible to pay out and breaks the run totals (run shows totalNet = −2,699.99).
 - The levy math itself is internally consistent with its declared base (`housingLevyBase: 179999` in the audit breakdown) - the *base choice* was the bug.
@@ -53,11 +53,11 @@ The June 2026 **SUPPLEMENTAL** payroll run (`cmqvfzg180005jj04fyi24ejc`) for Den
 All 7 payroll tests pass. The historical bad payslip is an immutable financial record - per the system's accounting rules it must be corrected with a reversing/correcting supplemental run, not edited (see Recommendations R1).
 
 ### Statutory rates verified correct (Kenya 2024/2025)
-- NSSF: 6% Tier I (≤ 8,000) + 6% Tier II (8,000-72,000), max 4,320 ✅
-- SHIF: 2.75% of gross, min KES 300 ✅
-- Housing Levy: 1.5% employee ✅
-- PAYE: 10/25/30/32.5/35% monthly bands, personal relief 2,400, insurance relief 15% of SHIF (max 5,000), NSSF+SHIF+levy deductible before PAYE ✅
-- Formula: net = gross − (PAYE + NSSF + SHIF + levy + arrears + loan + other) ✅
+- NSSF: 6% Tier I (≤ 8,000) + 6% Tier II (8,000-72,000), max 4,320
+- SHIF: 2.75% of gross, min KES 300
+- Housing Levy: 1.5% employee
+- PAYE: 10/25/30/32.5/35% monthly bands, personal relief 2,400, insurance relief 15% of SHIF (max 5,000), NSSF+SHIF+levy deductible before PAYE
+- Formula: net = gross − (PAYE + NSSF + SHIF + levy + arrears + loan + other)
 
 ---
 
@@ -66,11 +66,11 @@ All 7 payroll tests pass. The historical bad payslip is an immutable financial r
 ### Observation before fix - READ and DELETE were broken
 | Operation | Endpoint | Before | After |
 |---|---|---|---|
-| Create | `POST /api/employees` | 201 ✅ | 201 ✅ |
-| Read (list) | `GET /api/employees` | 200 ✅ | 200 ✅ |
-| **Read (one)** | `GET /api/employees/{id}` | **500 ❌** | **200 ✅** |
-| **Update** | `PATCH /api/employees/{id}` | **500 ❌** (same include bug) | **200 ✅** |
-| **Delete** | `DELETE /api/employees/{id}` (soft terminate) | **500 ❌** | **200 ✅** |
+| Create | `POST /api/employees` | 201 | 201 |
+| Read (list) | `GET /api/employees` | 200 | 200 |
+| **Read (one)** | `GET /api/employees/{id}` | **500** | **200** |
+| **Update** | `PATCH /api/employees/{id}` | **500** (same include bug) | **200** |
+| **Delete** | `DELETE /api/employees/{id}` (soft terminate) | **500** | **200** |
 
 ### Root cause (PR #30)
 The route queried `_count: { select: { payrollDetails: true, leaves: true } }` - the `Employee` model has **no `leaves` relation** (Prisma suggests `leaveRequests` / `leaveBalances` / `attendanceRecords`). Prisma threw `PrismaClientValidationError` → HTTP 500 on **every** employee detail read, update, and terminate. Fixed by using the real relation name `leaveRequests` in 4 places.
@@ -91,11 +91,11 @@ Test product: **"QA Audit Hammer 16oz"**, SKU `QA-PH3-001`, price 850, cost 500,
 
 | Step | Action | Result | Verdict |
 |---|---|---|---|
-| 1 | **Add** product (name, SKU, price, qty) | HTTP 201, id `cmtyclxnw0005l004wqm9uo80`, all fields echoed correctly | ✅ |
-| 2 | **Read** by ID | HTTP 200 - name/SKU/price/qty exactly as created | ✅ |
-| 3 | **Update** (name → "…PRO", price 850 → 950) | HTTP 200, persisted on re-read (PATCH returns 405 - update verb is `PUT`, documented) | ✅ |
-| 4 | **Delete** | HTTP 200 "Product deactivated (has related records)" - soft delete (`isActive: false`) because stock-movement history exists; re-read shows `isActive: false` | ✅ correct audit-preserving behavior |
-| 5 | **Hard delete** control - history-less throwaway product `QA-DEL-001` | HTTP 200 "Product deleted successfully" → re-read **404** | ✅ |
+| 1 | **Add** product (name, SKU, price, qty) | HTTP 201, id `cmtyclxnw0005l004wqm9uo80`, all fields echoed correctly | ✓ |
+| 2 | **Read** by ID | HTTP 200 - name/SKU/price/qty exactly as created | ✓ |
+| 3 | **Update** (name → "…PRO", price 850 → 950) | HTTP 200, persisted on re-read (PATCH returns 405 - update verb is `PUT`, documented) | ✓ |
+| 4 | **Delete** | HTTP 200 "Product deactivated (has related records)" - soft delete (`isActive: false`) because stock-movement history exists; re-read shows `isActive: false` | correct audit-preserving behavior |
+| 5 | **Hard delete** control - history-less throwaway product `QA-DEL-001` | HTTP 200 "Product deleted successfully" → re-read **404** | ✓ |
 
 ### Issue found (minor)
 - The products **list** endpoint only filters inactive products when the caller passes `?isActive=true`. By default a soft-deleted product still appears in list results (with `isActive: false`). The Catalog tab filters client-side (`p.isActive`), but the **POS fetch does not pass `isActive: true`** → deactivated products can appear in the POS grid until refreshed (see R2).
@@ -108,9 +108,9 @@ Setup: QA Audit Hammer starts at **qty 10**.
 
 | Step | Action | Expected | Observed | Verdict |
 |---|---|---|---|---|
-| 1 | Stock movement **ADJUSTMENT +1** (`POST /api/stock-movements`, transactional) | 11 | 11 | ✅ |
-| 2 | Stock movement **ADJUSTMENT +1** | 12 | 12 | ✅ |
-| 3 | Movements ledger for the product | 2 rows | 2 × `ADJUSTMENT +1` rows with notes and actor (`user_super_admin`) | ✅ |
+| 1 | Stock movement **ADJUSTMENT +1** (`POST /api/stock-movements`, transactional) | 11 | 11 | ✓ |
+| 2 | Stock movement **ADJUSTMENT +1** | 12 | 12 | ✓ |
+| 3 | Movements ledger for the product | 2 rows | 2 × `ADJUSTMENT +1` rows with notes and actor (`user_super_admin`) | ✓ |
 
 - Both movements are atomic `$transaction` writes (movement row + `quantityInStock` update together), so the books always reconcile.
 - **Conclusion:** adding two +1 units updates the remaining count accurately from 10 to 12. No drift, no lost updates.
@@ -124,7 +124,7 @@ Expected behavior (per test spec): adding a below-minimum-stock product → **pr
 ### Observation before fix
 Test product: **"QA OOS Wrench"** (SKU `QA-OOS-001`, qty 0, reorder 5).
 - Product card rendered with an "OUT OF STOCK" badge but the whole card and the row "Add" button were **`disabled`** - the item could never be added to the cart.
-- ❌ No red glow (item never reaches the cart), ❌ no pop-up alert, ✅ sale impossible but only silently (no explanation).
+- No red glow (item never reaches the cart), no pop-up alert, sale impossible but only silently (no explanation).
 - Server-side checkout *did* hard-block selling more than available (`Insufficient stock for "..."`, atomic decrement guard) - but nothing enforced a configured *minimum stock level*, and `minimumStockLevel` was ignored by the POS entirely.
 
 ### Fix (PRs #31 + #32)
@@ -163,9 +163,9 @@ Reproduced live: created "QA Transfer Paint 5L" (SKU `QA-XFER-001`) in **Thika**
 ### Verification (live, after deploy)
 | Step | Result |
 |---|---|
-| Transfer `XFR-20260912-B3EDE9` approve | 200 → `IN_TRANSIT` ✅ |
-| Ship (previously failing) | 200 ✅ - **Thika qty 30 → 25**, `TRANSFER −5` stock movement recorded |
-| Receive 5 units | 200 → `RECEIVED` ✅ - **Nakuru now has "QA Transfer Paint 5L" qty 5** (SKU `QA-XFER-001--store_nakuru`, active, sellable) |
+| Transfer `XFR-20260912-B3EDE9` approve | 200 → `IN_TRANSIT` |
+| Ship (previously failing) | 200 - **Thika qty 30 → 25**, `TRANSFER −5` stock movement recorded |
+| Receive 5 units | 200 → `RECEIVED` - **Nakuru now has "QA Transfer Paint 5L" qty 5** (SKU `QA-XFER-001--store_nakuru`, active, sellable) |
 
 Both inventory counts updated correctly, with a full audit trail (transfer record + stock movements on both sides).
 

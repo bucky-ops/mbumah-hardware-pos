@@ -28,7 +28,7 @@ const stageResults: { name: string; status: 'ok' | 'skipped' | 'failed'; detail?
 function stage(n: number, total: number, name: string): (status: 'ok' | 'skipped' | 'failed', detail?: string) => void {
   console.log(`\n[seed ${n}/${total}] Starting: ${name}`);
   return (status, detail) => {
-    const icon = status === 'ok' ? '✅' : status === 'skipped' ? '⏭️' : '⚠️';
+    const icon = status === 'ok' ? '[ok]' : status === 'skipped' ? '[skip]' : 'Warning:';
     console.log(`[seed ${n}/${total}] ${icon} ${name} - ${status}${detail ? ` (${detail})` : ''}`);
     stageResults.push({ name, status, detail });
   };
@@ -67,7 +67,7 @@ async function main() {
     // If the users table doesn't exist yet (schema not pushed), count() throws.
     // Treat that as "0 users" so the seed proceeds (and the upserts below will
     // create the foundation records).
-    console.log('   ⚠️ user.count() failed (table may not exist yet):', e instanceof Error ? e.message : String(e));
+    console.log('   Warning: user.count() failed (table may not exist yet):', e instanceof Error ? e.message : String(e));
     return 0;
   });
 
@@ -84,7 +84,7 @@ async function main() {
   try {
     await seedBody();
   } catch (error) {
-    console.error('\n❌ Seed completed with errors (DB retains partial data):');
+    console.error('\n[FAIL] Seed completed with errors (DB retains partial data):');
     console.error('   ', error instanceof Error ? error.message : String(error));
     if (error instanceof Error && error.stack) {
       console.error('   Stack:', error.stack.split('\n').slice(0, 5).join('\n   '));
@@ -95,7 +95,7 @@ async function main() {
     const skipped = stageResults.filter(s => s.status === 'skipped').length;
     const failed = stageResults.filter(s => s.status === 'failed').length;
     for (const r of stageResults) {
-      const icon = r.status === 'ok' ? '✅' : r.status === 'skipped' ? '⏭️' : '⚠️';
+      const icon = r.status === 'ok' ? '[ok]' : r.status === 'skipped' ? '[skip]' : 'Warning:';
       console.log(`  ${icon} ${r.name} - ${r.status}${r.detail ? ` (${r.detail})` : ''}`);
     }
     console.log(`\n  Total: ${ok} ok, ${skipped} skipped, ${failed} failed of ${stageResults.length} stages reached.`);
@@ -1858,8 +1858,8 @@ async function seedBody() {
     },
   });
 
-  console.log('   👔 Employees seeded: ' + employees.length + ' (Juja Main)');
-  console.log('   💵 Payroll period seeded: ' + payrollPeriod.name + ' (OPEN)');
+  console.log('   Employees seeded: ' + employees.length + ' (Juja Main)');
+  console.log('   Payroll period seeded: ' + payrollPeriod.name + ' (OPEN)');
 
   // ==========================================================================
   // 22. SEED PURCHASE ORDERS (Juja Main store)
@@ -2110,7 +2110,7 @@ async function seedBody() {
     });
   }
 
-  console.log('   📦 Purchase Orders seeded: 5 (RECEIVED, APPROVED, PARTIALLY_RECEIVED, DRAFT, CANCELLED)');
+  console.log('   Purchase Orders seeded: 5 (RECEIVED, APPROVED, PARTIALLY_RECEIVED, DRAFT, CANCELLED)');
 
   // ==========================================================================
   // 23. Log the initialization event
@@ -2135,23 +2135,23 @@ async function seedBody() {
   });
 
   console.log('MBUMAH HARDWARE POS - System initialized successfully!');
-  console.log('   📧 Super Admin: admin@mbumahhardware.co.ke');
-  console.log('   👑 Store Owner: owner@mbumahhardware.co.ke');
-  console.log('   🏪 Stores: 5 branches (Juja Main, Thika, Ruiru, Nairobi CBD, Nakuru)');
-  console.log('   👤 Branch Managers: 4 (Thika, Ruiru, Nairobi CBD, Nakuru)');
-  console.log('   💰 Branch Cashiers: 5 (Juja Main, Thika, Ruiru, Nairobi CBD, Nakuru)');
+  console.log('   Super Admin: admin@mbumahhardware.co.ke');
+  console.log('   Store Owner: owner@mbumahhardware.co.ke');
+  console.log('   Stores: 5 branches (Juja Main, Thika, Ruiru, Nairobi CBD, Nakuru)');
+  console.log('   Branch Managers: 4 (Thika, Ruiru, Nairobi CBD, Nakuru)');
+  console.log('   Branch Cashiers: 5 (Juja Main, Thika, Ruiru, Nairobi CBD, Nakuru)');
   console.log('   Products seeded: ' + (products.length + 1) + ' (Juja Main) + ' + (thkProducts.length + ruiruProducts.length + nbiProducts.length + nkrProducts.length) + ' (branches)');
-  console.log('   👥 Customers seeded: ' + customers.length + ' (Juja Main) + ' + (thkCustomers.length + ruiruCustomers.length + nbiCustomers.length + nkrCustomers.length) + ' (branches)');
+  console.log('   Customers seeded: ' + customers.length + ' (Juja Main) + ' + (thkCustomers.length + ruiruCustomers.length + nbiCustomers.length + nkrCustomers.length) + ' (branches)');
   console.log('   Accounts seeded: ' + (accounts.length + supplierAccounts.length));
   console.log('   Sales transactions seeded: ' + salesData.length + ' (Juja Main) + ' + (thikaSales.length + ruiruSales.length + nairobiSales.length + nakuruSales.length) + ' (branches)');
   console.log('   Stock movements seeded: ' + stockMovements.length);
-  console.log('   🏗️ Equipment rentals seeded: 3');
-  console.log('   🗄️ Cash drawer logs seeded: ' + cashDrawerLogs.length);
-  console.log('   📝 Expenses seeded: ' + (expenses.length + branchExpenses.length));
-  console.log('   🏭 Suppliers seeded: ' + suppliers.length);
-  console.log('   📦 Purchase Orders seeded: 5 (Juja Main)');
-  console.log('   🎁 Gift cards seeded: 14');
-  console.log('   🎁 Gift card redemptions seeded: ' + giftCardRedemptions.length);
+  console.log('   Equipment rentals seeded: 3');
+  console.log('   Cash drawer logs seeded: ' + cashDrawerLogs.length);
+  console.log('   Expenses seeded: ' + (expenses.length + branchExpenses.length));
+  console.log('   Suppliers seeded: ' + suppliers.length);
+  console.log('   Purchase Orders seeded: 5 (Juja Main)');
+  console.log('   Gift cards seeded: 14');
+  console.log('   Gift card redemptions seeded: ' + giftCardRedemptions.length);
 
   // 24. Multi-store workspaces: memberships + global chat (v2.16.0)
   const done24 = stage(24, TOTAL_STAGES, 'Seed workspace memberships + global chat');
@@ -2229,7 +2229,7 @@ async function seedBody() {
 
 main()
   .catch(e => {
-    console.error('❌ Seed failed:', e);
+    console.error('[FAIL] Seed failed:', e);
     process.exit(1);
   })
   .finally(async () => {

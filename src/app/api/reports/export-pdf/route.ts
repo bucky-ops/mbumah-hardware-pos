@@ -272,7 +272,6 @@ function formatDateTimeEAT(d: Date | string): string {
 interface StatementEntry {
   at: Date;
   activity: string;
-  icon: string;          // emoji marker for the timeline
   tone: 'in' | 'out' | 'info' | 'warn';
   reference: string;
   details: string;
@@ -367,7 +366,6 @@ async function loadCustomerStatement(storeId: string, customerId: string): Promi
     entries.push({
       at: t.createdAt,
       activity: t.transactionType === 'REFUND' ? 'Sales refund' : 'Purchase (sale)',
-      icon: t.transactionType === 'REFUND' ? '↩️' : '🛒',
       tone: t.transactionType === 'REFUND' ? 'info' : (isDebt ? 'out' : 'in'),
       reference: t.receiptNumber,
       details:
@@ -388,7 +386,6 @@ async function loadCustomerStatement(storeId: string, customerId: string): Promi
     entries.push({
       at: l.createdAt,
       activity: 'Credit sale charged to account',
-      icon: '📘',
       tone: 'warn',
       reference: l.transaction?.receiptNumber || l.id.slice(-8).toUpperCase(),
       details: `Due ${formatDate(l.dueDate)} · status ${l.status}`,
@@ -401,7 +398,6 @@ async function loadCustomerStatement(storeId: string, customerId: string): Promi
       entries.push({
         at: p.createdAt,
         activity: 'Debt payment received',
-        icon: '💵',
         tone: 'in',
         reference: p.reference || p.id.slice(-8).toUpperCase(),
         details: `${p.paymentMethod}${p.reference ? ` · ref ${p.reference}` : ''}`,
@@ -430,7 +426,6 @@ async function loadCustomerStatement(storeId: string, customerId: string): Promi
     entries.push({
       at: r.rentalStartDate,
       activity: `Rental started - ${r.product?.name || 'equipment'}`,
-      icon: '🔑',
       tone: 'out',
       reference: r.id.slice(-8).toUpperCase(),
       details: `SKU ${r.product?.sku || '-'} · deposit ${formatKES(deposit)} · rate ${formatKES(r.ratePerDay)}/day · due ${formatDate(r.expectedReturnDate)}`,
@@ -441,7 +436,6 @@ async function loadCustomerStatement(storeId: string, customerId: string): Promi
     entries.push({
       at: r.rentalStartDate,
       activity: 'Security deposit paid (held)',
-      icon: '🛡️',
       tone: 'info',
       reference: r.id.slice(-8).toUpperCase(),
       details: `Refundable deposit for ${r.product?.name || 'equipment'} - held as liability, not income`,
@@ -457,7 +451,6 @@ async function loadCustomerStatement(storeId: string, customerId: string): Promi
       entries.push({
         at: r.actualReturnDate || r.updatedAt,
         activity: `Rental returned - ${r.product?.name || 'equipment'}`,
-        icon: '✅',
         tone: 'in',
         reference: r.id.slice(-8).toUpperCase(),
         details:
@@ -471,7 +464,6 @@ async function loadCustomerStatement(storeId: string, customerId: string): Promi
         entries.push({
           at: r.actualReturnDate || r.updatedAt,
           activity: 'Rental charges applied',
-          icon: '🧾',
           tone: 'out',
           reference: r.id.slice(-8).toUpperCase(),
           details: `Hire charge settled from the security deposit at return`,
@@ -680,7 +672,7 @@ async function buildHtmlStatement(
     return `
       <tr class="${e.memo ? 'memo' : ''}">
         <td class="nowrap">${escapeHtml(formatDateTimeEAT(e.at))}</td>
-        <td>${e.icon} ${escapeHtml(e.activity)}</td>
+        <td>${escapeHtml(e.activity)}</td>
         <td class="mono">${escapeHtml(e.reference)}</td>
         <td class="details">${escapeHtml(e.details)}${e.memo ? ' <span class="chip">memo</span>' : ''}</td>
         <td class="right">${amountCell}</td>
@@ -691,7 +683,7 @@ async function buildHtmlStatement(
   // Timeline (most recent first)
   const timeline = [...data.entries].reverse().map((e) => `
     <div class="tl-row">
-      <div class="tl-dot tl-${e.tone}">${e.icon}</div>
+      <div class="tl-dot tl-${e.tone}"></div>
       <div class="tl-body">
         <div class="tl-head">
           <span class="tl-activity">${escapeHtml(e.activity)}</span>
@@ -823,7 +815,7 @@ async function buildHtmlStatement(
   </style>
 </head>
 <body>
-  <div class="print-hint">🖨️ To save as PDF: press <b>Ctrl/Cmd + P</b> → choose <b>Save as PDF</b>. This statement reflects the account as shown on screen at generation time.</div>
+  <div class="print-hint">To save as PDF: press <b>Ctrl/Cmd + P</b> → choose <b>Save as PDF</b>. This statement reflects the account as shown on screen at generation time.</div>
   <div class="header">
     ${logoHtml}
     <div class="company-info">

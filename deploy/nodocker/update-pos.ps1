@@ -27,7 +27,7 @@
 #   ... -Quiet                scripted mode (start-pos.ps1 calls this on every
 #                             launch): shorter network timeouts, no interactive
 #                             assumptions, harmless exit codes
-#   ... -NoStart              do NOT auto-start the POS after the update — the
+#   ... -NoStart              do NOT auto-start the POS after the update - the
 #                             caller does it (start-pos.ps1 continues its normal
 #                             startup on the NEW code; avoids double servers)
 #
@@ -125,8 +125,8 @@ function Test-InDormantWindow {
 }
 
 function Ensure-ScheduledTasks {
-  # Self-heal (v2.10.1): installs that predate the nightly tasks — or that
-  # received their FIRST update via the start-pos.ps1 startup check — may not
+  # Self-heal (v2.10.1): installs that predate the nightly tasks - or that
+  # received their FIRST update via the start-pos.ps1 startup check - may not
   # have "Mbumah POS Nightly Update/Backup" registered. Re-create any missing
   # task (same /tr quoting as the installer: full -File path, no /tr comma
   # mangling on Windows PowerShell 5.1) so the dormant-window automation
@@ -155,7 +155,7 @@ function Ensure-ScheduledTasks {
       }
     } catch { }
   }
-  # RAK agent — different cadence (every 15 min), registered separately.
+  # RAK agent - different cadence (every 15 min), registered separately.
   $agentTask = 'Mbumah POS Agent'
   $agentExists = $false
   try {

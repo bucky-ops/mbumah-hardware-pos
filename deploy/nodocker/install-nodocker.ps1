@@ -87,9 +87,9 @@ if (Test-Path ".env") {
   Write-Host "[OK] .env created - secrets generated, database at: $dbFile"
 }
 
-# -- 3b. Remote Ops agent identity (RAK, v2.11.0) — append missing keys only --
+# -- 3b. Remote Ops agent identity (RAK, v2.11.0) - append missing keys only --
 # STORE_ID: this machine's fleet identity (defaults to the sanitized hostname).
-# OPS_SIGNING_KEY: shared HMAC secret — MUST match the cloud's key or every
+# OPS_SIGNING_KEY: shared HMAC secret - MUST match the cloud's key or every
 # command is rejected by design. Both are written ONCE; never rotated here.
 $envLines = Get-Content ".env"
 $hasStoreId = ($envLines | Where-Object { $_ -match '^STORE_ID=' } | Measure-Object).Count -gt 0
@@ -175,7 +175,7 @@ Copy-Item "public" ".next\standalone\" -Recurse -Force
 # silently when offline, so a laptop that is switched off at night just
 # catches up the next night - nothing breaks. Both tasks run hidden.
 # The RAK agent (v2.11.0) runs every 15 minutes: it polls the private ops-log
-# repo for signed commands from the owner's Remote Ops console (pull-only —
+# repo for signed commands from the owner's Remote Ops console (pull-only -
 # no inbound ports) and reports results back. Without a GITHUB_TOKEN in .env
 # the agent is idle and harmless.
 $here = (Get-Location).Path
@@ -198,7 +198,7 @@ foreach ($t in $tasks) {
   }
 }
 
-# RAK agent — every 15 minutes, hidden. node.exe must be on PATH (step 2).
+# RAK agent - every 15 minutes, hidden. node.exe must be on PATH (step 2).
 $agentPath = Join-Path $here 'deploy\nodocker\agent.mjs'
 try {
   $agentTr = 'node.exe --no-warnings "' + $agentPath + '"'

@@ -31,7 +31,7 @@ not reach the form.
 2. **Inline feedback instead of overlays** (UX best practice - feedback lives
    next to the field it belongs to):
    - Wrong credentials → an **inline red banner inside the card**
-     (`role="alert"`, `aria-live="assertive"`, with a ✕ dismiss button).
+     (`role="alert"`, `aria-live="assertive"`, with an X dismiss button).
      It never blocks typing and never floats above the page.
    - Successful login → **no pop at all**; the dashboard appearing IS the
      confirmation.
@@ -53,7 +53,7 @@ Pop-ups remain a **Point-of-Sale feature**, tied to product activity:
 - **Product hover** → tooltip / hover cards in the POS grid and sidebar
   prefetch (`preloadTab` on `pointerenter`).
 - **Stock & store events while signed in** → 45-second alert pop-ups
-  (bottom-left stack, countdown bar, pause-on-hover, manual ✕ close).
+  (bottom-left stack, countdown bar, pause-on-hover, manual X close).
 - Recommendation chips in the cart ("frequently bought together") pop only
   when a cart exists.
 

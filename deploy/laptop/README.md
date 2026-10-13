@@ -71,7 +71,7 @@ docker compose -f docker-compose.laptop.yml up -d --build
 ## First login & go-live
 
 1. Open `http://localhost:3000` (or `http://<laptop-ip>:3000` in LAN mode).
-2. Log in with the seeded Super Admin: `admin@mbumahhardware.co.ke` / `password123`.
+2. Log in with the seeded Super Admin (local default): `admin@mbumahhardware.co.ke` / `password123`. Change it after first login.
 3. **Change the admin password immediately** (Profile → Security).
 4. Set `SEED_DATABASE=false` in `.env`, then
    `docker compose -f docker-compose.laptop.yml up -d`.

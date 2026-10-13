@@ -4,7 +4,7 @@
 **Source:** `FINANCIAL_MODULE_AUDIT_REPORT.md` (merged via PR #11)
 **Verification:** 344/344 tests pass (10 new remediation tests) · 0 ESLint errors · production Neon schema + DB-level controls applied live
 
-This report maps **every recommendation** from the audit to the concrete changes made, with file references and honest status. Status key: ✅ **Implemented** · 🟡 **Implemented (phased/partial - see note)** · ⛔ **Blocked (operational, not code)**.
+This report maps **every recommendation** from the audit to the concrete changes made, with file references and honest status. Status key: **Implemented** · **Implemented (phased/partial - see note)** · **Blocked (operational, not code)**.
 
 ---
 
@@ -32,7 +32,7 @@ Every actor field is now derived from the authenticated session, never the reque
 |---|---|
 | `scripts/set-vercel-env.sh` - the file containing the **live Neon password at HEAD** - deleted | `git rm scripts/set-vercel-env.sh` |
 | KRA portal password: real AES-256-GCM envelope (`v1:iv:tag:data`), key from `CREDENTIAL_ENCRYPTION_KEY` (scrypt fallback from `NEXTAUTH_SECRET`); legacy base64 rows decoded transparently and re-encrypted on next save | `src/lib/crypto-helpers.ts` (new), `src/app/api/kra/profile/route.ts`, `src/lib/kra-helpers.ts` |
-| Git-history purge + password rotation: ⛔ **blocked** - requires force-push to protected `main` and the owning-account Vercel token (issue #9); runbook documented, rotation workflow exists and is ready | `docs/runbooks/apply-prod-constraints.md` + issue #9 |
+| Git-history purge + password rotation: **blocked** - requires force-push to protected `main` and the owning-account Vercel token (issue #9); runbook documented, rotation workflow exists and is ready | `docs/runbooks/apply-prod-constraints.md` + issue #9 |
 
 ### F6-1 - Forgeable M-Pesa callback (P0) · Implemented
 `src/app/api/payments/mpesa/callback/route.ts`:
@@ -126,9 +126,9 @@ Issuance now commits card + `recordGiftCardIssuance` (Dr Cash / Cr Gift-Card Lia
 ## WAVE 2 - Structural
 
 ### F8-4 - Fire-and-forget on serverless · Implemented
-Transactional outbox: `OutboxEvent` model (schema + prod), `src/lib/outbox.ts` (enqueue-in-tx, guarded-claim pump, exponential backoff, DEAD after maxAttempts), `src/lib/outbox-handlers.ts` (registry; `MPESA_STK_PUSH` + `AUDIT_ALERT`). Checkout enqueues the STK push **inside** the sale transaction and pumps opportunistically post-commit.
+Transactional outbox: `OutboxEvent` model (schema + prod), `src/lib/outbox.ts` (enqueue-in-tx, guarded-claim pump, exponential backoff, DEAD after maxAttempts), `src/lib/outbox-handlers.ts` (registry; `MPESA_STK_PUSH` + `AUDIT_ALERT`). Checkout enqueues the STK Push **inside** the sale transaction and pumps opportunistically post-commit.
 
-### F6-2 - Relative-URL STK push (P0) · Implemented
+### F6-2 - Relative-URL STK Push (P0) · Implemented
 Daraja logic extracted to `src/lib/mpesa-daraja.ts`; the checkout no longer self-`fetch`es a relative URL - the outbox invokes the shared core in-process; `stkpush/route.ts` is a thin authed wrapper.
 
 ### F6-6 / F3-1 - Reconciliation · Implemented
@@ -138,7 +138,7 @@ Daraja logic extracted to `src/lib/mpesa-daraja.ts`; the checkout no longer self
 Float `init` migration deleted; new baseline `prisma/migrations/20260904120000_financial_baseline/migration.sql` (3,448 lines, 87 CREATE TABLE, Decimal money) generated from the real schema + constraints appended. Fresh provisions (Neon PR branches, DR restores) now get a correct Decimal ledger.
 
 ### F8-3 / F8-2 - Neon ops · Applied live to production
-`statement_timeout = '30s'` on `neondb_owner` (runaway scans can no longer burn CUs until the lambda dies); `pg_stat_statements` enabled; 4 crons wired in `vercel.json` (outbox hourly, sweeper hourly+, reconciliation daily, retention daily) - Hobby-plan schedule clamping documented in route headers. *PITR retention increase and Neon branch protection remain plan-tier decisions (⛔ ops).*
+`statement_timeout = '30s'` on `neondb_owner` (runaway scans can no longer burn CUs until the lambda dies); `pg_stat_statements` enabled; 4 crons wired in `vercel.json` (outbox hourly, sweeper hourly+, reconciliation daily, retention daily) - Hobby-plan schedule clamping documented in route headers. *PITR retention increase and Neon branch protection remain plan-tier decisions (ops).*
 
 ### F7-7 - Exports structurally broken · Implemented
 `DataExport` stuck-`PROCESSING` detection in the reconciliation cron + retention cron surfacing; storage-target change to `/tmp` + object storage tracked as follow-up (needs storage binding choice).
@@ -153,7 +153,7 @@ Float `init` migration deleted; new baseline `prisma/migrations/20260904120000_f
 - Wired into: sale completion (`transactions`), debt payments (`debt`), journal voids (existing helper), access-control (existing). Policy-expiry, GRN, and transfer events can adopt the same one-liner - the chain is live from today.
 
 ### F9-2 - eTIMS mock lies green (P0) · Implemented
-`etims/issue-invoice` **hard-fails 503** when the client is a mock (`isEtimsMock()` in `etims-service.ts`) unless `ETIMS_ALLOW_MOCK_ISSUANCE=true` (explicit non-compliant override); per-line tax rate (was hardcoded 16%); per-line discounts actually derived (the old lookup read a nonexistent field); per-store daily numbering. Real KRA API integration ⛔ requires KRA credentials - the app now refuses to fake compliance instead of pretending.
+`etims/issue-invoice` **hard-fails 503** when the client is a mock (`isEtimsMock()` in `etims-service.ts`) unless `ETIMS_ALLOW_MOCK_ISSUANCE=true` (explicit non-compliant override); per-line tax rate (was hardcoded 16%); per-line discounts actually derived (the old lookup read a nonexistent field); per-store daily numbering. Real KRA API integration requires KRA credentials - the app now refuses to fake compliance instead of pretending.
 
 ### F9-3 - KRA credential + payload quality (P1) · Implemented (crypto) / (payload)
 AES-256-GCM (see SYS-9); `customerPin` passed through `validateKraPin` - National IDs are never sent as PINs; stale `STORE_MANAGER` role fixed to `BRANCH_MANAGER`.
@@ -162,7 +162,7 @@ AES-256-GCM (see SYS-9); `customerPin` passed through `validateKraPin` - Nationa
 Only `SUPER_ADMIN` may assign `SUPER_ADMIN`/`ACCOUNTANT` (`users/route.ts`) + `ROLE_ASSIGNED` audit logs; PO approve/cancel manager-gated; debt-plan self-approval blocked. Full permission-matrix enforcement via `assertPermission` on every route is tracked as follow-up (the matrix itself exists; the wrapper layer now exists to enforce it incrementally).
 
 ### F9-5 - Brute force in-memory / seed passwords (P1) · Partial
-IP-block now writes keys the limiter actually reads + DB-backed `SecurityEvent`. ⛔ Moving counters to Postgres/Redis needs an infra decision (Neon already available - one-sprint change); the legacy `hashed_` login path and seed-password rotation are flagged in the runbook.
+IP-block now writes keys the limiter actually reads + DB-backed `SecurityEvent`. Moving counters to PostgreSQL/Redis needs an infra decision (Neon already available - one-sprint change); the legacy `hashed_` login path and seed-password rotation are flagged in the runbook.
 
 ### F9-6 - CSRF substring bypass / no-op blocking (P2) · Implemented
 Exact-host Origin comparison in `src/proxy.ts` (fail-closed on parse failure); `security/block-ip` writes real keys.
@@ -171,7 +171,7 @@ Exact-host Origin comparison in `src/proxy.ts` (fail-closed on parse failure); `
 Audit-log retention 3y → **7y** (Tax Procedures Act) with the purge now actually working (`withImmutabilityBypass('retention_purge')` - it previously threw `IMMUTABILITY_VIOLATION` every night); retention cron wired; the compliance test updated to pin the 7-year requirement.
 
 ### F2-1 / F2-2 - Serialized assets / batches (P1) · /
-Serial lifecycle implemented end-to-end: checkout schema (`serials[]`), atomic `IN_STOCK→SOLD` claim inside the sale tx (double-sell lock), warranty linkage (`soldInTransactionId`), regression tests. Batch FEFO consumption 🟡 tracked as follow-up (models + expiry exist; checkout-time batch selection needs a UI decision).
+Serial lifecycle implemented end-to-end: checkout schema (`serials[]`), atomic `IN_STOCK→SOLD` claim inside the sale tx (double-sell lock), warranty linkage (`soldInTransactionId`), regression tests. Batch FEFO consumption tracked as follow-up (models + expiry exist; checkout-time batch selection needs a UI decision).
 
 ---
 
@@ -193,9 +193,9 @@ Serial lifecycle implemented end-to-end: checkout schema (`serials[]`), atomic `
 *(squashed on merge; see PR for the full file list)*
 
 ## KNOWN FOLLOW-UPS (honest gaps)
-1. ⛔ Neon password rotation + git-history rewrite - blocked on owning-account Vercel token (issue #9).
-2. 🟡 `FinancialPeriod` seeding + hard period enforcement (F7-4 phase 2).
-3. 🟡 Batch FEFO checkout consumption (F2-2).
-4. 🟡 Centralized rate-limit store (Redis/Postgres) for cross-instance brute-force protection (F9-5).
-5. 🟡 Exports storage target (`/tmp` + object storage) and streaming generation (F7-7).
-6. 🟡 Real eTIMS/KRA API integration when credentials are provisioned (F9-2 phase 2).
+1. Neon password rotation + git-history rewrite - blocked on owning-account Vercel token (issue #9).
+2. `FinancialPeriod` seeding + hard period enforcement (F7-4 phase 2).
+3. Batch FEFO checkout consumption (F2-2).
+4. Centralized rate-limit store (Redis/PostgreSQL) for cross-instance brute-force protection (F9-5).
+5. Exports storage target (`/tmp` + object storage) and streaming generation (F7-7).
+6. Real eTIMS/KRA API integration when credentials are provisioned (F9-2 phase 2).

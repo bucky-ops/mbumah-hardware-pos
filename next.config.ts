@@ -37,7 +37,7 @@ const nextConfig: NextConfig = {
     "http://127.0.0.1:3000",
   ],
 
-  // Image optimization config — restrict to specific domains instead of wildcard
+  // Image optimization config - restrict to specific domains instead of wildcard
   images: {
     remotePatterns: [
       {

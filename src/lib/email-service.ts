@@ -338,7 +338,7 @@ export async function sendLowStockAlert(params: LowStockAlertParams): Promise<Em
 
   return sendEmail({
     to,
-    subject: `⚠️ Low Stock Alert - ${storeName} (${products.length} item${products.length !== 1 ? 's' : ''})`,
+    subject: `Low Stock Alert - ${storeName} (${products.length} item${products.length !== 1 ? 's' : ''})`,
     html,
     userId,
     type: NotificationType.LOW_STOCK,
@@ -421,7 +421,7 @@ export async function sendLoyaltyTierUpgrade(
 
   return sendEmail({
     to,
-    subject: `🎉 You're now ${newTier}! - MBUMAH HARDWARE Loyalty`,
+    subject: `You're now ${newTier} - MBUMAH HARDWARE Loyalty`,
     html,
     type: NotificationType.TIER_UPGRADE,
     metadata: { customerName, newTier, storeName },

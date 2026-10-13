@@ -32,7 +32,7 @@ If you ever need to install it again on a new laptop:
 **First login:**
 
 - Open the **Mbumah POS** icon
-- Username: `admin@mbumahhardware.co.ke`, password: `password123`
+- Username: `admin@mbumahhardware.co.ke`, password: `password123` (seeded local default)
 - **CHANGE THE PASSWORD IMMEDIATELY** (click your name, then Profile, then Security)
 - Write the new password down and keep it somewhere safe (and secret)
 

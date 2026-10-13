@@ -79,14 +79,14 @@ export async function registerDLQHandlers(): Promise<void> {
   });
 
   // MPESA_STK_PUSH handler
-  // M-Pesa STK pushes can't be trivially retried from the DLQ because:
-  //   1. The CheckoutRequestID is per-request (each STK push generates a new one)
+  // M-Pesa STK Push requests can't be trivially retried from the DLQ because:
+  //   1. The CheckoutRequestID is per-request (each STK Push generates a new one)
   //   2. The OAuth token may have expired
   //   3. The original transaction may have been resolved by callback already
   //
   // Instead, we mark the item as needing manual intervention. The admin
   // dashboard will show these items with a "retry" button that re-initiates
-  // the STK push with fresh credentials.
+  // the STK Push with fresh credentials.
   dlq.registerHandler(DLQOperationType.MPESA_STK_PUSH, async (_payload) => {
     return {
       success: false,
@@ -354,7 +354,7 @@ export async function enqueueFailedWhatsApp(
 }
 
 /**
- * Enqueue a failed M-Pesa STK push for later retry.
+ * Enqueue a failed M-Pesa STK Push for later retry.
  */
 export async function enqueueFailedMpesaStkPush(
   phone: string,

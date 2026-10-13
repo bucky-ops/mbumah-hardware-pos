@@ -121,7 +121,7 @@ are now imported in `src/app/layout.tsx` inside `<body>`.
 ## 4. Database Connection Pooling (Neon / Supabase)
 
 Serverless functions open a new connection per invocation. Without
-PgBouncer pooling, you will exhaust the Postgres connection limit
+PgBouncer pooling, you will exhaust the PostgreSQL connection limit
 (typically 20 on Neon free tier) and see intermittent `429` / `502` /
 "too many connections" errors.
 
@@ -187,7 +187,7 @@ vercel link
 # Pull the current production env vars into .vercel/.env.development.local
 vercel env pull .vercel/.env.development.local --environment=production
 
-# Inspect — is DATABASE_URL the POOLED string?
+# Inspect: is DATABASE_URL the POOLED string?
 grep DATABASE_URL .vercel/.env.development.local
 ```
 

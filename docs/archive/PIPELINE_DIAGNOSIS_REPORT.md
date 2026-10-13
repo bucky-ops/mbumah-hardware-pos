@@ -23,7 +23,7 @@ After Cycle E Phases 1-4, the build pipeline is now correctly configured (`SKIP_
 | 4 | `NEXTAUTH_SECRET` / `JWT_SECRET` not set in Vercel | LOW | `/api/health/env` |
 | 5 | Neon database suspended (free-tier auto-suspend) | LOW | `/api/health/db` |
 
-Follow the 5-stage checklist below **in order**. Each stage has a ✅ pass condition and a ❌ fix action.
+Follow the 5-stage checklist below **in order**. Each stage has a pass condition and a fix action.
 
 ---
 
@@ -73,10 +73,10 @@ Then wait ~2 min for Vercel to auto-deploy.
 
 | Variable | Required | Value hint |
 |---|---|---|
-| `DATABASE_URL` | ✅ YES | `postgresql://…-pooler…?pgbouncer=true&connect_timeout=15` (must contain `-pooler`) |
+| `DATABASE_URL` | YES | `postgresql://…-pooler…?pgbouncer=true&connect_timeout=15` (must contain `-pooler`) |
 | `DIRECT_URL` | recommended | `postgresql://…` (NON-pooler, for migrations) |
-| `NEXTAUTH_SECRET` | ✅ YES | ≥ 32 chars (generate: `openssl rand -base64 32`) |
-| `JWT_SECRET` | ✅ YES | ≥ 32 chars |
+| `NEXTAUTH_SECRET` | YES | ≥ 32 chars (generate: `openssl rand -base64 32`) |
+| `JWT_SECRET` | YES | ≥ 32 chars |
 | `NEXTAUTH_URL` | optional | `https://mbumah-hardware-pos-one.vercel.app` |
 | `EXPOSE_ERRORS` | optional | `true` for debugging ONLY - **remove for production** |
 | `ALLOW_DEV_BYPASS` | optional | `true` enables `/api/auth/dev-bypass` - **remove for production** |
@@ -84,7 +84,7 @@ Then wait ~2 min for Vercel to auto-deploy.
 3. **Critical:** `DATABASE_URL` MUST contain `-pooler` in the hostname. If it does not, you are using the direct connection, which will exhaust Neon's ~20-connection limit under serverless load → intermittent 500s.
 
 ### Pass condition
-Build status = Ready AND all ✅-required vars are set AND `DATABASE_URL` contains `-pooler`.
+Build status = Ready AND all required vars are set AND `DATABASE_URL` contains `-pooler`.
 
 ### Fix action
 - Missing vars: add them in Vercel → Settings → Environment Variables, then **Redeploy**.
@@ -171,7 +171,7 @@ curl -s https://mbumah-hardware-pos-one.vercel.app/api/health/env | python3 -m j
 }
 ```
 **If `status` is `error`:** the `missing[]` array lists exactly which required vars are absent. Fix in Vercel → Settings → Environment Variables → Redeploy.
-**If `hints[]` contains `⚠️`:** non-fatal warnings (e.g. `EXPOSE_ERRORS` is on). Address before production launch.
+**If `hints[]` is non-empty:** non-fatal warnings (e.g. `EXPOSE_ERRORS` is on). Address before production launch.
 
 ### 4b. Database health
 ```bash
@@ -188,8 +188,8 @@ curl -s https://mbumah-hardware-pos-one.vercel.app/api/health/db | python3 -m js
 }
 ```
 **If `status` is `error` with `reachable: false`:** `DATABASE_URL` is wrong, Neon is suspended, or the pool is exhausted. See Stage 3.
-**If `status` is `error` with `counts[X] = { error: ... }`:** the schema was not pushed (table missing). See Stage 3 ❌ fix.
-**If `status` is `degraded` with `users: 0`:** the DB is reachable but not seeded. See Stage 3 ❌ fix (run `db:seed`).
+**If `status` is `error` with `counts[X] = { error: ... }`:** the schema was not pushed (table missing). See Stage 3 fix.
+**If `status` is `degraded` with `users: 0`:** the DB is reachable but not seeded. See Stage 3 fix (run `db:seed`).
 
 ### 4c. Comprehensive health
 ```bash
@@ -216,7 +216,7 @@ Follow the `detail` / `hints` fields in the JSON response - they are written to 
    - Email: `admin@mbumahhardware.co.ke`
    - Password: `password123`
 4. Click **Sign In**.
-5. **Expected:** Dashboard renders with "Karibu, System 👋" and the 10-item sidebar.
+5. **Expected:** Dashboard renders with "Karibu, System" and the 10-item sidebar.
 
 ### 5b. Dev bypass (Preview deployments only)
 If `ALLOW_DEV_BYPASS=true` or `VERCEL_ENV=preview`:
@@ -246,8 +246,8 @@ If any of the above 500s:
 Login succeeds, dashboard renders, `/api/dashboard` returns 200 with data, zero 5xx in Vercel logs.
 
 ### Fix action
-- **Login 500 with "no active SUPER_ADMIN user found":** DB not seeded → Stage 3 ❌ fix.
-- **Login 500 with Prisma error "no such table" or "relation does not exist":** schema not pushed → Stage 3 ❌ fix.
+- **Login 500 with "no active SUPER_ADMIN user found":** DB not seeded → Stage 3 fix.
+- **Login 500 with Prisma error "no such table" or "relation does not exist":** schema not pushed → Stage 3 fix.
 - **Login 500 with "Can't reach database server":** `DATABASE_URL` wrong or Neon suspended → Stage 2b/3.
 - **Login hangs (no response):** connection pool exhausted → confirm `DATABASE_URL` has `-pooler` → Stage 2b.
 - **Env validation error:** `SKIP_ENV_VALIDATION` not propagating → confirm `package.json` `vercel-build` script → Stage 1.

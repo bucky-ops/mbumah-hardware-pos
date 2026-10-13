@@ -552,9 +552,9 @@ curl -s https://mbumah-hardware-pos-one.vercel.app/api/health/db
 
 | Role | Name | Date | Result |
 |------|------|------|--------|
-| Developer | | | ☐ Pass ☐ Fail |
-| QA | | | ☐ Pass ☐ Fail |
-| Product Owner | | | ☐ Pass ☐ Fail |
-| DevOps | | | ☐ Pass ☐ Fail |
+| Developer | | | [ ] Pass [ ] Fail |
+| QA | | | [ ] Pass [ ] Fail |
+| Product Owner | | | [ ] Pass [ ] Fail |
+| DevOps | | | [ ] Pass [ ] Fail |
 
 **Release blocked until all 4 roles sign off.**

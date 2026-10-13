@@ -117,7 +117,7 @@ const PAYMENT_METHODS: {
     iconGradient: 'bg-gradient-to-br from-fuchsia-500 to-purple-600 text-white',
   },
   {
-    value: 'MPESA', label: 'M-Pesa', icon: Smartphone, desc: 'STK push to customer phone', color: 'text-blue-600',
+    value: 'MPESA', label: 'M-Pesa', icon: Smartphone, desc: 'STK Push to customer phone', color: 'text-blue-600',
     selectedGradient: 'from-sky-500 to-blue-600',
     iconGradient: 'bg-gradient-to-br from-sky-500 to-blue-600 text-white',
   },
@@ -480,7 +480,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
       <div>
         <p className="text-lg font-bold text-green-700 dark:text-green-400">Payment Authorised!</p>
         <p className="text-sm text-muted-foreground">
-          M-Pesa STK push was accepted. Tap &ldquo;Complete Sale&rdquo; to finalise the receipt.
+          M-Pesa STK Push was accepted. Tap &ldquo;Complete Sale&rdquo; to finalise the receipt.
         </p>
       </div>
     </div>
@@ -511,7 +511,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
     <ResponsiveDialog
       open={open}
       onOpenChange={(o) => {
-        // Prevent closing while STK push is actively processing
+        // Prevent closing while STK Push is actively processing
         if (!o && mpesaStatus === 'processing') return;
         onOpenChange(o);
       }}
@@ -944,7 +944,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
                         )}
                       </span>
                     </div>
-                    {/* Show STK push state for split's mpesa portion */}
+                    {/* Show STK Push state for split's mpesa portion */}
                     {isProcessingMpesa && <StkStatusPanel
                       status={mpesaStatus}
                       stkCheckoutRequestId={stkCheckoutRequestId}
@@ -972,7 +972,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
                             autoFocus
                           />
                           <p className="text-[11px] text-muted-foreground mt-1">
-                            An STK push will be sent to this number. The customer must enter their M-Pesa PIN to authorise the payment of <span className="font-semibold">{formatKES(finalTotal)}</span>.
+                            An STK Push will be sent to this number. The customer must enter their M-Pesa PIN to authorise the payment of <span className="font-semibold">{formatKES(finalTotal)}</span>.
                           </p>
                         </div>
                         <div className="flex items-center gap-2 p-2.5 rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900">
@@ -1093,7 +1093,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
                     <Smartphone className="h-4 w-4" />
                     <AlertTitle>M-Pesa Payment</AlertTitle>
                     <AlertDescription>
-                      STK push will be sent to <span className="font-semibold">{mpesaPhone || '-'}</span> for <span className="font-semibold">{formatKES(finalTotal)}</span>.
+                      STK Push will be sent to <span className="font-semibold">{mpesaPhone || '-'}</span> for <span className="font-semibold">{formatKES(finalTotal)}</span>.
                     </AlertDescription>
                   </Alert>
                 )}

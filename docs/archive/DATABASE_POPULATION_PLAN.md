@@ -40,10 +40,10 @@ So this exercise is a **top-up**: we keep every existing record (it is live, fin
 ## 2. Schema structure (what each table stores, in plain English)
 
 ```
-organizations (1 row: "Mbumah Hardware" — KRA PIN, status)
+organizations (1 row: "Mbumah Hardware" - KRA PIN, status)
     └── stores (5 rows: name, location, address, phone, email, taxPin, status)
           ├── users            (login accounts: name, email, role, password, storeId)
-          ├── product_categories (name, icon, color, sort order — per store)
+          ├── product_categories (name, icon, color, sort order - per store)
           ├── products         (sku, barcode, name, description/specs, unit, stock,
           │                     cost price, selling price, VAT %, rental flag)
           ├── customers        (name, phone, email, ID number, debt limit, loyalty)

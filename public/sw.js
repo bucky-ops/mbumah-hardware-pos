@@ -1,15 +1,15 @@
 /**
- * MBUMAH HARDWARE POS — Service Worker
- * v1.2.0 Phase 3 — Offline-First PWA
+ * MBUMAH HARDWARE POS - Service Worker
+ * v1.2.0 Phase 3 - Offline-First PWA
  *
  * Cache strategy:
  *   - App shell (HTML, JS, CSS, fonts, icons): stale-while-revalidate
  *     → instant load from cache, then background update.
  *   - Static assets (/icons/*, /logo.*, /manifest.json, /favicon*):
  *     cache-first, long TTL.
- *   - API requests (/api/*): network-only (NEVER cache — financial data must
+ *   - API requests (/api/*): network-only (NEVER cache - financial data must
  *     be live). When offline, the in-app IndexedDB queue handles pending
- *     sales — the SW does not need to intervene.
+ *     sales - the SW does not need to intervene.
  *   - Navigation requests (HTML page loads): network-first with cache
  *     fallback → fresh content when online, app shell when offline.
  *
@@ -35,7 +35,7 @@ const PRECACHE_URLS = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INSTALL — pre-cache the app shell.
+// INSTALL - pre-cache the app shell.
 // skipWaiting() makes the new SW take over immediately on first install.
 // On update, skipWaiting is deferred until the user confirms (see 'message'
 // handler in register-sw.tsx).
@@ -66,7 +66,7 @@ self.addEventListener('install', (event) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ACTIVATE — purge old caches and claim clients.
+// ACTIVATE - purge old caches and claim clients.
 // ─────────────────────────────────────────────────────────────────────────────
 self.addEventListener('activate', (event) => {
   event.waitUntil(
@@ -84,12 +84,12 @@ self.addEventListener('activate', (event) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FETCH — main routing logic.
+// FETCH - main routing logic.
 // ─────────────────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
   const req = event.request;
 
-  // Only handle GET — never intercept POST/PUT/DELETE (mutations go to API
+  // Only handle GET - never intercept POST/PUT/DELETE (mutations go to API
   // which is network-only anyway, and we don't want to break auth flows).
   if (req.method !== 'GET') return;
 
@@ -120,7 +120,7 @@ self.addEventListener('fetch', (event) => {
           cache.put('/', fresh.clone()).catch(() => {});
           return fresh;
         } catch (_err) {
-          // Network failed — fall back to cached app shell, then offline page.
+          // Network failed - fall back to cached app shell, then offline page.
           const cached = await caches.match('/');
           if (cached) return cached;
           const offline = await caches.match('/offline.html');
@@ -160,7 +160,7 @@ self.addEventListener('fetch', (event) => {
       const networkRes = await networkPromise;
       if (networkRes) return networkRes;
 
-      // Both cache and network failed — for images, return a 1x1 transparent PNG.
+      // Both cache and network failed - for images, return a 1x1 transparent PNG.
       if (req.destination === 'image') {
         // 1x1 transparent PNG as a Uint8Array (avoids Buffer which is Node-only).
         const bytes = new Uint8Array([
@@ -182,7 +182,7 @@ self.addEventListener('fetch', (event) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MESSAGE — handle "SKIP_WAITING" from the registration script
+// MESSAGE - handle "SKIP_WAITING" from the registration script
 // (used when the user accepts an update prompt).
 // ─────────────────────────────────────────────────────────────────────────────
 self.addEventListener('message', (event) => {
@@ -192,7 +192,7 @@ self.addEventListener('message', (event) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PERIODIC SYNC — (future) refresh catalog prices in the background.
+// PERIODIC SYNC - (future) refresh catalog prices in the background.
 // Requires the `periodic-background-sync` permission (Chrome only).
 // ─────────────────────────────────────────────────────────────────────────────
 self.addEventListener('periodicsync', (event) => {
@@ -209,6 +209,6 @@ async function refreshCatalogCache() {
       await cache.put('/api/products?limit=100', res.clone());
     }
   } catch {
-    // Silently ignore — periodic sync is best-effort.
+    // Silently ignore - periodic sync is best-effort.
   }
 }

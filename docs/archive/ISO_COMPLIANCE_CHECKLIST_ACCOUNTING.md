@@ -17,13 +17,13 @@ immutable audit trails, and role-based access control. This checklist
 documents every ISO 27001 and ISO 9001 control implemented across the 6-phase
 enhancement program.
 
-**Compliance Status: ✅ FULLY COMPLIANT**
+**Compliance Status: FULLY COMPLIANT**
 
 | Standard | Controls Implemented | Status |
 |----------|---------------------|--------|
-| ISO 27001 (Security) | 24 controls | ✅ Compliant |
-| ISO 9001 (Quality) | 16 controls | ✅ Compliant |
-| **Total** | **40 controls** | **✅** |
+| ISO 27001 (Security) | 24 controls | Compliant |
+| ISO 9001 (Quality) | 16 controls | Compliant |
+| **Total** | **40 controls** | **✓** |
 
 ---
 
@@ -32,7 +32,7 @@ enhancement program.
 ### A.5 - Organizational Controls
 
 #### A.5.12 - Classification of Information
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - Financial data classified as **CONFIDENTIAL** (customer PII, transaction amounts) and **INTERNAL** (chart of accounts, journal entries).
   - PII masking in all log entries: emails masked as `j•••@example.com`, phones as `+254•••••123`.
@@ -40,7 +40,7 @@ enhancement program.
   - AuditLog stores masked recipient values, never raw PII.
 
 #### A.5.15 - Access Control
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - Role-Based Access Control (RBAC) with 5 roles: `SUPER_ADMIN`, `STORE_OWNER`, `BRANCH_MANAGER`, `ACCOUNTANT`, `CASHIER`.
   - `PERMISSION_MATRIX` in `src/lib/types.ts` defines explicit resource/action permissions per role.
@@ -52,21 +52,21 @@ enhancement program.
   - CASHIER role has **zero** financial permissions (`financials: []`).
 
 #### A.5.16 - Identity Management
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - Bearer token authentication via `getSessionFromRequest()` in `src/lib/auth.ts`.
   - Session validation against database (checks user exists, is active, token not expired).
   - Every financial API call requires a valid session - unauthenticated requests return HTTP 401.
 
 #### A.5.17 - Authentication Information
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - JWT tokens with `NEXTAUTH_SECRET` and `JWT_SECRET` environment variables.
   - Account lockout after failed login attempts (tracked in `User.failedLoginAttempts`, `lockedUntil`).
   - Password hashing via NextAuth.js credential provider.
 
 #### A.5.18 - Access Rights
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - `requireStoreAccess()` in `src/lib/auth.ts` enforces that non-SUPER_ADMIN users can only access their own store's data.
   - Cross-store access attempts are logged as `CROSS_STORE_ACCESS_DENIED` with WARN severity.
@@ -75,14 +75,14 @@ enhancement program.
 ### A.8 - Asset Management
 
 #### A.8.2 - Information Classification and Handling
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - Financial data marked as confidential in the data model.
   - `AuditLog.oldValues` and `AuditLog.newValues` stored as Json with PII fields masked before persistence.
   - Receipt distribution (`receipt-distribution.ts`) masks recipient email/phone in all log entries.
 
 #### A.8.3 - Restriction of Information Transfer
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - Receipt distribution via Email (Resend) and WhatsApp (Twilio) only sends to explicitly provided or customer-record recipients.
   - No bulk distribution without per-transaction authorization.
@@ -91,21 +91,21 @@ enhancement program.
 ### A.9 - Access Control
 
 #### A.9.4.1 - Access Restriction
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - `withFinancialAuth()` restricts financial endpoints to authorized roles only.
   - Unauthorized access attempts logged as `FINANCIAL_ACCESS_DENIED` with the user's email, role, attempted path, and required roles.
   - HTTP 403 returned for insufficient permissions.
 
 #### A.9.4.2 - Secure Log-on Procedures
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - Login via NextAuth.js credential provider with bcrypt password hashing.
   - Account lockout after configurable failed attempts.
   - Session tokens are JWT-based with expiration.
 
 #### A.9.4.4 - Use of Privileged Utility Programs
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - `withImmutabilityBypass()` in `src/lib/db.ts` is a controlled escape hatch for the immutability guard.
   - Only used in sanctioned code paths (journal voiding, reconciliation) with explicit per-entry reason strings.
@@ -114,14 +114,14 @@ enhancement program.
 ### A.12 - Operations Security
 
 #### A.12.1.1 - Operational Procedures and Responsibilities
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - Documented financial period lifecycle: OPEN → CLOSED → LOCKED (irreversible).
   - Each state transition requires explicit user action with mandatory reason (CLOSE, LOCK, REOPEN).
   - `closeFinancialPeriod()` blocks if unposted entries exist or audit issues are found.
 
 #### A.12.4.1 - Event Logging
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - Comprehensive `AuditLog` model records every financial mutation:
     - `entityType`, `entityId` - what was changed
@@ -136,7 +136,7 @@ enhancement program.
   - Receipt distribution writes `RECEIPT_DISTRIBUTED` and `RECEIPT_DISTRIBUTION_FAILED` audit entries.
 
 #### A.12.4.2 - Protection of Log Information
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - `AuditLog` is in the `IMMUTABLE_MODELS` set in `src/lib/db.ts`.
   - Prisma Client Extension intercepts and blocks `update`, `updateMany`, `delete`, `deleteMany` on AuditLog.
@@ -144,7 +144,7 @@ enhancement program.
   - AuditLog table is append-only - records can be created but never modified or deleted.
 
 #### A.12.4.3 - Administrator and Operator Logs
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - `FINANCIAL_ACCESS_DENIED` log entries record every unauthorized financial access attempt.
   - `CROSS_STORE_ACCESS_DENIED` records cross-tenant access attempts.
@@ -153,14 +153,14 @@ enhancement program.
 ### A.14 - System Acquisition, Development and Maintenance
 
 #### A.14.2.2 - System Change Control
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - Git-based version control with comprehensive commit messages.
   - 6-phase enhancement program executed sequentially with documented stopping points.
   - Each phase verified with lint (0 errors), type check, and agent-browser end-to-end testing before proceeding.
 
 #### A.14.2.3 - Technical Application of System Change Control
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - TypeScript strict mode enforced across the codebase.
   - `Money` class (`src/lib/money.ts`) eliminates floating-point errors in all monetary calculations.
@@ -168,7 +168,7 @@ enhancement program.
   - Prisma Decimal type for all database monetary fields (no Float columns).
 
 #### A.14.2.5 - Secure System Engineering Principles
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - Defense-in-depth: balance validation at 3 layers (UI → API → accounting-helpers).
   - `validateJournalEntryBalancing()` enforces Σdebit === Σcredit with half-cent tolerance.
@@ -178,7 +178,7 @@ enhancement program.
 ### A.16 - Incident Management
 
 #### A.16.1.5 - Response to Security Incidents
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - `runFinancialAudit()` in `src/lib/financial-audit.ts` detects integrity violations (unbalanced entries, trial balance mismatch).
   - CRITICAL issues auto-logged to SystemLog with immediate notification.
@@ -191,7 +191,7 @@ enhancement program.
 ### Clause 4 - Context of the Organization
 
 #### 4.1 - Understanding the Organization and its Context
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - Multi-tenant architecture supports the Mbumah Hardware multi-branch operation (5 stores).
   - Organization → Store → Transaction hierarchy with `organizationId` and `storeId` scoping.
@@ -200,7 +200,7 @@ enhancement program.
 ### Clause 6 - Planning
 
 #### 6.1 - Actions to Address Risks and Opportunities
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - `Budget` model with budgeted vs. actual variance tracking.
   - `recalculateBudgetActuals()` computes actual spending from posted journal entries.
@@ -210,7 +210,7 @@ enhancement program.
 ### Clause 7 - Support
 
 #### 7.5 - Documented Information
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - This compliance checklist document.
   - Comprehensive code documentation (JSDoc comments on all exported functions).
@@ -220,14 +220,14 @@ enhancement program.
 ### Clause 8 - Operation
 
 #### 8.1 - Operational Planning and Control
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - Financial period lifecycle: OPEN → CLOSED → LOCKED provides controlled operational phases.
   - Journal entry lifecycle: DRAFT → APPROVED → POSTED → (optionally VOIDED).
   - Each transition is a sanctioned, audit-logged operation.
 
 #### 8.2 - Products and Services - Customer Communication
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - Receipt distribution via Email (Resend) and WhatsApp (Twilio) - `src/lib/receipt-distribution.ts`.
   - Branded HTML receipt with store logo, address, phone, itemized totals.
@@ -235,7 +235,7 @@ enhancement program.
   - Audit trail: every receipt distribution logged with recipient (masked), channel, and provider ID.
 
 #### 8.3 - Design and Development
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - Double-entry bookkeeping per GAAP/IFRS standards.
   - Chart of accounts with 5 types (ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE) and 16 sub-types.
@@ -243,21 +243,21 @@ enhancement program.
   - Contra-account support (override normal balance for Accumulated Depreciation, Sales Discounts).
 
 #### 8.5 - Production and Service Provision
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - `recordSaleJournalEntry()` in `src/lib/account-helper.ts` automatically records journal entries for every POS sale.
   - Payment breakdown (cash, M-Pesa, debt) correctly allocated to appropriate accounts.
   - COGS (Cost of Goods Sold) automatically recorded for inventory transactions.
 
 #### 8.6 - Release of Products and Services
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - Journal entries require approval before posting (segregation of duties).
   - `postJournalEntry()` re-validates balance and period before posting (defense-in-depth).
   - System-generated entries (sales, M-Pesa callbacks) can bypass approval via `postImmediately` flag.
 
 #### 8.7 - Control of Nonconforming Outputs
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - `voidJournalEntry()` creates a reversing entry rather than deleting the original (error correction via reversing entry - ISO 9001 best practice).
   - Voided entries retain the `isVoided` flag and `voidReason` for audit trail.
@@ -266,7 +266,7 @@ enhancement program.
 ### Clause 9 - Performance Evaluation
 
 #### 9.1 - Monitoring, Measurement, Analysis and Evaluation
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - `generateTrialBalance()` computes real-time trial balance as of any date.
   - `runFinancialAudit()` performs comprehensive integrity checks:
@@ -278,7 +278,7 @@ enhancement program.
   - Budget variance analysis with automatic recalculation.
 
 #### 9.2 - Internal Audit
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - `listAuditTrail()` in `accounting-helpers.ts` provides filterable audit trail queries.
   - Audit Trail UI in the Reports sub-tab allows filtering by entityType, action, user, date range.
@@ -287,14 +287,14 @@ enhancement program.
 ### Clause 10 - Improvement
 
 #### 10.1 - General
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - Financial period reopen mechanism (CLOSED → OPEN) allows adjusting entries when errors are discovered.
   - LOCKED state prevents modification after financial statements are issued (regulatory requirement).
   - Reconciliation workflow identifies and resolves discrepancies.
 
 #### 10.2 - Nonconformity and Corrective Action
-- **Status:** ✅ Implemented
+- **Status:** Implemented
 - **Implementation:**
   - `voidJournalEntry()` with mandatory `voidReason` documents the corrective action.
   - `reopenFinancialPeriod()` with mandatory reason allows error correction in closed periods.
@@ -366,34 +366,34 @@ enhancement program.
 ## Part D - Verification Evidence
 
 ### Lint & Type Check
-- `bun run lint` → **0 errors**, 337 pre-existing warnings ✅
-- TypeScript strict mode enforced ✅
+- `bun run lint` → **0 errors**, 337 pre-existing warnings
+- TypeScript strict mode enforced
 
 ### Database Integrity
-- Prisma schema synced with SQLite database ✅
-- All 8 financial models present with correct fields, relations, indexes ✅
-- Unique constraints: `[organizationId, code]` on Account, `[storeId, periodName]` on FinancialPeriod, `[periodId, accountId]` on Budget ✅
+- Prisma schema synced with SQLite database
+- All 8 financial models present with correct fields, relations, indexes
+- Unique constraints: `[organizationId, code]` on Account, `[storeId, periodName]` on FinancialPeriod, `[periodId, accountId]` on Budget
 
 ### Security Verification
-- Unauthenticated financial API access → HTTP 401 ✅
-- Invalid Bearer token → HTTP 401 ✅
-- Insufficient role (CASHIER accessing financials) → HTTP 403 ✅
-- Cross-store access → HTTP 403 + `CROSS_STORE_ACCESS_DENIED` log ✅
+- Unauthenticated financial API access → HTTP 401
+- Invalid Bearer token → HTTP 401
+- Insufficient role (CASHIER accessing financials) → HTTP 403
+- Cross-store access → HTTP 403 + `CROSS_STORE_ACCESS_DENIED` log
 
 ### Functional Verification (agent-browser)
-- Financial tab renders with 7 sub-tabs ✅
-- Chart of Accounts: list + Add Account dialog ✅
-- Journal Entries: list + Add Journal Entry dialog ✅
-- Financial Periods: list + Create Period dialog ✅
-- Trial Balance: generate + capture snapshot ✅
-- Budgets: period selector + Set Budget ✅
-- Reports: P&L + Balance Sheet + Audit Trail ✅
-- Receipt distribution: Email + WhatsApp buttons in ReceiptModal ✅
+- Financial tab renders with 7 sub-tabs
+- Chart of Accounts: list + Add Account dialog
+- Journal Entries: list + Add Journal Entry dialog
+- Financial Periods: list + Create Period dialog
+- Trial Balance: generate + capture snapshot
+- Budgets: period selector + Set Budget
+- Reports: P&L + Balance Sheet + Audit Trail
+- Receipt distribution: Email + WhatsApp buttons in ReceiptModal
 
 ### Audit Trail Verification
-- Every financial mutation writes an AuditLog record ✅
-- AuditLog is immutable (Prisma Client Extension blocks UPDATE/DELETE) ✅
-- Audit trail UI displays filterable history ✅
+- Every financial mutation writes an AuditLog record
+- AuditLog is immutable (Prisma Client Extension blocks UPDATE/DELETE)
+- Audit trail UI displays filterable history
 
 ---
 
@@ -401,15 +401,15 @@ enhancement program.
 
 | Variable | Purpose | Required |
 |----------|---------|----------|
-| `DATABASE_URL` | SQLite/PostgreSQL connection string | ✅ Yes |
-| `DIRECT_URL` | Prisma direct connection (migrations) | ✅ Yes |
-| `NEXTAUTH_SECRET` | NextAuth.js session encryption | ✅ Yes |
-| `JWT_SECRET` | JWT token signing | ✅ Yes |
-| `RESEND_API_KEY` | Email distribution (Resend) | ⚠️ Optional (simulated if absent) |
-| `RESEND_FROM_EMAIL` | Sender email address | ⚠️ Optional (defaults to receipts@mbumah.co.ke) |
-| `TWILIO_ACCOUNT_SID` | WhatsApp distribution (Twilio) | ⚠️ Optional (simulated if absent) |
-| `TWILIO_AUTH_TOKEN` | WhatsApp distribution (Twilio) | ⚠️ Optional (simulated if absent) |
-| `TWILIO_WHATSAPP_FROM` | Twilio WhatsApp sender number | ⚠️ Optional (defaults to sandbox number) |
+| `DATABASE_URL` | SQLite/PostgreSQL connection string | Yes |
+| `DIRECT_URL` | Prisma direct connection (migrations) | Yes |
+| `NEXTAUTH_SECRET` | NextAuth.js session encryption | Yes |
+| `JWT_SECRET` | JWT token signing | Yes |
+| `RESEND_API_KEY` | Email distribution (Resend) | Optional (simulated if absent) |
+| `RESEND_FROM_EMAIL` | Sender email address | Optional (defaults to receipts@mbumah.co.ke) |
+| `TWILIO_ACCOUNT_SID` | WhatsApp distribution (Twilio) | Optional (simulated if absent) |
+| `TWILIO_AUTH_TOKEN` | WhatsApp distribution (Twilio) | Optional (simulated if absent) |
+| `TWILIO_WHATSAPP_FROM` | Twilio WhatsApp sender number | Optional (defaults to sandbox number) |
 
 ---
 

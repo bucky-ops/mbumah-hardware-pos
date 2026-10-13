@@ -620,7 +620,7 @@ export function PlanDetailsDialog({
 
                       {current.autoCharge && (
                         <div className="rounded-lg bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900 p-3 text-xs text-sky-700 dark:text-sky-300">
-                          Auto-charge via M-Pesa is enabled - STK push will be
+                          Auto-charge via M-Pesa is enabled - STK Push will be
                           attempted on each due date.
                         </div>
                       )}

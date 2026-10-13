@@ -35,7 +35,7 @@ MPESA_CALLBACK_URL=https://example.ngrok-free.app/api/payments/mpesa/callback
 Rules:
 
 - Always the **root** callback path - there is exactly one callback endpoint for the whole organization (`/api/payments/mpesa/callback`, a public, CSRF-exempt, rate-limited webhook).
-- **No per-branch callback URLs**: the callback resolves the store from the transaction. Daraja returns the `CheckoutRequestID` created by the STK push; the handler looks up the pending `MpesaTransaction` row (which already carries the sale's `storeId`) and applies the result there. Adding a branch never touches the Daraja portal.
+- **No per-branch callback URLs**: the callback resolves the store from the transaction. Daraja returns the `CheckoutRequestID` created by the STK Push; the handler looks up the pending `MpesaTransaction` row (which already carries the sale's `storeId`) and applies the result there. Adding a branch never touches the Daraja portal.
 - Register the same URL in the Daraja portal (or let the STK push's `CallBackURL` parameter carry it, which is what `MPESA_CALLBACK_URL` feeds).
 
 ## One root callback resolves the store from the transaction
@@ -43,7 +43,7 @@ Rules:
 The flow for any branch:
 
 1. A cashier on `juja-main.mbumah.test` (or `/stores/juja-main/...`) checks out with M-Pesa.
-2. The STK push creates a `MpesaTransaction` row for that store, `status PENDING`, with the sale's `CheckoutRequestID`.
+2. The STK Push creates a `MpesaTransaction` row for that store, `status PENDING`, with the sale's `CheckoutRequestID`.
 3. Safaricom POSTs the result to the single callback URL - regardless of which branch initiated it.
 4. The handler matches the row by `CheckoutRequestID`, applies the atomic PENDING claim, settles the sale for the right store, and writes the receipt. Duplicate callbacks are idempotent (the unique `(storeId, mpesaReceiptNumber)` constraint makes a repeated receipt a no-op), and amount mismatches route the transaction to reconciliation instead of settling.
 

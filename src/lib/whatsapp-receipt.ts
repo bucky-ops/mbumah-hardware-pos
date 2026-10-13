@@ -45,7 +45,7 @@ export interface FormatReceiptOptions {
   cashierName?: string;
   /** For cash sales: the note denomination received (for "Change" line). */
   cashReceived?: number;
-  /** For M-Pesa sales: the customer phone used for STK push. */
+  /** For M-Pesa sales: the customer phone used for STK Push. */
   mpesaPhone?: string;
   /** Optional gift message appended at the end. */
   thankYouNote?: string;
@@ -133,14 +133,14 @@ export function formatWhatsAppReceipt(
   const lines: string[] = [];
 
   // ── Store header ────────────────────────────────────────────────────────
-  lines.push("🛠️ *MBUMAH HARDWARE*");
-  if (store?.shortName) lines.push(`📍 ${store.shortName} Branch`);
+  lines.push("*MBUMAH HARDWARE*");
+  if (store?.shortName) lines.push(`${store.shortName} Branch`);
   if (store?.location) lines.push(`   ${store.location}`);
   if (store?.phone) lines.push(`   Tel: ${formatKenyanPhone(store.phone) || store.phone}`);
   lines.push("━━━━━━━━━━━━━━━━━━━━");
 
   // ── Receipt meta ────────────────────────────────────────────────────────
-  lines.push(`🧾 Receipt: *${transaction.receiptNumber}*`);
+  lines.push(`Receipt: *${transaction.receiptNumber}*`);
   const dateStr =
     typeof options.createdAt === "string"
       ? new Date(options.createdAt).toLocaleString("en-KE", {
@@ -153,14 +153,14 @@ export function formatWhatsAppReceipt(
           timeStyle: "short",
           timeZone: "Africa/Nairobi",
         });
-  lines.push(`📅 ${dateStr}`);
-  lines.push(`👤 Cashier: ${options.cashierName || "Cashier"}`);
+  lines.push(`Date: ${dateStr}`);
+  lines.push(`Cashier: ${options.cashierName || "Cashier"}`);
   const customerName = transaction.customer?.name || (transaction as { customerName?: string }).customerName || "Walk-in";
-  lines.push(`🧍 Customer: ${customerName}`);
+  lines.push(`Customer: ${customerName}`);
   lines.push("━━━━━━━━━━━━━━━━━━━━");
 
   // ── Line items ──────────────────────────────────────────────────────────
-  lines.push("🛒 *Items*");
+  lines.push("*Items*");
   const items = transaction.items ?? [];
   for (const item of items) {
     // Cap product name at 28 chars to keep single-line layout.
@@ -176,7 +176,7 @@ export function formatWhatsAppReceipt(
   lines.push("━━━━━━━━━━━━━━━━━━━━");
 
   // ── Totals ──────────────────────────────────────────────────────────────
-  lines.push("💵 *Payment Summary*");
+  lines.push("*Payment Summary*");
   lines.push(`Subtotal: ${formatKESCompact(transaction.subtotal)}`);
   lines.push(`VAT: ${formatKESCompact(transaction.taxAmount)}`);
   if (transaction.discountAmount > 0) {
@@ -188,7 +188,7 @@ export function formatWhatsAppReceipt(
   // ── Payment details ─────────────────────────────────────────────────────
   const pm = transaction.paymentMethod?.toUpperCase() ?? "CASH";
   const methodLabel =
-    pm === "MPESA" ? "📱 M-Pesa" : pm === "CASH" ? "💵 Cash" : pm === "DEBT" ? "🤝 On Credit" : `💳 ${pm}`;
+    pm === "MPESA" ? "M-Pesa" : pm === "CASH" ? "Cash" : pm === "DEBT" ? "On Credit" : pm;
   lines.push(`Payment: ${methodLabel}`);
 
   if (pm === "CASH") {
@@ -212,10 +212,10 @@ export function formatWhatsAppReceipt(
   lines.push("━━━━━━━━━━━━━━━━━━━━");
 
   // ── Footer ──────────────────────────────────────────────────────────────
-  lines.push("🙏 *Thank you for shopping with us!*");
+  lines.push("*Thank you for shopping with us!*");
   lines.push(options.thankYouNote || "Asante sana! Karibu tena.");
   if (store?.phone) {
-    lines.push(`📞 For enquiries: ${formatKenyanPhone(store.phone) || store.phone}`);
+    lines.push(`For enquiries: ${formatKenyanPhone(store.phone) || store.phone}`);
   }
   lines.push("-");
   lines.push("_Powered by MBUMAH HARDWARE POS_");
@@ -275,8 +275,8 @@ export function resolveReceiptPhone(
 // ── Internal helpers ──────────────────────────────────────────────────────
 
 /**
- * Compact KES formatter for WhatsApp - drops the "KES" prefix (we add 💵 emoji
- * on the totals line) and uses thousands separators. Two decimal places only
+ * Compact KES formatter for WhatsApp - drops the "KES" prefix (the
+ * totals line adds it back) and uses thousands separators. Two decimal places only
  * when needed.
  *
  *   1250      → "1,250"

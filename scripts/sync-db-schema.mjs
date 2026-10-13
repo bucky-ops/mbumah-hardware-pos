@@ -52,7 +52,7 @@ const DATABASE_URL = process.env.DATABASE_URL || '';
 function run(cmd, args) {
   const result = spawnSync(cmd, args, { stdio: 'inherit' });
   if (result.error) {
-    console.error(`❌ [schema-sync] failed to launch ${cmd}:`, result.error.message);
+    console.error(`[FAIL] [schema-sync] failed to launch ${cmd}:`, result.error.message);
     return false;
   }
   return result.status === 0;
@@ -90,7 +90,7 @@ function parseDatabaseUrl(raw) {
 }
 
 if (!DATABASE_URL) {
-  console.warn('⚠️  [schema-sync] DATABASE_URL is not set - skipping schema sync.');
+  console.warn('Warning: [schema-sync] DATABASE_URL is not set - skipping schema sync.');
   console.warn('    Production deploys MUST provide DATABASE_URL (Neon) or runtime');
   console.warn('    queries will fail with Prisma P2021/P2022 (missing table/column).');
   process.exit(0);
@@ -100,7 +100,7 @@ const dbUrl = parseDatabaseUrl(DATABASE_URL);
 if (dbUrl && dbUrl.protocol.startsWith('postgres') && dbUrl.hostname) {
   const reachable = await probeDatabaseReachability(dbUrl);
   if (!reachable) {
-    console.warn('⚠️  [schema-sync] database host ' + dbUrl.hostname + ':' +
+    console.warn('Warning: [schema-sync] database host ' + dbUrl.hostname + ':' +
       (Number.parseInt(dbUrl.port, 10) || 5432) + ' is UNREACHABLE - skipping schema sync.');
     console.warn('    Nothing to sync in this environment (e.g. GitHub Actions Build check');
     console.warn('    uses a placeholder localhost DATABASE_URL for provider detection).');
@@ -109,7 +109,7 @@ if (dbUrl && dbUrl.protocol.startsWith('postgres') && dbUrl.hostname) {
     process.exit(0);
   }
 } else if (!dbUrl) {
-  console.warn('⚠️  [schema-sync] DATABASE_URL is not a parsable URL - skipping schema sync.');
+  console.warn('Warning: [schema-sync] DATABASE_URL is not a parsable URL - skipping schema sync.');
   process.exit(0);
 }
 
@@ -122,40 +122,40 @@ if (dbUrl && dbUrl.protocol.startsWith('postgres') && dbUrl.hostname) {
 // DATABASE_URL is strictly better than failing the build: the pre-#15
 // pipeline never touched the database at build time at all.
 if (process.env.DIRECT_URL) {
-  console.log('🔗 [schema-sync] DIRECT_URL is set - schema commands use the direct endpoint.');
+  console.log('[schema-sync] DIRECT_URL is set - schema commands use the direct endpoint.');
 } else {
-  console.warn('⚠️  [schema-sync] DIRECT_URL is not set - falling back to DATABASE_URL for');
+  console.warn('Warning: [schema-sync] DIRECT_URL is not set - falling back to DATABASE_URL for');
   console.warn('    schema commands. Neon: prefer the direct (non-pooled) endpoint for');
   console.warn('    build-time schema operations to avoid pgbouncer quirks.');
   process.env.DIRECT_URL = DATABASE_URL;
 }
 
-console.log('🗄️  [schema-sync] step 1/3: prisma migrate deploy …');
+console.log('[schema-sync] step 1/3: prisma migrate deploy …');
 if (run('npx', ['prisma', 'migrate', 'deploy'])) {
-  console.log('✅ [schema-sync] migration history applied - schema is up to date.');
+  console.log('[ok] [schema-sync] migration history applied - schema is up to date.');
   process.exit(0);
 }
 
-console.warn('⚠️  [schema-sync] migrate deploy failed (expected for databases created');
+console.warn('Warning: [schema-sync] migrate deploy failed (expected for databases created');
 console.warn('    with `prisma db push` - they have no migration history yet).');
-console.warn('🗄️  [schema-sync] step 2/3: prisma db push (one-time drift recovery) …');
+console.warn('[schema-sync] step 2/3: prisma db push (one-time drift recovery) …');
 console.warn('    → Uses --accept-data-loss because adding unique indexes (e.g.');
 console.warn('      sales_transactions.idempotencyKey) is classified as a data-loss');
 console.warn('      warning. Verified safe: the current drift is purely additive.');
 if (!run('npx', ['prisma', 'db', 'push', '--accept-data-loss', '--skip-generate'])) {
-  console.error('❌ [schema-sync] db push could not converge the schema. Aborting the');
+  console.error('[FAIL] [schema-sync] db push could not converge the schema. Aborting the');
   console.error('   build rather than deploying code that will 500 at runtime.');
   console.error('   ACTION: inspect the database state (duplicate rows on new unique');
   console.error('   keys are the usual cause) and re-deploy.');
   process.exit(1);
 }
 
-console.log('♻️  [schema-sync] step 3/3: recording baseline migration as applied …');
+console.log('[schema-sync] step 3/3: recording baseline migration as applied …');
 console.log(`    (best-effort - future deploys will use migrate deploy exclusively)`);
 const resolved = run('npx', ['prisma', 'migrate', 'resolve', '--applied', BASELINE_MIGRATION]);
 if (!resolved) {
-  console.warn('⚠️  [schema-sync] could not mark the baseline applied (non-fatal).');
+  console.warn('Warning: [schema-sync] could not mark the baseline applied (non-fatal).');
   console.warn('    Schema IS synced; future deploys will retry the converge step.');
 }
 
-console.log('✅ [schema-sync] database schema is in sync with prisma/schema.prisma.');
+console.log('[ok] [schema-sync] database schema is in sync with prisma/schema.prisma.');

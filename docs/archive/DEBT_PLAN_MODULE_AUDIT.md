@@ -11,7 +11,7 @@
 
 The module's core money paths were already hardened in Task 12-c (atomic installment/debt-ledger claims, canonical `round2`, Decimal accumulation). This audit found that **the hardening stopped one layer short**: the plan *row itself* was mutated with read-modify-write totals that can be lost to concurrency, waivers over-credited customers on partially-paid installments, defaulted plans had **no exit from their state**, the stored `installmentAmount` disagreed with the actual schedule under interest, and - most seriously - **`DebtPaymentPlan` was missing from the ORM tenancy allowlist**, which let single-plan API routes touch other stores' plans by ID.
 
-14 defects were confirmed (1 critical security, 5 high, 8 medium) plus 9 low-severity issues and 4 dead-code items. All items marked ✅ in §3 are fixed and regression-checked in this branch.
+14 defects were confirmed (1 critical security, 5 high, 8 medium) plus 9 low-severity issues and 4 dead-code items. Every item listed in §3 is fixed and regression-checked in this branch.
 
 ---
 
@@ -102,13 +102,13 @@ The module's core money paths were already hardened in Task 12-c (atomic install
 
 1. **"Collected This Month" is an approximation.** Installments partially paid across two months are counted in full in the month of the last payment. A per-plan payment ledger (`DebtPlanPayment` rows, or reusing `DebtPayment` with a `planId` column) would make it exact and enable real MRR-style cohort reporting.
 2. **No cron driver for the overdue sweep.** The sweep is lazy (detail GET, pay/waive, and now the list endpoint). Fine at current scale; a nightly job would also drive MISSED-status marking (currently dead), late-fee application (`lateFee`/`lateFeeApplied` are stored but never applied), and reminder escalation via `scheduleReminders`.
-3. **`autoCharge` is stored but never charged** - M-Pesa STK push on due dates needs a scheduler + Daraja integration; until then the toggle is aspirational (labelled as requiring consent).
+3. **`autoCharge` is stored but never charged** - M-Pesa STK Push on due dates needs a scheduler + Daraja integration; until then the toggle is aspirational (labelled as requiring consent).
 4. **Installment rows carry no `storeId`** - they inherit tenancy through their plan. If installments are ever queried directly at scale, consider a backfilled `storeId` for first-class tenancy + faster bucket queries.
 5. **Frequency set is WEEKLY/BI_WEEKLY/MONTHLY** - DAILY/QUARTERLY would need `unitsPerYear` extension in `calculateTotalWithInterest` only (single place by design now).
 6. **`getPlanStatus` 25% DEFAULTED threshold is a policy constant** - consider exposing it per store (some stores want 2-missed-installments semantics).
 
 ## 5. Deployment notes
 
-- Migration `20260909120000_add_plan_approved_at` is additive/nullable - `bun run db:migrate:deploy` (Postgres/Neon) or `bun run db:push` (local SQLite) with zero downtime and no data backfill required.
+- Migration `20260909120000_add_plan_approved_at` is additive/nullable - `bun run db:migrate:deploy` (PostgreSQL/Neon) or `bun run db:push` (local SQLite) with zero downtime and no data backfill required.
 - No breaking API changes: new response fields are additive; the list endpoint's new `pagination` envelope matches the pre-existing `ApiResponse.pagination` type; unknown-field consumers are unaffected.
 - After deploy, the C1 tenancy fix takes effect immediately - any existing integrations that (incorrectly) read cross-store plans will start receiving 404s.

@@ -1,8 +1,8 @@
 #!/bin/sh
 # ============================================================================
-# MBUMAH HARDWARE POS — Generate Self-Signed SSL Certificate
+# MBUMAH HARDWARE POS - Generate Self-Signed SSL Certificate
 # ============================================================================
-# FOR TESTING ONLY — Browsers will show security warnings.
+# FOR TESTING ONLY - Browsers will show security warnings.
 # For production, use Let's Encrypt (see SELF_HOSTING_GUIDE.md).
 # ============================================================================
 
@@ -27,9 +27,9 @@ chmod 644 server.crt
 chmod 600 server.key
 
 echo ""
-echo "✅ Certificate generated:"
+echo "[ok] Certificate generated:"
 echo "   Certificate: $SCRIPT_DIR/server.crt"
 echo "   Private Key:  $SCRIPT_DIR/server.key"
 echo ""
-echo "⚠️  Remember: self-signed certificates are for TESTING only."
+echo "Warning: Remember: self-signed certificates are for TESTING only."
 echo "   Browsers will show security warnings. Use Let's Encrypt for production."

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# MBUMAH HARDWARE POS — Start the POS (Linux/macOS, no Docker)
+# MBUMAH HARDWARE POS - Start the POS (Linux/macOS, no Docker)
 # Runs the app in the foreground; background jobs go to cron.log.
 # ============================================================================
 set -e
@@ -49,7 +49,7 @@ nohup node deploy/nodocker/cron-local.mjs > cron.log 2>&1 &
 echo "Background jobs running → cron.log (pid $!)"
 
 # Readiness watcher: wait until health reports a WORKING database (not just a
-# 200 — an empty database also returns 200), then open the browser. If the DB
+# 200 - an empty database also returns 200), then open the browser. If the DB
 # stays broken, print the same fix the Windows script shows.
 (
   for i in $(seq 1 30); do

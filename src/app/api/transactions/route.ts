@@ -1297,7 +1297,7 @@ async function createTransactionInner(
 
   //  ATOMIC CHECKOUT TRANSACTION
   //  Every side effect below either commits together or rolls back together.
-  //  Timeout raised to 15s (default 5s) to accommodate Daraja STK push prep
+  //  Timeout raised to 15s (default 5s) to accommodate Daraja STK Push prep
   //  and journal-entry line creation on slow connections.
   // Wrapped in withSequenceRetry: on a receipt-number P2002 the retry
   // regenerates the number and re-runs (SYS-7). On an idempotency-key
@@ -1575,7 +1575,7 @@ async function createTransactionInner(
         },
       });
 
-      // F6-2 remediation: the server-side STK push is no longer a
+      // F6-2 remediation: the server-side STK Push is no longer a
       // fire-and-forget relative-URL fetch (which could never resolve and
       // silently stranded every M-Pesa sale in PENDING). The push request is
       // enqueued INSIDE this transaction and delivered right after commit by

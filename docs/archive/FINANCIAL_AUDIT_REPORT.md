@@ -11,7 +11,7 @@ The Profit & Loss card showed a **"Net Loss" of Ksh 3,800,130,011,202,040,000,00
 
 ```
 0 + "3800"   →  "03800"        (string)
-"03800" + "120"  →  "03800120" (digits glued — should be 3920)
+"03800" + "120"  →  "03800120" (digits glued - should be 3920)
 ```
 
 Every sale posts a "Cost of Goods Sold" journal line. After ~20 sales the glued string was over 100 digits long. The browser then rounded that string into a giant number - the exact digits `380013001120204` from the incident screenshot appear inside the glued string. **We reproduced the bug bit-for-bit against live production data before fixing it.**
@@ -67,17 +67,17 @@ Verified on `main` and confirmed deployed to both Vercel projects (commit `84459
 
 | Module | SELECT | INSERT | UPDATE | DELETE | Notes |
 |---|---|---|---|---|---|
-| users / employees | ✅ | ✅ | ✅ | ✅ | PR #24; role-guarded, audit-logged |
-| products | ✅ | ✅ | ✅ | ✅ | soft-delete |
-| **categories** | ✅ | ✅ | ❌ → ✅ | ❌ → ✅ | **was create-only - fixed in this PR** |
-| customers | ✅ | ✅ | ✅ (PUT) | ⚠️ no DELETE | recommend `isActive` archive flag (follow-up) |
-| gift-cards / vouchers | ✅ | ✅ | ✅ | ✅ | |
-| debt plans | ✅ | ✅ | ✅ (approve/pay/pause/cancel) | ✅ | segregation of duties enforced |
-| rentals / suppliers / purchase-orders / expenses | ✅ | ✅ | ✅ | ✅ | |
-| invoices / delivery notes | ✅ | ✅ | ✅ (PUT) | ⚠️ immutable | correct for financial documents |
-| **transactions** | ✅ | ✅ | ⚠️ none | ⚠️ none | immutable by design, but **no VOID/refund endpoint exists** - recommend a reversing-entry VOID (follow-up) |
-| journal entries | ✅ | ✅ | ✅ | ✅ void | reversing-entry model - correct |
-| shifts | ✅ | ✅ | ✅ (close via `/end`) | n/a | correct |
+| users / employees | ✓ | ✓ | ✓ | ✓ | PR #24; role-guarded, audit-logged |
+| products | ✓ | ✓ | ✓ | ✓ | soft-delete |
+| **categories** | ✓ | ✓ | ✗ → ✓ | ✗ → ✓ | **was create-only - fixed in this PR** |
+| customers | ✓ | ✓ | ✓ (PUT) | no DELETE | recommend `isActive` archive flag (follow-up) |
+| gift-cards / vouchers | ✓ | ✓ | ✓ | ✓ | |
+| debt plans | ✓ | ✓ | ✓ (approve/pay/pause/cancel) | ✓ | segregation of duties enforced |
+| rentals / suppliers / purchase-orders / expenses | ✓ | ✓ | ✓ | ✓ | |
+| invoices / delivery notes | ✓ | ✓ | ✓ (PUT) | immutable | correct for financial documents |
+| **transactions** | ✓ | ✓ | none | none | immutable by design, but **no VOID/refund endpoint exists** - recommend a reversing-entry VOID (follow-up) |
+| journal entries | ✓ | ✓ | ✓ | ✓ void | reversing-entry model - correct |
+| shifts | ✓ | ✓ | ✓ (close via `/end`) | n/a | correct |
 
 **Fixed in this PR:** categories got `/api/categories/[id]` (GET / PUT / DELETE) plus Manage-categories UI (inline edit + delete chips in Inventory). DELETE refuses (409) while products still reference the category, protecting referential integrity.
 

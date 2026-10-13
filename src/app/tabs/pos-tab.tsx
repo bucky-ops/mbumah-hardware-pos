@@ -772,7 +772,7 @@ export default function POSTab() {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(json?.error || json?.message || `Daraja STK push failed (HTTP ${res.status})`);
+        throw new Error(json?.error || json?.message || `Daraja STK Push failed (HTTP ${res.status})`);
       }
       return { data: json?.data ?? json };
     },
@@ -785,8 +785,8 @@ export default function POSTab() {
       setMpesaStatus('processing');
       setStkResultDesc((data as { ResponseDescription?: string; resultDesc?: string } | undefined)?.ResponseDescription
         || (data as { resultDesc?: string } | undefined)?.resultDesc
-        || 'STK push sent. Awaiting customer PIN entry.');
-      toast.success('STK push sent to customer phone');
+        || 'STK Push sent. Awaiting customer PIN entry.');
+      toast.success('STK Push sent to customer phone');
       // Begin polling status
       startStkPolling(crId);
     },
@@ -1285,9 +1285,9 @@ export default function POSTab() {
       }
     }
 
-    // For MPESA-only, the STK push must have been confirmed first
+    // For MPESA-only, the STK Push must have been confirmed first
     if (paymentMethod === 'MPESA' && mpesaStatus !== 'success') {
-      toast.error('Send the STK push and wait for confirmation before completing the sale.');
+      toast.error('Send the STK Push and wait for confirmation before completing the sale.');
       return;
     }
 
@@ -1298,9 +1298,9 @@ export default function POSTab() {
         toast.error('Split amounts must equal or exceed total');
         return;
       }
-      // If there's an M-Pesa portion, the STK push must have been confirmed
+      // If there's an M-Pesa portion, the STK Push must have been confirmed
       if (mpesaAmt > 0 && mpesaStatus !== 'success') {
-        toast.error('Send the M-Pesa STK push for the split portion and wait for confirmation.');
+        toast.error('Send the M-Pesa STK Push for the split portion and wait for confirmation.');
         return;
       }
     }

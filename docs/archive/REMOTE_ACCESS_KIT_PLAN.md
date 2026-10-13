@@ -75,7 +75,7 @@ The RAK does not replace the update machinery that shipped in v2.9.0/v2.10.1 (`u
                 │ CLOUD APP (Vercel + Neon)                  │
                 │ NEW  POST /api/admin/fleet/command         │──► Vercel API
                 │ NEW  GET  /api/admin/fleet                 │    (deployments,
-                │ NEW  GET  /api/admin/fleet/log             │     rollback — existing)
+                │ NEW  GET  /api/admin/fleet/log             │     rollback - existing)
                 │ server-side GitHub token (never exposed)   │
                 └───────────────┬────────────────────────────┘
                                 │ commits commands / reads ledger
@@ -145,7 +145,7 @@ mbumah-ops-log/                        (private)
 ### 5.3 Command and heartbeat schemas (authoritative in Appendix A)
 
 ```json
-// commands/juja.json — committed by the cloud
+// commands/juja.json - committed by the cloud
 {
   "command-id": "cmd-20261007-ja3f9",
   "type": "update",
@@ -348,7 +348,7 @@ Effort assumes the standing team (2-3 intermediate developers, Windows-first). "
 | Forged/replayed commands | HMAC-SHA256 over the command body + ±10 min freshness + `command-id` replay window |
 | Rate limits | Authenticated 5,000 req/h vs ~5 req/h/store actual; console ledger reads cached 60 s and served from the cloud |
 | Version skew across stores | Drift badges + ring grace-period alarms (Months 3-6); on-launch catch-up already converges offline stores |
-| SQLite/Postgres divergence between kit and cloud | Provider-aware code discipline (PR #83 precedent) + CI matrix; the RAK never writes business data, reducing schema-coupling risk |
+| SQLite/PostgreSQL divergence between kit and cloud | Provider-aware code discipline (PR #83 precedent) + CI matrix; the RAK never writes business data, reducing schema-coupling risk |
 | Admin lockout | Break-glass local SUPER_ADMIN procedure printed in the safe; two maintainer identities required for repo-level recovery |
 | Ledger tampering | No force-push/delete on `mbumah-ops-log`; console pins last-read commit SHAs; integrity mismatch raises an alarm |
 | Owner confusion / fear of "remote control" | Plain-language framing: the RAK can update, roll back and open a timed view - it can never touch business data; every action is visible in GitHub with the owner's own eyes as the audit |

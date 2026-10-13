@@ -104,7 +104,7 @@ async function handler(req: NextRequest): Promise<Response> {
     undefined;
 
   // Always log to server console (even if DB write fails)
-  console.error('🚨 CLIENT ERROR:', JSON.stringify({
+  console.error('CLIENT ERROR:', JSON.stringify({
     name,
     message,
     severity,
@@ -138,7 +138,7 @@ async function handler(req: NextRequest): Promise<Response> {
     // DB write failed (e.g. connection issue) - don't mask the original
     // client error. Log the DB failure to console and return success so
     // the client doesn't retry endlessly.
-    console.error('❌ Failed to write client error to SystemLog:', dbError);
+    console.error('[FAIL] Failed to write client error to SystemLog:', dbError);
   }
 
   return new Response(null, { status: 204 });

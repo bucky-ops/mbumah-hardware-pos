@@ -35,7 +35,7 @@ string. DDL must not go through PgBouncer:
 # 0. (Recommended) cap runaway statements so a surprise scan can't hold locks
 psql "$DIRECT_URL" -c "ALTER ROLE neondb_owner SET statement_timeout = '30s';"
 
-# 1. Apply the constraints (idempotent — safe to re-run)
+# 1. Apply the constraints (idempotent, safe to re-run)
 psql "$DIRECT_URL" -f prisma/sql/financial_constraints.sql
 ```
 

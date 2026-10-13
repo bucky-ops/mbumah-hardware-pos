@@ -101,7 +101,7 @@ export const COMPANY = {
   email: 'info@mbumahhardware.co.ke',
   website: 'www.mbumahhardware.co.ke',
   /** Relative path to the logo served from /public. */
-  logoPath: '/logo.png',
+  logoPath: '/logo3d-gear-256.png',
 } as const;
 
 /**

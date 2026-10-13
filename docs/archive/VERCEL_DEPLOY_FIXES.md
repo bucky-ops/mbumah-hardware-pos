@@ -76,7 +76,7 @@ EXPOSE_ERRORS = true
 > **IMPORTANT - PgBouncer query params are mandatory:**
 > The `?pgbouncer=true&connect_timeout=15` suffix on `DATABASE_URL` is what tells
 > Prisma to use PgBouncer-compatible (transaction-mode) pooling. Without it, each
-> serverless function invocation opens a direct Postgres connection, and you will
+> serverless function invocation opens a direct PostgreSQL connection, and you will
 > exhaust Neon's connection limit (typically 20 on free tier) within minutes.
 > `connect_timeout=15` prevents cold-start hangs when the pool is saturated.
 >
@@ -246,8 +246,8 @@ vercel logs https://mbumah-hardware-pos-one.vercel.app --follow
 
 | Log Pattern | Meaning | Action |
 |-------------|---------|--------|
-| `POST /api/auth/login 200` | ✅ Login working | None - proceed to Step 5 |
-| `POST /api/auth/login 500` | ❌ Still failing | Check the `[AUTH_LOGIN_FATAL_ERROR]` log entry for details |
+| `POST /api/auth/login 200` | Login working | None - proceed to Step 5 |
+| `POST /api/auth/login 500` | Still failing | Check the `[AUTH_LOGIN_FATAL_ERROR]` log entry for details |
 | `[AUTH_LOGIN_DB_ERROR]` | DB connection issue | Verify `DATABASE_URL` is the pooled Neon URL with `pgbouncer=true` |
 | `Can't reach database server at` | DB unreachable | Verify the Neon endpoint is correct and Neon project is active |
 | `ENV_VALIDATION_FAILED` | Env var missing/malformed | Check `/api/health/env` for which vars are broken |
@@ -300,7 +300,7 @@ curl -sS -X POST \
 4. Click **"Sign In"**
 5. You should be redirected to the **Dashboard** within ~1 second
 6. The dashboard should show:
-   - "Karibu, System 👋" greeting
+   - "Karibu, System" greeting
    - KPI cards with live data (Today's Revenue, Transactions, Low Stock, Debt)
    - No "Loading..." spinners that never resolve
    - No error toasts
@@ -345,21 +345,21 @@ All build & runtime compatibility checks pass:
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| `package.json` `vercel-build` script | ✅ | `"SKIP_ENV_VALIDATION=1 prisma generate && next build"` |
-| `vercel.json` `buildCommand` | ✅ FIXED | Changed from `"npm run build"` → `"npm run vercel-build"` to actually invoke the vercel-build script (was being bypassed!) |
-| `@vercel/analytics` dependency | ✅ | `^2.0.1` in dependencies |
-| `@vercel/speed-insights` dependency | ✅ | `^1.3.1` in dependencies |
-| `layout.tsx` `<Analytics />` | ✅ | Imported from `@vercel/analytics/next`, rendered inside `<Providers>` |
-| `layout.tsx` `<SpeedInsights />` | ✅ | Imported from `@vercel/speed-insights/next`, rendered inside `<Providers>` |
-| Font `preload: false` | ✅ | Both Geist Sans and Geist Mono set to `preload: false` (eliminates Chrome console warning) |
-| `force-dynamic` on API routes | ✅ | All **93** API route.ts files have `export const dynamic = 'force-dynamic'` |
-| `next.config.ts` `serverExternalPackages` | ✅ | `["@prisma/client"]` - ensures Prisma Client is bundled correctly for serverless |
-| `next.config.ts` `typescript.ignoreBuildErrors` | ✅ | `true` - prevents build failure on pre-existing type issues |
-| `next.config.ts` `eslint.ignoreDuringBuilds` | ✅ | `true` - prevents build failure on pre-existing lint issues |
-| `prisma/schema.prisma` provider | ✅ | `provider = "postgresql"` (committed permanently) |
-| `prisma/schema.prisma` directUrl | ✅ | `directUrl = env("DIRECT_URL")` |
-| `postinstall` script | ✅ | `bash scripts/setup-prisma-provider.sh && prisma generate` - runs on Vercel install phase |
-| `scripts/setup-prisma-provider.sh` default | ✅ | Defaults to `postgresql` when `DATABASE_URL` is unset (critical for Vercel install phase) |
+| `package.json` `vercel-build` script | ✓ | `"SKIP_ENV_VALIDATION=1 prisma generate && next build"` |
+| `vercel.json` `buildCommand` | FIXED | Changed from `"npm run build"` → `"npm run vercel-build"` to actually invoke the vercel-build script (was being bypassed!) |
+| `@vercel/analytics` dependency | ✓ | `^2.0.1` in dependencies |
+| `@vercel/speed-insights` dependency | ✓ | `^1.3.1` in dependencies |
+| `layout.tsx` `<Analytics />` | ✓ | Imported from `@vercel/analytics/next`, rendered inside `<Providers>` |
+| `layout.tsx` `<SpeedInsights />` | ✓ | Imported from `@vercel/speed-insights/next`, rendered inside `<Providers>` |
+| Font `preload: false` | ✓ | Both Geist Sans and Geist Mono set to `preload: false` (eliminates Chrome console warning) |
+| `force-dynamic` on API routes | ✓ | All **93** API route.ts files have `export const dynamic = 'force-dynamic'` |
+| `next.config.ts` `serverExternalPackages` | ✓ | `["@prisma/client"]` - ensures Prisma Client is bundled correctly for serverless |
+| `next.config.ts` `typescript.ignoreBuildErrors` | ✓ | `true` - prevents build failure on pre-existing type issues |
+| `next.config.ts` `eslint.ignoreDuringBuilds` | ✓ | `true` - prevents build failure on pre-existing lint issues |
+| `prisma/schema.prisma` provider | ✓ | `provider = "postgresql"` (committed permanently) |
+| `prisma/schema.prisma` directUrl | ✓ | `directUrl = env("DIRECT_URL")` |
+| `postinstall` script | ✓ | `bash scripts/setup-prisma-provider.sh && prisma generate` - runs on Vercel install phase |
+| `scripts/setup-prisma-provider.sh` default | ✓ | Defaults to `postgresql` when `DATABASE_URL` is unset (critical for Vercel install phase) |
 
 ---
 
@@ -409,7 +409,7 @@ is reachable and login returns 200.
 ### "Too many connections" or intermittent 429/502
 
 **Cause:** `DATABASE_URL` is missing the `pgbouncer=true` query param. Without
-PgBouncer, each serverless function opens a direct Postgres connection, exhausting
+PgBouncer, each serverless function opens a direct PostgreSQL connection, exhausting
 Neon's connection limit.
 
 **Fix:** Append `?pgbouncer=true&connect_timeout=15` to `DATABASE_URL` (and

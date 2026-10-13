@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 // ============================================================================
-// MBUMAH HARDWARE POS — Database verifier (shared by all install paths)
+// MBUMAH HARDWARE POS - Database verifier (shared by all install paths)
 // ============================================================================
 // Answers ONE question with an exit code a script can act on:
 //
 //   "Does the database this install points at contain the seeded data?"
 //
 // Exit codes:
-//   0  — connected AND users > 0 (seed present) → install/boot may proceed
-//   10 — connected BUT users == 0 (schema pushed, never seeded)
-//   1  — could not connect / client missing (schema missing or wrong URL)
+//   0  - connected AND users > 0 (seed present) → install/boot may proceed
+//   10 - connected BUT users == 0 (schema pushed, never seeded)
+//   1  - could not connect / client missing (schema missing or wrong URL)
 //
 // Used by:
-//   • install-nodocker.ps1 / .sh  (BUILD 5/5 — fail the install if empty)
+//   • install-nodocker.ps1 / .sh  (BUILD 5/5 - fail the install if empty)
 //   • docker-entrypoint.sh       (auto-seed when the DB is empty)
 //   • start-pos.ps1 / .sh        (support: run manually to diagnose "backend
 //                                 unavailable" on a laptop)
@@ -29,7 +29,7 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..', '..');
 
-// ── Load .env (WINS over inherited env — same precedence as the launcher) ────
+// ── Load .env (WINS over inherited env - same precedence as the launcher) ────
 const envPath = join(root, '.env');
 if (existsSync(envPath)) {
   for (const line of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
@@ -56,7 +56,7 @@ let PrismaClient;
 try {
   ({ PrismaClient } = await import('@prisma/client'));
 } catch {
-  console.error('[verify-db] ✗ @prisma/client not found — dependencies not installed?');
+  console.error('[verify-db] ✗ @prisma/client not found - dependencies not installed?');
   process.exit(1);
 }
 
@@ -68,12 +68,12 @@ try {
   const [users, products] = await Promise.all([db.user.count(), db.product.count()]);
 
   if (users === 0) {
-    console.log('[verify-db] ⚠  Database is reachable but EMPTY (0 users, ' + products + ' products).');
+    console.log('[verify-db] Warning: Database is reachable but EMPTY (0 users, ' + products + ' products).');
     console.log('             Schema exists but the seed never ran.');
     process.exit(10);
   }
 
-  console.log(`[verify-db] ✓ Database OK — ${users} users, ${products} products.`);
+  console.log(`[verify-db] ✓ Database OK - ${users} users, ${products} products.`);
   process.exit(0);
 } catch (err) {
   const raw = String(err && err.message ? err.message : err);
