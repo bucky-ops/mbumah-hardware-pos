@@ -200,6 +200,26 @@ export async function GET() {
   // consumers (CI health check, uptime monitors) read status/checks.
   const memory = process.memoryUsage();
 
+  // HOSTING SPEC FIELDS (hosting-readiness-audit gap P1): observability for
+  // multi-topology deployments. Monitors (uptime pings, tunnel checks, the
+  // LAN health gates) can now tell WHICH deployment posture answered without
+  // guessing from the environment. All three are informational strings -
+  // they never influence the status computation above.
+  //   appMode: the documented .env.example vocabulary
+  //            (local-offline | development | production), falling back to
+  //            the deployment target when APP_MODE is unset.
+  //   workspaceMode: the configured workspace routing posture (auto |
+  //            subdomain | path | off, default auto per .env.example).
+  //   databaseProvider: derived from DATABASE_URL scheme so a Vercel/Neon
+  //            deployment reports postgresql while a laptop install reports
+  //            sqlite, regardless of which Prisma client flavor was bundled.
+  const databaseUrl = process.env.DATABASE_URL ?? '';
+  const databaseProvider = databaseUrl.startsWith('file:')
+    ? 'sqlite'
+    : databaseUrl.startsWith('postgres')
+      ? 'postgresql'
+      : 'unknown';
+
   return Response.json({
     status: hasErrors ? 'unhealthy' : allOk ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
@@ -209,6 +229,9 @@ export async function GET() {
     // the Vercel runtime - import the version from package.json instead so
     // /api/health always reports the true release version.
     version: pkg.version,
+    appMode: process.env.APP_MODE || (process.env.VERCEL ? 'production' : 'local'),
+    workspaceMode: process.env.NEXT_PUBLIC_STORE_WORKSPACE_MODE || 'auto',
+    databaseProvider,
     uptimeSeconds: Math.floor(process.uptime()),
     memory: {
       heapUsedMB: Math.round(memory.heapUsed / 1024 / 1024),
