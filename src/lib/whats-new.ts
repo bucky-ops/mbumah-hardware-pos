@@ -22,6 +22,16 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.17.9',
+    title: 'Calmer updates: staged installs with live progress',
+    bullets: [
+      'Updates now run in clear stages - download, safety checks, database backup, install, activation - and each stage is verified before the next one starts.',
+      'While an update runs, the login page shows a calm progress bar: your data is safe and the page stays usable.',
+      'If any stage fails, the previous version and your database are restored automatically, so the shop is never left half-updated.',
+      'UPDATE_ON_START=0 in .env now skips only the internet version check; the local database safety check still runs on every start.',
+    ],
+  },
+  {
     version: '2.17.8',
     title: 'Hardened access control: your branch data stays yours',
     bullets: [

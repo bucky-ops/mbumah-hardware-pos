@@ -111,3 +111,6 @@ worklog.md
 
 # Generated artifacts
 package-lock.json
+
+# Runtime update staging and state (never commit)
+/updater/

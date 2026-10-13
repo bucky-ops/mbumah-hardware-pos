@@ -2,6 +2,22 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.17.9] Staged updates and login progress UI
+
+### Added
+- **Staged update orchestrator (`scripts/staged-update.mjs`)**: the self-hosted staged update pipeline as one detached run - download, schema preflight on a throwaway copy of the database, verified database backup, install (install-directory swap when `MBUMAH_INSTALL_DIR` is set), activation and a bounded health smoke test - with automatic rollback of the previous release and database once the backup step has completed. Refuses to run on Vercel serverless (exit code 2); never runs destructive SQL; writes no secrets to the state file.
+- **Updater state store (`src/lib/updater/state.ts`)**: the shared server-side state file (`updater/update-state.json`) with phase/percent/message progression, atomic tmp+rename writes, path-sanitized error text, and idle defaults (never a 500) on missing or corrupt files.
+- **Update endpoints**: `GET /api/update/status` (public minimal progress; SUPER_ADMIN and STORE_OWNER additionally receive startedAt, sanitized error and pid) and `POST /api/update/prepare` (admin-only; 409 while an update is active, 501 on Vercel).
+- **Login page update progress bar (`src/components/updater/update-progress-bar.tsx`)**: an iPhone-style amber progress banner that polls the public status endpoint every 2.5 s during maintenance windows and renders nothing at any other time, so the login form is untouched.
+- **Documentation (`docs/staged-updates.md`)**: the phase table, the endpoint contract, orchestrator CLI usage, `UPDATE_ON_START` semantics and rollback behavior.
+
+### Fixed
+- `UPDATE_ON_START=0` now disables only the remote version check at startup; the local schema preflight (the start-time schema self-heal) always runs.
+
+### Security
+- **Update preparation is restricted to SUPER_ADMIN and STORE_OWNER**: `POST /api/update/prepare` validates the DB-backed session in-file (401 unauthenticated, 403 otherwise) before accepting a run and refuses serverless environments outright.
+- **Public status exposes progress only**: `GET /api/update/status` answers phase, percent, message, target version and timestamp to everyone; error detail, process id and start time require an owner/administrator session, and even the stored error text is stripped of filesystem paths before it is written to disk.
+
 ## [2.17.8] Security, RBAC and tenant isolation hardening
 
 ### Fixed
