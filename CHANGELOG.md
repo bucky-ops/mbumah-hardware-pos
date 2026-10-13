@@ -2,6 +2,17 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.17.0] Hosting readiness audit corrections (external spec review)
+
+### Added
+- **Hosting readiness audit** (`docs/hosting-readiness-audit.md`): the external "hosting and subdomain phases" specification and the "local and online hosting guide" were reviewed against the repository. The audit maps all seven spec phases to what actually shipped (v2.15.0 through v2.16.0), records where the documents' assumptions no longer match the codebase (custom Bearer auth instead of NextAuth, IndexedDB instead of localStorage, `isEngraved` is a deliberate feature, the v2.15.0 series is already released so remaining work uses 2.17.0+), and keeps a prioritized gap register with dispositions.
+- **Deployment posture fields on `/api/health`**: new informational top-level fields `appMode` (APP_MODE vocabulary: local-offline / development / production), `workspaceMode` (auto / subdomain / path / off) and `databaseProvider` (sqlite / postgresql, derived from the DATABASE_URL scheme). Monitors, tunnel checks and the LAN health gates can now tell which deployment posture answered. Additive only; the status computation is unchanged.
+- **Database backup tooling** (`scripts/backup-db.mjs`, `npm run db:backup`): timestamped SQLite backup with `-wal`/`-shm` sidecars, file-missing and empty-file refusal, size verification, `BACKUP_DIR` destination and `BACKUP_KEEP`/`--keep` retention (newest 20 by default). PostgreSQL URLs print masked pg_dump / snapshot guidance instead of handling credentials. `npm run db:verify` runs the provider-aware `prisma validate`.
+
+### Fixed
+- **STK Push now rides the PAYMENT rate tier** (20/min) in the Edge proxy instead of the generic WRITE tier; initiating a customer-facing M-Pesa payment prompt is money-touching and must not share the 30/min write budget.
+- **Docs corrected**: `/api/healthy` never existed as a route - `docs/deployment.md` and `docs/self-hosting.md` now document the real authenticated aggregated status endpoint `/api/health/system-status`, and the `/api/health` field lists include the new posture fields.
+
 ## [2.16.0] Feature: subdomain workspaces for offline and localhost modes
 
 ### Added

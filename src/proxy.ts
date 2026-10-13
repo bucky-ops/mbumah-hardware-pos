@@ -182,7 +182,12 @@ const CSRF_EXEMPT_PATHS = [
 function getRateLimitTier(pathname: string, method: string): RateLimitTier {
   if (pathname.startsWith('/api/auth/login')) return 'AUTH';
   if (pathname.startsWith('/api/auth/password-reset')) return 'PASSWORD_RESET';
+  // PAYMENT tier covers money-touching initiations: sale creation AND
+  // M-Pesa STK Push (hosting-readiness-audit gap P1 - a push triggers a
+  // customer-facing payment prompt, so it must not ride the generic WRITE
+  // tier of 30/min).
   if (pathname === '/api/transactions' && method === 'POST') return 'PAYMENT';
+  if (pathname.startsWith('/api/payments/mpesa/stkpush') && method === 'POST') return 'PAYMENT';
   if (pathname.startsWith('/api/products/search')) return 'SEARCH';
   if (pathname.startsWith('/api/whatsapp')) return 'MESSAGING';
   if ((pathname.startsWith('/api/messages') || pathname.startsWith('/api/chat')) && method !== 'GET') return 'MESSAGING';
