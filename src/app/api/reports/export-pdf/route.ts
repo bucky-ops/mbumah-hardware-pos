@@ -36,17 +36,11 @@ export const dynamic = 'force-dynamic';
 
 function getLogoDataUri(): string {
   try {
-    const logoPath = join(process.cwd(), 'public', 'logo.png');
+    const logoPath = join(process.cwd(), 'public', 'logo3d-gear-256.png');
     const buffer = readFileSync(logoPath);
     return `data:image/png;base64,${buffer.toString('base64')}`;
   } catch {
-    try {
-      const svgPath = join(process.cwd(), 'public', 'logo.svg');
-      const buffer = readFileSync(svgPath);
-      return `data:image/svg+xml;base64,${buffer.toString('base64')}`;
-    } catch {
-      return '';
-    }
+    return '';
   }
 }
 

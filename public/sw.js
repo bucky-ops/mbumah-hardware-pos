@@ -5,7 +5,7 @@
  * Cache strategy:
  *   - App shell (HTML, JS, CSS, fonts, icons): stale-while-revalidate
  *     → instant load from cache, then background update.
- *   - Static assets (/icons/*, /logo.*, /manifest.json, /favicon*):
+ *   - Static assets (/icons/*, /logo3d-*, /manifest.json, /favicon*):
  *     cache-first, long TTL.
  *   - API requests (/api/*): network-only (NEVER cache - financial data must
  *     be live). When offline, the in-app IndexedDB queue handles pending
@@ -17,14 +17,13 @@
  * assets. The activate handler purges old cache versions.
  */
 
-const SW_CACHE_VERSION = 'v1.2.0-phase3';
+const SW_CACHE_VERSION = 'v1.2.1-phase3';
 const PRECACHE_NAME = `mbumah-precache-${SW_CACHE_VERSION}`;
 const RUNTIME_NAME = `mbumah-runtime-${SW_CACHE_VERSION}`;
 const PRECACHE_URLS = [
   '/',
   '/manifest.json',
-  '/logo.svg',
-  '/logo.png',
+  '/logo3d-gear-256.png',
   '/favicon-32.png',
   '/icons/icon-192.png',
   '/icons/icon-512.png',

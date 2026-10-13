@@ -2,6 +2,17 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.17.2] File organization and duplicate file removal
+
+### Removed
+- **Retired duplicate brand assets**: `public/logo.png` and `public/logo.svg` (the old flat logo generation) are gone. Every surface now uses the current 3D brand set: the app sidebar, receipts and printed documents, the PDF statement report (which now embeds the 3D gear mark), and the service worker precache (cache version bumped so clients pick up the new asset list).
+- **One-shot operational workflow removed**: `.github/workflows/delete-duplicate-vercel-project.yml` served its purpose once the duplicate Vercel project was confirmed deleted; the workflow remains recoverable from git history if ever needed again.
+
+### Changed
+- **.gitignore hardened**: SQLite/PostgreSQL local database variants (`*.sqlite`, `*.db.wal`/`*.db.shm`) and OS or editor droppings (`Thumbs.db`, `*.swp`) are now ignored, alongside the existing env, log, and database exclusions. One shared database remains the rule: nothing in the repo creates per-branch databases.
+- The Edge proxy matcher explicitly excludes the 3D brand assets from the workspace pipeline so they are always served statically.
+- Project structure documentation updated to describe the current brand asset set.
+
 ## [2.17.1] Professional repository writing standards
 
 ### Changed

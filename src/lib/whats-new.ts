@@ -22,6 +22,15 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.17.2',
+    title: 'Repository tidy-up: one brand, one database',
+    bullets: [
+      'The retired flat logo files are gone; receipts, printed documents, the PDF statement, and the offline cache all use the current 3D Mbumah brand mark.',
+      'The service worker cache was refreshed so existing installs pick up the updated brand assets on the next load.',
+      'Housekeeping: the one-shot Vercel cleanup workflow was removed after completing its purpose, and the gitignore now also excludes local SQLite variants and OS droppings.',
+    ],
+  },
+  {
     version: '2.17.1',
     title: 'Professional polish across the product',
     bullets: [

@@ -8,7 +8,7 @@ mbumah-hardware-pos/
 │   ├── schema.prisma          # Database schema (25+ models)
 │   └── seed.ts                # Demo data seeder
 ├── public/
-│   ├── logo.svg               # Legacy brand logo (still precached by the service worker)
+│   ├── logo3d-*.webp/png       # 3D brand marks (sidebar, receipts, print, PWA)
 │   └── categories/            # Category images
 ├── src/
 │   ├── app/
