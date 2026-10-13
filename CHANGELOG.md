@@ -2,6 +2,15 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.18.0] Full QA verification release
+
+### Added
+- **Full QA report (`docs/v2.18.0-qa-report.md`)**: the complete audit of the v2.17.x feature line - quality gates, hygiene sweeps, security and tenant isolation, workspace resolution, the staged updater contract, hosting modes, data integrity and observability - with per-area pass/fail/blocked results, evidence references, known gaps and the release verdict.
+- **QA evidence for the v2.17.x feature line**: static gates re-measured at the 2.17.9 baseline (lint 0 errors and 396 warnings, typecheck 472 advisory, vitest 507/507, prisma validate valid), a 21-check runtime matrix on the seeded SQLite development server (auth, RBAC, cross-store 404-indistinguishable probing, store-context allow/deny, updater 401/400/202/409, subdomain and forwarded-host behavior, gateway page, chat) and a browser pass verifying the organization console login and the five branch workspace links.
+
+### Fixed
+- Nothing. This is a verification release: no runtime behavior changes are intended; the changes are the QA report, the version bump and release notes.
+
 ## [2.17.9] Staged updates and login progress UI
 
 ### Added
