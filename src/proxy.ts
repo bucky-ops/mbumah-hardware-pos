@@ -11,8 +11,25 @@ import {
   extractSubdomain,
   isHostAllowed,
   parseHost,
+  resolveRequestHost,
   resolveWorkspaceHostMode,
 } from '@/lib/workspace/config';
+
+/**
+ * Client-visible host for the workspace pipeline. Reads the Host header, or
+ * the x-forwarded-host header when TRUST_X_FORWARDED_HOST is enabled (see
+ * src/lib/workspace/config.ts for the security contract: only behind a
+ * proxy/tunnel that overwrites the header). Empty string when both are gone,
+ * matching the previous parseHost-only behavior.
+ */
+function currentRequestHost(request: NextRequest): string {
+  return (
+    resolveRequestHost({
+      host: request.headers.get('host'),
+      'x-forwarded-host': request.headers.get('x-forwarded-host'),
+    }) ?? ''
+  );
+}
 
 // In-Memory Rate Limiter (Edge-compatible)
 
@@ -238,7 +255,7 @@ function withWorkspaceHeaders(subdomain: string | null): Record<string, string> 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const method = request.method;
-  const requestHost = parseHost(request.headers.get('host'));
+  const requestHost = currentRequestHost(request);
 
   // ------------------------------------------------------------------
   // PAGE ROUTES (v2.16.0 workspace pipeline)
@@ -285,7 +302,7 @@ export async function proxy(request: NextRequest) {
   // cross-subdomain clients never hit the auth/rate-limit layers with a
   // preflight. Only trusted origins get CORS headers (never a wildcard).
   if (method === 'OPTIONS') {
-    const cors = corsHeadersFor(request.headers.get('origin'), request.headers.get('host') || '');
+    const cors = corsHeadersFor(request.headers.get('origin'), currentRequestHost(request));
     if (!cors) return new Response(null, { status: 204 });
     return new Response(null, { status: 204, headers: cors });
   }

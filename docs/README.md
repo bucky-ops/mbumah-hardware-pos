@@ -23,6 +23,7 @@ Documentation for Mbumah Hardware POS. Start with the [README](../README.md) for
 | [LAN deployment](lan-deployment.md) | One shop server on the local network: DNS wildcard, path fallback, shared DB, mock M-Pesa |
 | [Local offline setup](local-offline-setup.md) | Offline localhost/LAN mode: hosts file, dnsmasq, local HTTPS, mock M-Pesa, idle timeout |
 | [Tunnel development](tunnel-development.md) | ngrok/Cloudflare/Tailscale tunnels for Daraja sandbox callbacks |
+| [Online hosting](online-hosting.md) | Self-hosted public subdomains: Cloudflare Tunnel config, Caddy reverse proxy, .env.online.example, forwarded-host trust |
 | [Troubleshooting and FAQ](troubleshooting-and-faq.md) | M-Pesa callbacks, Vercel 500s, ghost shifts, common fixes |
 | [Hosting readiness audit](hosting-readiness-audit.md) | External hosting spec and guide reviewed against the repo: phase status, corrections, gap register |
 | [Offline mode](offline-mode.md) | Offline sales queue, idempotent replay, top-bar indicator, testing |

@@ -78,7 +78,7 @@ All devices and branches talk to the one database on the server: stock, customer
 
 ## Mock M-Pesa
 
-On a LAN without internet, keep `MPESA_ENVIRONMENT=mock`. STK pushes run against the mock Daraja server (`docker/mpesa-mock`, port 3001 in the dev compose stack) and the callback returns to the root callback URL after a few seconds. Real Daraja sandbox callbacks need a public HTTPS endpoint - use a tunnel for that ([Tunnel development](tunnel-development.md)).
+On a LAN without internet, keep `MPESA_ENVIRONMENT=mock`. STK pushes run against the mock Daraja server (`docker/mpesa-mock`, port 3001 in the dev compose stack) and the callback returns to the root callback URL after a few seconds. Real Daraja sandbox callbacks need a public HTTPS endpoint - use a tunnel for that ([Tunnel development](tunnel-development.md)); the permanent online setup on your own domain is covered in [Online hosting](online-hosting.md).
 
 ## Verify
 

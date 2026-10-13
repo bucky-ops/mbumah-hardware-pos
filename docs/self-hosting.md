@@ -52,6 +52,8 @@ mbumah.test, *.mbumah.test {
 
 Run `caddy trust` (or accept the first-run prompt) so devices trust the local CA, then point DNS/hosts at the server as above. Caddy passes the original Host header through by default, so the workspace pipeline sees real branch hostnames.
 
+For a PUBLIC deployment with real certificates (`app.yourdomain.com` plus the `*.yourdomain.com` wildcard, automatic HTTPS via the DNS-01 challenge), use the production Caddyfile in [Online hosting](online-hosting.md) - the `tls internal` variant here is for LAN and trusted-network installs only.
+
 ## Nodocker and laptop installs (no Docker)
 
 For a single shop machine that must not depend on the internet or on Docker:
@@ -74,6 +76,7 @@ Public health paths (`/api/health` and `/api/health/*`) are passed through by th
 
 ## Related documents
 
+- [Online hosting](online-hosting.md) - public subdomains on your own domain via Cloudflare Tunnel or Caddy
 - [Deployment](deployment.md) - the full self-hosting procedure: SSL options, backups, troubleshooting, architecture diagram
 - [Subdomain workspaces](subdomain-workspaces.md) - what the host header does once it reaches the app
 - [LAN deployment](lan-deployment.md) - one shop server for many devices on the local network

@@ -2,6 +2,19 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.17.7] Online hosting and public subdomains
+
+### Added
+- **Trusted forwarded host support (`TRUST_X_FORWARDED_HOST`)**: the new `resolveRequestHost` helper (src/lib/workspace/config.ts, Edge-safe, no Prisma) resolves the client-visible request host from the first `x-forwarded-host` value when the flag is truthy ('1', 'true', 'yes', 'on', case-insensitive), falling back to the plain `Host` header. Wired into the proxy workspace pipeline (page routing, host allowlist, CORS preflight) and the workspace host readers (`/api/me/store-context`, `/api/stores/[storeSlug]`). Off by default everywhere: with the flag absent, request handling is byte-for-byte the pre-2.17.7 behavior.
+- **Online tunnel env template (`.env.online.example`)**: copy to `.env` for a self-hosted public deployment on your own domain (`app.mbumah.co.ke` console plus the branch wildcard) behind Cloudflare Tunnel or Caddy, with secure shared cookies, the host allowlist, the forwarded-host trust flag, and commented production PostgreSQL and M-Pesa callback placeholders. Raw localhost and LAN IPs always fall back to path mode automatically.
+- **Online hosting guide (`docs/online-hosting.md`)**: the production counterpart to the dev-focused tunnel guide. Covers the environment, the `x-forwarded-host` trust contract, a named Cloudflare Tunnel setup (ingress rules for the console host and the `*.mbumah.co.ke` wildcard, `cloudflared tunnel route dns`, Host header preservation notes) and a Caddy reverse proxy option (site blocks for the app host and the wildcard, automatic HTTPS via the DNS-01 challenge, admin endpoint off, no debug).
+
+### Fixed
+- The ngrok recipe in `docs/tunnel-development.md` is now explicitly marked DEV/TESTING ONLY (free tunnels rotate URLs and cannot serve branch wildcards) and points production readers at the online hosting guide; cross-links to the new guide were added from the self-hosting, subdomain-workspaces, LAN deployment, local offline setup and documentation index pages.
+
+### Security
+- `x-forwarded-host` is honored only when `TRUST_X_FORWARDED_HOST` is enabled, and the security contract is documented at the helper and in both hosting guides: enable it only behind a proxy or tunnel that overwrites the header (Cloudflare Tunnel, Caddy), never on a directly exposed server. The resolved host still passes the `ALLOWED_HOSTS` validation, so spoofed or unknown hosts are rejected with 403 regardless.
+
 ## [2.17.6] LAN hosting and localhost fallback completion
 
 ### Added

@@ -140,7 +140,7 @@ Offline installs cannot call Safaricom, so checkout runs against the mock Daraja
 - Point `MPESA_CALLBACK_URL` at the **root** callback: `http://mbumah.test:3000/api/payments/mpesa/callback`. One callback endpoint serves every branch - the callback resolves the store from the transaction record (by `CheckoutRequestID`), so no per-branch callback URL is needed.
 - The callback route only accepts flat mock-shaped bodies when `MOCK_CALLBACKS_ENABLED=true`; real Daraja payloads use the standard nested shape.
 
-**Why a tunnel is needed for real sandbox tests**: Safaricom's Daraja platform must reach your callback over public HTTPS. An offline `localhost` or `mbumah.test` address is unreachable from Safaricom. To test against the real Daraja sandbox, run the app behind ngrok, Cloudflare Tunnel or Tailscale Funnel - see [Tunnel development](tunnel-development.md). In production on Vercel or a public server, set `MPESA_CALLBACK_URL` to the public root callback and register it in the Daraja portal (see [Vercel deployment](vercel-deployment.md)).
+**Why a tunnel is needed for real sandbox tests**: Safaricom's Daraja platform must reach your callback over public HTTPS. An offline `localhost` or `mbumah.test` address is unreachable from Safaricom. To test against the real Daraja sandbox, run the app behind ngrok, Cloudflare Tunnel or Tailscale Funnel - see [Tunnel development](tunnel-development.md). In production on Vercel or a public server, set `MPESA_CALLBACK_URL` to the public root callback and register it in the Daraja portal (see [Vercel deployment](vercel-deployment.md) for the managed setup and [Online hosting](online-hosting.md) for self-hosted public domains).
 
 ## The 30-minute idle timeout
 

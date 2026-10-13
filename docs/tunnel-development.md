@@ -4,6 +4,8 @@ Safaricom's Daraja platform delivers STK Push results to a **public HTTPS** call
 
 This guide covers ngrok, Cloudflare Tunnel and Tailscale Funnel for exactly that purpose. For offline-only testing skip the tunnel and use the mock (`MPESA_ENVIRONMENT=mock`, see [Local offline setup](local-offline-setup.md)).
 
+Scope: everything here is development and testing. The production setup for self-hosted public subdomains (a named Cloudflare Tunnel with wildcard DNS, or a Caddy reverse proxy, plus the `TRUST_X_FORWARDED_HOST` forwarded-host trust flag) is documented separately in [Online hosting](online-hosting.md).
+
 ## Which tunnel to pick
 
 | Tunnel | Wildcard hostnames | Notes |
@@ -22,6 +24,8 @@ This guide covers ngrok, Cloudflare Tunnel and Tailscale Funnel for exactly that
   ```
 
   `ALLOWED_HOSTS` supports exact names and `*.` suffix wildcards; unknown hosts are rejected with 403.
+
+  If a tunnel or proxy hop rewrites the `Host` header so the app no longer sees the client-visible hostname, set `TRUST_X_FORWARDED_HOST=true` so the workspace pipeline reads the `x-forwarded-host` header instead (first value wins). Only enable it behind a proxy or tunnel that overwrites the header - never on a directly exposed server (any client could spoof it). Default is false; the plain `Host` header is used otherwise.
 
 ## Point MPESA_CALLBACK_URL at the tunnel root
 
@@ -54,7 +58,9 @@ The flow for any branch:
 - **Rate limiting**: the callback endpoint applies its own webhook rate limit per source IP; when testing behind one tunnel IP with many pushes, expect `429` with `Retry-After` if you hammer it.
 - **Mock vs sandbox**: flat mock-shaped callback bodies are only accepted when `MOCK_CALLBACKS_ENABLED=true`; real Daraja sandbox payloads use the nested format and need no extra flag.
 
-## Quick recipe (ngrok)
+## Quick recipe (ngrok) - DEV/TESTING ONLY
+
+ngrok is for development and testing only: free tunnels get a random URL on every restart and have no wildcard hostnames, so branch subdomains cannot resolve. Production must use Cloudflare Tunnel (named tunnel, wildcard DNS route) or a proper reverse proxy - see [Online hosting](online-hosting.md).
 
 ```bash
 # 1. Start the app (dev or production build) on port 3000
@@ -75,6 +81,7 @@ ngrok http 3000
 
 ## Related documents
 
+- [Online hosting](online-hosting.md) - production tunnels and reverse proxies for public subdomains
 - [Local offline setup](local-offline-setup.md) - mock M-Pesa and offline domains
 - [Vercel deployment](vercel-deployment.md) - the production callback setup (no tunnel needed)
 - [Subdomain workspaces](subdomain-workspaces.md) - host allowlist and workspace routing

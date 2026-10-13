@@ -187,6 +187,7 @@ Workspace pages: `/org/dashboard`, `/branches/select`, `/chat`, and the branch w
 - [Global chat](global-chat.md) - the chat architecture
 - [RBAC](rbac.md) - roles, permission matrix, tenancy layers
 - [Vercel deployment](vercel-deployment.md) - wildcard domains and production env vars
+- [Online hosting](online-hosting.md) - self-hosted public subdomains via Cloudflare Tunnel or Caddy (and the forwarded-host trust flag)
 - [Self-hosting](self-hosting.md) - nginx/Caddy wiring for subdomains
 - [LAN deployment](lan-deployment.md) - one shop server for several devices
 - [Tunnel development](tunnel-development.md) - Daraja sandbox callbacks behind ngrok/Cloudflare/Tailscale
