@@ -13,7 +13,7 @@ What it shows:
 - The ten most recent audit events, org-wide.
 - A Global Chat button (see [Global chat](global-chat.md)).
 
-Every "Open branch workspace" action opens the branch in a **new tab** (`target="_blank" rel="noopener noreferrer"`), so the console tab stays available. The link is an absolute subdomain URL when the current origin resolves to subdomain mode, otherwise `/stores/{slug}/dashboard`.
+Every "Open branch workspace" action opens the branch in a **new tab** (`target="_blank" rel="noopener noreferrer"`), so the console tab stays available. The link is an absolute subdomain URL when every safety check passes on the current origin, otherwise `/stores/{slug}/dashboard`; on localhost, 127.0.0.1 and raw IPs the path form is always used. When no safe URL can be built (missing slug, inactive store) a calm inline message replaces the button. See [Branch workspaces](branch-workspaces.md) and [Store context resolution](store-context-resolution.md).
 
 KPI definitions (from the summary route):
 

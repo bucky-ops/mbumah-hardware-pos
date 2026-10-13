@@ -182,6 +182,8 @@ Workspace pages: `/org/dashboard`, `/branches/select`, `/chat`, and the branch w
 
 ## Related documents
 
+- [Branch workspaces](branch-workspaces.md) - the v2.18.0.0 safe link builder, automatic path fallback on localhost/127.0.0.1/raw IPs, and the hosting setup checklists
+- [Store context resolution](store-context-resolution.md) - the resolver modes, the reasonCode vocabulary and the security properties
 - [Local offline setup](local-offline-setup.md) - hosts file, dnsmasq, local HTTPS, mock M-Pesa
 - [Multi-store workspaces](multi-store-workspaces.md) - organization console, branch selector, workspace UI
 - [Global chat](global-chat.md) - the chat architecture

@@ -3,7 +3,10 @@
 // to avoid leaking secrets.
 
 import { db } from '@/lib/db';
-import pkg from '../../../../package.json';
+// APP_VERSION prefers the mbumah.releaseVersion metadata (2.18.0.0) over the
+// package.json semver "version" (2.18.0) so /api/health reports the true
+// correction-release version.
+import { APP_VERSION } from '@/lib/version';
 
 export const dynamic = 'force-dynamic';
 
@@ -226,9 +229,10 @@ export async function GET() {
     nodeEnv: process.env.NODE_ENV,
     responseTime: `${totalResponseTime}ms`,
     // npm_package_version is an npm-lifecycle env var and is NOT present in
-    // the Vercel runtime - import the version from package.json instead so
+    // the Vercel runtime - import the version from src/lib/version.ts (which
+    // reads package.json and prefers the mbumah.releaseVersion metadata) so
     // /api/health always reports the true release version.
-    version: pkg.version,
+    version: APP_VERSION,
     appMode: process.env.APP_MODE || (process.env.VERCEL ? 'production' : 'local'),
     workspaceMode: process.env.NEXT_PUBLIC_STORE_WORKSPACE_MODE || 'auto',
     databaseProvider,

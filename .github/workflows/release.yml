@@ -42,7 +42,10 @@ jobs:
       - name: Read version from package.json (single source of truth)
         id: ver
         run: |
-          VERSION=$(node -p "require('./package.json').version")
+          # v2.18.0.0: correction releases carry the full four-part version in
+          # the "mbumah" metadata block (package.json "version" must stay
+          # valid semver for npm/CI); prefer it when present.
+          VERSION=$(node -p "const p = require('./package.json'); (p.mbumah && p.mbumah.releaseVersion) || p.version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Releasing version: v$VERSION"
 

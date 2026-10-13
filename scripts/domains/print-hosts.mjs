@@ -6,11 +6,19 @@
 //   node scripts/domains/print-hosts.mjs --ip 192.168.1.20  # LAN mode (one LAN server)
 //   node scripts/domains/print-hosts.mjs --domain mbumah.lan
 //   node scripts/domains/print-hosts.mjs --ipv6           # include ::1 entries
+//   LOCAL_LAN_IP=192.168.1.20 node scripts/domains/print-hosts.mjs
+//                                                  # adds a second LAN block
 //
 // The script ONLY PRINTS copy-pasteable entries; it never modifies the system
 // hosts file. Apply them yourself:
 //   macOS / Linux:  sudo nano /etc/hosts          (then paste)
 //   Windows:        run Notepad as Administrator, open C:\Windows\System32\drivers\etc\hosts
+//
+// NOTE: raw localhost (http://localhost:3000 or http://127.0.0.1:3000) needs
+// NO hosts entries at all in path mode - branch workspaces are addressed as
+// /stores/{slug}/... and the app falls back to path mode automatically on
+// localhost, 127.0.0.1 and raw IPs (v2.18.0.0). Hosts entries are only needed
+// for local SUBDOMAIN mode (mbumah.test branches).
 //
 // Store slugs/subdomains come from scripts/domains/stores.config.json, which
 // mirrors prisma/seed.ts and src/lib/store-info.ts.
@@ -63,10 +71,23 @@ function main() {
       lines.push(`::1\t${host}`);
     }
   }
+  // Second block from the LOCAL_LAN_IP environment variable: handy when the
+  // same machine also serves the LAN (LAN clients resolve the branch
+  // subdomains to the server's LAN address instead of 127.0.0.1).
+  const lanIp = (process.env.LOCAL_LAN_IP || '').trim();
+  if (lanIp) {
+    lines.push('');
+    lines.push(`# LAN block (from LOCAL_LAN_IP=${lanIp}) - paste on the LAN SERVER only`);
+    for (const host of hosts) {
+      lines.push(`${lanIp}\t${host}`);
+    }
+  }
   lines.push('');
   lines.push(`# Root console:    http://${rootDomain}:${port}`);
   lines.push(`# Branch example:  http://${config.stores[0].subdomain}.${rootDomain}:${port}`);
   lines.push(`# Path fallback:   http://${ip}:${port}/stores/${config.stores[0].slug}/dashboard`);
+  lines.push('# Path mode needs NO hosts entries: localhost / 127.0.0.1 / raw IPs always');
+  lines.push('# fall back to path mode automatically (v2.18.0.0).');
   console.log(lines.join('\n'));
 }
 

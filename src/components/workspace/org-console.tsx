@@ -5,7 +5,10 @@
 // Root-domain, organization-wide view for SUPER_ADMIN / STORE_OWNER (full)
 // and ACCOUNTANT (read-only financial aggregates). Data: GET /api/org/summary.
 // Every "Open workspace" action opens the branch in a NEW TAB (subdomain URL
-// when subdomain mode is available, /stores/{slug}/... otherwise).
+// when subdomain mode is safe on the current host, /stores/{slug}/... path
+// URL otherwise). Links are built by the safe v2.18.0.0 builder; when no
+// safe URL exists (missing slug) a calm inline message replaces the button
+// instead of opening a broken placeholder (/stores/<undefined>) tab.
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -27,7 +30,7 @@ import { LoginScreen } from '@/components/login-screen';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { useAuthStore } from '@/lib/stores';
 import { authorizedFetchJson } from '@/lib/api';
-import { buildStoreWorkspaceUrl } from '@/lib/workspace/links';
+import { getBranchWorkspaceHref } from '@/lib/branch-workspace';
 import { useWorkspaceAuthBoot } from '@/lib/workspace/workspace-store';
 import { useWorkspaceStore, type WorkspaceStoreRef } from '@/lib/workspace/workspace-store';
 
@@ -282,8 +285,16 @@ export function OrgConsole() {
               </thead>
               <tbody>
                 {summary.stores.map((store) => {
-                  const href = buildStoreWorkspaceUrl(store);
                   const inactive = store.status !== 'ACTIVE';
+                  // Safe v2.18.0.0 builder: path URL on localhost / raw IPs,
+                  // subdomain URL only when every safety check passes, null
+                  // for inactive stores or a missing slug (never a broken
+                  // placeholder path).
+                  const href = getBranchWorkspaceHref({
+                    store: { slug: store.slug, subdomain: store.subdomain, isActive: !inactive },
+                    currentHost: typeof window !== 'undefined' ? window.location.host : '',
+                    protocol: typeof window !== 'undefined' ? window.location.protocol : undefined,
+                  });
                   return (
                     <tr key={store.id} className="border-b last:border-0 hover:bg-muted/40">
                       <td className="px-4 py-3">
@@ -309,13 +320,26 @@ export function OrgConsole() {
                       <td className="px-4 py-3 text-right tabular-nums">{formatKES(store.debtOutstanding)}</td>
                       <td className="px-4 py-3 text-right tabular-nums">{store.pendingMpesa}</td>
                       <td className="px-4 py-3 text-right">
-                        <Button asChild size="sm" variant="outline" disabled={inactive}>
-                          <a href={href} target="_blank" rel="noopener noreferrer">
-                            <Building2 className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
-                            Open branch workspace
-                            <ArrowUpRight className="h-3 w-3 ml-1" aria-hidden="true" />
-                          </a>
-                        </Button>
+                        {href ? (
+                          <Button asChild size="sm" variant="outline" disabled={inactive}>
+                            <a href={href} target="_blank" rel="noopener noreferrer">
+                              <Building2 className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
+                              Open branch workspace
+                              <ArrowUpRight className="h-3 w-3 ml-1" aria-hidden="true" />
+                            </a>
+                          </Button>
+                        ) : (
+                          <span
+                            className="inline-block max-w-[10rem] text-xs text-muted-foreground"
+                            title={
+                              inactive
+                                ? 'This branch is currently inactive. The workspace cannot be opened.'
+                                : 'Branch workspace unavailable. Store slug is not configured.'
+                            }
+                          >
+                            Branch workspace unavailable
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );
