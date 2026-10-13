@@ -1,6 +1,6 @@
 {
   "name": "mbumah-hardware-pos",
-  "version": "2.15.2",
+  "version": "2.16.0",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
@@ -17,6 +17,9 @@
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
     "db:push": "node scripts/ensure-schema.mjs",
+    "db:backfill-slugs": "node scripts/backfill-store-slugs.mjs",
+    "domains:print": "node scripts/domains/print-hosts.mjs",
+    "domains:verify": "node scripts/domains/verify-subdomains.mjs",
     "db:generate": "node scripts/setup-prisma-provider.mjs && prisma generate",
     "db:migrate": "node scripts/setup-prisma-provider.mjs && prisma migrate dev",
     "db:migrate:deploy": "node scripts/setup-prisma-provider.mjs && prisma migrate deploy",
@@ -24,7 +27,7 @@
     "db:reset": "prisma migrate reset",
     "audit:financial": "bun run scripts/run-financial-audit.ts",
     "health": "curl -s http://localhost:3000/api/health | bun -e 'process.stdin.on(\"data\",d=>console.log(JSON.stringify(JSON.parse(d.toString()),null,2)))'",
-    "vercel-build": "SKIP_ENV_VALIDATION=1 node scripts/setup-prisma-provider.mjs && prisma generate && node scripts/sync-db-schema.mjs && next build"
+    "vercel-build": "SKIP_ENV_VALIDATION=1 node scripts/setup-prisma-provider.mjs && prisma generate && node scripts/sync-db-schema.mjs && node scripts/backfill-store-slugs.mjs && next build"
   },
   "prisma": {
     "seed": "bun prisma/seed.ts"

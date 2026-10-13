@@ -59,6 +59,16 @@ model Store {
   // traced back to the branch that owns it (e.g. JUJ, THI, RUI, NAI, NAK).
   // Convention: 2-6 uppercase letters derived from the town/county name.
   code           String?  @unique
+  // Path-workspace identifier: /stores/{slug}/dashboard. Stable, lowercase.
+  // Falls back to the store id when null (legacy rows; backfill script sets it).
+  slug           String?  @unique
+  // Subdomain-workspace identifier: {subdomain}.{NEXT_PUBLIC_ROOT_DOMAIN}.
+  // Null means "derive from slug". Must match /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
+  // and must not be a reserved word (www, api, auth, admin, app, ...).
+  subdomain      String?  @unique
+  // Optional branch accent color (hex, e.g. #B45309) used by the branch
+  // workspace header and badge so each branch feels like its own website.
+  brandingColor  String?
   location       String?
   address        String?
   phone          String?
@@ -128,6 +138,7 @@ model Store {
   storeTransfersFrom   StoreTransfer[]       @relation("TransferFromStore")
   storeTransfersTo     StoreTransfer[]       @relation("TransferToStore")
   inventories          Inventory[]
+  memberships          StoreMembership[]
   notifications        Notification[]
   // ── v2.1.0 accounting module relations ─────────────────────────────────
   financialPeriods     FinancialPeriod[]
@@ -184,6 +195,10 @@ model User {
   // ── v2.0.0 messaging relations ─────────────────────────────────────────
   sentMessages            ConversationMessage[]
   notificationPreferences NotificationPreference[]
+
+  // ── Multi-store workspace memberships (v2.16.0 subdomain workspaces) ──
+  storeMemberships    StoreMembership[]
+  assignedMemberships StoreMembership[] @relation("MembershipAssignedBy")
 
   // ── v2.1.0 accounting relations (ISO 9001 audit trail) ──────────────────
   // Named relations are REQUIRED because multiple JournalEntry fields
@@ -1938,11 +1953,48 @@ model DebtReminder {
 // ConversationMessage pair handles INTERNAL staff chat (real-time, threaded).
 // They are deliberately separate to avoid conflating two distinct domains.
 
+// ══════════════════════════════════════════════════════════════════════
+// v2.16.0 — MULTI-STORE WORKSPACE MEMBERSHIPS (subdomain workspaces)
+// ══════════════════════════════════════════════════════════════════════
+// Assignment of a user to a store for workspace-access purposes. The primary
+// session store stays User.storeId; a membership row GRANTS additional store
+// access (e.g. a WAREHOUSE_MANAGER assigned to Juja Main and Thika).
+//   CASHIER / BRANCH_MANAGER: normally one active membership (their store).
+//   WAREHOUSE_MANAGER: may hold several active memberships.
+//   SUPER_ADMIN / STORE_OWNER: organization-wide, no membership required.
+// Deactivating a membership (status != ACTIVE) blocks access immediately.
+model StoreMembership {
+  id           String   @id @default(cuid())
+  userId       String
+  storeId      String
+  // Same role vocabulary as User.role; the effective branch role may differ
+  // from the user's organization-wide role in future multi-role setups.
+  role         String
+  // ACTIVE, SUSPENDED, REVOKED
+  status       String   @default("ACTIVE")
+  assignedById String?
+  note         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store      Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  assignedBy User? @relation("MembershipAssignedBy", fields: [assignedById], references: [id])
+
+  @@unique([userId, storeId])
+  @@index([storeId])
+  @@index([userId, status])
+  @@map("store_memberships")
+}
+
 /// A conversation thread — internal staff chat or customer-support chat.
+/// storeId is nullable since v2.16.0: a GLOBAL organization chat channel has
+/// no store scope and is readable by every authenticated user of the org.
 model Conversation {
   id                 String    @id @default(cuid())
-  storeId            String
-  // INTERNAL (staff-to-staff), CUSTOMER_SUPPORT (staff-to-customer)
+  storeId            String?
+  // INTERNAL (staff-to-staff), CUSTOMER_SUPPORT (staff-to-customer),
+  // GLOBAL (organization-wide chat, readable across all stores)
   type               String    @default("INTERNAL")
   title              String? // Optional human-readable title
   // JSON array of participant user IDs (and customer ID for support chats).
@@ -1953,7 +2005,7 @@ model Conversation {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  store    Store                 @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store    Store?                @relation(fields: [storeId], references: [id], onDelete: Cascade)
   messages ConversationMessage[]
 
   @@index([storeId])
@@ -1968,6 +2020,9 @@ model ConversationMessage {
   id             String   @id @default(cuid())
   conversationId String
   senderId       String // User ID of the sender
+  // Origin store of the message (denormalized from the sender's workspace at
+  // send time) so the global chat can show a branch badge per message.
+  storeId        String?
   content        String
   // TEXT, IMAGE, FILE, SYSTEM (join/leave notifications)
   messageType    String   @default("TEXT")

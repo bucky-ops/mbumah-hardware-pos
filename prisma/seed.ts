@@ -34,7 +34,7 @@ function stage(n: number, total: number, name: string): (status: 'ok' | 'skipped
   };
 }
 
-const TOTAL_STAGES = 23;
+const TOTAL_STAGES = 24;
 
 // Generate date N days ago
 function daysAgo(n: number): Date {
@@ -122,11 +122,15 @@ async function seedBody() {
   const done2 = stage(2, TOTAL_STAGES, 'Create Stores (5 branches)');
   const store = await prisma.store.upsert({
     where: { id: 'store_juja_main' },
-    update: { organizationId: org.id, name: 'MBUMAH HARDWARE - Juja Main', status: 'ACTIVE' },
+    update: { organizationId: org.id, name: 'MBUMAH HARDWARE - Juja Main', status: 'ACTIVE', code: 'JUJ', slug: 'juja-main', subdomain: 'juja-main', brandingColor: '#B45309' },
     create: {
       id: 'store_juja_main',
       organizationId: org.id,
       name: 'MBUMAH HARDWARE - Juja Main',
+      code: 'JUJ',
+      slug: 'juja-main',
+      subdomain: 'juja-main',
+      brandingColor: '#B45309',
       location: 'Salama M-Store, Juja',
       address: 'P.O. Box 9101-00300, Nairobi',
       phone: '0795191909',
@@ -138,11 +142,15 @@ async function seedBody() {
 
   const storeThika = await prisma.store.upsert({
     where: { id: 'store_thika' },
-    update: { organizationId: org.id, name: 'MBUMAH HARDWARE - Thika Branch', status: 'ACTIVE' },
+    update: { organizationId: org.id, name: 'MBUMAH HARDWARE - Thika Branch', status: 'ACTIVE', code: 'THI', slug: 'thika', subdomain: 'thika', brandingColor: '#047857' },
     create: {
       id: 'store_thika',
       organizationId: org.id,
       name: 'MBUMAH HARDWARE - Thika Branch',
+      code: 'THI',
+      slug: 'thika',
+      subdomain: 'thika',
+      brandingColor: '#047857',
       location: 'Thika Town, Kiambu County',
       address: 'Thika Town, Kiambu County',
       phone: '0712345678',
@@ -154,11 +162,15 @@ async function seedBody() {
 
   const storeRuiru = await prisma.store.upsert({
     where: { id: 'store_ruiru' },
-    update: { organizationId: org.id, name: 'MBUMAH HARDWARE - Ruiru Branch', status: 'ACTIVE' },
+    update: { organizationId: org.id, name: 'MBUMAH HARDWARE - Ruiru Branch', status: 'ACTIVE', code: 'RUI', slug: 'ruiru', subdomain: 'ruiru', brandingColor: '#9A3412' },
     create: {
       id: 'store_ruiru',
       organizationId: org.id,
       name: 'MBUMAH HARDWARE - Ruiru Branch',
+      code: 'RUI',
+      slug: 'ruiru',
+      subdomain: 'ruiru',
+      brandingColor: '#9A3412',
       location: 'Ruiru Town, Kiambu County',
       address: 'Ruiru Town, Kiambu County',
       phone: '0723456789',
@@ -170,11 +182,15 @@ async function seedBody() {
 
   const storeNairobiCbd = await prisma.store.upsert({
     where: { id: 'store_nairobi_cbd' },
-    update: { organizationId: org.id, name: 'MBUMAH HARDWARE - Nairobi CBD Branch', status: 'ACTIVE' },
+    update: { organizationId: org.id, name: 'MBUMAH HARDWARE - Nairobi CBD Branch', status: 'ACTIVE', code: 'NAI', slug: 'nairobi-cbd', subdomain: 'nairobi-cbd', brandingColor: '#B91C1C' },
     create: {
       id: 'store_nairobi_cbd',
       organizationId: org.id,
       name: 'MBUMAH HARDWARE - Nairobi CBD Branch',
+      code: 'NAI',
+      slug: 'nairobi-cbd',
+      subdomain: 'nairobi-cbd',
+      brandingColor: '#B91C1C',
       location: 'Kenyatta Avenue, Nairobi',
       address: 'Kenyatta Avenue, Nairobi',
       phone: '0734567890',
@@ -186,11 +202,15 @@ async function seedBody() {
 
   const storeNakuru = await prisma.store.upsert({
     where: { id: 'store_nakuru' },
-    update: { organizationId: org.id, name: 'MBUMAH HARDWARE - Nakuru Branch', status: 'ACTIVE' },
+    update: { organizationId: org.id, name: 'MBUMAH HARDWARE - Nakuru Branch', status: 'ACTIVE', code: 'NAK', slug: 'nakuru', subdomain: 'nakuru', brandingColor: '#BE185D' },
     create: {
       id: 'store_nakuru',
       organizationId: org.id,
       name: 'MBUMAH HARDWARE - Nakuru Branch',
+      code: 'NAK',
+      slug: 'nakuru',
+      subdomain: 'nakuru',
+      brandingColor: '#BE185D',
       location: 'Nakuru Town, Nakuru County',
       address: 'Nakuru Town, Nakuru County',
       phone: '0745678901',
@@ -398,6 +418,25 @@ async function seedBody() {
       passwordHash: adminPasswordHash,
       role: 'STORE_OWNER',
       phone: '0795191910',
+      isActive: true,
+    },
+  });
+
+  // 4e. Seed Warehouse Manager (v2.16.0 multi-branch demo user)
+  // Assigned to Juja Main + Thika via StoreMembership (stage 24) so the
+  // /branches/select workspace flow can be exercised out of the box.
+  await prisma.user.upsert({
+    where: { email: 'warehouse@mbumahhardware.co.ke' },
+    update: { isActive: true, role: 'WAREHOUSE_MANAGER', storeId: store.id },
+    create: {
+      id: 'user_warehouse_manager',
+      organizationId: org.id,
+      storeId: store.id,
+      email: 'warehouse@mbumahhardware.co.ke',
+      name: 'Peter Kimani (Warehouse)',
+      passwordHash: adminPasswordHash,
+      role: 'WAREHOUSE_MANAGER',
+      phone: '0795191911',
       isActive: true,
     },
   });
@@ -2113,6 +2152,79 @@ async function seedBody() {
   console.log('   📦 Purchase Orders seeded: 5 (Juja Main)');
   console.log('   🎁 Gift cards seeded: 14');
   console.log('   🎁 Gift card redemptions seeded: ' + giftCardRedemptions.length);
+
+  // 24. Multi-store workspaces: memberships + global chat (v2.16.0)
+  const done24 = stage(24, TOTAL_STAGES, 'Seed workspace memberships + global chat');
+  await prisma.storeMembership.upsert({
+    where: { userId_storeId: { userId: 'user_warehouse_manager', storeId: 'store_juja_main' } },
+    update: { status: 'ACTIVE', role: 'WAREHOUSE_MANAGER' },
+    create: {
+      userId: 'user_warehouse_manager',
+      storeId: 'store_juja_main',
+      role: 'WAREHOUSE_MANAGER',
+      status: 'ACTIVE',
+      note: 'Primary warehouse (seed demo)',
+    },
+  });
+  await prisma.storeMembership.upsert({
+    where: { userId_storeId: { userId: 'user_warehouse_manager', storeId: 'store_thika' } },
+    update: { status: 'ACTIVE', role: 'WAREHOUSE_MANAGER' },
+    create: {
+      userId: 'user_warehouse_manager',
+      storeId: 'store_thika',
+      role: 'WAREHOUSE_MANAGER',
+      status: 'ACTIVE',
+      note: 'Secondary warehouse (seed demo)',
+    },
+  });
+
+  // Global chat channel: one organization-wide conversation with no store
+  // scope, readable by every authenticated user. Messages carry a denormalized
+  // origin storeId so the UI can badge the sender's branch.
+  await prisma.conversation.upsert({
+    where: { id: 'conv_global' },
+    update: { type: 'GLOBAL', storeId: null, title: 'Global (All Stores)', lastMessageAt: new Date() },
+    create: {
+      id: 'conv_global',
+      storeId: null,
+      type: 'GLOBAL',
+      title: 'Global (All Stores)',
+      participantIds: '[]',
+      lastMessageAt: new Date(),
+    },
+  });
+  const existingGlobalMessages = await prisma.conversationMessage.count({ where: { conversationId: 'conv_global' } });
+  if (existingGlobalMessages === 0) {
+    await prisma.conversationMessage.createMany({
+      data: [
+        {
+          conversationId: 'conv_global',
+          senderId: superAdmin.id,
+          storeId: 'store_juja_main',
+          content: 'Global channel is live. All branches and the organization console share this room.',
+          sentAt: new Date(Date.now() - 30 * 60 * 1000),
+        },
+        {
+          conversationId: 'conv_global',
+          senderId: 'user_thika_manager',
+          storeId: 'store_thika',
+          content: 'Thika here: cement restock confirmed for tomorrow morning.',
+          sentAt: new Date(Date.now() - 20 * 60 * 1000),
+        },
+        {
+          conversationId: 'conv_global',
+          senderId: 'user_store_owner',
+          storeId: null,
+          content: 'Reminder: end-of-day reports are due before 9pm for every branch.',
+          sentAt: new Date(Date.now() - 10 * 60 * 1000),
+        },
+      ],
+      skipDuplicates: true,
+    });
+  }
+  done24('ok', '2 memberships + global channel');
+
+  console.log('   Workspace seeds: WAREHOUSE_MANAGER demo (warehouse@mbumahhardware.co.ke), 2 memberships, global chat channel');
 }
 
 main()

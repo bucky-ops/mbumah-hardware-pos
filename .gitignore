@@ -45,6 +45,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 local-*
+# exception: the offline install guide lives in docs/ and must be tracked
+!docs/local-offline-setup.md
 .claude
 .z-ai-config
 *.log
