@@ -22,7 +22,7 @@
 // this environment's postinstall) is what the tests actually import.
 
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -83,6 +83,17 @@ try {
   const cli = prismaCliPath();
   const cliArgs = (rest) => (cli ? rest : ['prisma', ...rest]);
   run(cli || 'npx', cliArgs(['db', 'push', '--skip-generate']));
+
+  // 4b. The generated client must match the sqlite flip. A client generated
+  //     against the postgres schema (for example after a local vercel-build
+  //     replication) makes every runtime query fail with "the URL must start
+  //     with the protocol `postgresql://`" and drops 16 tests. Regenerate
+  //     when the stored client schema says otherwise.
+  const genSchema = join(root, 'node_modules', '.prisma', 'client', 'schema.prisma');
+  if (existsSync(genSchema) && !/provider\s*=\s*"sqlite"/.test(readFileSync(genSchema, 'utf8'))) {
+    console.log('prepare-test-db: generated client is not sqlite - regenerating ...');
+    run(cli || 'npx', cliArgs(['generate']));
+  }
 
   // 5. Seed the fixture data (upsert-safe, same as CI).
   run(cli || 'npx', cliArgs(['db', 'seed']));

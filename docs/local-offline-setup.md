@@ -4,7 +4,7 @@ This guide turns a single laptop or desktop into a complete multi-branch Mbumah 
 
 ## Environment variables for offline mode
 
-Set these in `.env` (the `SUBDOMAIN WORKSPACES` section of `.env.example` documents them):
+Set these in `.env`. A ready-made template lives in `.env.local-offline.example` (copy it to `.env` and fill the secrets); the `SUBDOMAIN WORKSPACES` section of `.env.example` documents every option:
 
 ```env
 APP_MODE=local-offline
@@ -29,6 +29,14 @@ Generate the exact block to paste - the script only prints, it never edits your 
 
 ```bash
 npm run domains:print
+```
+
+Prefer to have it written for you? The writer script takes a timestamped backup of the hosts file, replaces only its own clearly marked managed block, and verifies the write (re-run elevated when it says so):
+
+```bash
+sudo npm run domains:write-hosts       # macOS / Linux
+# Windows: Start-Process PowerShell -Verb RunAs -ArgumentList "-NoProfile -Command npm run domains:write-hosts"
+npm run domains:write-hosts -- --remove   # strip the managed block again
 ```
 
 Output (for the five seeded branches):

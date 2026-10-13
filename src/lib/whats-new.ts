@@ -22,6 +22,14 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.17.4',
+    title: 'Offline branch subdomains: one-command setup',
+    bullets: [
+      'New local offline env template: copy .env.local-offline.example to .env and the shop runs as mbumah.test with every branch on its own subdomain.',
+      'New hosts file helper: npm run domains:write-hosts writes (and cleans up) the managed hosts block for all five branches, with an automatic backup and a clear refusal when elevation is needed.',
+    ],
+  },
+  {
     version: '2.17.3',
     title: 'Safer database updates: preflight and one-command repair',
     bullets: [
