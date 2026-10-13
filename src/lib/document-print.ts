@@ -150,7 +150,7 @@ export interface BrandedDocumentOptions {
   /** Accent hex for the header band, table head and highlights (no blue/indigo). */
   accentColor: string;
   docNumber: string;
-  /** Absolute logo URL (caller passes `${window.location.origin}/logo.png`). */
+  /** Absolute logo URL (callers normally pass the COMPANY.logoPath brand mark). */
   logoSrc?: string;
   storeName: string;
   /** Location / phone / email lines shown under the store name. */

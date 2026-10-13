@@ -80,6 +80,14 @@ screenshots/
 # Database
 *.db
 *.db-journal
+*.sqlite
+*.sqlite-journal
+*.db.wal
+*.db.shm
+
+# OS / editor droppings
+Thumbs.db
+*.swp
 
 # Runner PID
 /tmp/
