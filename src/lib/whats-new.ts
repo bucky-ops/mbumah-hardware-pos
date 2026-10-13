@@ -22,6 +22,15 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.15.2',
+    title: 'Laptops repair their own database after updates',
+    bullets: [
+      'Fixed: after an update, some shops saw errors like "column does not exist" on Notifications, Debt and Stock Movements. The database now repairs itself automatically - the update applies any missing schema changes and keeps all your data.',
+      'Every start of the POS double-checks the database schema (about 1 second) and heals it if a previous update left it behind.',
+      'The health report now names schema problems directly ("Schema drift detected - run the updater") instead of staying silent while some modules error.',
+    ],
+  },
+  {
     version: '2.15.1',
     title: 'Offline selling now truly works at the till',
     bullets: [

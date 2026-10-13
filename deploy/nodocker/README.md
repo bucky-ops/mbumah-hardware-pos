@@ -244,7 +244,7 @@ Manual update (equivalent to what the updater runs):
 ```bash
 git pull origin main
 npm install           # refresh dependencies (reconciles the lockfile; do not use npm ci, the lockfile is bun-managed)
-npm run db:push       # apply schema changes
+npm run db:push       # apply schema changes (self-healing: backs up SQLite data and converges even when unique-index additions are refused)
 npm run build         # rebuild (SKIP_ENV_VALIDATION=1 is set by the installer; re-set it if needed)
 # then start with start-pos.ps1 / start-pos.sh (they refresh static assets)
 ```
@@ -255,6 +255,7 @@ npm run build         # rebuild (SKIP_ENV_VALIDATION=1 is set by the installer; 
 
 | Symptom | Fix |
 |---|---|
+| API errors like "The column ... does not exist" (notifications / debt / stock movements), or `/api/health` reports "Schema drift detected" | The database schema lags the code (usually an update whose schema step was refused). Fix: close the POS, then run `npm run db:push` in the app folder - it now converges the schema automatically (with a file backup first). Every start also self-heals since v2.15.2. |
 | `node` not recognized after install | Close and reopen PowerShell (PATH refresh) |
 | Build fails: Prisma provider errors | `.env` must exist with `DATABASE_URL=file:...` BEFORE `npm install` (the installer handles this) |
 | Login loops on phones | `NEXTAUTH_URL` ≠ browser URL → set both URL vars to `http://<laptop-ip>:3000` and rebuild |

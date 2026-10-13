@@ -80,6 +80,37 @@ export async function GET() {
     };
   }
 
+  // Schema-drift sentinel (v2.15.2) - a database created by an OLDER release
+  // can be perfectly reachable with row counts intact while missing columns
+  // the deployed code queries (offline incident: v2.14.0 added five nullable
+  // `idempotencyKey @unique` columns; the bare `db push` on the laptop had
+  // been refused, so /api/notifications, /api/debt, /api/reminders/debt/
+  // overdue and /api/stock-movements kept failing with P2022 even though
+  // every count above succeeded and the start/update health gates passed).
+  // Probe a recently added column so drift degrades `database_stats` from
+  // 'ok' to 'warning' with a self-service fix hint - the start-pos and
+  // update-pos health gates key on exactly that status. The updater's
+  // schema converge step (scripts/ensure-schema.mjs) repairs the database
+  // BEFORE this gate runs, so a healthy update never sees this warning.
+  if (checks.database_stats.status === 'ok') {
+    try {
+      // Use the generated client, NOT raw SQL: SQLite silently treats a
+      // double-quoted unknown identifier as a string literal ("SELECT
+      // \"idempotencyKey\" ..." returns rows instead of erroring when the
+      // column is missing), so a raw probe would never detect the drift.
+      // The ORM emits correctly quoted per-dialect SQL and raises P2022.
+      await db.equipmentRental.findFirst({ select: { idempotencyKey: true }, take: 1 });
+    } catch {
+      // Static detail on purpose: dev bundlers mangle Prisma error text with
+      // code-frame noise, and the probe is deterministic (it asks for exactly
+      // one known-new column), so the reason never needs parsing.
+      checks.database_stats = {
+        status: 'warning',
+        detail: 'Schema drift detected: the database is missing columns this release expects (Prisma P2022 on equipment_rentals.idempotencyKey). Run the updater (Update-Mbumah-POS.bat) or "npm run db:push" in the app folder to converge the schema.',
+      };
+    }
+  }
+
   // Seeded-state check - a reachable but EMPTY database (fresh install where
   // the seed never ran, or the server pointed at the wrong file) used to look
   // "healthy" here because `SELECT 1` succeeds on any SQLite/Postgres. The

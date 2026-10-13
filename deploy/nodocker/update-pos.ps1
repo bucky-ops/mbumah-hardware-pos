@@ -7,6 +7,10 @@
 #   2. Code update (git checkout of the release tag, or ZIP when no .git)
 #   3. The exact rebuild sequence the installer uses
 #      (npm install -> db:push -> build -> verify-db -> assemble standalone)
+#      where db:push is the SELF-HEALING schema converge (v2.15.2:
+#      scripts/ensure-schema.mjs - backs up SQLite data and converges with
+#      --accept-data-loss when adding unique indexes is refused), so
+#      databases that lagged the code repair themselves during the update.
 #   4. Server restart + health gate (database must answer, not just HTTP 200)
 #   5. AUTOMATIC CODE ROLLBACK if any step fails (data is never touched -
 #      SQLite schemas in this project are forward-compatible)

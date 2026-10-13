@@ -2,6 +2,20 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.15.2] Hotfix: offline laptops self-heal database schema drift
+
+### Fixed
+- **Critical (offline incident): laptops updated to a release whose schema added unique columns kept serving Prisma P2022 errors** - "The column `equipment_rentals.idempotencyKey` does not exist in the current database" on `/api/notifications`, `/api/debt`, `/api/reminders/debt/overdue` and `/api/stock-movements`. Root cause: v2.14.0 added five nullable `idempotencyKey @unique` columns; Prisma classifies adding a unique constraint to a NON-EMPTY existing database as a data-loss warning and REFUSES `prisma db push` in non-interactive mode ("Use the --accept-data-loss flag"). Every self-hosted path (Windows installer, updater, Linux laptop scripts, docker entrypoint) ran the bare push with no fallback, so the database silently stayed behind the code while `/api/health` stayed green (row counts never touch new columns).
+
+### Added
+- **`scripts/ensure-schema.mjs` - the self-healing schema converge step** now behind `npm run db:push` everywhere (installer, updater, laptop scripts, CI prepare): plain push first (fast no-op when in sync); when refused, it backs the SQLite file up (`pos.db.pre-heal-<timestamp>.db`, newest 5 kept) and converges with `--accept-data-loss` - safe for this project's recurring additive drift (new nullable unique columns).
+- **Startup self-heal**: the standalone server launcher (`deploy/nodocker/start-server.mjs`) converges the schema on EVERY boot before starting the POS (~1s no-op when in sync), so an install whose update schema step was skipped repairs itself the next time the shop opens the till. Disable with `SKIP_SCHEMA_HEAL=1` in `.env`. The docker entrypoint uses the same converge step (replacing the blind push + retry).
+- **Schema-drift sentinel in `/api/health`**: when row counts succeed but the schema lags the code, `database_stats` degrades from `ok` to `warning` with a self-service fix hint. The probe uses the generated Prisma client (an ORM `findFirst` on the sentinel column) - a raw `SELECT "idempotencyKey"` probe would be blind on SQLite, which treats a double-quoted unknown identifier as a string literal instead of erroring. The start-pos and update-pos health gates key on exactly this status, so a drifted database can no longer pass the update health gate unnoticed.
+
+### Notes
+- Data safety: the converge fallback only ever runs after a plain push is refused, takes a timestamped SQLite file backup first, and the updater still takes its full pre-update backup before the rebuild. No changes to totals, VAT math, payments, debt or discount gates.
+- Immediate remedy for affected laptops (works on any version): close the POS, run `npm run db:push` in the app folder, start the POS. Updating to 2.15.2+ does this automatically.
+
 ## [2.15.1] Hotfix: offline sales actually queue (mutation networkMode)
 
 ### Fixed

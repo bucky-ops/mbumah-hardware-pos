@@ -20,19 +20,27 @@ echo ""
 echo "[2/4] Generating Prisma Client..."
 npx prisma generate
 
-# ── Step 3: Push schema to database ──────────────────────────────────────────
-# Using `prisma db push` instead of `prisma migrate deploy` because:
+# ── Step 3: Converge the database schema ─────────────────────────────────────
+# Using `prisma db push` (via scripts/ensure-schema.mjs) instead of
+# `prisma migrate deploy` because:
 #   - Self-hosted deployments typically start from an empty database
 #   - db push is simpler and doesn't require migration history
-#   - For existing databases, db push is non-destructive (adds missing tables/columns)
+#   - For existing databases the push is additive; when it is refused (adding
+#     unique indexes to a non-empty database), ensure-schema.mjs backs the
+#     file up and converges with --accept-data-loss (self-heal, v2.15.2)
 echo ""
 echo "[3/4] Pushing database schema..."
-npx prisma db push --skip-generate 2>&1 || {
-  echo "⚠️  prisma db push failed. The database may not be ready yet."
+# Self-healing converge (v2.15.2): plain `db push` REFUSES to add unique
+# indexes (e.g. the idempotencyKey columns) to a NON-EMPTY existing database,
+# which left self-hosted containers serving Prisma P2022 errors after an
+# update. scripts/ensure-schema.mjs retries with the data-loss acceptance
+# after a safety backup - see the header of that script.
+node scripts/ensure-schema.mjs || {
+  echo "⚠️  schema converge failed. The database may not be ready yet."
   echo "   Retrying in 5 seconds..."
   sleep 5
-  npx prisma db push --skip-generate 2>&1 || {
-    echo "❌ Database schema push failed after retry. Check your DATABASE_URL."
+  node scripts/ensure-schema.mjs || {
+    echo "❌ Database schema could not be converged after retry. Check your DATABASE_URL."
     echo "   Exiting so the container restart policy can retry from a clean state."
     echo "   (Starting the server anyway would render every module 'unavailable'.)"
     exit 1
