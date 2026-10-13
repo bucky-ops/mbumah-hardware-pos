@@ -12,6 +12,12 @@ const nextConfig: NextConfig = {
 
   reactStrictMode: true,
 
+  // v2.17.8 (Task 44): stop advertising the framework. Next.js sends
+  // "X-Powered-By: Next.js <version>" by default; the API headers block
+  // blanked it on /api/* only, so page responses still leaked the stack.
+  // poweredByHeader: false removes it from every response.
+  poweredByHeader: false,
+
   // CI build robustness: don't block production build on pre-existing type/lint
   // issues in banking routes (pending Prisma schema additions) or Zod v4 types.
   // Dev-time type-checking and `bun run lint` still run normally.

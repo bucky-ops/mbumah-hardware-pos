@@ -1,7 +1,7 @@
 // GET/PUT/DELETE /api/products/[id]
 
 import { type NextRequest } from 'next/server';
-import { db } from '@/lib/db';
+import { db, runWithoutTenant } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 // v2.12.2 (PR B - RBAC): supplier-cost visibility gate + product-edit roles.
@@ -12,6 +12,7 @@ import {
   getSessionFromRequest,
   MANAGER_PLUS_ROLES,
   recordPermissionDenied,
+  auditRecordMiss,
 } from '@/lib/auth';
 import { hasFeaturePermission } from '@/lib/permissions';
 // v2.12.7 (PR C): manager step-up for the ±20% price guard (same credential
@@ -64,6 +65,22 @@ async function getProductHandler(...args: unknown[]): Promise<Response> {
   });
 
   if (!product) {
+    // v2.17.8 (Task 44): classify the miss - a product that exists in ANOTHER
+    // store is an IDOR probe and is security-logged; both cases answer the
+    // same 404 (no existence leak).
+    const missSession = await getSessionFromRequest(_request);
+    if (missSession) {
+      await auditRecordMiss({
+        request: _request,
+        session: missSession,
+        resourceId: id,
+        resource: 'product',
+        probe: () =>
+          runWithoutTenant(() =>
+            db.product.findUnique({ where: { id }, select: { storeId: true } })
+          ),
+      });
+    }
     return Response.json(
       { success: false, error: 'Product not found.' },
       { status: 404 }
@@ -98,6 +115,20 @@ async function updateProductHandler(...args: unknown[]): Promise<Response> {
 
   const existing = await db.product.findUnique({ where: { id } });
   if (!existing) {
+    // v2.17.8 (Task 44): classify the miss (see GET) - foreign-store ids are
+    // security-logged as probes, missing ids stay silent; same 404 either way.
+    if (session) {
+      await auditRecordMiss({
+        request,
+        session,
+        resourceId: id,
+        resource: 'product',
+        probe: () =>
+          runWithoutTenant(() =>
+            db.product.findUnique({ where: { id }, select: { storeId: true } })
+          ),
+      });
+    }
     return Response.json(
       { success: false, error: 'Product not found.' },
       { status: 404 }
@@ -400,6 +431,21 @@ async function deleteProductHandler(...args: unknown[]): Promise<Response> {
   });
 
   if (!existing) {
+    // v2.17.8 (Task 44): classify the miss (see GET) - foreign-store ids are
+    // security-logged as probes, missing ids stay silent; same 404 either way.
+    const missSession = await getSessionFromRequest(_request);
+    if (missSession) {
+      await auditRecordMiss({
+        request: _request,
+        session: missSession,
+        resourceId: id,
+        resource: 'product',
+        probe: () =>
+          runWithoutTenant(() =>
+            db.product.findUnique({ where: { id }, select: { storeId: true } })
+          ),
+      });
+    }
     return Response.json(
       { success: false, error: 'Product not found.' },
       { status: 404 }

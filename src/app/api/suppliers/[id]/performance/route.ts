@@ -2,10 +2,23 @@
 //
 // Detailed performance for a single supplier.
 // Includes: monthly order trend, product list, payment history.
+//
+// v2.17.8 (Task 44 - security hardening): this route was previously exported
+// with ONLY withErrorBoundary - no session validation at all (the edge proxy
+// checks Bearer PRESENCE, never validity), so supplier performance data
+// (order trends, payment history, balances) was readable by anyone with a
+// junk token. It now runs behind requireStoreAccess: DB-backed session
+// validation, ORM tenant scoping (cross-store supplier ids answer 404), and
+// a SecurityEvent when a foreign id is probed.
 
 import { type NextRequest } from 'next/server';
-import { db } from '@/lib/db';
+import { db, runWithoutTenant } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
+import {
+  requireStoreAccess,
+  auditRecordMiss,
+  type AuthSession,
+} from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +28,8 @@ interface RouteContext {
 
 async function getSupplierPerformanceHandler(...args: unknown[]): Promise<Response> {
   const request = args[0] as NextRequest;
-  const context = args[1] as RouteContext;
+  const session = args[1] as unknown as AuthSession;
+  const context = args[2] as RouteContext;
   const supplierId = (await context.params).id;
   const { searchParams } = new URL(request.url);
 
@@ -35,6 +49,22 @@ async function getSupplierPerformanceHandler(...args: unknown[]): Promise<Respon
   });
 
   if (!supplier) {
+    // v2.17.8 (Task 44): classify the miss - a supplier that exists in
+    // ANOTHER store is an IDOR probe and is security-logged; both cases
+    // still answer the same 404 (no existence leak).
+    await auditRecordMiss({
+      request,
+      session,
+      resourceId: supplierId,
+      resource: 'supplier',
+      probe: () =>
+        runWithoutTenant(() =>
+          db.supplier.findUnique({
+            where: { id: supplierId },
+            select: { storeId: true },
+          })
+        ),
+    });
     return Response.json(
       { success: false, error: 'Supplier not found.' },
       { status: 404 },
@@ -196,4 +226,7 @@ async function getSupplierPerformanceHandler(...args: unknown[]): Promise<Respon
   });
 }
 
-export const GET = withErrorBoundary(getSupplierPerformanceHandler, 'SUPPLIER_PERFORMANCE_DETAIL');
+export const GET = withErrorBoundary(
+  requireStoreAccess(getSupplierPerformanceHandler),
+  'SUPPLIER_PERFORMANCE_DETAIL'
+);

@@ -215,6 +215,16 @@ export function requireAuth(
       }
     }
 
+    // v2.17.8 (Task 44 - security/RBAC hardening): requireAuth previously
+    // skipped store-scope validation, so (a) a non-admin session WITHOUT a
+    // store assignment ran the handler in runWithoutTenant - no ORM tenancy
+    // at all - and (b) cross-store ?storeId= probes were silently answered
+    // instead of rejected + security-logged. requireAuth now enforces the
+    // SAME policy as withSessionAuth / requireStoreAccess (403 + SecurityEvent
+    // on probes, 403 for unassignable sessions). SUPER_ADMIN passes through.
+    const storeScopeDenied = await assertStoreScope(request, session);
+    if (storeScopeDenied) return storeScopeDenied;
+
     // Run the handler inside the ORM-level tenant context so every
     // store-scoped Prisma query is automatically filtered by storeId.
     return runWithSessionTenant(session, () =>
@@ -370,9 +380,17 @@ export function withSessionAuth(
 //
 // SUPER_ADMIN is exempt (org-wide role). Sessions without a store assignment
 // are still rejected - they can never be safely scoped.
+/** Minimal session shape needed for store-scope decisions. Full AuthSession
+ *  satisfies it; route-local structural session types (which omit
+ *  organizationId) satisfy it too. */
+export type StoreScopeSession = Pick<
+  AuthSession,
+  'userId' | 'email' | 'role' | 'storeId'
+>;
+
 async function denyCrossStoreAccess(
   request: NextRequest,
-  session: AuthSession,
+  session: StoreScopeSession,
   requestedStoreId: string,
 ): Promise<Response> {
   const path = new URL(request.url).pathname;
@@ -479,6 +497,139 @@ export async function assertStoreScope(
   }
 
   return null;
+}
+
+// Body storeId validation (v2.17.8 - Task 44)
+//
+// assertStoreScope only inspects QUERY params. Several mutating routes accept
+// storeId in the JSON body (stock movements, debt reminders, M-Pesa STK push,
+// KRA submissions, gift-card redemption, ...), and Prisma `create` is
+// deliberately NOT intercepted by injectTenant (creates are writes, not reads
+// of existing tenant rows) - so a cross-store body storeId would have been a
+// REAL cross-tenant write through those routes. This helper applies the same
+// policy to a body-supplied store id:
+//
+//   SUPER_ADMIN / STORE_OWNER ........ pass (org-wide roles, as assertStoreScope)
+//   active StoreMembership .......... pass (multi-store members)
+//   requested === session.storeId ... pass
+//   no store assignment ............. 403 (cannot be safely scoped)
+//   anything else ................... 403 + SecurityEvent (denyCrossStoreAccess)
+//
+// Absent/empty values are a pass: the route's own fallback (session storeId)
+// applies, and requireAuth/withSessionAuth already reject unassignable
+// sessions before the handler runs.
+export async function assertBodyStoreScope(
+  request: NextRequest,
+  session: StoreScopeSession,
+  requestedStoreId: string | null | undefined,
+): Promise<Response | null> {
+  if (!requestedStoreId) return null;
+  if (requestedStoreId === session.storeId) return null;
+  if (session.role === 'SUPER_ADMIN') return null;
+  if (!session.storeId) {
+    return Response.json(
+      {
+        success: false,
+        error: 'You are not assigned to a store. Contact an administrator.',
+      },
+      { status: 403 }
+    );
+  }
+  if (session.role === 'STORE_OWNER') return null;
+
+  const membership = await db.storeMembership.findFirst({
+    where: {
+      userId: session.userId,
+      storeId: requestedStoreId,
+      status: 'ACTIVE',
+    },
+    select: { id: true },
+  });
+  if (membership) return null;
+
+  return denyCrossStoreAccess(request, session, requestedStoreId);
+}
+
+// [id] 404 classification + denied-attempt audit (v2.17.8 - Task 44)
+//
+// Policy: a store-scoped [id] route answers 404 when the record is missing
+// OR belongs to another store (ORM tenancy narrows the unique lookup), and
+// 403 only for role/scope denials. The 404 must not leak WHICH case happened
+// to the caller (no enumeration oracle) - but the security feed needs the
+// distinction so IDOR probing by id is visible. auditRecordMiss classifies a
+// 404: only when the record EXISTS outside the caller's tenant does it write
+// a SecurityEvent (UNAUTHORIZED_ACCESS, blocked) plus a
+// CROSS_TENANT_RESOURCE_DENIED ops log. Truly-missing ids stay silent (no
+// noise for stale links). Auditing must never change the response.
+export async function auditRecordMiss(options: {
+  request: NextRequest;
+  session: StoreScopeSession;
+  resourceId: string;
+  /** Model/resource label for the audit trail, e.g. 'product'. */
+  resource: string;
+  /**
+   * Bypassed lookup that answers whether the id exists at all and which store
+   * owns it. Implement with runWithoutTenant(() => db.<model>.findUnique({
+   * where: { id }, select: { storeId: true } })) so the ORM tenant filter
+   * (which produced the 404) does not also blind the probe.
+   */
+  probe: () => Promise<{ storeId: string | null } | null>;
+}): Promise<void> {
+  try {
+    // SUPER_ADMIN runs without tenant enforcement - a miss is just a miss.
+    if (options.session.role === 'SUPER_ADMIN') return;
+
+    const foreign = await options.probe();
+    if (!foreign || foreign.storeId === options.session.storeId) return;
+
+    const path = new URL(options.request.url).pathname;
+
+    await systemLog({
+      action: 'CROSS_TENANT_RESOURCE_DENIED',
+      component: LogComponent.AUTH,
+      severity: LogSeverity.WARN,
+      message: `User ${options.session.email} requested ${options.resource} ${options.resourceId} which belongs to another store.`,
+      userId: options.session.userId,
+      storeId: options.session.storeId || undefined,
+      metadata: {
+        resource: options.resource,
+        resourceId: options.resourceId,
+        recordStoreId: foreign.storeId,
+        assignedStoreId: options.session.storeId,
+        path,
+        method: options.request.method,
+      },
+    }).catch(() => {});
+
+    await db.securityEvent
+      .create({
+        data: {
+          eventType: 'UNAUTHORIZED_ACCESS',
+          severity: 'WARN',
+          userId: options.session.userId,
+          storeId: options.session.storeId,
+          resource: path,
+          action: `${options.request.method} ${path}`,
+          details: JSON.stringify({
+            type: 'CROSS_TENANT_RESOURCE_DENIED',
+            resource: options.resource,
+            resourceId: options.resourceId,
+            recordStoreId: foreign.storeId,
+            assignedStoreId: options.session.storeId,
+            role: options.session.role,
+            email: options.session.email,
+          }),
+          userAgent: options.request.headers.get('user-agent') || undefined,
+          ipAddress:
+            options.request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+            undefined,
+          blocked: true,
+        },
+      })
+      .catch(() => {});
+  } catch {
+    /* auditing must never change the response */
+  }
 }
 
 // Store-scoped access

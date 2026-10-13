@@ -25,7 +25,11 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
-import { withSessionAuth, getSessionFromRequest } from '@/lib/auth';
+import {
+  withSessionAuth,
+  getSessionFromRequest,
+  assertBodyStoreScope,
+} from '@/lib/auth';
 import { toDec, round2 } from '@/lib/utils/financialMath';
 
 class InsufficientGiftCardBalanceError extends Error {
@@ -84,6 +88,13 @@ async function redeemGiftCardByCodeHandler(...args: unknown[]): Promise<Response
 
   // 2. Store scoping - a card redeems only where it was issued
   const requestedStoreId = typeof body.storeId === 'string' ? body.storeId : '';
+
+  // v2.17.8 (Task 44): the redemption context storeId must pass the shared
+  // store-scope policy before the card-store check runs (403 + SecurityEvent
+  // on a foreign store; SUPER_ADMIN/STORE_OWNER/members pass).
+  const scopeDenied = await assertBodyStoreScope(request, session, requestedStoreId);
+  if (scopeDenied) return scopeDenied;
+
   if (requestedStoreId && giftCard.storeId !== requestedStoreId) {
     return Response.json(
       { success: false, error: 'This gift card was issued by another store and cannot be redeemed here.' },

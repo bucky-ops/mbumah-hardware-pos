@@ -29,7 +29,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
-import { requireStoreAccess } from '@/lib/auth';
+import { requireStoreAccess, assertBodyStoreScope } from '@/lib/auth';
 import {
   kraApiService,
   SubmissionStatus,
@@ -151,6 +151,16 @@ async function submitHandler(
     transactionId: string;
     dryRun?: boolean;
   };
+
+  // v2.17.8 (Task 44): body storeId must pass the same store-scope policy as
+  // query params (SUPER_ADMIN/STORE_OWNER/active membership; otherwise 403 +
+  // SecurityEvent). KRA submission is a store-scoped regulatory action.
+  const scopeDenied = await assertBodyStoreScope(
+    request,
+    session,
+    body.storeId as string | undefined,
+  );
+  if (scopeDenied) return scopeDenied;
 
   // Resolve the store - prefer the request body, then the session.
   const url = new URL(request.url);

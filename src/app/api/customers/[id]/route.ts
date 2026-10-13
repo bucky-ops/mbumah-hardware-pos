@@ -1,10 +1,15 @@
 // GET/PUT /api/customers/[id]
 
 import { type NextRequest } from 'next/server';
-import { db } from '@/lib/db';
+import { db, runWithoutTenant } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
-import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
+import {
+  withSessionAuth,
+  getSessionFromRequest,
+  MANAGER_PLUS_ROLES,
+  auditRecordMiss,
+} from '@/lib/auth';
 // Task 12-b: Prisma Decimal valueOf() returns a STRING - `number + decimal`
 // concatenates. Sums run through toDec(); numbers emitted at the boundary.
 import { toDec } from '@/lib/utils/financialMath';
@@ -54,6 +59,22 @@ async function getCustomerHandler(...args: unknown[]): Promise<Response> {
   });
 
   if (!customer) {
+    // v2.17.8 (Task 44): classify the miss - a customer that exists in
+    // ANOTHER store is an IDOR probe and is security-logged; both cases
+    // answer the same 404 (no existence leak).
+    const missSession = await getSessionFromRequest(_request);
+    if (missSession) {
+      await auditRecordMiss({
+        request: _request,
+        session: missSession,
+        resourceId: id,
+        resource: 'customer',
+        probe: () =>
+          runWithoutTenant(() =>
+            db.customer.findUnique({ where: { id }, select: { storeId: true } })
+          ),
+      });
+    }
     return Response.json(
       { success: false, error: 'Customer not found.' },
       { status: 404 }
@@ -91,6 +112,21 @@ async function updateCustomerHandler(...args: unknown[]): Promise<Response> {
 
   const existing = await db.customer.findUnique({ where: { id } });
   if (!existing) {
+    // v2.17.8 (Task 44): classify the miss (see GET) - foreign-store ids are
+    // security-logged as probes, missing ids stay silent; same 404 either way.
+    const missSession = await getSessionFromRequest(request);
+    if (missSession) {
+      await auditRecordMiss({
+        request,
+        session: missSession,
+        resourceId: id,
+        resource: 'customer',
+        probe: () =>
+          runWithoutTenant(() =>
+            db.customer.findUnique({ where: { id }, select: { storeId: true } })
+          ),
+      });
+    }
     return Response.json(
       { success: false, error: 'Customer not found.' },
       { status: 404 }

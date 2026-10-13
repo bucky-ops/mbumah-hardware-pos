@@ -10,7 +10,7 @@
 
 import { type NextRequest } from 'next/server';
 import { withErrorBoundary } from '@/lib/logger';
-import { requireAuth } from '@/lib/auth';
+import { requireAuth, assertBodyStoreScope, type StoreScopeSession } from '@/lib/auth';
 import { initiateStkPush } from '@/lib/mpesa-daraja';
 import { isRateLimited } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/security';
@@ -29,8 +29,11 @@ interface StkPushBody {
 
 async function stkPushHandler(
   request: NextRequest,
-  ..._args: unknown[]
+  ...args: unknown[]
 ): Promise<Response> {
+  // requireAuth passes (request, session, ...rest) - v2.17.8 store-scope
+  // validation below needs the session.
+  const session = args[0] as StoreScopeSession;
   // AUDIT FIX (Finding 5.2 - rate limiting): each STK Push costs a Daraja API
   // call (rate-limited by Safaricom and billable); a runaway client loop or a
   // compromised session could otherwise hammer it. Per-IP PAYMENT-tier cap
@@ -57,6 +60,12 @@ async function stkPushHandler(
       { status: 400 },
     );
   }
+
+  // v2.17.8 (Task 44): storeId is advisory metadata for the push context, but
+  // a cross-store value must still be rejected + security-logged (same policy
+  // as query-param scoping). SUPER_ADMIN cross-store passes.
+  const scopeDenied = await assertBodyStoreScope(request, session, body.storeId);
+  if (scopeDenied) return scopeDenied;
 
   const result = await initiateStkPush({
     phone: String(rawPhone),
