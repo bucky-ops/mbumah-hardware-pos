@@ -20,8 +20,28 @@
  */
 import pkg from '../../package.json';
 
-export const APP_VERSION: string = pkg.version;
-export const APP_VERSION_LABEL: string = `v${pkg.version}`;
+/**
+ * Correction-release metadata (v2.18.0.0). package.json "version" must stay a
+ * valid semver (npm/CI reject four-part versions), so correction releases
+ * carry their full version in the "mbumah" metadata block instead:
+ *   "mbumah": { "releaseVersion": "2.18.0.0", "baseVersion": "2.18.0", "hotfix": 0 }
+ * The app-reported version (footer, login screen, /api/health, openapi.json)
+ * prefers releaseVersion when present and falls back to "version".
+ */
+interface MbumahReleaseMetadata {
+  releaseVersion?: string;
+  baseVersion?: string;
+  hotfix?: number;
+}
+
+const MBUMAH_METADATA: MbumahReleaseMetadata | undefined = (
+  pkg as { mbumah?: MbumahReleaseMetadata }
+).mbumah;
+
+export const RELEASE_VERSION: string = MBUMAH_METADATA?.releaseVersion || pkg.version;
+
+export const APP_VERSION: string = RELEASE_VERSION;
+export const APP_VERSION_LABEL: string = `v${RELEASE_VERSION}`;
 
 /**
  * Build identity - the exact commit this bundle was compiled from.

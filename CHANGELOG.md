@@ -2,6 +2,31 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.18.0.0] Branch workspace path fallback correction
+
+Correction release for the "This branch workspace does not exist or is no longer available" error when opening a branch workspace from the organization console. package.json keeps the valid semver `2.18.0`; the full correction version `2.18.0.0` lives in the `mbumah.releaseVersion` metadata block, a new root `VERSION` file, and every app-reported version surface (footer, login screen, `/api/health`, openapi.json).
+
+### Added
+- **Safe branch workspace link builder (`src/lib/branch-workspace.ts`)**: one pure, client-safe and server-safe `getBranchWorkspaceHref` function that turns a store record plus the current origin into the correct new-tab URL: an absolute subdomain URL only when every safety check passes, otherwise `/stores/{slug}/dashboard`; `null` when no safe URL exists (missing slug, inactive store, mode off). It never produces `/stores/undefined`, `/stores/null` or unresolvable `//undefined..` URLs, and it re-uses the reserved-subdomain rules from `src/lib/workspace/config.ts`.
+- **Server-side store context resolver reason codes**: `resolveStoreContext` and the `/api/me/store-context` payload now carry a stable, client-safe `reasonCode` alongside the unchanged internal `reason` (store-not-found, store-inactive, user-not-allowed, unauthenticated, missing-slug, schema-drift). The workspace gateway renders one calm message per cause, replacing the single generic "does not exist or is no longer available" copy.
+- **New resolver detections**: a present-but-empty slug short-circuits to `missing-slug` without a database call, and a Prisma known request error during the store lookup (for example P2022, a missing column) is answered as `schema-drift` without leaking any error text. Denial audit rows now also carry the request host, pathname and request id for correlation.
+- **Workspace environment safe defaults (`.env.example`)**: the branch workspace keys ship with safe local defaults (path mode, no shared cookie domain, minimal host allowlist, forwarded-host trust off) plus a comment block pointing at `.env.local-offline.example`, `.env.lan.example` and `.env.online.example` and the automatic path-fallback rule for localhost, 127.0.0.1 and raw IPs.
+- **Hosts helper extension (`scripts/domains/print-hosts.mjs`)**: an optional second block from the `LOCAL_LAN_IP` environment variable and an explicit note that raw localhost needs no hosts entries in path mode; the script still only prints entries and never touches the hosts file.
+- **Verification script and tests (`scripts/verify-branch-workspace.mjs`, `bun run verify:branch-workspace`; `src/tests/lib/branch-workspace.test.ts`)**: a read-only environment and hygiene check for branch workspace configuration, and 27 new vitest cases covering the link builder safety matrix (localhost, 127.0.0.1, raw IPv4/IPv6, path mode, reserved subdomains, missing slug, inactive stores, broken slug data) and the resolver reasonCode matrix (path/subdomain resolution, slug fallback, inactive denial, cross-store denial, SUPER_ADMIN/STORE_OWNER/warehouse-manager rules, schema drift, non-Prisma error re-throw).
+- **Documentation**: `docs/branch-workspaces.md` (modes, fallback rules, button behavior, local/online setup), `docs/store-context-resolution.md` (resolver modes, reasonCode vocabulary, security properties), a "This branch workspace does not exist" entry in the troubleshooting guide with all six messages and their fixes, and cross-links from the README and the workspace docs.
+
+### Fixed
+- No broken `/stores/undefined` or `/stores/null` links: the organization console's "Open branch workspace" button now uses the safe builder and shows a calm inline message ("Branch workspace unavailable. Store slug is not configured.") instead of opening a dead tab when the store slug is missing.
+- Localhost, 127.0.0.1, `*.localhost`, ::1 and raw LAN IPs no longer attempt invalid subdomain workspaces: branch links always fall back to `/stores/{slug}/dashboard` on those hosts, even when the environment asks for subdomains.
+- A missing or whitespace store slug is handled safely end to end (calm console message, `missing-slug` gateway state, no database call).
+- Inactive store access is blocked with a clear message ("This branch is currently inactive. Contact the store owner or system administrator.") at the button and in the gateway.
+- Cross-store branch access stays denied server-side; the gateway wording and the audit trail make the cause explicit instead of a generic not-found.
+- Schema drift on local databases now shows a calm, actionable "schema update needed" message instead of a misleading branch-not-found error.
+
+### Security
+- **Branch workspace resolution is validated on the server**: the store is re-derived from the request host or path slug for every call, never from client input, and authorization (role rules plus ACTIVE memberships) is enforced inside the resolver before any workspace payload is returned.
+- **Denied access attempts are logged safely**: `UNAUTHORIZED_ACCESS` SecurityEvent rows for workspace denials now include the request host, pathname and request id, while never exposing error text, stack traces or secrets; audit failures still never change the access decision.
+
 ## [2.18.0] Full QA verification release
 
 ### Added

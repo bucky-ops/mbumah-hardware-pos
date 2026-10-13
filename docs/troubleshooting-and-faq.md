@@ -252,6 +252,23 @@ git commit -m "db: add your_change_description migration"
 
 > For rapid prototyping, `db:push` is fine locally, but always create a proper migration before deploying to production.
 
+## "This branch workspace does not exist or is no longer available"
+
+**Symptom:** Clicking "Open branch workspace" in the organization console (or visiting `/stores/{slug}/...`) shows the branch-not-found screen. Since v2.18.0.0 the gateway shows one of six distinct messages; each maps to a `reasonCode` from `GET /api/me/store-context` (see [Store context resolution](store-context-resolution.md)).
+
+| Message (title) | reasonCode | Cause | Fix |
+|-----------------|------------|-------|-----|
+| Branch not found | `store-not-found` | The slug in the address matches no store (typo, renamed branch, stale link) | Check the slug, or open the workspace from the organization console; verify the store row exists with the right slug |
+| Branch workspace unavailable (store slug is not configured) | `missing-slug` | The store has no slug configured, so no safe workspace URL can be built (or a workspace URL was opened with an empty slug; the server answers without touching the database) | Set the store's slug in the database/settings; the console button then reappears |
+| You do not have access to this branch. (inactive) | `store-inactive` | The branch is not `ACTIVE` | Reactivate the store, or contact the store owner / system administrator |
+| You do not have access to this branch. (assignment) | `user-not-allowed` | Your account has no role/membership for that branch (attempt is audit-logged) | Ask an owner or administrator for the assignment; use the branch selector if you are multi-store |
+| Schema update needed | `schema-drift` | The local database is missing a column the resolver selects (Prisma known request error, e.g. P2022); the error text is never shown | Contact the administrator or run the safe repair process (`bun run db:repair`, or re-run the schema push/migration for your deployment) |
+| Subdomain workspace is not available on this host | `subdomain-unavailable` | A subdomain-style address was used on a host that cannot serve subdomains | Use the path-based branch workspace (`/stores/{slug}/dashboard`) |
+
+**Still seeing the old generic message?** You are on a pre-2.18.0.0 build (or the payload carries no `reasonCode`); the gateway falls back to the plain branch-not-found copy.
+
+**Root causes fixed in v2.18.0.0:** missing `Store.slug`/`subdomain` data, subdomain URLs generated on localhost or raw IPs, a resolver without a slug fallback, and broken `/stores/undefined`-style links. The safe link builder is `getBranchWorkspaceHref` in `src/lib/branch-workspace.ts`; see [Branch workspaces](branch-workspaces.md).
+
 ## Still stuck?
 
 - Read [Deployment](deployment.md) for setup-oriented guidance, and the archived [Vercel recovery guide](archive/VERCEL_RECOVERY.md) for the historical incident notes.

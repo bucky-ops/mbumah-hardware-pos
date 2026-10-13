@@ -15,6 +15,7 @@
 
 import { db } from '@/lib/db';
 import type { AuthSession } from '@/lib/auth';
+import { getRequestId } from '@/lib/request-context';
 import { extractSubdomain, parseHost, resolveWorkspaceHostMode } from './config';
 
 export interface StoreSummary {
@@ -45,6 +46,12 @@ export interface StoreContextResult {
   /** Read-only financial view (ACCOUNTANT workspaces). */
   readOnly?: boolean;
   reason?: string;
+  /**
+   * Stable, client-safe machine code derived from `reason` (v2.18.0.0).
+   * The API payload passes it through so the gateway can render one calm
+   * message per cause without parsing the internal reason strings.
+   */
+  reasonCode?: string;
   /** The workspace address style detected from the host. */
   hostMode: 'subdomain' | 'path' | 'organization';
   subdomain: string | null;
@@ -52,6 +59,43 @@ export interface StoreContextResult {
 
 /** Roles with implicit access to every ACTIVE store in the organization. */
 const ORG_WIDE_ROLES = new Set(['SUPER_ADMIN', 'STORE_OWNER']);
+
+/**
+ * Map an internal reason to the stable client-safe reasonCode vocabulary
+ * (v2.18.0.0). Purely additive: the internal `reason` values are unchanged
+ * and stay the audit-facing source of truth.
+ */
+function reasonCodeFor(reason: string | undefined): string | undefined {
+  switch (reason) {
+    case 'STORE_NOT_FOUND':
+      return 'store-not-found';
+    case 'STORE_INACTIVE':
+      return 'store-inactive';
+    case 'NO_MEMBERSHIP':
+    case 'ROLE_NOT_PERMITTED':
+      return 'user-not-allowed';
+    case 'UNAUTHENTICATED':
+      return 'unauthenticated';
+    case 'MISSING_SLUG':
+      return 'missing-slug';
+    case 'SCHEMA_DRIFT':
+      return 'schema-drift';
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * True for Prisma known request errors (P2xxx codes, e.g. P2022 = a column
+ * the query selects does not exist, the local-database schema-drift signal).
+ * Duck-typed so this module keeps working without a runtime Prisma import.
+ */
+function isPrismaKnownRequestError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (error.name === 'PrismaClientKnownRequestError') return true;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' && /^P\d{4}$/.test(code);
+}
 
 function toStoreSummary(store: {
   id: string;
@@ -102,6 +146,7 @@ async function logDeniedWorkspaceAccess(
   attempted: { subdomain: string | null; slug: string | null; storeId?: string },
   resource: string,
   reason: string,
+  extras?: { host?: string | null; pathname?: string | null },
 ): Promise<void> {
   try {
     await db.securityEvent.create({
@@ -118,6 +163,10 @@ async function logDeniedWorkspaceAccess(
           slug: attempted.slug,
           role: session?.role ?? 'anonymous',
           email: session?.email ?? null,
+          // v2.18.0.0: richer, still non-sensitive correlation fields.
+          host: extras?.host ?? null,
+          pathname: extras?.pathname ?? null,
+          requestId: getRequestId(),
         }),
         userAgent: null,
         ipAddress: null,
@@ -134,6 +183,7 @@ async function logDeniedWorkspaceAccess(
  *
  * @param input.host        request Host header (subdomain detection)
  * @param input.slug        explicit slug from the path (/stores/{slug}/...)
+ * @param input.pathname    optional request pathname (denial-log detail only)
  * @param input.session     authenticated session or null (unauthenticated)
  * @param input.auditDenials set false only for pre-auth probes that must not
  *                          write audit rows (e.g. the login page bootstrap)
@@ -141,6 +191,7 @@ async function logDeniedWorkspaceAccess(
 export async function resolveStoreContext(input: {
   host: string | null;
   slug?: string | null;
+  pathname?: string | null;
   session: AuthSession | null;
   auditDenials?: boolean;
 }): Promise<StoreContextResult> {
@@ -148,43 +199,95 @@ export async function resolveStoreContext(input: {
   const subdomain = extractSubdomain(host);
   const hostMode = resolveWorkspaceHostMode(host);
   const audit = input.auditDenials !== false;
+  const extras = { host, pathname: input.pathname ?? null };
 
-  // 1. Nothing to resolve: root-domain request (or subdomains disabled).
-  if (!subdomain && !input.slug) {
+  // 1. A slug that is present but empty/whitespace is a configuration or
+  //    link-building bug, not a database question: answer calmly WITHOUT a
+  //    DB call (v2.18.0.0 missing-slug detection).
+  if (typeof input.slug === 'string' && input.slug.trim() === '' && !subdomain) {
+    return {
+      mode: 'not-found',
+      allowed: false,
+      reason: 'MISSING_SLUG',
+      reasonCode: reasonCodeFor('MISSING_SLUG'),
+      hostMode,
+      subdomain,
+    };
+  }
+  const requestedSlug = typeof input.slug === 'string' ? input.slug.trim() : '';
+
+  // 1b. Nothing to resolve: root-domain request (or subdomains disabled).
+  if (!subdomain && !requestedSlug) {
     return { mode: 'organization', allowed: true, hostMode, subdomain: null };
   }
 
   // 2. Resolve the store: subdomain wins over an explicit slug (the proxy
   //    rewrote {sub}.root/x to /stores/{sub}/x, so both point at the same
   //    store; a forged mismatched pair resolves by the trusted host first).
-  const store = await db.store.findFirst({
-    where: subdomain
-      ? { OR: [{ subdomain }, { slug: subdomain }] }
-      : { slug: input.slug || undefined },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      subdomain: true,
-      code: true,
-      location: true,
-      phone: true,
-      email: true,
-      brandingColor: true,
-      status: true,
-    },
-  });
+  //    Schema drift (v2.18.0.0): a local database missing a column the
+  //    query selects (Prisma P2022 or any known request error) is answered
+  //    as a calm not-found WITHOUT leaking the error text. Other errors
+  //    re-throw to the route's error boundary as before.
+  let store: Parameters<typeof toStoreSummary>[0] | null = null;
+  try {
+    store = await db.store.findFirst({
+      where: subdomain
+        ? { OR: [{ subdomain }, { slug: subdomain }] }
+        : { slug: requestedSlug || undefined },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        subdomain: true,
+        code: true,
+        location: true,
+        phone: true,
+        email: true,
+        brandingColor: true,
+        status: true,
+      },
+    });
+  } catch (error) {
+    if (isPrismaKnownRequestError(error)) {
+      if (audit) {
+        await logDeniedWorkspaceAccess(
+          input.session,
+          { subdomain, slug: requestedSlug || null },
+          'workspace',
+          'SCHEMA_DRIFT',
+          extras,
+        );
+      }
+      return {
+        mode: 'not-found',
+        allowed: false,
+        reason: 'SCHEMA_DRIFT',
+        reasonCode: reasonCodeFor('SCHEMA_DRIFT'),
+        hostMode,
+        subdomain,
+      };
+    }
+    throw error;
+  }
 
   if (!store) {
     if (audit) {
       await logDeniedWorkspaceAccess(
         input.session,
-        { subdomain, slug: input.slug ?? null },
+        { subdomain, slug: requestedSlug || null },
         'workspace',
         'STORE_NOT_FOUND',
+        extras,
       );
     }
-    return { mode: 'not-found', allowed: false, reason: 'STORE_NOT_FOUND', hostMode, subdomain };
+    return {
+      mode: 'not-found',
+      allowed: false,
+      reason: 'STORE_NOT_FOUND',
+      reasonCode: reasonCodeFor('STORE_NOT_FOUND'),
+      hostMode,
+      subdomain,
+    };
   }
 
   // 3. Unauthenticated: let the client render its login screen (same origin),
@@ -195,6 +298,7 @@ export async function resolveStoreContext(input: {
       store: toStoreSummary(store),
       allowed: false,
       reason: 'UNAUTHENTICATED',
+      reasonCode: reasonCodeFor('UNAUTHENTICATED'),
       hostMode,
       subdomain,
     };
@@ -208,12 +312,14 @@ export async function resolveStoreContext(input: {
         { subdomain, slug: input.slug ?? null, storeId: store.id },
         store.id,
         'STORE_INACTIVE',
+        extras,
       );
     }
     return {
       mode: 'denied',
       allowed: false,
       reason: 'STORE_INACTIVE',
+      reasonCode: reasonCodeFor('STORE_INACTIVE'),
       store: toStoreSummary(store),
       hostMode,
       subdomain,
@@ -250,6 +356,7 @@ export async function resolveStoreContext(input: {
       { subdomain, slug: input.slug ?? null, storeId: store.id },
       store.id,
       reason,
+      extras,
     );
   }
 
@@ -259,6 +366,7 @@ export async function resolveStoreContext(input: {
     allowed,
     readOnly: allowed ? readOnly : false,
     reason: allowed ? undefined : reason,
+    reasonCode: allowed ? undefined : reasonCodeFor(reason),
     hostMode,
     subdomain,
   };
@@ -270,6 +378,7 @@ export interface StoreContextPayload {
   allowed: boolean;
   readOnly: boolean;
   reason?: string;
+  reasonCode?: string;
   hostMode: StoreContextResult['hostMode'];
   store?: StoreSummary;
   rootDomain: string;
@@ -286,6 +395,7 @@ export interface StoreContextPayload {
 export async function buildStoreContextPayload(input: {
   host: string | null;
   slug?: string | null;
+  pathname?: string | null;
   session: AuthSession | null;
 }): Promise<StoreContextPayload> {
   const result = await resolveStoreContext(input);
@@ -314,6 +424,7 @@ export async function buildStoreContextPayload(input: {
     allowed: result.allowed,
     readOnly: result.readOnly ?? false,
     reason: result.reason,
+    reasonCode: result.reasonCode,
     hostMode: result.hostMode,
     store: result.store,
     rootDomain: (process.env.NEXT_PUBLIC_ROOT_DOMAIN || '').toLowerCase(),

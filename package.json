@@ -2,6 +2,11 @@
   "name": "mbumah-hardware-pos",
   "version": "2.18.0",
   "private": true,
+  "mbumah": {
+    "releaseVersion": "2.18.0.0",
+    "baseVersion": "2.18.0",
+    "hotfix": 0
+  },
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
     "build": "next build",
@@ -32,7 +37,8 @@
     "db:verify": "node scripts/setup-prisma-provider.mjs && prisma validate",
     "db:preflight": "node scripts/preflight-schema.mjs",
     "db:repair": "node scripts/repair-db.mjs",
-    "domains:write-hosts": "node scripts/domains/write-hosts.mjs"
+    "domains:write-hosts": "node scripts/domains/write-hosts.mjs",
+    "verify:branch-workspace": "node scripts/verify-branch-workspace.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

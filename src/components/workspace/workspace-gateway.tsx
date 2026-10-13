@@ -11,7 +11,10 @@
 //   1. Adopt a shared session cookie when this origin has no localStorage
 //      token (cross-subdomain single sign-on, see session-cookie.ts).
 //   2. Resolve + authorize the workspace via GET /api/me/store-context.
-//   3. Render calm, specific states: loading, login, denied, not-found.
+//   3. Render calm, specific states: loading, login, denied, not-found -
+//      with a distinct message per cause (v2.18.0.0 reasonCode vocabulary:
+//      store-not-found, store-inactive, user-not-allowed, missing-slug,
+//      schema-drift, subdomain-unavailable).
 //   4. On success: pin the app store to the workspace store, set the page
 //      title to "{Store Name} | Mbumah Hardware POS", apply the branch
 //      accent, and render the SAME MainApp shell used on the root domain.
@@ -35,6 +38,8 @@ interface StoreContextResponse {
     allowed: boolean;
     readOnly: boolean;
     reason?: string;
+    /** Stable client-safe cause code (v2.18.0.0); see docs/store-context-resolution.md. */
+    reasonCode?: string;
     hostMode: 'subdomain' | 'path' | 'organization';
     store?: WorkspaceStoreRef & { status: string; isActive: boolean; phone: string | null; email: string | null };
     memberships: string[];
@@ -108,6 +113,8 @@ function GatewayMessage({
 export function WorkspaceGateway({ slug }: { slug: string | null }) {
   const [phase, setPhase] = useState<GatewayPhase>('loading');
   const [deniedReason, setDeniedReason] = useState<string>('');
+  // Stable client-safe cause for the not-found / denied views (v2.18.0.0).
+  const [statusCode, setStatusCode] = useState<string>('');
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const hydrateFromStorage = useAuthStore((s) => s.hydrateFromStorage);
   const setWorkspace = useWorkspaceStore((s) => s.setWorkspace);
@@ -141,19 +148,22 @@ export function WorkspaceGateway({ slug }: { slug: string | null }) {
       const json = (await res.json().catch(() => null)) as StoreContextResponse | null;
 
       if (!res.ok || !json?.data) {
+        setStatusCode('store-not-found');
         setPhase(res.status === 401 ? 'login' : 'not-found');
         return;
       }
 
-      const { allowed, mode, store, reason, hostMode, readOnly } = json.data;
+      const { allowed, mode, store, reason, reasonCode, hostMode, readOnly } = json.data;
 
       if (!allowed || !store) {
         if (mode === 'not-found' || reason === 'STORE_NOT_FOUND') {
+          setStatusCode(reasonCode || 'store-not-found');
           setPhase('not-found');
         } else if (reason === 'UNAUTHENTICATED' || res.status === 401) {
           setPhase('login');
         } else {
           setDeniedReason(reason || 'ACCESS_DENIED');
+          setStatusCode(reasonCode || '');
           setPhase('denied');
         }
         return;
@@ -166,6 +176,7 @@ export function WorkspaceGateway({ slug }: { slug: string | null }) {
       document.title = `${store.name} | Mbumah Hardware POS`;
       setPhase('ready');
     } catch {
+      setStatusCode('store-not-found');
       setPhase('not-found');
     }
   }, [slug, setWorkspace]);
@@ -197,11 +208,42 @@ export function WorkspaceGateway({ slug }: { slug: string | null }) {
   }
 
   if (phase === 'not-found') {
+    // One calm message per cause (v2.18.0.0); unknown codes fall back to the
+    // plain store-not-found copy. Legacy payloads (no reasonCode) also land
+    // on the plain copy, which keeps old API responses rendering correctly.
+    if (statusCode === 'missing-slug') {
+      return (
+        <GatewayMessage
+          icon={<SearchX className="h-6 w-6" aria-hidden="true" />}
+          title="Branch workspace unavailable"
+          description="Branch workspace unavailable. Store slug is not configured."
+          action={
+            <Button asChild variant="outline">
+              <Link href="/">Go to the home page</Link>
+            </Button>
+          }
+        />
+      );
+    }
+    if (statusCode === 'schema-drift') {
+      return (
+        <GatewayMessage
+          icon={<AlertTriangle className="h-6 w-6" aria-hidden="true" />}
+          title="Schema update needed"
+          description="The local database needs a schema update. Contact the administrator or run the safe repair process."
+          action={
+            <Button asChild variant="outline">
+              <Link href="/">Go to the home page</Link>
+            </Button>
+          }
+        />
+      );
+    }
     return (
       <GatewayMessage
         icon={<SearchX className="h-6 w-6" aria-hidden="true" />}
         title="Branch not found"
-        description="This branch workspace does not exist or is no longer available. Check the address or open the workspace from the organization console."
+        description="Branch workspace not found. Check the store slug or open the workspace from the organization console."
         action={
           <Button asChild variant="outline">
             <Link href="/">Go to the home page</Link>
@@ -212,15 +254,24 @@ export function WorkspaceGateway({ slug }: { slug: string | null }) {
   }
 
   if (phase === 'denied') {
-    const inactive = deniedReason === 'STORE_INACTIVE';
+    const inactive = statusCode === 'store-inactive' || deniedReason === 'STORE_INACTIVE';
+    const subdomainUnavailable = statusCode === 'subdomain-unavailable';
     return (
       <GatewayMessage
-        icon={inactive ? <AlertTriangle className="h-6 w-6" aria-hidden="true" /> : <Lock className="h-6 w-6" aria-hidden="true" />}
+        icon={
+          inactive || subdomainUnavailable ? (
+            <AlertTriangle className="h-6 w-6" aria-hidden="true" />
+          ) : (
+            <Lock className="h-6 w-6" aria-hidden="true" />
+          )
+        }
         title="You do not have access to this branch."
         description={
           inactive
-            ? 'This branch is currently inactive. Ask a store owner or administrator if you need access.'
-            : 'Your account is not assigned to this branch. If you believe this is a mistake, contact a store owner or administrator. This attempt has been logged.'
+            ? 'This branch is currently inactive. Contact the store owner or system administrator.'
+            : subdomainUnavailable
+              ? 'Subdomain workspace is not available on this host. Use the path-based branch workspace.'
+              : 'Your account is not assigned to this branch. If you believe this is a mistake, contact a store owner or administrator. This attempt has been logged.'
         }
         action={
           <Button asChild variant="outline">

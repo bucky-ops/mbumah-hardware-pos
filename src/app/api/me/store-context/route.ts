@@ -26,6 +26,8 @@ async function storeContextHandler(request: NextRequest, session: AuthSession): 
       'x-forwarded-host': request.headers.get('x-forwarded-host'),
     }),
     slug,
+    // Denial-log correlation only (v2.18.0.0): never used for resolution.
+    pathname: new URL(request.url).pathname,
     session,
   });
 
