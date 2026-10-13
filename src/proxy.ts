@@ -6,6 +6,13 @@
 // All security logic is self-contained here.
 
 import { type NextRequest, NextResponse } from 'next/server';
+import {
+  buildInternalPath,
+  extractSubdomain,
+  isHostAllowed,
+  parseHost,
+  resolveWorkspaceHostMode,
+} from '@/lib/workspace/config';
 
 // In-Memory Rate Limiter (Edge-compatible)
 
@@ -25,7 +32,7 @@ const RATE_LIMIT_TIERS: Record<string, { max: number; windowMs: number }> = {
   READ: { max: 100, windowMs: 60 * 1000 },
   WRITE: { max: 30, windowMs: 60 * 1000 },
   SEARCH: { max: 30, windowMs: 60 * 1000 },
-  MESSAGING: { max: 10, windowMs: 60 * 1000 },
+  MESSAGING: { max: 30, windowMs: 60 * 1000 },
   // Client error logger - generous enough to catch burst errors but prevents abuse.
   CLIENT_ERROR: { max: 5, windowMs: 60 * 1000 },
 };
@@ -178,10 +185,47 @@ function getRateLimitTier(pathname: string, method: string): RateLimitTier {
   if (pathname === '/api/transactions' && method === 'POST') return 'PAYMENT';
   if (pathname.startsWith('/api/products/search')) return 'SEARCH';
   if (pathname.startsWith('/api/whatsapp')) return 'MESSAGING';
-  if (pathname.startsWith('/api/messages') && method !== 'GET') return 'MESSAGING';
+  if ((pathname.startsWith('/api/messages') || pathname.startsWith('/api/chat')) && method !== 'GET') return 'MESSAGING';
   if (pathname.startsWith('/api/logs/client-error')) return 'CLIENT_ERROR';
   if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return 'READ';
   return 'WRITE';
+}
+
+// Workspace (subdomain) request helpers (v2.16.0)
+
+/**
+ * CORS headers for trusted origins. Credentials are allowed ONLY with an
+ * exact origin echo (never a wildcard) per the subdomain-workspaces spec.
+ */
+function corsHeadersFor(origin: string | null, _host: string): Record<string, string> | null {
+  if (!origin) return null;
+  try {
+    const originHost = parseHost(new URL(origin).host);
+    // Trusted origins only: root domain, branch subdomains, localhost/LAN,
+    // Vercel previews. Never a wildcard with credentials (spec requirement).
+    if (!originHost || !isHostAllowed(originHost)) return null;
+    return {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Credentials': 'true',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-CSRF-Token, X-Store-Id, X-Store-Slug, X-Store-Subdomain',
+      'Access-Control-Max-Age': '86400',
+      Vary: 'Origin',
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Attach the workspace identity headers (x-store-subdomain / x-store-slug)
+ * to a response/request chain. Advisory hints for server components and API
+ * routes; authorization ALWAYS re-validates server-side (see
+ * src/lib/workspace/server.ts).
+ */
+function withWorkspaceHeaders(subdomain: string | null): Record<string, string> {
+  if (!subdomain) return {};
+  return { 'x-store-subdomain': subdomain, 'x-store-slug': subdomain };
 }
 
 // Main Middleware
@@ -189,10 +233,56 @@ function getRateLimitTier(pathname: string, method: string): RateLimitTier {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const method = request.method;
+  const requestHost = parseHost(request.headers.get('host'));
 
-  // Allow non-API routes
+  // ------------------------------------------------------------------
+  // PAGE ROUTES (v2.16.0 workspace pipeline)
+  //
+  // 1. Host header allowlist (reject host header attacks for pages too).
+  // 2. Branch subdomain rewrite: {store}.{root}/anything is served by the
+  //    internal path workspace /stores/{store}/anything without changing
+  //    the visible URL. /api, /_next, and the public receipt route /r are
+  //    excluded (matcher already excludes _next/static assets).
+  // 3. Workspace identity headers (x-store-subdomain / x-store-slug).
+  // ------------------------------------------------------------------
   if (!pathname.startsWith('/api/')) {
-    return NextResponse.next();
+    if (!isHostAllowed(requestHost)) {
+      return new Response('Invalid host.', { status: 403 });
+    }
+
+    const subdomain = extractSubdomain(requestHost);
+    const mode = resolveWorkspaceHostMode(requestHost);
+
+    if (subdomain && mode === 'subdomain' && !pathname.startsWith('/r/')) {
+      const internal = buildInternalPath(subdomain, pathname);
+      if (internal) {
+        const url = request.nextUrl.clone();
+        url.pathname = internal;
+        const headers = new Headers(request.headers);
+        headers.set('x-store-subdomain', subdomain);
+        headers.set('x-store-slug', subdomain);
+        return NextResponse.rewrite(url, { request: { headers } });
+      }
+    }
+
+    const pageResponse = NextResponse.next();
+    for (const [key, value] of Object.entries(withWorkspaceHeaders(subdomain))) {
+      pageResponse.headers.set(key, value);
+    }
+    return pageResponse;
+  }
+
+  // ------------------------------------------------------------------
+  // API ROUTES (existing security pipeline, unchanged behavior)
+  // ------------------------------------------------------------------
+
+  // OPTIONS preflight: answered here so cross-origin tooling and future
+  // cross-subdomain clients never hit the auth/rate-limit layers with a
+  // preflight. Only trusted origins get CORS headers (never a wildcard).
+  if (method === 'OPTIONS') {
+    const cors = corsHeadersFor(request.headers.get('origin'), request.headers.get('host') || '');
+    if (!cors) return new Response(null, { status: 204 });
+    return new Response(null, { status: 204, headers: cors });
   }
 
   // Health & CSRF token endpoints: allow without any checks
@@ -297,5 +387,12 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: '/api/:path*',
+  // API routes: full security pipeline.
+  // Page routes: host validation + branch subdomain rewrite. Static Next.js
+  // assets and common well-known files are excluded so the workspace
+  // pipeline never runs in front of them.
+  matcher: [
+    '/api/:path*',
+    '/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|logo.png|manifest.json|manifest.webmanifest|sw.js|offline.html|robots.txt|sitemap.xml|icons/|sounds/|screenshots/).*)',
+  ],
 };

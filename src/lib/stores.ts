@@ -127,6 +127,18 @@ export const useAuthStore = create<AuthState>((set) => ({
           user,
           isAuthenticated: true,
         });
+      } else {
+        // v2.16.0 WORKSPACE COOKIE ADOPTION: on a branch subdomain origin the
+        // shared session cookie (Domain=.mbumah.test) may exist even though
+        // this origin has no localStorage token yet. Adopt it and validate via
+        // /api/auth/me (fetchUser clears everything on a 401).
+        const cookieToken = document.cookie.match(/(?:^|;\s*)mbt_token=([^;]+)/)?.[1];
+        if (cookieToken) {
+          localStorage.setItem('mbt_token', decodeURIComponent(cookieToken));
+          // fetchUser is async and self-contained: on success it flips
+          // isAuthenticated; on failure it clears the adopted token.
+          void useAuthStore.getState().fetchUser();
+        }
       }
       // SECURITY: re-align the persisted branch choice with the user's own
       // store on every boot (see syncStoreScopeToUser docstring).

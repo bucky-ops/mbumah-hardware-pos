@@ -28,6 +28,10 @@ async function getHandler(request: NextRequest): Promise<Response> {
         // use it to prefill branch-coded SKU drafts that match what the
         // server-side generateSKU() will store (MBM-<branch>-<cat>-XXXX).
         code: true,
+        // v2.16.0 (subdomain workspaces): workspace identity + branch accent.
+        slug: true,
+        subdomain: true,
+        brandingColor: true,
         location: true,
         address: true,
         phone: true,
