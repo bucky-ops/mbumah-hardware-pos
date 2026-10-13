@@ -160,7 +160,7 @@
   background: oklch(0.55 0.02 250);
 }
 
-/* ── CART SCROLLBAR (v2.5.0 — cart fits any window size) ─────────────────
+/* ── CART SCROLLBAR (v2.5.0 - cart fits any window size) ─────────────────
    The POS cart list needs a scrollbar that is always DISCOVERABLE (a 6px
    invisible-until-hover thumb is too subtle for a busy cashier), so the
    cart uses its own class: wider thumb, faint persistent track, amber
@@ -203,7 +203,7 @@
   background-clip: content-box;
 }
 
-/* ── ALERT POPUP countdown bar (v2.5.0 — 45-second alerts) ───────────────
+/* ── ALERT POPUP countdown bar (v2.5.0 - 45-second alerts) ───────────────
    Drains linearly from 100% to 0 over the popup's lifetime. The JS host
    sets animation-duration per popup and pauses it on hover via
    animation-play-state, so one keyframe serves every popup. */
@@ -226,7 +226,7 @@
    Receipt PRINT isolation (2026-09 overhaul)
 
    The previous rules keyed on a `.receipt-printable-wrapper` class that never
-   existed in the dialog DOM — every direct child of [role="dialog"] collapsed
+   existed in the dialog DOM - every direct child of [role="dialog"] collapsed
    to display:none and the printer produced a BLANK page.
 
    New model (see src/lib/receipt-pdf.ts → printReceiptElement):
@@ -237,7 +237,7 @@
    • Backgrounds/badges keep their colors via print-color-adjust: exact.
    ───────────────────────────────────────────────────────────────────────────── */
 @media screen {
-  /* The print host is empty except during a print — never show it on screen. */
+  /* The print host is empty except during a print - never show it on screen. */
   #print-root { display: none !important; }
 }
 
@@ -251,7 +251,7 @@
     print-color-adjust: exact !important;
   }
 
-  /* Everything except the print host disappears — display:none (not just
+  /* Everything except the print host disappears - display:none (not just
      visibility) so hidden ancestors can never suppress the receipt. */
   body > *:not(#print-root) {
     display: none !important;
@@ -654,7 +654,7 @@
   animation: fade-in-up 0.4s ease-out;
 }
 
-/* Staggered animation delay utility — 0.1s → 0.6s (defined later in file) */
+/* Staggered animation delay utility - 0.1s → 0.6s (defined later in file) */
 
 /* Scale in animation for modals and dialogs */
 @keyframes scale-in {
@@ -865,7 +865,7 @@
 
 /* ===== Login screen enhancements ===== */
 
-/* Floating particles — gentle drift + rotation */
+/* Floating particles - gentle drift + rotation */
 @keyframes float {
   0%, 100% {
     transform: translateY(0px) rotate(0deg);
@@ -973,7 +973,7 @@
   animation: tab-enter 0.25s ease-out;
 }
 
-/* Card hover lift — 4px translate + enhanced shadow (full definition later in file) */
+/* Card hover lift - 4px translate + enhanced shadow (full definition later in file) */
 /* Subtle row hover for tables */
 .table-row-hover {
   transition: background-color 0.15s ease;
@@ -1023,7 +1023,7 @@
   animation: badge-pop 0.3s ease-out;
 }
 
-/* Skeleton pulse with shimmer — full enhanced definition (with ::after sweep) later in file */
+/* Skeleton pulse with shimmer - full enhanced definition (with ::after sweep) later in file */
 /* ===== Gradient border utility ===== */
 .gradient-border {
   position: relative;
@@ -1048,7 +1048,7 @@
   opacity: 1;
 }
 
-/* Stat card color variants — gradient border colors */
+/* Stat card color variants - gradient border colors */
 .stat-card-green::before { background: linear-gradient(135deg, oklch(0.65 0.18 145 / 0.4), oklch(0.55 0.15 160 / 0.1)); }
 .stat-card-blue::before { background: linear-gradient(135deg, oklch(0.55 0.18 260 / 0.4), oklch(0.45 0.15 250 / 0.1)); }
 .stat-card-amber::before { background: linear-gradient(135deg, oklch(0.75 0.15 85 / 0.4), oklch(0.65 0.12 75 / 0.1)); }
@@ -1109,7 +1109,7 @@
   opacity: 0.5;
 }
 
-/* Glass card effect — frosted glass with stronger blur + shadow-xl */
+/* Glass card effect - frosted glass with stronger blur + shadow-xl */
 .glass-card {
   background: oklch(1 0 0 / 0.6);
   backdrop-filter: blur(20px) saturate(180%);
@@ -1124,7 +1124,7 @@
   box-shadow: 0 12px 32px oklch(0 0 0 / 0.3), 0 4px 12px oklch(0 0 0 / 0.2);
 }
 
-/* Animated gradient border using background-clip (used on .gradient-border class — kept above) */
+/* Animated gradient border using background-clip (used on .gradient-border class - kept above) */
 .gradient-border-animated {
   position: relative;
   background-clip: padding-box;
@@ -1147,7 +1147,7 @@
   100% { background-position: 0% 50%; }
 }
 
-/* Improved shimmer background — smoother, wider gradient sweep */
+/* Improved shimmer background - smoother, wider gradient sweep */
 @keyframes shimmer-sweep {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
@@ -1211,7 +1211,7 @@
   color: transparent;
 }
 
-/* Card hover lift — 4px translate + enhanced shadow */
+/* Card hover lift - 4px translate + enhanced shadow */
 .card-hover-lift {
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.2s ease;
 }
@@ -1225,7 +1225,7 @@
   box-shadow: 0 12px 32px oklch(1 0 0 / 0.06), 0 4px 12px oklch(1 0 0 / 0.04);
 }
 
-/* Button press effect — scale(0.97) on active */
+/* Button press effect - scale(0.97) on active */
 .btn-press {
   transition: transform 0.1s ease, box-shadow 0.1s ease;
 }
@@ -1239,7 +1239,7 @@
   animation: fade-in-up 0.4s ease-out both;
 }
 
-/* Staggered animation delay utility — 6 stagger steps (0.1s → 0.6s) */
+/* Staggered animation delay utility - 6 stagger steps (0.1s → 0.6s) */
 .stagger-1 { animation-delay: 100ms; }
 .stagger-2 { animation-delay: 200ms; }
 .stagger-3 { animation-delay: 300ms; }
@@ -1283,7 +1283,7 @@
   background: oklch(0.55 0.02 250);
 }
 
-/* Improved skeleton with gradient sweep — richer gradient stops */
+/* Improved skeleton with gradient sweep - richer gradient stops */
 .skeleton-shimmer {
   position: relative;
   overflow: hidden;

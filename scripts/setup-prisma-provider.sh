@@ -1,6 +1,6 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# MBUMAH HARDWARE POS — Prisma provider auto-detection (shell version)
+# MBUMAH HARDWARE POS - Prisma provider auto-detection (shell version)
 # ─────────────────────────────────────────────────────────────────────────────
 #
 # Sets the Prisma provider in schema.prisma based on the DATABASE_URL scheme:
@@ -31,7 +31,7 @@ else
 fi
 
 # Replace the provider value in the datasource block.
-# We only target "sqlite" and "postgresql" — the generator's
+# We only target "sqlite" and "postgresql" - the generator's
 # "prisma-client-js" provider is never matched.
 # Use a regex that tolerates variable whitespace between "provider" and "="
 # (the committed schema uses `provider  = "postgresql"` with 2 spaces for

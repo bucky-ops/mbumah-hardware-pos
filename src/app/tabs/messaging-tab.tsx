@@ -116,63 +116,63 @@ const MESSAGE_TEMPLATES = [
   {
     id: 'christmas',
     type: 'PROMOTION',
-    label: '🎄 Christmas',
+    label: 'Christmas',
     content:
-      '🎄 Merry Christmas from Mbumah Hardware! We appreciate your business. Visit us for special holiday deals!',
+      'Merry Christmas from Mbumah Hardware! We appreciate your business. Visit us for special holiday deals!',
   },
   {
     id: 'new-year',
     type: 'PROMOTION',
-    label: '🎉 New Year',
+    label: 'New Year',
     content:
-      '🎉 Happy New Year from Mbumah Hardware! Start the year right with our great deals on building materials!',
+      'Happy New Year from Mbumah Hardware! Start the year right with our great deals on building materials!',
   },
   {
     id: 'easter',
     type: 'PROMOTION',
-    label: '🐰 Easter',
+    label: 'Easter',
     content:
-      '🐰 Happy Easter from Mbumah Hardware! Celebrate with our special Easter discounts!',
+      'Happy Easter from Mbumah Hardware! Celebrate with our special Easter discounts!',
   },
   {
     id: 'valentine',
     type: 'PROMOTION',
-    label: '❤️ Valentine',
+    label: 'Valentine',
     content:
-      '❤️ Happy Valentine\'s Day! Show your love with a gift from Mbumah Hardware!',
+      'Happy Valentine\'s Day! Show your love with a gift from Mbumah Hardware!',
   },
   {
     id: 'general-promotion',
     type: 'PROMOTION',
-    label: '🔥 Promotion',
+    label: 'Promotion',
     content:
-      '🔥 Special offer at Mbumah Hardware! Great deals on all building materials. Visit us today!',
+      'Special offer at Mbumah Hardware! Great deals on all building materials. Visit us today!',
   },
   {
     id: 'debt-reminder',
     type: 'DEBT_REMINDER',
-    label: '💳 Debt Reminder',
+    label: 'Debt Reminder',
     content:
       'Dear {name}, your outstanding balance at Mbumah Hardware is KES {amount}. Please settle at your earliest convenience.',
   },
   {
     id: 'thank-you',
     type: 'PAYMENT_CONFIRMATION',
-    label: '👍 Thank You',
+    label: 'Thank You',
     content:
       'Thank you for doing business with Mbumah Hardware! We appreciate your continued support.',
   },
   {
     id: 'payment-confirmation',
     type: 'PAYMENT_CONFIRMATION',
-    label: '✅ Payment Confirmation',
+    label: 'Payment Confirmation',
     content:
       'Thank you {customer_name}! We have received your payment of KES {amount} at MBUMAH HARDWARE. Your account has been updated.',
   },
   {
     id: 'balance-update',
     type: 'BALANCE_UPDATE',
-    label: '📊 Balance Update',
+    label: 'Balance Update',
     content:
       'Hello {customer_name}, your current account balance at MBUMAH HARDWARE is KES {balance}. Thank you for your continued business!',
   },
@@ -185,21 +185,21 @@ const MESSAGE_TEMPLATES = [
 const HOLIDAY_TEMPLATES: { id: string; label: string; content: string }[] = [
   {
     id: 'christmas',
-    label: '🎄 Christmas',
+    label: 'Christmas',
     content:
-      '🎄 Merry Christmas from Mbumah Hardware! Wishing you joy and prosperity. Thank you for your continued business.',
+      'Merry Christmas from Mbumah Hardware! Wishing you joy and prosperity. Thank you for your continued business.',
   },
   {
     id: 'new-year',
-    label: '🎉 New Year',
+    label: 'New Year',
     content:
-      '🎉 Happy New Year from Mbumah Hardware! Wishing you a prosperous year ahead. Visit us for great deals on building materials.',
+      'Happy New Year from Mbumah Hardware! Wishing you a prosperous year ahead. Visit us for great deals on building materials.',
   },
   {
     id: 'easter',
-    label: '🐰 Easter',
+    label: 'Easter',
     content:
-      '🐰 Happy Easter from Mbumah Hardware! May this season bring you renewal and joy. Special discounts on building materials this week.',
+      'Happy Easter from Mbumah Hardware! May this season bring you renewal and joy. Special discounts on building materials this week.',
   },
   {
     id: 'madaraka',

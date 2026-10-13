@@ -1,7 +1,7 @@
 import { createServer, IncomingMessage, ServerResponse } from 'http'
 import { Server, Socket } from 'socket.io'
 
-// ── AUDIT FIX (Findings 3.3 + 2.3 — structured logging & heartbeat lifecycle) ─
+// ── AUDIT FIX (Findings 3.3 + 2.3 - structured logging & heartbeat lifecycle) ─
 //
 // The service previously mixed console.log/console.error with ad-hoc
 // [TAG] prefixes, emitted a heartbeat from an anonymous setInterval that was
@@ -9,9 +9,9 @@ import { Server, Socket } from 'socket.io'
 // classification. That made production issues hard to correlate and risked
 // leaking intervals across dev HMR reloads.
 //
-// Everything below now goes through `log()` — one JSON object per line
+// Everything below now goes through `log()` - one JSON object per line
 // (level, component, message + queryable context fields) that Vercel/Docker
-// log drains can parse and filter — and the heartbeat interval is owned by
+// log drains can parse and filter - and the heartbeat interval is owned by
 // startHeartbeat()/stopHeartbeat() so SIGTERM/SIGINT clears it.
 
 // ── Structured logger ────────────────────────────────────────────────────
@@ -275,7 +275,7 @@ io.on('connection', (socket: Socket) => {
       id: generateId(),
       type: 'new-transaction',
       title: 'New Transaction',
-      message: `${transaction.type} — ${transaction.currency} ${transaction.total.toFixed(2)}`,
+      message: `${transaction.type} - ${transaction.currency} ${transaction.total.toFixed(2)}`,
       data: { transaction },
       timestamp: new Date().toISOString(),
       storeId,
@@ -380,8 +380,8 @@ io.on('connection', (socket: Socket) => {
     // AUDIT FIX (Finding 3.3): classify disconnect reasons so log drains can
     // separate routine lifecycle events from network trouble.
     //   • clean:  transport close / server-namespace disconnect / client ping
-    //     timeout by explicit client close — normal churn, logged at debug.
-    //   • error:  transport errors, ping timeouts, everything else — warn.
+    //     timeout by explicit client close - normal churn, logged at debug.
+    //   • error:  transport errors, ping timeouts, everything else - warn.
     const cleanReasons = new Set([
       'transport close',
       'server namespace disconnect',
@@ -415,10 +415,10 @@ const HEARTBEAT_INTERVAL_MS = 30000
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
 function startHeartbeat(): void {
-  if (heartbeatTimer !== null) return // idempotent — never double-schedule
+  if (heartbeatTimer !== null) return // idempotent - never double-schedule
   heartbeatTimer = setInterval(() => {
     const connectedSockets = io.sockets.sockets.size
-    if (connectedSockets === 0) return // nothing to heartbeat — cheap no-op
+    if (connectedSockets === 0) return // nothing to heartbeat - cheap no-op
     io.emit('heartbeat', {
       timestamp: new Date().toISOString(),
       connections: connectedSockets,

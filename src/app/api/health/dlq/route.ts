@@ -44,7 +44,7 @@
 // POST (SUPER_ADMIN only):
 //   Administrative actions to manage the DLQ. Useful for:
 //     • Retrying a specific item that was marked DEAD (e.g. a failed M-Pesa
-//       STK push that the admin wants to manually re-attempt).
+//       STK Push that the admin wants to manually re-attempt).
 //     • Retrying ALL items (or all for a given service) when the admin knows
 //       the downstream service has recovered.
 //     • Cancelling an item that should never be retried (e.g. a test SMS).

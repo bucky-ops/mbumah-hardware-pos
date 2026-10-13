@@ -124,31 +124,31 @@ Live verification on production, as the admin user, on the Nakuru branch:
 
 1. **Recorded a real payment** for Kenya Plumbing Co. (KES 506, Cash, the
    full small debt):
-   - Toast: **"Payment recorded! New balance: Ksh 0.00"** ✅
-   - Debt record `cmty2mok0002gkz04haqndaqp` became **SETTLED** (paid 506 / 506) ✅
-   - Customer debt balance updated **54,116 → 53,610** ✅
+   - Toast: **"Payment recorded! New balance: Ksh 0.00"**
+   - Debt record `cmty2mok0002gkz04haqndaqp` became **SETTLED** (paid 506 / 506)
+   - Customer debt balance updated **54,116 → 53,610**
    - Balanced journal entry posted automatically:
-     **JE-20260912-54512 - Dr Cash 506.00 / Cr Accounts Receivable 506.00** ✅
-   - Tamper-evident audit entry + debt-payment ledger row written ✅
+     **JE-20260912-54512 - Dr Cash 506.00 / Cr Accounts Receivable 506.00**
+   - Tamper-evident audit entry + debt-payment ledger row written
 2. **Loyalty card now loads** (points, tier, "Redeem Points" button) - no more
-   "Authentication required." ✅
+   "Authentication required."
 3. **Top Customers endpoint now returns 200** with real data
-   (Kenya Plumbing Co. ranks #3 by spend: Ksh 62,099.50). ✅
+   (Kenya Plumbing Co. ranks #3 by spend: Ksh 62,099.50).
 4. **Settled debts are protected**: repeating a payment on the settled ledger
-   is refused ("Cannot record payment on a settled debt."). ✅
+   is refused ("Cannot record payment on a settled debt.").
 5. **Validation messages are precise**: missing `storeId`+`debtLedgerId` now
-   returns "storeId and debtLedgerId are required." ✅
+   returns "storeId and debtLedgerId are required."
 6. **Branch codes are now visible in the UI**: sidebar shows `NAK Nakuru`, and
    the Switch Branch menu shows `JUJ / THI / RUI / NAI / NAK` chips. The
    Payroll → Employees table shows a **Staff No.** column
-   (`MBM-NAK-E001…E006`). ✅
+   (`MBM-NAK-E001…E006`).
 7. **Payroll correction delivered** (the June 2026 supplemental run that paid
    deductions on zero earnings, net −2,699.99): verified that run **never
    posted a journal entry and was never paid**, so a reversing GL entry would
    have been wrong; instead a new guarded **VOID** capability was added
    (`POST /api/payroll/runs/[id]/void` - refuses PAID runs and runs with
    posted journal entries) and the run is now **VOIDED** on production with
-   the reason recorded for audit. ✅
+   the reason recorded for audit.
 
 ---
 

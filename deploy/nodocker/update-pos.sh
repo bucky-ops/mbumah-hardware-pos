@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# MBUMAH HARDWARE POS — Automatic Updater (Linux/macOS, no-Docker laptop)
+# MBUMAH HARDWARE POS - Automatic Updater (Linux/macOS, no-Docker laptop)
 # ============================================================================
 # Installs the newest GitHub release during DORMANT hours (default 22:00-06:00)
 # with a pre-update backup, the exact installer rebuild sequence, a health

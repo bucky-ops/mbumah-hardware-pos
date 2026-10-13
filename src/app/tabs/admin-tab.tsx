@@ -1404,7 +1404,7 @@ function UserManagement({ storeId }: { storeId: string }) {
                   type="email"
                   value={newUser.email}
                   onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  placeholder="john@mbumah.co.ke"
+                  placeholder="john@mbumahhardware.co.ke"
                   className={formErrors.email ? 'border-red-500' : ''}
                 />
                 {formErrors.email && <p className="text-xs text-red-500">{formErrors.email}</p>}

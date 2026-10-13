@@ -1,5 +1,5 @@
 # ============================================================================
-# MBUMAH HARDWARE POS — SSL Certificate Directory
+# MBUMAH HARDWARE POS - SSL Certificate Directory
 # ============================================================================
 #
 # Place your SSL certificates here. Nginx will load them from this directory.
@@ -27,7 +27,7 @@
 #   cd nginx/ssl && ./generate-self-signed.sh
 #
 # This creates server.crt and server.key valid for 365 days.
-# Browsers will show a security warning — this is expected for self-signed.
+# Browsers will show a security warning - this is expected for self-signed.
 #
 # ── Option 3: Existing Certificates ───────────────────────────────────────
 # Copy your certificate and key files here:

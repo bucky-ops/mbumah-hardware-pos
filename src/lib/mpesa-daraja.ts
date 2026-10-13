@@ -1,7 +1,7 @@
-// M-Pesa Daraja STK push core - shared by the HTTP route and the outbox pump.
+// M-Pesa Daraja STK Push core - shared by the HTTP route and the outbox pump.
 //
 // AUDIT REMEDIATION - FINANCIAL_MODULE_AUDIT_REPORT.md (F6-2, P0):
-//   The checkout route used to initiate the server-side STK push with a
+//   The checkout route used to initiate the server-side STK Push with a
 //   RELATIVE-URL fetch (`fetch('/api/payments/mpesa/stkpush?XTransformPort=3001')`)
 //   which can never resolve in Node serverless - every M-Pesa sale silently
 //   stuck PENDING with no push ever sent. The initiation logic now lives here
@@ -41,7 +41,7 @@ export function normalisePhone(raw: string): string {
   return p;
 }
 
-/** Build the Base64 password used by Daraja STK push: shortcode + passkey + timestamp. */
+/** Build the Base64 password used by Daraja STK Push: shortcode + passkey + timestamp. */
 function buildDarajaPassword(shortcode: string, passkey: string, timestamp: string): string {
   return Buffer.from(`${shortcode}${passkey}${timestamp}`).toString('base64');
 }
@@ -75,7 +75,7 @@ async function fetchDarajaToken(
   return json.access_token;
 }
 
-/** Perform the actual Daraja STK push. */
+/** Perform the actual Daraja STK Push. */
 async function darajaStkPush(params: {
   isProduction: boolean;
   shortcode: string;
@@ -143,7 +143,7 @@ async function darajaStkPush(params: {
 }
 
 /**
- * Initiate an STK push for an (already-created, PENDING) MpesaTransaction row.
+ * Initiate an STK Push for an (already-created, PENDING) MpesaTransaction row.
  * Persists the CheckoutRequestID on the row (or creates a row when the caller
  * did not pre-create one). Never throws - failures degrade to 'simulated'
  * with a loud log so the caller's business transaction is unaffected.

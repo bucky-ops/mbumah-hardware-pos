@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# MBUMAH HARDWARE POS — No-Docker Laptop Installer (Linux / macOS)
+# MBUMAH HARDWARE POS - No-Docker Laptop Installer (Linux / macOS)
 # ============================================================================
 # For machines that cannot run Docker. Stack: Node.js 20+ + SQLite file.
 # Usage: bash deploy/nodocker/install-nodocker.sh [--lan]
@@ -54,9 +54,9 @@ else
   echo "[OK] .env created - secrets generated, database at: $DB_FILE"
 fi
 
-# ── 3b. Remote Ops agent identity (RAK, v2.11.0) — append missing keys only ──
+# ── 3b. Remote Ops agent identity (RAK, v2.11.0) - append missing keys only ──
 # STORE_ID: this machine's fleet identity (defaults to the sanitized hostname).
-# OPS_SIGNING_KEY: shared HMAC secret — must match the cloud's key or every
+# OPS_SIGNING_KEY: shared HMAC secret - must match the cloud's key or every
 # remote command is rejected by design. Written once; never rotated here.
 if ! grep -q '^STORE_ID=' .env 2>/dev/null; then
   SID="$(hostname | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9._-' '-' | cut -c1-80)"
@@ -70,7 +70,7 @@ if ! grep -q '^OPS_SIGNING_KEY=' .env 2>/dev/null; then
   echo "[OK] OPS_SIGNING_KEY generated (copy the SAME value into the cloud's OPS_SIGNING_KEY)."
 fi
 
-# ── 4. LAN mode — decide BEFORE the build ────────────────────────────────
+# ── 4. LAN mode - decide BEFORE the build ────────────────────────────────
 if [ "${1:-}" = "--lan" ]; then
   LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
   if [ -z "${LAN_IP}" ]; then
@@ -90,7 +90,7 @@ export DIRECT_URL="$(grep -m1 '^DIRECT_URL=' .env | cut -d= -f2- | tr -d '\"')"
 export SKIP_ENV_VALIDATION=1
 
 # ── 6. Install → schema → seed → build ────────────────────────────────
-# NOTE: `npm install` (not `npm ci`) — the repo is developed with bun, so the
+# NOTE: `npm install` (not `npm ci`) - the repo is developed with bun, so the
 # npm lockfile can drift from package.json; `npm ci` would hard-fail on that.
 echo "[BUILD 1/4] Installing dependencies (2-5 min, needs internet)..."
 npm install

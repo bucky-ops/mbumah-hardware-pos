@@ -2,7 +2,7 @@
 //
 // AUDIT REMEDIATION - FINANCIAL_MODULE_AUDIT_REPORT.md:
 //   • SYS-1 (P0): this endpoint was unauthenticated - anyone could fire
-//     STK pushes to arbitrary phone numbers. Now requires an authenticated
+//     STK Push requests to arbitrary phone numbers. Now requires an authenticated
 //     session (cashier-level roles).
 //   • F6-2 (P0): the initiation logic moved to `src/lib/mpesa-daraja.ts` so
 //     the checkout flow can invoke it IN-PROCESS (via the transactional
@@ -31,14 +31,14 @@ async function stkPushHandler(
   request: NextRequest,
   ..._args: unknown[]
 ): Promise<Response> {
-  // AUDIT FIX (Finding 5.2 - rate limiting): each STK push costs a Daraja API
+  // AUDIT FIX (Finding 5.2 - rate limiting): each STK Push costs a Daraja API
   // call (rate-limited by Safaricom and billable); a runaway client loop or a
   // compromised session could otherwise hammer it. Per-IP PAYMENT-tier cap
   // (20/min) with 429 + Retry-After. Session auth already ran via requireAuth.
   const rl = isRateLimited(`mpesa-stkpush:${getClientIp(request)}`, 'PAYMENT');
   if (rl.limited) {
     return Response.json(
-      { success: false, error: 'Too many STK push requests. Retry later.' },
+      { success: false, error: 'Too many STK Push requests. Retry later.' },
       { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 60) } },
     );
   }

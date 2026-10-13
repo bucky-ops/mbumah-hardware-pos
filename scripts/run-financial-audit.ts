@@ -49,9 +49,9 @@ async function main() {
       for (const issue of result.issues) {
         const icon =
           issue.severity === 'CRITICAL'
-            ? '✖'
+            ? ''
             : issue.severity === 'HIGH'
-              ? '⚠'
+              ? 'Warning:'
               : '•';
         console.log(`  ${icon} [${issue.severity}] ${issue.type}: ${issue.message}`);
       }
@@ -82,7 +82,7 @@ async function main() {
   console.log(`Completed:        ${new Date().toISOString()}`);
 
   if (totalCritical > 0) {
-    console.log('\n✖ AUDIT FAILED - CRITICAL issues detected.');
+    console.log('\nAUDIT FAILED - CRITICAL issues detected.');
     await systemLog({
       action: 'NIGHTLY_AUDIT_FAILED',
       component: LogComponent.FINANCIAL,

@@ -23,10 +23,10 @@ export default defineConfig({
     testTimeout: 30000,
     hookTimeout: 30000,
     reporters: ['default'],
-    // AUDIT FIX (Finding 4.1 — no coverage measurement): wire the v8
+    // AUDIT FIX (Finding 4.1 - no coverage measurement): wire the v8
     // coverage provider so `vitest run --coverage` produces text/lcov
     // reports over first-party source. Thresholds are INTENTIONALLY not
-    // enforced yet — the current suite covers lib logic, not the 60+ API
+    // enforced yet - the current suite covers lib logic, not the 60+ API
     // routes, so a hard gate would go red immediately. Revisit once route
     // tests land (audit recommendation: 70% lines/functions/statements,
     // 60% branches); uncomment and raise progressively.
@@ -38,7 +38,7 @@ export default defineConfig({
         'src/tests/**',
         'src/__tests__/**',
         '**/*.d.ts',
-        // OpenAPI doc is a static data module — exclude from coverage.
+        // OpenAPI doc is a static data module - exclude from coverage.
         'src/lib/openapi.ts',
       ],
       // thresholds: { lines: 70, functions: 70, branches: 60, statements: 70 },

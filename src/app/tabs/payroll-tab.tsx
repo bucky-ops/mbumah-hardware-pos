@@ -745,7 +745,7 @@ function EmployeeFormDialog({ open, onOpenChange, form, setForm, editingId, onSu
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2"><Label>First Name *</Label><Input value={form.firstName} onChange={(e) => upd({ firstName: e.target.value })} placeholder="John" /></div>
               <div className="space-y-2"><Label>Last Name *</Label><Input value={form.lastName} onChange={(e) => upd({ lastName: e.target.value })} placeholder="Mwangi" /></div>
-              <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => upd({ email: e.target.value })} placeholder="john@mbumah.co.ke" /></div>
+              <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => upd({ email: e.target.value })} placeholder="john@mbumahhardware.co.ke" /></div>
               <div className="space-y-2"><Label>Phone</Label><Input value={form.phone} onChange={(e) => upd({ phone: e.target.value })} placeholder="+254 700 000 000" /></div>
               <div className="space-y-2"><Label>National ID</Label><Input value={form.nationalId} onChange={(e) => upd({ nationalId: e.target.value })} placeholder="12345678" /></div>
               <div className="space-y-2"><Label>KRA PIN</Label><Input value={form.kraPin} onChange={(e) => upd({ kraPin: e.target.value })} placeholder="A009999999X" /></div>

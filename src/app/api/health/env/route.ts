@@ -47,9 +47,9 @@ export async function GET() {
         pgbouncer: hasPgbouncer,
         ssl: hasSsl,
         notes: [
-          isPooled ? 'Pooled Neon URL ✓' : '⚠️ NOT pooled (no -pooler in hostname) - will exhaust Neon connection limit',
-          hasPgbouncer ? 'pgbouncer=true ✓' : '⚠️ Missing pgbouncer=true query param',
-          hasSsl ? 'sslmode=require ✓' : '⚠️ Missing sslmode=require',
+          isPooled ? 'Pooled Neon URL ✓' : 'Warning: NOT pooled (no -pooler in hostname) - will exhaust Neon connection limit',
+          hasPgbouncer ? 'pgbouncer=true ✓' : 'Warning: Missing pgbouncer=true query param',
+          hasSsl ? 'sslmode=require ✓' : 'Warning: Missing sslmode=require',
         ],
       };
       if (!isPooled) hints.push(`${key} is not using the Neon pooled URL (hostname should contain -pooler). This will cause connection exhaustion under serverless load.`);
@@ -83,7 +83,7 @@ export async function GET() {
   for (const flag of devFlags) {
     const value = process.env[flag];
     if (value === 'true' || value === '1') {
-      variables[flag] = { set: true, value, warning: '⚠️ DEV-ONLY FLAG - should be removed in production' };
+      variables[flag] = { set: true, value, warning: 'DEV-ONLY FLAG - should be removed in production' };
       hints.push(`${flag}=true is set. Remove this from Vercel env vars for production security.`);
     } else {
       variables[flag] = { set: false };

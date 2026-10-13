@@ -1,14 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Next.js Instrumentation Hook
+// MBUMAH HARDWARE POS - Next.js Instrumentation Hook
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // Next.js 16 calls `register()` ONCE per server runtime, BEFORE any route
 // handler or page is rendered. This is the canonical place to initialise
 // server-side observability:
 //
-//   • Sentry (server config) — error aggregation + performance traces.
-//   • (Future) OpenTelemetry — distributed tracing to Grafana / Honeycomb.
-//   • (Future) APM agents — Datadog / New Relic.
+//   • Sentry (server config) - error aggregation + performance traces.
+//   • (Future) OpenTelemetry - distributed tracing to Grafana / Honeycomb.
+//   • (Future) APM agents - Datadog / New Relic.
 //
 // Runtime detection:
 //   Next.js sets `process.env.NEXT_RUNTIME` to either:
@@ -19,7 +19,7 @@
 //
 // Why dynamic import()?
 //   Static `import './sentry.server.config'` would bundle the config into
-//   EVERY route — bloating cold-start. Dynamic `import()` is code-split:
+//   EVERY route - bloating cold-start. Dynamic `import()` is code-split:
 //   the config loads once, lazily, on first server boot. Next.js caches
 //   the resolved promise so subsequent calls are free.
 //
@@ -42,7 +42,7 @@ export async function register(): Promise<void> {
       await import('./sentry.server.config');
     } catch (error) {
       // Sentry init must NEVER block the server from booting. If it fails,
-      // log to stderr and continue — the DB-backed SystemLog is the
+      // log to stderr and continue - the DB-backed SystemLog is the
       // fallback system-of-record.
       console.error(
         '[instrumentation] Failed to initialise server Sentry:',
@@ -69,7 +69,7 @@ export async function register(): Promise<void> {
 
   // ── Edge runtime ───────────────────────────────────────────────────────────
   // The Edge runtime supports a subset of the Sentry SDK. We reuse the same
-  // config file — `@sentry/nextjs` detects the runtime and enables only the
+  // config file - `@sentry/nextjs` detects the runtime and enables only the
   // compatible integrations. (Edge middleware runs here too.)
   if (runtime === 'edge') {
     try {
@@ -84,7 +84,7 @@ export async function register(): Promise<void> {
   }
 
   // ── Unknown runtime (build phase) ──────────────────────────────────────────
-  // During `next build`, `NEXT_RUNTIME` is undefined. We skip Sentry init —
+  // During `next build`, `NEXT_RUNTIME` is undefined. We skip Sentry init -
   // the build doesn't need a live error reporter, and env vars may not be
   // injected yet.
   //

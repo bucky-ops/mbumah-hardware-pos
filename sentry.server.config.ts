@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Sentry Server Configuration
+// MBUMAH HARDWARE POS - Sentry Server Configuration
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // This file is the CANONICAL Sentry initialization for the NODE.JS server
@@ -134,11 +134,11 @@ if (SENTRY_DSN) {
 
     // ── Ignore noisy, non-actionable errors ────────────────────────────────
     ignoreErrors: [
-      // Next.js control-flow utilities — not errors.
+      // Next.js control-flow utilities - not errors.
       'NEXT_NOT_FOUND',
       'NEXT_REDIRECT',
       'NEXT_AUTH',
-      // Prisma retryable errors (handled by retry layer — don't double-report).
+      // Prisma retryable errors (handled by retry layer - don't double-report).
       'PrismaClientInitializationError',
       // M-Pesa / network blips that auto-retry.
       'NetworkError',
@@ -149,7 +149,7 @@ if (SENTRY_DSN) {
     // ── Server-specific integrations ───────────────────────────────────────
     //
     // `httpIntegration` is auto-enabled by @sentry/nextjs for the Node
-    // runtime — it instruments `http`/`https` outgoing requests so we get
+    // runtime - it instruments `http`/`https` outgoing requests so we get
     // spans for M-Pesa, Twilio, Resend API calls.
     //
     // `requestData` is configured to include request headers (sanitised in

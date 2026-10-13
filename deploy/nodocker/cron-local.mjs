@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ============================================================================
-// MBUMAH HARDWARE POS — local background-job scheduler (replaces Vercel Cron)
+// MBUMAH HARDWARE POS - local background-job scheduler (replaces Vercel Cron)
 // Fires /api/cron/hourly every hour and /api/cron/nightly when the local
 // hour is 02, authenticated with the CRON_SECRET from .env.
 // Run alongside the app (start-pos.ps1 / start-pos.sh do this for you).

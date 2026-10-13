@@ -181,8 +181,8 @@ async function simulateCallback(checkoutRequestId, forceSuccess = true) {
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`🔧 Mock M-Pesa Daraja API running on port ${PORT}`);
-  console.log(`📋 STK Push: POST http://localhost:${PORT}/mpesa/stkpush/v1/processrequest`);
-  console.log(`🔍 Query: GET http://localhost:${PORT}/mpesa/stkpushquery/v1/query`);
-  console.log(`🐛 Debug: GET http://localhost:${PORT}/debug/requests`);
+  console.log(`Mock M-Pesa Daraja API running on port ${PORT}`);
+  console.log(`STK Push: POST http://localhost:${PORT}/mpesa/stkpush/v1/processrequest`);
+  console.log(`Query: GET http://localhost:${PORT}/mpesa/stkpushquery/v1/query`);
+  console.log(`Debug: GET http://localhost:${PORT}/debug/requests`);
 });

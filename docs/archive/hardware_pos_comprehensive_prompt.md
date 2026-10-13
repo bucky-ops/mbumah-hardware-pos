@@ -1855,14 +1855,14 @@ User-Facing Errors:
 - Contact support if unresolvable
 
 Examples:
-❌ Bad: "Internal Server Error 500"
-✅ Good: "Unable to process payment right now. Please try again in a few minutes or contact support."
+Bad: "Internal Server Error 500"
+Good: "Unable to process payment right now. Please try again in a few minutes or contact support."
 
-❌ Bad: "FK constraint violation"
-✅ Good: "Cannot delete this product as it has existing sales records."
+Bad: "FK constraint violation"
+Good: "Cannot delete this product as it has existing sales records."
 
-❌ Bad: "Timeout error"
-✅ Good: "Payment is taking longer than expected. Check M-Pesa balance or try again."
+Bad: "Timeout error"
+Good: "Payment is taking longer than expected. Check M-Pesa balance or try again."
 ```
 
 ### 13.2 Graceful Degradation

@@ -1,7 +1,7 @@
-// GET /api/cron/payments-sweeper - expire abandoned M-Pesa STK pushes.
+// GET /api/cron/payments-sweeper - expire abandoned M-Pesa STK Push requests.
 //
 // AUDIT REFERENCE - FINANCIAL_MODULE_AUDIT_REPORT.md (F6 race atlas / Wave 1):
-//   An STK push that is never completed (customer dismissed the prompt, phone
+//   An STK Push that is never completed (customer dismissed the prompt, phone
 //   offline, wrong PIN) leaves MpesaTransaction rows stuck in 'PENDING' and -
 //   for STK-initiated sales - SalesTransaction rows stuck in paymentStatus
 //   'PENDING' forever. Safaricom expires the request after ~2 minutes, but
@@ -31,7 +31,7 @@ import { LogSeverity, LogComponent } from '@/lib/types';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-// STK pushes are expired by Safaricom after ~2 minutes; 10 minutes gives the
+// STK Push requests are expired by Safaricom after ~2 minutes; 10 minutes gives the
 // Daraja callback generous room to arrive before we consider it lost.
 const STALE_AFTER_MINUTES = 10;
 // Bounded batch keeps lambda duration predictable; the next hourly run
@@ -118,7 +118,7 @@ async function paymentsSweeperHandler(...args: unknown[]): Promise<Response> {
         where: { id: txn.id, status: 'PENDING' },
         data: {
           status: 'CANCELLED',
-          resultDesc: `STK push expired after ${STALE_AFTER_MINUTES}m with no callback (payments-sweeper)`,
+          resultDesc: `STK Push expired after ${STALE_AFTER_MINUTES}m with no callback (payments-sweeper)`,
         },
       });
       if (claimed.count === 0) continue;
@@ -136,7 +136,7 @@ async function paymentsSweeperHandler(...args: unknown[]): Promise<Response> {
         action: 'MPESA_STK_EXPIRED',
         component: LogComponent.PAYMENT,
         severity: LogSeverity.WARN,
-        message: `Stale PENDING M-Pesa STK push older than ${STALE_AFTER_MINUTES}m expired by payments-sweeper; linked sale marked FAILED (stock compensation, if the callback later arrives, is owned by the Daraja callback handler).`,
+        message: `Stale PENDING M-Pesa STK Push older than ${STALE_AFTER_MINUTES}m expired by payments-sweeper; linked sale marked FAILED (stock compensation, if the callback later arrives, is owned by the Daraja callback handler).`,
         storeId: txn.storeId,
         metadata: {
           mpesaTransactionId: txn.id,

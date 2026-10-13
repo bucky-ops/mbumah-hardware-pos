@@ -1,13 +1,13 @@
 # ============================================================================
-# MBUMAH HARDWARE POS & ERP — Production Docker Compose (Self-Hosted)
+# MBUMAH HARDWARE POS & ERP - Production Docker Compose (Self-Hosted)
 # ============================================================================
 # Usage:
 #   docker compose -f docker-compose.prod.yml up -d
 #
 # This file orchestrates the full production stack:
-#   1. PostgreSQL 15 — persistent database
-#   2. Next.js App  — the POS application
-#   3. Nginx        — reverse proxy with SSL termination & security headers
+#   1. PostgreSQL 15 - persistent database
+#   2. Next.js App  - the POS application
+#   3. Nginx        - reverse proxy with SSL termination & security headers
 #
 # Prerequisites:
 #   - Copy .env.example to .env and fill in all values
@@ -45,7 +45,7 @@ services:
       - mbumah-internal
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Next.js Application — built from the Dockerfile with standalone output
+  # Next.js Application - built from the Dockerfile with standalone output
   # ─────────────────────────────────────────────────────────────────────────────
   app:
     build:
@@ -88,14 +88,14 @@ services:
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
       TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
 
-      # ── Redis (Optional — for caching & sessions) ─────────────────────────
+      # ── Redis (Optional - for caching & sessions) ─────────────────────────
       REDIS_URL: ${REDIS_URL:-}
 
       # ── Diagnostics ───────────────────────────────────────────────────────
       # EXPOSE_ERRORS: "true"  # Uncomment TEMPORARILY to debug 500 errors
     expose:
       - "3000"
-    # Do NOT map port 3000 to the host in production — nginx handles external traffic.
+    # Do NOT map port 3000 to the host in production - nginx handles external traffic.
     # For initial testing only, uncomment the line below:
     # ports:
     #   - "3000:3000"
@@ -113,7 +113,7 @@ services:
           - nextjs_app
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Notification — Realtime socket.io service (port 3003, internal only)
+  # Notification - Realtime socket.io service (port 3003, internal only)
   # Receives same-origin /socket.io/ traffic from nginx (websocket upgrade).
   # Powers live receipt distribution and POS notifications. Never expose
   # port 3003 to the host - the service trusts same-origin connections.
@@ -136,7 +136,7 @@ services:
       - mbumah-internal
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Nginx — Reverse Proxy with SSL termination and security headers
+  # Nginx - Reverse Proxy with SSL termination and security headers
   # ─────────────────────────────────────────────────────────────────────────────
   nginx:
     image: nginx:1.27-alpine
@@ -166,7 +166,7 @@ services:
       - mbumah-internal
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Certbot — Automatic SSL certificate renewal via Let's Encrypt
+  # Certbot - Automatic SSL certificate renewal via Let's Encrypt
   # Uncomment and configure after your domain's DNS points to this server.
   # ─────────────────────────────────────────────────────────────────────────────
   # certbot:
@@ -190,7 +190,7 @@ volumes:
     driver: local
 
 # ───────────────────────────────────────────────────────────────────────────────
-# Network — Internal-only network; only nginx exposes ports to the host
+# Network - Internal-only network; only nginx exposes ports to the host
 # ───────────────────────────────────────────────────────────────────────────────
 networks:
   mbumah-internal:

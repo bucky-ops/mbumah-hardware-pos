@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// MBUMAH HARDWARE POS — Sentry Client Configuration
+// MBUMAH HARDWARE POS - Sentry Client Configuration
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // This file is the CANONICAL Sentry initialization for the BROWSER bundle.
@@ -58,9 +58,9 @@ const RELEASE =
 // ── Sample rates ─────────────────────────────────────────────────────────────
 //
 // Transaction (performance) sampling is environment-aware:
-//   • development: 100% — see every trace while debugging.
-//   • staging:     20%  — enough signal to catch regressions pre-prod.
-//   • production:  10%  — stays within Sentry's free tier for a single-store
+//   • development: 100% - see every trace while debugging.
+//   • staging:     20%  - enough signal to catch regressions pre-prod.
+//   • production:  10%  - stays within Sentry's free tier for a single-store
 //                         POS with modest traffic. Errors are ALWAYS 100%.
 //
 // Session replays: capture 100% of error sessions, 10% of normal sessions in
@@ -77,7 +77,7 @@ const REPLAYS_ON_ERROR_SAMPLE_RATE = 1.0;
 // If no DSN is configured (local dev without Sentry), `Sentry.init()` is
 // never called and the SDK no-ops gracefully. Every public API
 // (`captureException`, `addBreadcrumb`, etc.) is safe to call on an
-// uninitialised hub — it just does nothing.
+// uninitialised hub - it just does nothing.
 if (SENTRY_DSN) {
   Sentry.init({
     dsn: SENTRY_DSN,
@@ -157,7 +157,7 @@ if (SENTRY_DSN) {
     // These errors are either framework-level control flow (NEXT_NOT_FOUND,
     // NEXT_REDIRECT) or browser quirks that aren't real bugs.
     ignoreErrors: [
-      // Next.js control-flow utilities — not errors.
+      // Next.js control-flow utilities - not errors.
       'NEXT_NOT_FOUND',
       'NEXT_REDIRECT',
       'NEXT_AUTH',

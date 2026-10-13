@@ -22,6 +22,16 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.17.1',
+    title: 'Professional polish across the product',
+    bullets: [
+      'Cleaner, more professional wording everywhere: docs, comments, console output, receipts, emails, and message templates no longer use decorative emojis or AI-style dashes.',
+      'Consistent terminology across the app and docs: M-Pesa, Daraja API, STK Push, PostgreSQL, TypeScript.',
+      'Receipts and printed documents now carry the current 3D Mbumah brand mark, and PWA shortcuts use the standard icon set.',
+      'Demo login credentials are clearly labeled as local-only defaults; change them on first login.',
+    ],
+  },
+  {
     version: '2.17.0',
     title: 'Hosting readiness audit and safer operations',
     bullets: [

@@ -1,9 +1,9 @@
 # ============================================================================
-# MBUMAH HARDWARE POS & ERP — Laptop / Standalone Compose (single machine)
+# MBUMAH HARDWARE POS & ERP - Laptop / Standalone Compose (single machine)
 # ============================================================================\# Runs the ENTIRE POS on ONE laptop with zero cloud dependency:
-#   postgres — local persistent database (internal network only)
-#   app      — Next.js POS (standalone build), exposed on host port 3000
-#   cron     — in-stack scheduler replacing Vercel Cron (hourly + nightly)
+#   postgres - local persistent database (internal network only)
+#   app      - Next.js POS (standalone build), exposed on host port 3000
+#   cron     - in-stack scheduler replacing Vercel Cron (hourly + nightly)
 #
 # Usage:
 #   cp deploy/laptop/.env.laptop.example .env   (or run the install script)
@@ -19,7 +19,7 @@ name: mbumah-laptop
 
 services:
   # ───────────────────────────────────────────────────────────────────────────
-  # PostgreSQL 15 — persistent local database
+  # PostgreSQL 15 - persistent local database
   # ───────────────────────────────────────────────────────────────────────────
   postgres:
     image: postgres:15-alpine
@@ -29,7 +29,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-mbumah}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-mbumah_pos}
-    # Not published to the host — reachable only inside the compose network.
+    # Not published to the host - reachable only inside the compose network.
     expose:
       - "5432"
     volumes:
@@ -45,7 +45,7 @@ services:
       - mbumah-laptop
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Next.js Application — built from the Dockerfile (standalone output)
+  # Next.js Application - built from the Dockerfile (standalone output)
   # ───────────────────────────────────────────────────────────────────────────
   app:
     build:
@@ -75,7 +75,7 @@ services:
       # Set to true for the FIRST RUN ONLY to create the admin + demo data.
       # Set back to false after first login (re-running seed re-creates users).
       SEED_DATABASE: ${SEED_DATABASE:-false}
-      # ── M-Pesa Daraja (Safaricom) — optional ─────────────────────────────
+      # ── M-Pesa Daraja (Safaricom) - optional ─────────────────────────────
       MPESA_CONSUMER_KEY: ${MPESA_CONSUMER_KEY:-}
       MPESA_CONSUMER_SECRET: ${MPESA_CONSUMER_SECRET:-}
       MPESA_PASSKEY: ${MPESA_PASSKEY:-}
@@ -103,7 +103,7 @@ services:
       - mbumah-laptop
 
   # ───────────────────────────────────────────────────────────────────────────
-  # In-stack cron — replaces Vercel Cron on local installs.
+  # In-stack cron - replaces Vercel Cron on local installs.
   # Fires the hourly dispatcher every hour; the nightly dispatcher once per
   # day when the local hour is 02. Every sub-job re-verifies the
   # x-cron-secret itself, so this only works when CRON_SECRET matches.

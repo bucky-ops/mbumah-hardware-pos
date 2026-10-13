@@ -973,7 +973,7 @@ export const paymentsApi = {
   },
 
   /**
-   * Initiate a Daraja STK push (real or simulated depending on env). Accepts
+   * Initiate a Daraja STK Push (real or simulated depending on env). Accepts
    * the enhanced payload - `phone`, `amount`, `accountReference`,
    * `transactionDesc`, `storeId`.
    */
@@ -992,7 +992,7 @@ export const paymentsApi = {
   },
 
   /**
-   * Poll the status of a previously-initiated STK push by its
+   * Poll the status of a previously-initiated STK Push by its
    * CheckoutRequestID. When Daraja credentials are configured this hits the
    * live STK query endpoint; otherwise it returns the stored status.
    */

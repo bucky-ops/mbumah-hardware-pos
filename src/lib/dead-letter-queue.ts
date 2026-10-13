@@ -8,7 +8,7 @@
 //
 //   • No customer notification is lost - it's persisted to SQLite and will
 //     be retried when the service recovers.
-//   • No payment is stuck - M-Pesa STK pushes that fail get queued and
+//   • No payment is stuck - M-Pesa STK Push requests that fail get queued and
 //     retried (with a fresh CheckoutRequestID) when Daraja comes back.
 //   • Full observability - every enqueued item has a status, error history,
 //     and can be inspected via the admin API.

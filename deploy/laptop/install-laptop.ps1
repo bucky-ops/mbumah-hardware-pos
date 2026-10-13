@@ -1,5 +1,5 @@
 # ============================================================================
-# MBUMAH HARDWARE POS — One-command laptop installer (Windows)
+# MBUMAH HARDWARE POS - One-command laptop installer (Windows)
 # ============================================================================
 # Usage (PowerShell):
 #   powershell -ExecutionPolicy Bypass -File deploy\laptop\install-laptop.ps1

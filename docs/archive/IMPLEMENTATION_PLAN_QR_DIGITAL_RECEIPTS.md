@@ -3,7 +3,7 @@
 **Application:** Mbumah Hardware POS
 **Version target:** v2.10.0
 **Scope:** Invoices · Quotations · Proformas · Credit Notes · Debit Notes (Delivery Notes included because they share the same QR component)
-**Status:** ✅ Implemented and shipped with this release (this document doubles as the delivered plan and the as-built record).
+**Status:** Implemented and shipped with this release (this document doubles as the delivered plan and the as-built record).
 
 ---
 
@@ -27,12 +27,12 @@ debit notes - do **not** behave the same way:
 
 | Surface | QR library | Payload today | Digital page? |
 | --- | --- | --- | --- |
-| POS receipt modal / checkout (`receipt-print.tsx`, `receipt-qr.ts`) | `qrcode.react` | `<origin>/r/<receiptNumber>` | ✅ `/r/[receiptNumber]` (sales transactions only) |
-| Invoice view dialog - all 5 types (`invoices-tab.tsx`) | `qrcode.react` via `DocumentQrBadge` | verify string | ❌ |
-| Invoice/delivery **printed** documents (`document-print.ts`) | `qrcode` (data-URI) | verify string | ❌ |
-| Delivery note view dialog (`delivery-notes-tab.tsx`) | `DocumentQrBadge` | verify string | ❌ |
-| Customer-credits print (`credits-tab.tsx`) | `qrcode` data-URI | verify string (docNo is a **ledger reference**, not a document number) | ❌ must stay a verify string |
-| Rental receipt print (`rentals-tab.tsx`) | `qrcode` data-URI | verify string (`RENTAL`) | ❌ out of scope |
+| POS receipt modal / checkout (`receipt-print.tsx`, `receipt-qr.ts`) | `qrcode.react` | `<origin>/r/<receiptNumber>` | ✓ `/r/[receiptNumber]` (sales transactions only) |
+| Invoice view dialog - all 5 types (`invoices-tab.tsx`) | `qrcode.react` via `DocumentQrBadge` | verify string | ✗ |
+| Invoice/delivery **printed** documents (`document-print.ts`) | `qrcode` (data-URI) | verify string | ✗ |
+| Delivery note view dialog (`delivery-notes-tab.tsx`) | `DocumentQrBadge` | verify string | ✗ |
+| Customer-credits print (`credits-tab.tsx`) | `qrcode` data-URI | verify string (docNo is a **ledger reference**, not a document number) | ✗ must stay a verify string |
+| Rental receipt print (`rentals-tab.tsx`) | `qrcode` data-URI | verify string (`RENTAL`) | ✗ out of scope |
 | KRA eTIMS invoice cards (`etims/qr-code-display.tsx`) | `qrcode.react` | KRA verification payload | n/a (real QR since v2.8.0) |
 
 Key infra already present and reused: public page route `/r/[receiptNumber]`
@@ -145,12 +145,12 @@ download-the-public-page-as-PDF; analytics on scan events (device, time).
 
 | Check | Invoice | Quotation | Proforma | Credit note | Debit note | Delivery note |
 | --- | --- | --- | --- | --- | --- | --- |
-| QR visible in view dialog (desktop + 390 px) | ☑ | ☑ | ☑ | ☑ | ☑ | ☑ |
-| Click QR / “View receipt” opens viewer | ☑ | ☑ | ☑ | ☑ | ☑ | ☑ |
-| Scroll works when content overflows | ☑ | ☑ | ☑ | ☑ | ☑ | ☑ |
-| Autofit fits whole receipt on screen | ☑ | ☑ | ☑ | ☑ | ☑ | ☑ |
-| Public page renders with items + totals | ☑ | ☑ | ☑ | ☑ | ☑ | ☑ |
-| Printed document QR opens the public page | ☑ | ☑ | ☑ | ☑ | ☑ | ☑ |
+| QR visible in view dialog (desktop + 390 px) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Click QR / “View receipt” opens viewer | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Scroll works when content overflows | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Autofit fits whole receipt on screen | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Public page renders with items + totals | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Printed document QR opens the public page | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 **Success metrics:**
 

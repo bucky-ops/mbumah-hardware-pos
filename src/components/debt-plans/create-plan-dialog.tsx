@@ -476,7 +476,7 @@ export function CreatePlanDialog({
                   Auto-charge via M-Pesa
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Attempt STK push on each due date (requires customer consent).
+                  Attempt STK Push on each due date (requires customer consent).
                 </p>
               </div>
               <Switch

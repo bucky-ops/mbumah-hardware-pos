@@ -332,7 +332,7 @@ export function lowStockTemplate(data: LowStockTemplateData): string {
   return emailShell(
     'Low Stock Alert',
     `
-    <h2>⚠️ Low Stock Alert</h2>
+    <h2>Low Stock Alert</h2>
     <p>An inventory review for <strong>${data.storeName}</strong> identified ${data.products.length} product(s) at or below their reorder level.</p>
     ${data.generatedAt ? `<p style="font-size:12px;color:${BRAND.textMuted};">Generated: ${data.generatedAt}</p>` : ''}
 
@@ -459,7 +459,7 @@ export function welcomeTemplate(data: WelcomeTemplateData): string {
   return emailShell(
     'Welcome to MBUMAH HARDWARE',
     `
-    <h2>Welcome, ${data.customerName}! 👋</h2>
+    <h2>Welcome, ${data.customerName}</h2>
     <p>Thank you for joining the <strong>${BRAND.name}</strong> family. We're delighted to have you as a customer${data.storeName ? ` at our <strong>${data.storeName}</strong> branch` : ''}.</p>
 
     <div class="alert alert-success">
@@ -524,9 +524,9 @@ export function tierUpgradeTemplate(data: TierUpgradeTemplateData): string {
   const benefitsHtml = benefits.map((b) => `<li>${b}</li>`).join('');
 
   return emailShell(
-    `You're now ${data.newTier}! 🎉`,
+    `You're now ${data.newTier}!`,
     `
-    <h2>Congratulations, ${data.customerName}! 🎉</h2>
+    <h2>Congratulations, ${data.customerName}</h2>
     <p>Great news! You've been upgraded to the <strong>${data.newTier}</strong> loyalty tier${data.storeName ? ` at ${data.storeName}` : ''}.</p>
 
     <div class="alert alert-success">

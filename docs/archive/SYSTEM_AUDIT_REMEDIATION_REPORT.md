@@ -21,7 +21,7 @@ Every fix is surgical, commented with `// AUDIT FIX:`, and leaves unrelated beha
 
 | Gate | Baseline (`e343cbc`) | After remediation |
 |---|---|---|
-| `npm test` (vitest) | 344/344 ✅ | **344/344 ✅** |
+| `npm test` (vitest) | 344/344 | **344/344** |
 | `npm run lint` | 0 errors / 386 warnings | **0 errors / 387 warnings** *(+1 pre-existing-class warning; new error introduced by wrap fixed in-integration)* |
 | `npx tsc --noEmit --strict` | 659 pre-existing errors (advisory, issue #8) | **643** (−16; zero new errors introduced - verified per-file by each agent) |
 | `npm run build` (`SKIP_ENV_VALIDATION=1`) | pass | **pass** (full route manifest emitted) |
@@ -30,62 +30,62 @@ Every fix is surgical, commented with `// AUDIT FIX:`, and leaves unrelated beha
 
 ## 2. Phase 1 - Module-by-Module Checklist Matrix
 
-Legend: ✅ verified passing · 🔧 fixed in this patch · ⚠️ documented gap
+Legend: ✓ verified passing · Fixed = fixed in this patch · Gap = documented gap
 
 ### Module 1 - POS & Checkout Terminal
 | Checklist item | Status | Evidence / fix |
 |---|---|---|
-| Fractional quantity math, no float drift | 🔧 | `quantity` is Decimal & `z.coerce.number().positive()`; but line totals used raw float. `calculateLineTotal` now routes through `KES()` HALF_EVEN 2dp and the checkout accumulators re-round (`src/lib/helpers.ts:111-148`, `transactions/route.ts:405-419`). Header total = Σ rounded lines; the ±0.01 JE backstop can no longer trip. |
-| Cart manipulation, item/cart discounts, VAT recalibration | ✅ | Server-authoritative pricing from PR #12 re-verified: item discountPercent clamped 0-100, cart discountAmount capped ≤ total, tax from `product.taxRate` server-side (`transactions/route.ts:354-396`). |
-| Multi-tender split ($ cash + $ mobile + $ store credit) | 🔧 | Split legs already recorded Payment rows, but (a) Σ legs was only implicitly enforced, (b) a DEBT leg bypassed credit limit **and** the debtor ledger, (c) the cash leg never hit the drawer. Fixed: explicit Σ==total 400 (`:421-448`); DEBT leg = in-tx conditional credit check + DebtLedger charge + balance increment + AR JE parity (`:949-1011`); split-cash drawer SALE row (`:713-754`). |
-| Cart hold & retrieve, out-of-order resume | 🔧 | Hold existed (localStorage) but resume was a blind LIFO `pop()`. New `HeldCartsDialog` lists held carts (timestamp, count, total, customer) with per-row Resume/Delete (`src/components/pos/held-carts-dialog.tsx`, `pos-tab.tsx:741-838`). Stock is never reserved while held, so nothing to release (commented). |
-| Offline queue syncs without duplicates | ✅ | PR #12 SYS-10 re-verified end-to-end: queue stamps `idempotencyKey`, sends `Authorization`, 409/`idempotentReplay` treated as success (`offline-sync.ts:171-279`, server pre-check + P2002 catch `transactions/route.ts:159-174,482-501`, `receiptNumber @unique`). |
+| Fractional quantity math, no float drift | Fixed | `quantity` is Decimal & `z.coerce.number().positive()`; but line totals used raw float. `calculateLineTotal` now routes through `KES()` HALF_EVEN 2dp and the checkout accumulators re-round (`src/lib/helpers.ts:111-148`, `transactions/route.ts:405-419`). Header total = Σ rounded lines; the ±0.01 JE backstop can no longer trip. |
+| Cart manipulation, item/cart discounts, VAT recalibration | ✓ | Server-authoritative pricing from PR #12 re-verified: item discountPercent clamped 0-100, cart discountAmount capped ≤ total, tax from `product.taxRate` server-side (`transactions/route.ts:354-396`). |
+| Multi-tender split ($ cash + $ mobile + $ store credit) | Fixed | Split legs already recorded Payment rows, but (a) Σ legs was only implicitly enforced, (b) a DEBT leg bypassed credit limit **and** the debtor ledger, (c) the cash leg never hit the drawer. Fixed: explicit Σ==total 400 (`:421-448`); DEBT leg = in-tx conditional credit check + DebtLedger charge + balance increment + AR JE parity (`:949-1011`); split-cash drawer SALE row (`:713-754`). |
+| Cart hold & retrieve, out-of-order resume | Fixed | Hold existed (localStorage) but resume was a blind LIFO `pop()`. New `HeldCartsDialog` lists held carts (timestamp, count, total, customer) with per-row Resume/Delete (`src/components/pos/held-carts-dialog.tsx`, `pos-tab.tsx:741-838`). Stock is never reserved while held, so nothing to release (commented). |
+| Offline queue syncs without duplicates | ✓ | PR #12 SYS-10 re-verified end-to-end: queue stamps `idempotencyKey`, sends `Authorization`, 409/`idempotentReplay` treated as success (`offline-sync.ts:171-279`, server pre-check + P2002 catch `transactions/route.ts:159-174,482-501`, `receiptNumber @unique`). |
 
 ### Module 2 - Quotation & Contractor Invoicing
 | Checklist item | Status | Evidence / fix |
 |---|---|---|
-| Quote lifecycle; stock decrements only on conversion | 🔧 | Quotes are Invoice rows (`invoiceType QUOTATION/PROFORMA`); creation never touches stock ✅. But expiry was unenforced and quotes could be converted twice. Fixed server-side (see below); conversion payload compatibility preserved byte-for-byte. |
-| Expiry enforcement | 🔧 | `POST /api/invoices` now 409s `QUOTE_EXPIRED` when the source quote's `dueDate` < start-of-today or status `EXPIRED`, plus lazy auto-expiry of stale quotes on GET/POST (`invoices/route.ts:213-294`). Client pre-flight guard + toast added (`invoices-tab.tsx:287-303,495-513`). |
-| Delivery note hides cost & margins | ✅ | DN print payload contains only productName/quantity/unitType/notes (`delivery-notes-tab.tsx:401-409`); routes now also session-guarded (3-d). |
+| Quote lifecycle; stock decrements only on conversion | Fixed | Quotes are Invoice rows (`invoiceType QUOTATION/PROFORMA`); creation never touches stock. But expiry was unenforced and quotes could be converted twice. Fixed server-side (see below); conversion payload compatibility preserved byte-for-byte. |
+| Expiry enforcement | Fixed | `POST /api/invoices` now 409s `QUOTE_EXPIRED` when the source quote's `dueDate` < start-of-today or status `EXPIRED`, plus lazy auto-expiry of stale quotes on GET/POST (`invoices/route.ts:213-294`). Client pre-flight guard + toast added (`invoices-tab.tsx:287-303,495-513`). |
+| Delivery note hides cost & margins | ✓ | DN print payload contains only productName/quantity/unitType/notes (`delivery-notes-tab.tsx:401-409`); routes now also session-guarded (3-d). |
 
 ### Module 3 - Stock & Inventory Management
 | Checklist item | Status | Evidence / fix |
 |---|---|---|
-| Multi-unit case↔unit breakdown | ⚠️ | No `conversionFactor`/`unitsPerCase` anywhere; `ProductVariant` is a parallel SKU, not a conversion. Requires schema + migration + UI - documented as a recommended feature, not safe to bolt on in a remediation pass. |
-| Low-stock alerts → dashboard/reorder list | ✅ | `reorderLevel` + `products/low-stock` endpoint (deficit-sorted, on-order lookup) + dashboard widget re-verified (`products/low-stock/route.ts:215`). |
-| Write-offs require admin reason + audit trail | 🔧 | Was: optional reason, actor taken from request **body**, no JE. Now: session-only identity, mandatory reason ≥3 chars for negatives, `DAMAGED/STOLEN/EXPIRED` classification persisted in movement notes + systemLog metadata, and a **balanced in-tx JE (Dr 5000 / Cr 1300)** at WAC cost (`stock-movements/route.ts:318-500`). |
-| Race conditions: no negative stock | 🔧 | Full mutation-site census: 3 blind decrement sites remained. All 10 sites are now conditional-safe - see §3 CRIT-3/4/5. POS sale guard (PR #12 R1) re-verified. |
+| Multi-unit case↔unit breakdown | Gap | No `conversionFactor`/`unitsPerCase` anywhere; `ProductVariant` is a parallel SKU, not a conversion. Requires schema + migration + UI - documented as a recommended feature, not safe to bolt on in a remediation pass. |
+| Low-stock alerts → dashboard/reorder list | ✓ | `reorderLevel` + `products/low-stock` endpoint (deficit-sorted, on-order lookup) + dashboard widget re-verified (`products/low-stock/route.ts:215`). |
+| Write-offs require admin reason + audit trail | Fixed | Was: optional reason, actor taken from request **body**, no JE. Now: session-only identity, mandatory reason ≥3 chars for negatives, `DAMAGED/STOLEN/EXPIRED` classification persisted in movement notes + systemLog metadata, and a **balanced in-tx JE (Dr 5000 / Cr 1300)** at WAC cost (`stock-movements/route.ts:318-500`). |
+| Race conditions: no negative stock | Fixed | Full mutation-site census: 3 blind decrement sites remained. All 10 sites are now conditional-safe - see §3 CRIT-3/4/5. POS sale guard (PR #12 R1) re-verified. |
 
 ### Module 4 - Purchasing & Suppliers
 | Checklist item | Status | Evidence / fix |
 |---|---|---|
-| PO → partial GRN → open quantity preserved | ✅ | PR #12 wave re-verified: per-receipt CAS on PO item qty, derived status machine, receipt-guarded delete/cancel, atomic WAC blend + `recordGoodsReceiptEntry` (Dr Inventory+VAT / Cr AP) in-tx (`purchase-orders/[id]/route.ts:249-280`). |
-| COGS via Moving Average Cost | ✅ | Atomic in-tx WAC blend re-verified (`wac.test.ts` 14/14). |
+| PO → partial GRN → open quantity preserved | ✓ | PR #12 wave re-verified: per-receipt CAS on PO item qty, derived status machine, receipt-guarded delete/cancel, atomic WAC blend + `recordGoodsReceiptEntry` (Dr Inventory+VAT / Cr AP) in-tx (`purchase-orders/[id]/route.ts:249-280`). |
+| COGS via Moving Average Cost | ✓ | Atomic in-tx WAC blend re-verified (`wac.test.ts` 14/14). |
 
 ### Module 5 - Customer & Debtor Management
 | Checklist item | Status | Evidence / fix |
 |---|---|---|
-| Credit limit breach blocked | 🔧 | Pure-DEBT check existed but the SPLIT-DEBT leg bypassed it entirely and the in-tx increment was unconditional (TOCTOU). Now conditional inside the tx for both paths + friendly pre-check retained (§3 CRIT-1/2). Hard block per protocol ("blocked **or** manager approval"). |
-| Partial settlement → ledger/aging/open credit | 🔧 | Verified passing (atomic claim, aging recalculation, balance decrement, JE, drawer CASH_IN in one tx) - plus fixed the audit row `ReferenceError` that silently skipped audit logging (`debt/route.ts:343-348`). |
+| Credit limit breach blocked | Fixed | Pure-DEBT check existed but the SPLIT-DEBT leg bypassed it entirely and the in-tx increment was unconditional (TOCTOU). Now conditional inside the tx for both paths + friendly pre-check retained (§3 CRIT-1/2). Hard block per protocol ("blocked **or** manager approval"). |
+| Partial settlement → ledger/aging/open credit | Fixed | Verified passing (atomic claim, aging recalculation, balance decrement, JE, drawer CASH_IN in one tx) - plus fixed the audit row `ReferenceError` that silently skipped audit logging (`debt/route.ts:343-348`). |
 
 ### Module 6 - Cash Drawer & Shift Control
 | Checklist item | Status | Evidence / fix |
 |---|---|---|
-| Float + sales + payouts → shortage flagged | 🔧 | `shift.totalSales` was **never written** - expected cash was always `startingCash`, making every `cashDifference` fiction. Shift end now derives expected cash from the `CashDrawerLog` signed-sum within the shift window and persists the full breakdown (`shifts/[id]/end/route.ts:45-160`). |
-| X-read (non-resetting) vs Z-read (resetting+lock) | 🔧 | New `GET /api/shifts/[id]/xread` - pure inquiry, zero mutation. Z = shift end with snapshot breakdown. Drawer CLOSE/CASH_OUT now manager-or-above. Global "no sales without open shift" enforcement is a documented gap (§6). |
+| Float + sales + payouts → shortage flagged | Fixed | `shift.totalSales` was **never written** - expected cash was always `startingCash`, making every `cashDifference` fiction. Shift end now derives expected cash from the `CashDrawerLog` signed-sum within the shift window and persists the full breakdown (`shifts/[id]/end/route.ts:45-160`). |
+| X-read (non-resetting) vs Z-read (resetting+lock) | Fixed | New `GET /api/shifts/[id]/xread` - pure inquiry, zero mutation. Z = shift end with snapshot breakdown. Drawer CLOSE/CASH_OUT now manager-or-above. Global "no sales without open shift" enforcement is a documented gap (§6). |
 
 ### Module 7 - Analytics & Financial Reporting
 | Checklist item | Status | Evidence / fix |
 |---|---|---|
-| Revenue − COGS − Discounts = Net Profit consistency | 🔧 | Three conflicting formulas unified behind `src/lib/profit.ts` (VAT-exclusive, HALF_EVEN): `sales-summary`, `daily`, `revenue-trend` rewired; response keys preserved. Bonus: fixed a real corruption bug in `revenue-trend` (`0 + Decimal` string-concatenation into `byMethod` JSON). Profit/margin fields redacted for below-manager callers (`sales-summary`, `daily`, `transactions/[id]`, `receipts/[id]`). |
-| VAT ledger: exempt = 0 tax; inclusive/exclusive toggle | 🔧/⚠️ | Exempt items yield 0 tax (per-line `taxRate`) ✅. `tax/filings` no longer trusts client-declared totals - server recompute is authoritative with an additive `discrepancy` block (`tax/filings/route.ts`). A platform-wide inclusive/exclusive pricing toggle remains a documented gap (KRA eTIMS assumes tax-inclusive while POS math is tax-exclusive - needs a KRA-aligned product decision). |
+| Revenue − COGS − Discounts = Net Profit consistency | Fixed | Three conflicting formulas unified behind `src/lib/profit.ts` (VAT-exclusive, HALF_EVEN): `sales-summary`, `daily`, `revenue-trend` rewired; response keys preserved. Bonus: fixed a real corruption bug in `revenue-trend` (`0 + Decimal` string-concatenation into `byMethod` JSON). Profit/margin fields redacted for below-manager callers (`sales-summary`, `daily`, `transactions/[id]`, `receipts/[id]`). |
+| VAT ledger: exempt = 0 tax; inclusive/exclusive toggle | Fixed / Gap | Exempt items yield 0 tax (per-line `taxRate`). `tax/filings` no longer trusts client-declared totals - server recompute is authoritative with an additive `discrepancy` block (`tax/filings/route.ts`). A platform-wide inclusive/exclusive pricing toggle remains a documented gap (KRA eTIMS assumes tax-inclusive while POS math is tax-exclusive - needs a KRA-aligned product decision). |
 
 ### Module 8 - User Management, RBAC & Security
 | Checklist item | Status | Evidence / fix |
 |---|---|---|
-| Cashier denied: price edit / profit / invoice delete / user admin | 🔧 | `PERMISSION_MATRIX` was defined but enforced **nowhere** server-side; ~34 route files had no in-file guard beyond proxy Bearer-presence. `auth.ts` now supports `roles` on `withSessionAuth`/`requireStoreAccess`, plus `assertPermission`/`hasPermissionOr403`; 33 route files wrapped per the matrix (products PUT/DELETE → manager+; users SoD from PR #12; reports exports → manager+; whatsapp → manager+; stores/branches writes → owner+; invoices have no DELETE by design - immutability). Cashier customer intake intentionally kept open (core POS walk-in flow) - commented. |
-| SQL injection | ✅ | All 10 raw usages re-verified parameterized (tagged templates or `?/$1` placeholders + fixed table allowlist in `sequence.ts`). |
-| XSS | ✅ | Single sink = shadcn `ChartStyle` CSS vars from developer-defined config (not user input). No `eval`/`new Function`/`javascript:` hrefs. |
+| Cashier denied: price edit / profit / invoice delete / user admin | Fixed | `PERMISSION_MATRIX` was defined but enforced **nowhere** server-side; ~34 route files had no in-file guard beyond proxy Bearer-presence. `auth.ts` now supports `roles` on `withSessionAuth`/`requireStoreAccess`, plus `assertPermission`/`hasPermissionOr403`; 33 route files wrapped per the matrix (products PUT/DELETE → manager+; users SoD from PR #12; reports exports → manager+; whatsapp → manager+; stores/branches writes → owner+; invoices have no DELETE by design - immutability). Cashier customer intake intentionally kept open (core POS walk-in flow) - commented. |
+| SQL injection | ✓ | All 10 raw usages re-verified parameterized (tagged templates or `?/$1` placeholders + fixed table allowlist in `sequence.ts`). |
+| XSS | ✓ | Single sink = shadcn `ChartStyle` CSS vars from developer-defined config (not user input). No `eval`/`new Function`/`javascript:` hrefs. |
 
 ---
 
@@ -135,9 +135,9 @@ Legend: ✅ verified passing · 🔧 fixed in this patch · ⚠️ documented ga
 
 | Test | Result | Detail |
 |---|---|---|
-| Thermal receipt printer offline mid-print | ✅ **SAFE (verified)** | Printing is browser `window.print()` fired **after** sale commit (`pos-tab.tsx:403`, offline synthetic receipt `:341-403`); a print failure cannot corrupt transaction state. No ESC/POS SDK in the stack. |
-| Barcode scanner speed (20 scans / 5 s) | 🔧 **FIXED** | Enter-terminated scan now resolves deterministically (exact barcode/SKU → cart → clear), 200 ms debounce prevents render thrash; nothing concatenates. Server-side barcode exact lookup for >100-product catalogs remains a documented enhancement. |
-| Cash drawer RJ12 pulse on cash, not on account/quote | ⚠️ **NOT_IMPLEMENTED** | No hardware control layer exists (grep: no ESC/POS/drawer-kick/pulse code), so the trigger rule is moot until a printer/drawer SDK is integrated. Documented as a feature requirement. |
+| Thermal receipt printer offline mid-print | **SAFE (verified)** | Printing is browser `window.print()` fired **after** sale commit (`pos-tab.tsx:403`, offline synthetic receipt `:341-403`); a print failure cannot corrupt transaction state. No ESC/POS SDK in the stack. |
+| Barcode scanner speed (20 scans / 5 s) | **FIXED** | Enter-terminated scan now resolves deterministically (exact barcode/SKU → cart → clear), 200 ms debounce prevents render thrash; nothing concatenates. Server-side barcode exact lookup for >100-product catalogs remains a documented enhancement. |
+| Cash drawer RJ12 pulse on cash, not on account/quote | **NOT_IMPLEMENTED** | No hardware control layer exists (grep: no ESC/POS/drawer-kick/pulse code), so the trigger rule is moot until a printer/drawer SDK is integrated. Documented as a feature requirement. |
 
 ---
 

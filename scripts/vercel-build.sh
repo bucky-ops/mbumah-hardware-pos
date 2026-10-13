@@ -13,12 +13,12 @@ echo "OS: $(uname -s) $(uname -m)"
 # Prisma generate validates the schema and needs env vars to be present
 # We use the actual DATABASE_URL if available (from Vercel env), otherwise a dummy
 if [ -z "${DATABASE_URL:-}" ]; then
-  echo "⚠️  DATABASE_URL not set, using dummy URL for prisma generate"
+  echo "Warning: DATABASE_URL not set, using dummy URL for prisma generate"
   export DATABASE_URL="postgresql://build:build@localhost/build"
 fi
 
 if [ -z "${DIRECT_URL:-}" ]; then
-  echo "⚠️  DIRECT_URL not set, using dummy URL for prisma generate"
+  echo "Warning: DIRECT_URL not set, using dummy URL for prisma generate"
   export DIRECT_URL="postgresql://build:build@localhost/build"
 fi
 
@@ -26,31 +26,31 @@ fi
 export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/&channel_binding=require//' | sed 's/?channel_binding=require&/?/' | sed 's/?channel_binding=require$//')
 export DIRECT_URL=$(echo "$DIRECT_URL" | sed 's/&channel_binding=require//' | sed 's/?channel_binding=require&/?/' | sed 's/?channel_binding=require$//')
 
-echo "✅ DATABASE_URL is set (starts with: ${DATABASE_URL:0:30}...)"
+echo "[ok] DATABASE_URL is set (starts with: ${DATABASE_URL:0:30}...)"
 
 # Generate Prisma client with correct binary targets for Vercel
-echo "🔧 Running prisma generate..."
+echo "Running prisma generate..."
 npx prisma generate
 
 # Verify Prisma client was generated
-echo "📦 Checking Prisma client..."
-ls -la node_modules/.prisma/client/ 2>/dev/null || echo "⚠️  Prisma client not found in expected location"
-ls -la node_modules/@prisma/client/ 2>/dev/null || echo "⚠️  @prisma/client not found"
+echo "Checking Prisma client..."
+ls -la node_modules/.prisma/client/ 2>/dev/null || echo "Warning: Prisma client not found in expected location"
+ls -la node_modules/@prisma/client/ 2>/dev/null || echo "Warning: @prisma/client not found"
 
 # Sync the database schema (migrate deploy → db push drift recovery →
 # baseline resolve). See scripts/sync-db-schema.mjs for the full incident
 # rationale (P2022 checkout 500: deployed code ahead of the DB schema).
-# Exits non-zero when the schema cannot be converged — failing the build is
+# Exits non-zero when the schema cannot be converged - failing the build is
 # the correct outcome vs. deploying code that 500s on every checkout.
 if [[ "$DATABASE_URL" == *"neon.tech"* ]]; then
-  echo "🗄️  Syncing database schema..."
+  echo "Syncing database schema..."
   node scripts/sync-db-schema.mjs
 else
-  echo "ℹ️  Skipping schema sync (not a Neon database URL)"
+  echo "Skipping schema sync (not a Neon database URL)"
 fi
 
 # Build the Next.js app
-echo "🏗️  Running next build..."
+echo "Running next build..."
 npx next build
 
-echo "✅ Build complete!"
+echo "[ok] Build complete!"

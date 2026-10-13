@@ -53,7 +53,7 @@ function poDateStr(d: Date): string {
 }
 
 async function main() {
-  console.log(`\n=== MBUMAH demo-data top-up - mode: ${APPLY ? '🟢 APPLY' : '🟡 DRY RUN'} ===\n`);
+  console.log(`\n=== MBUMAH demo-data top-up - mode: ${APPLY ? 'APPLY' : 'DRY RUN'} ===\n`);
 
   // before counts
   const before = await snapshot();
@@ -295,7 +295,7 @@ async function main() {
     // Verify items' products - drop rows with unknown products rather than fail.
     const validItems = sale.items.filter(i => productIds.has(i.productId));
     if (validItems.length < sale.items.length) {
-      console.log(`   ⚠️  ${sale.receiptNumber}: dropping ${sale.items.length - validItems.length} item(s) with unknown productId`);
+      console.log(`   Warning: ${sale.receiptNumber}: dropping ${sale.items.length - validItems.length} item(s) with unknown productId`);
     }
     if (validItems.length === 0) { failed.push({ item: `sale:${sale.receiptNumber}`, err: 'all item productIds unknown' }); continue; }
     const cashierId = userOrUndefined(sale.cashierId);
@@ -530,9 +530,9 @@ async function main() {
           metadata: JSON.stringify({ created: created.length, skipped: skipped.length, failed: failed.length }),
         },
       });
-      console.log('\n📝 systemLog audit entry written.');
+      console.log('\nsystemLog audit entry written.');
     } catch (e) {
-      console.log(`\n⚠️ systemLog entry failed: ${String(e).slice(0, 120)}`);
+      console.log(`\nWarning: systemLog entry failed: ${String(e).slice(0, 120)}`);
     }
   }
 
@@ -544,7 +544,7 @@ async function main() {
   for (const k of Object.keys(before)) {
     console.log(`${k.padEnd(24)} ${String(before[k]).padStart(5)} → ${after[k]}`);
   }
-  console.log(`\n${APPLY ? '✅ APPLY complete.' : '🟡 Dry run only - re-run with APPLY=1 to write.'}`);
+  console.log(`\n${APPLY ? '[ok] APPLY complete.' : 'Dry run only - re-run with APPLY=1 to write.'}`);
 }
 
 async function snapshot(): Promise<Record<string, number>> {
@@ -563,5 +563,5 @@ async function snapshot(): Promise<Record<string, number>> {
 }
 
 main()
-  .catch(e => { console.error('❌ Top-up failed:', e); process.exit(1); })
+  .catch(e => { console.error('[FAIL] Top-up failed:', e); process.exit(1); })
   .finally(async () => { await prisma.$disconnect(); });

@@ -51,7 +51,7 @@ export const OPENAPI_SPEC = {
     { name: 'Products', description: 'Inventory catalogue' },
     { name: 'Customers', description: 'Customer book including credit' },
     { name: 'Debt Payment Plans', description: 'Structured debt repayment plans' },
-    { name: 'Payments', description: 'M-Pesa STK push + Daraja callback' },
+    { name: 'Payments', description: 'M-Pesa STK Push + Daraja callback' },
   ],
   paths: {
     '/api/admin/bulk-seed': {
@@ -352,7 +352,7 @@ export const OPENAPI_SPEC = {
     '/api/payments/mpesa/stkpush': {
       post: {
         tags: ['Payments'],
-        summary: 'Initiate an M-Pesa STK push (authenticated, rate limited)',
+        summary: 'Initiate an M-Pesa STK Push (authenticated, rate limited)',
         responses: {
           '200': { description: 'Push initiated - CheckoutRequestID returned' },
           '429': { description: 'Rate limited (20/min/IP) - see Retry-After' },

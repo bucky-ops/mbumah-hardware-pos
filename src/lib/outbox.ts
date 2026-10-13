@@ -3,7 +3,7 @@
 // AUDIT REFERENCE - FINANCIAL_MODULE_AUDIT_REPORT.md (F8-4):
 //   Vercel serverless functions freeze shortly after the HTTP response is
 //   returned. Any fire-and-forget promise started inside a route handler -
-//   the old server-side STK push `fetch(...).catch(() => {})`, post-commit
+//   the old server-side STK Push `fetch(...).catch(() => {})`, post-commit
 //   loyalty writes, notification sends - can silently die half-done.
 //
 // Pattern:

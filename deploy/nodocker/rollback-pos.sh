@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# MBUMAH HARDWARE POS — Rollback to a previous version (Linux/macOS, no-Docker)
+# MBUMAH HARDWARE POS - Rollback to a previous version (Linux/macOS, no-Docker)
 # ============================================================================
 # Thin interactive wrapper around update-pos.sh:
 #   1. Reads the update ledger (~/mbumah-pos-data/update-ledger.jsonl) and

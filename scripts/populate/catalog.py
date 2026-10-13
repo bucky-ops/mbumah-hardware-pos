@@ -10,16 +10,16 @@ STORES = [
 ]
 
 CATEGORIES = [
-    ("Power Tools",          "🔧", "#E67E22", "Drills, grinders, saws and other powered equipment"),
-    ("Hand Tools",           "🔨", "#8E44AD", "Hammers, spanners, pliers and manual tools"),
-    ("Building Materials",   "🧱", "#795548", "Cement, steel, aggregates, boards and waterproofing"),
-    ("Electrical Supplies",  "💡", "#F1C40F", "Cables, switches, lighting, breakers and solar"),
-    ("Plumbing Supplies",    "🚰", "#16A085", "Pipes, fittings, taps, sanitary ware and tanks"),
-    ("Paint & Finishes",     "🎨", "#C0392B", "Emulsions, enamels, primers, brushes and fillers"),
-    ("Hardware & Fasteners", "🔩", "#2C3E50", "Nails, screws, hinges, locks and door hardware"),
-    ("Garden & Outdoor",     "🌱", "#27AE60", "Wheelbarrows, spades, hoses and outdoor equipment"),
-    ("Safety & Workwear",    "🦺", "#D35400", "Helmets, boots, gloves, harnesses and PPE"),
-    ("Home Appliances",      "🏠", "#2980B9", "Cookers, TVs, freezers, fans and small appliances"),
+    ("Power Tools",          "", "#E67E22", "Drills, grinders, saws and other powered equipment"),
+    ("Hand Tools",           "", "#8E44AD", "Hammers, spanners, pliers and manual tools"),
+    ("Building Materials",   "", "#795548", "Cement, steel, aggregates, boards and waterproofing"),
+    ("Electrical Supplies",  "", "#F1C40F", "Cables, switches, lighting, breakers and solar"),
+    ("Plumbing Supplies",    "", "#16A085", "Pipes, fittings, taps, sanitary ware and tanks"),
+    ("Paint & Finishes",     "", "#C0392B", "Emulsions, enamels, primers, brushes and fillers"),
+    ("Hardware & Fasteners", "", "#2C3E50", "Nails, screws, hinges, locks and door hardware"),
+    ("Garden & Outdoor",     "", "#27AE60", "Wheelbarrows, spades, hoses and outdoor equipment"),
+    ("Safety & Workwear",    "", "#D35400", "Helmets, boots, gloves, harnesses and PPE"),
+    ("Home Appliances",      "", "#2980B9", "Cookers, TVs, freezers, fans and small appliances"),
 ]
 
 CAT_KEYS = [c[0] for c in CATEGORIES]

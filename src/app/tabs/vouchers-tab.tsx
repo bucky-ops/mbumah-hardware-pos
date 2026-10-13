@@ -811,7 +811,7 @@ export default function VouchersTab() {
   function getCampaignMessage(campaign: VoucherCampaignItem): string {
     const storeName = 'Mbumah Hardware';
     const validStr = campaign.endDate ? `${formatDate(campaign.startDate)} - ${formatDate(campaign.endDate)}` : `From ${formatDate(campaign.startDate)}`;
-    return `📢 ${campaign.name} at ${storeName}!\n\n${campaign.description || 'Exciting promotional offers available!'}\n\nValid: ${validStr}\n${campaign.targetAudience ? `For: ${campaign.targetAudience}` : ''}\n\nDon't miss out!`;
+    return `${campaign.name} at ${storeName}!\n\n${campaign.description || 'Exciting promotional offers available!'}\n\nValid: ${validStr}\n${campaign.targetAudience ? `For: ${campaign.targetAudience}` : ''}\n\nDon't miss out!`;
   }
 
   // Campaign sends stay deep-link based (server-side campaign dispatch is out

@@ -157,15 +157,15 @@ schtasks /create /tn "Mbumah POS" /sc onlogon /tr ^
 
 ## First login & go-live
 
-1. Open the POS → log in as `admin@mbumahhardware.co.ke` / `password123`.
+1. Open the POS and log in with the seeded local default: `admin@mbumahhardware.co.ke` / `password123` (local installs only).
 2. **Change the admin password immediately** (Profile → Security).
 3. Let staff train on the demo data as long as needed.
 4. Before the first real sale: double-click **deploy/windows/Wipe-Demo-Data.bat** (see the
    Go-Live Reset section above).
 5. Set `SEED_DATABASE=false` in `.env`.
 6. M-Pesa: fill Daraja credentials in `.env`, restart. Production callbacks
-   need a public HTTPS URL (see docs/deployment.md (self-hosting).
-7. Verify: About dialog shows v2.7.x; test sale, receipt print, shift close.
+   need a public HTTPS URL (see docs/self-hosting.md).
+7. Verify: the About dialog shows the new version; test a sale, receipt print, and shift close.
 
 ---
 

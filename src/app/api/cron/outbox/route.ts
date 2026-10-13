@@ -2,7 +2,7 @@
 //
 // AUDIT REFERENCE - FINANCIAL_MODULE_AUDIT_REPORT.md (F8-4 / Wave 0):
 //   Vercel serverless functions freeze shortly after the HTTP response is
-//   returned, so outbox events enqueued during checkout (M-Pesa STK push,
+//   returned, so outbox events enqueued during checkout (M-Pesa STK Push,
 //   audit alerts) can silently die half-done if delivery is left to
 //   fire-and-forget promises. This route is invoked on a schedule (see
 //   vercel.json "crons") and drains due OutboxEvents via pumpOutbox(), which

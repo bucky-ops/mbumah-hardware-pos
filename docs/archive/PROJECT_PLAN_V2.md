@@ -30,26 +30,26 @@ only the final stable cut merges to `main`.
 
 | # | Module                     | Status | Notes                                                     |
 |---|----------------------------|--------|-----------------------------------------------------------|
-| 1 | Multi-Branch POS           | ✅     | 5 stores seeded; store-scoped queries throughout          |
-| 2 | Role-Based Access Control  | ✅     | 5 roles; middleware + API `requireAuth` + UI tab filtering|
-| 3 | Product & Inventory        | ✅     | `reorderLevel`, low-stock alerts, stock movements, photos |
-| 4 | Sales & POS                | ✅     | MPESA STK Push, split payments, debt, thermal receipts    |
-| 5 | Customer CRM               | ✅     | Loyalty points, credits, debt aging, WhatsApp statements  |
-| 6 | Equipment Rentals          | ✅     | Rental/return, deposits, late fees, overdue auto-sync     |
-| 7 | Gift Cards                 | ✅     | Full CRUD, redemption, hard-delete (SUPER_ADMIN)          |
-| 8 | Financial Management       | ✅     | Double-entry (JournalEntry/Account), expense tracking     |
-| 9 | Shift Management           | ✅     | Start/end, cash drawer reconciliation                     |
-| 10| Supplier Management        | ✅     | Suppliers + Purchase Orders + GRN                         |
-| 11| Expense Tracking           | ✅     | 7 categories (RENT/SALARIES/UTILITIES/…), void + journal  |
-| 12| Reports & Analytics        | ✅     | CSV + branded PDF export; 7-day sales forecast            |
-| 13| Payroll & HR (Kenya)       | ✅     | PAYE/NSSF/SHIF/Housing Levy; 5 seeded employees           |
-| 14| Messaging                  | ✅     | `Message` model + `messaging-tab.tsx` (WhatsApp/SMS/email)|
-| 15| Vouchers & Promotions      | ✅     | Campaign types, redemption tracking                       |
-| 16| Delivery Notes             | ✅     | `DeliveryNote` model + tab                                |
-| 17| Customer Credits           | ✅     | `CustomerCredit` model, refund/store credit               |
-| 18| Banking                    | ✅     | Bank accounts, reconciliations                            |
-| 19| Security Audit Log         | ✅     | `security-tab.tsx`, system logs                           |
-| 20| Admin & User Management    | ✅     | User CRUD, store assignment, role management              |
+| 1 | Multi-Branch POS           | ✓     | 5 stores seeded; store-scoped queries throughout          |
+| 2 | Role-Based Access Control  | ✓     | 5 roles; middleware + API `requireAuth` + UI tab filtering|
+| 3 | Product & Inventory        | ✓     | `reorderLevel`, low-stock alerts, stock movements, photos |
+| 4 | Sales & POS                | ✓     | MPESA STK Push, split payments, debt, thermal receipts    |
+| 5 | Customer CRM               | ✓     | Loyalty points, credits, debt aging, WhatsApp statements  |
+| 6 | Equipment Rentals          | ✓     | Rental/return, deposits, late fees, overdue auto-sync     |
+| 7 | Gift Cards                 | ✓     | Full CRUD, redemption, hard-delete (SUPER_ADMIN)          |
+| 8 | Financial Management       | ✓     | Double-entry (JournalEntry/Account), expense tracking     |
+| 9 | Shift Management           | ✓     | Start/end, cash drawer reconciliation                     |
+| 10| Supplier Management        | ✓     | Suppliers + Purchase Orders + GRN                         |
+| 11| Expense Tracking           | ✓     | 7 categories (RENT/SALARIES/UTILITIES/…), void + journal  |
+| 12| Reports & Analytics        | ✓     | CSV + branded PDF export; 7-day sales forecast            |
+| 13| Payroll & HR (Kenya)       | ✓     | PAYE/NSSF/SHIF/Housing Levy; 5 seeded employees           |
+| 14| Messaging                  | ✓     | `Message` model + `messaging-tab.tsx` (WhatsApp/SMS/email)|
+| 15| Vouchers & Promotions      | ✓     | Campaign types, redemption tracking                       |
+| 16| Delivery Notes             | ✓     | `DeliveryNote` model + tab                                |
+| 17| Customer Credits           | ✓     | `CustomerCredit` model, refund/store credit               |
+| 18| Banking                    | ✓     | Bank accounts, reconciliations                            |
+| 19| Security Audit Log         | ✓     | `security-tab.tsx`, system logs                           |
+| 20| Admin & User Management    | ✓     | User CRUD, store assignment, role management              |
 
 ### Planned for v2.0.0
 
@@ -74,7 +74,7 @@ only the final stable cut merges to `main`.
 
 - [x] **Next.js 16** App Router - confirmed (`next-server v16.1.3`)
 - [x] **TypeScript 5** strict mode - confirmed
-- [x] **Prisma ORM** - 51 models, SQLite (dev) / Neon Postgres (prod)
+- [x] **Prisma ORM** - 51 models, SQLite (dev) / Neon PostgreSQL (prod)
 - [x] **102 API routes** under `src/app/api/`
 - [x] **22 UI tabs** under `src/app/tabs/`
 - [x] **Global auth middleware** - `src/middleware.ts` enforces Bearer token
@@ -84,57 +84,57 @@ only the final stable cut merges to `main`.
 
 ### Module Verification
 
-- [x] **Multi-Branch POS** - ✅ Verified. 5 stores seeded
+- [x] **Multi-Branch POS** - Verified. 5 stores seeded
       (`store_juja_main`, `store_thika_rd`, etc.); all queries store-scoped;
       store switcher in TopBar; `requireStoreAccess` on API.
-- [x] **RBAC** - ✅ Verified. 5 roles (SUPER_ADMIN / STORE_OWNER /
+- [x] **RBAC** - Verified. 5 roles (SUPER_ADMIN / STORE_OWNER /
       BRANCH_MANAGER / CASHIER / ACCOUNTANT). `requireAuth({roles})` on API;
       `filterTabsByRole()` on UI; CASHIER sees only 5 tabs, SUPER_ADMIN all.
-- [x] **Product & Inventory** - ✅ Verified. `Product` model with
+- [x] **Product & Inventory** - Verified. `Product` model with
       `quantityInStock`, `reorderLevel`, `isRental`, `imageUrl`. Low-stock
       banner, stock-status filters, stock movements, photo upload component.
-- [x] **Sales & POS** - ✅ Verified. `SalesTransaction` with items,
+- [x] **Sales & POS** - Verified. `SalesTransaction` with items,
       MPESA STK Push, split payments (CASH/MPESA/DEBT), thermal + on-screen
       receipts with logo + dynamic store info.
-- [x] **Customer CRM** - ✅ Verified. `Customer` with loyalty points,
+- [x] **Customer CRM** - Verified. `Customer` with loyalty points,
       `CustomerCredit`, debt aging (0/30/60/90+ buckets), account history
       dialog, WhatsApp statement send (bug fixed this round: `customerId`
       field added).
-- [x] **Equipment Rentals** - ✅ Verified. `EquipmentRental` with
+- [x] **Equipment Rentals** - Verified. `EquipmentRental` with
       ratePerDay/Week/Month, security deposits, late fees, overdue auto-sync
       (made non-blocking this round to prevent 500s).
-- [x] **Gift Cards** - ✅ Verified. Full CRUD, redemption, balance adjust,
+- [x] **Gift Cards** - Verified. Full CRUD, redemption, balance adjust,
       hard-delete (SUPER_ADMIN), visibility toggle.
-- [x] **Financial Management** - ✅ Verified. Double-entry via
+- [x] **Financial Management** - Verified. Double-entry via
       `JournalEntry` + `JournalEntryLine` + `Account` (chart of accounts).
       Revenue trend with expenses + gross profit + margin.
-- [x] **Shift Management** - ✅ Verified. `Shift` model, start/end,
+- [x] **Shift Management** - Verified. `Shift` model, start/end,
       cash drawer logs (`CashDrawerLog`), reconciliation.
-- [x] **Supplier Management** - ✅ Verified. `Supplier` + `PurchaseOrder`
+- [x] **Supplier Management** - Verified. `Supplier` + `PurchaseOrder`
       + goods-received notes.
-- [x] **Expense Tracking** - ✅ Verified. `Expense` model with 7 categories
+- [x] **Expense Tracking** - Verified. `Expense` model with 7 categories
       (RENT, SALARIES, UTILITIES, TRANSPORT, MAINTENANCE, SUPPLIES, OTHER),
       void + journal posting.
-- [x] **Reports & Analytics** - ✅ Verified. `reports-tab.tsx` (2694 lines),
+- [x] **Reports & Analytics** - Verified. `reports-tab.tsx` (2694 lines),
       CSV + branded PDF export, 7-day sales forecast (linear regression with
       confidence bands - implemented this round).
-- [x] **Payroll & HR** - ✅ Verified. 8 models (Employee, LeaveType, Leave,
+- [x] **Payroll & HR** - Verified. 8 models (Employee, LeaveType, Leave,
       PayrollPeriod, PayrollRun, PayrollDetail, Attendance). Kenya statutory
       calc in `payroll-helpers.ts` (PAYE/NSSF/SHIF/Housing Levy). 5 seeded
       employees.
-- [x] **Messaging** - ✅ Verified (exists). `Message` model +
+- [x] **Messaging** - Verified (exists). `Message` model +
       `messaging-tab.tsx` (2351 lines). WhatsApp deep-links, SMS, email.
       **Enhancement planned for v2.0.0** (see §4.C).
-- [x] **Vouchers & Promotions** - ✅ Verified. `Voucher` model,
+- [x] **Vouchers & Promotions** - Verified. `Voucher` model,
       campaign types, redemption tracking.
-- [x] **Delivery Notes** - ✅ Verified. `DeliveryNote` model + tab.
-- [x] **Customer Credits** - ✅ Verified. `CustomerCredit` model,
+- [x] **Delivery Notes** - Verified. `DeliveryNote` model + tab.
+- [x] **Customer Credits** - Verified. `CustomerCredit` model,
       refund/store-credit/gift reasons.
-- [x] **Banking** - ✅ Verified. Bank accounts, reconciliations
+- [x] **Banking** - Verified. Bank accounts, reconciliations
       (`banking-tab.tsx` 1374 lines).
-- [x] **Security Audit** - ✅ Verified. `security-tab.tsx` (785 lines),
+- [x] **Security Audit** - Verified. `security-tab.tsx` (785 lines),
       system logs, login history.
-- [x] **Admin** - ✅ Verified. `admin-tab.tsx` (1907 lines), user CRUD,
+- [x] **Admin** - Verified. `admin-tab.tsx` (1907 lines), user CRUD,
       store assignment, role management, health checks.
 
 ### Bugs Fixed This Round (v2.0.0-dev)
@@ -159,22 +159,22 @@ only the final stable cut merges to `main`.
 
 ### Not Yet Implemented (v2.0.0 targets)
 
-- [ ] **eTIMS / TIMS** - ❌ No `KraSubmission`, `InvoiceForKRA`, or
+- [ ] **eTIMS / TIMS** - No `KraSubmission`, `InvoiceForKRA`, or
       `KraBusinessProfile` models. No KRA API integration. **Planned: §4.A.**
-- [ ] **Automated debt reminders** - ❌ No `PaymentReminder` model or
+- [ ] **Automated debt reminders** - No `PaymentReminder` model or
       scheduler. Reminders are manual (WhatsApp statement button only).
       **Planned: §4.B.**
-- [ ] **Real-time notifications** - ❌ 60-second polling; no WebSocket push.
+- [ ] **Real-time notifications** - 60-second polling; no WebSocket push.
       Read state is localStorage-only (per-browser). **Planned: §4.H.**
-- [ ] **Server-side notification read state** - ❌ No `Notification` Prisma
+- [ ] **Server-side notification read state** - No `Notification` Prisma
       model; `isRead` hardcoded `false` in the computed API. **Planned: §4.H.**
-- [ ] **Resizable sidebar** - ❌ Fixed width; no drag-to-resize.
+- [ ] **Resizable sidebar** - Fixed width; no drag-to-resize.
       **Planned: §4.D.**
-- [ ] **Email receipt delivery** - ❌ Receipts print only; no email send.
+- [ ] **Email receipt delivery** - Receipts print only; no email send.
       **Planned: §4.E.**
-- [ ] **MPESA B2B payouts** - ❌ Only STK Push (C2B) implemented.
+- [ ] **MPESA B2B payouts** - Only STK Push (C2B) implemented.
       **Planned: §4.F.**
-- [ ] **Catalog pagination** - ❌ Products fetched in one query (fine for
+- [ ] **Catalog pagination** - Products fetched in one query (fine for
       current catalog size; needed for scale). **Planned: §4.G.**
 
 ---

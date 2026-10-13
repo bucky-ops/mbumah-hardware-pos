@@ -42,10 +42,10 @@ work** in priority order.
 | `/api/debt` | ✓ numbers (fixed v2.4.0) | - |
 | `/api/customers/top` | ✓ numbers (fixed v2.4.0) | - |
 | `/api/payroll/*`, `/api/employees` | ✓ numbers (fixed v2.4.0) | - |
-| **`/api/transactions`** | ❌ strings (subtotal, taxAmount, discountAmount, totalAmount, cashTendered, changeDue + item lines) | ✅ serialized |
-| **`/api/products`** | ❌ strings (pricePerUnit, costPrice, taxRate + bundle children) | ✅ serialized |
-| **`/api/rentals`** | ❌ strings (charges, deposits, late fees + summary aggregates) | ✅ serialized |
-| **`/api/gift-cards`** | ❌ strings (initialBalance, currentBalance) | ✅ serialized |
+| **`/api/transactions`** | ✗ strings (subtotal, taxAmount, discountAmount, totalAmount, cashTendered, changeDue + item lines) | ✓ serialized |
+| **`/api/products`** | ✗ strings (pricePerUnit, costPrice, taxRate + bundle children) | ✓ serialized |
+| **`/api/rentals`** | ✗ strings (charges, deposits, late fees + summary aggregates) | ✓ serialized |
+| **`/api/gift-cards`** | ✗ strings (initialBalance, currentBalance) | ✓ serialized |
 
 **Standing rule (documented in code):** convert at the API boundary; never trust the client to `Number()` anything.
 
@@ -56,7 +56,7 @@ work** in priority order.
 
 ### 2.4 Alert popups (45 seconds, closeable) - shipped
 1. `src/lib/alert-bus.ts` - app-wide alert store (`showAlert()` callable from any client module).
-2. `AlertPopupHost` (mounted in `providers.tsx`) - popups stay on screen **45 seconds** with a draining countdown bar, **pause on hover**, and an always-available **Close (✕)** button; stack capped at 4, bottom-left.
+2. `AlertPopupHost` (mounted in `providers.tsx`) - popups stay on screen **45 seconds** with a draining countdown bar, **pause on hover**, and an always-available **Close (X)** button; stack capped at 4, bottom-left.
 3. Automatic triggers: the host polls the notifications API (60s) and pops **new** critical/warning notifications exactly once (localStorage memory) - out-of-stock, overdue rentals and large-debt events now surface without watching the bell menu.
 
 ### 2.5 System audit - see §3 and §4.

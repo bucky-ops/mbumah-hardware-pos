@@ -2,7 +2,7 @@
 
 **Role:** Principal Financial Systems Architect & Database Engineer (Supply-Chain Ledgering, Serverless Infrastructure)
 **Date:** 2026-09-04 · **Repo:** `bucky-ops/mbumah-hardware-pos` @ `33c6563` (main) · **Prod DB:** Neon `pos-erp-crm` (`broad-snow-78900501`), branch `br-proud-lab-ai15r38h`, PG 18.6
-**Stack:** Next.js 16 (App Router, 180 API routes) · Prisma 6 (~90 models) · Neon Serverless Postgres (pgbouncer pooled) · Vercel (iad1) · GitHub Actions · M-Pesa Daraja (STK + callback) · Kenya eTIMS/KRA · CSV-based ERP hand-off
+**Stack:** Next.js 16 (App Router, 180 API routes) · Prisma 6 (~90 models) · Neon Serverless PostgreSQL (pgbouncer pooled) · Vercel (iad1) · GitHub Actions · M-Pesa Daraja (STK + callback) · Kenya eTIMS/KRA · CSV-based ERP hand-off
 
 **Method:** Every finding below was verified twice: (1) full source read with `file:line` evidence, and (2) where possible, **live verification against production Neon** (table counts, ledger sums, invariant checks) and the git history. One agent-reported finding (a claimed syntax error in `reports/export/route.ts`) was **disproven by byte-level inspection** and is deliberately excluded - this report contains no unverified claims.
 
@@ -16,7 +16,7 @@ The system has **good bones** - an atomic checkout transaction, an ORM-level imm
 |---|-------|----------|--------------------|
 | S1 | **Authentication is decorative** | **P0** | The edge proxy only checks that a `Bearer` header is *non-empty*; dozens of money-moving routes never call a session validator. `Authorization: Bearer x` creates sales, records debt payments, mints gift cards, and posts journal entries. |
 | S2 | **The buy side never hits the books** | **P0** | Goods receipt posts zero journal entries; Accounts Payable (2000) is defined but never used; Inventory GL is credited by COGS but never debited by purchases → structurally negative inventory valuation. |
-| S3 | **M-Pesa is broken end-to-end** | **P0** | The callback is unauthenticated (forgeable), the confirmation transaction throws on every success (FK violation on `userId: 'system'`), posted ledger lines are rewritten via `updateMany`, and the server-side STK push uses a relative `fetch` that can never resolve - every M-Pesa sale is permanently stuck `PENDING` with stock already gone. |
+| S3 | **M-Pesa is broken end-to-end** | **P0** | The callback is unauthenticated (forgeable), the confirmation transaction throws on every success (FK violation on `userId: 'system'`), posted ledger lines are rewritten via `updateMany`, and the server-side STK Push uses a relative `fetch` that can never resolve - every M-Pesa sale is permanently stuck `PENDING` with stock already gone. |
 | S4 | **Concurrency = read-then-write everywhere** | **P0** | Zero `SELECT … FOR UPDATE`, zero `isolationLevel`, zero version columns, no DB CHECK constraints. Oversell, gift-card double-spend, debt double-payment, drawer drift, WAC corruption are all one concurrent request away. |
 | S5 | **Store transfers destroy stock deterministically** | **P0** | The receive handler writes a field (`receivedBy`) that does not exist in the schema - it crashes *after* crediting destination stock, guaranteeing double-credit on every retry. The `inventory` table does not even exist in production. |
 | S6 | **The audit trail is empty** | **P0** | `audit_logs` has **0 rows** in production; the hash-chain `verify()` is a mathematical no-op; the compliance dashboard self-attests 100%. |
@@ -48,7 +48,7 @@ Severity key: **P0** = exploitable/corrupting today · **P1** = high financial r
 `src/app/api/purchase-orders/[id]/route.ts:168-289` (receive transaction) writes only `product`, `warehouseStock`, `stockMovement`. Grep-verified: `recordGoodsReceiptEntry` does not exist; `ACCOUNTS_PAYABLE: '2000'` (`src/lib/account-helper.ts:11`) has **zero** posting call sites. Meanwhile `recordSaleJournalEntry` credits Inventory for COGS (`account-helper.ts:466-471`). Net effect: the Inventory GL account drifts **negative** as sales proceed, and the balance sheet is unreconstructable for the entire buy side.
 
 ```ts
-// [id]/route.ts — inside db.$transaction: stock only, no tx.journalEntry.create
+// [id]/route.ts - inside db.$transaction: stock only, no tx.journalEntry.create
 await tx.product.update({ where: { id: item.productId },
   data: { quantityInStock: { increment: recv.receivedQty }, costPrice: wac.newWac } });
 await tx.warehouseStock.update(... { increment: recv.receivedQty } ...);
@@ -85,7 +85,7 @@ const ok = await tx.purchaseOrderItem.updateMany({
            receivedQty: item.receivedQty,                       // optimistic token
            quantity: { gte: { /* raw */ } } },
   data: { receivedQty: { increment: recv.receivedQty } } });
-if (ok.count === 0) throw new APIError(409, 'Concurrent receipt detected — re-sync and retry');
+if (ok.count === 0) throw new APIError(409, 'Concurrent receipt detected - re-sync and retry');
 ```
 (Prisma can't compare two columns in `where` - use `tx.$queryRaw` `UPDATE purchase_order_items SET "receivedQty"="receivedQty"+$1 WHERE id=$2 AND "receivedQty"+$1 <= quantity RETURNING id` and abort when 0 rows.)
 
@@ -107,7 +107,7 @@ if (ok.count === 0) throw new APIError(409, 'Concurrent receipt detected — re-
 **F1-6 · P2 - PO number generation: cross-store collision guaranteed daily; double-submit 500s.**
 `route.ts:141-147` counts **per-store** but `poNumber` is `@unique` **globally** (`schema.prisma:863`). Store B's first PO on any day collides with Store A's → unhandled P2002. Concurrent double-clicks both count N → same number.
 
-**Remediation:** `@@unique([storeId, poNumber])`; allocate via a per-store daily counter row `SELECT … FOR UPDATE` (or Postgres sequence); accept an `Idempotency-Key` header and return the original response on replay.
+**Remediation:** `@@unique([storeId, poNumber])`; allocate via a per-store daily counter row `SELECT … FOR UPDATE` (or PostgreSQL sequence); accept an `Idempotency-Key` header and return the original response on replay.
 
 **F1-7 · P2 - WAC recompute is last-write-wins.**
 `[id]/route.ts:188-210` computes WAC from a fresh in-tx read but writes the **absolute** `costPrice`; `stock-movements/route.ts:264-294` reads the product **outside** the tx. Two concurrent receipts blend from the same base and one overwrites the other → silent COGS corruption on every subsequent sale. **Remediation:** single-statement SQL blend atomic with the increment (`UPDATE products SET "costPrice" = (("quantityInStock")*"costPrice" + $inc*$newCost)/("quantityInStock"+$inc), "quantityInStock" = "quantityInStock"+$inc WHERE id=$id`), or `SELECT … FOR UPDATE` the product row first.
@@ -251,7 +251,7 @@ Checkout accepts `paymentDetails.voucherId` but never checks existence/validity 
 
 ## PHASE 6 - PAYMENT GATEWAY & WEBHOOK INGESTION / FULFILLMENT (M-PESA)
 
-**Flow:** checkout → (broken server-side STK push) → client-side `stkpush` (`src/lib/api.ts:727,746`) → Daraja → `POST /api/payments/mpesa/callback` (public) → mark paid + post journal + drawer. Live DB: `mpesa_transactions` = 2 rows - this subsystem is nearly unused in production, and what exists is the most dangerous code in the repo.
+**Flow:** checkout → (broken server-side STK Push) → client-side `stkpush` (`src/lib/api.ts:727,746`) → Daraja → `POST /api/payments/mpesa/callback` (public) → mark paid + post journal + drawer. Live DB: `mpesa_transactions` = 2 rows - this subsystem is nearly unused in production, and what exists is the most dangerous code in the repo.
 
 **F6-1 · P0 - The callback is unauthenticated and forgeable.**
 `callback/route.ts:72-95` - no HMAC, no Daraja credential check, no IP allowlist; the route is in `PUBLIC_PATHS` and CSRF-exempt (`proxy.ts:138-154`); it additionally accepts a flat "mock" body shape (`resultCode` at top level, `:26-34,60-69`). `CheckoutRequestID` values are predictable (`ws_CO_<counter>` - see the repo's own mock, `docker/mpesa-mock/server.js:36`). Anyone can `POST {"Body":{"stkCallback":{"CheckoutRequestID":"ws_CO_1","ResultCode":0,…}}}` and flip an unpaid sale to `COMPLETED`, post the journal, and walk out with goods.
@@ -264,7 +264,7 @@ const isSuccess = data.resultCode === '0';
 
 **Remediation (exact):** (1) validate Daraja's basic-auth `Authorization` header on the callback (per-environment credential in Vercel env) **and** an IP allowlist of Safaricom ranges; (2) reject non-`stkCallback` shapes when `NODE_ENV=production`; (3) verify `metadata.Amount === mpesaTx.amount` (in KES) before applying; (4) log a `SecurityEvent` on every rejected callback.
 
-**F6-2 · P0 - The server-side STK push can never succeed (relative URL fetch).**
+**F6-2 · P0 - The server-side STK Push can never succeed (relative URL fetch).**
 `transactions/route.ts:730-743`:
 
 ```ts
@@ -349,7 +349,7 @@ F7-6's scans plus no timeout mean a single runaway report holds Neon compute (bi
 History retention = **6 h** → PITR covers less than one business day; no scheduled logical backups; production branch protection blocked by free-plan limits. **Remediation:** raise history retention (paid tier) to ≥ 7 days minimum (30 preferred); add a nightly cron: Neon API `backup` (or `pg_dump` to object storage) with 30-day retention and a monthly restore drill into a scratch branch; revisit branch protection on upgrade.
 
 **F8-4 · P1 - Fire-and-forget promises die with the lambda.**
-The broken STK push (`F6-2`), post-commit loyalty earn (`transactions:763-823`), and `.catch(() => {})` system logs all assume the process lives on. On Vercel, after the response returns, background work may be frozen at any time. **Remediation:** adopt a **transactional outbox**: write `outbox_events` rows inside the business tx (kind, payload, attempts); a cron-driven pump (every 1 min) processes with retries → DLQ (`dead-letter-queue.ts` already exists - wire it to the outbox instead of ad-hoc calls).
+The broken STK Push (`F6-2`), post-commit loyalty earn (`transactions:763-823`), and `.catch(() => {})` system logs all assume the process lives on. On Vercel, after the response returns, background work may be frozen at any time. **Remediation:** adopt a **transactional outbox**: write `outbox_events` rows inside the business tx (kind, payload, attempts); a cron-driven pump (every 1 min) processes with retries → DLQ (`dead-letter-queue.ts` already exists - wire it to the outbox instead of ad-hoc calls).
 
 **F8-5 · P2 - Cold-start UX.** First-hit 2.12 s TTFB (DB cold-start penalty ~1.4 s on top of lambda cold start). **Remediation:** acceptable for POS if the offline queue works (it currently doesn't authenticate - SYS-10); consider Neon "compute, always-on" (minimum 0.25 CU 24/7) during business hours; `connect_timeout=15` in db.ts is already correct.
 
@@ -378,7 +378,7 @@ KRA portal password is base64-labeled-AES (`kra/profile/route.ts:142-144`, hones
 SYS-1 (verified myself: `proxy.ts:240-259` checks only header format) plus: `requireStoreAccess` validates **only query params** against the session (`auth.ts:233-238`) while `POST` bodies carry `storeId` that `injectTenant` deliberately defers to (`db.ts:579-584`) → cross-tenant writes (POs, suppliers, KRA profiles, data exports); `users/route.ts:96-121` lets any financial role mint a `SUPER_ADMIN` (bypassing all store checks via `runWithoutTenant`, `auth.ts:89-92`); debt-plan approval never blocks self-approval (`debt-payment-plans/[id]/approve/route.ts:55-66`); stale role names (`STORE_MANAGER` at `kra/submit:42` vs actual `BRANCH_MANAGER`) silently exclude branch managers from KRA submission. **Remediation:** one shared `assertPermission(action, resource)` guard enforcing the matrix server-side; bind `storeId`/`orgId` from session everywhere (reject body-supplied values); role assignment restricted to `SUPER_ADMIN`; self-approval blocks; grep-fix stale role names.
 
 **F9-5 · P1 - Account security is per-instance memory.**
-`brute-force.ts:15` keeps counters in a `Map` that resets on every cold start and doesn't coordinate across instances; 5 wrong guesses permanently sets `isActive: false` (staff DoS, manual `scripts/reset-lockout.ts` to recover); rate limits (`rate-limit.ts:11`, proxy) share the same weakness; login accepts legacy reversible `hashed_` credentials (`auth/login/route.ts:61-64`); every seeded user has `bcrypt('password123')` (`seed.ts:205`). **Remediation:** persist `failedLoginAttempts/lockedUntil` (columns **already exist** in the schema, `schema.prisma:155-157`); never auto-deactivate; move IP counters to Postgres/Redis; delete the `hashed_` path; force seed-password rotation.
+`brute-force.ts:15` keeps counters in a `Map` that resets on every cold start and doesn't coordinate across instances; 5 wrong guesses permanently sets `isActive: false` (staff DoS, manual `scripts/reset-lockout.ts` to recover); rate limits (`rate-limit.ts:11`, proxy) share the same weakness; login accepts legacy reversible `hashed_` credentials (`auth/login/route.ts:61-64`); every seeded user has `bcrypt('password123')` (`seed.ts:205`). **Remediation:** persist `failedLoginAttempts/lockedUntil` (columns **already exist** in the schema, `schema.prisma:155-157`); never auto-deactivate; move IP counters to PostgreSQL/Redis; delete the `hashed_` path; force seed-password rotation.
 
 **F9-6 · P2 - Edge middleware bypasses.** CSRF allows `origin.includes(host)` - `https://app.example.com.evil.io` passes (`proxy.ts:84-95`); `security/block-ip` writes a key format `isRateLimited` never reads (`security/block-ip/route.ts:25`) - blocking is a no-op; `TaxFiling` totals are client-authored and never reconciled to `InvoiceForKRA`/transactions (`tax/filings/route.ts:129-144`). **Remediation:** exact Origin-host equality; fix the block key; compute filing totals server-side for the period.
 

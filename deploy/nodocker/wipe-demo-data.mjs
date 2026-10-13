@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ============================================================================
-// MBUMAH HARDWARE POS — Go-Live Reset (demo-data wipe)
+// MBUMAH HARDWARE POS - Go-Live Reset (demo-data wipe)
 // ============================================================================
 // Purpose: after staff has trained on the seeded demo data, this wipes ALL
 // transactional history so the shop starts clean for real trading:
@@ -24,7 +24,7 @@
 //
 // Usage (close the POS first!):
 //   node deploy/nodocker/wipe-demo-data.mjs          (interactive confirm)
-//   node deploy/nodocker/wipe-demo-data.mjs --yes    (no prompt — for scripts)
+//   node deploy/nodocker/wipe-demo-data.mjs --yes    (no prompt - for scripts)
 // ============================================================================
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -138,7 +138,7 @@ const prisma = await (async () => {
 // ── Preflight ────────────────────────────────────────────────────────────────
 console.log('');
 console.log('══════════════════════════════════════════════════════════════');
-console.log('  MBUMAH HARDWARE POS — GO-LIVE RESET (demo-data wipe)');
+console.log('  MBUMAH HARDWARE POS - GO-LIVE RESET (demo-data wipe)');
 console.log('══════════════════════════════════════════════════════════════');
 console.log('');
 console.log('  CLOSE THE POS WINDOWS FIRST (the database must not be in use).');
@@ -170,13 +170,13 @@ if (!process.argv.includes('--yes')) {
   const answer = (await rl.question('  Type GO-LIVE-WIPE to confirm (anything else cancels): ')).trim();
   rl.close();
   if (answer !== 'GO-LIVE-WIPE') {
-    console.log('\nCancelled — nothing was changed.\n');
+    console.log('\nCancelled - nothing was changed.\n');
     process.exit(0);
   }
 }
 
 console.log('');
-console.log('Wiping (single atomic transaction — any error aborts everything)...');
+console.log('Wiping (single atomic transaction - any error aborts everything)...');
 
 const started = Date.now();
 try {
@@ -189,7 +189,7 @@ try {
     steps.push({ label: found.name, promise: found.d.deleteMany({}) });
   }
   if (skipped.length) {
-    console.log(`  (models not present in this schema version — skipped: ${skipped.join(', ')})`);
+    console.log(`  (models not present in this schema version - skipped: ${skipped.join(', ')})`);
   }
 
   const results = await prisma.$transaction(steps.map((s) => s.promise));
@@ -203,7 +203,7 @@ try {
   console.log(`  ✓ TOTAL rows deleted: ${total}  in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 } catch (err) {
   console.error('');
-  console.error('✗ WIPE ABORTED — nothing was changed (transaction rolled back).');
+  console.error('✗ WIPE ABORTED - nothing was changed (transaction rolled back).');
   console.error('  Reason: ' + (err?.message ?? err));
   console.error('  Send this message to your developer.');
   await prisma.$disconnect();
@@ -213,7 +213,7 @@ try {
 // ── Post-verify ──────────────────────────────────────────────────────────────
 const remaining = await prisma.salesTransaction.count();
 if (remaining !== 0) {
-  console.error(`✗ UNEXPECTED: ${remaining} sales transactions remain — investigate before go-live.`);
+  console.error(`✗ UNEXPECTED: ${remaining} sales transactions remain - investigate before go-live.`);
   await prisma.$disconnect();
   process.exit(1);
 }
@@ -240,7 +240,7 @@ for (const [name, label] of KEEP_LABELS) {
 await prisma.$disconnect();
 console.log('');
 console.log('──────────────────────────────────────────────────────────────');
-console.log('  ✅ GO-LIVE RESET COMPLETE — the shop is ready for real sales.');
+console.log('  [ok] GO-LIVE RESET COMPLETE - the shop is ready for real sales.');
 console.log("  Next: start the POS, create the client's real products &");
 console.log('  customers (or keep the catalog), and set SEED_DATABASE=false.');
 console.log('──────────────────────────────────────────────────────────────');

@@ -42,7 +42,7 @@
 
 **Connection headroom.** `max_connections=901`. At idle, `pg_stat_activity` shows **zero application connections** (only Neon control-plane: pgbouncer, exporters, pg_cron, compute_ctl) - no leaky/idle connections.
 
-**Timeouts.** `idle_in_transaction_session_timeout=300000` (5 min - good). ⚠️ `statement_timeout=0` - an orphaned heavy query can run unbounded.
+**Timeouts.** `idle_in_transaction_session_timeout=300000` (5 min - good). `statement_timeout=0` - an orphaned heavy query can run unbounded.
 
 ### Recommendations
 
@@ -50,7 +50,7 @@
 2. **Cold-start strategy for a POS** (latency-sensitive at checkout):
    - Keep scale-to-zero during off hours (cost ≈ 0) and accept the ~1.4 s wake on first morning request; **or** on the Launch plan set the compute to *always-on* (0.25 CU ≈ 182 CU-hrs/mo) - only if morning latency complaints appear.
    - Do **not** add a synthetic keep-alive pinger: it converts scale-to-zero savings into 24/7 billing for little UX gain.
-3. **Connection-limit guardrail** on the app env: append `&connection_limit=5&pool_timeout=10` to the pooled `DATABASE_URL` - caps per-instance pool width under traffic spikes (901 max_connections is generous, but the pooler, not Postgres, is the real bottleneck).
+3. **Connection-limit guardrail** on the app env: append `&connection_limit=5&pool_timeout=10` to the pooled `DATABASE_URL` - caps per-instance pool width under traffic spikes (901 max_connections is generous, but the pooler, not PostgreSQL, is the real bottleneck).
 4. **PgBouncer transaction-mode caveats** already handled: `pgbouncer=true` is present in the pooled URL (disables prepared-statement reuse). Keep interactive transactions short (`maxWait`/`timeout` defaults in Prisma 6 are sane).
 
 ---
@@ -82,7 +82,7 @@
      run: |
        bunx prisma migrate diff --from-url "$DIRECT_URL" \
          --to-schema-datamodel prisma/schema.prisma --exit-code \
-       || { echo "::error::Production DB is out of sync with schema — run migrate deploy"; exit 1; }
+       || { echo "::error::Production DB is out of sync with schema - run migrate deploy"; exit 1; }
      env:
        DIRECT_URL: ${{ secrets.DIRECT_URL }}
    ```
@@ -150,7 +150,7 @@
 
 - **Leaked credential - still critical.** The Neon password `npg_aRfWJIn8Neq9` was published in `VERCEL_NEON_VERIFICATION.md` (removed from HEAD in PR #7) but **remains valid** - this audit connected with it repeatedly - and **remains in git history** (public repo). Rotation is fully scripted (repo workflow `rotate-neon-credentials.yml`, two safe pre-flight aborts logged) but blocked because updating Vercel's `DATABASE_URL`/`DIRECT_URL` in the same atomic window requires an **owning-account Vercel token** - the provided `vck_…` token belongs to a different account (Recaro) and cannot see the project. Tracked as **issue #9** with exact unblock steps.
 - **Vercel env hygiene:** since the June fix, Production/Preview/Development carry the correct pooled/direct split; CI never touches prod credentials (hermetic SQLite test env, placeholder build env).
-- **Tenant isolation:** no Postgres RLS anywhere (verified `pg_tables.rowsecurity` = none). Instead, tenancy is enforced **at the ORM layer**: `src/lib/db.ts` wraps the client in an `AsyncLocalStorage`-based extension that force-ANDs `storeId` into every store-scoped query, with an explicit `runWithoutTenant` opt-out - plus financial immutability enforcement (`JournalEntry`/`SystemLog` are append-only at the ORM level). Strong single-layer control, but one ORM bypass (`$queryRaw`, `runWithoutTenant` misuse) away from cross-tenant reads.
+- **Tenant isolation:** no PostgreSQL RLS anywhere (verified `pg_tables.rowsecurity` = none). Instead, tenancy is enforced **at the ORM layer**: `src/lib/db.ts` wraps the client in an `AsyncLocalStorage`-based extension that force-ANDs `storeId` into every store-scoped query, with an explicit `runWithoutTenant` opt-out - plus financial immutability enforcement (`JournalEntry`/`SystemLog` are append-only at the ORM level). Strong single-layer control, but one ORM bypass (`$queryRaw`, `runWithoutTenant` misuse) away from cross-tenant reads.
 - **Roles:** everything runs as `neondb_owner` (migration + app + this audit's scripts). No least-privilege split.
 - **Backup/PITR:** `history_retention_seconds = 21600` → **6 hours** of point-in-time recovery. That is below even a single business day - a bad `db push` at 09:00 cannot be rolled back after 15:00. (This audit took a manual safety branch `backup-pre-topup-20260904` / `br-curly-queen-ai1b3jcc` before any change.)
 - **Repo hardening already in place:** secret scanning + push protection **enabled**, dependabot alerts **disabled**, audit/log tables append-only.

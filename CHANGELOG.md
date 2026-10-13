@@ -2,6 +2,18 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.17.1] Professional repository writing standards
+
+### Changed
+- **Decorative emojis removed from the product surface**: seed and tooling console output now uses plain status markers ([ok] / [skip] / Warning: / [FAIL]); the offline page, WhatsApp receipt text, email subjects and headings, staff message templates, PDF statement activity rows, and client error logs read as plain professional text. Typographic status glyphs used by financial tables (check and cross marks) and the Mac Command key notation are preserved.
+- **AI-style em and en dashes removed** from prose, comments, documentation (including the archive), console output, and config banners across the repository. Technical hyphens inside identifiers, URLs, CLI flags, package names, and version strings are untouched.
+- **Terminology standardized in prose**: M-Pesa, Daraja API, STK Push, TypeScript, Next.js, PostgreSQL. Code identifiers, enum values, and endpoint paths are unchanged.
+- **Demo credentials labeled as local-only**: the README, client setup guide, and self-host READMEs now explicitly mark the seeded admin login as a local default that must be changed immediately after first login.
+
+### Fixed
+- **Brand consistency**: receipts, printed documents, and the PWA shortcuts now use the current 3D gear brand mark (the same set as the app sidebar and favicon) instead of the retired flat logo; the two PWA shortcut icons point at the standard icon set; staff-facing email placeholders use the mbumahhardware.co.ke domain.
+- **Self-host README corrections**: removed a stale version reference and repaired a malformed documentation link.
+
 ## [2.17.0] Hosting readiness audit corrections (external spec review)
 
 ### Added

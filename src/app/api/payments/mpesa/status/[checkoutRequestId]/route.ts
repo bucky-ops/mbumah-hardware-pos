@@ -1,10 +1,10 @@
 // GET /api/payments/mpesa/status/[checkoutRequestId]
 //
-// Checks the status of an M-Pesa STK push. Two modes:
+// Checks the status of an M-Pesa STK Push. Two modes:
 //
 //   1. REAL Daraja - when MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET,
 //      MPESA_SHORTCODE and MPESA_PASSKEY env vars are set, the route
-//      queries the Daraja STK push query endpoint to get the live status.
+//      queries the Daraja STK Push query endpoint to get the live status.
 //
 //   2. FALLBACK - returns the status stored on the MpesaTransaction row
 //      (which is updated by the callback handler when a real callback
