@@ -22,6 +22,14 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.17.5',
+    title: 'Branch workspaces: verified end to end',
+    bullets: [
+      'The multi-branch workspace matrix (organization console, per-branch sites, branch selector, access denials, global chat) was re-verified end to end on the current release.',
+      'Small accessibility polish on the global chat composer.',
+    ],
+  },
+  {
     version: '2.17.4',
     title: 'Offline branch subdomains: one-command setup',
     bullets: [
